@@ -2,28 +2,27 @@
 
 namespace Parlot
 {
-
-    // TODO: It might be necessary to expose the direct string and cache it locally to prevent
-    // StringSegment from copying the value every time it needs to be accessed.
-
-    // TODO: Understand how the inner value behind the token (integer, literal) could be materialized once and kept with the token.
-    // It might also be the responsibility of the AST to hold such value (preferred solution).
-    public struct Token
+    public struct Token<T>
     {
-        public static readonly Token Empty = new("", "", TextPosition.Start, 0);
+        public static readonly Token<T> Empty = new(default, null, TextPosition.Start, TextPosition.Start);
 
-        public Token(string type, string buffer, TextPosition position, int length)
+        public Token(T type, string buffer, TextPosition start, TextPosition end)
         {
             Buffer = buffer;
             Type = type;
-            Position = position;
-            Length = length;
+            Start = start;
+            End = end;
         }
 
-        public int Length { get; }
         public string Buffer { get; }
-        public TextPosition Position { get; }
-        public string Type { get; }
-        public ReadOnlySpan<char> Span => Buffer.AsSpan(Position.Offset, Length);
+        public TextPosition Start { get; }
+        public TextPosition End { get; }
+        public T Type { get; }
+        public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, End - Start);
+
+        public static implicit operator ScanResult<T>(Token<T> token)
+        {
+            return new ScanResult<T>(token);
+        }
     }
 }

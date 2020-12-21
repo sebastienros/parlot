@@ -9,7 +9,7 @@ namespace Parlot.Tests.Calc
      * expression     => term ;
      * term           => factor ( ( "-" | "+" ) factor )* ;
      * factor         => unary ( ( "/" | "*" ) unary )* ;
-     * unary          => ( "!" | "-" ) unary
+     * unary          => ( "-" ) unary
      *                 | primary ;
      * primary        => NUMBER
      *                  | "(" expression ")" ;
@@ -134,16 +134,18 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal("Number"))
+            var number = _scanner.ReadDecimal();
+
+            if (number)
             {
-                return new Number(decimal.Parse(_scanner.Token.Span));
+                return new Number(decimal.Parse(number.Token.Span));
             }
 
-            if (_scanner.ReadText("(", "OpenBrace"))
+            if (_scanner.ReadText("("))
             {
                 var expression = ParseExpression();
 
-                if (!_scanner.ReadText(")", "CloseBrace"))
+                if (!_scanner.ReadText(")"))
                 {
                     throw new ParseException("Expected ')'");
                 }

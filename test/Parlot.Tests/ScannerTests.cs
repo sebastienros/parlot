@@ -15,30 +15,32 @@ namespace Parlot.Tests
         public void ShouldNotReadEscapedStringWithoutMatchingQuotes(string text)
         {
             Scanner s = new(text);
-            Assert.False(s.ReadEscapedString(""));
+            Assert.False(s.ReadQuotedString());
         }
 
         [Theory]
-        [InlineData("'Lorem ipsum'", "Lorem ipsum")]
-        [InlineData("\"Lorem ipsum\"", "Lorem ipsum")]
+        [InlineData("'Lorem ipsum'", "'Lorem ipsum'")]
+        [InlineData("\"Lorem ipsum\"", "\"Lorem ipsum\"")]
         public void ShouldReadEscapedStringWithMatchingQuotes(string text, string expected)
         {
             Scanner s = new(text);
-            Assert.True(s.ReadEscapedString(""));
-            Assert.Equal(expected, s.Token.Span.ToString());
+            var result = s.ReadQuotedString();
+            Assert.True(result);
+            Assert.Equal(expected, result.Token.Span.ToString());
         }
 
         [Theory]
-        [InlineData("'Lorem \\n ipsum'", "Lorem \\n ipsum")]
-        [InlineData("\"Lorem \\n ipsum\"", "Lorem \\n ipsum")]
-        [InlineData("\"Lo\\trem \\n ipsum\"", "Lo\\trem \\n ipsum")]
-        [InlineData("'Lorem \\u1234 ipsum'", "Lorem \\u1234 ipsum")]
-        [InlineData("'Lorem \\xabcd ipsum'", "Lorem \\xabcd ipsum")]
+        [InlineData("'Lorem \\n ipsum'", "'Lorem \\n ipsum'")]
+        [InlineData("\"Lorem \\n ipsum\"", "\"Lorem \\n ipsum\"")]
+        [InlineData("\"Lo\\trem \\n ipsum\"", "\"Lo\\trem \\n ipsum\"")]
+        [InlineData("'Lorem \\u1234 ipsum'", "'Lorem \\u1234 ipsum'")]
+        [InlineData("'Lorem \\xabcd ipsum'", "'Lorem \\xabcd ipsum'")]
         public void ShouldReadStringWithEscapes(string text, string expected)
         {
             Scanner s = new(text);
-            Assert.True(s.ReadEscapedString(""));
-            Assert.Equal(expected, s.Token.Span.ToString());
+            var result = s.ReadQuotedString();
+            Assert.True(result);
+            Assert.Equal(expected, result.Token.Span.ToString());
         }
 
         [Theory]
@@ -48,7 +50,7 @@ namespace Parlot.Tests
         public void ShouldNotReadStringWithInvalidEscapes(string text)
         {
             Scanner s = new(text);
-            Assert.False(s.ReadEscapedString(""));
+            Assert.False(s.ReadQuotedString());
         }
     }
 }

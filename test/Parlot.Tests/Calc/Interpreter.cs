@@ -111,9 +111,11 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal("number"))
+            var number = _scanner.ReadDecimal();
+            
+            if (number)
             {
-                return decimal.Parse(_scanner.Token.Span);
+                return decimal.Parse(number.Token.Span);
             }
 
             if (_scanner.ReadText("("))

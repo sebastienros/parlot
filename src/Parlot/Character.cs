@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text;
 
 namespace Parlot
 {
@@ -38,7 +37,7 @@ namespace Parlot
                    (ch == 9) || // tab
                    (ch == 0xB) ||
                    (ch == 0xC) ||
-                   (ch == 0xA0) ||
+                   (ch == 0xA0) || // non-breaking space
                    (ch >= 0x1680 && (
                                         ch == 0x1680 ||
                                         ch == 0x180E ||
