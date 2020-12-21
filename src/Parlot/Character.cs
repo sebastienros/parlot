@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Text;
-using Microsoft.Extensions.Primitives;
 
 namespace Parlot
 {
@@ -65,18 +64,19 @@ namespace Parlot
             return (char)code;
         }
 
-        public static StringSegment DecodeString(string buffer, int offset, int count)
+        public static ReadOnlySpan<char> DecodeString(string buffer, int offset, int count)
         {
             // Nothing to do if the string doesn't have any escape char
             if (!buffer.Contains('\\'))
             {
-                return new StringSegment(buffer, offset, count);
+                return buffer.AsSpan(offset, count);
             }
 
-            // The asumption is that the new string will be shorted since most escapes are smaller
-            var sb = new StringBuilder(count);
+            // The asumption is that the new string will be shorter since escapes results are smaller than their source
+            var data = new char[count];
 
             var endIndex = offset + count;
+            var dataIndex = 0;
 
             for (var i = offset; i < endIndex; i++)
             {
@@ -89,33 +89,33 @@ namespace Parlot
 
                     switch (c)
                     {
-                        case '0': sb.Append("\0"); break;
-                        case '\'': sb.Append("\'"); break;
-                        case '"': sb.Append("\""); break;
-                        case '\\': sb.Append("\\"); break;
-                        case 'b': sb.Append("\b"); break;
-                        case 'f': sb.Append("\f"); break;
-                        case 'n': sb.Append("\n"); break;
-                        case 'r': sb.Append("\r"); break;
-                        case 't': sb.Append("\t"); break;
-                        case 'v': sb.Append("\v"); break;
+                        case '0' : data[dataIndex++] = '\0'; break;
+                        case '\'': data[dataIndex++] = '\''; break;
+                        case '"' : data[dataIndex++] = '\"'; break;
+                        case '\\': data[dataIndex++] = '\\'; break;
+                        case 'b' : data[dataIndex++] = '\b'; break;
+                        case 'f' : data[dataIndex++] = '\f'; break;
+                        case 'n' : data[dataIndex++] = '\n'; break;
+                        case 'r' : data[dataIndex++] = '\r'; break;
+                        case 't' : data[dataIndex++] = '\t'; break;
+                        case 'v' : data[dataIndex++] = '\v'; break;
                         case 'u':
-                            sb.Append(Character.ScanHexEscape(buffer, i));
+                            data[dataIndex++] = Character.ScanHexEscape(buffer, i);
                             i += 4;
                             break;
                         case 'x':
-                            sb.Append(Character.ScanHexEscape(buffer, i));
+                            data[dataIndex++] = Character.ScanHexEscape(buffer, i);
                             i += 2;
                             break;
                     }
                 }
                 else
                 {
-                    sb.Append(c);
+                    data[dataIndex++] = c;
                 }
             }
 
-            return sb.ToString();
+            return new ReadOnlySpan<char>(data, 0, dataIndex);
         }
 
         private static int HexValue(char ch)

@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Parlot
@@ -50,7 +52,7 @@ namespace Parlot
         /// <summary>
         /// Advances the cursor.
         /// </summary>
-        /// <param name="offset">The number of chars to advance the cursor of.</param>
+        /// <param name="offset">The number of c</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int offset = 1)
         {
@@ -148,16 +150,18 @@ namespace Parlot
         /// Whether a char is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAny(params char[] c)
+        public bool MatchAnyOf(string s)
         {
             if (Eof)
             {
                 return false;
             }
 
-            for (var i = 0; i < c.Length; i++)
+            var span = s.AsSpan();
+
+            for (var i = 0; i < span.Length; i++)
             {
-                if (c[i] == _current)
+                if (span[i] == _current)
                 {
                     return true;
                 }
@@ -172,32 +176,14 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
         {
-            var length = s.Length;
-
-            if (length == 1)
-            {
-                return !Eof && _current == s[0];
-            }
-
-            if (Eof || Position.Offset + length - 1 >= _textLength)
+            if (Eof || Position.Offset + s.Length - 1 >= _textLength)
             {
                 return false;
             }
 
-            if (length == 2)
-            {
-                return s[0] == Buffer[Position.Offset] && s[1] == Buffer[Position.Offset + 1];
-            }
+            var span = Buffer.AsSpan(Position.Offset, s.Length);
 
-            for (var i = 0; i < length; i++)
-            {
-                if (s[i] != Buffer[Position.Offset + i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return span.SequenceEqual(s);
         }
     }
 }

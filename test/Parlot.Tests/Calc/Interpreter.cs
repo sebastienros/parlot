@@ -16,66 +16,43 @@ namespace Parlot.Tests.Calc
     */
 
     /// <summary>
-    /// This verion of the Parser creates and intermediate AST.
+    /// This verion of the Interpreter evaluates the value while it parses the expression.
     /// </summary>
-    public class Parser
+    public class Interpreter
     {
         private Scanner _scanner;
 
-        public Expression Parse(string text)
+        public decimal Evaluate(string text)
         {
             _scanner = new Scanner(text);
 
             return ParseExpression();
         }
 
-        public bool TryParse(string text, out Expression expression, out ParseError error)
-        {
-            error = null;
-            expression = null;
-
-            try
-            {
-                expression = Parse(text);
-
-                return true;
-            }
-            catch (ParseException e)
-            {
-                error = new ParseError
-                {
-                    Message = e.Message,
-                    Position = _scanner.Cursor.Position
-                };
-            }
-
-            return false;
-        }
-
-        private Expression ParseExpression()
+        private decimal ParseExpression()
         {
             return ParseTerm();
         }
 
-        private Expression ParseTerm()
+        private decimal ParseTerm()
         {
-            var expression = ParseFactor();
+            var value = ParseFactor();
 
             _scanner.SkipWhiteSpace();
 
             while (true)
             {
-                if (_scanner.ReadText("+", "Plus"))
+                if (_scanner.ReadText("+"))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Addition(expression, ParseFactor());
+                    value = value + ParseFactor();
                 }
-                else if (_scanner.ReadText("-", "Minus"))
+                else if (_scanner.ReadText("-"))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Substraction(expression, ParseFactor());
+                    value = value - ParseFactor();
                 }
                 else
                 {
@@ -83,28 +60,28 @@ namespace Parlot.Tests.Calc
                 }
             }
 
-            return expression;
+            return value;
         }
 
-        private Expression ParseFactor()
+        private decimal ParseFactor()
         {
-            var expression = ParseUnaryExpression();
+            var value = ParseUnaryExpression();
 
             _scanner.SkipWhiteSpace();
 
             while (true)
             {
-                if (_scanner.ReadText("*", "Times"))
+                if (_scanner.ReadText("*"))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Multiplication(expression, ParseUnaryExpression());
+                    value = value * ParseUnaryExpression();
                 }
-                else if (_scanner.ReadText("/", "Divided"))
+                else if (_scanner.ReadText("/"))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Division(expression, ParseUnaryExpression());
+                    value = value / ParseUnaryExpression();
                 }
                 else
                 {
@@ -112,7 +89,7 @@ namespace Parlot.Tests.Calc
                 }
             }
 
-            return expression;
+            return value;
         }
 
         /*
@@ -120,7 +97,7 @@ namespace Parlot.Tests.Calc
                     | primary ;
         */
 
-        private Expression ParseUnaryExpression()
+        private decimal ParseUnaryExpression()
         {
             return ParsePrimaryExpression();
         }
@@ -130,25 +107,25 @@ namespace Parlot.Tests.Calc
                     | "(" expression ")" ;
         */
 
-        private Expression ParsePrimaryExpression()
+        private decimal ParsePrimaryExpression()
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal("Number"))
+            if (_scanner.ReadDecimal("number"))
             {
-                return new Number(decimal.Parse(_scanner.Token.Span));
+                return decimal.Parse(_scanner.Token.Span);
             }
 
-            if (_scanner.ReadText("(", "OpenBrace"))
+            if (_scanner.ReadText("("))
             {
-                var expression = ParseExpression();
+                var value = ParseExpression();
 
-                if (!_scanner.ReadText(")", "CloseBrace"))
+                if (!_scanner.ReadText(")"))
                 {
                     throw new ParseException("Expected ')'");
                 }
 
-                return expression;
+                return value;
             }
 
             throw new ParseException("Expected primary expression");
