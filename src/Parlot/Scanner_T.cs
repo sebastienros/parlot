@@ -56,8 +56,10 @@ namespace Parlot
             }
         }
 
-        public ScanResult<T> ReadIdentifier(Func<char, bool> identifierStart, Func<char, bool> identifierPart, T tokenType = default)
+        public bool ReadIdentifier(Func<char, bool> identifierStart, Func<char, bool> identifierPart, out Token<T> token, T tokenType = default)
         {
+            token = Token<T>.Empty;
+
             var start = Cursor.Position;
 
             if (!identifierStart(Cursor.Peek()))
@@ -69,20 +71,24 @@ namespace Parlot
 
             Cursor.Advance();
 
-            ReadWhile(x => identifierPart(x));
+            ReadWhile(x => identifierPart(x), out _);
 
-            return EmitToken(tokenType, start, Cursor.Position);
+            token = EmitToken(tokenType, start, Cursor.Position);
+
+            return true;
         }
 
-        public ScanResult<T> ReadIdentifier(T tokenType = default)
+        public bool ReadIdentifier(out Token<T> token, T tokenType = default)
         {
             // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
 
-            return ReadIdentifier(x => Character.IsIdentifierStart(x), x => Character.IsIdentifierPart(x), tokenType);
+            return ReadIdentifier(x => Character.IsIdentifierStart(x), x => Character.IsIdentifierPart(x), out token, tokenType);
         }
 
-        public ScanResult<T> ReadDecimal(T tokenType = default)
+        public bool ReadDecimal(out Token<T> token, T tokenType = default)
         {
+            token = Token<T>.Empty;
+
             var start = Cursor.Position;
 
             Cursor.RecordPosition();
@@ -106,7 +112,7 @@ namespace Parlot
                 if (!Char.IsDigit(Cursor.Peek()))
                 {
                     Cursor.RollbackPosition();
-                    return new(false);
+                    return false;
                 }
 
                 do
@@ -122,17 +128,20 @@ namespace Parlot
             
             if (length == 0)
             {
-                return new(false);
+                return false;
             }
 
-            return EmitToken(tokenType, start, Cursor.Position);
+            token = EmitToken(tokenType, start, Cursor.Position);
+            return true;
         }
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public ScanResult<T> ReadWhile(Func<char, bool> predicate, T tokenType = default)
+        public bool ReadWhile(Func<char, bool> predicate, out Token<T> token, T tokenType = default)
         {
+            token = Token<T>.Empty;
+
             var start = Cursor.Position;
 
             while (!Cursor.Eof && predicate(Cursor.Peek()))
@@ -147,19 +156,22 @@ namespace Parlot
                 return false;
             }
 
-            return EmitToken(tokenType, start, Cursor.Position);
+            token = EmitToken(tokenType, start, Cursor.Position);
+            return true;
         }
 
-        public ScanResult<T> ReadNonWhiteSpace(T tokenType = default)
+        public bool ReadNonWhiteSpace(out Token<T> token, T tokenType = default)
         {
-            return ReadWhile(x => !Char.IsWhiteSpace(x), tokenType);
+            return ReadWhile(x => !Char.IsWhiteSpace(x), out token, tokenType);
         }
 
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public ScanResult<T> ReadText(string text, T tokenType = default)
+        public bool ReadText(string text, out Token<T> token, T tokenType = default)
         {
+            token = Token<T>.Empty;
+
             var start = Cursor.Position;
 
             if (!Cursor.Match(text))
@@ -169,21 +181,24 @@ namespace Parlot
 
             Cursor.Advance(text.Length);
 
-            return EmitToken(tokenType, start, Cursor.Position);
+            token = EmitToken(tokenType, start, Cursor.Position);
+            return true;
         }
 
-        public ScanResult<T> ReadSingleQuotedString(T tokenType = default)
+        public bool ReadSingleQuotedString(out Token<T> token, T tokenType = default)
         {
-            return ReadQuotedString('\'', tokenType);
+            return ReadQuotedString('\'', out token, tokenType);
         }
 
-        public ScanResult<T> ReadDoubleQuotedString(T tokenType = default)
+        public bool ReadDoubleQuotedString(out Token<T> token, T tokenType = default)
         {
-            return ReadQuotedString('\"', tokenType);
+            return ReadQuotedString('\"', out token, tokenType);
         }
 
-        public ScanResult<T> ReadQuotedString(T tokenType = default)
+        public bool ReadQuotedString(out Token<T> token, T tokenType = default)
         {
+            token = Token<T>.Empty;
+
             var startChar = Cursor.Peek();
 
             if (startChar != '\'' && startChar != '\"')
@@ -191,7 +206,7 @@ namespace Parlot
                 return false;
             }
 
-            return ReadQuotedString(startChar, tokenType);
+            return ReadQuotedString(startChar, out token, tokenType);
         }
 
         /// <summary>
@@ -201,8 +216,10 @@ namespace Parlot
         /// This method doesn't escape the string, but only validates its content is syntactically correct.
         /// The resulting Span contains the original quotes.
         /// </remarks>
-        private ScanResult<T> ReadQuotedString(char quoteChar, T tokenType = default)
+        private bool ReadQuotedString(char quoteChar, out Token<T> token, T tokenType = default)
         {
+            token = Token<T>.Empty;
+
             var startChar = Cursor.Peek();
 
             if (startChar != quoteChar)
@@ -233,7 +250,8 @@ namespace Parlot
 
                     Cursor.CommitPosition();
 
-                    return EmitToken(tokenType, start, Cursor.Position);
+                    token = EmitToken(tokenType, start, Cursor.Position);
+                    return true;
                 }
             }
             else
@@ -250,7 +268,7 @@ namespace Parlot
             {
                 if (Cursor.Eof)
                 {
-                    return new(false);
+                    return false;
                 }
 
                 if (Cursor.Match("\\"))
@@ -293,7 +311,7 @@ namespace Parlot
                             {
                                 Cursor.RollbackPosition();
 
-                                return new(false);
+                                return false;
                             }
 
                             break;
@@ -315,14 +333,14 @@ namespace Parlot
                             {
                                 Cursor.RollbackPosition();
                                 
-                                return new(false);
+                                return false;
                             }
 
                             break;
                         default:
                             Cursor.RollbackPosition();
 
-                            return new(false);
+                            return false;
                     }
                 }
 
@@ -333,7 +351,9 @@ namespace Parlot
 
             Cursor.CommitPosition();
 
-            return EmitToken(tokenType, start, Cursor.Position);
+            token = EmitToken(tokenType, start, Cursor.Position);
+
+            return true;
         }
     }
 }

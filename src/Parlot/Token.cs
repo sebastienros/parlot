@@ -19,10 +19,5 @@ namespace Parlot
         public TextPosition End { get; }
         public T Type { get; }
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, End - Start);
-
-        public static implicit operator ScanResult<T>(Token<T> token)
-        {
-            return new ScanResult<T>(token);
-        }
     }
 }
