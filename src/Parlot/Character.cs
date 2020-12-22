@@ -48,7 +48,7 @@ namespace Parlot
                                         ch == 0xFEFF));
         }
 
-        public static char ScanHexEscape(string text, int index)
+        public static char ScanHexEscape(ReadOnlySpan<char> text, int index)
         {
             var prefix = text[index];
             var len = (prefix == 'u') ? 4 : 2;
@@ -63,21 +63,20 @@ namespace Parlot
             return (char)code;
         }
 
-        public static ReadOnlySpan<char> DecodeString(string buffer, int offset, int count)
+        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> buffer)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (!buffer.Contains('\\'))
+            if (!buffer.Contains("\\", StringComparison.Ordinal))
             {
-                return buffer.AsSpan(offset, count);
+                return buffer;
             }
 
             // The asumption is that the new string will be shorter since escapes results are smaller than their source
-            var data = new char[count];
+            var data = new char[buffer.Length];
 
-            var endIndex = offset + count;
             var dataIndex = 0;
 
-            for (var i = offset; i < endIndex; i++)
+            for (var i = 0; i < buffer.Length; i++)
             {
                 var c = buffer[i];
 

@@ -1,14 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Parlot
 {
     public class ParseException : Exception
     {
-        public ParseException(string message) : base(message)
+        public ParseException(string message, TextPosition position) : base(message)
         {
-
+            Position = position;
         }
+
+        public TextPosition Position { get; set; }
     }
 }

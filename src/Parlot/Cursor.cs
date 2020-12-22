@@ -91,8 +91,18 @@ namespace Parlot
         private void Seek(TextPosition position)
         {
             Position = position;
-            _current = Buffer[position.Offset];
-            Eof = false;
+            
+            // Eof might have been recorded
+            if (position.Offset >= Buffer.Length)
+            {
+                _current = '\0';
+                Eof = true;
+            }
+            else
+            {
+                _current = Buffer[position.Offset];
+                Eof = false;
+            }
         }
 
         /// <summary>

@@ -124,13 +124,13 @@ namespace Parlot.Tests.Calc
 
                 if (!_scanner.ReadText(")"))
                 {
-                    throw new ParseException("Expected ')'");
+                    throw new ParseException("Expected ')'", _scanner.Cursor.Position);
                 }
 
                 return value;
             }
 
-            throw new ParseException("Expected primary expression");
+            throw new ParseException("Expected primary expression", _scanner.Cursor.Position);
         }
     }
 }

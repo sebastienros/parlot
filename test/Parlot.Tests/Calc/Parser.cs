@@ -18,38 +18,15 @@ namespace Parlot.Tests.Calc
     /// <summary>
     /// This verion of the Parser creates and intermediate AST.
     /// </summary>
-    public class Parser
+    public class Parser : Parser<Expression>
     {
         private Scanner _scanner;
 
-        public Expression Parse(string text)
+        public override Expression Parse(string text)
         {
             _scanner = new Scanner(text);
 
             return ParseExpression();
-        }
-
-        public bool TryParse(string text, out Expression expression, out ParseError error)
-        {
-            error = null;
-            expression = null;
-
-            try
-            {
-                expression = Parse(text);
-
-                return true;
-            }
-            catch (ParseException e)
-            {
-                error = new ParseError
-                {
-                    Message = e.Message,
-                    Position = _scanner.Cursor.Position
-                };
-            }
-
-            return false;
         }
 
         private Expression ParseExpression()
@@ -147,13 +124,13 @@ namespace Parlot.Tests.Calc
 
                 if (!_scanner.ReadText(")"))
                 {
-                    throw new ParseException("Expected ')'");
+                    throw new ParseException("Expected ')'", _scanner.Cursor.Position);
                 }
 
                 return expression;
             }
 
-            throw new ParseException("Expected primary expression");
+            throw new ParseException("Expected primary expression", _scanner.Cursor.Position);
         }
     }
 }

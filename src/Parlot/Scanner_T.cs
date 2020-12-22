@@ -12,7 +12,7 @@ namespace Parlot
     /// </remarks>
     public class Scanner<T>
     {
-        protected readonly string Buffer;
+        public readonly string Buffer;
         public Cursor Cursor;       
 
         public Scanner(string buffer)
@@ -56,7 +56,7 @@ namespace Parlot
             }
         }
 
-        public ScanResult<T> ReadIdentifier(Predicate<char> identifierStart, Predicate<char> identifierPart, T tokenType = default)
+        public ScanResult<T> ReadIdentifier(Func<char, bool> identifierStart, Func<char, bool> identifierPart, T tokenType = default)
         {
             var start = Cursor.Position;
 
@@ -69,9 +69,16 @@ namespace Parlot
 
             Cursor.Advance();
 
-            ReadWhile(identifierPart);
+            ReadWhile(x => identifierPart(x));
 
             return EmitToken(tokenType, start, Cursor.Position);
+        }
+
+        public ScanResult<T> ReadIdentifier(T tokenType = default)
+        {
+            // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
+
+            return ReadIdentifier(x => Character.IsIdentifierStart(x), x => Character.IsIdentifierPart(x), tokenType);
         }
 
         public ScanResult<T> ReadDecimal(T tokenType = default)
@@ -124,7 +131,7 @@ namespace Parlot
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public ScanResult<T> ReadWhile(Predicate<char> predicate, T tokenType = default)
+        public ScanResult<T> ReadWhile(Func<char, bool> predicate, T tokenType = default)
         {
             var start = Cursor.Position;
 
