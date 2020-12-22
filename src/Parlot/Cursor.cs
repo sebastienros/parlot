@@ -186,6 +186,11 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
         {
+            if (s.Length == 2)
+            {
+                return !Eof && s[0] == _current && s[1] == PeekNext();
+            }
+
             if (Eof || Position.Offset + s.Length - 1 >= _textLength)
             {
                 return false;

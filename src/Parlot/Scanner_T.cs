@@ -12,6 +12,8 @@ namespace Parlot
     /// </remarks>
     public class Scanner<T>
     {
+        public static readonly Token<T> Empty = Token<T>.Empty;
+
         public readonly string Buffer;
         public Cursor Cursor;       
 
@@ -58,7 +60,7 @@ namespace Parlot
 
         public bool ReadIdentifier(Func<char, bool> identifierStart, Func<char, bool> identifierPart, out Token<T> token, T tokenType = default)
         {
-            token = Token<T>.Empty;
+            token = Empty;
 
             var start = Cursor.Position;
 
@@ -87,7 +89,7 @@ namespace Parlot
 
         public bool ReadDecimal(out Token<T> token, T tokenType = default)
         {
-            token = Token<T>.Empty;
+            token = Empty;
 
             var start = Cursor.Position;
 
@@ -140,7 +142,7 @@ namespace Parlot
         /// </summary>
         public bool ReadWhile(Func<char, bool> predicate, out Token<T> token, T tokenType = default)
         {
-            token = Token<T>.Empty;
+            token = Empty;
 
             var start = Cursor.Position;
 
@@ -170,7 +172,7 @@ namespace Parlot
         /// </summary>
         public bool ReadText(string text, out Token<T> token, T tokenType = default)
         {
-            token = Token<T>.Empty;
+            token = Empty;
 
             var start = Cursor.Position;
 
@@ -197,7 +199,7 @@ namespace Parlot
 
         public bool ReadQuotedString(out Token<T> token, T tokenType = default)
         {
-            token = Token<T>.Empty;
+            token = Empty;
 
             var startChar = Cursor.Peek();
 
@@ -218,7 +220,7 @@ namespace Parlot
         /// </remarks>
         private bool ReadQuotedString(char quoteChar, out Token<T> token, T tokenType = default)
         {
-            token = Token<T>.Empty;
+            token = Empty;
 
             var startChar = Cursor.Peek();
 
@@ -271,7 +273,7 @@ namespace Parlot
                     return false;
                 }
 
-                if (Cursor.Match("\\"))
+                if (Cursor.Match('\\'))
                 {
                     Cursor.Advance();
 
