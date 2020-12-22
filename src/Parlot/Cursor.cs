@@ -5,21 +5,28 @@ using System.Runtime.CompilerServices;
 
 namespace Parlot
 {
-    public struct Cursor
+    public class Cursor
     {
         private readonly Stack<TextPosition> _stack;
         private readonly int _textLength;
         private char _current;
+        private int _offset;
+        private int _line;
+        private int _column;
 
         public Cursor(string buffer, TextPosition position)
         {
             _stack = new Stack<TextPosition>();
             Buffer = buffer;
-            Position = position;
             _textLength = buffer.Length;
             _current = _textLength == 0 ? '\0' : Buffer[position.Offset];
             Eof = _textLength == 0;
+            _offset = 0;
+            _line = 0;
+            _column = 0;
         }
+
+        public TextPosition Position => new TextPosition(_offset, _line, _column);
 
         /// <summary>
         /// Records the current location of the cursor.
@@ -54,34 +61,36 @@ namespace Parlot
         /// </summary>
         /// <param name="offset">The number of c</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Advance(int offset = 1)
+        public void Advance()
         {
             if (Eof)
             {
                 return;
             }
 
-            for (var i = 0; i < offset; i++)
+            _offset++;
+
+            Eof = _offset >= _textLength;
+
+            if (Eof)
             {
-                Position = Position.NextColumn();
-
-                Eof = Position.Offset >= _textLength;
-
-                if (Eof)
-                {
-                    _current = '\0';
-                    return;
-                }
-
-                var c = Buffer[Position.Offset];
-
-                if (c == '\n' || (c == '\r' && _current != '\n'))
-                {
-                    Position = Position.NextLine();
-                }
-
-                _current = c;
+                _current = '\0';
+                return;
             }
+
+            var c = Buffer[_offset];
+
+            if (c == '\n' || (c == '\r' && _current != '\n'))
+            {
+                _line++;
+                _column = 0;
+            }
+            else
+            {
+                _column = 0;
+            }
+
+            _current = c;
         }
 
         /// <summary>
@@ -90,10 +99,12 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Seek(TextPosition position)
         {
-            Position = position;
-            
+            _offset = position.Offset;
+            _line = position.Line;
+            _column = position.Column;
+
             // Eof might have been recorded
-            if (position.Offset >= Buffer.Length)
+            if (_offset >= Buffer.Length)
             {
                 _current = '\0';
                 Eof = true;
@@ -129,7 +140,7 @@ namespace Parlot
                 return '\0';
             }
 
-            var nextIndex = Position.Offset + index;
+            var nextIndex = _offset + index;
 
             if (nextIndex >= _textLength || nextIndex < 0)
             {
@@ -138,7 +149,7 @@ namespace Parlot
 
             return Buffer[nextIndex];
         }
-        public TextPosition Position { get; private set; }
+        
         public bool Eof { get; private set; }
         public string Buffer { get; private set; }
 
@@ -191,12 +202,12 @@ namespace Parlot
                 return !Eof && s[0] == _current && s[1] == PeekNext();
             }
 
-            if (Eof || Position.Offset + s.Length - 1 >= _textLength)
+            if (Eof || _offset + s.Length - 1 >= _textLength)
             {
                 return false;
             }
 
-            var span = Buffer.AsSpan(Position.Offset, s.Length);
+            var span = Buffer.AsSpan(_offset, s.Length);
 
             return span.SequenceEqual(s);
         }

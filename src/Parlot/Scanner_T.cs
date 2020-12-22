@@ -48,14 +48,7 @@ namespace Parlot
         {
             var token = new Token<T>(tokenType, Buffer, start, end);
 
-            if (OnToken is not null)
-            {
-                return OnToken.Invoke(token);
-            }
-            else
-            {
-                return token;
-            }
+            return OnToken == null ? token : OnToken.Invoke(token);
         }
 
         public bool ReadIdentifier(Func<char, bool> identifierStart, Func<char, bool> identifierPart, out Token<T> token, T tokenType = default)
@@ -181,7 +174,10 @@ namespace Parlot
                 return false;
             }
 
-            Cursor.Advance(text.Length);
+            for (var i = 0; i < text.Length; i++)
+            {
+                Cursor.Advance();
+            }
 
             token = EmitToken(tokenType, start, Cursor.Position);
             return true;
@@ -243,12 +239,15 @@ namespace Parlot
             // Is there an end quote?
             if (nextQuote != -1)
             {
-                var nextEscape = buffer.IndexOf('\\');
+                var nextEscape = buffer.IndexOf("\\", StringComparison.Ordinal);
 
                 // If the next escape if not before the next quote, we can return the string as-is
                 if (nextEscape == -1 || nextEscape > nextQuote)
                 {
-                    Cursor.Advance(nextQuote + 1);
+                    for (var i = 0; i < nextQuote + 1; i++)
+                    {
+                        Cursor.Advance();
+                    }
 
                     Cursor.CommitPosition();
 

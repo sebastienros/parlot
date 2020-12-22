@@ -14,23 +14,9 @@ namespace Parlot
             Column = column;
         }
 
-        public TextPosition(TextPosition textPosition) : this(textPosition.Offset, textPosition.Line, textPosition.Column)
-        {
-        }
-
-        public int Offset;
-        public int Line;
-        public int Column;
-
-        public TextPosition NextColumn()
-        {
-            return new TextPosition(Offset + 1, Line, Column + 1);
-        }
-
-        public TextPosition NextLine()
-        {
-            return new TextPosition(Offset, Line + 1, 0);
-        }
+        public int Offset { get; }
+        public int Line { get; }
+        public int Column { get; }
 
         public static int operator -(TextPosition left, TextPosition right)
         {
