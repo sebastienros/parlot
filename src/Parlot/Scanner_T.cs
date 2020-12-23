@@ -36,10 +36,12 @@ namespace Parlot
                 return false;
             }
 
-            do
+            Cursor.Advance();
+
+            while (Character.IsWhiteSpace(Cursor.Peek()))
             {
                 Cursor.Advance();
-            } while (Character.IsWhiteSpace(Cursor.Peek()));
+            }
 
             return true;
         }
@@ -51,22 +53,22 @@ namespace Parlot
             return OnToken == null ? token : OnToken.Invoke(token);
         }
 
-        public bool ReadIdentifier(Func<char, bool> identifierStart, Func<char, bool> identifierPart, out Token<T> token, T tokenType = default)
+        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out Token<T> token, T tokenType = default)
         {
             token = Empty;
 
-            var start = Cursor.Position;
-
-            if (!identifierStart(Cursor.Peek()))
+            if (!first(Cursor.Peek()))
             {
                 return false;
             }
+
+            var start = Cursor.Position;
 
             // At this point we have an identifier, read while it's an identifier part.
 
             Cursor.Advance();
 
-            ReadWhile(x => identifierPart(x), out _);
+            ReadWhile(x => other(x), out _, discardToken: true);
 
             token = EmitToken(tokenType, start, Cursor.Position);
 
@@ -77,14 +79,14 @@ namespace Parlot
         {
             // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
 
-            return ReadIdentifier(x => Character.IsIdentifierStart(x), x => Character.IsIdentifierPart(x), out token, tokenType);
+            return ReadFirstThenOthers(x => Character.IsIdentifierStart(x), x => Character.IsIdentifierPart(x), out token, tokenType);
         }
 
         public bool ReadDecimal(out Token<T> token, T tokenType = default)
         {
             token = Empty;
 
-            // perf: to prevent a copy of the position
+            // perf: fast path to prevent a copy of the position
 
             if (!Char.IsDigit(Cursor.Peek()))
             {
@@ -116,13 +118,6 @@ namespace Parlot
                 } while (!Cursor.Eof && Char.IsDigit(Cursor.Peek()));
             }
 
-            var length = Cursor.Position - start; 
-            
-            if (length == 0)
-            {
-                return false;
-            }
-
             token = EmitToken(tokenType, start, Cursor.Position);
             return true;
         }
@@ -130,7 +125,7 @@ namespace Parlot
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public bool ReadWhile(Func<char, bool> predicate, out Token<T> token, T tokenType = default)
+        public bool ReadWhile(Func<char, bool> predicate, out Token<T> token, T tokenType = default, bool discardToken = false)
         {
             token = Empty;
 
@@ -155,7 +150,11 @@ namespace Parlot
                 return false;
             }
 
-            token = EmitToken(tokenType, start, Cursor.Position);
+            if (!discardToken)
+            {
+                token = EmitToken(tokenType, start, Cursor.Position);
+            }
+
             return true;
         }
 
@@ -232,38 +231,33 @@ namespace Parlot
             var start = Cursor.Position;
 
             Cursor.Advance();
-            
+
             // Fast path if there aren't any escape char until next quote
-            var buffer = Cursor.Buffer.AsSpan(start.Offset + 1);
+            var startOffset = start.Offset + 1;
 
-            var nextQuote = buffer.IndexOf(startChar);
+            var nextQuote = Cursor.Buffer.IndexOf(startChar, startOffset);
 
-            // Is there an end quote?
-            if (nextQuote != -1)
+            if (nextQuote == -1)
             {
-                var nextEscape = buffer.IndexOf('\\');
-
-                // If the next escape if not before the next quote, we can return the string as-is
-                if (nextEscape == -1 || nextEscape > nextQuote)
-                {
-                    for (var i = 0; i < nextQuote + 1; i++)
-                    {
-                        Cursor.Advance();
-                    }
-
-                    token = EmitToken(tokenType, start, Cursor.Position);
-                    return true;
-                }
-            }
-            else
-            {
-                // There is no end quote
+                // There is no end quote, not a string
                 Cursor.ResetPosition(start);
 
                 return false;
             }
 
-            // TODO: Can we reuse the ReadOnlySpan buffer?
+            var nextEscape = Cursor.Buffer.IndexOf('\\', startOffset, nextQuote - startOffset);
+
+            // If the next escape if not before the next quote, we can return the string as-is
+            if (nextEscape == -1 || nextEscape > nextQuote)
+            {
+                for (var i = startOffset; i < nextQuote + 1; i++)
+                {
+                    Cursor.Advance();
+                }
+
+                token = EmitToken(tokenType, start, Cursor.Position);
+                return true;
+            }
 
             while (!Cursor.Match(startChar))
             {
