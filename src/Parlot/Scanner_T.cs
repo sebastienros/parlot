@@ -84,7 +84,7 @@ namespace Parlot
         {
             token = Empty;
 
-            // perf: try to prevent having to call RecordPosition
+            // perf: to prevent a copy of the position
 
             if (!Char.IsDigit(Cursor.Peek()))
             {
@@ -134,7 +134,14 @@ namespace Parlot
         {
             token = Empty;
 
+            if (Cursor.Eof || !predicate(Cursor.Peek()))
+            {
+                return false;
+            }
+
             var start = Cursor.Position;
+
+            Cursor.Advance();
 
             while (!Cursor.Eof && predicate(Cursor.Peek()))
             {
@@ -164,12 +171,12 @@ namespace Parlot
         {
             token = Empty;
 
-            var start = Cursor.Position;
-
             if (!Cursor.Match(text))
             {
                 return false;
             }
+
+            var start = Cursor.Position;
 
             for (var i = 0; i < text.Length; i++)
             {
@@ -234,7 +241,7 @@ namespace Parlot
             // Is there an end quote?
             if (nextQuote != -1)
             {
-                var nextEscape = buffer.IndexOf("\\", StringComparison.Ordinal);
+                var nextEscape = buffer.IndexOf('\\');
 
                 // If the next escape if not before the next quote, we can return the string as-is
                 if (nextEscape == -1 || nextEscape > nextQuote)
