@@ -33,6 +33,7 @@ namespace Parlot
         /// Use this method when the current location of the text needs to be kept in case the parsing doesn't reach a successful state and
         /// another token needs to be tried.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RecordPosition()
         {
             _stack.Push(Position);
@@ -42,6 +43,7 @@ namespace Parlot
         /// Restores the cursor to the last recorded location.
         /// Use this method when a token wasn't found and the cursor needs to be pointing to the previously recorded location.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RollbackPosition()
         {
             Seek(_stack.Pop());
@@ -51,6 +53,7 @@ namespace Parlot
         /// Discard the previously recorded location.
         /// Use this method when a token was successfuly found and the recorded location can be discaded.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CommitPosition()
         {
             _stack.Pop();
@@ -178,11 +181,9 @@ namespace Parlot
                 return false;
             }
 
-            var span = s.AsSpan();
-
-            for (var i = 0; i < span.Length; i++)
+            for (var i = 0; i < s.Length; i++)
             {
-                if (span[i] == _current)
+                if (s[i] == _current)
                 {
                     return true;
                 }

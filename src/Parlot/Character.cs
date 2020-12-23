@@ -63,7 +63,7 @@ namespace Parlot
             return (char)code;
         }
 
-        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> buffer)
+        public static string DecodeString(string buffer)
         {
             // Nothing to do if the string doesn't have any escape char
             if (!buffer.Contains("\\", StringComparison.Ordinal))
@@ -113,7 +113,7 @@ namespace Parlot
                 }
             }
 
-            return new ReadOnlySpan<char>(data, 0, dataIndex);
+            return new ReadOnlySpan<char>(data, 0, dataIndex).ToString();
         }
 
         private static int HexValue(char ch)
