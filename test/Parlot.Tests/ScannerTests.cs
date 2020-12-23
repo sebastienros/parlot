@@ -15,7 +15,7 @@ namespace Parlot.Tests
         public void ShouldNotReadEscapedStringWithoutMatchingQuotes(string text)
         {
             Scanner s = new(text);
-            Assert.False(s.ReadQuotedString());
+            Assert.False(s.ReadQuotedString(out _));
         }
 
         [Theory]
@@ -24,9 +24,9 @@ namespace Parlot.Tests
         public void ShouldReadEscapedStringWithMatchingQuotes(string text, string expected)
         {
             Scanner s = new(text);
-            var result = s.ReadQuotedString();
+            var result = s.ReadQuotedString(out var token);
             Assert.True(result);
-            Assert.Equal(expected, result.Token.Span.ToString());
+            Assert.Equal(expected, token.Text);
         }
 
         [Theory]
@@ -38,9 +38,9 @@ namespace Parlot.Tests
         public void ShouldReadStringWithEscapes(string text, string expected)
         {
             Scanner s = new(text);
-            var result = s.ReadQuotedString();
+            var result = s.ReadQuotedString(out var token);
             Assert.True(result);
-            Assert.Equal(expected, result.Token.Span.ToString());
+            Assert.Equal(expected, token.Text);
         }
 
         [Theory]
@@ -50,7 +50,7 @@ namespace Parlot.Tests
         public void ShouldNotReadStringWithInvalidEscapes(string text)
         {
             Scanner s = new(text);
-            Assert.False(s.ReadQuotedString());
+            Assert.False(s.ReadQuotedString(out _));
         }
     }
 }

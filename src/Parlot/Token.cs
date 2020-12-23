@@ -1,4 +1,6 @@
-﻿namespace Parlot
+﻿using System;
+
+namespace Parlot
 {
     public struct Token<T>
     {
@@ -17,6 +19,11 @@
         public TextPosition End { get; }
         public T Type { get; }
         public int Length => End - Start;
+
+        /// <summary>
+        /// Returns the text associated with the token. Prefer using Buffer and positions to prevent allocations.
+        /// </summary>
         public string Text => Buffer.Substring(Start.Offset, Length);
+        public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
     }
 }

@@ -42,13 +42,13 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("+", "Plus"))
+                if (_scanner.ReadText("+", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
                     expression = new Addition(expression, ParseFactor());
                 }
-                else if (_scanner.ReadText("-", "Minus"))
+                else if (_scanner.ReadText("-", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
@@ -71,13 +71,13 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("*", "Times"))
+                if (_scanner.ReadText("*", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
                     expression = new Multiplication(expression, ParseUnaryExpression());
                 }
-                else if (_scanner.ReadText("/", "Divided"))
+                else if (_scanner.ReadText("/", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
@@ -111,18 +111,16 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            var number = _scanner.ReadDecimal();
-
-            if (number)
+            if (_scanner.ReadDecimal(out var number))
             {
-                return new Number(decimal.Parse(number.Token.Span));
+                return new Number(decimal.Parse(number.Span));
             }
 
-            if (_scanner.ReadText("("))
+            if (_scanner.ReadText("(", out _))
             {
                 var expression = ParseExpression();
 
-                if (!_scanner.ReadText(")"))
+                if (!_scanner.ReadText(")", out _))
                 {
                     throw new ParseException("Expected ')'", _scanner.Cursor.Position);
                 }

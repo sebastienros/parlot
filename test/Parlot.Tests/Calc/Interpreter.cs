@@ -1,3 +1,5 @@
+using System;
+
 namespace Parlot.Tests.Calc
 {
 
@@ -42,17 +44,17 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("+"))
+                if (_scanner.ReadText("+", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    value = value + ParseFactor();
+                    value += ParseFactor();
                 }
-                else if (_scanner.ReadText("-"))
+                else if (_scanner.ReadText("-", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    value = value - ParseFactor();
+                    value -= ParseFactor();
                 }
                 else
                 {
@@ -71,17 +73,17 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("*"))
+                if (_scanner.ReadText("*", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    value = value * ParseUnaryExpression();
+                    value *= ParseUnaryExpression();
                 }
-                else if (_scanner.ReadText("/"))
+                else if (_scanner.ReadText("/", out _))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    value = value / ParseUnaryExpression();
+                    value /= ParseUnaryExpression();
                 }
                 else
                 {
@@ -111,18 +113,16 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            var number = _scanner.ReadDecimal();
-            
-            if (number)
+            if (_scanner.ReadDecimal(out var number))
             {
-                return decimal.Parse(number.Token.Span);
+                return decimal.Parse(number.Span);
             }
 
-            if (_scanner.ReadText("("))
+            if (_scanner.ReadText("(", out _))
             {
                 var value = ParseExpression();
 
-                if (!_scanner.ReadText(")"))
+                if (!_scanner.ReadText(")", out _))
                 {
                     throw new ParseException("Expected ')'", _scanner.Cursor.Position);
                 }
