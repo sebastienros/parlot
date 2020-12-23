@@ -44,13 +44,13 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("+", out _))
+                if (_scanner.ReadChar('+'))
                 {
                     _scanner.SkipWhiteSpace();
 
                     value += ParseFactor();
                 }
-                else if (_scanner.ReadText("-", out _))
+                else if (_scanner.ReadChar('-'))
                 {
                     _scanner.SkipWhiteSpace();
 
@@ -73,13 +73,13 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("*", out _))
+                if (_scanner.ReadChar('*'))
                 {
                     _scanner.SkipWhiteSpace();
 
                     value *= ParseUnaryExpression();
                 }
-                else if (_scanner.ReadText("/", out _))
+                else if (_scanner.ReadChar('/'))
                 {
                     _scanner.SkipWhiteSpace();
 
@@ -113,16 +113,18 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal(out var number))
+            var number = new TokenResult();
+
+            if (_scanner.ReadDecimal(number))
             {
-                return decimal.Parse(number.Span);
+                return decimal.Parse(number.Token.Span);
             }
 
-            if (_scanner.ReadText("(", out _))
+            if (_scanner.ReadChar('('))
             {
                 var value = ParseExpression();
 
-                if (!_scanner.ReadText(")", out _))
+                if (!_scanner.ReadChar(')'))
                 {
                     throw new ParseException("Expected ')'", _scanner.Cursor.Position);
                 }

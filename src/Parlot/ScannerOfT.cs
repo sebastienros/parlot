@@ -12,7 +12,7 @@ namespace Parlot
     /// </remarks>
     public class Scanner<T>
     {
-        public static readonly Token<T> Empty = Token<T>.Empty;
+        public static readonly Token<T> EmptyToken = Token<T>.Empty;
 
         public readonly string Buffer;
         public Cursor Cursor;       
@@ -46,17 +46,8 @@ namespace Parlot
             return true;
         }
 
-        public Token<T> EmitToken(T tokenType, TextPosition start, TextPosition end)
+        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, TokenResult<T> result = null, T tokenType = default)
         {
-            var token = new Token<T>(tokenType, Buffer, start, end);
-
-            return OnToken == null ? token : OnToken.Invoke(token);
-        }
-
-        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out Token<T> token, T tokenType = default)
-        {
-            token = Empty;
-
             if (!first(Cursor.Peek()))
             {
                 return false;
@@ -68,23 +59,23 @@ namespace Parlot
 
             Cursor.Advance();
 
-            ReadWhile(x => other(x), out _, discardToken: true);
+            ReadWhile(other, null);
 
-            token = EmitToken(tokenType, start, Cursor.Position);
+            result?.SetToken(tokenType, Buffer, start, Cursor.Position);
 
             return true;
         }
 
-        public bool ReadIdentifier(out Token<T> token, T tokenType = default)
+        public bool ReadIdentifier(TokenResult<T> result = null, T tokenType = default)
         {
             // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
 
-            return ReadFirstThenOthers(x => Character.IsIdentifierStart(x), x => Character.IsIdentifierPart(x), out token, tokenType);
+            return ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), result, tokenType);
         }
 
-        public bool ReadDecimal(out Token<T> token, T tokenType = default)
+        public bool ReadDecimal(TokenResult<T> result = null, T tokenType = default)
         {
-            token = Empty;
+            
 
             // perf: fast path to prevent a copy of the position
 
@@ -118,16 +109,15 @@ namespace Parlot
                 } while (!Cursor.Eof && Char.IsDigit(Cursor.Peek()));
             }
 
-            token = EmitToken(tokenType, start, Cursor.Position);
+            result?.SetToken(tokenType, Buffer, start, Cursor.Position);
             return true;
         }
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public bool ReadWhile(Func<char, bool> predicate, out Token<T> token, T tokenType = default, bool discardToken = false)
-        {
-            token = Empty;
+        public bool ReadWhile(Func<char, bool> predicate, TokenResult<T> result = null, T tokenType = default)
+        {           
 
             if (Cursor.Eof || !predicate(Cursor.Peek()))
             {
@@ -150,56 +140,86 @@ namespace Parlot
                 return false;
             }
 
-            if (!discardToken)
-            {
-                token = EmitToken(tokenType, start, Cursor.Position);
-            }
+            result?.SetToken(tokenType, Buffer, start, Cursor.Position);
 
             return true;
         }
 
-        public bool ReadNonWhiteSpace(out Token<T> token, T tokenType = default)
+        public bool ReadNonWhiteSpace(TokenResult<T> result = null, T tokenType = default)
         {
-            return ReadWhile(x => !Char.IsWhiteSpace(x), out token, tokenType);
+            return ReadWhile(static x => !Char.IsWhiteSpace(x), result, tokenType);
+        }
+
+        /// <summary>
+        /// Reads the specified text.
+        /// </summary>
+        public bool ReadChar(char c, TokenResult<T> result = null, T tokenType = default)
+        {
+            if (!Cursor.Match(c))
+            {
+                return false;
+            }
+
+            if (result != null)
+            {
+                var start = Cursor.Position;
+
+                Cursor.Advance();
+
+                result?.SetToken(tokenType, Buffer, start, Cursor.Position);
+            }
+            else
+            {
+                Cursor.Advance();
+            }
+
+            return true;
         }
 
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, out Token<T> token, T tokenType = default)
+        public bool ReadText(string text, TokenResult<T> result = null, T tokenType = default)
         {
-            token = Empty;
-
             if (!Cursor.Match(text))
             {
                 return false;
             }
 
-            var start = Cursor.Position;
-
-            for (var i = 0; i < text.Length; i++)
+            if (result != null)
             {
-                Cursor.Advance();
-            }
+                var start = Cursor.Position;
 
-            token = EmitToken(tokenType, start, Cursor.Position);
+                for (var i = 0; i < text.Length; i++)
+                {
+                    Cursor.Advance();
+                }
+
+                result?.SetToken(tokenType, Buffer, start, Cursor.Position);
+            }
+            else
+            {
+                for (var i = 0; i < text.Length; i++)
+                {
+                    Cursor.Advance();
+                }
+            }
+            
             return true;
         }
 
-        public bool ReadSingleQuotedString(out Token<T> token, T tokenType = default)
+        public bool ReadSingleQuotedString(TokenResult<T> result = null, T tokenType = default)
         {
-            return ReadQuotedString('\'', out token, tokenType);
+            return ReadQuotedString('\'', result, tokenType);
         }
 
-        public bool ReadDoubleQuotedString(out Token<T> token, T tokenType = default)
+        public bool ReadDoubleQuotedString(TokenResult<T> result = null, T tokenType = default)
         {
-            return ReadQuotedString('\"', out token, tokenType);
+            return ReadQuotedString('\"', result, tokenType);
         }
 
-        public bool ReadQuotedString(out Token<T> token, T tokenType = default)
+        public bool ReadQuotedString(TokenResult<T> result = null, T tokenType = default)
         {
-            token = Empty;
-
             var startChar = Cursor.Peek();
 
             if (startChar != '\'' && startChar != '\"')
@@ -207,7 +227,7 @@ namespace Parlot
                 return false;
             }
 
-            return ReadQuotedString(startChar, out token, tokenType);
+            return ReadQuotedString(startChar, result, tokenType);
         }
 
         /// <summary>
@@ -217,10 +237,8 @@ namespace Parlot
         /// This method doesn't escape the string, but only validates its content is syntactically correct.
         /// The resulting Span contains the original quotes.
         /// </remarks>
-        private bool ReadQuotedString(char quoteChar, out Token<T> token, T tokenType = default)
+        private bool ReadQuotedString(char quoteChar, TokenResult<T> result = null, T tokenType = default)
         {
-            token = Empty;
-
             var startChar = Cursor.Peek();
 
             if (startChar != quoteChar)
@@ -255,7 +273,7 @@ namespace Parlot
                     Cursor.Advance();
                 }
 
-                token = EmitToken(tokenType, start, Cursor.Position);
+                result?.SetToken(tokenType, Buffer, start, Cursor.Position);
                 return true;
             }
 
@@ -344,7 +362,7 @@ namespace Parlot
 
             Cursor.Advance();
 
-            token = EmitToken(tokenType, start, Cursor.Position);
+            result?.SetToken(tokenType, Buffer, start, Cursor.Position);
 
             return true;
         }

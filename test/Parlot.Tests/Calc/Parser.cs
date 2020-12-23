@@ -1,6 +1,5 @@
 namespace Parlot.Tests.Calc
 {
-
     // Recursive descent parser
     // https://craftinginterpreters.com/parsing-expressions.html#recursive-descent-parsing
 
@@ -42,13 +41,13 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("+", out _))
+                if (_scanner.ReadChar('+'))
                 {
                     _scanner.SkipWhiteSpace();
 
                     expression = new Addition(expression, ParseFactor());
                 }
-                else if (_scanner.ReadText("-", out _))
+                else if (_scanner.ReadChar('-'))
                 {
                     _scanner.SkipWhiteSpace();
 
@@ -71,13 +70,13 @@ namespace Parlot.Tests.Calc
 
             while (true)
             {
-                if (_scanner.ReadText("*", out _))
+                if (_scanner.ReadChar('*'))
                 {
                     _scanner.SkipWhiteSpace();
 
                     expression = new Multiplication(expression, ParseUnaryExpression());
                 }
-                else if (_scanner.ReadText("/", out _))
+                else if (_scanner.ReadChar('/'))
                 {
                     _scanner.SkipWhiteSpace();
 
@@ -111,16 +110,18 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal(out var number))
+            var number = new TokenResult();
+
+            if (_scanner.ReadDecimal(number))
             {
-                return new Number(decimal.Parse(number.Span));
+                return new Number(decimal.Parse(number.Token.Span));
             }
 
-            if (_scanner.ReadText("(", out _))
+            if (_scanner.ReadChar('('))
             {
                 var expression = ParseExpression();
 
-                if (!_scanner.ReadText(")", out _))
+                if (!_scanner.ReadChar(')'))
                 {
                     throw new ParseException("Expected ')'", _scanner.Cursor.Position);
                 }

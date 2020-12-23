@@ -23,7 +23,7 @@ namespace Parlot
             _column = 0;
         }
 
-        public TextPosition Position => new TextPosition(_offset, _line, _column);
+        public TextPosition Position => new (_offset, _line, _column);
 
         /// <summary>
         /// Advances the cursor.

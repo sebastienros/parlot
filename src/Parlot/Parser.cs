@@ -7,7 +7,7 @@ namespace Parlot
         public bool TryParse(string text, out T expression, out ParseError error)
         {
             error = null;
-            expression = default(T);
+            expression = default;
 
             try
             {
