@@ -18,6 +18,29 @@ namespace Parlot.Tests.Calc
 
     }
 
+    public abstract class UnaryExpression : Expression
+    {
+        public UnaryExpression(Expression inner)
+        {
+            Inner = inner;
+        }
+
+        public Expression Inner { get; set; }
+    }
+
+    public class NegateExpression : UnaryExpression
+    {
+        public NegateExpression(Expression inner) : base(inner)
+        {
+        }
+
+        public override decimal Evaluate()
+        {
+            return -1 * Inner.Evaluate();
+        }
+    }
+
+
     public class Addition : BinaryExpression
     {
         public Addition(Expression left, Expression right) : base(left, right)

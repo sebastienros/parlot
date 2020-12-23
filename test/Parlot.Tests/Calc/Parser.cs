@@ -92,12 +92,26 @@ namespace Parlot.Tests.Calc
         }
 
         /*
-         unary =    ( "!" | "-" ) unary
+         unary =    ( "-" ) unary
                     | primary ;
         */
 
         private Expression ParseUnaryExpression()
         {
+            _scanner.SkipWhiteSpace();
+
+            if (_scanner.ReadChar('-'))
+            {
+                var inner = ParseUnaryExpression();
+
+                if (inner == null)
+                {
+                    throw new ParseException("Expected expression after '-'", _scanner.Cursor.Position);
+                }
+
+                return new NegateExpression(inner);
+            }
+
             return ParsePrimaryExpression();
         }
 

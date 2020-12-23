@@ -11,7 +11,7 @@ namespace Parlot.Tests.Calc
      * expression     => term ;
      * term           => factor ( ( "-" | "+" ) factor )* ;
      * factor         => unary ( ( "/" | "*" ) unary )* ;
-     * unary          => ( "!" | "-" ) unary
+     * unary          => ( "-" ) unary
      *                 | primary ;
      * primary        => NUMBER
      *                  | "(" expression ")" ;
@@ -95,12 +95,19 @@ namespace Parlot.Tests.Calc
         }
 
         /*
-         unary =    ( "!" | "-" ) unary
+         unary =    ( "-" ) unary
                     | primary ;
         */
 
         private decimal ParseUnaryExpression()
         {
+            _scanner.SkipWhiteSpace();
+
+            if (_scanner.ReadChar('-'))
+            {
+                return -1 * ParseUnaryExpression();
+            }
+
             return ParsePrimaryExpression();
         }
 

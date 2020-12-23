@@ -66,7 +66,7 @@ namespace Parlot
         public static string DecodeString(string buffer)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (!buffer.Contains("\\", StringComparison.Ordinal))
+            if (!buffer.Contains('\\'))
             {
                 return buffer;
             }

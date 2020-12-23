@@ -82,5 +82,16 @@ namespace Parlot.Tests.Calc
 
             Assert.Equal(value, result);
         }
+
+        [Theory]
+        [InlineData("-2", -2)]
+        [InlineData("-(1+2)", -3)]
+        [InlineData("--(1+2)", 3)]
+        public void TestUnary(string text, decimal value)
+        {
+            var result = Evaluate(text);
+
+            Assert.Equal(value, result);
+        }
     }
 }
