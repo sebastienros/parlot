@@ -16,8 +16,8 @@ namespace Parlot
         {
             Buffer = buffer;
             _textLength = buffer.Length;
-            _current = _textLength == 0 ? '\0' : Buffer[position.Offset];
             Eof = _textLength == 0;
+            _current = _textLength == 0 ? '\0' : Buffer[position.Offset];
             _offset = 0;
             _line = 0;
             _column = 0;
@@ -90,11 +90,6 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public char Peek()
         {
-            if (Eof)
-            {
-                return '\0';
-            }
-
             return _current;
         }
 
@@ -163,19 +158,37 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
         {
-            if (s.Length == 2)
+            if (s.Length == 0)
             {
-                return !Eof && s[0] == _current && s[1] == PeekNext();
+                return true;
             }
 
-            if (Eof || _offset + s.Length - 1 >= _textLength)
+            if (Eof || s[0] != _current)
             {
                 return false;
             }
 
-            var span = Buffer.AsSpan(_offset, s.Length);
+            var length = s.Length;
 
-            return span.SequenceEqual(s);
+            if (_offset + length - 1 >= _textLength)
+            {
+                return false;
+            }
+            
+            if (length > 1 && Buffer[_offset + 1] != s[1])
+            {
+                return false;
+            }
+
+            for (var i = 2; i < length; i++)
+            {
+                if (s[i] != Buffer[_offset + i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }
