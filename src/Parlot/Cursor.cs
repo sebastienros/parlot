@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
@@ -7,7 +6,6 @@ namespace Parlot
 {
     public class Cursor
     {
-        private readonly Stack<TextPosition> _stack;
         private readonly int _textLength;
         private char _current;
         private int _offset;
@@ -16,7 +14,6 @@ namespace Parlot
 
         public Cursor(string buffer, TextPosition position)
         {
-            _stack = new Stack<TextPosition>();
             Buffer = buffer;
             _textLength = buffer.Length;
             _current = _textLength == 0 ? '\0' : Buffer[position.Offset];
@@ -27,37 +24,6 @@ namespace Parlot
         }
 
         public TextPosition Position => new TextPosition(_offset, _line, _column);
-
-        /// <summary>
-        /// Records the current location of the cursor.
-        /// Use this method when the current location of the text needs to be kept in case the parsing doesn't reach a successful state and
-        /// another token needs to be tried.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void RecordPosition()
-        {
-            _stack.Push(Position);
-        }
-
-        /// <summary>
-        /// Restores the cursor to the last recorded location.
-        /// Use this method when a token wasn't found and the cursor needs to be pointing to the previously recorded location.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void RollbackPosition()
-        {
-            Seek(_stack.Pop());
-        }
-
-        /// <summary>
-        /// Discard the previously recorded location.
-        /// Use this method when a token was successfuly found and the recorded location can be discaded.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void CommitPosition()
-        {
-            _stack.Pop();
-        }
 
         /// <summary>
         /// Advances the cursor.
@@ -99,8 +65,7 @@ namespace Parlot
         /// <summary>
         /// Moves the cursor to the specific position
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Seek(TextPosition position)
+        public void ResetPosition(TextPosition position)
         {
             _offset = position.Offset;
             _line = position.Line;

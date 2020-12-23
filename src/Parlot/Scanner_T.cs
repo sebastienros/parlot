@@ -84,15 +84,14 @@ namespace Parlot
         {
             token = Empty;
 
-            var start = Cursor.Position;
-
-            Cursor.RecordPosition();
+            // perf: try to prevent having to call RecordPosition
 
             if (!Char.IsDigit(Cursor.Peek()))
             {
-                Cursor.RollbackPosition();
                 return false;
             }
+
+            var start = Cursor.Position;
 
             do
             {
@@ -106,7 +105,7 @@ namespace Parlot
 
                 if (!Char.IsDigit(Cursor.Peek()))
                 {
-                    Cursor.RollbackPosition();
+                    Cursor.ResetPosition(start);
                     return false;
                 }
 
@@ -116,8 +115,6 @@ namespace Parlot
 
                 } while (!Cursor.Eof && Char.IsDigit(Cursor.Peek()));
             }
-
-            Cursor.CommitPosition();
 
             var length = Cursor.Position - start; 
             
@@ -227,8 +224,6 @@ namespace Parlot
 
             var start = Cursor.Position;
 
-            Cursor.RecordPosition();
-
             Cursor.Advance();
             
             // Fast path if there aren't any escape char until next quote
@@ -249,8 +244,6 @@ namespace Parlot
                         Cursor.Advance();
                     }
 
-                    Cursor.CommitPosition();
-
                     token = EmitToken(tokenType, start, Cursor.Position);
                     return true;
                 }
@@ -258,7 +251,7 @@ namespace Parlot
             else
             {
                 // There is no end quote
-                Cursor.RollbackPosition();
+                Cursor.ResetPosition(start);
 
                 return false;
             }
@@ -310,7 +303,7 @@ namespace Parlot
 
                             if (!isValidUnicode)
                             {
-                                Cursor.RollbackPosition();
+                                Cursor.ResetPosition(start);
 
                                 return false;
                             }
@@ -332,14 +325,14 @@ namespace Parlot
 
                             if (!isValidHex)
                             {
-                                Cursor.RollbackPosition();
-                                
+                                Cursor.ResetPosition(start);
+
                                 return false;
                             }
 
                             break;
                         default:
-                            Cursor.RollbackPosition();
+                            Cursor.ResetPosition(start);
 
                             return false;
                     }
@@ -349,8 +342,6 @@ namespace Parlot
             }
 
             Cursor.Advance();
-
-            Cursor.CommitPosition();
 
             token = EmitToken(tokenType, start, Cursor.Position);
 
