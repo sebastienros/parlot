@@ -101,6 +101,11 @@ namespace Parlot
         public char Current => _current;
 
         /// <summary>
+        /// Returns the cursor's position in the buffer.
+        /// </summary>
+        public int Offset => _offset;
+
+        /// <summary>
         /// Evaluates a char forward in the buffer.
         /// </summary>
         public char PeekNext(int index = 1)

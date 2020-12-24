@@ -8,8 +8,6 @@ namespace Parlot
     /// <typeparam name="T">The state type of tokens.</typeparam>
     public class Scanner<T>
     {
-        public static readonly Token<T> EmptyToken = Token<T>.Empty;
-
         public readonly string Buffer;
         public Cursor Cursor;       
 
@@ -88,7 +86,7 @@ namespace Parlot
         {
             // perf: fast path to prevent a copy of the position
 
-            if (!Char.IsDigit(Cursor.Current))
+            if (!Character.IsDecimalDigit(Cursor.Current))
             {
                 return false;
             }
@@ -99,13 +97,13 @@ namespace Parlot
             {
                 Cursor.Advance();
 
-            } while (!Cursor.Eof && Char.IsDigit(Cursor.Current));
+            } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 
             if (Cursor.Match('.'))
             {
                 Cursor.Advance();
 
-                if (!Char.IsDigit(Cursor.Current))
+                if (!Character.IsDecimalDigit(Cursor.Current))
                 {
                     Cursor.ResetPosition(start);
                     return false;
@@ -115,7 +113,7 @@ namespace Parlot
                 {
                     Cursor.Advance();
 
-                } while (!Cursor.Eof && Char.IsDigit(Cursor.Current));
+                } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
             }
 
             result?.SetToken(tokenType, Buffer, start, Cursor.Position);
@@ -142,13 +140,6 @@ namespace Parlot
                 Cursor.Advance();
             }
 
-            var length = Cursor.Position - start; 
-            
-            if (length == 0)
-            {
-                return false;
-            }
-
             result?.SetToken(tokenType, Buffer, start, Cursor.Position);
 
             return true;
@@ -156,7 +147,7 @@ namespace Parlot
 
         public bool ReadNonWhiteSpace(TokenResult<T> result = null, T tokenType = default)
         {
-            return ReadWhile(static x => !Char.IsWhiteSpace(x), result, tokenType);
+            return ReadWhile(static x => !Character.IsWhiteSpace(x), result, tokenType);
         }
 
         /// <summary>
@@ -195,24 +186,20 @@ namespace Parlot
                 return false;
             }
 
+            var start = TextPosition.Start;
+
+            // perf: don't allocate a new TextPosition if we don't need to return it
             if (result != null)
             {
-                var start = Cursor.Position;
-
-                for (var i = 0; i < text.Length; i++)
-                {
-                    Cursor.Advance();
-                }
-
-                result?.SetToken(tokenType, Buffer, start, Cursor.Position);
+                start = Cursor.Position;
             }
-            else
+
+            for (var i = 0; i < text.Length; i++)
             {
-                for (var i = 0; i < text.Length; i++)
-                {
-                    Cursor.Advance();
-                }
+                Cursor.Advance();
             }
+
+            result?.SetToken(tokenType, Buffer, start, Cursor.Position);
             
             return true;
         }
@@ -255,22 +242,21 @@ namespace Parlot
                 return false;
             }
 
-            var start = Cursor.Position;
-
-            Cursor.Advance();
-
             // Fast path if there aren't any escape char until next quote
-            var startOffset = start.Offset + 1;
+            var startOffset = Cursor.Offset + 1;
 
             var nextQuote = Cursor.Buffer.IndexOf(startChar, startOffset);
 
             if (nextQuote == -1)
             {
                 // There is no end quote, not a string
-                Cursor.ResetPosition(start);
 
                 return false;
             }
+
+            var start = Cursor.Position;
+
+            Cursor.Advance();
 
             var nextEscape = Cursor.Buffer.IndexOf('\\', startOffset, nextQuote - startOffset);
 
@@ -288,6 +274,7 @@ namespace Parlot
 
             while (!Cursor.Match(startChar))
             {
+                // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
                 if (Cursor.Eof)
                 {
                     return false;
