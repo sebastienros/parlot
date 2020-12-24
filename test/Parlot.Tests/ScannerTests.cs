@@ -27,7 +27,7 @@ namespace Parlot.Tests
             var result = new TokenResult();
             var success = s.ReadQuotedString(result);
             Assert.True(success);
-            Assert.Equal(expected, result.Token.Text);
+            Assert.Equal(expected, result.Text);
         }
 
         [Theory]
@@ -42,7 +42,7 @@ namespace Parlot.Tests
             var result = new TokenResult();
             var success = s.ReadQuotedString(result);
             Assert.True(success);
-            Assert.Equal(expected, result.Token.Text);
+            Assert.Equal(expected, result.Text);
         }
 
         [Theory]
@@ -87,12 +87,12 @@ namespace Parlot.Tests
             var result = new TokenResult();
 
             Assert.True(s.ReadIdentifier(result));
-            Assert.Equal("a", result.Token.Text);
+            Assert.Equal("a", result.Text);
 
             s.SkipWhiteSpace();
 
             Assert.True(s.ReadIdentifier(result));
-            Assert.Equal("$abc", result.Token.Text);
+            Assert.Equal("$abc", result.Text);
 
             s.SkipWhiteSpace();
 
@@ -106,13 +106,13 @@ namespace Parlot.Tests
             var result = new TokenResult();
 
             Assert.True(s.ReadChar('a', result));
-            Assert.Equal("a", result.Token.Text);
+            Assert.Equal("a", result.Text);
 
             Assert.True(s.ReadChar('a', result));
-            Assert.Equal("a", result.Token.Text);
+            Assert.Equal("a", result.Text);
 
             Assert.True(s.ReadChar('a', result));
-            Assert.Equal("a", result.Token.Text);
+            Assert.Equal("a", result.Text);
 
             Assert.False(s.ReadChar('a', result));
         }
@@ -127,10 +127,10 @@ namespace Parlot.Tests
             Assert.False(s.ReadText("abd", result));
 
             Assert.True(s.ReadText("abc", result));
-            Assert.Equal("abc", result.Token.Text);
+            Assert.Equal("abc", result.Text);
 
             Assert.True(s.ReadText("d", result));
-            Assert.Equal("d", result.Token.Text);
+            Assert.Equal("d", result.Text);
         }
 
         [Fact]
@@ -139,10 +139,10 @@ namespace Parlot.Tests
             var result = new TokenResult();
 
             new Scanner("'abcd'").ReadSingleQuotedString(result);
-            Assert.Equal("'abcd'", result.Token.Text);
+            Assert.Equal("'abcd'", result.Text);
 
             new Scanner("'a\\nb'").ReadSingleQuotedString(result);
-            Assert.Equal("'a\\nb'", result.Token.Text);
+            Assert.Equal("'a\\nb'", result.Text);
 
             Assert.False(new Scanner("'abcd").ReadSingleQuotedString(result));
             Assert.False(new Scanner("abcd'").ReadSingleQuotedString(result));
@@ -156,10 +156,10 @@ namespace Parlot.Tests
             var result = new TokenResult();
 
             new Scanner("\"abcd\"").ReadDoubleQuotedString(result);
-            Assert.Equal("\"abcd\"", result.Token.Text);
+            Assert.Equal("\"abcd\"", result.Text);
 
             new Scanner("\"a\\nb\"").ReadDoubleQuotedString(result);
-            Assert.Equal("\"a\\nb\"", result.Token.Text);
+            Assert.Equal("\"a\\nb\"", result.Text);
 
             Assert.False(new Scanner("\"abcd").ReadDoubleQuotedString());
             Assert.False(new Scanner("abcd\"").ReadDoubleQuotedString());
@@ -178,7 +178,7 @@ namespace Parlot.Tests
             var result = new TokenResult();
 
             Assert.True(new Scanner(text).ReadDecimal(result));
-            Assert.Equal(expected, result.Token.Text);
+            Assert.Equal(expected, result.Text);
         }
 
         [Theory]

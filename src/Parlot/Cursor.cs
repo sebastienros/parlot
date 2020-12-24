@@ -34,43 +34,47 @@ namespace Parlot
         /// Advances the cursor.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Advance()
+        public void Advance(int count = 1)
         {
             if (Eof)
             {
                 return;
             }
 
-            _offset++;
+            _offset += count;
 
             Eof = _offset >= _textLength;
 
             if (Eof)
             {
+                _offset = _textLength;
                 _current = NullChar;
                 return;
             }
 
-            var c = Buffer[_offset];
-
-            if (_current == '\n') 
+            for (var i = 0; i < count; i++)
             {
-                _line++;
-                _column = 1;
-            }
-            else if (c == '\r' && PeekNext() == '\n')
-            {
-                _offset++;
+                var c = Buffer[_offset];
 
-                // Skip \r
-                c = '\n';
-            }
-            else
-            {
-                _column++;
-            }
+                if (_current == '\n')
+                {
+                    _line++;
+                    _column = 1;
+                }
+                else if (c == '\r' && PeekNext() == '\n')
+                {
+                    _offset++;
 
-            _current = c;
+                    // Skip \r
+                    c = '\n';
+                }
+                else
+                {
+                    _column++;
+                }
+
+                _current = c;
+            }
         }
 
         /// <summary>

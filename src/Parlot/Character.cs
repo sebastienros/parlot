@@ -68,10 +68,10 @@ namespace Parlot
             return (char)code;
         }
 
-        public static string DecodeString(string buffer)
+        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> buffer)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (!buffer.Contains('\\'))
+            if (buffer.IndexOf('\\') == -1)
             {
                 return buffer;
             }
