@@ -8,8 +8,7 @@ namespace Parlot.Tests.Calc
 
     /*
      * Grammar:
-     * expression     => term ;
-     * term           => factor ( ( "-" | "+" ) factor )* ;
+     * expression     => factor ( ( "-" | "+" ) factor )* ;
      * factor         => unary ( ( "/" | "*" ) unary )* ;
      * unary          => ( "-" ) unary
      *                 | primary ;
@@ -32,11 +31,6 @@ namespace Parlot.Tests.Calc
         }
 
         private decimal ParseExpression()
-        {
-            return ParseTerm();
-        }
-
-        private decimal ParseTerm()
         {
             var value = ParseFactor();
 

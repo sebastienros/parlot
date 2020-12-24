@@ -5,7 +5,7 @@ namespace Parlot
     /// </summary>
     public struct TextPosition
     {
-        public static TextPosition Start = new(0, 0, 0);
+        public static TextPosition Start = new(0, 1, 1);
 
         public TextPosition(int offset, int line, int column)
         {
@@ -22,5 +22,7 @@ namespace Parlot
         {
             return left.Offset - right.Offset;
         }
+
+        public override string ToString() => $"({Line},{Column})";
     }
 }

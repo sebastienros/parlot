@@ -48,6 +48,11 @@ namespace Parlot
                                         ch == 0xFEFF));
         }
 
+        public static bool IsWhiteSpaceOrNewLine(char ch)
+        {
+            return (ch == 0xA) || IsWhiteSpace(ch);
+        }
+
         public static char ScanHexEscape(ReadOnlySpan<char> text, int index)
         {
             var prefix = text[index];

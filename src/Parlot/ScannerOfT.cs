@@ -3,13 +3,9 @@
 namespace Parlot
 {
     /// <summary>
-    /// 
+    /// This class is used to return <see cref="Token{T}"/> instances extracted from the input buffer.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <remarks>
-    /// Calling a Read() method without a token type won't emit a token. This can be used to reuse Read() method without other 
-    /// Read() methods without trigger a new Token for each sub-call.
-    /// </remarks>
+    /// <typeparam name="T">The state type of tokens.</typeparam>
     public class Scanner<T>
     {
         public static readonly Token<T> EmptyToken = Token<T>.Empty;
@@ -23,22 +19,37 @@ namespace Parlot
             Cursor = new Cursor(Buffer, TextPosition.Start);
         }
 
-        public Func<Token<T>, Token<T>> OnToken { get; set; }
-
         /// <summary>
         /// Reads any whitespace without generating a token.
         /// </summary>
         /// <returns>Whether some white space was read.</returns>
-        public bool SkipWhiteSpace()
+        public bool SkipWhiteSpaceOrNewLine()
         {
-            if (!Character.IsWhiteSpace(Cursor.Peek()))
+            if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
             {
                 return false;
             }
 
             Cursor.Advance();
 
-            while (Character.IsWhiteSpace(Cursor.Peek()))
+            while (Character.IsWhiteSpaceOrNewLine(Cursor.Current))
+            {
+                Cursor.Advance();
+            }
+
+            return true;
+        }
+
+        public bool SkipWhiteSpace()
+        {
+            if (!Character.IsWhiteSpace(Cursor.Current))
+            {
+                return false;
+            }
+
+            Cursor.Advance();
+
+            while (Character.IsWhiteSpace(Cursor.Current))
             {
                 Cursor.Advance();
             }
@@ -48,7 +59,7 @@ namespace Parlot
 
         public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, TokenResult<T> result = null, T tokenType = default)
         {
-            if (!first(Cursor.Peek()))
+            if (!first(Cursor.Current))
             {
                 return false;
             }
@@ -75,11 +86,9 @@ namespace Parlot
 
         public bool ReadDecimal(TokenResult<T> result = null, T tokenType = default)
         {
-            
-
             // perf: fast path to prevent a copy of the position
 
-            if (!Char.IsDigit(Cursor.Peek()))
+            if (!Char.IsDigit(Cursor.Current))
             {
                 return false;
             }
@@ -90,13 +99,13 @@ namespace Parlot
             {
                 Cursor.Advance();
 
-            } while (!Cursor.Eof && Char.IsDigit(Cursor.Peek()));
+            } while (!Cursor.Eof && Char.IsDigit(Cursor.Current));
 
             if (Cursor.Match('.'))
             {
                 Cursor.Advance();
 
-                if (!Char.IsDigit(Cursor.Peek()))
+                if (!Char.IsDigit(Cursor.Current))
                 {
                     Cursor.ResetPosition(start);
                     return false;
@@ -106,7 +115,7 @@ namespace Parlot
                 {
                     Cursor.Advance();
 
-                } while (!Cursor.Eof && Char.IsDigit(Cursor.Peek()));
+                } while (!Cursor.Eof && Char.IsDigit(Cursor.Current));
             }
 
             result?.SetToken(tokenType, Buffer, start, Cursor.Position);
@@ -119,7 +128,7 @@ namespace Parlot
         public bool ReadWhile(Func<char, bool> predicate, TokenResult<T> result = null, T tokenType = default)
         {           
 
-            if (Cursor.Eof || !predicate(Cursor.Peek()))
+            if (Cursor.Eof || !predicate(Cursor.Current))
             {
                 return false;
             }
@@ -128,7 +137,7 @@ namespace Parlot
 
             Cursor.Advance();
 
-            while (!Cursor.Eof && predicate(Cursor.Peek()))
+            while (!Cursor.Eof && predicate(Cursor.Current))
             {
                 Cursor.Advance();
             }
@@ -220,7 +229,7 @@ namespace Parlot
 
         public bool ReadQuotedString(TokenResult<T> result = null, T tokenType = default)
         {
-            var startChar = Cursor.Peek();
+            var startChar = Cursor.Current;
 
             if (startChar != '\'' && startChar != '\"')
             {
@@ -239,7 +248,7 @@ namespace Parlot
         /// </remarks>
         private bool ReadQuotedString(char quoteChar, TokenResult<T> result = null, T tokenType = default)
         {
-            var startChar = Cursor.Peek();
+            var startChar = Cursor.Current;
 
             if (startChar != quoteChar)
             {
@@ -288,7 +297,7 @@ namespace Parlot
                 {
                     Cursor.Advance();
 
-                    switch (Cursor.Peek())
+                    switch (Cursor.Current)
                     {
                         case '0':
                         case '\'':
@@ -306,13 +315,13 @@ namespace Parlot
 
                             Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Peek()))
+                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
                                 Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Peek()))
+                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                 {
                                     Cursor.Advance();
-                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Peek()))
+                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                     {
                                         Cursor.Advance();
                                         isValidUnicode = true;
@@ -333,10 +342,10 @@ namespace Parlot
 
                             Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Peek()))
+                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
                                 Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Peek()))
+                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                 {
                                     isValidHex = true;
                                 }

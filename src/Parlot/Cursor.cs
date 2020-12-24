@@ -1,11 +1,12 @@
 ﻿using System;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Parlot
 {
     public class Cursor
     {
+        public static readonly char NullChar = '\0';
+
         private readonly int _textLength;
         private char _current;
         private int _offset;
@@ -17,10 +18,14 @@ namespace Parlot
             Buffer = buffer;
             _textLength = buffer.Length;
             Eof = _textLength == 0;
-            _current = _textLength == 0 ? '\0' : Buffer[position.Offset];
+            _current = _textLength == 0 ? NullChar : Buffer[position.Offset];
             _offset = 0;
-            _line = 0;
-            _column = 0;
+            _line = 1;
+            _column = 1;
+        }
+
+        public Cursor(string buffer) : this(buffer, TextPosition.Start)
+        {
         }
 
         public TextPosition Position => new (_offset, _line, _column);
@@ -28,7 +33,6 @@ namespace Parlot
         /// <summary>
         /// Advances the cursor.
         /// </summary>
-        /// <param name="offset">The number of c</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance()
         {
@@ -43,20 +47,27 @@ namespace Parlot
 
             if (Eof)
             {
-                _current = '\0';
+                _current = NullChar;
                 return;
             }
 
             var c = Buffer[_offset];
 
-            if (c == '\n' || (c == '\r' && _current != '\n'))
+            if (_current == '\n') 
             {
                 _line++;
-                _column = 0;
+                _column = 1;
+            }
+            else if (c == '\r' && PeekNext() == '\n')
+            {
+                _offset++;
+
+                // Skip \r
+                c = '\n';
             }
             else
             {
-                _column = 0;
+                _column++;
             }
 
             _current = c;
@@ -74,7 +85,7 @@ namespace Parlot
             // Eof might have been recorded
             if (_offset >= Buffer.Length)
             {
-                _current = '\0';
+                _current = NullChar;
                 Eof = true;
             }
             else
@@ -87,27 +98,18 @@ namespace Parlot
         /// <summary>
         /// Evaluates the char at the current position.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public char Peek()
-        {
-            return _current;
-        }
+        public char Current => _current;
 
         /// <summary>
         /// Evaluates a char forward in the buffer.
         /// </summary>
         public char PeekNext(int index = 1)
         {
-            if (_textLength == 0)
-            {
-                return '\0';
-            }
-
             var nextIndex = _offset + index;
 
             if (nextIndex >= _textLength || nextIndex < 0)
             {
-                return '\0';
+                return NullChar;
             }
 
             return Buffer[nextIndex];
@@ -136,14 +138,56 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MatchAnyOf(string s)
         {
+            if (s == null)
+            {
+                throw new ArgumentNullException(nameof(s));
+            }
+
             if (Eof)
             {
                 return false;
             }
 
+            if (s.Length == 0)
+            {
+                return true;
+            }
+
             for (var i = 0; i < s.Length; i++)
             {
                 if (s[i] == _current)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether a char is at the current position.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool MatchAny(params char[] chars)
+        {
+            if (chars == null)
+            {
+                throw new ArgumentNullException(nameof(chars));
+            }
+
+            if (Eof)
+            {
+                return false;
+            }
+
+            if (chars.Length == 0)
+            {
+                return true;
+            }
+
+            for (var i = 0; i < chars.Length; i++)
+            {
+                if (chars[i] == _current)
                 {
                     return true;
                 }
@@ -163,7 +207,11 @@ namespace Parlot
                 return true;
             }
 
-            if (Eof || s[0] != _current)
+            if (Eof)
+            {
+                return false;
+            }
+            else if (s[0] != _current)
             {
                 return false;
             }

@@ -54,5 +54,29 @@ namespace Parlot.Tests
             Scanner s = new(text);
             Assert.False(s.ReadQuotedString());
         }
+
+        [Fact]
+        public void SkipWhitespaceShouldSkipWhitespace()
+        {
+            Scanner s = new("Lorem ipsum   \r\n   ");
+
+            Assert.False(s.SkipWhiteSpace());
+
+            s.ReadNonWhiteSpace();
+
+            Assert.True(s.SkipWhiteSpace());
+            Assert.Equal(6, s.Cursor.Position.Offset);
+
+            s.ReadNonWhiteSpace();
+
+            Assert.True(s.SkipWhiteSpace());
+            Assert.Equal(15, s.Cursor.Position.Offset);
+
+            Assert.True(s.SkipWhiteSpaceOrNewLine());
+            Assert.Equal(19, s.Cursor.Position.Offset);
+
+            Assert.True(s.Cursor.Eof);
+        }
+
     }
 }
