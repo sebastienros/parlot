@@ -41,19 +41,18 @@ namespace Parlot
                 return;
             }
 
-            _offset += count;
-
-            Eof = _offset >= _textLength;
-
-            if (Eof)
-            {
-                _offset = _textLength;
-                _current = NullChar;
-                return;
-            }
-
             for (var i = 0; i < count; i++)
             {
+                _offset++;
+
+                if (_offset >= _textLength)
+                {
+                    Eof = true;
+                    _column++;
+                    _current = NullChar;
+                    return;
+                }
+
                 var c = Buffer[_offset];
 
                 if (_current == '\n')

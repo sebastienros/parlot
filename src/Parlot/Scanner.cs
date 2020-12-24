@@ -56,10 +56,9 @@ namespace Parlot
 
         public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, ITokenResult result = null)
         {
-            result?.Reset();
-
             if (!first(Cursor.Current))
             {
+                result?.Fail();
                 return false;
             }
 
@@ -71,7 +70,7 @@ namespace Parlot
 
             ReadWhile(other, null);
 
-            result?.Set(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Position);
 
             return true;
         }
@@ -85,12 +84,11 @@ namespace Parlot
 
         public bool ReadDecimal(ITokenResult result = null)
         {
-            result?.Reset();
-
             // perf: fast path to prevent a copy of the position
 
             if (!Character.IsDecimalDigit(Cursor.Current))
             {
+                result?.Fail();
                 return false;
             }
 
@@ -108,6 +106,7 @@ namespace Parlot
 
                 if (!Character.IsDecimalDigit(Cursor.Current))
                 {
+                    result?.Fail();
                     Cursor.ResetPosition(start);
                     return false;
                 }
@@ -119,7 +118,7 @@ namespace Parlot
                 } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
             }
 
-            result?.Set(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Position);
             return true;
         }
 
@@ -128,10 +127,9 @@ namespace Parlot
         /// </summary>
         public bool ReadWhile(Func<char, bool> predicate, ITokenResult result = null)
         {
-            result?.Reset();
-
             if (Cursor.Eof || !predicate(Cursor.Current))
             {
+                result?.Fail();
                 return false;
             }
 
@@ -144,7 +142,7 @@ namespace Parlot
                 Cursor.Advance();
             }
 
-            result?.Set(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Position);
 
             return true;
         }
@@ -159,10 +157,9 @@ namespace Parlot
         /// </summary>
         public bool ReadChar(char c, ITokenResult result = null)
         {
-            result?.Reset();
-
             if (!Cursor.Match(c))
             {
+                result?.Fail();
                 return false;
             }
 
@@ -172,7 +169,7 @@ namespace Parlot
 
                 Cursor.Advance();
 
-                result?.Set(Buffer, start, Cursor.Position);
+                result?.Succeed(Buffer, start, Cursor.Position);
             }
             else
             {
@@ -187,10 +184,9 @@ namespace Parlot
         /// </summary>
         public bool ReadText(string text, ITokenResult result = null)
         {
-            result?.Reset();
-
             if (!Cursor.Match(text))
             {
+                result?.Fail();
                 return false;
             }
 
@@ -204,7 +200,7 @@ namespace Parlot
 
             Cursor.Advance(text.Length);
 
-            result?.Set(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Position);
             
             return true;
         }
@@ -221,12 +217,11 @@ namespace Parlot
 
         public bool ReadQuotedString(ITokenResult result = null)
         {
-            result?.Reset();
-
             var startChar = Cursor.Current;
 
             if (startChar != '\'' && startChar != '\"')
             {
+                result?.Fail();
                 return false;
             }
 
@@ -242,12 +237,11 @@ namespace Parlot
         /// </remarks>
         private bool ReadQuotedString(char quoteChar, ITokenResult result = null)
         {
-            result?.Reset();
-
             var startChar = Cursor.Current;
 
             if (startChar != quoteChar)
             {
+                result?.Fail();
                 return false;
             }
 
@@ -259,7 +253,7 @@ namespace Parlot
             if (nextQuote == -1)
             {
                 // There is no end quote, not a string
-
+                result?.Fail();
                 return false;
             }
 
@@ -274,7 +268,7 @@ namespace Parlot
             {
                 Cursor.Advance(nextQuote + 1 - startOffset);
 
-                result?.Set(Buffer, start, Cursor.Position);
+                result?.Succeed(Buffer, start, Cursor.Position);
                 return true;
             }
 
@@ -283,6 +277,7 @@ namespace Parlot
                 // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
                 if (Cursor.Eof)
                 {
+                    result?.Fail();
                     return false;
                 }
 
@@ -326,6 +321,7 @@ namespace Parlot
                             {
                                 Cursor.ResetPosition(start);
 
+                                result?.Fail();
                                 return false;
                             }
 
@@ -348,6 +344,7 @@ namespace Parlot
                             {
                                 Cursor.ResetPosition(start);
 
+                                result?.Fail();
                                 return false;
                             }
 
@@ -355,6 +352,7 @@ namespace Parlot
                         default:
                             Cursor.ResetPosition(start);
 
+                            result?.Fail();
                             return false;
                     }
                 }
@@ -364,7 +362,7 @@ namespace Parlot
 
             Cursor.Advance();
 
-            result?.Set(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Position);
 
             return true;
         }

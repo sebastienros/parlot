@@ -38,11 +38,11 @@ namespace Parlot
         /// <summary>
         /// Sets the result.
         /// </summary>
-        ITokenResult Set(string buffer, TextPosition start, TextPosition end);
+        ITokenResult Succeed(string buffer, TextPosition start, TextPosition end);
 
         /// <summary>
         /// Initializes the token result.
         /// </summary>
-        ITokenResult Reset();
+        ITokenResult Fail();
     }
 }
