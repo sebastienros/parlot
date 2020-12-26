@@ -24,13 +24,13 @@
                 return false;
             }
 
+            if (_skipWhitespace)
+            {
+                scanner.SkipWhiteSpace();
+            }
+
             for (var i = 0; i < _parsers.Length; i++)
             {
-                if (_skipWhitespace)
-                {
-                    scanner.SkipWhiteSpace();
-                }
-
                 if (_parsers[i].Parse(scanner, out var parsed))
                 {
                     result = new ParseResult<ParseResult<object>>(parsed.Buffer, parsed.Start, parsed.End, parsed);

@@ -38,11 +38,6 @@ namespace Parlot.Fluent
 
                 results ??= new List<T>();
                 results.Add(parsed.GetValue());
-
-                if (_skipWhitespace)
-                {
-                    scanner.SkipWhiteSpace();
-                }
             }
 
             result = new ParseResult<IList<T>>(scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());

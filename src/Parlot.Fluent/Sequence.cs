@@ -118,18 +118,8 @@ namespace Parlot.Fluent
 
             if (parser1.Parse(scanner, out var parseResult1))
             {
-                if (_skipWhitespace)
-                {
-                    scanner.SkipWhiteSpace();
-                }
-
                 if (parser2.Parse(scanner, out var parseResult2))
                 {
-                    if (_skipWhitespace)
-                    {
-                        scanner.SkipWhiteSpace();
-                    }
-
                     if (parser3.Parse(scanner, out var parseResult3))
                     {
                         result = new ParseResult<Tuple<T1, T2, T3>>(parseResult1.Buffer, parseResult1.Start, parseResult3.End, new Tuple<T1, T2, T3>(parseResult1.GetValue(), parseResult2.GetValue(), parseResult3.GetValue()));

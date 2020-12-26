@@ -30,11 +30,6 @@ namespace Parlot
 
         private T _typedValue;
 
-        public void SetValue(T value)
-        {
-            _typedValue = value;
-        }
-
         public T GetValue() => _typedValue;
     }
 }
