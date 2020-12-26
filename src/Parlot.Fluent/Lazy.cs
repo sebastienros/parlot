@@ -8,23 +8,9 @@
         {
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<T> result)
+        public override bool Parse(Scanner scanner, out ParseResult<T> result)
         {
-            return Parser.Parse(scanner, result);
-        }
-    }
-
-    public class Lazy : Parser<IParseResult>
-    {
-        public IParser Parser { get; set; }
-
-        public Lazy()
-        {
-        }
-
-        public override bool Parse(Scanner scanner, IParseResult<IParseResult> result)
-        {
-            return Parser.Parse(scanner, result);
+            return Parser.Parse(scanner, out result);
         }
     }
 }

@@ -5,7 +5,7 @@
     /// We then return the <see cref="IParseResult"/> of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class OneOf : Parser<IParseResult>
+    public class OneOf : Parser<ParseResult<object>>
     {
         private readonly IParser[] _parsers;
         private readonly bool _skipWhitespace;
@@ -16,10 +16,11 @@
             _skipWhitespace = skipWhitespace;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<IParseResult> result)
+        public override bool Parse(Scanner scanner, out ParseResult<ParseResult<object>> result)
         {
             if (_parsers.Length == 0)
             {
+                result = ParseResult<ParseResult<object>>.Empty;
                 return false;
             }
 
@@ -30,12 +31,14 @@
                     scanner.SkipWhiteSpace();
                 }
 
-                if (_parsers[i].Parse(scanner, result))
+                if (_parsers[i].Parse(scanner, out var parsed))
                 {
+                    result = new ParseResult<ParseResult<object>>(parsed.Buffer, parsed.Start, parsed.End, parsed);
                     return true;
                 }
             }
 
+            result = ParseResult<ParseResult<object>>.Empty;
             return false;
         }
     }
@@ -56,10 +59,11 @@
             _skipWhitespace = skipWhitespace;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<T> result)
+        public override bool Parse(Scanner scanner, out ParseResult<T> result)
         {
             if (_parsers.Length == 0)
             {
+                result = ParseResult<T>.Empty;
                 return false;
             }
 
@@ -70,12 +74,13 @@
 
             for (var i = 0; i < _parsers.Length; i++)
             {
-                if (_parsers[i].Parse(scanner, result))
+                if (_parsers[i].Parse(scanner, out result))
                 {
                     return true;
                 }
             }
 
+            result = ParseResult<T>.Empty;
             return false;
         }
     }

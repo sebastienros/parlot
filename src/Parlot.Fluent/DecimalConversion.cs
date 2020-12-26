@@ -9,19 +9,17 @@
             _parser = parser;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<decimal> result)
+        public override bool Parse(Scanner scanner, out ParseResult<decimal> result)
         {
-            var tokenResult = new ParseResult<TokenResult>();
-
-            if (_parser.Parse(scanner, tokenResult))
+            if (_parser.Parse(scanner, out var tokenResult))
             {
                 decimal.TryParse(tokenResult.GetValue().Span, out var value);
-                result?.Succeed(tokenResult.Buffer, tokenResult.Start, tokenResult.End, value);
+                result = new ParseResult<decimal>(tokenResult.Buffer, tokenResult.Start, tokenResult.End, value);
 
                 return true;
             }
 
-            result?.Fail();
+            result = ParseResult<decimal>.Empty;
             return false;
         }
     }

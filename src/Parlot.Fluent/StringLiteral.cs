@@ -9,18 +9,18 @@
 
         public string Text { get; }
 
-        public override bool Parse(Scanner scanner, IParseResult<string> result)
+        public override bool Parse(Scanner scanner, out ParseResult<string> result)
         {
             var token = new TokenResult();
 
             if(scanner.ReadText(Text, token))
             {
-                result?.Succeed(token.Buffer, token.Start, token.End, Text);
+                result = new ParseResult<string>(token.Buffer, token.Start, token.End, Text);
                 return true;
             }
             else
             {
-                result?.Fail();
+                result = ParseResult<string>.Empty;
                 return false;
             }
         }

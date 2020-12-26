@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public class Sequence : Parser<IParseResult[]>
+    public class Sequence : Parser<IList<ParseResult<object>>>
     {
         private readonly IParser[] _parsers;
         private readonly bool _skipWhitespace;
@@ -13,14 +14,15 @@ namespace Parlot.Fluent
             _skipWhitespace = skipWhitespace;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<IParseResult[]> result)
+        public override bool Parse(Scanner scanner, out ParseResult<IList<ParseResult<object>>> result)
         {
-            var results = new ParseResult[_parsers.Length];
-
             if (_parsers.Length == 0)
             {
+                result = ParseResult<IList<ParseResult<object>>>.Empty;
                 return true;
             }
+
+            var results = new List<ParseResult<object>>(_parsers.Length);
 
             var success = true;
 
@@ -31,28 +33,23 @@ namespace Parlot.Fluent
                     scanner.SkipWhiteSpace();
                 }
 
-                var parsed = new ParseResult();
-
-                if (!_parsers[i].Parse(scanner, parsed))
+                if (!_parsers[i].Parse(scanner, out var parsed))
                 {
                     success = false;
                     break;
                 }
 
-                if (parsed != null)
-                {
-                    results[i] = parsed;
-                }
+                results[i] = parsed;
             }
 
             if (success)
             {
-                result?.Succeed(results[0].Buffer, results[0].Start, results[^1].End, results);
+                result = new ParseResult<IList<ParseResult<object>>>(results[0].Buffer, results[0].Start, results[^1].End, results);
                 return true;
             }
             else
             {
-                result?.Fail();
+                result = ParseResult<IList<ParseResult<object>>>.Empty;
                 return false;
             }
         }
@@ -71,32 +68,28 @@ namespace Parlot.Fluent
             _skipWhitespace = skipWhitespace;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<Tuple<T1, T2>> result)
+        public override bool Parse(Scanner scanner, out ParseResult<Tuple<T1, T2>> result)
         {
             if (_skipWhitespace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
-
-            if (parser1.Parse(scanner, parseResult1))
+            if (parser1.Parse(scanner, out var parseResult1))
             {
                 if (_skipWhitespace)
                 {
                     scanner.SkipWhiteSpace();
                 }
 
-                var parseResult2 = new ParseResult<T2>();
-
-                if (parser2.Parse(scanner, parseResult2))
+                if (parser2.Parse(scanner, out var parseResult2))
                 {
-                    result?.Succeed(parseResult1.Buffer, parseResult1.Start, parseResult2.End, new Tuple<T1, T2>(parseResult1.GetValue(), parseResult2.GetValue()));
+                    result = new ParseResult<Tuple<T1, T2>>(parseResult1.Buffer, parseResult1.Start, parseResult2.End, new Tuple<T1, T2>(parseResult1.GetValue(), parseResult2.GetValue()));
                     return true;
                 }
             }
 
-            result?.Fail();
+            result = ParseResult<Tuple<T1, T2>>.Empty;
             return false;
         }
     }
@@ -116,42 +109,36 @@ namespace Parlot.Fluent
             _skipWhitespace = skipWhitespace;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<Tuple<T1, T2, T3>> result)
+        public override bool Parse(Scanner scanner, out ParseResult<Tuple<T1, T2, T3>> result)
         {
             if (_skipWhitespace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
-
-            if (parser1.Parse(scanner, parseResult1))
+            if (parser1.Parse(scanner, out var parseResult1))
             {
                 if (_skipWhitespace)
                 {
                     scanner.SkipWhiteSpace();
                 }
 
-                var parseResult2 = new ParseResult<T2>();
-
-                if (parser2.Parse(scanner, parseResult2))
+                if (parser2.Parse(scanner, out var parseResult2))
                 {
                     if (_skipWhitespace)
                     {
                         scanner.SkipWhiteSpace();
                     }
 
-                    var parseResult3 = new ParseResult<T3>();
-
-                    if (parser3.Parse(scanner, parseResult3))
+                    if (parser3.Parse(scanner, out var parseResult3))
                     {
-                        result?.Succeed(parseResult1.Buffer, parseResult1.Start, parseResult3.End, new Tuple<T1, T2, T3>(parseResult1.GetValue(), parseResult2.GetValue(), parseResult3.GetValue()));
+                        result = new ParseResult<Tuple<T1, T2, T3>>(parseResult1.Buffer, parseResult1.Start, parseResult3.End, new Tuple<T1, T2, T3>(parseResult1.GetValue(), parseResult2.GetValue(), parseResult3.GetValue()));
                         return true;
                     }
                 }
             }
 
-            result?.Fail();
+            result = ParseResult<Tuple<T1, T2, T3>>.Empty;
             return false;
         }
     }

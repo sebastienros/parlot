@@ -11,17 +11,14 @@
             _skipWhitespace = skipWhitespace;
         }
 
-        public override bool Parse(Scanner scanner, IParseResult<T> result)
+        public override bool Parse(Scanner scanner, out ParseResult<T> result)
         {
             if (_skipWhitespace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (!parser.Parse(scanner, result))
-            {
-                result.SetValue(default);
-            }
+            parser.Parse(scanner, out result);
 
             return true;
         }

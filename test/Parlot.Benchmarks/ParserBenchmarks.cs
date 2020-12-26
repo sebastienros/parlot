@@ -29,7 +29,8 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("Expression1")]
         public Expression FluentExpression1()
         {
-            return FluentParser.Expression.Parse(Expression1).GetValue();
+            FluentParser.Expression.TryParse(Expression1, out var result);
+            return result;
         }
 
         [Benchmark, BenchmarkCategory("Expression2")]
@@ -47,7 +48,8 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("Expression2")]
         public Expression FluentExpression2()
         {
-            return FluentParser.Expression.Parse(Expression2).GetValue();
+            FluentParser.Expression.TryParse(Expression2, out var result);
+            return result;
         }
     }
 }

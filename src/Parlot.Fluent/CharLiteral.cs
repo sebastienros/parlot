@@ -9,20 +9,18 @@
 
         public char Char { get; }
 
-        public override bool Parse(Scanner scanner, IParseResult<char> result)
+        public override bool Parse(Scanner scanner, out ParseResult<char> result)
         {
             var token = new TokenResult();
 
             if (scanner.ReadChar(Char, token))
             {
-                result?.Succeed(token.Buffer, token.Start, token.End, Char);
+                result = new ParseResult<char>(token.Buffer, token.Start, token.End, Char);
                 return true;
             }
-            else
-            {
-                result?.Fail();
-                return false;
-            }
+
+            result = ParseResult<char>.Empty;
+            return false;
         }
     }
 }

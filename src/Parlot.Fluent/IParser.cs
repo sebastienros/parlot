@@ -2,30 +2,28 @@
 {
     public interface IParser
     {
-        bool Parse(Scanner scanner, IParseResult result);
+        bool Parse(Scanner scanner, out ParseResult<object> result);
     }
 
     public interface IParser<T> : IParser
     {
-        bool Parse(Scanner scanner, IParseResult<T> result);
+        bool Parse(Scanner scanner, out ParseResult<T> result);
     }
 
     public abstract class Parser<T> : IParser<T>
     {
-        public abstract bool Parse(Scanner scanner, IParseResult<T> result);
+        public abstract bool Parse(Scanner scanner, out ParseResult<T> result);
 
-        public bool Parse(Scanner scanner, IParseResult result)
+        bool IParser.Parse(Scanner scanner, out ParseResult<object> result)
         {
-            var localResult = result != null ? new ParseResult<T>() : null;
-
-            if (Parse(scanner, result))
+            if (Parse(scanner, out var localResult))
             {
-                result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, localResult.GetValue());
+                result = new ParseResult<object>(localResult.Buffer, localResult.Start, localResult.End, localResult.GetValue());
                 return true;
             }
             else
             {
-                result?.Fail();
+                result = ParseResult<object>.Empty;
                 return false;
             }
         }
@@ -33,36 +31,19 @@
 
     public static class IParserExtensions
     {
-        public static IParseResult<TResult> Parse<TResult>(this IParser parser, string text)
-        {
-            var scanner = new Scanner(text);
-
-            var result = new ParseResult<TResult>();
-
-            parser.Parse(scanner, result);
-
-            return result;
-        }
-
-        public static IParseResult<TResult> Parse<TResult>(this IParser<TResult> parser, string text)
-        {
-            var scanner = new Scanner(text);
-
-            var result = new ParseResult<TResult>();
-
-            parser.Parse(scanner, result);
-
-            return result;
-        }
-
         public static bool TryParse<TResult>(this IParser<TResult> parser, string text, out TResult value)
         {
             try
             {
-                var result = parser.Parse(text);
-                value = result.GetValue();
+                var scanner = new Scanner(text);
 
-                return result.Success;
+                var success = parser.Parse(scanner, out var result);
+
+                if (success)
+                {
+                    value = result.GetValue();
+                    return true;
+                }
             }
             catch (ParseException)
             {
