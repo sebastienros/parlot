@@ -137,7 +137,7 @@ namespace Parlot.Tests
 
             Assert.Equal(Cursor.NullChar, c.Current);
             Assert.Equal(12, c.Position.Offset);
-            Assert.Equal(3, c.Position.Column);
+            Assert.Equal(4, c.Position.Column);
             Assert.Equal(3, c.Position.Line);
         }
 

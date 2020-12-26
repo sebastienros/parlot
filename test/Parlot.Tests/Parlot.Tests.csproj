@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Parlot/Parlot.csproj" />
+    <ProjectReference Include="..\..\src\Parlot.Fluent\Parlot.Fluent.csproj" />
   </ItemGroup>
 
   <ItemGroup>

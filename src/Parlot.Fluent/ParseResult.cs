@@ -2,7 +2,7 @@
 
 namespace Parlot
 {
-    public sealed class TokenResult : ITokenResult
+    public class ParseResult<T> : IParseResult<T>
     {
         private string _text;
 
@@ -14,24 +14,12 @@ namespace Parlot
 
         public int Length { get; private set; }
         public string Buffer { get; private set; }
-
+        private T _value;
         public string Text => _text ??= Buffer?.Substring(Start.Offset, Length);
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
 
-        public ITokenResult Succeed(string buffer, TextPosition start, TextPosition end)
-        {
-            Success = true;
-            Buffer = buffer;
-            Start = start;
-            End = end;
-            Length = end - start;
-            _text = null;
-
-            return this;
-        }
-
-        public ITokenResult Fail()
+        public void Fail()
         {
             Success = false;
             Buffer = null;
@@ -39,8 +27,20 @@ namespace Parlot
             Start = TextPosition.Start;
             End = TextPosition.Start;
             Length = 0;
-
-            return this;
+            _value = default;
         }
+
+        public void Succeed(string buffer, TextPosition start, TextPosition end, T value)
+        {
+            Success = true;
+            Buffer = buffer;
+            Start = start;
+            End = end;
+            Length = end - start;
+            _text = null;
+            _value = value;
+        }
+
+        public T Value => _value;
     }
 }

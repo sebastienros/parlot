@@ -67,6 +67,7 @@ namespace Parlot.Tests.Calc
         [Theory]
         [InlineData("3 + (1 - 2)", 2)]
         [InlineData("(3 + 1) * 2", 8)]
+        [InlineData("( (3 + 1) * 2 ) + 1", 9)]
         public void TestGroup(string text, decimal value)
         {
             var result = Evaluate(text);
