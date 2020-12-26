@@ -1,19 +1,21 @@
 ﻿namespace Parlot.Fluent
 {
-    public class NumberLiteral : Parser<TokenResult>
+    public class NumberLiteral : Parser<TextSpan>
     {
-        public override bool Parse(Scanner scanner, out ParseResult<TokenResult> result)
+        public override bool Parse(Scanner scanner, out ParseResult<TextSpan> result)
         {
-            var token = new TokenResult();
+            var start = scanner.Cursor.Position;
 
-            if (scanner.ReadDecimal(token))
+            if (scanner.ReadDecimal())
             {
-                result = new ParseResult<TokenResult>(token.Buffer, token.Start, token.End, token);
+                var end = scanner.Cursor.Position;
+
+                result = new ParseResult<TextSpan>(scanner.Buffer, start, end, new TextSpan(scanner.Buffer, start.Offset, end - start));
                 return true;
             }
             else
             {
-                result = ParseResult<TokenResult>.Empty;
+                result = ParseResult<TextSpan>.Empty;
                 return false;
             }
         }

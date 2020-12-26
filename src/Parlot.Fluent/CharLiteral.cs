@@ -11,11 +11,11 @@
 
         public override bool Parse(Scanner scanner, out ParseResult<char> result)
         {
-            var token = new TokenResult();
+            var start = scanner.Cursor.Position;
 
-            if (scanner.ReadChar(Char, token))
+            if (scanner.ReadChar(Char))
             {
-                result = new ParseResult<char>(token.Buffer, token.Start, token.End, Char);
+                result = new ParseResult<char>(scanner.Buffer, start, scanner.Cursor.Position, Char);
                 return true;
             }
 

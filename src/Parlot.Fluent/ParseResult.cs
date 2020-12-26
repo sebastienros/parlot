@@ -28,7 +28,7 @@ namespace Parlot
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
 
-        private T _typedValue;
+        private readonly T _typedValue;
 
         public T GetValue() => _typedValue;
     }

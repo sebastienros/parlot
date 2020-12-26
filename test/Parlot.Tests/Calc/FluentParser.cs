@@ -19,13 +19,23 @@ namespace Parlot.Tests.Calc
              *                  | "(" expression ")" ;
             */
 
-            var primary = Lazy<Expression>();
+            // Make expression Lazy since it's a cyclic reference
+            var expression = Lazy<Expression>();
 
-            var decimalNumber = Literals.Number()
-                .AsDecimal()
+            var number = Literals
+                .Decimal()
                 .Then(static d => (Expression) new Number(d))
                 ;
 
+            var groupExpression = Sequence(
+               Literals.Char('('),
+               expression,
+               Literals.Char(')')
+               ).Then(static x => x.Item2);
+
+            var primary = OneOf(number, groupExpression);
+
+            // Make unary Lazy since it's a cyclic reference
             var unary = Lazy<Expression>();
 
             unary.Parser = OneOf(
@@ -64,7 +74,7 @@ namespace Parlot.Tests.Calc
                     return result;
                 });
 
-            var expression = Sequence(
+            expression.Parser = Sequence(
                 factor,
                 ZeroOrMany(
                     Sequence(
@@ -91,15 +101,8 @@ namespace Parlot.Tests.Calc
                     }
 
                     return result;
-                });
-
-            var groupExpression = Sequence(
-                Literals.Char('('),
-                expression,
-                Literals.Char(')')
-                ).Then(static x => x.Item2);
-
-            primary.Parser = OneOf(decimalNumber, groupExpression);
+                });           
+            
 
             Expression = expression;
         }

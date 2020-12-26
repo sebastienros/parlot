@@ -7,6 +7,7 @@ namespace Parlot.Benchmarks
 {
     [MemoryDiagnoser]
     [ShortRunJob]
+#pragma warning disable CA1822 // Mark members as static
     public class ExpressionBenchmarks
     {
         private readonly Parser _parser = new();
@@ -52,4 +53,5 @@ namespace Parlot.Benchmarks
             return result;
         }
     }
+#pragma warning restore CA1822 // Mark members as static
 }

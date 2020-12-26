@@ -8,7 +8,6 @@ namespace Parlot.Fluent
         public static LiteralBuilder Literals => new();
 
         public static IParser<U> Then<T, U>(this IParser<T> parser, Func<T, U> conversion) => new Then<T, U>(parser, conversion);
-        public static IParser<decimal> AsDecimal(this IParser<TokenResult> parser) => new DecimalConversion(parser);
 
         public static IParser<ParseResult<object>> OneOf(params IParser[] parsers) => new OneOf(parsers);
         public static IParser<T> OneOf<T>(params IParser<T>[] parsers) => new OneOf<T>(parsers);
@@ -28,6 +27,7 @@ namespace Parlot.Fluent
     {
         public IParser<string> String(string text) => new StringLiteral(text);
         public IParser<char> Char(char c) => new CharLiteral(c);
-        public IParser<TokenResult> Number() => new NumberLiteral();
+        public IParser<TextSpan> Number() => new NumberLiteral();
+        public IParser<decimal> Decimal() => new DecimalLiteral();
     }
 }
