@@ -43,6 +43,11 @@ namespace Parlot
         protected object _value;
 
         public object GetValue() => _value;
+
+        public void SetValue(object value)
+        {
+            _value = value;
+        }
     }
 
     public class ParseResult<T> : ParseResult, IParseResult<T>
@@ -63,5 +68,11 @@ namespace Parlot
         }
 
         public new T GetValue() => _set ? _typedValue : _value == null ? default : (T) _value;
+
+        public void SetValue(T value)
+        {
+            _set = true;
+            _typedValue = value;
+        }
     }
 }

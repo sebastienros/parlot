@@ -31,7 +31,7 @@ namespace Parlot.Fluent
                     scanner.SkipWhiteSpace();
                 }
 
-                var parsed = result != null ? new ParseResult() : null;
+                var parsed = new ParseResult();
 
                 if (!_parsers[i].Parse(scanner, parsed))
                 {
@@ -78,7 +78,7 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = result != null ? new ParseResult<T1>() : null;
+            var parseResult1 = new ParseResult<T1>();
 
             if (parser1.Parse(scanner, parseResult1))
             {
@@ -87,7 +87,7 @@ namespace Parlot.Fluent
                     scanner.SkipWhiteSpace();
                 }
 
-                var parseResult2 = result != null ? new ParseResult<T2>() : null;
+                var parseResult2 = new ParseResult<T2>();
 
                 if (parser2.Parse(scanner, parseResult2))
                 {
@@ -123,7 +123,7 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = result != null ? new ParseResult<T1>() : null;
+            var parseResult1 = new ParseResult<T1>();
 
             if (parser1.Parse(scanner, parseResult1))
             {
@@ -132,7 +132,7 @@ namespace Parlot.Fluent
                     scanner.SkipWhiteSpace();
                 }
 
-                var parseResult2 = result != null ? new ParseResult<T2>() : null;
+                var parseResult2 = new ParseResult<T2>();
 
                 if (parser2.Parse(scanner, parseResult2))
                 {
@@ -141,7 +141,7 @@ namespace Parlot.Fluent
                         scanner.SkipWhiteSpace();
                     }
 
-                    var parseResult3 = result != null ? new ParseResult<T3>() : null;
+                    var parseResult3 = new ParseResult<T3>();
 
                     if (parser3.Parse(scanner, parseResult3))
                     {

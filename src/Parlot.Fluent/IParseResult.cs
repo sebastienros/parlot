@@ -48,11 +48,13 @@ namespace Parlot
         void Fail();
 
         object GetValue();
+        void SetValue(object value);
     }
 
     public interface IParseResult<T> : IParseResult
     {
         void Succeed(string buffer, TextPosition start, TextPosition end, T Value);
         new T GetValue();
+        void SetValue(T value);
     }
 }

@@ -11,18 +11,17 @@
 
         public override bool Parse(Scanner scanner, IParseResult<decimal> result)
         {
-            var localResult = result != null ? new ParseResult<TokenResult>() : null;
-            if (_parser.Parse(scanner, localResult))
+            var tokenResult = new ParseResult<TokenResult>();
+
+            if (_parser.Parse(scanner, tokenResult))
             {
-                if (localResult != null && localResult.Success)
-                {
-                    decimal.TryParse(localResult.GetValue().Span, out var value);
-                    result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, value);
-                }
+                decimal.TryParse(tokenResult.GetValue().Span, out var value);
+                result?.Succeed(tokenResult.Buffer, tokenResult.Start, tokenResult.End, value);
 
                 return true;
             }
 
+            result?.Fail();
             return false;
         }
     }

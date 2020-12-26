@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
@@ -16,12 +15,7 @@ namespace Parlot.Fluent
 
         public override bool Parse(Scanner scanner, IParseResult<IList<T>> result)
         {
-            if (_skipWhitespace)
-            {
-                scanner.SkipWhiteSpace();
-            }
-
-            var parsed = result != null ? new ParseResult<T>() : null;
+            var parsed = new ParseResult<T>();
             
             if (!parser.Parse(scanner, parsed))
             {
@@ -37,10 +31,8 @@ namespace Parlot.Fluent
             do
             {
                 end = parsed.End;
-
                 results.Add(parsed.GetValue());
 
-                parsed = result != null ? new ParseResult<T>() : null;
             } while (parser.Parse(scanner, parsed));
 
             result?.Succeed(scanner.Buffer, start, end, results);

@@ -23,8 +23,6 @@
                 return false;
             }
 
-            var parsed = result != null ? new ParseResult() : null;
-
             for (var i = 0; i < _parsers.Length; i++)
             {
                 if (_skipWhitespace)
@@ -32,15 +30,12 @@
                     scanner.SkipWhiteSpace();
                 }
 
-                if (_parsers[i].Parse(scanner, parsed))
+                if (_parsers[i].Parse(scanner, result))
                 {
-                    // TODO: this might incur boxing
-                    result?.Succeed(parsed.Buffer, parsed.Start, parsed.End, parsed.GetValue());
                     return true;
                 }
             }
 
-            result?.Fail();
             return false;
         }
     }
@@ -68,23 +63,19 @@
                 return false;
             }
 
+            if (_skipWhitespace)
+            {
+                scanner.SkipWhiteSpace();
+            }
+
             for (var i = 0; i < _parsers.Length; i++)
             {
-                var parsed = result != null ? new ParseResult<T>() : null;
-
-                if (_skipWhitespace)
+                if (_parsers[i].Parse(scanner, result))
                 {
-                    scanner.SkipWhiteSpace();
-                }
-
-                if (_parsers[i].Parse(scanner, parsed))
-                {
-                    result?.Succeed(scanner.Buffer, parsed.Start, parsed.End, parsed.GetValue());
                     return true;
                 }
             }
 
-            result?.Fail();
             return false;
         }
     }

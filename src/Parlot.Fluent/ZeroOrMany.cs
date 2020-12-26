@@ -21,7 +21,7 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parsed = result != null ? new ParseResult<T>() : null;
+            var parsed = new ParseResult<T>();
 
             List<T> results = null;
 
@@ -41,7 +41,10 @@ namespace Parlot.Fluent
                 results ??= new List<T>();
                 results.Add(parsed.GetValue());
 
-                parsed = result != null ? new ParseResult<T>() : null;
+                if (_skipWhitespace)
+                {
+                    scanner.SkipWhiteSpace();
+                }
             }
 
             result?.Succeed(scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());

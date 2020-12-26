@@ -18,7 +18,7 @@
         {
             var localResult = result != null ? new ParseResult<T>() : null;
 
-            if (Parse(scanner, localResult))
+            if (Parse(scanner, result))
             {
                 result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, localResult.GetValue());
                 return true;

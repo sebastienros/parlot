@@ -21,14 +21,12 @@ namespace Parlot.Fluent
 
         public override bool Parse(Scanner scanner, IParseResult<U> result)
         {
-            var localResult = result != null ? new ParseResult<T>() : null;
-            if (_parser.Parse(scanner, localResult))
+            var parsed = new ParseResult<T>();
+
+            if (_parser.Parse(scanner, parsed))
             {
-                if (localResult != null && localResult.Success)
-                {
-                    var value = _action != null ? _action.Invoke(localResult.GetValue()) : default;
-                    result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, value);
-                }
+                var value = _action != null ? _action.Invoke(parsed.GetValue()) : default;
+                result.SetValue(value);
 
                 return true;
             }

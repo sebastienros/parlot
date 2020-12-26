@@ -11,7 +11,7 @@
 
         public override bool Parse(Scanner scanner, IParseResult<char> result)
         {
-            var token = result == null ? null : new TokenResult();
+            var token = new TokenResult();
 
             if (scanner.ReadChar(Char, token))
             {

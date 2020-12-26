@@ -18,23 +18,9 @@
                 scanner.SkipWhiteSpace();
             }
 
-            var parsed = result != null ? new ParseResult<T>() : null;
-
-            var start = TextPosition.Start;
-            var end = TextPosition.Start;
-
-            if (parser.Parse(scanner, parsed))
+            if (!parser.Parse(scanner, result))
             {
-                start = parsed.Start;
-                end = parsed.End;
-
-                parsed = result != null ? new ParseResult<T>() : null;
-
-                result?.Succeed(scanner.Buffer, start, end, parsed.GetValue());
-            }
-            else
-            {
-                result?.Succeed(scanner.Buffer, start, end, default);
+                result.SetValue(default);
             }
 
             return true;
