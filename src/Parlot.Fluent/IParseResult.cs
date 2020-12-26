@@ -2,7 +2,7 @@
 
 namespace Parlot
 {
-    public interface IParseResult<T>
+    public interface IParseResult
     {
         /// <summary>
         /// Whether a token was successfully found.
@@ -40,13 +40,19 @@ namespace Parlot
         /// <summary>
         /// Sets the result.
         /// </summary>
-        void Succeed(string buffer, TextPosition start, TextPosition end, T Value);
+        void Succeed(string buffer, TextPosition start, TextPosition end, object Value);
 
         /// <summary>
         /// Initializes the token result.
         /// </summary>
         void Fail();
 
-        public T Value { get; }
+        object GetValue();
+    }
+
+    public interface IParseResult<T> : IParseResult
+    {
+        void Succeed(string buffer, TextPosition start, TextPosition end, T Value);
+        new T GetValue();
     }
 }

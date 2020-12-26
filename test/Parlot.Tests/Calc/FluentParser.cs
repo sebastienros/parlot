@@ -1,35 +1,107 @@
 ﻿using Parlot.Fluent;
-using Xunit;
+using static Parlot.Fluent.ParserBuilder;
 
 namespace Parlot.Tests.Calc
 {
     public class FluentParser
     {
-        [Fact]
-        public void Test()
+        public static readonly IParser<Expression> Expression;
+
+        static FluentParser()
         {
-            var plus = ParserBuilder.Char('+');
-            var minus = ParserBuilder.Char('-');
-            var number = ParserBuilder.Number;
-            var numberToDecimal = ParserBuilder.Number.AsDecimal();
-            var customNumber = ParserBuilder.Number.Then(static token => decimal.Parse(token.Span));
-            var addition = ParserBuilder.Sequence(number, ParserBuilder.FirstOf(plus, minus), number);
+            /*
+             * Grammar:
+             * expression     => factor ( ( "-" | "+" ) factor )* ;
+             * factor         => unary ( ( "/" | "*" ) unary )* ;
+             * unary          => ( "-" ) unary
+             *                 | primary ;
+             * primary        => NUMBER
+             *                  | "(" expression ")" ;
+            */
 
-            Assert.True(ParserBuilder.Number.Parse("123").Success);
-            Assert.False(ParserBuilder.Number.Parse("a").Success);
+            var primary = Lazy<Expression>();
 
-            numberToDecimal.TryParse("123", out var value1);
-            Assert.Equal(123, value1);
+            var decimalNumber = Literals.Number()
+                .AsDecimal()
+                .Then(static d => (Expression) new Number(d))
+                ;
 
-            customNumber.TryParse("123", out var value2);
-            Assert.Equal(123, value2);
+            var unary = Lazy<Expression>();
 
-            addition.TryParse("1 + 2", out var additionResult);
+            unary.Parser = OneOf(
+                Sequence(
+                    Literals.Char('-'),
+                    unary
+                    ).Then(static x => (Expression)new NegateExpression(x.Item2)),
+                primary
+            );
 
-            Assert.Equal("1", additionResult[0].Text);
-            Assert.Equal("+", additionResult[1].Text);
-            Assert.Equal("2", additionResult[2].Text);
+            var factor = Sequence(
+                unary,
+                ZeroOrMany(
+                    Sequence(
+                        OneOf(
+                            Literals.Char('/'),
+                            Literals.Char('*')
+                        ),
+                        unary
+                    ))
+                ).Then(static x =>
+                {
+                    // unary
+                    Expression result = x.Item1;
 
+                    // (("/" | "*") unary ) *
+                    foreach (var op in x.Item2)
+                    {
+                        switch (op.Item1)
+                        {
+                            case '/': result = new Division(result, op.Item2); break;
+                            case '*': result = new Multiplication(result, op.Item2); break;
+                        }
+                    }
+
+                    return result;
+                });
+
+            var expression = Sequence(
+                factor,
+                ZeroOrMany(
+                    Sequence(
+                        OneOf(
+                            Literals.Char('+'),
+                            Literals.Char('-')
+                        ),
+                        factor
+                    )
+                )
+                ).Then(static x =>
+                {
+                    // factor
+                    Expression result = x.Item1;
+
+                    // (("-" | "+") factor ) *
+                    foreach (var op in x.Item2)
+                    {
+                        switch (op.Item1)
+                        {
+                            case '+': result = new Addition(result, op.Item2); break;
+                            case '-': result = new Substraction(result, op.Item2); break;
+                        }
+                    }
+
+                    return result;
+                });
+
+            var groupExpression = Sequence(
+                Literals.Char('('),
+                expression,
+                Literals.Char(')')
+                ).Then(static x => x.Item2);
+
+            primary.Parser = OneOf(decimalNumber, groupExpression);
+
+            Expression = expression;
         }
     }
 }

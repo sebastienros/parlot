@@ -1,6 +1,6 @@
 ﻿namespace Parlot.Fluent
 {
-    public class DecimalConversion : IParser<decimal>
+    public class DecimalConversion : Parser<decimal>
     {
         private readonly IParser<TokenResult> _parser;
 
@@ -9,15 +9,15 @@
             _parser = parser;
         }
 
-        public bool Parse(Scanner scanner, IParseResult<decimal> result)
+        public override bool Parse(Scanner scanner, IParseResult<decimal> result)
         {
             var localResult = result != null ? new ParseResult<TokenResult>() : null;
             if (_parser.Parse(scanner, localResult))
             {
                 if (localResult != null && localResult.Success)
                 {
-                    decimal.TryParse(localResult.Value.Span, out var value);
-                    result?.Succeed(result.Buffer, result.Start, result.End, value);
+                    decimal.TryParse(localResult.GetValue().Span, out var value);
+                    result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, value);
                 }
 
                 return true;

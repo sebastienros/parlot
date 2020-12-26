@@ -1,12 +1,49 @@
 ﻿namespace Parlot.Fluent
 {
-    public interface IParser<TResult>
+    public interface IParser
     {
-        bool Parse(Scanner scanner, IParseResult<TResult> result);
+        bool Parse(Scanner scanner, IParseResult result);
+    }
+
+    public interface IParser<T> : IParser
+    {
+        bool Parse(Scanner scanner, IParseResult<T> result);
+    }
+
+    public abstract class Parser<T> : IParser<T>
+    {
+        public abstract bool Parse(Scanner scanner, IParseResult<T> result);
+
+        public bool Parse(Scanner scanner, IParseResult result)
+        {
+            var localResult = result != null ? new ParseResult<T>() : null;
+
+            if (Parse(scanner, localResult))
+            {
+                result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, localResult.GetValue());
+                return true;
+            }
+            else
+            {
+                result?.Fail();
+                return false;
+            }
+        }
     }
 
     public static class IParserExtensions
     {
+        public static IParseResult<TResult> Parse<TResult>(this IParser parser, string text)
+        {
+            var scanner = new Scanner(text);
+
+            var result = new ParseResult<TResult>();
+
+            parser.Parse(scanner, result);
+
+            return result;
+        }
+
         public static IParseResult<TResult> Parse<TResult>(this IParser<TResult> parser, string text)
         {
             var scanner = new Scanner(text);
@@ -23,7 +60,7 @@
             try
             {
                 var result = parser.Parse(text);
-                value = result.Value;
+                value = result.GetValue();
 
                 return result.Success;
             }

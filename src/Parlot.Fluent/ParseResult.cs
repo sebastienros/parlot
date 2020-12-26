@@ -2,19 +2,18 @@
 
 namespace Parlot
 {
-    public class ParseResult<T> : IParseResult<T>
+    public class ParseResult : IParseResult
     {
-        private string _text;
+        protected string _text;
 
-        public bool Success { get; private set; }
+        public bool Success { get; protected set; }
 
-        public TextPosition Start { get; private set; }
+        public TextPosition Start { get; protected set; }
 
-        public TextPosition End { get; private set; }
+        public TextPosition End { get; protected set; }
 
-        public int Length { get; private set; }
-        public string Buffer { get; private set; }
-        private T _value;
+        public int Length { get; protected set; }
+        public string Buffer { get; protected set; }
         public string Text => _text ??= Buffer?.Substring(Start.Offset, Length);
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
@@ -30,7 +29,7 @@ namespace Parlot
             _value = default;
         }
 
-        public void Succeed(string buffer, TextPosition start, TextPosition end, T value)
+        public void Succeed(string buffer, TextPosition start, TextPosition end, object value)
         {
             Success = true;
             Buffer = buffer;
@@ -41,6 +40,28 @@ namespace Parlot
             _value = value;
         }
 
-        public T Value => _value;
+        protected object _value;
+
+        public object GetValue() => _value;
+    }
+
+    public class ParseResult<T> : ParseResult, IParseResult<T>
+    {
+        private T _typedValue;
+        private bool _set;
+
+        public void Succeed(string buffer, TextPosition start, TextPosition end, T value)
+        {
+            Success = true;
+            Buffer = buffer;
+            Start = start;
+            End = end;
+            Length = end - start;
+            _text = null;
+            _typedValue = value;
+            _set = true;
+        }
+
+        public new T GetValue() => _set ? _typedValue : _value == null ? default : (T) _value;
     }
 }

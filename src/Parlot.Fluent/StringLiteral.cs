@@ -1,21 +1,21 @@
 ﻿namespace Parlot.Fluent
 {
-    public class StringTerminal : IParser<TokenResult>
-    {
-        public StringTerminal(string text)
+    public class StringLiteral : Parser<string>
+    { 
+        public StringLiteral(string text)
         {
             Text = text;
         }
 
         public string Text { get; }
 
-        public bool Parse(Scanner scanner, IParseResult<TokenResult> result)
+        public override bool Parse(Scanner scanner, IParseResult<string> result)
         {
             var token = result == null ? null : new TokenResult();
 
             if(scanner.ReadText(Text, token))
             {
-                result?.Succeed(token.Buffer, token.Start, token.End, token);
+                result?.Succeed(token.Buffer, token.Start, token.End, Text);
                 return true;
             }
             else

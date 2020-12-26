@@ -8,7 +8,7 @@ namespace Parlot.Fluent
     /// </summary>
     /// <typeparam name="T">The input parser type.</typeparam>
     /// <typeparam name="U">The output parser type.</typeparam>
-    public class Then<T, U> : IParser<U>
+    public class Then<T, U> : Parser<U>
     {
         private readonly Func<T, U> _action;
         private readonly IParser<T> _parser;
@@ -19,15 +19,15 @@ namespace Parlot.Fluent
             _parser = parser;
         }
 
-        public bool Parse(Scanner scanner, IParseResult<U> result)
+        public override bool Parse(Scanner scanner, IParseResult<U> result)
         {
             var localResult = result != null ? new ParseResult<T>() : null;
             if (_parser.Parse(scanner, localResult))
             {
                 if (localResult != null && localResult.Success)
                 {
-                    var value = _action != null ? _action.Invoke(localResult.Value) : default;
-                    result?.Succeed(result.Buffer, result.Start, result.End, value);
+                    var value = _action != null ? _action.Invoke(localResult.GetValue()) : default;
+                    result?.Succeed(localResult.Buffer, localResult.Start, localResult.End, value);
                 }
 
                 return true;
