@@ -30,14 +30,13 @@ namespace Parlot.Fluent
             var start = scanner.Cursor.Position;
 
             var token = new TokenResult();
-            var success = false;
-
-            switch (_quotes)
+            var success = _quotes switch
             {
-                case StringLiteralQuotes.Single: success = scanner.ReadSingleQuotedString(token); break;
-                case StringLiteralQuotes.Double: success = scanner.ReadDoubleQuotedString(token); break;
-                case StringLiteralQuotes.SingleOrDouble: success = scanner.ReadQuotedString(token); break;
-            }
+                StringLiteralQuotes.Single => scanner.ReadSingleQuotedString(token),
+                StringLiteralQuotes.Double => scanner.ReadDoubleQuotedString(token),
+                StringLiteralQuotes.SingleOrDouble => scanner.ReadQuotedString(token),
+                _ => false
+            };
 
             if (success)
             {

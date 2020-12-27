@@ -5,8 +5,8 @@ namespace Parlot.Fluent
 {
     public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>
     {
-        private readonly IParser<T1> _parser1;
-        private readonly IParser<T2> _parser2;
+        internal readonly IParser<T1> _parser1;
+        internal readonly IParser<T2> _parser2;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(IParser<T1> parser1, IParser<T2> parser2, bool skipWhiteSpace = true)
@@ -39,9 +39,9 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
     {
-        private readonly IParser<T1> _parser1;
-        private readonly IParser<T2> _parser2;
-        private readonly IParser<T3> _parser3;
+        internal readonly IParser<T1> _parser1;
+        internal readonly IParser<T2> _parser2;
+        internal readonly IParser<T3> _parser3;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
@@ -88,10 +88,10 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
     {
-        private readonly IParser<T1> _parser1;
-        private readonly IParser<T2> _parser2;
-        private readonly IParser<T3> _parser3;
-        private readonly IParser<T4> _parser4;
+        internal readonly IParser<T1> _parser1;
+        internal readonly IParser<T2> _parser2;
+        internal readonly IParser<T3> _parser3;
+        internal readonly IParser<T4> _parser4;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
@@ -144,11 +144,11 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
     {
-        private readonly IParser<T1> _parser1;
-        private readonly IParser<T2> _parser2;
-        private readonly IParser<T3> _parser3;
-        private readonly IParser<T4> _parser4;
-        private readonly IParser<T5> _parser5;
+        internal readonly IParser<T1> _parser1;
+        internal readonly IParser<T2> _parser2;
+        internal readonly IParser<T3> _parser3;
+        internal readonly IParser<T4> _parser4;
+        internal readonly IParser<T5> _parser5;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
@@ -207,12 +207,12 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
-        private readonly IParser<T1> _parser1;
-        private readonly IParser<T2> _parser2;
-        private readonly IParser<T3> _parser3;
-        private readonly IParser<T4> _parser4;
-        private readonly IParser<T5> _parser5;
-        private readonly IParser<T6> _parser6;
+        internal readonly IParser<T1> _parser1;
+        internal readonly IParser<T2> _parser2;
+        internal readonly IParser<T3> _parser3;
+        internal readonly IParser<T4> _parser4;
+        internal readonly IParser<T5> _parser5;
+        internal readonly IParser<T6> _parser6;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
@@ -277,13 +277,13 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
-        private readonly IParser<T1> _parser1;
-        private readonly IParser<T2> _parser2;
-        private readonly IParser<T3> _parser3;
-        private readonly IParser<T4> _parser4;
-        private readonly IParser<T5> _parser5;
-        private readonly IParser<T6> _parser6;
-        private readonly IParser<T7> _parser7;
+        internal readonly IParser<T1> _parser1;
+        internal readonly IParser<T2> _parser2;
+        internal readonly IParser<T3> _parser3;
+        internal readonly IParser<T4> _parser4;
+        internal readonly IParser<T5> _parser5;
+        internal readonly IParser<T6> _parser6;
+        internal readonly IParser<T7> _parser7;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
@@ -354,7 +354,7 @@ namespace Parlot.Fluent
 
     public sealed class Sequence : Parser<IList<ParseResult<object>>>
     {
-        private readonly IParser[] _parsers;
+        internal readonly IParser[] _parsers;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(IParser[] parsers, bool skipWhiteSpace = true)

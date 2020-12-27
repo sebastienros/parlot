@@ -1,5 +1,5 @@
 ﻿using Parlot.Fluent;
-using static Parlot.Fluent.ParserBuilder;
+using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests.Calc
 {
@@ -22,88 +22,70 @@ namespace Parlot.Tests.Calc
             // Make deferred Lazy since it's a cyclic reference
             var expression = Deferred<Expression>();
 
-            var number = Literals
-                .Decimal()
+            var number = Literals.Decimal()
                 .Then(static d => (Expression) new Number(d))
                 ;
+
+            var divided = Literals.Char('/');
+            var times = Literals.Char('*');
+            var minus = Literals.Char('-');
+            var plus = Literals.Char('+');
 
             // "(" expression ")"
             var groupExpression = Between("(", expression, ")");
 
             // primary => NUMBER | "(" expression ")";
-            var primary = OneOf(number, groupExpression);
+            var primary = number.Or(groupExpression);
 
             // Make unary deferred since it's a cyclic reference
             var unary = Deferred<Expression>();
 
             // ( "-" ) unary | primary;
-            unary.Parser = OneOf(
-                Sequence(
-                    Literals.Char('-'),
-                    unary
-                    ).Then(static x => (Expression)new NegateExpression(x.Item2)),
-                primary
-            );
+            unary.Parser = minus.And(unary)
+                .Then(static x => (Expression) new NegateExpression(x.Item2))
+                .Or(primary);
 
-            // factor         => unary ( ( "/" | "*" ) unary )* ;
-            var factor = Sequence(
-                unary,
-                ZeroOrMany(
-                    Sequence(
-                        OneOf(
-                            Literals.Char('/'),
-                            Literals.Char('*')
-                        ),
-                        unary
-                    ))
-                ).Then(static x =>
+            // factor => unary ( ( "/" | "*" ) unary )* ;
+            var factor = unary.And(Star(divided.Or(times).And(unary)))
+                .Then(static x =>
                 {
                     // unary
-                    Expression result = x.Item1;
+                    var result = x.Item1;
 
                     // (("/" | "*") unary ) *
                     foreach (var op in x.Item2)
                     {
-                        switch (op.Item1)
+                        result = op.Item1 switch
                         {
-                            case '/': result = new Division(result, op.Item2); break;
-                            case '*': result = new Multiplication(result, op.Item2); break;
-                        }
+                            '/' => new Division(result, op.Item2),
+                            '*' => new Multiplication(result, op.Item2),
+                            _ => null
+                        };
                     }
 
                     return result;
                 });
 
-            // expression     => factor ( ( "-" | "+" ) factor )* ;
-            expression.Parser = Sequence(
-                factor,
-                ZeroOrMany(
-                    Sequence(
-                        OneOf(
-                            Literals.Char('+'),
-                            Literals.Char('-')
-                        ),
-                        factor
-                    )
-                )
-                ).Then(static x =>
+            // expression => factor ( ( "-" | "+" ) factor )* ;
+            expression.Parser = factor.And(Star(plus.Or(minus).And(factor)))
+                .Then(static x =>
                 {
                     // factor
-                    Expression result = x.Item1;
+                    var result = x.Item1;
 
                     // (("-" | "+") factor ) *
                     foreach (var op in x.Item2)
                     {
-                        switch (op.Item1)
+                        result = op.Item1 switch
                         {
-                            case '+': result = new Addition(result, op.Item2); break;
-                            case '-': result = new Substraction(result, op.Item2); break;
-                        }
+                            '+' => new Addition(result, op.Item2),
+                            '-' => new Substraction(result, op.Item2),
+                            _ => null
+                        };
                     }
 
                     return result;
-                });           
-            
+                });            
 
             Expression = expression;
         }

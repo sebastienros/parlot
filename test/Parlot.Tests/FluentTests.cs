@@ -1,6 +1,6 @@
 using Parlot.Fluent;
 using Xunit;
-using static Parlot.Fluent.ParserBuilder;
+using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests
 {
@@ -46,7 +46,7 @@ namespace Parlot.Tests
         [Fact]
         public void BetweenShouldParseBetweenTwoString()
         {
-            var code = Between("[[", Literals.Integer(), "]]");
+            var code = Between("[[", Terms.Integer(), "]]");
 
             Assert.True(code.TryParse("[[123]]", out long result));
             Assert.Equal(123, result);
@@ -83,7 +83,66 @@ namespace Parlot.Tests
         public void CharLiteralShouldBeCaseSensitive()
         {
             Assert.True(Literals.Char('a').TryParse("a", out _));
+            Assert.False(Literals.Char('a').TryParse("B", out _));
+        }
 
+        [Fact]
+        public void OrShoulReturnOneOf()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Char('b');
+            var c = Literals.Char('c');
+
+            var o2 = a.Or(b);
+            var o3 = a.Or(b).Or(c);
+
+            Assert.IsType<OneOf<char>>(o2);
+            Assert.True(o2.TryParse("a", out _));
+            Assert.True(o2.TryParse("b", out _));
+            Assert.False(o2.TryParse("c", out _));
+
+            Assert.IsType<OneOf<char>>(o3);
+            Assert.True(o3.TryParse("a", out _));
+            Assert.True(o3.TryParse("b", out _));
+            Assert.True(o3.TryParse("c", out _));
+            Assert.False(o3.TryParse("d", out _));
+        }
+
+        [Fact]
+        public void AndShoulReturnSequences()
+        {
+            var a = Literals.Char('a');
+
+            var s2 = a.And(a);
+            var s3 = s2.And(a);
+            var s4 = s3.And(a);
+            var s5 = s4.And(a);
+            var s6 = s5.And(a);
+            var s7 = s6.And(a);
+
+            Assert.IsType<Sequence<char, char>>(s2);
+            Assert.False(s2.TryParse("a", out _));
+            Assert.True(s2.TryParse("aab", out _));
+
+            Assert.IsType<Sequence<char, char, char>>(s3);
+            Assert.False(s3.TryParse("aa", out _));
+            Assert.True(s3.TryParse("aaab", out _));
+
+            Assert.IsType<Sequence<char, char, char, char>>(s4);
+            Assert.False(s4.TryParse("aaa", out _));
+            Assert.True(s4.TryParse("aaaab", out _));
+
+            Assert.IsType<Sequence<char, char, char, char, char>>(s5);
+            Assert.False(s5.TryParse("aaaa", out _));
+            Assert.True(s5.TryParse("aaaaab", out _));
+
+            Assert.IsType<Sequence<char, char, char, char, char, char>>(s6);
+            Assert.False(s6.TryParse("aaaaa", out _));
+            Assert.True(s6.TryParse("aaaaaab", out _));
+
+            Assert.IsType<Sequence<char, char, char, char, char, char, char>>(s7);
+            Assert.False(s7.TryParse("aaaaaa", out _));
+            Assert.True(s7.TryParse("aaaaaaab", out _));
         }
     }
 }

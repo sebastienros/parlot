@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
@@ -9,18 +10,19 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf : Parser<ParseResult<object>>
     {
-        private readonly IParser[] _parsers;
         private readonly bool _skipWhiteSpace;
 
-        public OneOf(IParser[] parsers, bool skipWhiteSpace = true)
+        public OneOf(IList<IParser> parsers, bool skipWhiteSpace = true)
         {
-            _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+            Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
             _skipWhiteSpace = skipWhiteSpace;
         }
 
+        public IList<IParser> Parsers { get; }
+
         public override bool Parse(Scanner scanner, out ParseResult<ParseResult<object>> result)
         {
-            if (_parsers.Length == 0)
+            if (Parsers.Count == 0)
             {
                 result = ParseResult<ParseResult<object>>.Empty;
                 return false;
@@ -31,9 +33,9 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            for (var i = 0; i < _parsers.Length; i++)
+            for (var i = 0; i < Parsers.Count; i++)
             {
-                if (_parsers[i].Parse(scanner, out var parsed))
+                if (Parsers[i].Parse(scanner, out var parsed))
                 {
                     result = new ParseResult<ParseResult<object>>(parsed.Buffer, parsed.Start, parsed.End, parsed);
                     return true;
@@ -43,6 +45,7 @@ namespace Parlot.Fluent
             result = ParseResult<ParseResult<object>>.Empty;
             return false;
         }
+
     }
 
     /// <summary>
@@ -52,18 +55,18 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf<T> : Parser<T>
     {
-        private readonly IParser<T>[] _parsers;
         private readonly bool _skipWhiteSpace;
 
-        public OneOf(IParser<T>[] parsers, bool skipWhiteSpace = true)
+        public OneOf(IList<IParser<T>> parsers, bool skipWhiteSpace = true)
         {
-            _parsers = parsers;
+            Parsers = parsers;
             _skipWhiteSpace = skipWhiteSpace;
         }
+        public IList<IParser<T>> Parsers { get; }
 
         public override bool Parse(Scanner scanner, out ParseResult<T> result)
         {
-            if (_parsers.Length == 0)
+            if (Parsers.Count == 0)
             {
                 result = ParseResult<T>.Empty;
                 return false;
@@ -74,9 +77,9 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            for (var i = 0; i < _parsers.Length; i++)
+            for (var i = 0; i < Parsers.Count; i++)
             {
-                if (_parsers[i].Parse(scanner, out result))
+                if (Parsers[i].Parse(scanner, out result))
                 {
                     return true;
                 }
