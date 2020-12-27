@@ -7,7 +7,7 @@ namespace Parlot.Fluent
     /// We then return the <see cref="IParseResult"/> of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class OneOf : Parser<ParseResult<object>>
+    public sealed class OneOf : Parser<ParseResult<object>>
     {
         private readonly IParser[] _parsers;
         private readonly bool _skipWhiteSpace;
@@ -50,7 +50,7 @@ namespace Parlot.Fluent
     /// We then return the actual result of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class OneOf<T> : Parser<T>
+    public sealed class OneOf<T> : Parser<T>
     {
         private readonly IParser<T>[] _parsers;
         private readonly bool _skipWhiteSpace;

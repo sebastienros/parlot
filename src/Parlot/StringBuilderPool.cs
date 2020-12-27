@@ -293,7 +293,7 @@ namespace Parlot
         // global pool
         private static readonly ObjectPool<StringBuilderPool> s_poolInstance = CreatePool();
 
-        public readonly StringBuilder Builder = new StringBuilder(DefaultCapacity);
+        public readonly StringBuilder Builder = new(DefaultCapacity);
         private readonly ObjectPool<StringBuilderPool> _pool;
 
         private StringBuilderPool(ObjectPool<StringBuilderPool> pool)

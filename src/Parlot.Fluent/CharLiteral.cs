@@ -1,6 +1,6 @@
 ﻿namespace Parlot.Fluent
 {
-    public class CharLiteral : Parser<char>
+    public sealed class CharLiteral : Parser<char>
     {
         private readonly bool _skipWhiteSpace;
 

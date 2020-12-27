@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public class ZeroOrOne<T> : Parser<T>
+    public sealed class ZeroOrOne<T> : Parser<T>
     {
         private readonly IParser<T> _parser;
         private readonly bool _skipWhiteSpace;

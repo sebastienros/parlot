@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public class Between<T> : Parser<T>
+    public sealed class Between<T> : Parser<T>
     {
         private readonly IParser<T> _parser;
         private readonly string _before;

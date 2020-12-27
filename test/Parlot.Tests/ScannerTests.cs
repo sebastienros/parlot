@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Parlot.Tests
@@ -118,18 +119,34 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ReadTextShouldBeCaseSensitiveByDefault()
+        {
+            Scanner s = new("abcd");
+            var result = new TokenResult();
+
+            // We test each char position because to verify specific optimizations
+            // in the implementation.
+            Assert.False(s.ReadText("Abcd", result: result));
+            Assert.False(s.ReadText("aBcd", result: result));
+            Assert.False(s.ReadText("abCd", result: result));
+            Assert.False(s.ReadText("abcD", result: result));
+            Assert.True(s.ReadText("ABCD", comparer: StringComparer.OrdinalIgnoreCase, result: result));
+            Assert.Equal("abcd", result.Text);
+        }
+
+        [Fact]
         public void ReadTextShouldReadTheFullTextOrNothing()
         {
             Scanner s = new("abcd");
             var result = new TokenResult();
 
-            Assert.False(s.ReadText("abcde", result));
-            Assert.False(s.ReadText("abd", result));
+            Assert.False(s.ReadText("abcde", result: result));
+            Assert.False(s.ReadText("abd", result: result));
 
-            Assert.True(s.ReadText("abc", result));
+            Assert.True(s.ReadText("abc", result: result));
             Assert.Equal("abc", result.Text);
 
-            Assert.True(s.ReadText("d", result));
+            Assert.True(s.ReadText("d", result: result));
             Assert.Equal("d", result.Text);
         }
 

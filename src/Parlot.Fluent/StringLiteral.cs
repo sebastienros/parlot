@@ -9,7 +9,7 @@ namespace Parlot.Fluent
         SingleOrDouble
     }
 
-    public class StringLiteral : Parser<TextSpan>
+    public sealed class StringLiteral : Parser<TextSpan>
     {
         private readonly StringLiteralQuotes _quotes;
         private readonly bool _skipWhiteSpace;

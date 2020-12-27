@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public class IntegerLiteral : Parser<long>
+    public sealed class IntegerLiteral : Parser<long>
     {
         private readonly bool _skipWhiteSpace;
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>
+    public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>
     {
         private readonly IParser<T1> _parser1;
         private readonly IParser<T2> _parser2;
@@ -37,7 +37,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
+    public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
     {
         private readonly IParser<T1> _parser1;
         private readonly IParser<T2> _parser2;
@@ -86,7 +86,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
+    public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
     {
         private readonly IParser<T1> _parser1;
         private readonly IParser<T2> _parser2;
@@ -142,7 +142,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
+    public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
     {
         private readonly IParser<T1> _parser1;
         private readonly IParser<T2> _parser2;
@@ -205,7 +205,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
         private readonly IParser<T1> _parser1;
         private readonly IParser<T2> _parser2;
@@ -275,7 +275,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
         private readonly IParser<T1> _parser1;
         private readonly IParser<T2> _parser2;
@@ -352,7 +352,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public class Sequence : Parser<IList<ParseResult<object>>>
+    public sealed class Sequence : Parser<IList<ParseResult<object>>>
     {
         private readonly IParser[] _parsers;
         private readonly bool _skipWhiteSpace;

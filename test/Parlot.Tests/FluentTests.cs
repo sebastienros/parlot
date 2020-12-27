@@ -48,9 +48,7 @@ namespace Parlot.Tests
         {
             var code = Between("[[", Literals.Integer(), "]]");
 
-            long result;
-
-            Assert.True(code.TryParse("[[123]]", out result));
+            Assert.True(code.TryParse("[[123]]", out long result));
             Assert.Equal(123, result);
 
             Assert.True(code.TryParse(" [[ 123 ]] ", out result));
@@ -61,6 +59,31 @@ namespace Parlot.Tests
             Assert.False(code.TryParse("123", out _));
             Assert.False(code.TryParse("[[123", out _));
             Assert.False(code.TryParse("[[123]", out _));
+        }
+
+        [Fact]
+        public void LiteralsShouldNotSkipWhiteSpaceByDefault()
+        {
+            Assert.False(Literals.Char('a').TryParse(" a", out _));
+            Assert.False(Literals.Decimal().TryParse(" 123", out _));
+            Assert.False(Literals.String().TryParse(" 'abc'", out _));
+            Assert.False(Literals.Text("abc").TryParse(" abc", out _));
+        }
+
+        [Fact]
+        public void TermsShouldSkipWhiteSpaceByDefault()
+        {
+            Assert.True(Terms.Char('a').TryParse(" a", out _));
+            Assert.True(Terms.Decimal().TryParse(" 123", out _));
+            Assert.True(Terms.String().TryParse(" 'abc'", out _));
+            Assert.True(Terms.Text("abc").TryParse(" abc", out _));
+        }
+
+        [Fact]
+        public void CharLiteralShouldBeCaseSensitive()
+        {
+            Assert.True(Literals.Char('a').TryParse("a", out _));
+
         }
     }
 }

@@ -6,7 +6,7 @@ namespace Parlot.Fluent
     /// Ensure the given parser is valid based on a condition
     /// </summary>
     /// <typeparam name="T">The output parser type.</typeparam>
-    public class When<T> : Parser<T>
+    public sealed class When<T> : Parser<T>
     {
         private readonly Func<T, bool> _action;
         private readonly IParser<T> _parser;

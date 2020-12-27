@@ -208,12 +208,25 @@ namespace Parlot
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, ITokenResult result = null)
+        public bool ReadText(string text, StringComparer comparer = null, ITokenResult result = null)
         {
-            if (!Cursor.Match(text))
+            // Default comparison is ordinal.
+            // Use implementation of Match() that doesn't use any comparer in this case.
+            if (comparer == null)
             {
-                result?.Fail();
-                return false;
+                if (!Cursor.Match(text))
+                {
+                    result?.Fail();
+                    return false;
+                }
+            }
+            else
+            {
+                if (!Cursor.Match(text, comparer))
+                {
+                    result?.Fail();
+                    return false;
+                }
             }
 
             var start = TextPosition.Start;

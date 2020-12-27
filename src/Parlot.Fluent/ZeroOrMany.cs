@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public class ZeroOrMany<T> : Parser<IList<T>>
+    public sealed class ZeroOrMany<T> : Parser<IList<T>>
     {
         private readonly IParser<T> _parser;
         private readonly bool _skipWhiteSpace;

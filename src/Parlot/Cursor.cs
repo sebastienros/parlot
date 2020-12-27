@@ -137,11 +137,12 @@ namespace Parlot
                 return false;
             }
 
+            // Ordinal comparison
             return _current == c;
         }
 
         /// <summary>
-        /// Whether a char is at the current position.
+        /// Whether any char of the string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MatchAnyOf(string s)
@@ -156,12 +157,14 @@ namespace Parlot
                 return false;
             }
 
-            if (s.Length == 0)
+            var length = s.Length;
+
+            if (length == 0)
             {
                 return true;
             }
 
-            for (var i = 0; i < s.Length; i++)
+            for (var i = 0; i < length; i++)
             {
                 if (s[i] == _current)
                 {
@@ -173,7 +176,7 @@ namespace Parlot
         }
 
         /// <summary>
-        /// Whether a char is at the current position.
+        /// Whether any char of an array is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MatchAny(params char[] chars)
@@ -188,12 +191,14 @@ namespace Parlot
                 return false;
             }
 
-            if (chars.Length == 0)
+            var length = chars.Length;
+
+            if (length == 0)
             {
                 return true;
             }
 
-            for (var i = 0; i < chars.Length; i++)
+            for (var i = 0; i < length; i++)
             {
                 if (chars[i] == _current)
                 {
@@ -219,7 +224,8 @@ namespace Parlot
             {
                 return false;
             }
-            else if (s[0] != _current)
+            
+            if (s[0] != _current)
             {
                 return false;
             }
@@ -239,6 +245,62 @@ namespace Parlot
             for (var i = 2; i < length; i++)
             {
                 if (s[i] != Buffer[_offset + i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether a string is at the current position.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Match(string s, StringComparer comparer)
+        {
+            if (s.Length == 0)
+            {
+                return true;
+            }
+
+            if (Eof)
+            {
+                return false;
+            }
+
+            var a = CharToStringTable.GetString(_current);
+            var b = CharToStringTable.GetString(s[0]);
+
+            if (comparer.Compare(a, b) != 0)
+            {
+                return false;
+            }
+
+            var length = s.Length;
+
+            if (_offset + length - 1 >= _textLength)
+            {
+                return false;
+            }
+
+            if (length > 1)
+            {
+                a = CharToStringTable.GetString(Buffer[_offset + 1]);
+                b = CharToStringTable.GetString(s[1]);
+
+                if (comparer.Compare(a, b) != 0)
+                {
+                    return false;
+                }
+            }
+
+            for (var i = 2; i < length; i++)
+            {
+                a = CharToStringTable.GetString(Buffer[_offset + i]);
+                b = CharToStringTable.GetString(s[i]);
+
+                if (comparer.Compare(a, b) != 0)
                 {
                     return false;
                 }
