@@ -4,6 +4,14 @@ namespace Parlot.Fluent
 {
     public struct TextSpan
     {
+        public TextSpan(string value)
+        {
+            Buffer = value;
+            Offset = 0;
+            Length = value.Length;
+            _text = value;
+        }
+
         public TextSpan(string buffer, int offset, int count)
         {
             Buffer = buffer;

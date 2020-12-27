@@ -1,4 +1,6 @@
-﻿namespace Parlot.Fluent
+﻿using System;
+
+namespace Parlot.Fluent
 {
     /// <summary>
     /// OneOf the inner choices when not all parsers return the same type.
@@ -8,12 +10,12 @@
     public class OneOf : Parser<ParseResult<object>>
     {
         private readonly IParser[] _parsers;
-        private readonly bool _skipWhitespace;
+        private readonly bool _skipWhiteSpace;
 
-        public OneOf(IParser[] parsers, bool skipWhitespace = true)
+        public OneOf(IParser[] parsers, bool skipWhiteSpace = true)
         {
-            _parsers = parsers;
-            _skipWhitespace = skipWhitespace;
+            _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ParseResult<object>> result)
@@ -24,7 +26,7 @@
                 return false;
             }
 
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
@@ -51,12 +53,12 @@
     public class OneOf<T> : Parser<T>
     {
         private readonly IParser<T>[] _parsers;
-        private readonly bool _skipWhitespace;
+        private readonly bool _skipWhiteSpace;
 
-        public OneOf(IParser<T>[] parsers, bool skipWhitespace = true)
+        public OneOf(IParser<T>[] parsers, bool skipWhiteSpace = true)
         {
             _parsers = parsers;
-            _skipWhitespace = skipWhitespace;
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<T> result)
@@ -67,7 +69,7 @@
                 return false;
             }
 
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }

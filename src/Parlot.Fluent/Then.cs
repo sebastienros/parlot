@@ -15,15 +15,15 @@ namespace Parlot.Fluent
 
         public Then(IParser<T> parser, Func<T, U> action)
         {
-            _action = action;
-            _parser = parser;
+            _action = action ?? throw new ArgumentNullException(nameof(action));
+            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<U> result)
         {
             if (_parser.Parse(scanner, out var parsed))
             {
-                var value = _action != null ? _action.Invoke(parsed.GetValue()) : default;
+                var value = _action.Invoke(parsed.GetValue());
                 result = new ParseResult<U>(parsed.Buffer, parsed.Start, parsed.End, value);
 
                 return true;

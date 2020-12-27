@@ -2,16 +2,15 @@
 
 namespace Parlot.Fluent
 {
-    public class DecimalLiteral : Parser<decimal>
+    public class IntegerLiteral : Parser<long>
     {
         private readonly bool _skipWhiteSpace;
 
-        public DecimalLiteral(bool skipWhiteSpace = true)
+        public IntegerLiteral(bool skipWhiteSpace = true)
         {
             _skipWhiteSpace = skipWhiteSpace;
         }
-
-        public override bool Parse(Scanner scanner, out ParseResult<decimal> result)
+        public override bool Parse(Scanner scanner, out ParseResult<long> result)
         {
             if (_skipWhiteSpace)
             {
@@ -24,14 +23,14 @@ namespace Parlot.Fluent
             {
                 var end = scanner.Cursor.Position;
 
-                if (decimal.TryParse(scanner.Buffer.AsSpan(start.Offset, end - start), out var value))
+                if (long.TryParse(scanner.Buffer.AsSpan(start.Offset, end - start), out var value))
                 {
-                    result = new ParseResult<decimal>(scanner.Buffer, start, end, value);
+                    result = new ParseResult<long>(scanner.Buffer, start, end, value);
                     return true;
                 }
             }
          
-            result = ParseResult<decimal>.Empty;
+            result = ParseResult<long>.Empty;
             return false;
         }
     }

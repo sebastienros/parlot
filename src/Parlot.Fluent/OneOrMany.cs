@@ -1,26 +1,27 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
     public class OneOrMany<T> : Parser<IList<T>>
     {
-        private readonly IParser<T> parser;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T> _parser;
+        private readonly bool _skipWhiteSpace;
 
-        public OneOrMany(IParser<T> parser, bool skipWhitespace = true)
+        public OneOrMany(IParser<T> parser, bool skipWhiteSpace = true)
         {
-            this.parser = parser;
-            _skipWhitespace = skipWhitespace;
+            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<IList<T>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (!parser.Parse(scanner, out var parsed))
+            if (!_parser.Parse(scanner, out var parsed))
             {
                 result = ParseResult<IList<T>>.Empty;
                 return false;
@@ -36,7 +37,7 @@ namespace Parlot.Fluent
                 end = parsed.End;
                 results.Add(parsed.GetValue());
 
-            } while (parser.Parse(scanner, out parsed));
+            } while (_parser.Parse(scanner, out parsed));
 
             result = new ParseResult<IList<T>>(scanner.Buffer, start, end, results);
             return true;

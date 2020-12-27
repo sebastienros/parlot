@@ -1,10 +1,10 @@
 ﻿namespace Parlot.Fluent
 {
-    public class Lazy<T> : Parser<T>
+    public class Deferred<T> : Parser<T>
     {
         public IParser<T> Parser { get; set; }
 
-        public Lazy()
+        public Deferred()
         {
         }
 

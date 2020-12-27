@@ -8,8 +8,12 @@ namespace Parlot
     public class Scanner
     {
         public readonly string Buffer;
-        public Cursor Cursor;       
+        public Cursor Cursor;
 
+        /// <summary>
+        /// Scans some text.
+        /// </summary>
+        /// <param name="buffer">The string containing the text to scan.</param>
         public Scanner(string buffer)
         {
             Buffer = buffer;
@@ -117,6 +121,28 @@ namespace Parlot
 
                 } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
             }
+
+            result?.Succeed(Buffer, start, Cursor.Position);
+            return true;
+        }
+
+        public bool ReadInteger(ITokenResult result = null)
+        {
+            // perf: fast path to prevent a copy of the position
+
+            if (!Character.IsDecimalDigit(Cursor.Current))
+            {
+                result?.Fail();
+                return false;
+            }
+
+            var start = Cursor.Position;
+
+            do
+            {
+                Cursor.Advance();
+
+            } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 
             result?.Succeed(Buffer, start, Cursor.Position);
             return true;

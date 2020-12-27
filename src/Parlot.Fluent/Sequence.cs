@@ -5,27 +5,27 @@ namespace Parlot.Fluent
 {
     public class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>
     {
-        private readonly IParser<T1> parser1;
-        private readonly IParser<T2> parser2;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T1> _parser1;
+        private readonly IParser<T2> _parser2;
+        private readonly bool _skipWhiteSpace;
 
-        public Sequence(IParser<T1> parser1, IParser<T2> parser2, bool skipWhitespace = true)
+        public Sequence(IParser<T1> parser1, IParser<T2> parser2, bool skipWhiteSpace = true)
         {
-            this.parser1 = parser1;
-            this.parser2 = parser2;
-            _skipWhitespace = skipWhitespace;
+            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
+            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ValueTuple<T1, T2>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (parser1.Parse(scanner, out var parseResult1))
+            if (_parser1.Parse(scanner, out var parseResult1))
             {
-                if (parser2.Parse(scanner, out var parseResult2))
+                if (_parser2.Parse(scanner, out var parseResult2))
                 {
                     result = new ParseResult<ValueTuple<T1, T2>>(parseResult1.Buffer, parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.GetValue(), parseResult2.GetValue()));
                     return true;
@@ -39,35 +39,35 @@ namespace Parlot.Fluent
 
     public class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
     {
-        private readonly IParser<T1> parser1;
-        private readonly IParser<T2> parser2;
-        private readonly IParser<T3> parser3;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T1> _parser1;
+        private readonly IParser<T2> _parser2;
+        private readonly IParser<T3> _parser3;
+        private readonly bool _skipWhiteSpace;
 
         public Sequence(
             IParser<T1> parser1, 
             IParser<T2> parser2, 
             IParser<T3> parser3, 
-            bool skipWhitespace = true)
+            bool skipWhiteSpace = true)
         {
-            this.parser1 = parser1;
-            this.parser2 = parser2;
-            this.parser3 = parser3;
-            _skipWhitespace = skipWhitespace;
+            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
+            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ValueTuple<T1, T2, T3>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (parser1.Parse(scanner, out var parseResult1))
+            if (_parser1.Parse(scanner, out var parseResult1))
             {
-                if (parser2.Parse(scanner, out var parseResult2))
+                if (_parser2.Parse(scanner, out var parseResult2))
                 {
-                    if (parser3.Parse(scanner, out var parseResult3))
+                    if (_parser3.Parse(scanner, out var parseResult3))
                     {
                         var tuple = new ValueTuple<T1, T2, T3>(
                             parseResult1.GetValue(), 
@@ -88,40 +88,40 @@ namespace Parlot.Fluent
 
     public class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
     {
-        private readonly IParser<T1> parser1;
-        private readonly IParser<T2> parser2;
-        private readonly IParser<T3> parser3;
-        private readonly IParser<T4> parser4;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T1> _parser1;
+        private readonly IParser<T2> _parser2;
+        private readonly IParser<T3> _parser3;
+        private readonly IParser<T4> _parser4;
+        private readonly bool _skipWhiteSpace;
 
         public Sequence(
             IParser<T1> parser1,
             IParser<T2> parser2,
             IParser<T3> parser3,
             IParser<T4> parser4,
-            bool skipWhitespace = true)
+            bool skipWhiteSpace = true)
         {
-            this.parser1 = parser1;
-            this.parser2 = parser2;
-            this.parser3 = parser3;
-            this.parser4 = parser4;
-            _skipWhitespace = skipWhitespace;
+            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
+            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
+            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ValueTuple<T1, T2, T3, T4>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (parser1.Parse(scanner, out var parseResult1))
+            if (_parser1.Parse(scanner, out var parseResult1))
             {
-                if (parser2.Parse(scanner, out var parseResult2))
+                if (_parser2.Parse(scanner, out var parseResult2))
                 {
-                    if (parser3.Parse(scanner, out var parseResult3))
+                    if (_parser3.Parse(scanner, out var parseResult3))
                     {
-                        if (parser4.Parse(scanner, out var parseResult4))
+                        if (_parser4.Parse(scanner, out var parseResult4))
                         {
                             var tuple = new ValueTuple<T1, T2, T3, T4>(
                                 parseResult1.GetValue(),
@@ -144,12 +144,12 @@ namespace Parlot.Fluent
 
     public class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
     {
-        private readonly IParser<T1> parser1;
-        private readonly IParser<T2> parser2;
-        private readonly IParser<T3> parser3;
-        private readonly IParser<T4> parser4;
-        private readonly IParser<T5> parser5;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T1> _parser1;
+        private readonly IParser<T2> _parser2;
+        private readonly IParser<T3> _parser3;
+        private readonly IParser<T4> _parser4;
+        private readonly IParser<T5> _parser5;
+        private readonly bool _skipWhiteSpace;
 
         public Sequence(
             IParser<T1> parser1,
@@ -157,32 +157,32 @@ namespace Parlot.Fluent
             IParser<T3> parser3,
             IParser<T4> parser4,
             IParser<T5> parser5,
-            bool skipWhitespace = true)
+            bool skipWhiteSpace = true)
         {
-            this.parser1 = parser1;
-            this.parser2 = parser2;
-            this.parser3 = parser3;
-            this.parser4 = parser4;
-            this.parser5 = parser5;
-            _skipWhitespace = skipWhitespace;
+            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
+            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
+            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
+            _parser5 = parser5 ?? throw new ArgumentNullException(nameof(parser5));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (parser1.Parse(scanner, out var parseResult1))
+            if (_parser1.Parse(scanner, out var parseResult1))
             {
-                if (parser2.Parse(scanner, out var parseResult2))
+                if (_parser2.Parse(scanner, out var parseResult2))
                 {
-                    if (parser3.Parse(scanner, out var parseResult3))
+                    if (_parser3.Parse(scanner, out var parseResult3))
                     {
-                        if (parser4.Parse(scanner, out var parseResult4))
+                        if (_parser4.Parse(scanner, out var parseResult4))
                         {
-                            if (parser5.Parse(scanner, out var parseResult5))
+                            if (_parser5.Parse(scanner, out var parseResult5))
                             {
                                 var tuple = new ValueTuple<T1, T2, T3, T4, T5>(
                                     parseResult1.GetValue(),
@@ -207,13 +207,13 @@ namespace Parlot.Fluent
 
     public class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
-        private readonly IParser<T1> parser1;
-        private readonly IParser<T2> parser2;
-        private readonly IParser<T3> parser3;
-        private readonly IParser<T4> parser4;
-        private readonly IParser<T5> parser5;
-        private readonly IParser<T6> parser6;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T1> _parser1;
+        private readonly IParser<T2> _parser2;
+        private readonly IParser<T3> _parser3;
+        private readonly IParser<T4> _parser4;
+        private readonly IParser<T5> _parser5;
+        private readonly IParser<T6> _parser6;
+        private readonly bool _skipWhiteSpace;
 
         public Sequence(
             IParser<T1> parser1,
@@ -222,35 +222,35 @@ namespace Parlot.Fluent
             IParser<T4> parser4,
             IParser<T5> parser5,
             IParser<T6> parser6,
-            bool skipWhitespace = true)
+            bool skipWhiteSpace = true)
         {
-            this.parser1 = parser1;
-            this.parser2 = parser2;
-            this.parser3 = parser3;
-            this.parser4 = parser4;
-            this.parser5 = parser5;
-            this.parser6 = parser6;
-            _skipWhitespace = skipWhitespace;
+            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
+            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
+            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
+            _parser5 = parser5 ?? throw new ArgumentNullException(nameof(parser5));
+            _parser6 = parser6 ?? throw new ArgumentNullException(nameof(parser6));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (parser1.Parse(scanner, out var parseResult1))
+            if (_parser1.Parse(scanner, out var parseResult1))
             {
-                if (parser2.Parse(scanner, out var parseResult2))
+                if (_parser2.Parse(scanner, out var parseResult2))
                 {
-                    if (parser3.Parse(scanner, out var parseResult3))
+                    if (_parser3.Parse(scanner, out var parseResult3))
                     {
-                        if (parser4.Parse(scanner, out var parseResult4))
+                        if (_parser4.Parse(scanner, out var parseResult4))
                         {
-                            if (parser5.Parse(scanner, out var parseResult5))
+                            if (_parser5.Parse(scanner, out var parseResult5))
                             {
-                                if (parser6.Parse(scanner, out var parseResult6))
+                                if (_parser6.Parse(scanner, out var parseResult6))
                                 {
                                     var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6>(
                                         parseResult1.GetValue(),
@@ -277,14 +277,14 @@ namespace Parlot.Fluent
 
     public class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
-        private readonly IParser<T1> parser1;
-        private readonly IParser<T2> parser2;
-        private readonly IParser<T3> parser3;
-        private readonly IParser<T4> parser4;
-        private readonly IParser<T5> parser5;
-        private readonly IParser<T6> parser6;
-        private readonly IParser<T7> parser7;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T1> _parser1;
+        private readonly IParser<T2> _parser2;
+        private readonly IParser<T3> _parser3;
+        private readonly IParser<T4> _parser4;
+        private readonly IParser<T5> _parser5;
+        private readonly IParser<T6> _parser6;
+        private readonly IParser<T7> _parser7;
+        private readonly bool _skipWhiteSpace;
 
         public Sequence(
             IParser<T1> parser1,
@@ -294,38 +294,38 @@ namespace Parlot.Fluent
             IParser<T5> parser5,
             IParser<T6> parser6,
             IParser<T7> parser7,
-            bool skipWhitespace = true)
+            bool skipWhiteSpace = true)
         {
-            this.parser1 = parser1;
-            this.parser2 = parser2;
-            this.parser3 = parser3;
-            this.parser4 = parser4;
-            this.parser5 = parser5;
-            this.parser6 = parser6;
-            this.parser7 = parser7;
-            _skipWhitespace = skipWhitespace;
+            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
+            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
+            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
+            _parser5 = parser5 ?? throw new ArgumentNullException(nameof(parser5));
+            _parser6 = parser6 ?? throw new ArgumentNullException(nameof(parser6));
+            _parser7 = parser7 ?? throw new ArgumentNullException(nameof(parser7));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            if (parser1.Parse(scanner, out var parseResult1))
+            if (_parser1.Parse(scanner, out var parseResult1))
             {
-                if (parser2.Parse(scanner, out var parseResult2))
+                if (_parser2.Parse(scanner, out var parseResult2))
                 {
-                    if (parser3.Parse(scanner, out var parseResult3))
+                    if (_parser3.Parse(scanner, out var parseResult3))
                     {
-                        if (parser4.Parse(scanner, out var parseResult4))
+                        if (_parser4.Parse(scanner, out var parseResult4))
                         {
-                            if (parser5.Parse(scanner, out var parseResult5))
+                            if (_parser5.Parse(scanner, out var parseResult5))
                             {
-                                if (parser6.Parse(scanner, out var parseResult6))
+                                if (_parser6.Parse(scanner, out var parseResult6))
                                 {
-                                    if (parser7.Parse(scanner, out var parseResult7))
+                                    if (_parser7.Parse(scanner, out var parseResult7))
                                     {
                                         var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6, T7>(
                                             parseResult1.GetValue(),
@@ -355,12 +355,12 @@ namespace Parlot.Fluent
     public class Sequence : Parser<IList<ParseResult<object>>>
     {
         private readonly IParser[] _parsers;
-        private readonly bool _skipWhitespace;
+        private readonly bool _skipWhiteSpace;
 
-        public Sequence(IParser[] parsers, bool skipWhitespace = true)
+        public Sequence(IParser[] parsers, bool skipWhiteSpace = true)
         {
             _parsers = parsers;
-            _skipWhitespace = skipWhitespace;
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<IList<ParseResult<object>>> result)
@@ -375,7 +375,7 @@ namespace Parlot.Fluent
 
             var success = true;
 
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }

@@ -5,18 +5,18 @@ namespace Parlot.Fluent
 {
     public class ZeroOrMany<T> : Parser<IList<T>>
     {
-        private readonly IParser<T> parser;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T> _parser;
+        private readonly bool _skipWhiteSpace;
 
-        public ZeroOrMany(IParser<T> parser, bool skipWhitespace = true)
+        public ZeroOrMany(IParser<T> parser, bool skipWhiteSpace = true)
         {
-            this.parser = parser;
-            _skipWhitespace = skipWhitespace;
+            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<IList<T>> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
@@ -27,7 +27,7 @@ namespace Parlot.Fluent
             var end = TextPosition.Start;
 
             var first = true;
-            while (parser.Parse(scanner, out var parsed))
+            while (_parser.Parse(scanner, out var parsed))
             {
                 if (first)
                 {

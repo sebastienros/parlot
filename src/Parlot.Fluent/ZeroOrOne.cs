@@ -1,24 +1,26 @@
-﻿namespace Parlot.Fluent
+﻿using System;
+
+namespace Parlot.Fluent
 {
     public class ZeroOrOne<T> : Parser<T>
     {
-        private readonly IParser<T> parser;
-        private readonly bool _skipWhitespace;
+        private readonly IParser<T> _parser;
+        private readonly bool _skipWhiteSpace;
 
-        public ZeroOrOne(IParser<T> parser, bool skipWhitespace = true)
+        public ZeroOrOne(IParser<T> parser, bool skipWhiteSpace = true)
         {
-            this.parser = parser;
-            _skipWhitespace = skipWhitespace;
+            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(Scanner scanner, out ParseResult<T> result)
         {
-            if (_skipWhitespace)
+            if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            parser.Parse(scanner, out result);
+            _parser.Parse(scanner, out result);
 
             return true;
         }

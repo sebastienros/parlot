@@ -2,15 +2,23 @@
 {
     public class CharLiteral : Parser<char>
     {
-        public CharLiteral(char c)
+        private readonly bool _skipWhiteSpace;
+
+        public CharLiteral(char c, bool skipWhiteSpace = true)
         {
             Char = c;
+            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public char Char { get; }
 
         public override bool Parse(Scanner scanner, out ParseResult<char> result)
         {
+            if (_skipWhiteSpace)
+            {
+                scanner.SkipWhiteSpace();
+            }
+
             var start = scanner.Cursor.Position;
 
             if (scanner.ReadChar(Char))
