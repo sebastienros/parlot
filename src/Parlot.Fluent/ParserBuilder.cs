@@ -13,8 +13,8 @@ namespace Parlot.Fluent
         public static IParser<T> OneOf<T>(params IParser<T>[] parsers) => new OneOf<T>(parsers);
         public static IParser<IList<ParseResult<object>>> Sequence(params IParser[] parsers) => new Sequence(parsers);
 
-        public static IParser<Tuple<T1, T2>> Sequence<T1, T2>(IParser<T1> parser1, IParser<T2> parser2) => new Sequence<T1, T2>(parser1, parser2);
-        public static IParser<Tuple<T1, T2, T3>> Sequence<T1, T2, T3>(IParser<T1> parser1, IParser<T2> parser2, IParser<T3> parser3) => new Sequence<T1, T2, T3>(parser1, parser2, parser3);
+        public static IParser<ValueTuple<T1, T2>> Sequence<T1, T2>(IParser<T1> parser1, IParser<T2> parser2) => new Sequence<T1, T2>(parser1, parser2);
+        public static IParser<ValueTuple<T1, T2, T3>> Sequence<T1, T2, T3>(IParser<T1> parser1, IParser<T2> parser2, IParser<T3> parser3) => new Sequence<T1, T2, T3>(parser1, parser2, parser3);
 
         public static IParser<T> ZeroOrOne<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
         public static IParser<IList<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);

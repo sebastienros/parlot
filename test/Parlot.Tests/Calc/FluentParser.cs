@@ -27,17 +27,20 @@ namespace Parlot.Tests.Calc
                 .Then(static d => (Expression) new Number(d))
                 ;
 
+            // "(" expression ")"
             var groupExpression = Sequence(
                Literals.Char('('),
                expression,
                Literals.Char(')')
                ).Then(static x => x.Item2);
 
+            // primary => NUMBER | "(" expression ")";
             var primary = OneOf(number, groupExpression);
 
             // Make unary Lazy since it's a cyclic reference
             var unary = Lazy<Expression>();
 
+            // ( "-" ) unary | primary;
             unary.Parser = OneOf(
                 Sequence(
                     Literals.Char('-'),
@@ -46,6 +49,7 @@ namespace Parlot.Tests.Calc
                 primary
             );
 
+            // factor         => unary ( ( "/" | "*" ) unary )* ;
             var factor = Sequence(
                 unary,
                 ZeroOrMany(
@@ -74,6 +78,7 @@ namespace Parlot.Tests.Calc
                     return result;
                 });
 
+            // expression     => factor ( ( "-" | "+" ) factor )* ;
             expression.Parser = Sequence(
                 factor,
                 ZeroOrMany(
