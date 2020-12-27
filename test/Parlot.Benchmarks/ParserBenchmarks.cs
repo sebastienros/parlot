@@ -1,7 +1,8 @@
 ﻿using BenchmarkDotNet.Attributes;
 using Parlot.Benchmarks.Pidgin;
-using Parlot.Tests.Calc;
 using Parlot.Fluent;
+using Parlot.Tests.Calc;
+using System;
 
 namespace Parlot.Benchmarks
 {
@@ -12,8 +13,22 @@ namespace Parlot.Benchmarks
     {
         private readonly Parser _parser = new();
 
-        private const string Expression1 = "1 + 2";
+        private const string Expression1 = "3 - 1 / 2 + 1";
         private const string Expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";
+
+        public ExpressionBenchmarks()
+        {
+            var expected1 = (decimal)3.5;
+            var expected2 = (decimal)-64.5;
+
+            if (PidginExpression1().Evaluate() != expected1) throw new Exception("PidginExpression1");
+            if (ParlotExpression1().Evaluate() != expected1) throw new Exception("ParlotExpression1");
+            if (FluentExpression1().Evaluate() != expected1) throw new Exception("FluentExpression1");
+
+            if (PidginExpression2().Evaluate() != expected2) throw new Exception("PidginExpression2");
+            if (ParlotExpression2().Evaluate() != expected2) throw new Exception("ParlotExpression2");
+            if (FluentExpression2().Evaluate() != expected2) throw new Exception("FluentExpression2");
+        }
 
         [Benchmark, BenchmarkCategory("Expression1")]
         public Expression PidginExpression1()

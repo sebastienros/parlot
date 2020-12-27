@@ -31,10 +31,10 @@ namespace Parlot.Tests.Calc
         {
             var expression = ParseFactor();
 
-            _scanner.SkipWhiteSpace();
-
             while (true)
             {
+                _scanner.SkipWhiteSpace();
+
                 if (_scanner.ReadChar('+'))
                 {
                     _scanner.SkipWhiteSpace();
@@ -60,10 +60,10 @@ namespace Parlot.Tests.Calc
         {
             var expression = ParseUnaryExpression();
 
-            _scanner.SkipWhiteSpace();
-
             while (true)
             {
+                _scanner.SkipWhiteSpace();
+
                 if (_scanner.ReadChar('*'))
                 {
                     _scanner.SkipWhiteSpace();

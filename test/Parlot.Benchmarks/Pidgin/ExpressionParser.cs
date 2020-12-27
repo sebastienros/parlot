@@ -57,11 +57,9 @@ namespace Parlot.Benchmarks.Pidgin
                 ),
                 new[]
                 {
-                Operator.Prefix(Neg),
-                Operator.InfixL(Mul),
-                Operator.InfixL(Div),
-                Operator.InfixL(Add),
-                Operator.InfixL(Sub)
+                    Operator.Prefix(Neg),
+                    Operator.InfixL(Mul).And(Operator.InfixL(Div)),
+                    Operator.InfixL(Add).And(Operator.InfixL(Sub))
                 }
             )
         ).Labelled("expression");
