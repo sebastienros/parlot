@@ -29,26 +29,29 @@ namespace Parlot.Fluent
 
             var start = scanner.Cursor.Position;
 
-            var token = new TokenResult();
             var success = _quotes switch
             {
-                StringLiteralQuotes.Single => scanner.ReadSingleQuotedString(token),
-                StringLiteralQuotes.Double => scanner.ReadDoubleQuotedString(token),
-                StringLiteralQuotes.SingleOrDouble => scanner.ReadQuotedString(token),
+                StringLiteralQuotes.Single => scanner.ReadSingleQuotedString(),
+                StringLiteralQuotes.Double => scanner.ReadDoubleQuotedString(),
+                StringLiteralQuotes.SingleOrDouble => scanner.ReadQuotedString(),
                 _ => false
             };
 
+            var end = scanner.Cursor.Position;
+
             if (success)
             {
-                var decoded = Character.DecodeString(token.Span);
-                
+                // Remove quotes
+                var encoded = scanner.Buffer.AsSpan(start.Offset + 1, end - start - 2);
+                var decoded = Character.DecodeString(encoded);
+
                 // Don't create a new string if the decoded string is the same, meaning is 
                 // has no escape sequences.
-                var span = decoded == token.Span 
-                    ? new TextSpan(scanner.Buffer, start.Offset, decoded.Length)
-                    : new TextSpan(token.Text);
+                var span = decoded == encoded || decoded.SequenceEqual(encoded)
+                    ? new TextSpan(scanner.Buffer, start.Offset + 1, encoded.Length)
+                    : new TextSpan(decoded.ToString());
 
-                result.Set(scanner.Buffer, start, scanner.Cursor.Position, span);
+                result.Set(scanner.Buffer, start, end, span);
                 return true;
             }
             else

@@ -22,7 +22,7 @@ namespace Parlot.Tests.Json
 
             var jsonString =
                 String
-                    .Then<IJson>(static s => new JsonString(Character.DecodeString(s.Text).ToString()));
+                    .Then<IJson>(static s => new JsonString(s.Text));
 
             var json = Deferred<IJson>();
 
@@ -32,7 +32,7 @@ namespace Parlot.Tests.Json
 
             var jsonMember =
                 String.And(Colon).And(json)
-                    .Then(static member => new KeyValuePair<string, IJson>(member.Item1.Text[1..^1], member.Item3));
+                    .Then(static member => new KeyValuePair<string, IJson>(member.Item1.Text, member.Item3));
 
             var jsonObject =
                 Between(LBrace, Separated(Comma, jsonMember), RBrace)
