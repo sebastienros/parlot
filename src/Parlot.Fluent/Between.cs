@@ -65,7 +65,7 @@ namespace Parlot.Fluent
 
             if (_parser.Parse(scanner, out var parsed))
             {
-                
+                return false;
             }            
 
             if (_afterIsChar)

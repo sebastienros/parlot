@@ -23,6 +23,6 @@ namespace Parlot
             return left.Offset - right.Offset;
         }
 
-        public override string ToString() => $"({Line},{Column})";
+        public override string ToString() => $"({Line}:{Column})";
     }
 }
