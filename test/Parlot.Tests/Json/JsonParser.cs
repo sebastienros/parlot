@@ -11,17 +11,18 @@ namespace Parlot.Tests.Json
 
         static JsonParser()
         {
-            var LBrace = Literals.Char('{');
-            var RBrace = Literals.Char('}');
-            var LBracket = Literals.Char('[');
-            var RBracket = Literals.Char(']');
-            var Colon = Literals.Char(':');
-            var Comma = Literals.Char(',');
+            var LBrace = Terms.Char('{');
+            var RBrace = Terms.Char('}');
+            var LBracket = Terms.Char('[');
+            var RBracket = Terms.Char(']');
+            var Colon = Terms.Char(':');
+            var Comma = Terms.Char(',');
 
             var String = Terms.String(StringLiteralQuotes.Double);
 
             var jsonString =
-                String.Then<IJson>(static s => new JsonString(Character.DecodeString(s.Text).ToString()));
+                String
+                    .Then<IJson>(static s => new JsonString(Character.DecodeString(s.Text).ToString()));
 
             var json = Deferred<IJson>();
 
@@ -31,7 +32,7 @@ namespace Parlot.Tests.Json
 
             var jsonMember =
                 String.And(Colon).And(json)
-                .Then(static x => new KeyValuePair<string, IJson>(x.Item1.Text[1..^1], x.Item3));
+                    .Then(static member => new KeyValuePair<string, IJson>(member.Item1.Text[1..^1], member.Item3));
 
             var jsonObject =
                 Between(LBrace, Separated(Comma, jsonMember), RBrace)

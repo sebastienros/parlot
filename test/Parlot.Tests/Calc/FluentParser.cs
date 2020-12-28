@@ -23,7 +23,7 @@ namespace Parlot.Tests.Calc
             var expression = Deferred<Expression>();
 
             var number = Literals.Decimal()
-                .Then(static d => (Expression) new Number(d))
+                .Then<Expression>(static d => new Number(d))
                 ;
 
             var divided = Literals.Char('/');
@@ -44,7 +44,7 @@ namespace Parlot.Tests.Calc
 
             // ( "-" ) unary | primary;
             unary.Parser = minus.And(unary)
-                .Then(static x => (Expression) new NegateExpression(x.Item2))
+                .Then<Expression>(static x => new NegateExpression(x.Item2))
                 .Or(primary);
 
             // factor => unary ( ( "/" | "*" ) unary )* ;
