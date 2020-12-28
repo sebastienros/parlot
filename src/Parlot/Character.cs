@@ -73,7 +73,7 @@ namespace Parlot
             // Nothing to do if the string doesn't have any escape char
             if (buffer.IndexOf('\\') == -1)
             {
-                return buffer;
+                return buffer[1..^1];
             }
 
             // The asumption is that the new string will be shorter since escapes results are smaller than their source

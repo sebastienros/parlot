@@ -30,9 +30,11 @@ namespace Parlot.Tests.Calc
             var times = Literals.Char('*');
             var minus = Literals.Char('-');
             var plus = Literals.Char('+');
+            var openParen = Literals.Char('(');
+            var closeParen = Literals.Char(')');
 
             // "(" expression ")"
-            var groupExpression = Between("(", expression, ")");
+            var groupExpression = Between(openParen, expression, closeParen);
 
             // primary => NUMBER | "(" expression ")";
             var primary = number.Or(groupExpression);

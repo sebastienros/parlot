@@ -1,5 +1,5 @@
 ﻿using BenchmarkDotNet.Attributes;
-using Parlot.Benchmarks.Pidgin;
+using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
 using System;
@@ -9,14 +9,14 @@ namespace Parlot.Benchmarks
     [MemoryDiagnoser]
     [ShortRunJob]
 #pragma warning disable CA1822 // Mark members as static
-    public class ExpressionBenchmarks
+    public class ExprBench
     {
         private readonly Parser _parser = new();
 
         private const string Expression1 = "3 - 1 / 2 + 1";
         private const string Expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";
 
-        public ExpressionBenchmarks()
+        public ExprBench()
         {
             var expected1 = (decimal)3.5;
             var expected2 = (decimal)-64.5;

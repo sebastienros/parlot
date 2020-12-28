@@ -46,7 +46,7 @@ namespace Parlot.Tests
         [Fact]
         public void BetweenShouldParseBetweenTwoString()
         {
-            var code = Between("[[", Terms.Integer(), "]]");
+            var code = Between(Literals.Text("[["), Terms.Integer(), Literals.Text("]]"));
 
             Assert.True(code.TryParse("[[123]]", out long result));
             Assert.Equal(123, result);

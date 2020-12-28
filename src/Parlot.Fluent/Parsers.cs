@@ -18,40 +18,39 @@ namespace Parlot.Fluent
         /// </summary>
         public static TermBuilder Terms => new();
 
-        public static Then<T, U> Then<T, U>(this IParser<T> parser, Func<T, U> conversion) => new(parser, conversion);
-        public static When<T> When<T>(this IParser<T> parser, Func<T, bool> predicate) => new(parser, predicate);
+        public static IParser<IList<T>> Separated<T>(IParser separator, IParser<T> parser) => new Separated<T>(separator, parser);
 
         // TODO: Decide between Bang and ZeroOrOne
-        public static ZeroOrOne<T> Bang<T>(IParser<T> parser) => new(parser);
-        public static ZeroOrOne<T> ZeroOrOne<T>(IParser<T> parser) => new(parser);
+        public static IParser<T> Bang<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
+        public static IParser<T> ZeroOrOne<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
 
         // TODO: Decide between Star and ZeroOrMany
-        public static ZeroOrMany<T> Star<T>(IParser<T> parser) => new (parser);
-        public static ZeroOrMany<T> ZeroOrMany<T>(IParser<T> parser) => new (parser);
+        public static IParser<IList<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
+        public static IParser<IList<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
 
         // TODO: Decide between Plus and OneOrMany
-        public static OneOrMany<T> Plus<T>(IParser<T> parser) => new (parser);
-        public static OneOrMany<T> OneOrMany<T>(IParser<T> parser) => new (parser);
+        public static IParser<IList<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
+        public static IParser<IList<T>> OneOrMany<T>(IParser<T> parser) => new OneOrMany<T>(parser);
 
         public static Deferred<T> Deferred<T>() => new ();
-        public static Between<T> Between<T>(string before, IParser<T> parser, string after) => new(before, parser, after);
+        public static IParser<T> Between<T>(IParser before, IParser<T> parser, IParser after) => new Between<T>(before, parser, after);
     }
 
     public class LiteralBuilder
     {
-        public TextLiteral Text(string text, bool caseInsensitive = false) => new(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
-        public CharLiteral Char(char c) => new(c, false);
-        public IntegerLiteral Integer() => new(false);
-        public DecimalLiteral Decimal() => new(false);
-        public StringLiteral String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new(quotes, false);
+        public IParser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
+        public IParser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
+        public IParser<long> Integer() => new IntegerLiteral(skipWhiteSpace: false);
+        public IParser<decimal> Decimal() => new DecimalLiteral(skipWhiteSpace: false);
+        public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes, skipWhiteSpace: false);
     }
 
     public class TermBuilder
     {
-        public TextLiteral Text(string text, bool caseInsensitive = false) => new(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
-        public CharLiteral Char(char c) => new(c);
-        public IntegerLiteral Integer() => new();
-        public DecimalLiteral Decimal() => new();
-        public StringLiteral String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new(quotes);
+        public IParser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
+        public IParser<char> Char(char c) => new CharLiteral(c);
+        public IParser<long> Integer() => new IntegerLiteral();
+        public IParser<decimal> Decimal() => new DecimalLiteral();
+        public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
     }
 }

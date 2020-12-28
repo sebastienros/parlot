@@ -6,7 +6,7 @@ namespace Parlot.Benchmarks
     {
         static void Main(string[] args)
         {
-            BenchmarkRunner.Run<ExpressionBenchmarks>();
+            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
         }
     }
 }

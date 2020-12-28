@@ -4,7 +4,7 @@ using Pidgin.Expression;
 using System;
 using static Pidgin.Parser;
 
-namespace Parlot.Benchmarks.Pidgin
+namespace Parlot.Benchmarks.PidginParsers
 {
     public static class ExprParser
     {
