@@ -12,7 +12,7 @@
 
         public bool SkipWhiteSpace { get; }
 
-        public override bool Parse(Scanner scanner, out ParseResult<char> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<char> result)
         {
             if (SkipWhiteSpace)
             {
@@ -23,11 +23,10 @@
 
             if (scanner.ReadChar(Char))
             {
-                result = new ParseResult<char>(scanner.Buffer, start, scanner.Cursor.Position, Char);
+                result.Set(scanner.Buffer, start, scanner.Cursor.Position, Char);
                 return true;
             }
 
-            result = ParseResult<char>.Empty;
             return false;
         }
     }

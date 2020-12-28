@@ -14,7 +14,7 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<IList<T>> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<IList<T>> result)
         {
             if (_skipWhiteSpace)
             {
@@ -27,7 +27,9 @@ namespace Parlot.Fluent
             var end = TextPosition.Start;
 
             var first = true;
-            while (_parser.Parse(scanner, out var parsed))
+            var parsed = new ParseResult<T>();
+
+            while (_parser.Parse(scanner, ref parsed))
             {
                 if (first)
                 {
@@ -35,9 +37,8 @@ namespace Parlot.Fluent
                 }
 
                 end = parsed.End;
-
                 results ??= new List<T>();
-                results.Add(parsed.GetValue());
+                results.Add(parsed.Value);
             }
 
             result = new ParseResult<IList<T>>(scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());

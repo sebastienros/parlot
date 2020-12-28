@@ -13,14 +13,14 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<T> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
         {
             if (_skipWhiteSpace)
             {
                 scanner.SkipWhiteSpace();
             }
 
-            _parser.Parse(scanner, out result);
+            _parser.Parse(scanner, ref result);
 
             return true;
         }

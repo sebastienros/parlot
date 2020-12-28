@@ -38,11 +38,8 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<T> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
         {
-            var start = scanner.Cursor.Position;
-            result = ParseResult<T>.Empty;
-
             if (_beforeIsChar)
             {
                 if (_beforeSkipWhiteSpace)
@@ -57,13 +54,15 @@ namespace Parlot.Fluent
             }
             else
             {
-                if (!_before.Parse(scanner, out _))
+                var parsed = new ParseResult<object>();
+
+                if (!_before.Parse(scanner, ref parsed))
                 {
                     return false;
                 }
             }
 
-            if (_parser.Parse(scanner, out var parsed))
+            if (!_parser.Parse(scanner, ref result))
             {
                 return false;
             }            
@@ -82,13 +81,14 @@ namespace Parlot.Fluent
             }
             else
             {
-                if (!_after.Parse(scanner, out _))
+                var parsed = new ParseResult<object>();
+
+                if (!_after.Parse(scanner, ref parsed))
                 {
                     return false;
                 }
             }
 
-            result = new ParseResult<T>(parsed.Buffer, start, parsed.End, parsed.GetValue());
             return true;
         }
     }

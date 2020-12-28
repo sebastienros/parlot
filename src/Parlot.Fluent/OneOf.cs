@@ -20,11 +20,10 @@ namespace Parlot.Fluent
 
         public IList<IParser> Parsers { get; }
 
-        public override bool Parse(Scanner scanner, out ParseResult<ParseResult<object>> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<ParseResult<object>> result)
         {
             if (Parsers.Count == 0)
             {
-                result = ParseResult<ParseResult<object>>.Empty;
                 return false;
             }
 
@@ -33,16 +32,17 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
+            var parsed = new ParseResult<object>();
+
             for (var i = 0; i < Parsers.Count; i++)
             {
-                if (Parsers[i].Parse(scanner, out var parsed))
+                if (Parsers[i].Parse(scanner, ref parsed))
                 {
-                    result = new ParseResult<ParseResult<object>>(parsed.Buffer, parsed.Start, parsed.End, parsed);
+                    result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed);
                     return true;
                 }
             }
 
-            result = ParseResult<ParseResult<object>>.Empty;
             return false;
         }
 
@@ -64,11 +64,10 @@ namespace Parlot.Fluent
         }
         public IList<IParser<T>> Parsers { get; }
 
-        public override bool Parse(Scanner scanner, out ParseResult<T> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
         {
             if (Parsers.Count == 0)
             {
-                result = ParseResult<T>.Empty;
                 return false;
             }
 
@@ -79,13 +78,12 @@ namespace Parlot.Fluent
 
             for (var i = 0; i < Parsers.Count; i++)
             {
-                if (Parsers[i].Parse(scanner, out result))
+                if (Parsers[i].Parse(scanner, ref result))
                 {
                     return true;
                 }
             }
 
-            result = ParseResult<T>.Empty;
             return false;
         }
     }

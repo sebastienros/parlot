@@ -8,9 +8,9 @@
         {
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<T> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
         {
-            return Parser.Parse(scanner, out result);
+            return Parser.Parse(scanner, ref result);
         }
     }
 }

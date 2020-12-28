@@ -16,7 +16,7 @@ namespace Parlot.Fluent
 
         public string Text { get; }
 
-        public override bool Parse(Scanner scanner, out ParseResult<string> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<string> result)
         {
             if (_skipWhiteSpace)
             {
@@ -27,12 +27,11 @@ namespace Parlot.Fluent
 
             if (scanner.ReadText(Text, _comparer))
             {
-                result = new ParseResult<string>(scanner.Buffer, start, scanner.Cursor.Position, Text);
+                result.Set(scanner.Buffer, start, scanner.Cursor.Position, Text);
                 return true;
             }
             else
             {
-                result = ParseResult<string>.Empty;
                 return false;
             }
         }

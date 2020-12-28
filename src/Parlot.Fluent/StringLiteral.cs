@@ -20,7 +20,7 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<TextSpan> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<TextSpan> result)
         {
             if (_skipWhiteSpace)
             {
@@ -48,12 +48,11 @@ namespace Parlot.Fluent
                     ? new TextSpan(scanner.Buffer, start.Offset, decoded.Length)
                     : new TextSpan(token.Text);
 
-                result = new ParseResult<TextSpan>(scanner.Buffer, start, scanner.Cursor.Position, span);
+                result.Set(scanner.Buffer, start, scanner.Cursor.Position, span);
                 return true;
             }
             else
             {
-                result = ParseResult<TextSpan>.Empty;
                 return false;
             }
         }

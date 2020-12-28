@@ -19,17 +19,18 @@ namespace Parlot.Fluent
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<U> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<U> result)
         {
-            if (_parser.Parse(scanner, out var parsed))
+            var parsed = new ParseResult<T>();
+
+            if (_parser.Parse(scanner, ref parsed))
             {
-                var value = _action.Invoke(parsed.GetValue());
-                result = new ParseResult<U>(parsed.Buffer, parsed.Start, parsed.End, value);
+                var value = _action.Invoke(parsed.Value);
+                result.Set(parsed.Buffer, parsed.Start, parsed.End, value);
 
                 return true;
             }
 
-            result = ParseResult<U>.Empty;
             return false;
         }
     }

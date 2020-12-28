@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 
 namespace Parlot.Fluent
@@ -29,7 +28,7 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<IList<T>> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<IList<T>> result)
         {
             List<T> results = null;
 
@@ -37,11 +36,12 @@ namespace Parlot.Fluent
             var end = TextPosition.Start;
 
             var first = true;
-            result = ParseResult<IList<T>>.Empty;
+            var parsed = new ParseResult<T>();
+            var separatorResult = new ParseResult<object>();
 
             while (true)
             {
-                if (!_parser.Parse(scanner, out var parsed))
+                if (!_parser.Parse(scanner, ref parsed))
                 {
                     if (!first)
                     {
@@ -60,7 +60,7 @@ namespace Parlot.Fluent
 
                 results ??= new List<T>();
 
-                results.Add(parsed.GetValue());
+                results.Add(parsed.Value);
 
                 if (_separatorIsChar)
                 {
@@ -74,7 +74,7 @@ namespace Parlot.Fluent
                         break;
                     }
                 }
-                else if (!_separator.Parse(scanner, out _))
+                else if (!_separator.Parse(scanner, ref separatorResult))
                 {
                     break;
                 }

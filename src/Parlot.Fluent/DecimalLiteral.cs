@@ -11,7 +11,7 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, out ParseResult<decimal> result)
+        public override bool Parse(Scanner scanner, ref ParseResult<decimal> result)
         {
             if (_skipWhiteSpace)
             {
@@ -26,12 +26,11 @@ namespace Parlot.Fluent
 
                 if (decimal.TryParse(scanner.Buffer.AsSpan(start.Offset, end - start), out var value))
                 {
-                    result = new ParseResult<decimal>(scanner.Buffer, start, end, value);
+                    result.Set(scanner.Buffer, start, end, value);
                     return true;
                 }
             }
          
-            result = ParseResult<decimal>.Empty;
             return false;
         }
     }
