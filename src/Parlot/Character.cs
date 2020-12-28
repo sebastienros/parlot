@@ -34,9 +34,9 @@ namespace Parlot
         public static bool IsWhiteSpace(char ch)
         {
             return (ch == 32) || // space
-                   (ch == 9) || // tab
-                   (ch == 0xB) ||
-                   (ch == 0xC) ||
+                   (ch == '\t') || // horizontal tab
+                   (ch == '\v') || // vertical tab
+                   (ch == 0xC) || // form feed - new page
                    (ch == 0xA0) || // non-breaking space
                    (ch >= 0x1680 && (
                                         ch == 0x1680 ||
@@ -50,7 +50,7 @@ namespace Parlot
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
         {
-            return (ch == 0xA) || IsWhiteSpace(ch);
+            return (ch == '\n') || (ch == '\r') || IsWhiteSpace(ch);
         }
 
         public static char ScanHexEscape(ReadOnlySpan<char> text, int index)
