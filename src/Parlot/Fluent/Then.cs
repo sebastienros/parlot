@@ -3,8 +3,8 @@
 namespace Parlot.Fluent
 {
     /// <summary>
-    /// Returns a new <see cref="IParser{TResult}" /> converting the input value of 
-    /// type <see cref="T"/> to the output value of type <see cref="U"/> using a custom function.
+    /// Returns a new <see cref="IParser{U}" /> converting the input value of 
+    /// type T to the output value of type U using a custom function.
     /// </summary>
     /// <typeparam name="T">The input parser type.</typeparam>
     /// <typeparam name="U">The output parser type.</typeparam>

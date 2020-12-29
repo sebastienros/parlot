@@ -5,9 +5,8 @@ namespace Parlot.Fluent
 {
     /// <summary>
     /// OneOf the inner choices when not all parsers return the same type.
-    /// We then return the <see cref="IParseResult"/> of each parser.
+    /// We then return the <see cref="ParseResult{T}"/> of each parser.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
     public sealed class OneOf : Parser<ParseResult<object>>
     {
         private readonly bool _skipWhiteSpace;
