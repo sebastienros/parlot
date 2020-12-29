@@ -21,51 +21,51 @@ namespace Parlot.Benchmarks
             var expected1 = (decimal)3.5;
             var expected2 = (decimal)-64.5;
 
-            if (PidginExpression1().Evaluate() != expected1) throw new Exception("PidginExpression1");
-            if (ParlotExpression1().Evaluate() != expected1) throw new Exception("ParlotExpression1");
-            if (FluentExpression1().Evaluate() != expected1) throw new Exception("FluentExpression1");
+            if (PidginSmall().Evaluate() != expected1) throw new Exception(nameof(PidginSmall));
+            if (ParlotRawSmall().Evaluate() != expected1) throw new Exception(nameof(ParlotRawSmall));
+            if (ParlotFluentSmall().Evaluate() != expected1) throw new Exception(nameof(ParlotFluentSmall));
 
-            if (PidginExpression2().Evaluate() != expected2) throw new Exception("PidginExpression2");
-            if (ParlotExpression2().Evaluate() != expected2) throw new Exception("ParlotExpression2");
-            if (FluentExpression2().Evaluate() != expected2) throw new Exception("FluentExpression2");
+            if (PidginBig().Evaluate() != expected2) throw new Exception(nameof(PidginBig));
+            if (ParlotRawBig().Evaluate() != expected2) throw new Exception(nameof(ParlotRawBig));
+            if (ParlotFluentBig().Evaluate() != expected2) throw new Exception(nameof(ParlotFluentBig));
         }
 
-        [Benchmark, BenchmarkCategory("Expression1")]
-        public Expression PidginExpression1()
-        {
-            return ExprParser.ParseOrThrow(Expression1);
-        }
-
-        [Benchmark, BenchmarkCategory("Expression1")]
-        public Expression ParlotExpression1()
+        [Benchmark(Baseline = true), BenchmarkCategory("Expression1")]
+        public Expression ParlotRawSmall()
         {
             return _parser.Parse(Expression1);
         }
 
         [Benchmark, BenchmarkCategory("Expression1")]
-        public Expression FluentExpression1()
+        public Expression ParlotFluentSmall()
         {
             FluentParser.Expression.TryParse(Expression1, out var result);
             return result;
         }
 
-        [Benchmark, BenchmarkCategory("Expression2")]
-        public Expression PidginExpression2()
+        [Benchmark, BenchmarkCategory("Expression1")]
+        public Expression PidginSmall()
         {
-            return ExprParser.ParseOrThrow(Expression2);
+            return ExprParser.ParseOrThrow(Expression1);
         }
 
-        [Benchmark, BenchmarkCategory("Expression2")]
-        public Expression ParlotExpression2()
+        [Benchmark(Baseline = true), BenchmarkCategory("Expression2")]
+        public Expression ParlotRawBig()
         {
             return _parser.Parse(Expression2);
         }
 
         [Benchmark, BenchmarkCategory("Expression2")]
-        public Expression FluentExpression2()
+        public Expression ParlotFluentBig()
         {
             FluentParser.Expression.TryParse(Expression2, out var result);
             return result;
+        }
+
+        [Benchmark, BenchmarkCategory("Expression2")]
+        public Expression PidginBig()
+        {
+            return ExprParser.ParseOrThrow(Expression2);
         }
     }
 #pragma warning restore CA1822 // Mark members as static

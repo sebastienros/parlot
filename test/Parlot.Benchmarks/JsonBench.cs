@@ -30,85 +30,85 @@ namespace Parlot.Benchmarks
             _deepJson = BuildJson(1, 256, 1).ToString()!;
         }
 
-        //[Benchmark(Baseline = true), BenchmarkCategory("Big")]
-        //public void BigJson_Pidgin()
-        //{
-        //    PidginJsonParser.Parse(_bigJson);
-        //}
-        //[Benchmark, BenchmarkCategory("Big")]
-        //public void BigJson_Sprache()
-        //{
-        //    SpracheJsonParser.Parse(_bigJson);
-        //}
-        //[Benchmark, BenchmarkCategory("Big")]
-        //public void BigJson_Superpower()
-        //{
-        //    SuperpowerJsonParser.Parse(_bigJson);
-        //}
+        [Benchmark(Baseline = true), BenchmarkCategory("Big")]
+        public void BigJson_Pidgin()
+        {
+            PidginJsonParser.Parse(_bigJson);
+        }
+        [Benchmark, BenchmarkCategory("Big")]
+        public void BigJson_Sprache()
+        {
+            SpracheJsonParser.Parse(_bigJson);
+        }
+        [Benchmark, BenchmarkCategory("Big")]
+        public void BigJson_Superpower()
+        {
+            SuperpowerJsonParser.Parse(_bigJson);
+        }
         [Benchmark, BenchmarkCategory("Big")]
         public void BigJson_Parlot()
         {
             JsonParser.Parse(_bigJson);
         }
 
-        //[Benchmark(Baseline = true), BenchmarkCategory("Long")]
-        //public void LongJson_Pidgin()
-        //{
-        //    PidginJsonParser.Parse(_longJson);
-        //}
-        //[Benchmark, BenchmarkCategory("Long")]
-        //public void LongJson_Sprache()
-        //{
-        //    SpracheJsonParser.Parse(_longJson);
-        //}
-        //[Benchmark, BenchmarkCategory("Long")]
-        //public void LongJson_Superpower()
-        //{
-        //    SuperpowerJsonParser.Parse(_longJson);
-        //}
+        [Benchmark(Baseline = true), BenchmarkCategory("Long")]
+        public void LongJson_Pidgin()
+        {
+            PidginJsonParser.Parse(_longJson);
+        }
+        [Benchmark, BenchmarkCategory("Long")]
+        public void LongJson_Sprache()
+        {
+            SpracheJsonParser.Parse(_longJson);
+        }
+        [Benchmark, BenchmarkCategory("Long")]
+        public void LongJson_Superpower()
+        {
+            SuperpowerJsonParser.Parse(_longJson);
+        }
         [Benchmark, BenchmarkCategory("Long")]
         public void LongJson_Parlot()
         {
             JsonParser.Parse(_longJson);
         }
 
-        //[Benchmark(Baseline = true), BenchmarkCategory("Deep")]
-        //public void DeepJson_Pidgin()
-        //{
-        //    PidginJsonParser.Parse(_deepJson);
-        //}
+        [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
+        public void DeepJson_Pidgin()
+        {
+            PidginJsonParser.Parse(_deepJson);
+        }
+        [Benchmark, BenchmarkCategory("Deep")]
+        public void DeepJson_Sprache()
+        {
+            SpracheJsonParser.Parse(_deepJson);
+        }
+        //this one blows the stack
         //[Benchmark, BenchmarkCategory("Deep")]
-        //public void DeepJson_Sprache()
+        //public void DeepJson_Superpower()
         //{
-        //    SpracheJsonParser.Parse(_deepJson);
+        //    SuperpowerJsonParser.Parse(_deepJson);
         //}
-        // this one blows the stack
-        // [Benchmark, BenchmarkCategory("Deep")]
-        // public void DeepJson_Superpower()
-        // {
-        //     SuperpowerJsonParser.Parse(_deepJson);
-        // }
         [Benchmark, BenchmarkCategory("Deep")]
         public void DeepJson_Parlot()
         {
             JsonParser.Parse(_deepJson);
         }
 
-        //[Benchmark(Baseline = true), BenchmarkCategory("Wide")]
-        //public void WideJson_Pidgin()
-        //{
-        //    PidginJsonParser.Parse(_wideJson);
-        //}
-        //[Benchmark, BenchmarkCategory("Wide")]
-        //public void WideJson_Sprache()
-        //{
-        //    SpracheJsonParser.Parse(_wideJson);
-        //}
-        //[Benchmark, BenchmarkCategory("Wide")]
-        //public void WideJson_Superpower()
-        //{
-        //    SuperpowerJsonParser.Parse(_wideJson);
-        //}
+        [Benchmark(Baseline = true), BenchmarkCategory("Wide")]
+        public void WideJson_Pidgin()
+        {
+            PidginJsonParser.Parse(_wideJson);
+        }
+        [Benchmark, BenchmarkCategory("Wide")]
+        public void WideJson_Sprache()
+        {
+            SpracheJsonParser.Parse(_wideJson);
+        }
+        [Benchmark, BenchmarkCategory("Wide")]
+        public void WideJson_Superpower()
+        {
+            SuperpowerJsonParser.Parse(_wideJson);
+        }
         [Benchmark, BenchmarkCategory("Wide")]
         public void WideJson_Parlot()
         {
