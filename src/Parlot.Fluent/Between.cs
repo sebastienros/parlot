@@ -40,6 +40,8 @@ namespace Parlot.Fluent
 
         public override bool Parse(Scanner scanner, ref ParseResult<T> result)
         {
+            var parsed = new ParseResult<object>();
+
             if (_beforeIsChar)
             {
                 if (_beforeSkipWhiteSpace)
@@ -54,8 +56,6 @@ namespace Parlot.Fluent
             }
             else
             {
-                var parsed = new ParseResult<object>();
-
                 if (!_before.Parse(scanner, ref parsed))
                 {
                     return false;
@@ -81,8 +81,6 @@ namespace Parlot.Fluent
             }
             else
             {
-                var parsed = new ParseResult<object>();
-
                 if (!_after.Parse(scanner, ref parsed))
                 {
                     return false;

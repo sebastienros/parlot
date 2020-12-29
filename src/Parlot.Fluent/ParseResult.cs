@@ -22,15 +22,6 @@ namespace Parlot
             Value = value;
         }
 
-        //public void Reset()
-        //{
-        //    Buffer = null;
-        //    Start = TextPosition.Start;
-        //    End = TextPosition.Start;
-        //    Length = 0;
-        //    Value = default;
-        //}
-
         public TextPosition Start { get; private set; }
 
         public TextPosition End { get; private set; }
