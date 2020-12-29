@@ -1,4 +1,6 @@
-﻿namespace Parlot.Fluent
+﻿using System;
+
+namespace Parlot.Fluent
 {
     public sealed class Deferred<T> : Parser<T>
     {
@@ -6,6 +8,11 @@
 
         public Deferred()
         {
+        }
+
+        public Deferred(Func<Deferred<T>, IParser<T>> parser)
+        {
+            Parser = parser(this);
         }
 
         public override bool Parse(Scanner scanner, ref ParseResult<T> result)

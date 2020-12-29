@@ -13,6 +13,7 @@ namespace Parlot.Fluent
 
         public IParser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
         public IParser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
+        public IParser<U> Cast<U>() where U : T => Then(t => (U) t) ;
     }
 
     public abstract class Parser<T> : IParser<T>
@@ -33,36 +34,13 @@ namespace Parlot.Fluent
                 return false;
             }
         }
-
-        public IParser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
-        public IParser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
     }
 
     public static class IParserExtensions
     {
         public static bool TryParse<TResult>(this IParser<TResult> parser, string text, out TResult value)
         {
-            try
-            {
-                var scanner = new Scanner(text);
-
-                var localResult = new ParseResult<TResult>();
-
-                var success = parser.Parse(scanner, ref localResult);
-
-                if (success)
-                {
-                    value = localResult.Value;
-                    return true;
-                }
-            }
-            catch (ParseException)
-            {
-                // This overload doesn't expose errors
-            }
-
-            value = default;
-            return false;
+            return parser.TryParse(text, out value, out _);
         }
 
         public static bool TryParse<TResult>(this IParser<TResult> parser, string text, out TResult value, out ParseError error)

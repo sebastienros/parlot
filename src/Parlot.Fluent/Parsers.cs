@@ -32,7 +32,8 @@ namespace Parlot.Fluent
         public static IParser<IList<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
         public static IParser<IList<T>> OneOrMany<T>(IParser<T> parser) => new OneOrMany<T>(parser);
 
-        public static Deferred<T> Deferred<T>() => new ();
+        public static Deferred<T> Deferred<T>() => new();
+        public static Deferred<T> Recursive<T>(Func<Deferred<T>, IParser<T>> parser) => new(parser);
         public static IParser<T> Between<T>(IParser before, IParser<T> parser, IParser after) => new Between<T>(before, parser, after);
     }
 

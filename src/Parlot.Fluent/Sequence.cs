@@ -42,20 +42,17 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
     {
-        internal readonly IParser<T1> _parser1;
-        internal readonly IParser<T2> _parser2;
-        internal readonly IParser<T3> _parser3;
+        private readonly IParser<ValueTuple<T1, T2>> _parser;
+        internal readonly IParser<T3> _lastParser;
         private readonly bool _skipWhiteSpace;
 
-        public Sequence(
-            IParser<T1> parser1, 
-            IParser<T2> parser2, 
-            IParser<T3> parser3, 
+        public Sequence(IParser<ValueTuple<T1, T2>> 
+            parser,
+            IParser<T3> lastParser, 
             bool skipWhiteSpace = true)
         {
-            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
-            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
-            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
+            _parser = parser;
+            _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
             _skipWhiteSpace = skipWhiteSpace;
         }
 
@@ -66,28 +63,22 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
+            var tupleResult = new ParseResult<ValueTuple<T1, T2>>();
 
-            if (_parser1.Parse(scanner, ref parseResult1))
+            if (_parser.Parse(scanner, ref tupleResult))
             {
-                var parseResult2 = new ParseResult<T2>();
+                var lastResult = new ParseResult<T3>();
 
-                if (_parser2.Parse(scanner, ref parseResult2))
+                if (_lastParser.Parse(scanner, ref lastResult))
                 {
-                    var parseResult3 = new ParseResult<T3>();
-
-                    if (_parser3.Parse(scanner, ref parseResult3))
-                    {
-                        var tuple = new ValueTuple<T1, T2, T3>(
-                            parseResult1.Value, 
-                            parseResult2.Value, 
-                            parseResult3.Value
-                            )
-                            ;
+                    var tuple = new ValueTuple<T1, T2, T3>(
+                        tupleResult.Value.Item1,
+                        tupleResult.Value.Item2,
+                        lastResult.Value
+                        );
                         
-                        result.Set(parseResult1.Buffer, parseResult1.Start, parseResult3.End, tuple);
-                        return true;
-                    }
+                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
+                    return true;
                 }
             }
 
@@ -97,23 +88,17 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
     {
-        internal readonly IParser<T1> _parser1;
-        internal readonly IParser<T2> _parser2;
-        internal readonly IParser<T3> _parser3;
-        internal readonly IParser<T4> _parser4;
+        private readonly IParser<ValueTuple<T1, T2, T3>> _parser;
+        internal readonly IParser<T4> _lastParser;
         private readonly bool _skipWhiteSpace;
 
-        public Sequence(
-            IParser<T1> parser1,
-            IParser<T2> parser2,
-            IParser<T3> parser3,
-            IParser<T4> parser4,
+        public Sequence(IParser<ValueTuple<T1, T2, T3>>
+            parser,
+            IParser<T4> lastParser,
             bool skipWhiteSpace = true)
         {
-            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
-            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
-            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
-            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
+            _parser = parser;
+            _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
             _skipWhiteSpace = skipWhiteSpace;
         }
 
@@ -124,62 +109,43 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
+            var tupleResult = new ParseResult<ValueTuple<T1, T2, T3>>();
 
-            if (_parser1.Parse(scanner, ref parseResult1))
+            if (_parser.Parse(scanner, ref tupleResult))
             {
-                var parseResult2 = new ParseResult<T2>();
+                var lastResult = new ParseResult<T4>();
 
-                if (_parser2.Parse(scanner, ref parseResult2))
+                if (_lastParser.Parse(scanner, ref lastResult))
                 {
-                    var parseResult3 = new ParseResult<T3>();
+                    var tuple = new ValueTuple<T1, T2, T3, T4>(
+                        tupleResult.Value.Item1,
+                        tupleResult.Value.Item2,
+                        tupleResult.Value.Item3,
+                        lastResult.Value
+                        );
 
-                    if (_parser3.Parse(scanner, ref parseResult3))
-                    {
-                        var parseResult4 = new ParseResult<T4>();
-
-                        if (_parser4.Parse(scanner, ref parseResult4))
-                        {
-                            var tuple = new ValueTuple<T1, T2, T3, T4>(
-                                parseResult1.Value,
-                                parseResult2.Value,
-                                parseResult3.Value,
-                                parseResult4.Value
-                                );
-
-                            result.Set(parseResult1.Buffer, parseResult1.Start, parseResult4.End, tuple);
-                            return true;
-                        }
-                    }
+                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
+                    return true;
                 }
             }
 
             return false;
         }
     }
-
+    
     public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
     {
-        internal readonly IParser<T1> _parser1;
-        internal readonly IParser<T2> _parser2;
-        internal readonly IParser<T3> _parser3;
-        internal readonly IParser<T4> _parser4;
-        internal readonly IParser<T5> _parser5;
+        private readonly IParser<ValueTuple<T1, T2, T3, T4>> _parser;
+        internal readonly IParser<T5> _lastParser;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
-            IParser<T1> parser1,
-            IParser<T2> parser2,
-            IParser<T3> parser3,
-            IParser<T4> parser4,
-            IParser<T5> parser5,
+            IParser<ValueTuple<T1, T2, T3, T4>> parser,
+            IParser<T5> lastParser,
             bool skipWhiteSpace = true)
         {
-            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
-            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
-            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
-            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
-            _parser5 = parser5 ?? throw new ArgumentNullException(nameof(parser5));
+            _parser = parser;
+            _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
             _skipWhiteSpace = skipWhiteSpace;
         }
 
@@ -190,39 +156,24 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
+            var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4>>();
 
-            if (_parser1.Parse(scanner, ref parseResult1))
+            if (_parser.Parse(scanner, ref tupleResult))
             {
-                var parseResult2 = new ParseResult<T2>();
+                var lastResult = new ParseResult<T5>();
 
-                if (_parser2.Parse(scanner, ref parseResult2))
+                if (_lastParser.Parse(scanner, ref lastResult))
                 {
-                    var parseResult3 = new ParseResult<T3>();
+                    var tuple = new ValueTuple<T1, T2, T3, T4, T5>(
+                        tupleResult.Value.Item1,
+                        tupleResult.Value.Item2,
+                        tupleResult.Value.Item3,
+                        tupleResult.Value.Item4,
+                        lastResult.Value
+                        );
 
-                    if (_parser3.Parse(scanner, ref parseResult3))
-                    {
-                        var parseResult4 = new ParseResult<T4>();
-
-                        if (_parser4.Parse(scanner, ref parseResult4))
-                        {
-                            var parseResult5 = new ParseResult<T5>();
-
-                            if (_parser5.Parse(scanner, ref parseResult5))
-                            {
-                                var tuple = new ValueTuple<T1, T2, T3, T4, T5>(
-                                    parseResult1.Value,
-                                    parseResult2.Value,
-                                    parseResult3.Value,
-                                    parseResult4.Value,
-                                    parseResult5.Value
-                                    );
-
-                                result.Set(parseResult1.Buffer, parseResult1.Start, parseResult5.End, tuple);
-                                return true;
-                            }
-                        }
-                    }
+                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
+                    return true;
                 }
             }
 
@@ -232,29 +183,17 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
-        internal readonly IParser<T1> _parser1;
-        internal readonly IParser<T2> _parser2;
-        internal readonly IParser<T3> _parser3;
-        internal readonly IParser<T4> _parser4;
-        internal readonly IParser<T5> _parser5;
-        internal readonly IParser<T6> _parser6;
+        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
+        internal readonly IParser<T6> _lastParser;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
-            IParser<T1> parser1,
-            IParser<T2> parser2,
-            IParser<T3> parser3,
-            IParser<T4> parser4,
-            IParser<T5> parser5,
-            IParser<T6> parser6,
+            IParser<ValueTuple<T1, T2, T3, T4, T5>> parser,
+            IParser<T6> lastParser,
             bool skipWhiteSpace = true)
         {
-            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
-            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
-            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
-            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
-            _parser5 = parser5 ?? throw new ArgumentNullException(nameof(parser5));
-            _parser6 = parser6 ?? throw new ArgumentNullException(nameof(parser6));
+            _parser = parser;
+            _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
             _skipWhiteSpace = skipWhiteSpace;
         }
 
@@ -265,80 +204,45 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
+            var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5>>();
 
-            if (_parser1.Parse(scanner, ref parseResult1))
+            if (_parser.Parse(scanner, ref tupleResult))
             {
-                var parseResult2 = new ParseResult<T2>();
+                var lastResult = new ParseResult<T6>();
 
-                if (_parser2.Parse(scanner, ref parseResult2))
+                if (_lastParser.Parse(scanner, ref lastResult))
                 {
-                    var parseResult3 = new ParseResult<T3>();
+                    var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6>(
+                        tupleResult.Value.Item1,
+                        tupleResult.Value.Item2,
+                        tupleResult.Value.Item3,
+                        tupleResult.Value.Item4,
+                        tupleResult.Value.Item5,
+                        lastResult.Value
+                        );
 
-                    if (_parser3.Parse(scanner, ref parseResult3))
-                    {
-                        var parseResult4 = new ParseResult<T4>();
-
-                        if (_parser4.Parse(scanner, ref parseResult4))
-                        {
-                            var parseResult5 = new ParseResult<T5>();
-
-                            if (_parser5.Parse(scanner, ref parseResult5))
-                            {
-                                var parseResult6 = new ParseResult<T6>();
-
-                                if (_parser6.Parse(scanner, ref parseResult6))
-                                {
-                                    var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6>(
-                                        parseResult1.Value,
-                                        parseResult2.Value,
-                                        parseResult3.Value,
-                                        parseResult4.Value,
-                                        parseResult5.Value,
-                                        parseResult6.Value
-                                        );
-
-                                    result.Set(parseResult1.Buffer, parseResult1.Start, parseResult6.End, tuple);
-                                    return true;
-                                }
-                            }
-                        }
-                    }
+                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
+                    return true;
                 }
             }
-            
+
             return false;
         }
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
-        internal readonly IParser<T1> _parser1;
-        internal readonly IParser<T2> _parser2;
-        internal readonly IParser<T3> _parser3;
-        internal readonly IParser<T4> _parser4;
-        internal readonly IParser<T5> _parser5;
-        internal readonly IParser<T6> _parser6;
-        internal readonly IParser<T7> _parser7;
+        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
+        internal readonly IParser<T7> _lastParser;
         private readonly bool _skipWhiteSpace;
 
         public Sequence(
-            IParser<T1> parser1,
-            IParser<T2> parser2,
-            IParser<T3> parser3,
-            IParser<T4> parser4,
-            IParser<T5> parser5,
-            IParser<T6> parser6,
-            IParser<T7> parser7,
+            IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser,
+            IParser<T7> lastParser,
             bool skipWhiteSpace = true)
         {
-            _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
-            _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
-            _parser3 = parser3 ?? throw new ArgumentNullException(nameof(parser3));
-            _parser4 = parser4 ?? throw new ArgumentNullException(nameof(parser4));
-            _parser5 = parser5 ?? throw new ArgumentNullException(nameof(parser5));
-            _parser6 = parser6 ?? throw new ArgumentNullException(nameof(parser6));
-            _parser7 = parser7 ?? throw new ArgumentNullException(nameof(parser7));
+            _parser = parser;
+            _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
             _skipWhiteSpace = skipWhiteSpace;
         }
 
@@ -349,51 +253,26 @@ namespace Parlot.Fluent
                 scanner.SkipWhiteSpace();
             }
 
-            var parseResult1 = new ParseResult<T1>();
+            var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>>();
 
-            if (_parser1.Parse(scanner, ref parseResult1))
+            if (_parser.Parse(scanner, ref tupleResult))
             {
-                var parseResult2 = new ParseResult<T2>();
+                var lastResult = new ParseResult<T7>();
 
-                if (_parser2.Parse(scanner, ref parseResult2))
+                if (_lastParser.Parse(scanner, ref lastResult))
                 {
-                    var parseResult3 = new ParseResult<T3>();
+                    var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6, T7>(
+                        tupleResult.Value.Item1,
+                        tupleResult.Value.Item2,
+                        tupleResult.Value.Item3,
+                        tupleResult.Value.Item4,
+                        tupleResult.Value.Item5,
+                        tupleResult.Value.Item6,
+                        lastResult.Value
+                        );
 
-                    if (_parser3.Parse(scanner, ref parseResult3))
-                    {
-                        var parseResult4 = new ParseResult<T4>();
-
-                        if (_parser4.Parse(scanner, ref parseResult4))
-                        {
-                            var parseResult5 = new ParseResult<T5>();
-
-                            if (_parser5.Parse(scanner, ref parseResult5))
-                            {
-                                var parseResult6 = new ParseResult<T6>();
-
-                                if (_parser6.Parse(scanner, ref parseResult6))
-                                {
-                                    var parseResult7 = new ParseResult<T7>();
-
-                                    if (_parser7.Parse(scanner, ref parseResult7))
-                                    {
-                                        var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6, T7>(
-                                            parseResult1.Value,
-                                            parseResult2.Value,
-                                            parseResult3.Value,
-                                            parseResult4.Value,
-                                            parseResult5.Value,
-                                            parseResult6.Value,
-                                            parseResult7.Value
-                                            );
-
-                                        result.Set(parseResult1.Buffer, parseResult1.Start, parseResult7.End, tuple);
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
+                    return true;
                 }
             }
 

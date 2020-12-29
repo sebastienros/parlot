@@ -19,7 +19,7 @@ namespace Parlot.Tests.Calc
              *                  | "(" expression ")" ;
             */
 
-            // Make deferred Lazy since it's a cyclic reference
+            // The Deferred helper creates a parser that can be referenced by others before it is defined
             var expression = Deferred<Expression>();
 
             var number = Literals.Decimal()
@@ -39,13 +39,12 @@ namespace Parlot.Tests.Calc
             // primary => NUMBER | "(" expression ")";
             var primary = number.Or(groupExpression);
 
-            // Make unary deferred since it's a cyclic reference
-            var unary = Deferred<Expression>();
-
+            // The Recursive helper allows to create parsers that depend on themselves.
             // ( "-" ) unary | primary;
-            unary.Parser = minus.And(unary)
-                .Then<Expression>(static x => new NegateExpression(x.Item2))
-                .Or(primary);
+            var unary = Recursive<Expression>((u) => 
+                minus.And(u)
+                    .Then<Expression>(static x => new NegateExpression(x.Item2))
+                    .Or(primary));
 
             // factor => unary ( ( "/" | "*" ) unary )* ;
             var factor = unary.And(Star(divided.Or(times).And(unary)))
