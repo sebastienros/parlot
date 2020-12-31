@@ -14,92 +14,91 @@ The following example is a complete parser that create a mathematical expression
 The source is available [here](./test/Parlot.Tests/Calc/FluentParser.cs).
 
 ```c#
-        public static readonly IParser<Expression> Expression;
+public static readonly IParser<Expression> Expression;
 
-        static FluentParser()
+static FluentParser()
+{
+    /*
+     * Grammar:
+     * expression     => factor ( ( "-" | "+" ) factor )* ;
+     * factor         => unary ( ( "/" | "*" ) unary )* ;
+     * unary          => ( "-" ) unary
+     *                 | primary ;
+     * primary        => NUMBER
+     *                  | "(" expression ")" ;
+    */
+
+    // The Deferred helper creates a parser that can be referenced by others before it is defined
+    var expression = Deferred<Expression>();
+
+    var number = Terms.Decimal()
+        .Then<Expression>(static d => new Number(d))
+        ;
+
+    var divided = Terms.Char('/');
+    var times = Terms.Char('*');
+    var minus = Terms.Char('-');
+    var plus = Terms.Char('+');
+    var openParen = Terms.Char('(');
+    var closeParen = Terms.Char(')');
+
+    // "(" expression ")"
+    var groupExpression = Between(openParen, expression, closeParen);
+
+    // primary => NUMBER | "(" expression ")";
+    var primary = number.Or(groupExpression);
+
+    // The Recursive helper allows to create parsers that depend on themselves.
+    // ( "-" ) unary | primary;
+    var unary = Recursive<Expression>((u) => 
+        minus.And(u)
+            .Then<Expression>(static x => new NegateExpression(x.Item2))
+            .Or(primary));
+
+    // factor => unary ( ( "/" | "*" ) unary )* ;
+    var factor = unary.And(Star(divided.Or(times).And(unary)))
+        .Then(static x =>
         {
-            /*
-             * Grammar:
-             * expression     => factor ( ( "-" | "+" ) factor )* ;
-             * factor         => unary ( ( "/" | "*" ) unary )* ;
-             * unary          => ( "-" ) unary
-             *                 | primary ;
-             * primary        => NUMBER
-             *                  | "(" expression ")" ;
-            */
+            // unary
+            var result = x.Item1;
 
-            // The Deferred helper creates a parser that can be referenced by others before it is defined
-            var expression = Deferred<Expression>();
-
-            var number = Terms.Decimal()
-                .Then<Expression>(static d => new Number(d))
-                ;
-
-            var divided = Terms.Char('/');
-            var times = Terms.Char('*');
-            var minus = Terms.Char('-');
-            var plus = Terms.Char('+');
-            var openParen = Terms.Char('(');
-            var closeParen = Terms.Char(')');
-
-            // "(" expression ")"
-            var groupExpression = Between(openParen, expression, closeParen);
-
-            // primary => NUMBER | "(" expression ")";
-            var primary = number.Or(groupExpression);
-
-            // The Recursive helper allows to create parsers that depend on themselves.
-            // ( "-" ) unary | primary;
-            var unary = Recursive<Expression>((u) => 
-                minus.And(u)
-                    .Then<Expression>(static x => new NegateExpression(x.Item2))
-                    .Or(primary));
-
-            // factor => unary ( ( "/" | "*" ) unary )* ;
-            var factor = unary.And(Star(divided.Or(times).And(unary)))
-                .Then(static x =>
+            // (("/" | "*") unary ) *
+            foreach (var op in x.Item2)
+            {
+                result = op.Item1 switch
                 {
-                    // unary
-                    var result = x.Item1;
+                    '/' => new Division(result, op.Item2),
+                    '*' => new Multiplication(result, op.Item2),
+                    _ => null
+                };
+            }
 
-                    // (("/" | "*") unary ) *
-                    foreach (var op in x.Item2)
-                    {
-                        result = op.Item1 switch
-                        {
-                            '/' => new Division(result, op.Item2),
-                            '*' => new Multiplication(result, op.Item2),
-                            _ => null
-                        };
-                    }
+            return result;
+        });
 
-                    return result;
-                });
+    // expression => factor ( ( "-" | "+" ) factor )* ;
+    expression.Parser = factor.And(Star(plus.Or(minus).And(factor)))
+        .Then(static x =>
+        {
+            // factor
+            var result = x.Item1;
 
-            // expression => factor ( ( "-" | "+" ) factor )* ;
-            expression.Parser = factor.And(Star(plus.Or(minus).And(factor)))
-                .Then(static x =>
+            // (("-" | "+") factor ) *
+            foreach (var op in x.Item2)
+            {
+                result = op.Item1 switch
                 {
-                    // factor
-                    var result = x.Item1;
+                    '+' => new Addition(result, op.Item2),
+                    '-' => new Subtraction(result, op.Item2),
+                    _ => null
+                };
+            }
 
-                    // (("-" | "+") factor ) *
-                    foreach (var op in x.Item2)
-                    {
-                        result = op.Item1 switch
-                        {
-                            '+' => new Addition(result, op.Item2),
-                            '-' => new Subtraction(result, op.Item2),
-                            _ => null
-                        };
-                    }
+            return result;
+        });            
 
-                    return result;
-                });            
-
-            Expression = expression;
-        }
-    }
+    Expression = expression;
+}
 ```
 
 ## Standard API
