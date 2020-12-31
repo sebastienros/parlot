@@ -6,20 +6,14 @@ namespace Parlot.Fluent
     public sealed class ZeroOrMany<T> : Parser<IList<T>>
     {
         private readonly IParser<T> _parser;
-        private readonly bool _skipWhiteSpace;
-
-        public ZeroOrMany(IParser<T> parser, bool skipWhiteSpace = true)
+        public ZeroOrMany(IParser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<IList<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<IList<T>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             List<T> results = null;
 
@@ -29,7 +23,7 @@ namespace Parlot.Fluent
             var first = true;
             var parsed = new ParseResult<T>();
 
-            while (_parser.Parse(scanner, ref parsed))
+            while (_parser.Parse(context, ref parsed))
             {
                 if (first)
                 {
@@ -41,7 +35,7 @@ namespace Parlot.Fluent
                 results.Add(parsed.Value);
             }
 
-            result = new ParseResult<IList<T>>(scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());
+            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());
             return true;
         }
     }

@@ -6,24 +6,19 @@ namespace Parlot.Fluent
     public sealed class OneOrMany<T> : Parser<IList<T>>
     {
         private readonly IParser<T> _parser;
-        private readonly bool _skipWhiteSpace;
 
-        public OneOrMany(IParser<T> parser, bool skipWhiteSpace = true)
+        public OneOrMany(IParser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<IList<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<IList<T>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var parsed = new ParseResult<T>();
 
-            if (!_parser.Parse(scanner, ref parsed))
+            if (!_parser.Parse(context, ref parsed))
             {
                 return false;
             }
@@ -38,9 +33,9 @@ namespace Parlot.Fluent
                 end = parsed.End;
                 results.Add(parsed.Value);
 
-            } while (_parser.Parse(scanner, ref parsed));
+            } while (_parser.Parse(context, ref parsed));
 
-            result = new ParseResult<IList<T>>(scanner.Buffer, start, end, results);
+            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, results);
             return true;
         }
     }

@@ -11,22 +11,24 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<decimal> result)
+        public override bool Parse(ParseContext context, ref ParseResult<decimal> result)
         {
+            context.EnterParser(this);
+
             if (_skipWhiteSpace)
             {
-                scanner.SkipWhiteSpace();
+                context.SkipWhiteSpace();
             }
 
-            var start = scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Position;
 
-            if (scanner.ReadDecimal())
+            if (context.Scanner.ReadDecimal())
             {
-                var end = scanner.Cursor.Position;
+                var end = context.Scanner.Cursor.Position;
 
-                if (decimal.TryParse(scanner.Buffer.AsSpan(start.Offset, end - start), out var value))
+                if (decimal.TryParse(context.Scanner.Buffer.AsSpan(start.Offset, end - start), out var value))
                 {
-                    result.Set(scanner.Buffer, start, end, value);
+                    result.Set(context.Scanner.Buffer, start, end, value);
                     return true;
                 }
             }

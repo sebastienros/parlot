@@ -87,7 +87,7 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void OrShoulReturnOneOf()
+        public void OrShouldReturnOneOf()
         {
             var a = Literals.Char('a');
             var b = Literals.Char('b');
@@ -109,7 +109,7 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void AndShoulReturnSequences()
+        public void AndShouldReturnSequences()
         {
             var a = Literals.Char('a');
 
@@ -143,6 +143,62 @@ namespace Parlot.Tests
             Assert.IsType<Sequence<char, char, char, char, char, char, char>>(s7);
             Assert.False(s7.TryParse("aaaaaa", out _));
             Assert.True(s7.TryParse("aaaaaaab", out _));
+        }
+
+        [Fact]
+        public void SwitchShouldProvidePreviousResult()
+        {
+            var d = Literals.Text("d:");
+            var i = Literals.Text("i:");
+            var s = Literals.Text("s:");
+
+            var parser = d.Or(i).Or(s).Switch((context, result) => 
+            { 
+                switch (result) 
+                { 
+                    case "d:": return Literals.Decimal(); 
+                    case "i:": return Literals.Integer(); 
+                    case "s:": return Literals.String(); 
+                }
+                return null;
+            });
+
+            Assert.True(parser.TryParse("d:123.456", out var resultD));
+            Assert.Equal((decimal)123.456, resultD);
+
+            Assert.True(parser.TryParse("i:123", out var resultI));
+            Assert.Equal((long)123, resultI);
+
+            Assert.True(parser.TryParse("s:'123'", out var resultS));
+            Assert.Equal("123", ((TextSpan)resultS).Text);
+        }
+
+        [Fact]
+        public void SwitchShouldReturnCommonType()
+        {
+            var d = Literals.Text("d:");
+            var i = Literals.Text("i:");
+            var s = Literals.Text("s:");
+
+            var parser = d.Or(i).Or(s).Switch((context, result) => 
+            { 
+                switch (result) 
+                { 
+                    case "d:": return Literals.Decimal().Then(x => x.ToString()); 
+                    case "i:": return Literals.Integer().Then(x => x.ToString()); 
+                    case "s:": return Literals.String().Then(x => x.ToString()); 
+                } 
+                return null;
+            });
+
+            Assert.True(parser.TryParse("d:123.456", out var resultD));
+            Assert.Equal("123.456", resultD);
+
+            Assert.True(parser.TryParse("i:123", out var resultI));
+            Assert.Equal("123", resultI);
+
+            Assert.True(parser.TryParse("s:'123'", out var resultS));
+            Assert.Equal("123", resultS);
         }
     }
 }

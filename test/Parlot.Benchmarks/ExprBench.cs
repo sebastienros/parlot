@@ -1,4 +1,5 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
@@ -6,8 +7,7 @@ using System;
 
 namespace Parlot.Benchmarks
 {
-    [MemoryDiagnoser]
-    [ShortRunJob]
+    [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
 #pragma warning disable CA1822 // Mark members as static
     public class ExprBench
     {

@@ -22,16 +22,16 @@ namespace Parlot.Tests.Calc
             // The Deferred helper creates a parser that can be referenced by others before it is defined
             var expression = Deferred<Expression>();
 
-            var number = Literals.Decimal()
+            var number = Terms.Decimal()
                 .Then<Expression>(static d => new Number(d))
                 ;
 
-            var divided = Literals.Char('/');
-            var times = Literals.Char('*');
-            var minus = Literals.Char('-');
-            var plus = Literals.Char('+');
-            var openParen = Literals.Char('(');
-            var closeParen = Literals.Char(')');
+            var divided = Terms.Char('/');
+            var times = Terms.Char('*');
+            var minus = Terms.Char('-');
+            var plus = Terms.Char('+');
+            var openParen = Terms.Char('(');
+            var closeParen = Terms.Char(')');
 
             // "(" expression ")"
             var groupExpression = Between(openParen, expression, closeParen);

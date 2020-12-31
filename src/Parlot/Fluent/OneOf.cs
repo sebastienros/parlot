@@ -9,33 +9,25 @@ namespace Parlot.Fluent
     /// </summary>
     public sealed class OneOf : Parser<ParseResult<object>>
     {
-        private readonly bool _skipWhiteSpace;
-
-        public OneOf(IList<IParser> parsers, bool skipWhiteSpace = true)
+        public OneOf(IList<IParser> parsers)
         {
             Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public IList<IParser> Parsers { get; }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ParseResult<object>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ParseResult<object>> result)
         {
             if (Parsers.Count == 0)
             {
                 return false;
             }
 
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
-
             var parsed = new ParseResult<object>();
 
             for (var i = 0; i < Parsers.Count; i++)
             {
-                if (Parsers[i].Parse(scanner, ref parsed))
+                if (Parsers[i].Parse(context, ref parsed))
                 {
                     result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed);
                     return true;
@@ -54,30 +46,24 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf<T> : Parser<T>
     {
-        private readonly bool _skipWhiteSpace;
-
-        public OneOf(IList<IParser<T>> parsers, bool skipWhiteSpace = true)
+        public OneOf(IList<IParser<T>> parsers)
         {
             Parsers = parsers;
-            _skipWhiteSpace = skipWhiteSpace;
         }
         public IList<IParser<T>> Parsers { get; }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
+            context.EnterParser(this);
+
             if (Parsers.Count == 0)
             {
                 return false;
             }
 
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
-
             for (var i = 0; i < Parsers.Count; i++)
             {
-                if (Parsers[i].Parse(scanner, ref result))
+                if (Parsers[i].Parse(context, ref result))
                 {
                     return true;
                 }

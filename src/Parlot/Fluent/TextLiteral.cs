@@ -16,18 +16,20 @@ namespace Parlot.Fluent
 
         public string Text { get; }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<string> result)
+        public override bool Parse(ParseContext context, ref ParseResult<string> result)
         {
+            context.EnterParser(this);
+
             if (_skipWhiteSpace)
             {
-                scanner.SkipWhiteSpace();
+                context.SkipWhiteSpace();
             }
 
-            var start = scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Position;
 
-            if (scanner.ReadText(Text, _comparer))
+            if (context.Scanner.ReadText(Text, _comparer))
             {
-                result.Set(scanner.Buffer, start, scanner.Cursor.Position, Text);
+                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Position, Text);
                 return true;
             }
             else

@@ -28,5 +28,10 @@ namespace Parlot.Fluent
         public string Text => _text ??= Buffer?.Substring(Offset, Length);
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Offset, Length);
+
+        public override string ToString()
+        {
+            return Text;
+        }
     }
 }

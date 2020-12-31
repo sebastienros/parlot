@@ -28,8 +28,10 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<IList<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<IList<T>> result)
         {
+            context.EnterParser(this);
+            
             List<T> results = null;
 
             var start = TextPosition.Start;
@@ -41,7 +43,7 @@ namespace Parlot.Fluent
 
             while (true)
             {
-                if (!_parser.Parse(scanner, ref parsed))
+                if (!_parser.Parse(context, ref parsed))
                 {
                     if (!first)
                     {
@@ -66,21 +68,21 @@ namespace Parlot.Fluent
                 {
                     if (_separatorWhiteSpace)
                     {
-                        scanner.SkipWhiteSpace();
+                        context.Scanner.SkipWhiteSpace();
                     }
 
-                    if (!scanner.ReadChar(_separatorChar))
+                    if (!context.Scanner.ReadChar(_separatorChar))
                     {
                         break;
                     }
                 }
-                else if (!_separator.Parse(scanner, ref separatorResult))
+                else if (!_separator.Parse(context, ref separatorResult))
                 {
                     break;
                 }
             }
 
-            result = new ParseResult<IList<T>>(scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());
+            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());
             return true;
         }
     }

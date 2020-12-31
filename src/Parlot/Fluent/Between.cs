@@ -16,7 +16,6 @@ namespace Parlot.Fluent
         private readonly char _afterChar;
         private readonly bool _afterSkipWhiteSpace;
 
-
         public Between(IParser before, IParser<T> parser, IParser after)
         {
             _before = before ?? throw new ArgumentNullException(nameof(before));
@@ -38,31 +37,33 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
+            context.EnterParser(this);
+
             var parsed = new ParseResult<object>();
 
             if (_beforeIsChar)
             {
                 if (_beforeSkipWhiteSpace)
                 {
-                    scanner.SkipWhiteSpace();
+                    context.Scanner.SkipWhiteSpace();
                 }
 
-                if (!scanner.ReadChar(_beforeChar))
+                if (!context.Scanner.ReadChar(_beforeChar))
                 {
                     return false;
                 }
             }
             else
             {
-                if (!_before.Parse(scanner, ref parsed))
+                if (!_before.Parse(context, ref parsed))
                 {
                     return false;
                 }
             }
 
-            if (!_parser.Parse(scanner, ref result))
+            if (!_parser.Parse(context, ref result))
             {
                 return false;
             }            
@@ -71,17 +72,17 @@ namespace Parlot.Fluent
             {
                 if (_afterSkipWhiteSpace)
                 {
-                    scanner.SkipWhiteSpace();
+                    context.Scanner.SkipWhiteSpace();
                 }
 
-                if (!scanner.ReadChar(_afterChar))
+                if (!context.Scanner.ReadChar(_afterChar))
                 {
                     return false;
                 }
             }
             else
             {
-                if (!_after.Parse(scanner, ref parsed))
+                if (!_after.Parse(context, ref parsed))
                 {
                     return false;
                 }

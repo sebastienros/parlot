@@ -12,18 +12,20 @@
 
         public bool SkipWhiteSpace { get; }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<char> result)
+        public override bool Parse(ParseContext context, ref ParseResult<char> result)
         {
+            context.EnterParser(this);
+
             if (SkipWhiteSpace)
             {
-                scanner.SkipWhiteSpace();
+                context.SkipWhiteSpace();
             }
 
-            var start = scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Position;
 
-            if (scanner.ReadChar(Char))
+            if (context.Scanner.ReadChar(Char))
             {
-                result.Set(scanner.Buffer, start, scanner.Cursor.Position, Char);
+                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Position, Char);
                 return true;
             }
 

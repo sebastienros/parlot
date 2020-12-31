@@ -7,29 +7,23 @@ namespace Parlot.Fluent
     {
         internal readonly IParser<T1> _parser1;
         internal readonly IParser<T2> _parser2;
-        private readonly bool _skipWhiteSpace;
-
-        public Sequence(IParser<T1> parser1, IParser<T2> parser2, bool skipWhiteSpace = true)
+        public Sequence(IParser<T1> parser1, IParser<T2> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ValueTuple<T1, T2>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var parseResult1 = new ParseResult<T1>();
 
-            if (_parser1.Parse(scanner, ref parseResult1))
+            if (_parser1.Parse(context, ref parseResult1))
             {
                 var parseResult2 = new ParseResult<T2>();
 
-                if (_parser2.Parse(scanner, ref parseResult2))
+                if (_parser2.Parse(context, ref parseResult2))
                 {
                     result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
                     return true;
@@ -44,32 +38,27 @@ namespace Parlot.Fluent
     {
         private readonly IParser<ValueTuple<T1, T2>> _parser;
         internal readonly IParser<T3> _lastParser;
-        private readonly bool _skipWhiteSpace;
 
         public Sequence(IParser<ValueTuple<T1, T2>> 
             parser,
-            IParser<T3> lastParser, 
-            bool skipWhiteSpace = true)
+            IParser<T3> lastParser
+            )
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ValueTuple<T1, T2, T3>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2>>();
 
-            if (_parser.Parse(scanner, ref tupleResult))
+            if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T3>();
 
-                if (_lastParser.Parse(scanner, ref lastResult))
+                if (_lastParser.Parse(context, ref lastResult))
                 {
                     var tuple = new ValueTuple<T1, T2, T3>(
                         tupleResult.Value.Item1,
@@ -90,32 +79,24 @@ namespace Parlot.Fluent
     {
         private readonly IParser<ValueTuple<T1, T2, T3>> _parser;
         internal readonly IParser<T4> _lastParser;
-        private readonly bool _skipWhiteSpace;
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3>>
-            parser,
-            IParser<T4> lastParser,
-            bool skipWhiteSpace = true)
+        public Sequence(IParser<ValueTuple<T1, T2, T3>> parser, IParser<T4> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3>>();
 
-            if (_parser.Parse(scanner, ref tupleResult))
+            if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T4>();
 
-                if (_lastParser.Parse(scanner, ref lastResult))
+                if (_lastParser.Parse(context, ref lastResult))
                 {
                     var tuple = new ValueTuple<T1, T2, T3, T4>(
                         tupleResult.Value.Item1,
@@ -137,32 +118,24 @@ namespace Parlot.Fluent
     {
         private readonly IParser<ValueTuple<T1, T2, T3, T4>> _parser;
         internal readonly IParser<T5> _lastParser;
-        private readonly bool _skipWhiteSpace;
-
-        public Sequence(
-            IParser<ValueTuple<T1, T2, T3, T4>> parser,
-            IParser<T5> lastParser,
-            bool skipWhiteSpace = true)
+        
+        public Sequence(IParser<ValueTuple<T1, T2, T3, T4>> parser, IParser<T5> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4>>();
 
-            if (_parser.Parse(scanner, ref tupleResult))
+            if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T5>();
 
-                if (_lastParser.Parse(scanner, ref lastResult))
+                if (_lastParser.Parse(context, ref lastResult))
                 {
                     var tuple = new ValueTuple<T1, T2, T3, T4, T5>(
                         tupleResult.Value.Item1,
@@ -184,33 +157,25 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
         private readonly IParser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
-        internal readonly IParser<T6> _lastParser;
-        private readonly bool _skipWhiteSpace;
+        internal readonly IParser<T6> _lastParser;        
 
-        public Sequence(
-            IParser<ValueTuple<T1, T2, T3, T4, T5>> parser,
-            IParser<T6> lastParser,
-            bool skipWhiteSpace = true)
+        public Sequence(IParser<ValueTuple<T1, T2, T3, T4, T5>> parser, IParser<T6> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5>>();
 
-            if (_parser.Parse(scanner, ref tupleResult))
+            if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T6>();
 
-                if (_lastParser.Parse(scanner, ref lastResult))
+                if (_lastParser.Parse(context, ref lastResult))
                 {
                     var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6>(
                         tupleResult.Value.Item1,
@@ -234,32 +199,25 @@ namespace Parlot.Fluent
     {
         private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
         internal readonly IParser<T7> _lastParser;
-        private readonly bool _skipWhiteSpace;
 
         public Sequence(
-            IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser,
-            IParser<T7> lastParser,
-            bool skipWhiteSpace = true)
+            IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, IParser<T7> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
         {
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
+            context.EnterParser(this);
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>>();
 
-            if (_parser.Parse(scanner, ref tupleResult))
+            if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T7>();
 
-                if (_lastParser.Parse(scanner, ref lastResult))
+                if (_lastParser.Parse(context, ref lastResult))
                 {
                     var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6, T7>(
                         tupleResult.Value.Item1,
@@ -283,16 +241,15 @@ namespace Parlot.Fluent
     public sealed class Sequence : Parser<IList<ParseResult<object>>>
     {
         internal readonly IParser[] _parsers;
-        private readonly bool _skipWhiteSpace;
-
-        public Sequence(IParser[] parsers, bool skipWhiteSpace = true)
+        public Sequence(IParser[] parsers)
         {
             _parsers = parsers;
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<IList<ParseResult<object>>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<IList<ParseResult<object>>> result)
         {
+            context.EnterParser(this);
+
             if (_parsers.Length == 0)
             {
                 return true;
@@ -302,16 +259,11 @@ namespace Parlot.Fluent
 
             var success = true;
 
-            if (_skipWhiteSpace)
-            {
-                scanner.SkipWhiteSpace();
-            }
-
             var parsed = new ParseResult<object>();
 
             for (var i = 0; i < _parsers.Length; i++)
             {
-                if (!_parsers[i].Parse(scanner, ref parsed))
+                if (!_parsers[i].Parse(context, ref parsed))
                 {
                     success = false;
                     break;

@@ -15,9 +15,9 @@ namespace Parlot.Fluent
             Parser = parser(this);
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<T> result)
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
-            return Parser.Parse(scanner, ref result);
+            return Parser.Parse(context, ref result);
         }
     }
 }

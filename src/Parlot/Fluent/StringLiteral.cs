@@ -20,38 +20,40 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(Scanner scanner, ref ParseResult<TextSpan> result)
+        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {
+            context.EnterParser(this);
+
             if (_skipWhiteSpace)
             {
-                scanner.SkipWhiteSpace();
+                context.SkipWhiteSpace();
             }
 
-            var start = scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Position;
 
             var success = _quotes switch
             {
-                StringLiteralQuotes.Single => scanner.ReadSingleQuotedString(),
-                StringLiteralQuotes.Double => scanner.ReadDoubleQuotedString(),
-                StringLiteralQuotes.SingleOrDouble => scanner.ReadQuotedString(),
+                StringLiteralQuotes.Single => context.Scanner.ReadSingleQuotedString(),
+                StringLiteralQuotes.Double => context.Scanner.ReadDoubleQuotedString(),
+                StringLiteralQuotes.SingleOrDouble => context.Scanner.ReadQuotedString(),
                 _ => false
             };
 
-            var end = scanner.Cursor.Position;
+            var end = context.Scanner.Cursor.Position;
 
             if (success)
             {
                 // Remove quotes
-                var encoded = scanner.Buffer.AsSpan(start.Offset + 1, end - start - 2);
+                var encoded = context.Scanner.Buffer.AsSpan(start.Offset + 1, end - start - 2);
                 var decoded = Character.DecodeString(encoded);
 
                 // Don't create a new string if the decoded string is the same, meaning is 
                 // has no escape sequences.
                 var span = decoded == encoded || decoded.SequenceEqual(encoded)
-                    ? new TextSpan(scanner.Buffer, start.Offset + 1, encoded.Length)
+                    ? new TextSpan(context.Scanner.Buffer, start.Offset + 1, encoded.Length)
                     : new TextSpan(decoded.ToString());
 
-                result.Set(scanner.Buffer, start, end, span);
+                result.Set(context.Scanner.Buffer, start, end, span);
                 return true;
             }
             else
