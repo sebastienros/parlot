@@ -31,6 +31,11 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Big")]
+        public void BigJson_Parlot()
+        {
+            JsonParser.Parse(_bigJson);
+        }
+        [Benchmark, BenchmarkCategory("Big")]
         public void BigJson_Pidgin()
         {
             PidginJsonParser.Parse(_bigJson);
@@ -45,13 +50,13 @@ namespace Parlot.Benchmarks
         {
             SuperpowerJsonParser.Parse(_bigJson);
         }
-        [Benchmark, BenchmarkCategory("Big")]
-        public void BigJson_Parlot()
-        {
-            JsonParser.Parse(_bigJson);
-        }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Long")]
+        public void LongJson_Parlot()
+        {
+            JsonParser.Parse(_longJson);
+        }
+        [Benchmark, BenchmarkCategory("Long")]
         public void LongJson_Pidgin()
         {
             PidginJsonParser.Parse(_longJson);
@@ -66,13 +71,13 @@ namespace Parlot.Benchmarks
         {
             SuperpowerJsonParser.Parse(_longJson);
         }
-        [Benchmark, BenchmarkCategory("Long")]
-        public void LongJson_Parlot()
-        {
-            JsonParser.Parse(_longJson);
-        }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
+        public void DeepJson_Parlot()
+        {
+            JsonParser.Parse(_deepJson);
+        }
+        [Benchmark, BenchmarkCategory("Deep")]
         public void DeepJson_Pidgin()
         {
             PidginJsonParser.Parse(_deepJson);
@@ -88,13 +93,13 @@ namespace Parlot.Benchmarks
         //{
         //    SuperpowerJsonParser.Parse(_deepJson);
         //}
-        [Benchmark, BenchmarkCategory("Deep")]
-        public void DeepJson_Parlot()
-        {
-            JsonParser.Parse(_deepJson);
-        }
-
+        
         [Benchmark(Baseline = true), BenchmarkCategory("Wide")]
+        public void WideJson_Parlot()
+        {
+            JsonParser.Parse(_wideJson);
+        }
+        [Benchmark, BenchmarkCategory("Wide")]
         public void WideJson_Pidgin()
         {
             PidginJsonParser.Parse(_wideJson);
@@ -109,12 +114,6 @@ namespace Parlot.Benchmarks
         {
             SuperpowerJsonParser.Parse(_wideJson);
         }
-        [Benchmark, BenchmarkCategory("Wide")]
-        public void WideJson_Parlot()
-        {
-            JsonParser.Parse(_wideJson);
-        }
-
         private static IJson BuildJson(int length, int depth, int width)
             => new JsonArray(
                 Enumerable.Repeat(1, length)

@@ -107,147 +107,41 @@ The source is available [here](./test/Parlot.Tests/Calc/FluentParser.cs).
 The standard API provides direct access to the `Scanner` which is responsible for consuming chars from the text buffer and decide what tokens are found.
 It is recommended to use it if you are looking for the ultimate performance and using a very readable grammar is not required.
 
-Here is the same mathematical expression parser coded using the standard API:
+Here is how the same mathematical expression parser coded using the standard API.
+The full source is available [here](./test/Parlot.Tests/Calc/Parser.cs).
 
 ```c#
-    /*
-     * Grammar:
-     * expression     => factor ( ( "-" | "+" ) factor )* ;
-     * factor         => unary ( ( "/" | "*" ) unary )* ;
-     * unary          => ( "-" ) unary
-     *                 | primary ;
-     * primary        => NUMBER
-     *                  | "(" expression ")" ;
-    */
+private Expression ParseExpression()
+{
+    var expression = ParseFactor();
 
-    /// <summary>
-    /// This version of the Parser creates and intermediate AST.
-    /// </summary>
-    public class Parser : Parser<Expression>
+    while (true)
     {
-        private Scanner _scanner;
+        _scanner.SkipWhiteSpace();
 
-        public override Expression Parse(string text)
-        {
-            _scanner = new Scanner(text);
-
-            return ParseExpression();
-        }
-
-        private Expression ParseExpression()
-        {
-            var expression = ParseFactor();
-
-            while (true)
-            {
-                _scanner.SkipWhiteSpace();
-
-                if (_scanner.ReadChar('+'))
-                {
-                    _scanner.SkipWhiteSpace();
-
-                    expression = new Addition(expression, ParseFactor());
-                }
-                else if (_scanner.ReadChar('-'))
-                {
-                    _scanner.SkipWhiteSpace();
-
-                    expression = new Subtraction(expression, ParseFactor());
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            return expression;
-        }
-
-        private Expression ParseFactor()
-        {
-            var expression = ParseUnaryExpression();
-
-            while (true)
-            {
-                _scanner.SkipWhiteSpace();
-
-                if (_scanner.ReadChar('*'))
-                {
-                    _scanner.SkipWhiteSpace();
-
-                    expression = new Multiplication(expression, ParseUnaryExpression());
-                }
-                else if (_scanner.ReadChar('/'))
-                {
-                    _scanner.SkipWhiteSpace();
-
-                    expression = new Division(expression, ParseUnaryExpression());
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            return expression;
-        }
-
-        /*
-         unary =    ( "-" ) unary
-                    | primary ;
-        */
-
-        private Expression ParseUnaryExpression()
+        if (_scanner.ReadChar('+'))
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadChar('-'))
-            {
-                var inner = ParseUnaryExpression();
-
-                if (inner == null)
-                {
-                    throw new ParseException("Expected expression after '-'", _scanner.Cursor.Position);
-                }
-
-                return new NegateExpression(inner);
-            }
-
-            return ParsePrimaryExpression();
+            expression = new Addition(expression, ParseFactor());
         }
-
-        /*
-          primary = NUMBER
-                    | "(" expression ")" ;
-        */
-
-        private Expression ParsePrimaryExpression()
+        else if (_scanner.ReadChar('-'))
         {
             _scanner.SkipWhiteSpace();
 
-            var number = new TokenResult();
-
-            if (_scanner.ReadDecimal(number))
-            {
-                return new Number(decimal.Parse(number.Span));
-            }
-
-            if (_scanner.ReadChar('('))
-            {
-                var expression = ParseExpression();
-
-                if (!_scanner.ReadChar(')'))
-                {
-                    throw new ParseException("Expected ')'", _scanner.Cursor.Position);
-                }
-
-                return expression;
-            }
-
-            throw new ParseException("Expected primary expression", _scanner.Cursor.Position);
+            expression = new Subtraction(expression, ParseFactor());
+        }
+        else
+        {
+            break;
         }
     }
+
+    return expression;
+}
 ```
+
+Another example shows how to interpret the expression without creating an intermediate AST [here](./test/Parlot.Tests/Calc/Interpreter.cs).
 
 ## Performance
 
@@ -306,24 +200,29 @@ Intel Core i7-1065G7 CPU 1.30GHz, 1 CPU, 8 logical and 4 physical cores
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-|              Method |       Mean |     Error |   StdDev | Ratio | RatioSD |     Gen 0 |    Gen 1 | Gen 2 |  Allocated |
-|-------------------- |-----------:|----------:|---------:|------:|--------:|----------:|---------:|------:|-----------:|
-|      BigJson_Pidgin |   392.6 us |  90.35 us |  4.95 us |  1.00 |    0.00 |   24.9023 |   3.9063 |     - |   101.7 KB |
-|     BigJson_Sprache | 2,428.1 us | 346.36 us | 18.99 us |  6.19 |    0.08 | 1308.5938 |  50.7813 |     - | 5349.63 KB |
-|  BigJson_Superpower | 1,736.4 us |  48.66 us |  2.67 us |  4.42 |    0.06 |  222.6563 |   1.9531 |     - |  913.43 KB |
-|      BigJson_Parlot |   242.2 us | 118.32 us |  6.49 us |  0.62 |    0.02 |   24.9023 |   1.7090 |     - |  101.84 KB |
-|                     |            |           |          |       |         |           |          |       |            |
-|     LongJson_Pidgin |   379.2 us |  23.72 us |  1.30 us |  1.00 |    0.00 |   25.3906 |   2.4414 |     - |  104.25 KB |
-|    LongJson_Sprache | 2,011.3 us | 913.27 us | 50.06 us |  5.30 |    0.14 | 1054.6875 |  11.7188 |     - | 4311.36 KB |
-| LongJson_Superpower | 1,403.4 us | 412.93 us | 22.63 us |  3.70 |    0.05 |  171.8750 |   3.9063 |     - |  706.79 KB |
-|     LongJson_Parlot |   183.7 us |  52.53 us |  2.88 us |  0.48 |    0.01 |   25.3906 |   0.2441 |     - |  104.39 KB |
-|                     |            |           |          |       |         |           |          |       |            |
-|     DeepJson_Pidgin |   407.3 us | 127.74 us |  7.00 us |  1.00 |    0.00 |   49.8047 |   0.4883 |     - |  205.29 KB |
-|    DeepJson_Sprache | 2,315.6 us | 454.10 us | 24.89 us |  5.69 |    0.12 |  550.7813 | 222.6563 |     - | 2946.56 KB |
-|     DeepJson_Parlot |   173.0 us |  76.41 us |  4.19 us |  0.42 |    0.01 |   20.0195 |   0.9766 |     - |   82.38 KB |
-|                     |            |           |          |       |         |           |          |       |            |
-|     WideJson_Pidgin |   217.6 us |  39.13 us |  2.14 us |  1.00 |    0.00 |   11.7188 |   0.9766 |     - |   48.42 KB |
-|    WideJson_Sprache | 1,092.3 us | 196.29 us | 10.76 us |  5.02 |    0.08 |  683.5938 |  11.7188 |     - | 2797.28 KB |
-| WideJson_Superpower |   853.7 us | 170.20 us |  9.33 us |  3.92 |    0.08 |  112.3047 |   1.9531 |     - |  459.74 KB |
-|     WideJson_Parlot |   143.7 us |  46.03 us |  2.52 us |  0.66 |    0.02 |   11.7188 |        - |     - |   48.56 KB |
+|              Method |       Mean |       Error |    StdDev | Ratio | RatioSD |     Gen 0 |    Gen 1 | Gen 2 |  Allocated |
+|-------------------- |-----------:|------------:|----------:|------:|--------:|----------:|---------:|------:|-----------:|
+|      BigJson_Parlot |   259.4 us |   152.04 us |   8.33 us |  1.00 |    0.00 |   24.9023 |   3.4180 |     - |  101.84 KB |
+|      BigJson_Pidgin |   415.5 us |   206.23 us |  11.30 us |  1.60 |    0.05 |   24.9023 |   3.9063 |     - |   101.7 KB |
+|     BigJson_Sprache | 2,608.9 us | 2,245.48 us | 123.08 us | 10.06 |    0.19 | 1308.5938 |  50.7813 |     - | 5349.63 KB |
+|  BigJson_Superpower | 1,803.5 us | 1,210.12 us |  66.33 us |  6.95 |    0.05 |  222.6563 |   1.9531 |     - |  913.43 KB |
+|                     |            |             |           |       |         |           |          |       |            |
+|     LongJson_Parlot |   197.7 us |    81.63 us |   4.47 us |  1.00 |    0.00 |   25.3906 |   0.2441 |     - |  104.39 KB |
+|     LongJson_Pidgin |   341.4 us |   103.14 us |   5.65 us |  1.73 |    0.06 |   25.3906 |   2.4414 |     - |  104.25 KB |
+|    LongJson_Sprache | 1,956.1 us | 1,473.74 us |  80.78 us |  9.90 |    0.60 | 1054.6875 |   5.8594 |     - | 4311.36 KB |
+| LongJson_Superpower | 1,430.1 us |   401.45 us |  22.01 us |  7.24 |    0.25 |  171.8750 |   3.9063 |     - |  706.79 KB |
+|                     |            |             |           |       |         |           |          |       |            |
+|     DeepJson_Parlot |   179.5 us |   138.06 us |   7.57 us |  1.00 |    0.00 |   20.0195 |   0.9766 |     - |   82.38 KB |
+|     DeepJson_Pidgin |   422.9 us |    94.89 us |   5.20 us |  2.36 |    0.12 |   49.8047 |   0.4883 |     - |  205.29 KB |
+|    DeepJson_Sprache | 2,344.1 us | 1,578.03 us |  86.50 us | 13.06 |    0.44 |  554.6875 | 222.6563 |     - | 2946.56 KB |
+|                     |            |             |           |       |         |           |          |       |            |
+|     WideJson_Parlot |   154.5 us |   149.50 us |   8.19 us |  1.00 |    0.00 |   11.7188 |        - |     - |   48.56 KB |
+|     WideJson_Pidgin |   234.9 us |    79.61 us |   4.36 us |  1.52 |    0.07 |   11.7188 |   1.2207 |     - |   48.42 KB |
+|    WideJson_Sprache | 1,230.9 us |   585.60 us |  32.10 us |  7.99 |    0.57 |  683.5938 |  11.7188 |     - | 2797.28 KB |
+| WideJson_Superpower |   895.5 us |   314.60 us |  17.24 us |  5.81 |    0.41 |  112.3047 |   1.9531 |     - |  459.74 KB |
 ```
+
+### Usages
+
+Parlot is already used in these projects:
+- [Shortcodes](https://github.com/sebastienros/shortcodes)
