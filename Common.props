@@ -4,7 +4,7 @@
     <Copyright>Sebastien Ros</Copyright>
     <Authors>Sebastien Ros</Authors>
     <PackageProjectUrl>https://github.com/sebastienros/parlot</PackageProjectUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
     <Version>0.0.0-preview</Version>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <TargetFrameworks>netstandard2.1</TargetFrameworks>
