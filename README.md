@@ -1,7 +1,7 @@
 # Parlot
 
 [![NuGet](https://img.shields.io/nuget/v/Parlot.svg)](https://nuget.org/packages/Parlot)
-[![MIT](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/sebastienros/parlot/blob/dev/LICENSE)
+[![BSD 3-Clause](https://img.shields.io/github/license/sebastienros/parlot)](https://github.com/sebastienros/parlot/blob/main/LICENSE)
 
 Parlot is a __fast__,  __lightweight__ and simple to use .NET parser combinator.
 
