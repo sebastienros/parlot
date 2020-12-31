@@ -1,8 +1,5 @@
 namespace Parlot.Tests.Calc
 {
-    // Recursive descent parser
-    // https://craftinginterpreters.com/parsing-expressions.html#recursive-descent-parsing
-
     /*
      * Grammar:
      * expression     => factor ( ( "-" | "+" ) factor )* ;
@@ -14,7 +11,7 @@ namespace Parlot.Tests.Calc
     */
 
     /// <summary>
-    /// This verion of the Parser creates and intermediate AST.
+    /// This version of the Parser creates and intermediate AST.
     /// </summary>
     public class Parser : Parser<Expression>
     {
@@ -45,7 +42,7 @@ namespace Parlot.Tests.Calc
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Substraction(expression, ParseFactor());
+                    expression = new Subtraction(expression, ParseFactor());
                 }
                 else
                 {

@@ -80,7 +80,7 @@ namespace Parlot.Tests.Calc
                         result = op.Item1 switch
                         {
                             '+' => new Addition(result, op.Item2),
-                            '-' => new Substraction(result, op.Item2),
+                            '-' => new Subtraction(result, op.Item2),
                             _ => null
                         };
                     }

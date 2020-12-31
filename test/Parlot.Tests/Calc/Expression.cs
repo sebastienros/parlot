@@ -55,9 +55,9 @@ namespace Parlot.Tests.Calc
         }
     }
 
-    public class Substraction : BinaryExpression
+    public class Subtraction : BinaryExpression
     {
-        public Substraction(Expression left, Expression right) : base(left, right)
+        public Subtraction(Expression left, Expression right) : base(left, right)
         {
             Left = left;
             Right = right;

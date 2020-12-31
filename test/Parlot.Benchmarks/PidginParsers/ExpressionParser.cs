@@ -13,7 +13,7 @@ namespace Parlot.Benchmarks.PidginParsers
         private static Parser<char, string> Tok(string token)
             => Tok(String(token));
 
-        private static Parser<char, T> Parenthesised<T>(Parser<char, T> parser)
+        private static Parser<char, T> Parenthesized<T>(Parser<char, T> parser)
             => parser.Between(Tok("("), Tok(")"));
 
         private static Parser<char, Func<Expression, Expression, Expression>> Binary(Parser<char, string> op)
@@ -22,7 +22,7 @@ namespace Parlot.Benchmarks.PidginParsers
                 return type switch
                 {
                     "+" => new Addition(l, r),
-                    "-" => new Substraction(l, r),
+                    "-" => new Subtraction(l, r),
                     "*" => new Multiplication(l, r),
                     "/" => new Division(l, r),
                     _ => null,
@@ -53,7 +53,7 @@ namespace Parlot.Benchmarks.PidginParsers
             expr => (
                 OneOf(
                     Literal,
-                    Parenthesised(expr).Labelled("parenthesised expression")
+                    Parenthesized(expr).Labelled("parenthesized expression")
                 ),
                 new[]
                 {

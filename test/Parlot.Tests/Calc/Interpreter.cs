@@ -2,10 +2,6 @@ using System;
 
 namespace Parlot.Tests.Calc
 {
-
-    // Recursive descent parser
-    // https://craftinginterpreters.com/parsing-expressions.html#recursive-descent-parsing
-
     /*
      * Grammar:
      * expression     => factor ( ( "-" | "+" ) factor )* ;
@@ -17,7 +13,7 @@ namespace Parlot.Tests.Calc
     */
 
     /// <summary>
-    /// This verion of the Interpreter evaluates the value while it parses the expression.
+    /// This version of the Interpreter evaluates the value while it parses the expression.
     /// </summary>
     public class Interpreter
     {

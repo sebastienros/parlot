@@ -39,7 +39,7 @@ namespace Parlot.Tests.Calc
 
         [Theory]
         [InlineData("123 - 123", 0)]
-        public void TestSubstraction(string text, decimal value)
+        public void TestSubtraction(string text, decimal value)
         {
             var result = Evaluate(text);
 
