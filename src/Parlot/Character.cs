@@ -62,7 +62,13 @@ namespace Parlot
             for (var i = index + 1; i < len + index + 1; ++i)
             {
                 var d = text[i];
-                code = code * 16 + HexValue(d);
+                if (!IsHexDigit(d))
+                {
+                    return (char)0;
+                }
+
+                var hex = HexValue(d);
+                code = code * 16 + hex;
             }
 
             return (char)code;
@@ -123,26 +129,22 @@ namespace Parlot
 
         private static int HexValue(char ch)
         {
-            if (ch >= 'A')
+            if (ch >= '0' && ch <= '9')
             {
-                if (ch >= 'a')
-                {
-                    if (ch <= 'h')
-                    {
-                        return ch - 'a' + 10;
-                    }
-                }
-                else if (ch <= 'H')
-                {
-                    return ch - 'A' + 10;
-                }
+                return ch - 48;
             }
-            else if (ch <= '9')
+            else if (ch >= 'A' && ch <= 'F')
             {
-                return ch - '0';
+                return ch - 65 + 10;
             }
-
-            return 0;
+            else if (ch >= 'A' && ch <= 'F')
+            {
+                return ch - 97 + 10;
+            }
+            else
+            {
+                return 0;
+            }
         }
     }
 }
