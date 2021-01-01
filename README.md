@@ -147,21 +147,19 @@ Another example shows how to interpret the expression without creating an interm
 
 ## Performance
 
-Parlot was in order to provide a more performant solution to the tools I was knew about.
+Parlot was developed in order to provide a more performant solution to the tools I was knew about.
 
-I was mostly using the [Irony](https://github.com/IronyProject/Irony) project, and even though is was fast enough for my needs, it appeared that it could use some improvements in the allocations efficiency. 
+I was mostly using the [Irony](https://github.com/IronyProject/Irony) project, and even though is was fast enough for my needs, it appeared to allocate too much. I then discovered [Sprache](https://github.com/sprache/Sprache) and [Superpower](https://github.com/datalust/superpower) but they didn't provide any advantage over Irony that would make me switch to them. 
 
-I then discovered [Sprache](https://github.com/sprache/Sprache) and [Superpower](https://github.com/datalust/superpower) but they didn't provide any advantage over Irony that would make me switch. 
-
-Finally I found out about [Pidgin](https://github.com/benjamin-hodgson/Pidgin) only after having started on Parlot. This was interesting as after reading its benchmarks results I assumed it would be impossible to make something better, but I found out that even the fluent API of Parlot was better than Pidgin, so I decided to continue the work and release it.
+Finally I found out about [Pidgin](https://github.com/benjamin-hodgson/Pidgin) only after I had started developing Parlot. This was interesting as after reading its benchmarks results I assumed it would be impossible to make something better, but I found out that even the fluent API of Parlot was better than Pidgin so I decided to continue the work and release it.
 
 ### Expression Benchmarks
 
-This benchmark creates an expression tree (AST) representing mathematical expression with operator precedence and grouping. It exercises two expressions:
+This benchmark creates an expression tree (AST) representing mathematical expressions with operator precedence and grouping. It exercises two expressions:
 - Small: `3 - 1 / 2 + 1`
 - Big: `1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2`
 
-Only Pidgin and Parlot are benchmarked here. It also shows the results of the two Parlot APIs. The __Fluent API__ is the one that corresponds to Pidgin. The __raw__ variant is using the `Scanner` directly to show how to get the fastest possible parser. These benchmarks don't evaluate the expressions but only parse them to create the same AST. 
+Only Pidgin and Parlot are benchmarked here. It also shows the results of the two Parlot APIs. The __Fluent API__ is the one that corresponds to Pidgin. The __Raw__ variant is using the standard Parlot APIto show how to get the fastest possible parser. These benchmarks don't evaluate the expressions but only parse them to create the same AST. 
 
 In this benchmark Parlot Fluent is 3 times faster than Pidgin, and Parlot Raw gives another 3 times boost. Allocations are also smaller with Parlot.
 
