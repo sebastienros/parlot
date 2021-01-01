@@ -147,7 +147,7 @@ Another example shows how to interpret the expression without creating an interm
 
 ## Performance
 
-Parlot was developed in order to provide a more performant solution to the tools I was knew about.
+Parlot was developed in order to provide a more performant solution to the tools I knew about.
 
 I was mostly using the [Irony](https://github.com/IronyProject/Irony) project, and even though is was fast enough for my needs, it appeared to allocate too much. I then discovered [Sprache](https://github.com/sprache/Sprache) and [Superpower](https://github.com/datalust/superpower) but they didn't provide any advantage over Irony that would make me switch to them. 
 
