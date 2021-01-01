@@ -51,8 +51,8 @@ namespace Parlot.Fluent
     {
         public IParser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
         public IParser<char> Char(char c) => new CharLiteral(c);
-        public IParser<long> Integer() => new IntegerLiteral();
-        public IParser<decimal> Decimal() => new DecimalLiteral();
+        public IParser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral(numberOptions);
+        public IParser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral(numberOptions);
         public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
         public IParser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
     }
