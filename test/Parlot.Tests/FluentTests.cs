@@ -234,5 +234,19 @@ namespace Parlot.Tests
 
             Assert.Equal(text, Literals.Identifier(start, part).Parse(text).Text);
         }
+
+        [Fact]
+        public void NumbersShouldNotAcceptSignByDefault()
+        {
+            Assert.False(Terms.Decimal().TryParse("-123", out _));
+            Assert.False(Terms.Integer().TryParse("-123", out _));
+        }
+
+        [Fact]
+        public void NumbersShouldAcceptSignIfAllowed()
+        {
+            Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowSign).Parse("-123"));
+            Assert.Equal(-123, Terms.Integer(NumberOptions.AllowSign).Parse("-123"));
+        }
     }
 }
