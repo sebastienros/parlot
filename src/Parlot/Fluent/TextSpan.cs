@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public struct TextSpan
+    public struct TextSpan : IEquatable<string>
     {
         public TextSpan(string value)
         {
@@ -32,6 +32,21 @@ namespace Parlot.Fluent
         public override string ToString()
         {
             return Text;
+        }
+
+        public bool Equals(string other)
+        {
+            if (other == null)
+            {
+                return Buffer == null;
+            }
+
+            if (Length != other.Length)
+            {
+                return false;
+            }
+
+            return Span.SequenceEqual(other);
         }
     }
 }

@@ -44,6 +44,38 @@ namespace Parlot.Fluent
 
     public static class IParserExtensions
     {
+        public static object Parse(this IParser parser, string text)
+        {
+            var context = new ParseContext(new Scanner(text));
+
+            var localResult = new ParseResult<object>();
+
+            var success = parser.Parse(context, ref localResult);
+
+            if (success)
+            {
+                return localResult.Value;
+            }
+
+            return default;
+        }
+
+        public static T Parse<T>(this IParser<T> parser, string text)
+        {
+            var context = new ParseContext(new Scanner(text));
+
+            var localResult = new ParseResult<T>();
+
+            var success = parser.Parse(context, ref localResult);
+
+            if (success)
+            {
+                return localResult.Value;
+            }
+
+            return default;
+        }
+
         public static bool TryParse(this IParser parser, string text, out object value)
         {
             return parser.TryParse(text, out value, out _);

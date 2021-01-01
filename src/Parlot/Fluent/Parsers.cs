@@ -44,6 +44,7 @@ namespace Parlot.Fluent
         public IParser<long> Integer() => new IntegerLiteral(skipWhiteSpace: false);
         public IParser<decimal> Decimal() => new DecimalLiteral(skipWhiteSpace: false);
         public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes, skipWhiteSpace: false);
+        public IParser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
     }
 
     public class TermBuilder
@@ -53,5 +54,6 @@ namespace Parlot.Fluent
         public IParser<long> Integer() => new IntegerLiteral();
         public IParser<decimal> Decimal() => new DecimalLiteral();
         public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
+        public IParser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
     }
 }

@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -199,6 +200,39 @@ namespace Parlot.Tests
 
             Assert.True(parser.TryParse("s:'123'", out var resultS));
             Assert.Equal("123", resultS);
+        }
+
+        [Theory]
+        [InlineData("a", "a")]
+        [InlineData("foo", "foo")]
+        [InlineData("$_", "$_")]
+        [InlineData("a-foo.", "a")]
+        [InlineData("abc=3", "abc")]
+        public void IdentifierShouldParseValidIdentifiers(string text, string identifier)
+        {
+            Assert.Equal(identifier, Literals.Identifier().Parse(text).Text);
+        }
+
+        [Theory]
+        [InlineData("-foo")]
+        [InlineData("-")]
+        [InlineData("  ")]
+        public void IdentifierShouldNotParseInvalidIdentifiers(string text)
+        {
+            Assert.Null(Literals.Identifier().Parse(text).Text);
+        }
+
+        [Theory]
+        [InlineData("-foo")]
+        [InlineData("/foo")]
+        [InlineData("foo@asd")]
+        [InlineData("foo*")]
+        public void IdentifierShouldAcceptExtraChars(string text)
+        {
+            static bool start(char c) => c == '-' || c == '/';
+            static bool part(char c) => c == '@' || c == '*';
+
+            Assert.Equal(text, Literals.Identifier(start, part).Parse(text).Text);
         }
     }
 }
