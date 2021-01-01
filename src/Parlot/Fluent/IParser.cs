@@ -14,6 +14,8 @@ namespace Parlot.Fluent
     {
         bool Parse(ParseContext context, ref ParseResult<T> result);
         public IParser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
+        public IParser<U> Else<U>(Func<T, U> conversion) => new Else<T, U>(this, conversion);
+        public IParser<T> ElseError(string message) => new ElseError<T>(this, message);
         public IParser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
         public IParser<U> Cast<U>() where U : T => Then(t => (U) t) ;
         public IParser<T> Named(string name) { Name = name; return this; }

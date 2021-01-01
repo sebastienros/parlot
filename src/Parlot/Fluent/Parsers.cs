@@ -35,6 +35,10 @@ namespace Parlot.Fluent
         public static Deferred<T> Deferred<T>() => new();
         public static Deferred<T> Recursive<T>(Func<Deferred<T>, IParser<T>> parser) => new(parser);
         public static IParser<T> Between<T>(IParser before, IParser<T> parser, IParser after) => new Between<T>(before, parser, after);
+        public static IParser<TextSpan> AnyCharBefore<T>(IParser<T> parser, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, failOnEof, consumeDelimiter);
+        public static IParser<TextSpan> AnyCharBefore(IParser parser, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore(parser, failOnEof, consumeDelimiter);
+        public static IParser<U> SkipAnd<U>(this IParser parser, IParser<U> and) => new SkipAnd<U>(parser, and);
+
     }
 
     public class LiteralBuilder
