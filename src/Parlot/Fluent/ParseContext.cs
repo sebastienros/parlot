@@ -6,7 +6,7 @@ namespace Parlot.Fluent
     public class ParseContext
     {
         private Dictionary<string, object> _properties;
-        private ParseResult<object> _whiteSpaceResult = new ParseResult<object>();
+        private ParseResult<object> _whiteSpaceResult = new();
         public ParseContext(Scanner scanner)
         {
             Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));

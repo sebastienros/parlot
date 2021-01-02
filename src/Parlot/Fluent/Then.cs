@@ -10,12 +10,19 @@ namespace Parlot.Fluent
     /// <typeparam name="U">The output parser type.</typeparam>
     public sealed class Then<T, U> : Parser<U>, IParser<U>
     {
-        private readonly Func<T, U> _action;
+        private readonly Func<T, U> _action1;
+        private readonly Func<ParseContext, T, U> _action2;
         private readonly IParser<T> _parser;
 
         public Then(IParser<T> parser, Func<T, U> action)
         {
-            _action = action ?? throw new ArgumentNullException(nameof(action));
+            _action1 = action ?? throw new ArgumentNullException(nameof(action));
+            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        }
+
+        public Then(IParser<T> parser, Func<ParseContext, T, U> action)
+        {
+            _action2 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
@@ -27,8 +34,15 @@ namespace Parlot.Fluent
 
             if (_parser.Parse(context, ref parsed))
             {
-                var value = _action.Invoke(parsed.Value);
-                result.Set(parsed.Buffer, parsed.Start, parsed.End, value);
+                if (_action1 != null)
+                {
+                    result.Set(parsed.Buffer, parsed.Start, parsed.End, _parser.Name, _action1.Invoke(parsed.Value));
+                }
+
+                if (_action2 != null)
+                {
+                    result.Set(parsed.Buffer, parsed.Start, parsed.End, _parser.Name, _action2.Invoke(context, parsed.Value));
+                }
 
                 return true;
             }

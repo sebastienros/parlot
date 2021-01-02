@@ -27,6 +27,7 @@ namespace Parlot.Fluent
         // TODO: Decide between Star and ZeroOrMany
         public static IParser<IList<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
         public static IParser<IList<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
+        public static IParser<IList<ParseResult<object>>> ZeroOrMany(IParser parser) => new ZeroOrMany(parser);
 
         // TODO: Decide between Plus and OneOrMany
         public static IParser<IList<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);

@@ -53,7 +53,7 @@ namespace Parlot.Fluent
                     ? new TextSpan(context.Scanner.Buffer, start.Offset + 1, encoded.Length)
                     : new TextSpan(decoded.ToString());
 
-                result.Set(context.Scanner.Buffer, start, end, span);
+                result.Set(context.Scanner.Buffer, start, end, Name, span);
                 return true;
             }
             else

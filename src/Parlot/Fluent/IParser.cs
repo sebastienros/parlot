@@ -14,10 +14,10 @@ namespace Parlot.Fluent
     {
         bool Parse(ParseContext context, ref ParseResult<T> result);
         public IParser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
+        public IParser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
         public IParser<U> Else<U>(Func<T, U> conversion) => new Else<T, U>(this, conversion);
         public IParser<T> ElseError(string message) => new ElseError<T>(this, message);
         public IParser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
-        public IParser<U> Cast<U>() where U : T => Then(t => (U) t) ;
         public IParser<T> Named(string name) { Name = name; return this; }
         public IParser<U> Switch<U>(Func<ParseContext, T, IParser<U>> action) => new SwitchTypedToTyped<T, U>(this, action);
         public IParser Switch(Func<ParseContext, T, IParser> action) => new SwitchTypedToAnonymous<T>(this, action);
@@ -34,7 +34,7 @@ namespace Parlot.Fluent
 
             if (Parse(context, ref localResult))
             {
-                result = new ParseResult<object>(localResult.Buffer, localResult.Start, localResult.End, localResult.Value);
+                result = new ParseResult<object>(localResult.Buffer, localResult.Start, localResult.End, Name, localResult.Value);
                 return true;
             }
             else

@@ -36,7 +36,7 @@ namespace Parlot.Fluent
 
                 if (decimal.TryParse(context.Scanner.Buffer.AsSpan(start.Offset, end - start), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
                 {
-                    result.Set(context.Scanner.Buffer, start, end, value);
+                    result.Set(context.Scanner.Buffer, start, end, Name, value);
                     return true;
                 }
             }

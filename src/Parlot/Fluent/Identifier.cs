@@ -44,7 +44,7 @@ namespace Parlot.Fluent
 
             var end = context.Scanner.Cursor.Position;
 
-            result.Set(context.Scanner.Buffer, start, end, new TextSpan(context.Scanner.Buffer, start.Offset, end - start));
+            result.Set(context.Scanner.Buffer, start, end, Name, new TextSpan(context.Scanner.Buffer, start.Offset, end - start));
             return true;
         }
     }

@@ -31,7 +31,7 @@ namespace Parlot.Fluent
             {
                 if (Parsers[i].Parse(context, ref parsed))
                 {
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed);
+                    result.Set(parsed.Buffer, parsed.Start, parsed.End, Parsers[i].Name, parsed);
                     return true;
                 }
 
@@ -41,7 +41,6 @@ namespace Parlot.Fluent
 
             return false;
         }
-
     }
 
     /// <summary>

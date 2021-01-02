@@ -29,7 +29,7 @@ namespace Parlot.Fluent
 
             if (context.Scanner.ReadText(Text, _comparer))
             {
-                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Position, Text);
+                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Position, Name, Text);
                 return true;
             }
             else

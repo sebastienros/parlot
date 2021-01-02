@@ -82,7 +82,7 @@ namespace Parlot.Fluent
                 }
             }
 
-            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, (IList<T>) results ?? Array.Empty<T>());
+            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, Name, (IList<T>) results ?? Array.Empty<T>());
             return true;
         }
     }
