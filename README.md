@@ -159,7 +159,7 @@ This benchmark creates an expression tree (AST) representing mathematical expres
 - Small: `3 - 1 / 2 + 1`
 - Big: `1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2`
 
-Only Pidgin and Parlot are benchmarked here. It also shows the results of the two Parlot APIs. The __Fluent API__ is the one that corresponds to Pidgin. The __Raw__ variant is using the standard Parlot APIto show how to get the fastest possible parser. These benchmarks don't evaluate the expressions but only parse them to create the same AST. 
+Only Pidgin and Parlot are benchmarked here. It also shows the results of the two Parlot APIs. The __Fluent API__ is the one that corresponds to Pidgin. The __Raw__ variant is using the standard Parlot API to show how to get the fastest possible parser. These benchmarks don't evaluate the expressions but only parse them to create the same AST. 
 
 In this benchmark Parlot Fluent is 3 times faster than Pidgin, and Parlot Raw gives another 3 times boost. Allocations are also smaller with Parlot.
 
