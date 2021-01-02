@@ -25,6 +25,8 @@ namespace Parlot.Fluent
 
             var parsed = new ParseResult<object>();
 
+            var start = context.Scanner.Cursor.Position;
+
             for (var i = 0; i < Parsers.Count; i++)
             {
                 if (Parsers[i].Parse(context, ref parsed))
@@ -32,6 +34,9 @@ namespace Parlot.Fluent
                     result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed);
                     return true;
                 }
+
+                // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
+                context.Scanner.Cursor.ResetPosition(start);
             }
 
             return false;
@@ -61,12 +66,17 @@ namespace Parlot.Fluent
                 return false;
             }
 
+            var start = context.Scanner.Cursor.Position;
+
             for (var i = 0; i < Parsers.Count; i++)
             {
                 if (Parsers[i].Parse(context, ref result))
                 {
                     return true;
                 }
+
+                // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
+                context.Scanner.Cursor.ResetPosition(start);
             }
 
             return false;

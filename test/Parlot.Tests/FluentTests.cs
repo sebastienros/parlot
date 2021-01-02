@@ -248,5 +248,17 @@ namespace Parlot.Tests
             Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowSign).Parse("-123"));
             Assert.Equal(-123, Terms.Integer(NumberOptions.AllowSign).Parse("-123"));
         }
+
+        [Fact]
+        public void OneOfShouldRestorePosition()
+        {
+            var choice = OneOf(
+                Literals.Char('a').And(Literals.Char('b')).And(Literals.Char('c')).And(Literals.Char('d')),
+                Literals.Char('a').And(Literals.Char('b')).And(Literals.Char('e')).And(Literals.Char('d'))
+                ).Then(x => x.Item1.ToString() + x.Item2.ToString() + x.Item3.ToString() + x.Item4.ToString());
+
+            Assert.Equal("abcd", choice.Parse("abcd"));
+            Assert.Equal("abed", choice.Parse("abed"));
+        }
     }
 }

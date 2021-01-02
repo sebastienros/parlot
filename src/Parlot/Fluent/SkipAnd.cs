@@ -27,6 +27,8 @@ namespace Parlot.Fluent
                     result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, parseResult2.Value);
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(parseResult1.Start);
             }
 
             return false;

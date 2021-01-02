@@ -26,6 +26,12 @@
 
             var parsed = new ParseResult<T>();
 
+            if (_delimiter.Parse(context, ref parsed))
+            {
+                context.Scanner.Cursor.ResetPosition(start);
+                return false;
+            }
+
             while (true)
             {
                 if (_delimiter.Parse(context, ref parsed) || (!_failOnEof && context.Scanner.Cursor.Eof))
@@ -87,6 +93,12 @@
             var start = context.Scanner.Cursor.Position;
 
             var parsed = new ParseResult<object>();
+
+            if (_delimiter.Parse(context, ref parsed))
+            {
+                context.Scanner.Cursor.ResetPosition(start);
+                return false;
+            }
 
             while (true)
             {

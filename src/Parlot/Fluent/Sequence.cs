@@ -28,6 +28,8 @@ namespace Parlot.Fluent
                     result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(parseResult1.Start);
             }
 
             return false;
@@ -69,6 +71,8 @@ namespace Parlot.Fluent
                     result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
 
             return false;
@@ -108,6 +112,8 @@ namespace Parlot.Fluent
                     result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
 
             return false;
@@ -148,6 +154,8 @@ namespace Parlot.Fluent
                     result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
 
             return false;
@@ -189,6 +197,8 @@ namespace Parlot.Fluent
                     result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
 
             return false;
@@ -232,6 +242,8 @@ namespace Parlot.Fluent
                     result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
+
+                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
 
             return false;
@@ -261,6 +273,8 @@ namespace Parlot.Fluent
 
             var parsed = new ParseResult<object>();
 
+            var start = context.Scanner.Cursor.Position;
+
             for (var i = 0; i < _parsers.Length; i++)
             {
                 if (!_parsers[i].Parse(context, ref parsed))
@@ -279,6 +293,7 @@ namespace Parlot.Fluent
             }
             else
             {
+                context.Scanner.Cursor.ResetPosition(start);
                 return false;
             }
         }
