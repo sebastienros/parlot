@@ -2,14 +2,13 @@
 
 namespace Parlot.Fluent
 {
-    public struct TextSpan : IEquatable<string>
+    public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
     {
         public TextSpan(string value)
         {
             Buffer = value;
             Offset = 0;
             Length = value.Length;
-            _text = value;
         }
 
         public TextSpan(string buffer, int offset, int count)
@@ -17,21 +16,17 @@ namespace Parlot.Fluent
             Buffer = buffer;
             Offset = offset;
             Length = count;
-            _text = null;
         }
 
-        private string _text;
-        public int Length { get; private set; }
-        public int Offset { get; private set; }
-        public string Buffer { get; private set; }
-
-        public string Text => _text ??= Buffer?.Substring(Offset, Length);
+        public readonly int Length;
+        public readonly int Offset;
+        public readonly string Buffer;
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Offset, Length);
 
         public override string ToString()
         {
-            return Text;
+            return Buffer?.Substring(Offset, Length);
         }
 
         public bool Equals(string other)
@@ -47,6 +42,11 @@ namespace Parlot.Fluent
             }
 
             return Span.SequenceEqual(other);
+        }
+
+        public bool Equals(TextSpan other)
+        {
+            return Span.SequenceEqual(other.Span);
         }
     }
 }

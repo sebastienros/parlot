@@ -3,9 +3,9 @@ namespace Parlot
     /// <summary>
     /// Represents a position in a text buffer.
     /// </summary>
-    public struct TextPosition
+    public readonly struct TextPosition
     {
-        public static TextPosition Start = new(0, 1, 1);
+        public static readonly TextPosition Start = new(0, 1, 1);
 
         public TextPosition(int offset, int line, int column)
         {
@@ -14,11 +14,11 @@ namespace Parlot
             Column = column;
         }
 
-        public int Offset { get; }
-        public int Line { get; }
-        public int Column { get; }
+        public readonly int Offset;
+        public readonly int Line;
+        public readonly int Column;
 
-        public static int operator -(TextPosition left, TextPosition right)
+        public static int operator -(in TextPosition left, in TextPosition right)
         {
             return left.Offset - right.Offset;
         }

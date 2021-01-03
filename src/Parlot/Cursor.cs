@@ -5,20 +5,21 @@ namespace Parlot
 {
     public class Cursor
     {
-        public static readonly char NullChar = '\0';
+        public const char NullChar = '\0';
 
         private readonly int _textLength;
         private char _current;
         private int _offset;
         private int _line;
         private int _column;
+        private readonly string _buffer;
 
         public Cursor(string buffer, TextPosition position)
         {
-            Buffer = buffer;
-            _textLength = buffer.Length;
+            _buffer = buffer;
+            _textLength = _buffer.Length;
             Eof = _textLength == 0;
-            _current = _textLength == 0 ? NullChar : Buffer[position.Offset];
+            _current = _textLength == 0 ? NullChar : _buffer[position.Offset];
             _offset = 0;
             _line = 1;
             _column = 1;
@@ -28,12 +29,11 @@ namespace Parlot
         {
         }
 
-        public TextPosition Position => new (_offset, _line, _column);
+        public TextPosition Position => new(_offset, _line, _column);
 
         /// <summary>
         /// Advances the cursor.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count = 1)
         {
             if (Eof)
@@ -53,7 +53,7 @@ namespace Parlot
                     return;
                 }
 
-                var c = Buffer[_offset];
+                var c = _buffer[_offset];
 
                 if (_current == '\n')
                 {
@@ -86,14 +86,14 @@ namespace Parlot
             _column = position.Column;
 
             // Eof might have been recorded
-            if (_offset >= Buffer.Length)
+            if (_offset >= _buffer.Length)
             {
                 _current = NullChar;
                 Eof = true;
             }
             else
             {
-                _current = Buffer[position.Offset];
+                _current = _buffer[position.Offset];
                 Eof = false;
             }
         }
@@ -104,12 +104,12 @@ namespace Parlot
         public char Current => _current;
 
         /// <summary>
-        /// Returns the cursor's position in the buffer.
+        /// Returns the cursor's position in the _buffer.
         /// </summary>
         public int Offset => _offset;
 
         /// <summary>
-        /// Evaluates a char forward in the buffer.
+        /// Evaluates a char forward in the _buffer.
         /// </summary>
         public char PeekNext(int index = 1)
         {
@@ -120,11 +120,12 @@ namespace Parlot
                 return NullChar;
             }
 
-            return Buffer[nextIndex];
+            return _buffer[nextIndex];
         }
         
         public bool Eof { get; private set; }
-        public string Buffer { get; private set; }
+
+        public string Buffer => _buffer;
 
         /// <summary>
         /// Whether a char is at the current position.
@@ -149,7 +150,7 @@ namespace Parlot
         {
             if (s == null)
             {
-                throw new ArgumentNullException(nameof(s));
+                ThrowHelper.ThrowArgumentNullException(nameof(s));
             }
 
             if (Eof)
@@ -183,7 +184,7 @@ namespace Parlot
         {
             if (chars == null)
             {
-                throw new ArgumentNullException(nameof(chars));
+                ThrowHelper.ThrowArgumentNullException(nameof(chars));
             }
 
             if (Eof)
@@ -212,7 +213,6 @@ namespace Parlot
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
         {
             if (s.Length == 0)
@@ -237,14 +237,14 @@ namespace Parlot
                 return false;
             }
             
-            if (length > 1 && Buffer[_offset + 1] != s[1])
+            if (length > 1 && _buffer[_offset + 1] != s[1])
             {
                 return false;
             }
 
             for (var i = 2; i < length; i++)
             {
-                if (s[i] != Buffer[_offset + i])
+                if (s[i] != _buffer[_offset + i])
                 {
                     return false;
                 }
@@ -286,7 +286,7 @@ namespace Parlot
 
             if (length > 1)
             {
-                a = CharToStringTable.GetString(Buffer[_offset + 1]);
+                a = CharToStringTable.GetString(_buffer[_offset + 1]);
                 b = CharToStringTable.GetString(s[1]);
 
                 if (comparer.Compare(a, b) != 0)
@@ -297,7 +297,7 @@ namespace Parlot
 
             for (var i = 2; i < length; i++)
             {
-                a = CharToStringTable.GetString(Buffer[_offset + i]);
+                a = CharToStringTable.GetString(_buffer[_offset + i]);
                 b = CharToStringTable.GetString(s[i]);
 
                 if (comparer.Compare(a, b) != 0)

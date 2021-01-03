@@ -1,5 +1,4 @@
 using Parlot.Fluent;
-using System;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -171,7 +170,7 @@ namespace Parlot.Tests
             Assert.Equal((long)123, resultI);
 
             Assert.True(parser.TryParse("s:'123'", out var resultS));
-            Assert.Equal("123", ((TextSpan)resultS).Text);
+            Assert.Equal("123", ((TextSpan)resultS).ToString());
         }
 
         [Fact]
@@ -210,7 +209,7 @@ namespace Parlot.Tests
         [InlineData("abc=3", "abc")]
         public void IdentifierShouldParseValidIdentifiers(string text, string identifier)
         {
-            Assert.Equal(identifier, Literals.Identifier().Parse(text).Text);
+            Assert.Equal(identifier, Literals.Identifier().Parse(text).ToString());
         }
 
         [Theory]
@@ -219,7 +218,7 @@ namespace Parlot.Tests
         [InlineData("  ")]
         public void IdentifierShouldNotParseInvalidIdentifiers(string text)
         {
-            Assert.Null(Literals.Identifier().Parse(text).Text);
+            Assert.Null(Literals.Identifier().Parse(text).ToString());
         }
 
         [Theory]
@@ -232,7 +231,7 @@ namespace Parlot.Tests
             static bool start(char c) => c == '-' || c == '/';
             static bool part(char c) => c == '@' || c == '*';
 
-            Assert.Equal(text, Literals.Identifier(start, part).Parse(text).Text);
+            Assert.Equal(text, Literals.Identifier(start, part).Parse(text).ToString());
         }
 
         [Fact]

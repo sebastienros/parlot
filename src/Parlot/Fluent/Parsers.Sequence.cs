@@ -10,7 +10,7 @@ namespace Parlot.Fluent
             if (parser is Sequence sequence)
             {
                 // Return a single OneOf instance with this new one
-                return new Sequence(sequence._parsers.Concat(new[] { and }).ToArray());
+                return new Sequence(sequence.Parsers.Append(and).ToArray());
             }
             else
             {

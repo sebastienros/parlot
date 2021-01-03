@@ -2,13 +2,15 @@
 
 namespace Parlot
 {
+    using System.Runtime.CompilerServices;
+
     /// <summary>
     /// This class is used to return tokens extracted from the input buffer.
     /// </summary>
     public class Scanner
     {
         public readonly string Buffer;
-        public Cursor Cursor;
+        public readonly Cursor Cursor;
 
         /// <summary>
         /// Scans some text.
@@ -24,6 +26,7 @@ namespace Parlot
         /// Reads any whitespace without generating a token.
         /// </summary>
         /// <returns>Whether some white space was read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpaceOrNewLine()
         {
             if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
@@ -31,6 +34,12 @@ namespace Parlot
                 return false;
             }
 
+            return SkipWhiteSpaceOrNewLineUnlikely();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool SkipWhiteSpaceOrNewLineUnlikely()
+        {
             Cursor.Advance();
 
             while (Character.IsWhiteSpaceOrNewLine(Cursor.Current))
@@ -41,6 +50,7 @@ namespace Parlot
             return true;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpace()
         {
             if (!Character.IsWhiteSpace(Cursor.Current))
@@ -48,6 +58,12 @@ namespace Parlot
                 return false;
             }
 
+            return SkipWhiteSpaceUnlikely();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool SkipWhiteSpaceUnlikely()
+        {
             Cursor.Advance();
 
             while (Character.IsWhiteSpace(Cursor.Current))

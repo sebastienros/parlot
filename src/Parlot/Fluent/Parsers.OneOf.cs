@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 namespace Parlot.Fluent
 {
@@ -10,7 +9,7 @@ namespace Parlot.Fluent
             if (parser is OneOf<T> oneOf)
             {
                 // Return a single OneOf instance with this new one
-                return new OneOf<T>(oneOf.Parsers.Concat(new[] { or }).ToArray());
+                return new OneOf<T>(oneOf.Parsers.Append(or).ToArray());
             }
             else
             {
@@ -23,7 +22,7 @@ namespace Parlot.Fluent
             if (parser is OneOf oneOf)
             {
                 // Return a single OneOf instance with this new one
-                return new OneOf(oneOf.Parsers.Concat(new[] { or }).ToArray());
+                return new OneOf(oneOf.Parsers.Append(or).ToArray());
             }
             else
             {
