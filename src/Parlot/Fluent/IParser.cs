@@ -17,6 +17,8 @@ namespace Parlot.Fluent
         public IParser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
         public IParser<U> Else<U>(Func<T, U> conversion) => new Else<T, U>(this, conversion);
         public IParser<T> ElseError(string message) => new ElseError<T>(this, message);
+        public IParser<T> Error(string message) => new Error<T>(this, message);
+        public IParser<U> Error<U>(string message) => new Error<T, U>(this, message);
         public IParser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
         public IParser<T> Named(string name) { Name = name; return this; }
         public IParser<U> Switch<U>(Func<ParseContext, T, IParser<U>> action) => new SwitchTypedToTyped<T, U>(this, action);
