@@ -27,7 +27,11 @@ namespace Parlot.Fluent
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
-                context.Scanner.ReadChar('-');
+                if (!context.Scanner.ReadChar('-'))
+                {
+                    // If there is no '-' try to read a '+' but don't read both.
+                    context.Scanner.ReadChar('+');
+                }
             }
 
             if (context.Scanner.ReadDecimal())

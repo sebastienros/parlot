@@ -240,6 +240,8 @@ namespace Parlot.Tests
         {
             Assert.False(Terms.Decimal().TryParse("-123", out _));
             Assert.False(Terms.Integer().TryParse("-123", out _));
+            Assert.False(Terms.Decimal().TryParse("+123", out _));
+            Assert.False(Terms.Integer().TryParse("+123", out _));
         }
 
         [Fact]
@@ -247,6 +249,8 @@ namespace Parlot.Tests
         {
             Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowSign).Parse("-123"));
             Assert.Equal(-123, Terms.Integer(NumberOptions.AllowSign).Parse("-123"));
+            Assert.Equal(123, Terms.Decimal(NumberOptions.AllowSign).Parse("+123"));
+            Assert.Equal(123, Terms.Integer(NumberOptions.AllowSign).Parse("+123"));
         }
 
         [Fact]
