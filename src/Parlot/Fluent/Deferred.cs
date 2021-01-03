@@ -2,7 +2,12 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class Deferred<T> : Parser<T>
+    public interface IDeferredParser<T>: IParser<T>
+    {
+        public IParser<T> Parser { get; set; }
+    }
+
+    public sealed class Deferred<T> : Parser<T>, IDeferredParser<T>
     {
         public IParser<T> Parser { get; set; }
 
