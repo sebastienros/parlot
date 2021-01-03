@@ -35,7 +35,7 @@ namespace Parlot.Fluent
 
             if (nextParser.Parse(context, ref parsed))
             {
-                result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed.Value);
+                result.Set(parsed.Buffer, parsed.Start, parsed.End, nextParser.Name, parsed.Value);
                 return true;
             }
 
@@ -76,7 +76,7 @@ namespace Parlot.Fluent
 
             if (nextParser.Parse(context, ref parsed))
             {
-                result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed.Value);
+                result.Set(parsed.Buffer, parsed.Start, parsed.End, nextParser.Name, parsed.Value);
                 return true;
             }
 
@@ -117,7 +117,7 @@ namespace Parlot.Fluent
 
             if (nextParser.Parse(context, ref parsed))
             {
-                result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed.Value);
+                result.Set(parsed.Buffer, parsed.Start, parsed.End, nextParser.Name, parsed.Value);
                 return true;
             }
 
@@ -158,7 +158,7 @@ namespace Parlot.Fluent
 
             if (nextParser.Parse(context, ref parsed))
             {
-                result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed.Value);
+                result.Set(parsed.Buffer, parsed.Start, parsed.End, nextParser.Name, parsed.Value);
                 return true;
             }
 

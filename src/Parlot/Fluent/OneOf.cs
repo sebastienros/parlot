@@ -4,7 +4,7 @@
     /// OneOf the inner choices when not all parsers return the same type.
     /// We then return the <see cref="ParseResult{T}"/> of each parser.
     /// </summary>
-    public sealed class OneOf : Parser<ParseResult<object>>
+    public sealed class OneOf : Parser<object>
     {
         private readonly IParser[] _parsers;
 
@@ -15,22 +15,19 @@
 
         public IParser[] Parsers => _parsers;
 
-        public override bool Parse(ParseContext context, ref ParseResult<ParseResult<object>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<object> result)
         {
             if (_parsers.Length == 0)
             {
                 return false;
             }
 
-            var parsed = new ParseResult<object>();
-
             var start = context.Scanner.Cursor.Position;
 
             foreach (var parser in _parsers)
             {
-                if (parser.Parse(context, ref parsed))
+                if (parser.Parse(context, ref result))
                 {
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, parsed);
                     return true;
                 }
 
@@ -40,7 +37,6 @@
 
             return false;
         }
-
     }
 
     /// <summary>

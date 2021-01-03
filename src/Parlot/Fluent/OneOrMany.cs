@@ -35,7 +35,7 @@ namespace Parlot.Fluent
 
             } while (_parser.Parse(context, ref parsed));
 
-            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, results);
+            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, Name, results);
             return true;
         }
     }

@@ -6,7 +6,7 @@ namespace Parlot.Fluent
     public class ParseContext
     {
         private Dictionary<string, object> _properties;
-        private ParseResult<object> _whiteSpaceResult;
+        private ParseResult<object> _whiteSpaceResult = new();
 
         /// <summary>
         /// The scanner used for the parsing session.

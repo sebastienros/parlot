@@ -27,13 +27,14 @@ namespace Parlot.Fluent
         // TODO: Decide between Star and ZeroOrMany
         public static IParser<IList<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
         public static IParser<IList<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
+        public static IParser<IList<ParseResult<object>>> ZeroOrMany(IParser parser) => new ZeroOrMany(parser);
 
         // TODO: Decide between Plus and OneOrMany
         public static IParser<IList<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
         public static IParser<IList<T>> OneOrMany<T>(IParser<T> parser) => new OneOrMany<T>(parser);
 
-        public static Deferred<T> Deferred<T>() => new();
-        public static Deferred<T> Recursive<T>(Func<Deferred<T>, IParser<T>> parser) => new(parser);
+        public static IDeferredParser<T> Deferred<T>() => new Deferred<T>();
+        public static IDeferredParser<T> Recursive<T>(Func<Deferred<T>, IParser<T>> parser) => new Deferred<T>(parser);
         public static IParser<T> Between<T>(IParser before, IParser<T> parser, IParser after) => new Between<T>(before, parser, after);
         public static IParser<TextSpan> AnyCharBefore<T>(IParser<T> parser, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, failOnEof, consumeDelimiter);
         public static IParser<TextSpan> AnyCharBefore(IParser parser, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore(parser, failOnEof, consumeDelimiter);
