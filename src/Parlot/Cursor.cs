@@ -62,10 +62,12 @@ namespace Parlot
                 }
                 else if (c == '\r' && PeekNext() == '\n')
                 {
-                    _offset++;
-                    i++;
                     // Skip \r
-                    c = '\n';
+                    _current = '\n';
+                    _offset++;
+                    _column++;
+                    i++;
+                    continue;
                 }
                 else
                 {
@@ -81,6 +83,11 @@ namespace Parlot
         /// </summary>
         public void ResetPosition(TextPosition position)
         {
+            if (position.Offset == _offset)
+            {
+                return;
+            }
+
             _offset = position.Offset;
             _line = position.Line;
             _column = position.Column;

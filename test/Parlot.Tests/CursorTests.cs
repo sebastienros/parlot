@@ -113,7 +113,7 @@ namespace Parlot.Tests
 
             Assert.Equal('\n', c.Current);
             Assert.Equal(8, c.Position.Offset);
-            Assert.Equal(3, c.Position.Column);
+            Assert.Equal(4, c.Position.Column);
             Assert.Equal(2, c.Position.Line);
             c.Advance();
 

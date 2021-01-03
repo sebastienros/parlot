@@ -34,9 +34,11 @@
 
             while (true)
             {
-                if (_delimiter.Parse(context, ref parsed) || (!_failOnEof && context.Scanner.Cursor.Eof))
+                var delimiterFound = _delimiter.Parse(context, ref parsed);
+
+                if (delimiterFound || (!_failOnEof && context.Scanner.Cursor.Eof))
                 {
-                    var end = context.Scanner.Cursor.Eof ? context.Scanner.Cursor.Position : parsed.Start;
+                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : parsed.Start;
 
                     var length = end - start;
 
