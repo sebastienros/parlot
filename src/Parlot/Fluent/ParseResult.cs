@@ -31,6 +31,6 @@ namespace Parlot
     
     public static class ParseResultExtensions
     {
-        public static ReadOnlySpan<char> GetSpan<T>(this ParseResult<T> result) => result.Buffer.AsSpan(result.Start.Offset, result.Length);
+        public static ReadOnlySpan<char> GetSpan<T>(this ParseResult<T> result) => result.Buffer.AsSpan(result.Start.Offset, result.End - result.Start);
     }
 }
