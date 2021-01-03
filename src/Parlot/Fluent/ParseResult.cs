@@ -1,4 +1,6 @@
-﻿namespace Parlot
+﻿using System;
+
+namespace Parlot
 {
     public struct ParseResult<T>
     {
@@ -29,6 +31,6 @@
     
     public static class ParseResultExtensions
     {
-        public ReadOnlySpan<char> GetSpan() => Buffer.AsSpan(Start.Offset, Length);
+        public ReadOnlySpan<char> GetSpan => Buffer.AsSpan(Start.Offset, Length);
     }
 }
