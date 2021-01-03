@@ -7,15 +7,16 @@ namespace Parlot.Fluent
     {
         private Dictionary<string, object> _properties;
         private ParseResult<object> _whiteSpaceResult = new();
-        public ParseContext(Scanner scanner)
-        {
-            Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
-        }
 
         /// <summary>
         /// The scanner used for the parsing session.
         /// </summary>
-        public Scanner Scanner { get; }
+        public readonly Scanner Scanner;
+
+        public ParseContext(Scanner scanner)
+        {
+            Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
+        }
 
         /// <summary>
         /// A custom collection of objects that can be shared across parsers.

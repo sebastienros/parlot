@@ -252,32 +252,34 @@ namespace Parlot.Fluent
 
     public sealed class Sequence : Parser<IList<ParseResult<object>>>
     {
-        internal readonly IParser[] _parsers;
+        private readonly IParser[] _parsers;
+
         public Sequence(IParser[] parsers)
         {
             _parsers = parsers;
         }
 
+        public IParser[] Parsers => _parsers;
+
         public override bool Parse(ParseContext context, ref ParseResult<IList<ParseResult<object>>> result)
         {
             context.EnterParser(this);
 
-            if (_parsers.Length == 0)
+            IParser[] parsers = _parsers;
+
+            if (parsers.Length == 0)
             {
                 return true;
             }
 
-            var results = new List<ParseResult<object>>(_parsers.Length);
-
+            var results = new List<ParseResult<object>>(parsers.Length);
             var success = true;
-
             var parsed = new ParseResult<object>();
-
             var start = context.Scanner.Cursor.Position;
 
-            for (var i = 0; i < _parsers.Length; i++)
+            for (var i = 0; i < (uint) parsers.Length; i++)
             {
-                if (!_parsers[i].Parse(context, ref parsed))
+                if (!parsers[i].Parse(context, ref parsed))
                 {
                     success = false;
                     break;

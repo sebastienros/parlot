@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Parlot.Fluent
+﻿namespace Parlot.Fluent
 {
     /// <summary>
     /// OneOf the inner choices when not all parsers return the same type.
@@ -9,25 +6,27 @@ namespace Parlot.Fluent
     /// </summary>
     public sealed class OneOf : Parser<object>
     {
-        public OneOf(IList<IParser> parsers)
+        private readonly IParser[] _parsers;
+
+        public OneOf(IParser[] parsers)
         {
-            Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+            _parsers = parsers;
         }
 
-        public IList<IParser> Parsers { get; }
+        public IParser[] Parsers => _parsers;
 
         public override bool Parse(ParseContext context, ref ParseResult<object> result)
         {
-            if (Parsers.Count == 0)
+            if (_parsers.Length == 0)
             {
                 return false;
             }
 
             var start = context.Scanner.Cursor.Position;
 
-            for (var i = 0; i < Parsers.Count; i++)
+            foreach (var parser in _parsers)
             {
-                if (Parsers[i].Parse(context, ref result))
+                if (parser.Parse(context, ref result))
                 {
                     return true;
                 }
@@ -47,26 +46,29 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf<T> : Parser<T>
     {
-        public OneOf(IList<IParser<T>> parsers)
+        private readonly IParser<T>[] _parsers;
+
+        public OneOf(IParser<T>[] parsers)
         {
-            Parsers = parsers;
+            _parsers = parsers;
         }
-        public IList<IParser<T>> Parsers { get; }
+
+        public IParser<T>[] Parsers => _parsers;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
-            if (Parsers.Count == 0)
+            if (Parsers.Length == 0)
             {
                 return false;
             }
 
             var start = context.Scanner.Cursor.Position;
 
-            for (var i = 0; i < Parsers.Count; i++)
+            foreach (var parser in _parsers)
             {
-                if (Parsers[i].Parse(context, ref result))
+                if (parser.Parse(context, ref result))
                 {
                     return true;
                 }

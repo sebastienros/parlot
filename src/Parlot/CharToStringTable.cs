@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Text;
+﻿using System.Runtime.CompilerServices;
 
 namespace Parlot
 {
@@ -11,23 +8,24 @@ namespace Parlot
     /// </summary>
     internal static class CharToStringTable
     {
-        private static readonly int Size = 256;
-        private static readonly string[] Table = new string[Size];
+        private const int _size = 256;
+        private static readonly string[] _table = new string[_size];
 
         static CharToStringTable()
         {
-            for (int i = 0; i < Size; i++)
+            for (int i = 0; i < _size; i++)
             {
-                Table[i] = ((char)i).ToString();
+                _table[i] = ((char)i).ToString();
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string GetString(char c)
         {
-            if (c < Size)
+            string[] table = _table;
+            if (c < (uint) table.Length)
             {
-                return Table[c];
+                return table[c];
             }
 
             return c.ToString();

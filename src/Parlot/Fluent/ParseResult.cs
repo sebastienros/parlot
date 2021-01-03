@@ -4,38 +4,33 @@ namespace Parlot
 {
     public struct ParseResult<T>
     {
-        public ParseResult(string buffer, TextPosition start, TextPosition end, string parserName, T value)
+        public ParseResult(string buffer, in TextPosition start, in TextPosition end, string parserName, T value)
         {
             Buffer = buffer;
             Start = start;
             End = end;
-            Length = end - start;
             Value = value;
             ParserName = parserName;
         }
 
-        public void Set(string buffer, TextPosition start, TextPosition end, string parserName, T value)
+        public void Set(string buffer, in TextPosition start, in TextPosition end, string parserName, T value)
         {
             Buffer = buffer;
             Start = start;
             End = end;
-            Length = end - start;
             Value = value;
             ParserName = parserName;
         }
 
-        public TextPosition Start { get; private set; }
-
-        public TextPosition End { get; private set; }
-
-        public int Length { get; private set; }
-        public string Buffer { get; private set; }
-
-        public string Text => Buffer?.Substring(Start.Offset, Length);
-
-        public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
-
-        public T Value { get; private set; }
-        public string ParserName { get; private set; }
+        public TextPosition Start;
+        public TextPosition End;
+        public string Buffer;
+        public T Value;
+        public string ParserName;
+    }
+    
+    public static class ParseResultExtensions
+    {
+        public static ReadOnlySpan<char> GetSpan<T>(this ParseResult<T> result) => result.Buffer.AsSpan(result.Start.Offset, result.End - result.Start);
     }
 }
