@@ -86,6 +86,15 @@ namespace Parlot.Tests
             Assert.False(Literals.Char('a').TryParse("B", out _));
         }
 
+        [Theory]
+        [InlineData("'a\nb' ", "a\nb")]
+        [InlineData("'a\r\nb' ", "a\r\nb")]
+        public void ShouldReadStringsWithLineBreaks(string text, string expected)
+        {
+            Assert.Equal(expected, Literals.String(StringLiteralQuotes.Single).Parse(text).ToString());
+            Assert.Equal(expected, Literals.String(StringLiteralQuotes.SingleOrDouble).Parse(text).ToString());
+        }
+
         [Fact]
         public void OrShouldReturnOneOf()
         {

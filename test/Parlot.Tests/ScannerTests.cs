@@ -205,5 +205,16 @@ namespace Parlot.Tests
         {
             Assert.False(new Scanner(text).ReadDecimal());
         }
+
+        [Theory]
+        [InlineData("'a\nb' ", "'a\nb'")]
+        [InlineData("'a\r\nb' ", "'a\r\nb'")]
+        public void ShouldReadStringsWithLineBreaks(string text, string expected)
+        {
+            var result = new TokenResult();
+
+            Assert.True(new Scanner(text).ReadSingleQuotedString(result));
+            Assert.Equal(expected, result.Text);
+        }
     }
 }

@@ -63,7 +63,7 @@ namespace Parlot
                 else if (c == '\r' && PeekNext() == '\n')
                 {
                     _offset++;
-
+                    i++;
                     // Skip \r
                     c = '\n';
                 }
