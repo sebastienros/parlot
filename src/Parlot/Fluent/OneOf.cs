@@ -7,7 +7,7 @@ namespace Parlot.Fluent
     /// OneOf the inner choices when not all parsers return the same type.
     /// We then return the <see cref="ParseResult{T}"/> of each parser.
     /// </summary>
-    public sealed class OneOf : Parser<ParseResult<object>>
+    public sealed class OneOf : Parser<object>
     {
         public OneOf(IList<IParser> parsers)
         {
@@ -16,22 +16,19 @@ namespace Parlot.Fluent
 
         public IList<IParser> Parsers { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ParseResult<object>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<object> result)
         {
             if (Parsers.Count == 0)
             {
                 return false;
             }
 
-            var parsed = new ParseResult<object>();
-
             var start = context.Scanner.Cursor.Position;
 
             for (var i = 0; i < Parsers.Count; i++)
             {
-                if (Parsers[i].Parse(context, ref parsed))
+                if (Parsers[i].Parse(context, ref result))
                 {
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, Parsers[i].Name, parsed);
                     return true;
                 }
 

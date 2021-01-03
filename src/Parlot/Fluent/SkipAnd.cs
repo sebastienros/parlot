@@ -24,7 +24,7 @@ namespace Parlot.Fluent
 
                 if (_parser2.Parse(context, ref parseResult2))
                 {
-                    result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, _parser2.Name, parseResult2.Value);
+                    result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, _parser2.Name ?? Name, parseResult2.Value);
                     return true;
                 }
 

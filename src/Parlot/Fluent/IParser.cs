@@ -30,11 +30,12 @@ namespace Parlot.Fluent
 
         bool IParser.Parse(ParseContext context, ref ParseResult<object> result)
         {
+            // This method is invoked when a Parser<T> is used from a wrapper that is not strongly-typed
             var localResult = new ParseResult<T>();
 
             if (Parse(context, ref localResult))
             {
-                result = new ParseResult<object>(localResult.Buffer, localResult.Start, localResult.End, Name, localResult.Value);
+                result = new ParseResult<object>(localResult.Buffer, localResult.Start, localResult.End, localResult.ParserName, localResult.Value);
                 return true;
             }
             else
