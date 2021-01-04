@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public sealed class OneOrMany<T> : Parser<IList<T>>
+    public sealed class OneOrMany<T> : Parser<List<T>>
     {
         private readonly IParser<T> _parser;
 
@@ -12,7 +12,7 @@ namespace Parlot.Fluent
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<IList<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
         {
             context.EnterParser(this);
 
@@ -35,7 +35,7 @@ namespace Parlot.Fluent
 
             } while (_parser.Parse(context, ref parsed));
 
-            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, Name, results);
+            result = new ParseResult<List<T>>(context.Scanner.Buffer, start, end, Name, results);
             return true;
         }
     }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public sealed class ZeroOrMany : Parser<IList<ParseResult<object>>>
+    public sealed class ZeroOrMany : Parser<List<ParseResult<object>>>
     {
         private readonly IParser _parser;
         public ZeroOrMany(IParser parser)
@@ -11,11 +11,11 @@ namespace Parlot.Fluent
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<IList<ParseResult<object>>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<List<ParseResult<object>>> result)
         {
             context.EnterParser(this);
 
-            List<ParseResult<object>> results = null;
+            var results = new List<ParseResult<object>>();
 
             var start = TextPosition.Start;
             var end = TextPosition.Start;
@@ -31,16 +31,15 @@ namespace Parlot.Fluent
                 }
 
                 end = parsed.End;
-                results ??= new List<ParseResult<object>>();
                 results.Add(parsed);
             }
 
-            result = new ParseResult<IList<ParseResult<object>>>(context.Scanner.Buffer, start, end, _parser.Name, (IList<ParseResult<object>>)results ?? Array.Empty<ParseResult<object>>());
+            result = new ParseResult<List<ParseResult<object>>>(context.Scanner.Buffer, start, end, _parser.Name, results);
             return true;
         }
     }
 
-    public sealed class ZeroOrMany<T> : Parser<IList<T>>
+    public sealed class ZeroOrMany<T> : Parser<List<T>>
     {
         private readonly IParser<T> _parser;
         public ZeroOrMany(IParser<T> parser)
@@ -48,11 +47,11 @@ namespace Parlot.Fluent
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<IList<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
         {
             context.EnterParser(this);
 
-            List<T> results = null;
+            var results = new List<T>();
 
             var start = TextPosition.Start;
             var end = TextPosition.Start;
@@ -68,11 +67,10 @@ namespace Parlot.Fluent
                 }
 
                 end = parsed.End;
-                results ??= new List<T>();
                 results.Add(parsed.Value);
             }
 
-            result = new ParseResult<IList<T>>(context.Scanner.Buffer, start, end, _parser.Name, (IList<T>)results ?? Array.Empty<T>());
+            result = new ParseResult<List<T>>(context.Scanner.Buffer, start, end, _parser.Name, results);
             return true;
         }
     }

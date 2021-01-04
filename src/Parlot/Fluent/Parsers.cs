@@ -18,20 +18,20 @@ namespace Parlot.Fluent
         /// </summary>
         public static TermBuilder Terms => new();
 
-        public static IParser<IList<T>> Separated<T>(IParser separator, IParser<T> parser) => new Separated<T>(separator, parser);
+        public static IParser<List<T>> Separated<T>(IParser separator, IParser<T> parser) => new Separated<T>(separator, parser);
 
         // TODO: Decide between Bang and ZeroOrOne
         public static IParser<T> Bang<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
         public static IParser<T> ZeroOrOne<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
 
         // TODO: Decide between Star and ZeroOrMany
-        public static IParser<IList<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
-        public static IParser<IList<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
-        public static IParser<IList<ParseResult<object>>> ZeroOrMany(IParser parser) => new ZeroOrMany(parser);
+        public static IParser<List<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
+        public static IParser<List<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
+        public static IParser<List<ParseResult<object>>> ZeroOrMany(IParser parser) => new ZeroOrMany(parser);
 
         // TODO: Decide between Plus and OneOrMany
-        public static IParser<IList<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
-        public static IParser<IList<T>> OneOrMany<T>(IParser<T> parser) => new OneOrMany<T>(parser);
+        public static IParser<List<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
+        public static IParser<List<T>> OneOrMany<T>(IParser<T> parser) => new OneOrMany<T>(parser);
 
         public static IParser<T> Not<T>(IParser<T> parser) => new Not<T>(parser);
         public static IDeferredParser<T> Deferred<T>() => new Deferred<T>();
