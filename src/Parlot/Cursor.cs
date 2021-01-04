@@ -60,14 +60,9 @@ namespace Parlot
                     _line++;
                     _column = 1;
                 }
-                else if (c == '\r' && PeekNext() == '\n')
+                else if (c == '\r')
                 {
-                    // Skip \r
-                    _current = '\n';
-                    _offset++;
-                    _column++;
-                    i++;
-                    continue;
+                    // Don't increase the column count
                 }
                 else
                 {

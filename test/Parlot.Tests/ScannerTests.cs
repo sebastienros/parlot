@@ -71,7 +71,7 @@ namespace Parlot.Tests
             s.ReadNonWhiteSpace();
 
             Assert.True(s.SkipWhiteSpace());
-            Assert.Equal(15, s.Cursor.Position.Offset);
+            Assert.Equal(14, s.Cursor.Position.Offset);
 
             Assert.True(s.SkipWhiteSpaceOrNewLine());
             Assert.Equal(19, s.Cursor.Position.Offset);
