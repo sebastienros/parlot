@@ -3,12 +3,14 @@
     public sealed class TextBefore<T> : Parser<TextSpan>
     {
         private readonly IParser<T> _delimiter;
+        private readonly bool _canBeEmpty;
         private readonly bool _failOnEof;
         private readonly bool _consumeDelimiter;
 
-        public TextBefore(IParser<T> delimiter, bool failOnEof = false, bool consumeDelimiter = false)
+        public TextBefore(IParser<T> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
         {
             _delimiter = delimiter;
+            _canBeEmpty = canBeEmpty;
             _failOnEof = failOnEof;
             _consumeDelimiter = consumeDelimiter;
         }
@@ -26,10 +28,15 @@
 
             var parsed = new ParseResult<T>();
 
+            // Is there any text before the expected token?
             if (_delimiter.Parse(context, ref parsed))
             {
-                context.Scanner.Cursor.ResetPosition(start);
-                return false;
+                if (!_consumeDelimiter)
+                {
+                    context.Scanner.Cursor.ResetPosition(start);
+                }
+
+                return _canBeEmpty;
             }
 
             while (true)
@@ -44,7 +51,7 @@
 
                     if (length == 0)
                     {
-                        return false;
+                        return _canBeEmpty;
                     }
 
                     if (!_consumeDelimiter)
@@ -73,12 +80,14 @@
     public sealed class TextBefore : Parser<TextSpan>
     {
         private readonly IParser _delimiter;
+        private readonly bool _canBeEmpty;
         private readonly bool _failOnEof;
         private readonly bool _consumeDelimiter;
 
-        public TextBefore(IParser delimiter, bool failOnEof = false, bool consumeDelimiter = false)
+        public TextBefore(IParser delimiter, bool canBeEmpty, bool failOnEof = false, bool consumeDelimiter = false)
         {
             _delimiter = delimiter;
+            _canBeEmpty = canBeEmpty;
             _failOnEof = failOnEof;
             _consumeDelimiter = consumeDelimiter;
         }
@@ -96,23 +105,30 @@
 
             var parsed = new ParseResult<object>();
 
+            // Is there any text before the expected token?
             if (_delimiter.Parse(context, ref parsed))
             {
-                context.Scanner.Cursor.ResetPosition(start);
-                return false;
+                if (!_consumeDelimiter)
+                {
+                    context.Scanner.Cursor.ResetPosition(start);
+                }
+
+                return _canBeEmpty;
             }
 
             while (true)
             {
-                if (_delimiter.Parse(context, ref parsed) || (!_failOnEof && context.Scanner.Cursor.Eof))
+                var delimiterFound = _delimiter.Parse(context, ref parsed);
+
+                if (delimiterFound || (!_failOnEof && context.Scanner.Cursor.Eof))
                 {
-                    var end = context.Scanner.Cursor.Eof ? context.Scanner.Cursor.Position : parsed.Start;
+                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : parsed.Start;
 
                     var length = end - start;
 
                     if (length == 0)
                     {
-                        return false;
+                        return _canBeEmpty;
                     }
 
                     if (!_consumeDelimiter)
