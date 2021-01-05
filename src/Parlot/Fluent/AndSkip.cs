@@ -6,6 +6,9 @@ namespace Parlot.Fluent
     {
         internal readonly IParser<T> _parser1;
         internal readonly IParser _parser2;
+
+        static ParseResult<object> _parseResult2 = new ParseResult<object>();
+
         public AndSkip(IParser<T> parser1, IParser parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
@@ -18,9 +21,7 @@ namespace Parlot.Fluent
 
             if (_parser1.Parse(context, ref result))
             {
-                var parseResult2 = new ParseResult<object>();
-
-                if (_parser2.Parse(context, ref parseResult2))
+                if (_parser2.Parse(context, ref _parseResult2))
                 {
                     return true;
                 }

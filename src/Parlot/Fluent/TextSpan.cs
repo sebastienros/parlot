@@ -26,7 +26,7 @@ namespace Parlot.Fluent
 
         public override string ToString()
         {
-            return Buffer?.Substring(Offset, Length);
+            return Span.ToString();
         }
 
         public bool Equals(string other)

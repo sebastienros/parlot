@@ -227,7 +227,7 @@ namespace Parlot.Tests
         [InlineData("  ")]
         public void IdentifierShouldNotParseInvalidIdentifiers(string text)
         {
-            Assert.Null(Literals.Identifier().Parse(text).ToString());
+            Assert.False(Literals.Identifier().TryParse(text, out _));
         }
 
         [Theory]
