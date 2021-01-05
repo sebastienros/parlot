@@ -46,6 +46,7 @@ namespace Parlot.Fluent
 
     public class LiteralBuilder
     {
+        public IParser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
         public IParser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
         public IParser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
         public IParser<long> Integer() => new IntegerLiteral(skipWhiteSpace: false);
