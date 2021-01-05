@@ -63,6 +63,7 @@ namespace Parlot.Fluent
             {
                 if (first)
                 {
+                    first = false;
                     start = parsed.Start;
                 }
 
