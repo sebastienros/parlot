@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
     public class ParseContext
     {
-        private Dictionary<string, object> _properties;
         private ParseResult<object> _whiteSpaceResult = new();
 
         /// <summary>
@@ -17,11 +15,6 @@ namespace Parlot.Fluent
         {
             Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         }
-
-        /// <summary>
-        /// A custom collection of objects that can be shared across parsers.
-        /// </summary>
-        public Dictionary<string, object> Properties => _properties ??= new();
 
         /// <summary>
         /// Delegate that is executed whenever a parser is invoked.

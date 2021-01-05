@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent
 {
@@ -121,15 +122,17 @@ namespace Parlot.Fluent
         {
             return parser.TryParse(text, out value, out _);
         }
-
         public static bool TryParse<TResult>(this IParser<TResult> parser, string text, out TResult value, out ParseError error)
+        {
+            return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
+        }
+
+        public static bool TryParse<TResult>(this IParser<TResult> parser, ParseContext context, out TResult value, out ParseError error)
         {
             error = null;
 
             try
             {
-                var context = new ParseContext(new Scanner(text));
-
                 var localResult = new ParseResult<TResult>();
 
                 var success = parser.Parse(context, ref localResult);
