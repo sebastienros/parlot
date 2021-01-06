@@ -38,7 +38,7 @@ namespace Parlot
         /// <summary>
         /// Sets the result.
         /// </summary>
-        ITokenResult Succeed(string buffer, TextPosition start, TextPosition end);
+        ITokenResult Succeed(string buffer, in TextPosition start, in TextPosition end);
 
         /// <summary>
         /// Initializes the token result.

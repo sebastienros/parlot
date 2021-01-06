@@ -14,7 +14,7 @@ namespace Parlot
         private int _column;
         private readonly string _buffer;
 
-        public Cursor(string buffer, TextPosition position)
+        public Cursor(string buffer, in TextPosition position)
         {
             _buffer = buffer;
             _textLength = _buffer.Length;
