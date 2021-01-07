@@ -17,8 +17,8 @@ namespace Parlot.Fluent
 
             var results = new List<ParseResult<object>>();
 
-            var start = TextPosition.Start;
-            var end = TextPosition.Start;
+            var start = 0;
+            var end = 0;
 
             var first = true;
             var parsed = new ParseResult<object>();
@@ -34,7 +34,7 @@ namespace Parlot.Fluent
                 results.Add(parsed);
             }
 
-            result = new ParseResult<List<ParseResult<object>>>(context.Scanner.Buffer, start, end, _parser.Name, results);
+            result = new ParseResult<List<ParseResult<object>>>(start, end, results);
             return true;
         }
     }
@@ -53,8 +53,8 @@ namespace Parlot.Fluent
 
             var results = new List<T>();
 
-            var start = TextPosition.Start;
-            var end = TextPosition.Start;
+            var start = 0;
+            var end = 0;
 
             var first = true;
             var parsed = new ParseResult<T>();
@@ -71,7 +71,7 @@ namespace Parlot.Fluent
                 results.Add(parsed.Value);
             }
 
-            result = new ParseResult<List<T>>(context.Scanner.Buffer, start, end, _parser.Name, results);
+            result = new ParseResult<List<T>>(start, end, results);
             return true;
         }
     }

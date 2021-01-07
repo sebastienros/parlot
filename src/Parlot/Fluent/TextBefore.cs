@@ -41,11 +41,13 @@
 
             while (true)
             {
+                var previous = context.Scanner.Cursor.Position;
+
                 var delimiterFound = _delimiter.Parse(context, ref parsed);
 
                 if (delimiterFound || (!_failOnEof && context.Scanner.Cursor.Eof))
                 {
-                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : parsed.Start;
+                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : previous;
 
                     var length = end - start;
 
@@ -59,7 +61,7 @@
                         context.Scanner.Cursor.ResetPosition(end);
                     }
 
-                    result.Set(context.Scanner.Buffer, start, end, Name, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, end.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
                     return true;
                 }
 
@@ -118,11 +120,13 @@
 
             while (true)
             {
+                var previous = context.Scanner.Cursor.Position;
+
                 var delimiterFound = _delimiter.Parse(context, ref parsed);
 
                 if (delimiterFound || (!_failOnEof && context.Scanner.Cursor.Eof))
                 {
-                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : parsed.Start;
+                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : previous;
 
                     var length = end - start;
 
@@ -136,7 +140,7 @@
                         context.Scanner.Cursor.ResetPosition(end);
                     }
 
-                    result.Set(context.Scanner.Buffer, start, end, Name, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, end.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
                     return true;
                 }
 

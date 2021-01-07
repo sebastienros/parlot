@@ -3,16 +3,16 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public sealed class Separated<T> : Parser<List<T>>
+    public sealed class Separated<U, T> : Parser<List<T>>
     {
-        private readonly IParser _separator;
+        private readonly IParser<U> _separator;
         private readonly IParser<T> _parser;
 
         private readonly bool _separatorIsChar;
         private readonly char _separatorChar;
         private readonly bool _separatorWhiteSpace;
 
-        public Separated(IParser separator, IParser<T> parser)
+        public Separated(IParser<U> separator, IParser<T> parser)
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -34,12 +34,12 @@ namespace Parlot.Fluent
 
             List<T> results = null;
 
-            var start = TextPosition.Start;
-            var end = TextPosition.Start;
+            var start = 0;
+            var end = 0;
 
             var first = true;
             var parsed = new ParseResult<T>();
-            var separatorResult = new ParseResult<object>();
+            var separatorResult = new ParseResult<U>();
 
             while (true)
             {
@@ -80,7 +80,7 @@ namespace Parlot.Fluent
                 }
             }
 
-            result = new ParseResult<List<T>>(context.Scanner.Buffer, start, end, Name, results);
+            result = new ParseResult<List<T>>(start, end, results);
             return true;
         }
     }

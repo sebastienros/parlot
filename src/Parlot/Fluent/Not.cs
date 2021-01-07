@@ -15,12 +15,14 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
+            var start = context.Scanner.Cursor.Position;
+
             if (!_parser.Parse(context, ref result))
             {
                 return true;
             }
 
-            context.Scanner.Cursor.ResetPosition(result.Start);
+            context.Scanner.Cursor.ResetPosition(start);
             return false;
         }
     }

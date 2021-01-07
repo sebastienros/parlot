@@ -19,17 +19,19 @@ namespace Parlot.Fluent
 
             var parseResult1 = new ParseResult<T1>();
 
+            var start = context.Scanner.Cursor.Position;
+
             if (_parser1.Parse(context, ref parseResult1))
             {
                 var parseResult2 = new ParseResult<T2>();
 
                 if (_parser2.Parse(context, ref parseResult2))
                 {
-                    result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, _parser2.Name, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
+                    result.Set(parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
                     return true;
                 }
 
-                context.Scanner.Cursor.ResetPosition(parseResult1.Start);
+                context.Scanner.Cursor.ResetPosition(start);
             }
 
             return false;
@@ -56,6 +58,8 @@ namespace Parlot.Fluent
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2>>();
 
+            var start = context.Scanner.Cursor.Position;
+
             if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T3>();
@@ -68,12 +72,12 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
                         
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
-
-                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
+
+            context.Scanner.Cursor.ResetPosition(start);
 
             return false;
         }
@@ -96,6 +100,8 @@ namespace Parlot.Fluent
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3>>();
 
+            var start = context.Scanner.Cursor.Position;
+
             if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T4>();
@@ -109,12 +115,12 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
-
-                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
+
+            context.Scanner.Cursor.ResetPosition(start);
 
             return false;
         }
@@ -137,6 +143,8 @@ namespace Parlot.Fluent
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4>>();
 
+            var start = context.Scanner.Cursor.Position;
+
             if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T5>();
@@ -151,12 +159,12 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
-
-                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
+
+            context.Scanner.Cursor.ResetPosition(start);
 
             return false;
         }
@@ -179,6 +187,8 @@ namespace Parlot.Fluent
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5>>();
 
+            var start = context.Scanner.Cursor.Position;
+
             if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T6>();
@@ -194,12 +204,13 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
 
-                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
+
+            context.Scanner.Cursor.ResetPosition(start);
 
             return false;
         }
@@ -223,6 +234,8 @@ namespace Parlot.Fluent
 
             var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>>();
 
+            var start = context.Scanner.Cursor.Position;
+
             if (_parser.Parse(context, ref tupleResult))
             {
                 var lastResult = new ParseResult<T7>();
@@ -239,12 +252,13 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
 
-                context.Scanner.Cursor.ResetPosition(tupleResult.Start);
             }
+
+            context.Scanner.Cursor.ResetPosition(start);
 
             return false;
         }
@@ -290,7 +304,7 @@ namespace Parlot.Fluent
 
             if (success)
             {
-                result.Set(results[0].Buffer, results[0].Start, results[^1].End, Name, results);
+                result.Set(results[0].Start, results[^1].End, results);
                 return true;
             }
             else

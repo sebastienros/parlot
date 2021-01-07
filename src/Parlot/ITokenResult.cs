@@ -12,12 +12,12 @@ namespace Parlot
         /// <summary>
         /// The start of the token.
         /// </summary>
-        TextPosition Start { get; }
+        int Start { get; }
 
         /// <summary>
         /// The end of the token.
         /// </summary>
-        TextPosition End { get; }
+        int End { get; }
 
         /// <summary>
         /// The length of the token.
@@ -38,7 +38,7 @@ namespace Parlot
         /// <summary>
         /// Sets the result.
         /// </summary>
-        ITokenResult Succeed(string buffer, in TextPosition start, in TextPosition end);
+        ITokenResult Succeed(string buffer, int start, int end);
 
         /// <summary>
         /// Initializes the token result.

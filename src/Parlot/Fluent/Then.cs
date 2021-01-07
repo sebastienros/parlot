@@ -36,12 +36,12 @@ namespace Parlot.Fluent
             {
                 if (_action1 != null)
                 {
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, _parser.Name, _action1.Invoke(parsed.Value));
+                    result.Set(parsed.Start, parsed.End, _action1.Invoke(parsed.Value));
                 }
 
                 if (_action2 != null)
                 {
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, _parser.Name, _action2.Invoke(context, parsed.Value));
+                    result.Set(parsed.Start, parsed.End, _action2.Invoke(context, parsed.Value));
                 }
 
                 return true;

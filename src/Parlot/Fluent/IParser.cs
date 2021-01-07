@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent
 {
     public interface IParser
     {
-        string Name { get; set; }
         bool Parse(ParseContext context, ref ParseResult<object> result);
         public IParser Switch(Func<ParseContext, object, IParser> action) => new SwitchAnonymousToAnonymous(this, action);
         public IParser<T> Switch<T>(Func<ParseContext, object, IParser<T>> action) => new SwitchAnonymousToTyped<T>(this, action);
@@ -21,14 +19,12 @@ namespace Parlot.Fluent
         public IParser<T> Error(string message) => new Error<T>(this, message);
         public IParser<U> Error<U>(string message) => new Error<T, U>(this, message);
         public IParser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
-        public IParser<T> Named(string name) { Name = name; return this; }
         public IParser<U> Switch<U>(Func<ParseContext, T, IParser<U>> action) => new SwitchTypedToTyped<T, U>(this, action);
         public IParser Switch(Func<ParseContext, T, IParser> action) => new SwitchTypedToAnonymous<T>(this, action);
     }
 
     public abstract class Parser<T> : IParser<T>
     {
-        public string Name { get; set; }
         public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
 
         bool IParser.Parse(ParseContext context, ref ParseResult<object> result)
@@ -38,7 +34,7 @@ namespace Parlot.Fluent
 
             if (Parse(context, ref localResult))
             {
-                result = new ParseResult<object>(localResult.Buffer, localResult.Start, localResult.End, localResult.ParserName, localResult.Value);
+                result = new ParseResult<object>(localResult.Start, localResult.End, localResult.Value);
                 return true;
             }
             else

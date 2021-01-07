@@ -31,13 +31,13 @@ namespace Parlot.Fluent
                 if (_action1 != null)
                 {
                     var value = _action1.Invoke(parsed.Value);
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, _parser.Name, value);
+                    result.Set(parsed.Start, parsed.End, value);
                 }
 
                 if (_action2 != null)
                 {
                     var value = _action2.Invoke(context, parsed.Value);
-                    result.Set(parsed.Buffer, parsed.Start, parsed.End, _parser.Name, value);
+                    result.Set(parsed.Start, parsed.End, value);
                 }
 
                 return true;

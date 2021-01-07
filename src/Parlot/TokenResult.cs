@@ -8,18 +8,18 @@ namespace Parlot
 
         public bool Success { get; private set; }
 
-        public TextPosition Start { get; private set; }
+        public int Start { get; private set; }
 
-        public TextPosition End { get; private set; }
+        public int End { get; private set; }
 
         public int Length { get; private set; }
         public string Buffer { get; private set; }
 
-        public string Text => _text ??= Buffer?.Substring(Start.Offset, Length);
+        public string Text => _text ??= Buffer?.Substring(Start, Length);
 
-        public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
+        public ReadOnlySpan<char> Span => Buffer.AsSpan(Start, Length);
 
-        public ITokenResult Succeed(string buffer, in TextPosition start, in TextPosition end)
+        public ITokenResult Succeed(string buffer, int start, int end)
         {
             Success = true;
             Buffer = buffer;
@@ -36,8 +36,8 @@ namespace Parlot
             Success = false;
             Buffer = null;
             _text = null;
-            Start = TextPosition.Start;
-            End = TextPosition.Start;
+            Start = 0;
+            End = 0;
             Length = 0;
 
             return this;

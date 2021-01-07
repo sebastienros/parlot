@@ -31,7 +31,7 @@ namespace Parlot.Fluent
                 return false;
             }
 
-            var start = context.Scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Offset;
 
             // At this point we have an identifier, read while it's an identifier part.
 
@@ -42,9 +42,9 @@ namespace Parlot.Fluent
                 context.Scanner.Cursor.Advance();
             }
 
-            var end = context.Scanner.Cursor.Position;
+            var end = context.Scanner.Cursor.Offset;
 
-            result.Set(context.Scanner.Buffer, start, end, Name, new TextSpan(context.Scanner.Buffer, start.Offset, end - start));
+            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
             return true;
         }
     }
