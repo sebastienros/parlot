@@ -2,14 +2,14 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class SkipAnd<T> : Parser<T>
+    public sealed class SkipAnd<A, T> : Parser<T>
     {
-        internal readonly IParser _parser1;
+        internal readonly IParser<A> _parser1;
         internal readonly IParser<T> _parser2;
 
-        static ParseResult<object> _parseResult1 = new ParseResult<object>();
+        static ParseResult<A> _parseResult1 = new ParseResult<A>();
 
-        public SkipAnd(IParser parser1, IParser<T> parser2)
+        public SkipAnd(IParser<A> parser1, IParser<T> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));

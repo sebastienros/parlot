@@ -18,7 +18,7 @@ namespace Parlot.Fluent
         /// </summary>
         public static TermBuilder Terms => new();
 
-        public static IParser<List<T>> Separated<T>(IParser separator, IParser<T> parser) => new Separated<T>(separator, parser);
+        public static IParser<List<T>> Separated<U, T>(IParser<U> separator, IParser<T> parser) => new Separated<U, T>(separator, parser);
 
         // TODO: Decide between Bang and ZeroOrOne
         public static IParser<T> Bang<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
@@ -27,7 +27,6 @@ namespace Parlot.Fluent
         // TODO: Decide between Star and ZeroOrMany
         public static IParser<List<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
         public static IParser<List<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
-        public static IParser<List<ParseResult<object>>> ZeroOrMany(IParser parser) => new ZeroOrMany(parser);
 
         // TODO: Decide between Plus and OneOrMany
         public static IParser<List<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
@@ -36,11 +35,10 @@ namespace Parlot.Fluent
         public static IParser<T> Not<T>(IParser<T> parser) => new Not<T>(parser);
         public static IDeferredParser<T> Deferred<T>() => new Deferred<T>();
         public static IDeferredParser<T> Recursive<T>(Func<Deferred<T>, IParser<T>> parser) => new Deferred<T>(parser);
-        public static IParser<T> Between<T>(IParser before, IParser<T> parser, IParser after) => new Between<T>(before, parser, after);
+        public static IParser<T> Between<A, T, B>(IParser<A> before, IParser<T> parser, IParser<B> after) => new Between<A, T, B>(before, parser, after);
         public static IParser<TextSpan> AnyCharBefore<T>(IParser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
-        public static IParser<TextSpan> AnyCharBefore(IParser parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore(parser, canBeEmpty, failOnEof, consumeDelimiter);
-        public static IParser<U> SkipAnd<U>(this IParser parser, IParser<U> and) => new SkipAnd<U>(parser, and);
-        public static IParser<U> AndSkip<U>(this IParser<U> parser, IParser and) => new AndSkip<U>(parser, and);
+        public static IParser<U> SkipAnd<T, U>(this IParser<T> parser, IParser<U> and) => new SkipAnd<T, U>(parser, and);
+        public static IParser<T> AndSkip<T, U>(this IParser<T> parser, IParser<U> and) => new AndSkip<T, U>(parser, and);
 
     }
 

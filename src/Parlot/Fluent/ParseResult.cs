@@ -1,8 +1,10 @@
-﻿using System;
-
-namespace Parlot
+﻿namespace Parlot
 {
-    public struct ParseResult<T>
+    public interface IParseResult
+    {
+    }
+
+    public struct ParseResult<T> : IParseResult
     {
         public ParseResult(string buffer, int start, int end, string parserName, T value)
         {
