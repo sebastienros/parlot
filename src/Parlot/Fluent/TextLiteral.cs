@@ -25,11 +25,11 @@ namespace Parlot.Fluent
                 context.SkipWhiteSpace();
             }
 
-            var start = context.Scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Offset;
 
             if (context.Scanner.ReadText(Text, _comparer))
             {
-                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Position, Name, Text);
+                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset, Name, Text);
                 return true;
             }
             else

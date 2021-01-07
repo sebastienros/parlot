@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Text;
 
 namespace Parlot.Fluent
 {
@@ -22,7 +23,7 @@ namespace Parlot.Fluent
                 context.SkipWhiteSpace();
             }
 
-            var start = context.Scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Offset;
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
@@ -35,9 +36,9 @@ namespace Parlot.Fluent
 
             if (context.Scanner.ReadInteger())
             {
-                var end = context.Scanner.Cursor.Position;
+                var end = context.Scanner.Cursor.Offset;
 
-                if (long.TryParse(context.Scanner.Buffer.AsSpan(start.Offset, end - start), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+                if (long.TryParse(context.Scanner.Buffer.AsSpan(start, end - start), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
                 {
                     result.Set(context.Scanner.Buffer, start, end, Name, value);
                     return true;

@@ -29,7 +29,7 @@ namespace Parlot.Fluent
                 context.SkipWhiteSpace();
             }
 
-            var start = context.Scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Offset;
 
             var success = _quotes switch
             {
@@ -39,18 +39,18 @@ namespace Parlot.Fluent
                 _ => false
             };
 
-            var end = context.Scanner.Cursor.Position;
+            var end = context.Scanner.Cursor.Offset;
 
             if (success)
             {
                 // Remove quotes
-                var encoded = context.Scanner.Buffer.AsSpan(start.Offset + 1, end - start - 2);
+                var encoded = context.Scanner.Buffer.AsSpan(start + 1, end - start - 2);
                 var decoded = Character.DecodeString(encoded);
 
                 // Don't create a new string if the decoded string is the same, meaning is 
                 // has no escape sequences.
                 var span = decoded == encoded || decoded.SequenceEqual(encoded)
-                    ? new TextSpan(context.Scanner.Buffer, start.Offset + 1, encoded.Length)
+                    ? new TextSpan(context.Scanner.Buffer, start + 1, encoded.Length)
                     : new TextSpan(decoded.ToString());
 
                 result.Set(context.Scanner.Buffer, start, end, Name, span);

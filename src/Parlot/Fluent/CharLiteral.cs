@@ -21,11 +21,11 @@
                 context.SkipWhiteSpace();
             }
 
-            var start = context.Scanner.Cursor.Position;
+            var start = context.Scanner.Cursor.Offset;
 
             if (context.Scanner.ReadChar(Char))
             {
-                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Position, Name, Char);
+                result.Set(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset, Name, Char);
                 return true;
             }
 

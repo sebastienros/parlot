@@ -82,7 +82,7 @@ namespace Parlot
                 return false;
             }
 
-            var start = Cursor.Position;
+            var start = Cursor.Offset;
 
             // At this point we have an identifier, read while it's an identifier part.
 
@@ -90,7 +90,7 @@ namespace Parlot
 
             ReadWhile(other, null);
 
-            result?.Succeed(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Offset);
 
             return true;
         }
@@ -138,7 +138,7 @@ namespace Parlot
                 } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
             }
 
-            result?.Succeed(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start.Offset, Cursor.Offset);
             return true;
         }
 
@@ -152,7 +152,7 @@ namespace Parlot
                 return false;
             }
 
-            var start = Cursor.Position;
+            var start = Cursor.Offset;
 
             do
             {
@@ -160,7 +160,7 @@ namespace Parlot
 
             } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 
-            result?.Succeed(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Offset);
             return true;
         }
 
@@ -175,7 +175,7 @@ namespace Parlot
                 return false;
             }
 
-            var start = Cursor.Position;
+            var start = Cursor.Offset;
 
             Cursor.Advance();
 
@@ -184,7 +184,7 @@ namespace Parlot
                 Cursor.Advance();
             }
 
-            result?.Succeed(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Offset);
 
             return true;
         }
@@ -207,11 +207,11 @@ namespace Parlot
 
             if (result != null)
             {
-                var start = Cursor.Position;
+                var start = Cursor.Offset;
 
                 Cursor.Advance();
 
-                result?.Succeed(Buffer, start, Cursor.Position);
+                result?.Succeed(Buffer, start, Cursor.Offset);
             }
             else
             {
@@ -245,17 +245,17 @@ namespace Parlot
                 }
             }
 
-            var start = TextPosition.Start;
+            var start = 0;
 
             // perf: don't allocate a new TextPosition if we don't need to return it
             if (result != null)
             {
-                start = Cursor.Position;
+                start = Cursor.Offset;
             }
 
             Cursor.Advance(text.Length);
 
-            result?.Succeed(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start, Cursor.Offset);
             
             return true;
         }
@@ -323,7 +323,7 @@ namespace Parlot
             {
                 Cursor.Advance(nextQuote + 1 - startOffset);
 
-                result?.Succeed(Buffer, start, Cursor.Position);
+                result?.Succeed(Buffer, start.Offset, Cursor.Offset);
                 return true;
             }
 
@@ -417,7 +417,7 @@ namespace Parlot
 
             Cursor.Advance();
 
-            result?.Succeed(Buffer, start, Cursor.Position);
+            result?.Succeed(Buffer, start.Offset, Cursor.Offset);
 
             return true;
         }

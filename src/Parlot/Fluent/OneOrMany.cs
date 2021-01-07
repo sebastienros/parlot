@@ -26,7 +26,7 @@ namespace Parlot.Fluent
             var start = parsed.Start;
             var results = new List<T>();
 
-            TextPosition end;
+            int end = 0;
 
             do
             {
