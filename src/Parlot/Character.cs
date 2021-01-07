@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 
 namespace Parlot
 {
@@ -53,96 +54,109 @@ namespace Parlot
             return (ch == '\n') || (ch == '\r') || IsWhiteSpace(ch);
         }
 
-        public static char ScanHexEscape(ReadOnlySpan<char> text, int index)
+        public static char ScanHexEscape(ReadOnlySpan<char> text, int index, out int length)
         {
             var prefix = text[index];
             var len = (prefix == 'u') ? 4 : 2;
+            var lastIndex = Math.Min(len + index, text.Length - index);
             var code = 0;
 
-            for (var i = index + 1; i < len + index + 1; ++i)
+            length = 0;
+
+            for (var i = index + 1; i < lastIndex + 1; i++)
             {
                 var d = text[i];
+
+                if (!IsHexDigit(d))
+                {
+                    break;
+                }
+
+                length++;
                 code = code * 16 + HexValue(d);
             }
 
             return (char)code;
         }
 
-        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> buffer)
+        public static string DecodeString(ReadOnlySpan<char> buffer)
         {
             // Nothing to do if the string doesn't have any escape char
             if (buffer.IndexOf('\\') == -1)
             {
-                return buffer;
+                return buffer.ToString();
             }
 
             // The asumption is that the new string will be shorter since escapes results are smaller than their source
-            var data = new char[buffer.Length];
+            var data = ArrayPool<char>.Shared.Rent(buffer.Length);
 
-            var dataIndex = 0;
-
-            for (var i = 0; i < buffer.Length; i++)
+            try
             {
-                var c = buffer[i];
+                var dataIndex = 0;
 
-                if (c == '\\')
+                for (var i = 0; i < buffer.Length; i++)
                 {
-                    i++;
-                    c = buffer[i];
+                    var c = buffer[i];
 
-                    switch (c)
+                    if (c == '\\')
                     {
-                        case '0' : data[dataIndex++] = '\0'; break;
-                        case '\'': data[dataIndex++] = '\''; break;
-                        case '"' : data[dataIndex++] = '\"'; break;
-                        case '\\': data[dataIndex++] = '\\'; break;
-                        case 'b' : data[dataIndex++] = '\b'; break;
-                        case 'f' : data[dataIndex++] = '\f'; break;
-                        case 'n' : data[dataIndex++] = '\n'; break;
-                        case 'r' : data[dataIndex++] = '\r'; break;
-                        case 't' : data[dataIndex++] = '\t'; break;
-                        case 'v' : data[dataIndex++] = '\v'; break;
-                        case 'u':
-                            data[dataIndex++] = Character.ScanHexEscape(buffer, i);
-                            i += 4;
-                            break;
-                        case 'x':
-                            data[dataIndex++] = Character.ScanHexEscape(buffer, i);
-                            i += 2;
-                            break;
+                        i++;
+                        c = buffer[i];
+
+                        switch (c)
+                        {
+                            case '0': data[dataIndex++] = '\0'; break;
+                            case '\'': data[dataIndex++] = '\''; break;
+                            case '"': data[dataIndex++] = '\"'; break;
+                            case '\\': data[dataIndex++] = '\\'; break;
+                            case 'b': data[dataIndex++] = '\b'; break;
+                            case 'f': data[dataIndex++] = '\f'; break;
+                            case 'n': data[dataIndex++] = '\n'; break;
+                            case 'r': data[dataIndex++] = '\r'; break;
+                            case 't': data[dataIndex++] = '\t'; break;
+                            case 'v': data[dataIndex++] = '\v'; break;
+                            case 'u':
+                                data[dataIndex++] = Character.ScanHexEscape(buffer, i, out var length);
+                                i += length;
+                                break;
+                            case 'x':
+                                data[dataIndex++] = Character.ScanHexEscape(buffer, i, out length);
+                                i += length;
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        data[dataIndex++] = c;
                     }
                 }
-                else
-                {
-                    data[dataIndex++] = c;
-                }
-            }
 
-            return new ReadOnlySpan<char>(data, 0, dataIndex).ToString();
+                return String.Create(dataIndex, (data, dataIndex), (chars, source) => source.data.AsSpan(0, source.dataIndex).CopyTo(chars));
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(data);
+            }
         }
 
         private static int HexValue(char ch)
         {
-            if (ch >= 'A')
+            if (ch >= '0' && ch <= '9')
             {
-                if (ch >= 'a')
-                {
-                    if (ch <= 'h')
-                    {
-                        return ch - 'a' + 10;
-                    }
-                }
-                else if (ch <= 'H')
-                {
-                    return ch - 'A' + 10;
-                }
+                return ch - 48;
             }
-            else if (ch <= '9')
+            else if (ch >= 'a' && ch <= 'f')
             {
-                return ch - '0';
+                return ch - 'a' + 10;
             }
-
-            return 0;
+            else if (ch >= 'A' && ch <= 'F')
+            {
+                return ch - 'A' + 10;
+            }
+            else
+            {
+                return 0;
+            }
         }
     }
 }

@@ -1,5 +1,4 @@
-using System;
-using Xunit;
+﻿using Xunit;
 
 namespace Parlot.Tests
 {
@@ -7,9 +6,12 @@ namespace Parlot.Tests
     {
         [Theory]
         [InlineData("a\\bc", "a\bc")]
+        [InlineData("\\xa0", "\xa0")]
+        [InlineData("\\xfh", "\xfh")]
+        [InlineData("\\u1234", "\u1234")]
         public void ShouldDescodeString(string text, string expected)
         {
-            Assert.Equal(expected, Character.DecodeString(text.AsSpan()).ToString());
+            Assert.Equal(expected, Character.DecodeString(text));
         }
     }
 }
