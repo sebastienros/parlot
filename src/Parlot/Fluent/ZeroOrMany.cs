@@ -34,7 +34,7 @@ namespace Parlot.Fluent
                 results.Add(parsed);
             }
 
-            result = new ParseResult<List<ParseResult<object>>>(context.Scanner.Buffer, start, end, _parser.Name, results);
+            result = new ParseResult<List<ParseResult<object>>>(start, end, results);
             return true;
         }
     }
@@ -71,7 +71,7 @@ namespace Parlot.Fluent
                 results.Add(parsed.Value);
             }
 
-            result = new ParseResult<List<T>>(context.Scanner.Buffer, start, end, _parser.Name, results);
+            result = new ParseResult<List<T>>(start, end, results);
             return true;
         }
     }

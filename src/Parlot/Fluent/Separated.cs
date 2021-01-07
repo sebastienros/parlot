@@ -80,7 +80,7 @@ namespace Parlot.Fluent
                 }
             }
 
-            result = new ParseResult<List<T>>(context.Scanner.Buffer, start, end, Name, results);
+            result = new ParseResult<List<T>>(start, end, results);
             return true;
         }
     }

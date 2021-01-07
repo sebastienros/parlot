@@ -27,7 +27,7 @@ namespace Parlot.Fluent
 
                 if (_parser2.Parse(context, ref parseResult2))
                 {
-                    result.Set(parseResult1.Buffer, parseResult1.Start, parseResult2.End, _parser2.Name, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
+                    result.Set(parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
                     return true;
                 }
 
@@ -72,7 +72,7 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
                         
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
             }
@@ -115,7 +115,7 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
             }
@@ -159,7 +159,7 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
             }
@@ -204,7 +204,7 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
 
@@ -252,7 +252,7 @@ namespace Parlot.Fluent
                         lastResult.Value
                         );
 
-                    result.Set(tupleResult.Buffer, tupleResult.Start, lastResult.End, _lastParser.Name, tuple);
+                    result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
 
@@ -304,7 +304,7 @@ namespace Parlot.Fluent
 
             if (success)
             {
-                result.Set(results[0].Buffer, results[0].Start, results[^1].End, Name, results);
+                result.Set(results[0].Start, results[^1].End, results);
                 return true;
             }
             else

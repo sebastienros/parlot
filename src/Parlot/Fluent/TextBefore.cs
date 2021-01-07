@@ -61,7 +61,7 @@
                         context.Scanner.Cursor.ResetPosition(end);
                     }
 
-                    result.Set(context.Scanner.Buffer, start.Offset, end.Offset, Name, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, end.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
                     return true;
                 }
 
@@ -140,7 +140,7 @@
                         context.Scanner.Cursor.ResetPosition(end);
                     }
 
-                    result.Set(context.Scanner.Buffer, start.Offset, end.Offset, Name, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, end.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
                     return true;
                 }
 
