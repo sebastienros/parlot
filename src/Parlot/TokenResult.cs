@@ -19,7 +19,7 @@ namespace Parlot
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start.Offset, Length);
 
-        public ITokenResult Succeed(string buffer, TextPosition start, TextPosition end)
+        public ITokenResult Succeed(string buffer, in TextPosition start, in TextPosition end)
         {
             Success = true;
             Buffer = buffer;
