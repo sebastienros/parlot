@@ -79,19 +79,21 @@ namespace Parlot
             return (char)code;
         }
 
-        public static string DecodeString(ReadOnlySpan<char> buffer)
+        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> buffer)
         {
             // Nothing to do if the string doesn't have any escape char
             if (buffer.IndexOf('\\') == -1)
             {
-                return buffer.ToString();
+                return buffer;
             }
 
-            // The asumption is that the new string will be shorter since escapes results are smaller than their source
             var data = ArrayPool<char>.Shared.Rent(buffer.Length);
 
             try
             {
+                // The asumption is that the new string will be shorter since escapes results are smaller than their source
+                //var data = new char[buffer.Length];
+
                 var dataIndex = 0;
 
                 for (var i = 0; i < buffer.Length; i++)
@@ -131,7 +133,10 @@ namespace Parlot
                     }
                 }
 
-                return String.Create(dataIndex, (data, dataIndex), (chars, source) => source.data.AsSpan(0, source.dataIndex).CopyTo(chars));
+                return String.Create(dataIndex, data, (chars, source) =>
+                {
+                    source.AsSpan(0, chars.Length).CopyTo(chars);
+                }).AsSpan();
             }
             finally
             {

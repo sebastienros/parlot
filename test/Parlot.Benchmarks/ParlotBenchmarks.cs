@@ -1,6 +1,5 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using Parlot.Tests.Calc;
 using System;
 
 namespace Parlot.Benchmarks
@@ -12,15 +11,27 @@ namespace Parlot.Benchmarks
         private const string StringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
 
         [Benchmark]
-        public string DecodeStringWithEscapes()
+        public ReadOnlySpan<char> DecodeStringWithEscapes()
         {
             return Character.DecodeString(StringWithEscapes.AsSpan());
         }
 
         [Benchmark]
-        public string DecodeStringWithoutEscapes()
+        public ReadOnlySpan<char> DecodeStringWithoutEscapes()
         {
             return Character.DecodeString(StringWithoutEscapes.AsSpan());
+        }
+
+        [Benchmark]
+        public string DecodeStringWithEscapesToString()
+        {
+            return Character.DecodeString(StringWithEscapes.AsSpan()).ToString();
+        }
+
+        [Benchmark]
+        public string DecodeStringWithoutEscapesToString()
+        {
+            return Character.DecodeString(StringWithoutEscapes.AsSpan()).ToString();
         }
     }
 }

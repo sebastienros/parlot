@@ -11,7 +11,7 @@ namespace Parlot.Tests
         [InlineData("\\u1234", "\u1234")]
         public void ShouldDescodeString(string text, string expected)
         {
-            Assert.Equal(expected, Character.DecodeString(text));
+            Assert.Equal(expected, Character.DecodeString(text).ToString());
         }
     }
 }

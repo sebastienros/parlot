@@ -47,7 +47,7 @@ namespace Parlot.Fluent
                 var encoded = context.Scanner.Buffer.AsSpan(start + 1, end - start - 2);
                 var decoded = Character.DecodeString(encoded);
 
-                result.Set(start, end, new TextSpan(decoded));
+                result.Set(start, end, new TextSpan(decoded.ToString()));
                 return true;
             }
             else
