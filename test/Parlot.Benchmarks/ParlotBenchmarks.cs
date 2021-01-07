@@ -1,27 +1,26 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Tests.Calc;
+using System;
 
 namespace Parlot.Benchmarks
 {
     [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
     public class ParlotBenchmarks
     {
-        private readonly Parser _parser = new();
-
-        private const string StringWithEscapes = "This is a new line \\n \\t and a tab and some \\xD83D";
-        private const string StringWithoutEscapes = "This is a new line \n \t and a tab and some \xD83D";
+        private const string StringWithEscapes = "This is a new line \\n \\t and a tab and some \\xa0";
+        private const string StringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
 
         [Benchmark]
-        public Expression DecodeStringWithEscapes()
+        public string DecodeStringWithEscapes()
         {
-            return _parser.Parse(StringWithEscapes);
+            return Character.DecodeString(StringWithEscapes.AsSpan());
         }
 
         [Benchmark]
-        public Expression DecodeStringWithoutEscapes()
+        public string DecodeStringWithoutEscapes()
         {
-            return _parser.Parse(StringWithoutEscapes);
+            return Character.DecodeString(StringWithoutEscapes.AsSpan());
         }
     }
 }
