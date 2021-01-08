@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 
 namespace Parlot
 {
@@ -79,21 +78,25 @@ namespace Parlot
             return (char)code;
         }
 
-        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> buffer)
+        public static TextSpan DecodeString(string s)
+        {
+            return DecodeString(new TextSpan(s));
+        }
+
+        public static TextSpan DecodeString(TextSpan span)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (buffer.IndexOf('\\') == -1)
+            if (span.Buffer.IndexOf('\\', span.Offset, span.Length) == -1)
             {
-                return buffer;
+                return span;
             }
 
-            var data = ArrayPool<char>.Shared.Rent(buffer.Length);
-
-            try
+            var result = String.Create(span.Length, span, static (chars, source) =>
             {
                 // The asumption is that the new string will be shorter since escapes results are smaller than their source
 
                 var dataIndex = 0;
+                var buffer = source.Buffer;
                 var bufferLength = buffer.Length;
 
                 for (var i = 0; i < bufferLength; i++)
@@ -107,7 +110,6 @@ namespace Parlot
 
                         switch (c)
                         {
-                            case '0': c = '\0'; break;
                             case '\'': c = '\''; break;
                             case '"': c = '\"'; break;
                             case '\\': c = '\\'; break;
@@ -127,19 +129,22 @@ namespace Parlot
                                 break;
                         }
                     }
-                 
-                    data[dataIndex++] = c;
+
+                    chars[dataIndex++] = c;
                 }
 
-                return String.Create(dataIndex, data, (chars, source) =>
-                {
-                    source.AsSpan(0, chars.Length).CopyTo(chars);
-                }).AsSpan();
-            }
-            finally
+                chars[dataIndex++] = '\0';
+            });
+
+            for (var i = result.Length - 1; i >= 0; i--)
             {
-                ArrayPool<char>.Shared.Return(data);
+                if (result[i] != '\0')
+                {
+                    return new TextSpan(result, 0, i + 1);
+                }
             }
+
+            return new TextSpan(result);
         }
 
         private static int HexValue(char ch)
