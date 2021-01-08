@@ -92,11 +92,11 @@ namespace Parlot
             try
             {
                 // The asumption is that the new string will be shorter since escapes results are smaller than their source
-                //var data = new char[buffer.Length];
 
                 var dataIndex = 0;
+                var bufferLength = buffer.Length;
 
-                for (var i = 0; i < buffer.Length; i++)
+                for (var i = 0; i < bufferLength; i++)
                 {
                     var c = buffer[i];
 
@@ -107,30 +107,28 @@ namespace Parlot
 
                         switch (c)
                         {
-                            case '0': data[dataIndex++] = '\0'; break;
-                            case '\'': data[dataIndex++] = '\''; break;
-                            case '"': data[dataIndex++] = '\"'; break;
-                            case '\\': data[dataIndex++] = '\\'; break;
-                            case 'b': data[dataIndex++] = '\b'; break;
-                            case 'f': data[dataIndex++] = '\f'; break;
-                            case 'n': data[dataIndex++] = '\n'; break;
-                            case 'r': data[dataIndex++] = '\r'; break;
-                            case 't': data[dataIndex++] = '\t'; break;
-                            case 'v': data[dataIndex++] = '\v'; break;
+                            case '0': c = '\0'; break;
+                            case '\'': c = '\''; break;
+                            case '"': c = '\"'; break;
+                            case '\\': c = '\\'; break;
+                            case 'b': c = '\b'; break;
+                            case 'f': c = '\f'; break;
+                            case 'n': c = '\n'; break;
+                            case 'r': c = '\r'; break;
+                            case 't': c = '\t'; break;
+                            case 'v': c = '\v'; break;
                             case 'u':
-                                data[dataIndex++] = Character.ScanHexEscape(buffer, i, out var length);
+                                c = Character.ScanHexEscape(buffer, i, out var length);
                                 i += length;
                                 break;
                             case 'x':
-                                data[dataIndex++] = Character.ScanHexEscape(buffer, i, out length);
+                                c = Character.ScanHexEscape(buffer, i, out length);
                                 i += length;
                                 break;
                         }
                     }
-                    else
-                    {
-                        data[dataIndex++] = c;
-                    }
+                 
+                    data[dataIndex++] = c;
                 }
 
                 return String.Create(dataIndex, data, (chars, source) =>
