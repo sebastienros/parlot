@@ -97,9 +97,10 @@ namespace Parlot
 
                 var dataIndex = 0;
                 var buffer = source.Buffer;
-                var bufferLength = buffer.Length;
+                var start = source.Offset;
+                var end = source.Offset + source.Length;
 
-                for (var i = 0; i < bufferLength; i++)
+                for (var i = start; i < end; i++)
                 {
                     var c = buffer[i];
 
