@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
@@ -10,20 +9,20 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf<T> : Parser<T>
     {
-        private readonly IReadOnlyList<Parser<T>> _parsers;
+        private readonly Parser<T>[] _parsers;
 
         public OneOf(Parser<T>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         }
 
-        public IReadOnlyList<Parser<T>> Parsers => _parsers;
+        public Parser<T>[] Parsers => _parsers;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
-            if (Parsers.Count == 0)
+            if (Parsers.Length == 0)
             {
                 return false;
             }
