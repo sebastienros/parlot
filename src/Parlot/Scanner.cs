@@ -358,16 +358,19 @@ namespace Parlot
 
                             Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                            if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
                             {
                                 Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
                                 {
                                     Cursor.Advance();
-                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                    if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
                                     {
                                         Cursor.Advance();
-                                        isValidUnicode = true;
+                                        if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                        {
+                                            isValidUnicode = true;
+                                        }
                                     }
                                 }
                             }
@@ -388,10 +391,12 @@ namespace Parlot
 
                             if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
+                                isValidHex = true;
                                 Cursor.Advance();
+
                                 if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                 {
-                                    isValidHex = true;
+                                    Cursor.Advance();
                                 }
                             }
 

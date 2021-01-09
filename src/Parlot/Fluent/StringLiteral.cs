@@ -44,16 +44,9 @@ namespace Parlot.Fluent
             if (success)
             {
                 // Remove quotes
-                var encoded = context.Scanner.Buffer.AsSpan(start + 1, end - start - 2);
-                var decoded = Character.DecodeString(encoded);
+                var decoded = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
 
-                // Don't create a new string if the decoded string is the same, meaning is 
-                // has no escape sequences.
-                var span = decoded == encoded || decoded.SequenceEqual(encoded)
-                    ? new TextSpan(context.Scanner.Buffer, start + 1, encoded.Length)
-                    : new TextSpan(decoded.ToString());
-
-                result.Set(start, end,  span);
+                result.Set(start, end, decoded);
                 return true;
             }
             else

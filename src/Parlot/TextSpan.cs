@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Parlot.Fluent
+namespace Parlot
 {
     public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
     {
