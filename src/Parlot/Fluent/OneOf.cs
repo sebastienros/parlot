@@ -1,23 +1,29 @@
-﻿namespace Parlot.Fluent
+﻿using System;
+using System.Collections.Generic;
+
+namespace Parlot.Fluent
 {
     /// <summary>
-    /// OneOf the inner choices when not all parsers return the same type.
-    /// We then return the <see cref="ParseResult{T}"/> of each parser.
+    /// OneOf the inner choices when all parsers return the same type.
+    /// We then return the actual result of each parser.
     /// </summary>
-    public sealed class OneOf : Parser<object>
+    /// <typeparam name="T"></typeparam>
+    public sealed class OneOf<T> : Parser<T>
     {
-        private readonly IParser[] _parsers;
+        private readonly IReadOnlyList<Parser<T>> _parsers;
 
-        public OneOf(IParser[] parsers)
+        public OneOf(Parser<T>[] parsers)
         {
-            _parsers = parsers;
+            _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         }
 
-        public IParser[] Parsers => _parsers;
+        public IReadOnlyList<Parser<T>> Parsers => _parsers;
 
-        public override bool Parse(ParseContext context, ref ParseResult<object> result)
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
-            if (_parsers.Length == 0)
+            context.EnterParser(this);
+
+            if (Parsers.Count == 0)
             {
                 return false;
             }
@@ -39,43 +45,49 @@
         }
     }
 
-    /// <summary>
-    /// OneOf the inner choices when all parsers return the same type.
-    /// We then return the actual result of each parser.
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    public sealed class OneOf<T> : Parser<T>
+    public sealed class OneOf<A, B, T> : Parser<T>
+        where A: T
+        where B: T
     {
-        private readonly IParser<T>[] _parsers;
+        private readonly Parser<A> _parserA;
+        private readonly Parser<B> _parserB;
 
-        public OneOf(IParser<T>[] parsers)
+        public OneOf(Parser<A> parserA, Parser<B> parserB)
         {
-            _parsers = parsers;
+            _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
+            _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
         }
-
-        public IParser<T>[] Parsers => _parsers;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
-            if (Parsers.Length == 0)
-            {
-                return false;
-            }
+
+            var resultA = new ParseResult<A>();
 
             var start = context.Scanner.Cursor.Position;
 
-            foreach (var parser in _parsers)
+            if (_parserA.Parse(context, ref resultA))
             {
-                if (parser.Parse(context, ref result))
-                {
-                    return true;
-                }
+                result.Set(resultA.Start, resultA.End, resultA.Value);
 
-                // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
-                context.Scanner.Cursor.ResetPosition(start);
+                return true;
             }
+
+            // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
+            context.Scanner.Cursor.ResetPosition(start);
+
+            var resultB = new ParseResult<B>();
+
+            if (_parserB.Parse(context, ref resultB))
+            {
+                result.Set(resultA.Start, resultA.End, resultA.Value);
+
+                return true;
+            }
+
+            // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
+            context.Scanner.Cursor.ResetPosition(start);
 
             return false;
         }

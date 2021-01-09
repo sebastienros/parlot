@@ -13,11 +13,11 @@ namespace Parlot.Tests.Calc
     /// <summary>
     /// This version of the Parser creates and intermediate AST.
     /// </summary>
-    public class Parser : Parser<Expression>
+    public class Parser
     {
         private Scanner _scanner;
 
-        public override Expression Parse(string text)
+        public Expression Parse(string text)
         {
             _scanner = new Scanner(text);
 

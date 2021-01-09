@@ -4,9 +4,9 @@ namespace Parlot.Fluent
 {
     public sealed class Between<A, T, B> : Parser<T>
     {
-        private readonly IParser<T> _parser;
-        private readonly IParser<A> _before;
-        private readonly IParser<B> _after;
+        private readonly Parser<T> _parser;
+        private readonly Parser<A> _before;
+        private readonly Parser<B> _after;
 
         private readonly bool _beforeIsChar;
         private readonly char _beforeChar;
@@ -16,7 +16,7 @@ namespace Parlot.Fluent
         private readonly char _afterChar;
         private readonly bool _afterSkipWhiteSpace;
 
-        public Between(IParser<A> before, IParser<T> parser, IParser<B> after)
+        public Between(Parser<A> before, Parser<T> parser, Parser<B> after)
         {
             _before = before ?? throw new ArgumentNullException(nameof(before));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));

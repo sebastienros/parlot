@@ -18,48 +18,48 @@ namespace Parlot.Fluent
         /// </summary>
         public static TermBuilder Terms => new();
 
-        public static IParser<List<T>> Separated<U, T>(IParser<U> separator, IParser<T> parser) => new Separated<U, T>(separator, parser);
+        public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
 
         // TODO: Decide between Bang and ZeroOrOne
-        public static IParser<T> Bang<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
-        public static IParser<T> ZeroOrOne<T>(IParser<T> parser) => new ZeroOrOne<T>(parser);
+        public static Parser<T> Bang<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
+        public static Parser<T> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
 
         // TODO: Decide between Star and ZeroOrMany
-        public static IParser<List<T>> Star<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
-        public static IParser<List<T>> ZeroOrMany<T>(IParser<T> parser) => new ZeroOrMany<T>(parser);
+        public static Parser<List<T>> Star<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
+        public static Parser<List<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
 
         // TODO: Decide between Plus and OneOrMany
-        public static IParser<List<T>> Plus<T>(IParser<T> parser) => new OneOrMany<T>(parser);
-        public static IParser<List<T>> OneOrMany<T>(IParser<T> parser) => new OneOrMany<T>(parser);
+        public static Parser<List<T>> Plus<T>(Parser<T> parser) => new OneOrMany<T>(parser);
+        public static Parser<List<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
 
-        public static IParser<T> Not<T>(IParser<T> parser) => new Not<T>(parser);
-        public static IDeferredParser<T> Deferred<T>() => new Deferred<T>();
-        public static IDeferredParser<T> Recursive<T>(Func<Deferred<T>, IParser<T>> parser) => new Deferred<T>(parser);
-        public static IParser<T> Between<A, T, B>(IParser<A> before, IParser<T> parser, IParser<B> after) => new Between<A, T, B>(before, parser, after);
-        public static IParser<TextSpan> AnyCharBefore<T>(IParser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
-        public static IParser<U> SkipAnd<T, U>(this IParser<T> parser, IParser<U> and) => new SkipAnd<T, U>(parser, and);
-        public static IParser<T> AndSkip<T, U>(this IParser<T> parser, IParser<U> and) => new AndSkip<T, U>(parser, and);
+        public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
+        public static Deferred<T> Deferred<T>() => new Deferred<T>();
+        public static Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser) => new Deferred<T>(parser);
+        public static Parser<T> Between<A, T, B>(Parser<A> before, Parser<T> parser, Parser<B> after) => new Between<A, T, B>(before, parser, after);
+        public static Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
+        public static Parser<U> SkipAnd<T, U>(this Parser<T> parser, Parser<U> and) => new SkipAnd<T, U>(parser, and);
+        public static Parser<T> AndSkip<T, U>(this Parser<T> parser, Parser<U> and) => new AndSkip<T, U>(parser, and);
 
     }
 
     public class LiteralBuilder
     {
-        public IParser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
-        public IParser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
-        public IParser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
-        public IParser<long> Integer() => new IntegerLiteral(skipWhiteSpace: false);
-        public IParser<decimal> Decimal() => new DecimalLiteral(skipWhiteSpace: false);
-        public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes, skipWhiteSpace: false);
-        public IParser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
+        public Parser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
+        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
+        public Parser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
+        public Parser<long> Integer() => new IntegerLiteral(skipWhiteSpace: false);
+        public Parser<decimal> Decimal() => new DecimalLiteral(skipWhiteSpace: false);
+        public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes, skipWhiteSpace: false);
+        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
     }
 
     public class TermBuilder
     {
-        public IParser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
-        public IParser<char> Char(char c) => new CharLiteral(c);
-        public IParser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral(numberOptions);
-        public IParser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral(numberOptions);
-        public IParser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
-        public IParser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
+        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
+        public Parser<char> Char(char c) => new CharLiteral(c);
+        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral(numberOptions);
+        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral(numberOptions);
+        public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
+        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
     }
 }

@@ -48,5 +48,10 @@ namespace Parlot
         {
             return Span.SequenceEqual(other.Span);
         }
+
+        public static implicit operator TextSpan(string s)
+        {
+            return new TextSpan(s);
+        }
     }
 }

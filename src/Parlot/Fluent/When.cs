@@ -9,9 +9,9 @@ namespace Parlot.Fluent
     public sealed class When<T> : Parser<T>
     {
         private readonly Func<T, bool> _action;
-        private readonly IParser<T> _parser;
+        private readonly Parser<T> _parser;
 
-        public When(IParser<T> parser, Func<T, bool> action)
+        public When(Parser<T> parser, Func<T, bool> action)
         {
             _action = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));

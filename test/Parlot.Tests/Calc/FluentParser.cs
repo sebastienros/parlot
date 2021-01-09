@@ -5,7 +5,7 @@ namespace Parlot.Tests.Calc
 {
     public class FluentParser
     {
-        public static readonly IParser<Expression> Expression;
+        public static readonly Parlot.Fluent.Parser<Expression> Expression;
 
         static FluentParser()
         {

@@ -165,9 +165,9 @@ namespace Parlot.Tests
             { 
                 switch (result) 
                 { 
-                    case "d:": return Literals.Decimal(); 
-                    case "i:": return Literals.Integer(); 
-                    case "s:": return Literals.String(); 
+                    case "d:": return Literals.Decimal().Then<object>(x => x); 
+                    case "i:": return Literals.Integer().Then<object>(x => x);
+                    case "s:": return Literals.String().Then<object>(x => x);
                 }
                 return null;
             });

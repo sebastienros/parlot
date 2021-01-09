@@ -4,9 +4,9 @@ namespace Parlot.Fluent
 {
     public sealed class ZeroOrOne<T> : Parser<T>
     {
-        private readonly IParser<T> _parser;
+        private readonly Parser<T> _parser;
 
-        public ZeroOrOne(IParser<T> parser)
+        public ZeroOrOne(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
