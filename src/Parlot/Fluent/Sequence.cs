@@ -1,13 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
     public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>
     {
-        internal readonly IParser<T1> _parser1;
-        internal readonly IParser<T2> _parser2;
-        public Sequence(IParser<T1> parser1, IParser<T2> parser2)
+        internal readonly Parser<T1> _parser1;
+        internal readonly Parser<T2> _parser2;
+        public Sequence(Parser<T1> parser1, Parser<T2> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
@@ -40,12 +39,12 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
     {
-        private readonly IParser<ValueTuple<T1, T2>> _parser;
-        internal readonly IParser<T3> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2>> _parser;
+        internal readonly Parser<T3> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2>> 
+        public Sequence(Parser<ValueTuple<T1, T2>> 
             parser,
-            IParser<T3> lastParser
+            Parser<T3> lastParser
             )
         {
             _parser = parser;
@@ -85,10 +84,10 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
     {
-        private readonly IParser<ValueTuple<T1, T2, T3>> _parser;
-        internal readonly IParser<T4> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
+        internal readonly Parser<T4> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3>> parser, IParser<T4> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3>> parser, Parser<T4> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -128,10 +127,10 @@ namespace Parlot.Fluent
     
     public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4>> _parser;
-        internal readonly IParser<T5> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
+        internal readonly Parser<T5> _lastParser;
         
-        public Sequence(IParser<ValueTuple<T1, T2, T3, T4>> parser, IParser<T5> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4>> parser, Parser<T5> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -172,10 +171,10 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
-        internal readonly IParser<T6> _lastParser;        
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
+        internal readonly Parser<T6> _lastParser;        
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3, T4, T5>> parser, IParser<T6> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5>> parser, Parser<T6> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -218,11 +217,10 @@ namespace Parlot.Fluent
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
-        internal readonly IParser<T7> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
+        internal readonly Parser<T7> _lastParser;
 
-        public Sequence(
-            IParser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, IParser<T7> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -261,57 +259,6 @@ namespace Parlot.Fluent
             context.Scanner.Cursor.ResetPosition(start);
 
             return false;
-        }
-    }
-
-    public sealed class Sequence : Parser<IList<ParseResult<object>>>
-    {
-        private readonly IParser[] _parsers;
-
-        public Sequence(IParser[] parsers)
-        {
-            _parsers = parsers;
-        }
-
-        public IParser[] Parsers => _parsers;
-
-        public override bool Parse(ParseContext context, ref ParseResult<IList<ParseResult<object>>> result)
-        {
-            context.EnterParser(this);
-
-            IParser[] parsers = _parsers;
-
-            if (parsers.Length == 0)
-            {
-                return true;
-            }
-
-            var results = new List<ParseResult<object>>(parsers.Length);
-            var success = true;
-            var parsed = new ParseResult<object>();
-            var start = context.Scanner.Cursor.Position;
-
-            for (var i = 0; i < (uint) parsers.Length; i++)
-            {
-                if (!parsers[i].Parse(context, ref parsed))
-                {
-                    success = false;
-                    break;
-                }
-
-                results[i] = parsed;
-            }
-
-            if (success)
-            {
-                result.Set(results[0].Start, results[^1].End, results);
-                return true;
-            }
-            else
-            {
-                context.Scanner.Cursor.ResetPosition(start);
-                return false;
-            }
         }
     }
 }

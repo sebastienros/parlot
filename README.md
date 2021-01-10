@@ -17,7 +17,7 @@ The following example is a complete parser that create a mathematical expression
 The source is available [here](./test/Parlot.Tests/Calc/FluentParser.cs).
 
 ```c#
-public static readonly IParser<Expression> Expression;
+public static readonly Parser<Expression> Expression;
 
 static FluentParser()
 {

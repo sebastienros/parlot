@@ -5,14 +5,14 @@ namespace Parlot.Fluent
 {
     public sealed class Separated<U, T> : Parser<List<T>>
     {
-        private readonly IParser<U> _separator;
-        private readonly IParser<T> _parser;
+        private readonly Parser<U> _separator;
+        private readonly Parser<T> _parser;
 
         private readonly bool _separatorIsChar;
         private readonly char _separatorChar;
         private readonly bool _separatorWhiteSpace;
 
-        public Separated(IParser<U> separator, IParser<T> parser)
+        public Separated(Parser<U> separator, Parser<T> parser)
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));

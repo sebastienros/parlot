@@ -4,9 +4,9 @@ namespace Parlot.Fluent
 {
     public sealed class Not<T> : Parser<T>
     {
-        private readonly IParser<T> _parser;
+        private readonly Parser<T> _parser;
 
-        public Not(IParser<T> parser)
+        public Not(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

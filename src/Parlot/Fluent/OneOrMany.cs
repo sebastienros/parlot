@@ -5,9 +5,9 @@ namespace Parlot.Fluent
 {
     public sealed class OneOrMany<T> : Parser<List<T>>
     {
-        private readonly IParser<T> _parser;
+        private readonly Parser<T> _parser;
 
-        public OneOrMany(IParser<T> parser)
+        public OneOrMany(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

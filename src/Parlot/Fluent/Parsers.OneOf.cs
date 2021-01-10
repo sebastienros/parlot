@@ -2,10 +2,19 @@
 
 namespace Parlot.Fluent
 {
+    // We don't care about the performance of these helpers since they are called only once 
+    // during the parser tree creation
+
     public static partial class Parsers
     {
-        public static IParser<T> Or<T>(this IParser<T> parser, IParser<T> or)
+        /// <summary>
+        /// Builds a parser that return either of the first successful of the specified parsers.
+        /// </summary>
+        public static Parser<T> Or<T>(this Parser<T> parser, Parser<T> or)
         {
+            // We don't care about the performance of these helpers since they are called only once 
+            // during the parser tree creation
+
             if (parser is OneOf<T> oneOf)
             {
                 // Return a single OneOf instance with this new one
@@ -17,20 +26,19 @@ namespace Parlot.Fluent
             }
         }
 
-        public static IParser Or(this IParser parser, IParser or)
+        /// <summary>
+        /// Builds a parser that return either of the first successful of the specified parsers.
+        /// </summary>
+        public static Parser<T> Or<A, B, T>(this Parser<A> parser, Parser<B> or) 
+            where A: T 
+            where B: T
         {
-            if (parser is OneOf oneOf)
-            {
-                // Return a single OneOf instance with this new one
-                return new OneOf(oneOf.Parsers.Append(or).ToArray());
-            }
-            else
-            {
-                return new OneOf(new[] { parser, or });
-            }
+            return new OneOf<A, B, T>(parser, or);
         }
 
-        public static IParser OneOf(params IParser[] parsers) => new OneOf(parsers);
-        public static IParser<T> OneOf<T>(params IParser<T>[] parsers) => new OneOf<T>(parsers);
+        /// <summary>
+        /// Builds a parser that return either of the first successful of the specified parsers.
+        /// </summary>
+        public static Parser<T> OneOf<T>(params Parser<T>[] parsers) => new OneOf<T>(parsers);
     }
 }
