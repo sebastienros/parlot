@@ -31,95 +31,109 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Big")]
-        public void BigJson_Parlot()
+        public IJson BigJson_Parlot()
         {
-            JsonParser.Parse(_bigJson);
+            return JsonParser.Parse(_bigJson);
         }
+
         [Benchmark, BenchmarkCategory("Big")]
-        public void BigJson_Pidgin()
+        public IJson BigJson_Pidgin()
         {
-            PidginJsonParser.Parse(_bigJson);
+            return PidginJsonParser.Parse(_bigJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Big")]
-        public void BigJson_Sprache()
+        public IJson BigJson_Sprache()
         {
-            SpracheJsonParser.Parse(_bigJson);
+            return SpracheJsonParser.Parse(_bigJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Big")]
-        public void BigJson_Superpower()
+        public IJson BigJson_Superpower()
         {
-            SuperpowerJsonParser.Parse(_bigJson);
+            return SuperpowerJsonParser.Parse(_bigJson);
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Long")]
-        public void LongJson_Parlot()
+        public IJson LongJson_Parlot()
         {
-            JsonParser.Parse(_longJson);
+            return JsonParser.Parse(_longJson);
         }
+
         [Benchmark, BenchmarkCategory("Long")]
-        public void LongJson_Pidgin()
+        public IJson LongJson_Pidgin()
         {
-            PidginJsonParser.Parse(_longJson);
+            return PidginJsonParser.Parse(_longJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Long")]
-        public void LongJson_Sprache()
+        public IJson LongJson_Sprache()
         {
-            SpracheJsonParser.Parse(_longJson);
+            return SpracheJsonParser.Parse(_longJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Long")]
-        public void LongJson_Superpower()
+        public IJson LongJson_Superpower()
         {
-            SuperpowerJsonParser.Parse(_longJson);
+            return SuperpowerJsonParser.Parse(_longJson);
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
-        public void DeepJson_Parlot()
+        public IJson DeepJson_Parlot()
         {
-            JsonParser.Parse(_deepJson);
+            return JsonParser.Parse(_deepJson);
         }
+
         [Benchmark, BenchmarkCategory("Deep")]
-        public void DeepJson_Pidgin()
+        public IJson DeepJson_Pidgin()
         {
-            PidginJsonParser.Parse(_deepJson);
+            return PidginJsonParser.Parse(_deepJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Deep")]
-        public void DeepJson_Sprache()
+        public IJson DeepJson_Sprache()
         {
-            SpracheJsonParser.Parse(_deepJson);
+            return SpracheJsonParser.Parse(_deepJson).Value;
         }
+
         //this one blows the stack
         //[Benchmark, BenchmarkCategory("Deep")]
-        //public void DeepJson_Superpower()
+        //public IJson DeepJson_Superpower()
         //{
-        //    SuperpowerJsonParser.Parse(_deepJson);
+        //    return SuperpowerJsonParser.Parse(_deepJson);
         //}
-        
+
         [Benchmark(Baseline = true), BenchmarkCategory("Wide")]
-        public void WideJson_Parlot()
+        public IJson WideJson_Parlot()
         {
-            JsonParser.Parse(_wideJson);
+            return JsonParser.Parse(_wideJson);
         }
+
         [Benchmark, BenchmarkCategory("Wide")]
-        public void WideJson_Pidgin()
+        public IJson WideJson_Pidgin()
         {
-            PidginJsonParser.Parse(_wideJson);
+            return PidginJsonParser.Parse(_wideJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Wide")]
-        public void WideJson_Sprache()
+        public IJson WideJson_Sprache()
         {
-            SpracheJsonParser.Parse(_wideJson);
+            return SpracheJsonParser.Parse(_wideJson).Value;
         }
+
         [Benchmark, BenchmarkCategory("Wide")]
-        public void WideJson_Superpower()
+        public IJson WideJson_Superpower()
         {
-            SuperpowerJsonParser.Parse(_wideJson);
+            return SuperpowerJsonParser.Parse(_wideJson);
         }
+
         private static IJson BuildJson(int length, int depth, int width)
             => new JsonArray(
                 Enumerable.Repeat(1, length)
                     .Select(_ => BuildObject(depth, width))
                     .ToImmutableArray()
             );
+
         private static IJson BuildObject(int depth, int width)
         {
             if (depth == 0)

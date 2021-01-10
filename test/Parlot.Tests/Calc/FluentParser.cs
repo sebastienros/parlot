@@ -5,7 +5,7 @@ namespace Parlot.Tests.Calc
 {
     public class FluentParser
     {
-        public static readonly Parlot.Fluent.Parser<Expression> Expression;
+        public static readonly Parser<Expression> Expression;
 
         static FluentParser()
         {
@@ -47,7 +47,7 @@ namespace Parlot.Tests.Calc
                     .Or(primary));
 
             // factor => unary ( ( "/" | "*" ) unary )* ;
-            var factor = unary.And(Star(divided.Or(times).And(unary)))
+            var factor = unary.And(ZeroOrMany(divided.Or(times).And(unary)))
                 .Then(static x =>
                 {
                     // unary
@@ -68,7 +68,7 @@ namespace Parlot.Tests.Calc
                 });
 
             // expression => factor ( ( "-" | "+" ) factor )* ;
-            expression.Parser = factor.And(Star(plus.Or(minus).And(factor)))
+            expression.Parser = factor.And(ZeroOrMany(plus.Or(minus).And(factor)))
                 .Then(static x =>
                 {
                     // factor

@@ -7,6 +7,9 @@ namespace Parlot.Fluent
 
     public static partial class Parsers
     {
+        /// <summary>
+        /// Builds a parser that return either of the first successful of the specified parsers.
+        /// </summary>
         public static Parser<T> Or<T>(this Parser<T> parser, Parser<T> or)
         {
             // We don't care about the performance of these helpers since they are called only once 
@@ -23,6 +26,9 @@ namespace Parlot.Fluent
             }
         }
 
+        /// <summary>
+        /// Builds a parser that return either of the first successful of the specified parsers.
+        /// </summary>
         public static Parser<T> Or<A, B, T>(this Parser<A> parser, Parser<B> or) 
             where A: T 
             where B: T
@@ -30,6 +36,9 @@ namespace Parlot.Fluent
             return new OneOf<A, B, T>(parser, or);
         }
 
+        /// <summary>
+        /// Builds a parser that return either of the first successful of the specified parsers.
+        /// </summary>
         public static Parser<T> OneOf<T>(params Parser<T>[] parsers) => new OneOf<T>(parsers);
     }
 }

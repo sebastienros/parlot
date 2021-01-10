@@ -2,7 +2,7 @@
 
 namespace Parlot
 {
-    public sealed class TokenResult : ITokenResult
+    public sealed class TokenResult
     {
         private string _text;
 
@@ -19,7 +19,7 @@ namespace Parlot
 
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start, Length);
 
-        public ITokenResult Succeed(string buffer, int start, int end)
+        public TokenResult Succeed(string buffer, int start, int end)
         {
             Success = true;
             Buffer = buffer;
@@ -31,7 +31,7 @@ namespace Parlot
             return this;
         }
 
-        public ITokenResult Fail()
+        public TokenResult Fail()
         {
             Success = false;
             Buffer = null;

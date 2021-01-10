@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
@@ -221,8 +220,7 @@ namespace Parlot.Fluent
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
         internal readonly Parser<T7> _lastParser;
 
-        public Sequence(
-            Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
