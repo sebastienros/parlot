@@ -161,7 +161,7 @@ This benchmark creates an expression tree (AST) representing mathematical expres
 
 Only Pidgin and Parlot are benchmarked here. It also shows the results of the two Parlot APIs. The __Fluent API__ is the one that corresponds to Pidgin. The __Raw__ variant is using the standard Parlot API to show how to get the fastest possible parser. These benchmarks don't evaluate the expressions but only parse them to create the same AST. 
 
-In this benchmark Parlot Fluent is 3 times faster than Pidgin, and Parlot Raw gives another 3 times boost. Allocations are also smaller with Parlot.
+In this benchmark Parlot Fluent is 10 times faster than Pidgin, and Parlot Raw gives another 2 times boost. Allocations are also smaller with Parlot.
 
 ```
 BenchmarkDotNet=v0.12.1, OS=Windows 10.0.19042
@@ -189,7 +189,7 @@ WarmupCount=3
 
 This benchmark was taken from the Pidgin repository and demonstrates how to perform simple JSON document parsing. It exercises the parsers with different kinds of documents. Pidgin, Sprache, Superpower and Parlot are compared. The programming models are all based on parser combinator, hence are easy to understand.
 
-The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides again the best performance in all scenarios. The allocations of Parlot are also better or equivalent to the one of Pidgin.
+The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides again the best performance in all scenarios, being at least 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin.
 
 ```
 BenchmarkDotNet=v0.12.1, OS=Windows 10.0.19042
