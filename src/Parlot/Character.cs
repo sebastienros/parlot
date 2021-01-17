@@ -2,7 +2,7 @@
 
 namespace Parlot
 {
-    public class Character
+    public static class Character
     {
         public static bool IsDecimalDigit(char cp)
         {
@@ -53,7 +53,7 @@ namespace Parlot
             return (ch == '\n') || (ch == '\r') || IsWhiteSpace(ch);
         }
 
-        public static char ScanHexEscape(ReadOnlySpan<char> text, int index, out int length)
+        public static char ScanHexEscape(string text, int index, out int length)
         {
             var prefix = text[index];
             var len = (prefix == 'u') ? 4 : 2;
@@ -91,7 +91,11 @@ namespace Parlot
                 return span;
             }
 
+#if NETSTANDARD2_0
+            var result = CreateString(span.Length, span, static (chars, source) =>
+#else
             var result = String.Create(span.Length, span, static (chars, source) =>
+#endif
             {
                 // The asumption is that the new string will be shorter since escapes results are smaller than their source
 
@@ -167,5 +171,17 @@ namespace Parlot
                 return 0;
             }
         }
+
+#if NETSTANDARD2_0
+        private delegate void SpanAction<T, in TArg>(T[] span, TArg arg);
+        private static string CreateString<TState>(int length, TState state, SpanAction<char, TState> action)
+        {
+            var array = new char[length];
+
+            action(array, state);
+
+            return array.ToString();
+        }
+#endif
     }
 }

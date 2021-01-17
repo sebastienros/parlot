@@ -37,9 +37,14 @@ namespace Parlot.Fluent
             if (context.Scanner.ReadDecimal())
             {
                 var end = context.Scanner.Cursor.Offset;
+#if NETSTANDARD2_0
+                var sourceToParse = context.Scanner.Buffer.ToString();
+#else
+                var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
+#endif
 
-                if (decimal.TryParse(context.Scanner.Buffer.AsSpan(start, end - start), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
-                {
+                if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+                { 
                     result.Set(start, end,  value);
                     return true;
                 }
