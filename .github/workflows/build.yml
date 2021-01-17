@@ -17,14 +17,27 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dotnet: [ '2.1.x', '3.1.x', '5.0.x' ]
+
     steps:
     - uses: actions/checkout@v2
-    - name: Setup .NET Core
+
+    - name: Setup .NET Core 5.0
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: ${{ matrix.dotnet }}
-    - name: Test
-      run: dotnet test --configuration Release
+        dotnet-version: 5.0.*
+    - name: Test - net5.0
+      run: dotnet test --configuration Release --framework net5.0
+
+    - name: Setup .NET Core 3.1
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 3.1.*
+    - name: Test - netcoreapp3.1
+      run: dotnet test --configuration Release --framework netcoreapp3.1
+
+    - name: Setup .NET Core 2.1
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 2.1.*
+    - name: Test - netcoreapp2.1
+      run: dotnet test --configuration Release --framework netcoreapp2.1
