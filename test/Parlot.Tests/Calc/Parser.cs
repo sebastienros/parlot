@@ -119,7 +119,7 @@ namespace Parlot.Tests.Calc
 
             if (_scanner.ReadDecimal(number))
             {
-                return new Number(decimal.Parse(number.Span));
+                return new Number(decimal.Parse(number.Text));
             }
 
             if (_scanner.ReadChar('('))

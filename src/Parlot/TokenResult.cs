@@ -17,8 +17,10 @@ namespace Parlot
 
         public string Text => _text ??= Buffer?.Substring(Start, Length);
 
+#if !NETSTANDARD2_0
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start, Length);
-
+#endif
+        
         public TokenResult Succeed(string buffer, int start, int end)
         {
             Success = true;

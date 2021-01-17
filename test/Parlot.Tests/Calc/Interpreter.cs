@@ -114,7 +114,7 @@ namespace Parlot.Tests.Calc
 
             if (_scanner.ReadDecimal(number))
             {
-                return decimal.Parse(number.Span);
+                return decimal.Parse(number.Text);
             }
 
             if (_scanner.ReadChar('('))
