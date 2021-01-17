@@ -21,22 +21,20 @@ jobs:
         DOTNET_NOLOGO: true
         DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
-    strategy:
-      matrix:
-        dotnet: 
-            - sdk: '2.1.*'
-              framework: netcoreapp2.1
-            - sdk: '3.1.*'
-              framework: netcoreapp3.1
-            - sdk: '5.0.*'
-              framework: net5.0
-    
     steps:
     - uses: actions/checkout@v2
-
-    - name: Setup .NET Core
+    - name: Setup dotnet
       uses: actions/setup-dotnet@v1
       with:
-        dotnet-version: ${{ matrix.dotnet.sdk }}
+        dotnet-version: 2.1.*
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 3.1.*
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 5.0.*
+
     - name: Test
-      run: dotnet test --configuration Release --framework ${{ matrix.dotnet.framework }}
+      run: dotnet test --configuration Release
