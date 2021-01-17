@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: dotnet restore
     - name: Test
-      run: dotnet test -c Release
+      run: dotnet test -c Release --framework net5.0
     - name: Pack with dotnet
       run: |
         arrTag=(${GITHUB_REF//\// })
