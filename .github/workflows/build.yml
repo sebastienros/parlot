@@ -23,15 +23,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup dotnet
+    - name: Setup dotnet 2.1
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 2.1.*
-    - name: Setup dotnet
+    - name: Setup dotnet 3.1
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 3.1.*
-    - name: Setup dotnet
+    - name: Setup dotnet 5.0
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 5.0.*
