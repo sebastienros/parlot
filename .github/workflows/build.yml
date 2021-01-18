@@ -22,7 +22,9 @@ jobs:
         DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout source code
+      uses: actions/checkout@v2
+
     - name: Setup dotnet 2.1
       uses: actions/setup-dotnet@v1
       with:
