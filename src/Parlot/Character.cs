@@ -180,7 +180,7 @@ namespace Parlot
 
             action(array, state);
 
-            return array.ToString();
+            return new string(array);
         }
 #endif
     }
