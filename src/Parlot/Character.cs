@@ -4,32 +4,21 @@ namespace Parlot
 {
     public static class Character
     {
-        public static bool IsDecimalDigit(char cp)
-        {
-            return (cp >= '0' && cp <= '9');
-        }
+        public static bool IsDecimalDigit(char ch)
+            => ch >= '0' && ch <= '9';
 
-        public static bool IsHexDigit(char cp)
-        {
-            return (cp >= '0' && cp <= '9') ||
-                (cp >= 'A' && cp <= 'F') ||
-                (cp >= 'a' && cp <= 'f');
-        }
+        public static bool IsHexDigit(char ch)
+            => IsDecimalDigit(ch) ||
+                (ch >= 'A' && ch <= 'F') ||
+                (ch >= 'a' && ch <= 'f');
 
         public static bool IsIdentifierStart(char ch)
-        {
-            return (ch == '$') || (ch == '_') ||
-                   (ch >= 'A' && ch <= 'Z') ||
-                   (ch >= 'a' && ch <= 'z');
-        }
+            => (ch == '$') || (ch == '_') ||
+               (ch >= 'A' && ch <= 'Z') ||
+               (ch >= 'a' && ch <= 'z');
 
         public static bool IsIdentifierPart(char ch)
-        {
-            return (ch == '$') || (ch == '_') ||
-                   (ch >= 'A' && ch <= 'Z') ||
-                   (ch >= 'a' && ch <= 'z') ||
-                   (ch >= '0' && ch <= '9');
-        }
+            => IsIdentifierStart(ch) || IsDecimalDigit(ch);
 
         public static bool IsWhiteSpace(char ch)
         {
@@ -49,9 +38,7 @@ namespace Parlot
         }
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
-        {
-            return (ch == '\n') || (ch == '\r') || IsWhiteSpace(ch);
-        }
+            => (ch == '\n') || (ch == '\r') || IsWhiteSpace(ch);
 
         public static char ScanHexEscape(string text, int index, out int length)
         {
@@ -78,10 +65,7 @@ namespace Parlot
             return (char)code;
         }
 
-        public static TextSpan DecodeString(string s)
-        {
-            return DecodeString(new TextSpan(s));
-        }
+        public static TextSpan DecodeString(string s) => DecodeString(new TextSpan(s));
 
         public static TextSpan DecodeString(TextSpan span)
         {
