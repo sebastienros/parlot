@@ -42,9 +42,7 @@ namespace Parlot
 
         public static char ScanHexEscape(string text, int index, out int length)
         {
-            var prefix = text[index];
-            var len = (prefix == 'u') ? 4 : 2;
-            var lastIndex = Math.Min(len + index, text.Length - index);
+            var lastIndex = Math.Min(4 + index, text.Length - 1);
             var code = 0;
 
             length = 0;
@@ -99,6 +97,7 @@ namespace Parlot
 
                         switch (c)
                         {
+                            case '0': c = '\0'; break;
                             case '\'': c = '\''; break;
                             case '"': c = '\"'; break;
                             case '\\': c = '\\'; break;

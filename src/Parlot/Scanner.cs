@@ -343,8 +343,6 @@ namespace Parlot
                     switch (Cursor.Current)
                     {
                         case '0':
-                        case '\'':
-                        case '"':
                         case '\\':
                         case 'b':
                         case 'f':
@@ -352,22 +350,29 @@ namespace Parlot
                         case 'r':
                         case 't':
                         case 'v':
+                        case '\'':
+                        case '"':
                             break;
+
                         case 'u':
+
+                            // https://stackoverflow.com/a/32175520/142772
+                            // exactly 4 digits
+
                             var isValidUnicode = false;
 
                             Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
                                 Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                 {
                                     Cursor.Advance();
-                                    if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                     {
                                         Cursor.Advance();
-                                        if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                         {
                                             isValidUnicode = true;
                                         }
@@ -385,6 +390,10 @@ namespace Parlot
 
                             break;
                         case 'x':
+
+                            // https://stackoverflow.com/a/32175520/142772
+                            // exactly 4 digits
+
                             bool isValidHex = false;
 
                             Cursor.Advance();
@@ -392,11 +401,20 @@ namespace Parlot
                             if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
                                 isValidHex = true;
-                                Cursor.Advance();
 
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
                                 {
                                     Cursor.Advance();
+
+                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
+                                    {
+                                        Cursor.Advance();
+
+                                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
+                                        {
+                                            Cursor.Advance();
+                                        }
+                                    }
                                 }
                             }
 
