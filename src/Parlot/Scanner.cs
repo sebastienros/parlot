@@ -392,9 +392,8 @@ namespace Parlot
                             if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
                                 isValidHex = true;
-                                Cursor.Advance();
 
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
                                 {
                                     Cursor.Advance();
                                 }

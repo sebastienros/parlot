@@ -216,5 +216,23 @@ namespace Parlot.Tests
             Assert.True(new Scanner(text).ReadSingleQuotedString(result));
             Assert.Equal(expected, result.Text);
         }
+
+        [Theory]
+        [InlineData("'a\\bc'", "'a\\bc'")]
+        [InlineData("'\\xa0'", "'\\xa0'")]
+        [InlineData("'\\xfh'", "'\\xfh'")]
+        [InlineData("'\\u1234'", "'\\u1234'")]
+        [InlineData("' a\\bc ' ", "' a\\bc '")]
+        [InlineData("' \\xa0 ' ", "' \\xa0 '")]
+        [InlineData("' \\xfh ' ", "' \\xfh '")]
+        [InlineData("' \\u1234 ' ", "' \\u1234 '")]
+
+        public void ShouldReadUnicodeSequence(string text, string expected)
+        {
+            var result = new TokenResult();
+
+            new Scanner(text).ReadQuotedString(result);
+            Assert.Equal(expected, result.Text);
+        }
     }
 }
