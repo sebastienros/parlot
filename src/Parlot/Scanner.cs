@@ -343,8 +343,6 @@ namespace Parlot
                     switch (Cursor.Current)
                     {
                         case '0':
-                        case '\'':
-                        case '"':
                         case '\\':
                         case 'b':
                         case 'f':
@@ -352,22 +350,24 @@ namespace Parlot
                         case 'r':
                         case 't':
                         case 'v':
+                        case '\'':
+                        case '"':
                             break;
                         case 'u':
                             var isValidUnicode = false;
 
                             Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                             {
                                 Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                 {
                                     Cursor.Advance();
-                                    if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                     {
                                         Cursor.Advance();
-                                        if (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current))
+                                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
                                         {
                                             isValidUnicode = true;
                                         }

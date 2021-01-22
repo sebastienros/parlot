@@ -44,7 +44,7 @@ namespace Parlot
         {
             var prefix = text[index];
             var len = (prefix == 'u') ? 4 : 2;
-            var lastIndex = Math.Min(len + index, text.Length - index);
+            var lastIndex = Math.Min(len + index, text.Length);
             var code = 0;
 
             length = 0;
@@ -99,6 +99,7 @@ namespace Parlot
 
                         switch (c)
                         {
+                            case '0': c = '\0'; break;
                             case '\'': c = '\''; break;
                             case '"': c = '\"'; break;
                             case '\\': c = '\\'; break;
