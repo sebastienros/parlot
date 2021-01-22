@@ -97,7 +97,6 @@ namespace Parlot
 
                         switch (c)
                         {
-                            case '0': c = '\0'; break;
                             case '\'': c = '\''; break;
                             case '"': c = '\"'; break;
                             case '\\': c = '\\'; break;
