@@ -4,11 +4,11 @@ namespace Parlot.Fluent
 {
     public sealed class Identifier : Parser<TextSpan>
     {
-        private readonly Func<char, bool> _extraStart;
-        private readonly Func<char, bool> _extraPart;
+        private readonly Func<char, bool>? _extraStart;
+        private readonly Func<char, bool>? _extraPart;
         private readonly bool _skipWhiteSpace;
 
-        public Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null, bool skipWhiteSpace = true)
+        public Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null, bool skipWhiteSpace = true)
         {
             _extraStart = extraStart;
             _extraPart = extraPart;

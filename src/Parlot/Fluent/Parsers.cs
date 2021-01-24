@@ -19,7 +19,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or many times a parser separated by another one.
         /// </summary>
-        public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
+        public static Parser<List<T?>?> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
@@ -107,7 +107,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an identifier.
         /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
+        public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
     }
 
     public class TermBuilder
@@ -140,6 +140,6 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an identifier.
         /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
+        public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null) => new Identifier(extraStart, extraPart);
     }
 }

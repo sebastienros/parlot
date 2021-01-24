@@ -4,7 +4,7 @@ namespace Parlot
 {
     public sealed class TokenResult
     {
-        private string _text;
+        private string? _text;
 
         public bool Success { get; private set; }
 
@@ -13,9 +13,10 @@ namespace Parlot
         public int End { get; private set; }
 
         public int Length { get; private set; }
-        public string Buffer { get; private set; }
 
-        public string Text => _text ??= Buffer?.Substring(Start, Length);
+        public string? Buffer { get; private set; }
+
+        public string? Text => _text ??= Buffer?.Substring(Start, Length);
 
 #if !NETSTANDARD2_0
         public ReadOnlySpan<char> Span => Buffer.AsSpan(Start, Length);

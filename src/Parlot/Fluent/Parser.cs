@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Parlot.Fluent
 {
@@ -49,7 +50,7 @@ namespace Parlot.Fluent
 
     public static class ParserExtensions
     {
-        public static T Parse<T>(this Parser<T> parser, string text)
+        public static T? Parse<T>(this Parser<T> parser, string text)
         {
             var context = new ParseContext(new Scanner(text));
 
@@ -65,19 +66,31 @@ namespace Parlot.Fluent
             return default;
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult> parser, string text, out TResult value)
+        public static bool TryParse<TResult>(
+            this Parser<TResult> parser, 
+            string text,
+            [NotNullWhen(true)] out TResult? value)
         {
             return parser.TryParse(text, out value, out _);
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult> parser, string text, out TResult value, out ParseError error)
+        public static bool TryParse<TResult>(
+            this Parser<TResult> parser, 
+            string text,
+            [NotNullWhen(true)] out TResult? value,
+            out ParseError? error)
         {
             return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult> parser, ParseContext context, out TResult value, out ParseError error)
+        public static bool TryParse<TResult>(
+            this Parser<TResult> parser, 
+            ParseContext context,
+            [NotNullWhen(true)] out TResult? value,
+            out ParseError? error)
         {
             error = null;
+            value = default;
 
             try
             {
@@ -87,21 +100,20 @@ namespace Parlot.Fluent
 
                 if (success)
                 {
-                    value = localResult.Value;
+                    value = localResult.Value!;
                     return true;
                 }
             }
             catch (ParseException e)
             {
-                error = new ParseError
-                {
-                    Message = e.Message,
-                    Position = e.Position
-                };
+                error = new ParseError(e);
             }
 
-            value = default;
             return false;
         }
+        
+#if NETSTANDARD2_0
+        private class NotNullWhenAttribute : Attribute { public NotNullWhenAttribute(bool _) { } }
+#endif
     }
 }

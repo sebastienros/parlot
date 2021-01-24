@@ -4,7 +4,7 @@ namespace Parlot.Fluent
 {
     public sealed class Deferred<T> : Parser<T>
     {
-        public Parser<T> Parser { get; set; }
+        public Parser<T>? Parser { get; set; }
 
         public Deferred()
         {
@@ -17,7 +17,12 @@ namespace Parlot.Fluent
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
-            return Parser.Parse(context, ref result);
+            if (Parser is null)
+            {
+                ThrowHelper.ThrowArgumentNullException(nameof(Parser));
+            }
+            
+            return Parser!.Parse(context, ref result);
         }
     }
 }

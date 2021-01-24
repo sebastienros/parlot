@@ -2,7 +2,18 @@
 {
     public class ParseError
     {
-        public string Message { get; set; }
-        public TextPosition Position { get; set; }
+        public ParseError(ParseException parseException)
+            : this(parseException.Message, parseException.Position)
+        {
+        }
+
+        public ParseError(string message, in TextPosition position)
+        {
+            Message = message;
+            Position = position;
+        }
+
+        public string Message { get; }
+        public TextPosition Position { get; }
     }
 }
