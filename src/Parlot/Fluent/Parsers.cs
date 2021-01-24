@@ -44,12 +44,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that can be defined later one. Use it when a parser need to be declared before its rule can be set.
         /// </summary>
-        public static Deferred<T> Deferred<T>() => new Deferred<T>();
+        public static Deferred<T> Deferred<T>() => new();
 
         /// <summary>
         /// Builds a parser than needs a reference to itself to be declared.
         /// </summary>
-        public static Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser) => new Deferred<T>(parser);
+        public static Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser) => new(parser);
 
         /// <summary>
         /// Builds a parser that matches the specified parser between two other ones.
