@@ -1,10 +1,21 @@
 ﻿using System;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public abstract class Parser<T>
+    public interface ICompilable
+    {
+        CompileResult Compile(Expression parseContext);
+    }
+
+    public abstract class Parser<T> : ICompilable
     { 
         public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
+
+        public virtual CompileResult Compile(Expression parseContext)
+        {
+            return CompileResult.Empty;
+        }
 
         /// <summary>
         /// Builds a parser that converts the previous result when it succeeds.

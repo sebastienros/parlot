@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
@@ -37,11 +40,83 @@ namespace Parlot.Fluent
 
             return false;
         }
+
+        public override CompileResult Compile(Expression parseContext)
+        {
+            var variables = new List<ParameterExpression>();
+            var body = new List<Expression>();
+            var success = Expression.Variable(typeof(bool), "orSuccess");
+            var value = Expression.Variable(typeof(string), "orValue");
+
+            variables.Add(success);
+            variables.Add(value);
+
+            // var start = context.Scanner.Cursor.Position;
+
+            var start = Expression.Variable(typeof(TextPosition), "orStart");
+            variables.Add(start);
+
+            body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Position")));
+
+            // parse1 instructions
+            // 
+            // if (parser1.Success)
+            // {
+            //    success = true;
+            //    value = parse1.Value;
+            // }
+            // else
+            // {
+            //   parse2 instructions
+            //   
+            //   if (parser2.Success)
+            //   {
+            //      success = true;
+            //      value = parse2.Value
+            //   }
+            //   else
+            //   {
+            //      success = false;
+            //      context.Scanner.Cursor.ResetPosition(start);
+            //   }
+            // }
+
+            // Initialize the block variable with the inner else statement
+            var block = Expression.Block(
+                            Expression.Assign(success, Expression.Constant(false, typeof(bool))),
+                            Expression.Call(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
+                            );
+
+            foreach (var parser in _parsers.Reverse())
+            {
+                var parserCompileResult = parser.Compile(parseContext);
+
+                block = Expression.Block(
+                    parserCompileResult.Variables,
+                    parserCompileResult.Body
+                    .Append(
+                        Expression.IfThenElse(
+                            parserCompileResult.Success,
+                            Expression.Block(
+                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                Expression.Assign(value, parserCompileResult.Value)
+                                ),
+                            block
+                            )
+                        )
+                    );
+
+            }
+
+            body.Add(block);
+
+            return new CompileResult(variables, body, success, value);
+        }
     }
 
     public sealed class OneOf<A, B, T> : Parser<T>
-        where A: T
-        where B: T
+        where A : T
+        where B : T
     {
         private readonly Parser<A> _parserA;
         private readonly Parser<B> _parserB;
