@@ -74,11 +74,15 @@ namespace Parlot
             return true;
         }
 
-        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
+            => ReadFirstThenOthers(first, other, out _); 
+
+        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out TokenResult result)
         {
             if (!first(Cursor.Current))
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
@@ -88,27 +92,33 @@ namespace Parlot
 
             Cursor.Advance();
 
-            ReadWhile(other, null);
+            ReadWhile(other, out _);
 
-            result?.Succeed(Buffer, start, Cursor.Offset);
+            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
 
             return true;
         }
 
-        public bool ReadIdentifier(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadIdentifier() => ReadIdentifier(out _);
+
+        public bool ReadIdentifier(out TokenResult result)
         {
             // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
 
-            return ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), result);
+            return ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), out result);
         }
 
-        public bool ReadDecimal(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadDecimal() => ReadDecimal(out _);
+
+        public bool ReadDecimal(out TokenResult result)
         {
             // perf: fast path to prevent a copy of the position
 
             if (!Character.IsDecimalDigit(Cursor.Current))
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
@@ -126,7 +136,7 @@ namespace Parlot
 
                 if (!Character.IsDecimalDigit(Cursor.Current))
                 {
-                    result?.Fail();
+                    result = TokenResult.Fail();
                     Cursor.ResetPosition(start);
                     return false;
                 }
@@ -138,17 +148,20 @@ namespace Parlot
                 } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
             }
 
-            result?.Succeed(Buffer, start.Offset, Cursor.Offset);
+            result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
             return true;
         }
 
-        public bool ReadInteger(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadInteger() => ReadInteger(out _);
+        
+        public bool ReadInteger(out TokenResult result)
         {
             // perf: fast path to prevent a copy of the position
 
             if (!Character.IsDecimalDigit(Cursor.Current))
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
@@ -160,18 +173,24 @@ namespace Parlot
 
             } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 
-            result?.Succeed(Buffer, start, Cursor.Offset);
+            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
             return true;
         }
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public bool ReadWhile(Func<char, bool> predicate, TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadWhile(Func<char, bool> predicate) => ReadWhile(predicate, out _);
+
+        /// <summary>
+        /// Reads a token while the specific predicate is valid.
+        /// </summary>
+        public bool ReadWhile(Func<char, bool> predicate, out TokenResult result)
         {
             if (Cursor.Eof || !predicate(Cursor.Current))
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
@@ -184,103 +203,115 @@ namespace Parlot
                 Cursor.Advance();
             }
 
-            result?.Succeed(Buffer, start, Cursor.Offset);
+            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
 
             return true;
         }
 
-        public bool ReadNonWhiteSpace(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _); 
+
+        public bool ReadNonWhiteSpace(out TokenResult result)
         {
-            return ReadWhile(static x => !Character.IsWhiteSpace(x), result);
+            return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
         }
 
         /// <summary>
         /// Reads the specified text.
         /// </summary>
-        public bool ReadChar(char c, TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadChar(char c) => ReadChar(c, out _);
+
+        /// <summary>
+        /// Reads the specified text.
+        /// </summary>
+        public bool ReadChar(char c, out TokenResult result)
         {
             if (!Cursor.Match(c))
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
-            if (result != null)
-            {
-                var start = Cursor.Offset;
+            var start = Cursor.Offset;
+            Cursor.Advance();
 
-                Cursor.Advance();
-
-                result?.Succeed(Buffer, start, Cursor.Offset);
-            }
-            else
-            {
-                Cursor.Advance();
-            }
-
+            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
             return true;
         }
 
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, StringComparer comparer = null, TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadText(string text, StringComparer comparer) => ReadText(text, comparer, out _); 
+        
+        /// <summary>
+        /// Reads the specific expected text.
+        /// </summary>
+        public bool ReadText(string text, StringComparer comparer, out TokenResult result)
         {
-            // Default comparison is ordinal.
-            // Use implementation of Match() that doesn't use any comparer in this case.
-            if (comparer == null)
+            var match = comparer is null
+                ? Cursor.Match(text)
+                : Cursor.Match(text, comparer);
+
+            if (!match)
             {
-                if (!Cursor.Match(text))
-                {
-                    result?.Fail();
-                    return false;
-                }
-            }
-            else
-            {
-                if (!Cursor.Match(text, comparer))
-                {
-                    result?.Fail();
-                    return false;
-                }
+                result = TokenResult.Fail();
+                return false;
             }
 
-            var start = 0;
-
-            // perf: don't allocate a new TextPosition if we don't need to return it
-            if (result != null)
-            {
-                start = Cursor.Offset;
-            }
-
+            int start = Cursor.Offset;
             Cursor.Advance(text.Length);
-
-            result?.Succeed(Buffer, start, Cursor.Offset);
+            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
             
             return true;
         }
 
-        public bool ReadSingleQuotedString(TokenResult result = null)
+        /// <summary>
+        /// Reads the specific expected text.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadText(string text) => ReadText(text, out _);
+
+        /// <summary>
+        /// Reads the specific expected text.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadText(string text, out TokenResult result) => ReadText(text, comparer: null, out result);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadSingleQuotedString() => ReadSingleQuotedString(out _);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadSingleQuotedString(out TokenResult result)
         {
-            return ReadQuotedString('\'', result);
+            return ReadQuotedString('\'', out result);
         }
 
-        public bool ReadDoubleQuotedString(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadDoubleQuotedString() => ReadDoubleQuotedString(out _);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadDoubleQuotedString(out TokenResult result)
         {
-            return ReadQuotedString('\"', result);
+            return ReadQuotedString('\"', out result);
         }
 
-        public bool ReadQuotedString(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadQuotedString() => ReadQuotedString(out _);
+
+        public bool ReadQuotedString(out TokenResult result)
         {
             var startChar = Cursor.Current;
 
             if (startChar != '\'' && startChar != '\"')
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
-            return ReadQuotedString(startChar, result);
+            return ReadQuotedString(startChar, out result);
         }
 
         /// <summary>
@@ -290,13 +321,13 @@ namespace Parlot
         /// This method doesn't escape the string, but only validates its content is syntactically correct.
         /// The resulting Span contains the original quotes.
         /// </remarks>
-        private bool ReadQuotedString(char quoteChar, TokenResult result = null)
+        private bool ReadQuotedString(char quoteChar, out TokenResult result)
         {
             var startChar = Cursor.Current;
 
             if (startChar != quoteChar)
             {
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
@@ -308,7 +339,7 @@ namespace Parlot
             if (nextQuote == -1)
             {
                 // There is no end quote, not a string
-                result?.Fail();
+                result = TokenResult.Fail();
                 return false;
             }
 
@@ -323,7 +354,7 @@ namespace Parlot
             {
                 Cursor.Advance(nextQuote + 1 - startOffset);
 
-                result?.Succeed(Buffer, start.Offset, Cursor.Offset);
+                result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
                 return true;
             }
 
@@ -332,7 +363,7 @@ namespace Parlot
                 // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
                 if (Cursor.Eof)
                 {
-                    result?.Fail();
+                    result = TokenResult.Fail();
                     return false;
                 }
 
@@ -384,7 +415,7 @@ namespace Parlot
                             {
                                 Cursor.ResetPosition(start);
 
-                                result?.Fail();
+                                result = TokenResult.Fail();
                                 return false;
                             }
 
@@ -422,7 +453,7 @@ namespace Parlot
                             {
                                 Cursor.ResetPosition(start);
 
-                                result?.Fail();
+                                result = TokenResult.Fail();
                                 return false;
                             }
 
@@ -430,7 +461,7 @@ namespace Parlot
                         default:
                             Cursor.ResetPosition(start);
 
-                            result?.Fail();
+                            result = TokenResult.Fail();
                             return false;
                     }
                 }
@@ -440,7 +471,7 @@ namespace Parlot
 
             Cursor.Advance();
 
-            result?.Succeed(Buffer, start.Offset, Cursor.Offset);
+            result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
 
             return true;
         }

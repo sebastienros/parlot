@@ -115,11 +115,13 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            var number = new TokenResult();
-
-            if (_scanner.ReadDecimal(number))
+            if (_scanner.ReadDecimal(out var number))
             {
-                return new Number(decimal.Parse(number.Text));
+#if NETCOREAPP2_1
+                return new Number(decimal.Parse(number.GetText()));
+#else
+                return new Number(decimal.Parse(number.Span));
+#endif
             }
 
             if (_scanner.ReadChar('('))

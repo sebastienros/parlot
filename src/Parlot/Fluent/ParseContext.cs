@@ -4,8 +4,6 @@ namespace Parlot.Fluent
 {
     public class ParseContext
     {
-        private ParseResult<TextSpan> _whiteSpaceResult = new();
-
         /// <summary>
         /// The scanner used for the parsing session.
         /// </summary>
@@ -31,7 +29,8 @@ namespace Parlot.Fluent
         {
             if (WhiteSpaceParser != null)
             {
-                WhiteSpaceParser.Parse(this, ref _whiteSpaceResult);
+                ParseResult<TextSpan> _ = new();
+                WhiteSpaceParser.Parse(this, ref _);
             }
             else
             {
