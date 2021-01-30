@@ -4,12 +4,12 @@ namespace Parlot.Fluent
 {
     public sealed class TextLiteral : Parser<string>
     {
-        private readonly StringComparer _comparer;
+        private readonly StringComparer? _comparer;
         private readonly bool _skipWhiteSpace;
 
-        public TextLiteral(string text, StringComparer comparer = null,  bool skipWhiteSpace = true)
+        public TextLiteral(string text, StringComparer? comparer = null,  bool skipWhiteSpace = true)
         {
-            Text = text ?? throw new ArgumentNullException(nameof(text));
+            Text = text;
             _comparer = comparer;
             _skipWhiteSpace = skipWhiteSpace;
         }

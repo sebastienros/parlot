@@ -74,7 +74,7 @@ namespace Parlot
             return true;
         }
 
-        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, TokenResult result = null)
+        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, TokenResult? result = null)
         {
             if (!first(Cursor.Current))
             {
@@ -95,14 +95,14 @@ namespace Parlot
             return true;
         }
 
-        public bool ReadIdentifier(TokenResult result = null)
+        public bool ReadIdentifier(TokenResult? result = null)
         {
             // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
 
             return ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), result);
         }
 
-        public bool ReadDecimal(TokenResult result = null)
+        public bool ReadDecimal(TokenResult? result = null)
         {
             // perf: fast path to prevent a copy of the position
 
@@ -142,7 +142,7 @@ namespace Parlot
             return true;
         }
 
-        public bool ReadInteger(TokenResult result = null)
+        public bool ReadInteger(TokenResult? result = null)
         {
             // perf: fast path to prevent a copy of the position
 
@@ -167,7 +167,7 @@ namespace Parlot
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public bool ReadWhile(Func<char, bool> predicate, TokenResult result = null)
+        public bool ReadWhile(Func<char, bool> predicate, TokenResult? result = null)
         {
             if (Cursor.Eof || !predicate(Cursor.Current))
             {
@@ -189,7 +189,7 @@ namespace Parlot
             return true;
         }
 
-        public bool ReadNonWhiteSpace(TokenResult result = null)
+        public bool ReadNonWhiteSpace(TokenResult? result = null)
         {
             return ReadWhile(static x => !Character.IsWhiteSpace(x), result);
         }
@@ -197,7 +197,7 @@ namespace Parlot
         /// <summary>
         /// Reads the specified text.
         /// </summary>
-        public bool ReadChar(char c, TokenResult result = null)
+        public bool ReadChar(char c, TokenResult? result = null)
         {
             if (!Cursor.Match(c))
             {
@@ -224,7 +224,7 @@ namespace Parlot
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, StringComparer comparer = null, TokenResult result = null)
+        public bool ReadText(string text, StringComparer? comparer = null, TokenResult? result = null)
         {
             // Default comparison is ordinal.
             // Use implementation of Match() that doesn't use any comparer in this case.
@@ -260,17 +260,17 @@ namespace Parlot
             return true;
         }
 
-        public bool ReadSingleQuotedString(TokenResult result = null)
+        public bool ReadSingleQuotedString(TokenResult? result = null)
         {
             return ReadQuotedString('\'', result);
         }
 
-        public bool ReadDoubleQuotedString(TokenResult result = null)
+        public bool ReadDoubleQuotedString(TokenResult? result = null)
         {
             return ReadQuotedString('\"', result);
         }
 
-        public bool ReadQuotedString(TokenResult result = null)
+        public bool ReadQuotedString(TokenResult? result = null)
         {
             var startChar = Cursor.Current;
 
@@ -290,7 +290,7 @@ namespace Parlot
         /// This method doesn't escape the string, but only validates its content is syntactically correct.
         /// The resulting Span contains the original quotes.
         /// </remarks>
-        private bool ReadQuotedString(char quoteChar, TokenResult result = null)
+        private bool ReadQuotedString(char quoteChar, TokenResult? result = null)
         {
             var startChar = Cursor.Current;
 

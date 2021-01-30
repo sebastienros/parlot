@@ -13,19 +13,19 @@ namespace Parlot.Fluent
 
         public ParseContext(Scanner scanner)
         {
-            Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
+            Scanner = scanner;
         }
 
         /// <summary>
         /// Delegate that is executed whenever a parser is invoked.
         /// </summary>
-        public Action<object, ParseContext> OnEnterParser { get; set; }
+        public Action<object, ParseContext>? OnEnterParser { get; set; }
 
         /// <summary>
         /// The parser that is used to parse whitespaces and comments.
         /// This can also include comments.
         /// </summary>
-        public Parser<TextSpan> WhiteSpaceParser { get; set;}
+        public Parser<TextSpan>? WhiteSpaceParser { get; set;}
 
         public void SkipWhiteSpace()
         {

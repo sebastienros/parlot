@@ -150,41 +150,26 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MatchAnyOf(string s)
         {
-            if (s == null)
+            if (s is null)
             {
                 ThrowHelper.ThrowArgumentNullException(nameof(s));
             }
-
+            
             if (Eof)
             {
                 return false;
             }
 
-            var length = s.Length;
-
-            if (length == 0)
-            {
-                return true;
-            }
-
-            for (var i = 0; i < length; i++)
-            {
-                if (s[i] == _current)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return s!.Length == 0 || s.IndexOf(_current) > -1;
         }
 
         /// <summary>
         /// Whether any char of an array is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAny(params char[] chars)
+        public bool MatchAny(params char[]? chars)
         {
-            if (chars == null)
+            if (chars is null)
             {
                 ThrowHelper.ThrowArgumentNullException(nameof(chars));
             }
@@ -194,22 +179,7 @@ namespace Parlot
                 return false;
             }
 
-            var length = chars.Length;
-
-            if (length == 0)
-            {
-                return true;
-            }
-
-            for (var i = 0; i < length; i++)
-            {
-                if (chars[i] == _current)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return chars!.Length == 0 || Array.IndexOf(chars, _current) > -1;
         }
 
         /// <summary>

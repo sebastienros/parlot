@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public sealed class Separated<U, T> : Parser<List<T>>
+    public sealed class Separated<U, T> : Parser<List<T?>?>
     {
         private readonly Parser<U> _separator;
         private readonly Parser<T> _parser;
@@ -28,11 +28,11 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<List<T?>?> result)
         {
             context.EnterParser(this);
 
-            List<T> results = null;
+            List<T?>? results = null;
 
             var start = 0;
             var end = 0;
@@ -59,7 +59,7 @@ namespace Parlot.Fluent
                 }
 
                 end = parsed.End;
-                results ??= new List<T>();
+                results ??= new List<T?>();
                 results.Add(parsed.Value);
 
                 if (_separatorIsChar)
@@ -80,7 +80,7 @@ namespace Parlot.Fluent
                 }
             }
 
-            result = new ParseResult<List<T>>(start, end, results);
+            result = new ParseResult<List<T?>?>(start, end, results);
             return true;
         }
     }

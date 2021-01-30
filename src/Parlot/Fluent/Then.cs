@@ -10,8 +10,8 @@ namespace Parlot.Fluent
     /// <typeparam name="U">The output parser type.</typeparam>
     public sealed class Then<T, U> : Parser<U>
     {
-        private readonly Func<T, U> _action1;
-        private readonly Func<ParseContext, T, U> _action2;
+        private readonly Func<T, U>? _action1;
+        private readonly Func<ParseContext, T, U>? _action2;
         private readonly Parser<T> _parser;
 
         public Then(Parser<T> parser)

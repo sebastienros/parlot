@@ -4,8 +4,8 @@ namespace Parlot.Fluent
 {
     public sealed class Else<T, U> : Parser<U>
     {
-        private readonly Func<T, U> _action1;
-        private readonly Func<ParseContext, T, U> _action2;
+        private readonly Func<T, U>? _action1;
+        private readonly Func<ParseContext, T, U>? _action2;
         private readonly Parser<T> _parser;
 
         public Else(Parser<T> parser, Func<T, U> action)
