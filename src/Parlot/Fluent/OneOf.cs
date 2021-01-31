@@ -22,11 +22,6 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            if (Parsers.Length == 0)
-            {
-                return false;
-            }
-
             var start = context.Scanner.Cursor.Position;
 
             foreach (var parser in _parsers)
