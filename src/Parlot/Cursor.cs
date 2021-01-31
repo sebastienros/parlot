@@ -77,7 +77,7 @@ namespace Parlot
         /// <summary>
         /// Moves the cursor to the specific position
         /// </summary>
-        public void ResetPosition(TextPosition position)
+        public void ResetPosition(in TextPosition position)
         {
             if (position.Offset == _offset)
             {
