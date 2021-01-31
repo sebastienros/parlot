@@ -16,7 +16,7 @@ namespace Parlot.Fluent
 
         public string Text { get; }
 
-        public override bool Parse(in ParseContext context, ref ParseResult<string> result)
+        public override bool Parse(ParseContext context, ref ParseResult<string> result)
         {
             context.EnterParser(this);
 

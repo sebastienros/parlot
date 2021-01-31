@@ -13,7 +13,7 @@ namespace Parlot.Fluent
             _numberOptions = numberOptions;
             _skipWhiteSpace = skipWhiteSpace;
         }
-        public override bool Parse(in ParseContext context, ref ParseResult<long> result)
+        public override bool Parse(ParseContext context, ref ParseResult<long> result)
         {
             context.EnterParser(this);
 

@@ -18,7 +18,7 @@ namespace Parlot.Fluent
 
         public Parser<T>[] Parsers => _parsers;
 
-        public override bool Parse(in ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -52,7 +52,7 @@ namespace Parlot.Fluent
             _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
         }
 
-        public override bool Parse(in ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 

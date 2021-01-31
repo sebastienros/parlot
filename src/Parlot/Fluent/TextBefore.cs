@@ -15,7 +15,7 @@
             _consumeDelimiter = consumeDelimiter;
         }
 
-        public override bool Parse(in ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {
             if (context.Scanner.Cursor.Eof)
             {
