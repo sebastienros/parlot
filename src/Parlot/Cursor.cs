@@ -35,7 +35,19 @@ namespace Parlot
         /// Advances the cursor.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Advance(int count = 1)
+        public void Advance()
+        {
+            if (!Eof)
+            {
+                AdvanceOnce();
+            }
+        }
+
+        /// <summary>
+        /// Advances the cursor.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Advance(int count)
         {
             if (Eof)
             {
@@ -44,34 +56,43 @@ namespace Parlot
 
             do
             {
-                _offset++;
-
-                if (_offset >= _textLength)
+                if (!AdvanceOnce())
                 {
-                    Eof = true;
-                    _column++;
-                    _current = NullChar;
-                    return;
+                    count = 0;
                 }
-
-                var c = _buffer[_offset];
-
-                // most probable first 
-                if (_current != '\n' && c != '\r')
-                {
-                    _column++;
-                }
-                else if (_current == '\n')
-                {
-                    _line++;
-                    _column = 1;
-                }
-
-                // if c == '\r', don't increase the column count
-
-                _current = c;
                 count--;
             } while (count > 0);
+        }
+
+        internal bool AdvanceOnce()
+        {
+            _offset++;
+
+            if (_offset >= _textLength)
+            {
+                Eof = true;
+                _column++;
+                _current = NullChar;
+                return false;
+            }
+
+            var c = _buffer[_offset];
+
+            // most probable first 
+            if (_current != '\n' && c != '\r')
+            {
+                _column++;
+            }
+            else if (_current == '\n')
+            {
+                _line++;
+                _column = 1;
+            }
+
+            // if c == '\r', don't increase the column count
+
+            _current = c;
+            return true;
         }
 
         /// <summary>
