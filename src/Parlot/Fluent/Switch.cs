@@ -15,7 +15,7 @@ namespace Parlot.Fluent
             _action = action ?? throw new ArgumentNullException(nameof(action));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<U> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<U> result)
         {
             var previousResult = new ParseResult<T>();
 

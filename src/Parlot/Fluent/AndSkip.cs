@@ -4,8 +4,8 @@ namespace Parlot.Fluent
 {
     public sealed class AndSkip<T, U> : Parser<T>
     {
-        internal readonly Parser<T> _parser1;
-        internal readonly Parser<U> _parser2;
+        private readonly Parser<T> _parser1;
+        private readonly Parser<U> _parser2;
 
         public AndSkip(Parser<T> parser1, Parser<U> parser2)
         {
@@ -13,7 +13,7 @@ namespace Parlot.Fluent
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 

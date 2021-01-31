@@ -12,7 +12,7 @@ namespace Parlot.Fluent
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
         {
             context.EnterParser(this);
 
@@ -51,7 +51,7 @@ namespace Parlot.Fluent
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
         {
             context.EnterParser(this);
 
@@ -93,7 +93,7 @@ namespace Parlot.Fluent
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
         {
             context.EnterParser(this);
 
@@ -136,7 +136,7 @@ namespace Parlot.Fluent
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
         {
             context.EnterParser(this);
 
@@ -180,7 +180,7 @@ namespace Parlot.Fluent
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
         {
             context.EnterParser(this);
 
@@ -226,7 +226,7 @@ namespace Parlot.Fluent
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
         {
             context.EnterParser(this);
 

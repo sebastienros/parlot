@@ -4,7 +4,7 @@ namespace Parlot.Fluent
 {
     public abstract class Parser<T>
     { 
-        public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
+        public abstract bool Parse(in ParseContext parseContext, ref ParseResult<T> result);
 
         /// <summary>
         /// Builds a parser that converts the previous result when it succeeds.
@@ -75,7 +75,7 @@ namespace Parlot.Fluent
             return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult> parser, ParseContext context, out TResult value, out ParseError error)
+        public static bool TryParse<TResult>(this Parser<TResult> parser, in ParseContext context, out TResult value, out ParseError error)
         {
             error = null;
 

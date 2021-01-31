@@ -15,7 +15,7 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 

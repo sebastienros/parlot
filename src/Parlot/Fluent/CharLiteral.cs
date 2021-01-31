@@ -12,7 +12,7 @@
 
         public bool SkipWhiteSpace { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<char> result)
+        public override bool Parse(in ParseContext context, ref ParseResult<char> result)
         {
             context.EnterParser(this);
 
