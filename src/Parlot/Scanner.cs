@@ -53,19 +53,6 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpace()
         {
-            if (!Character.IsWhiteSpace(Cursor.Current))
-            {
-                return false;
-            }
-
-            return SkipWhiteSpaceUnlikely();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private bool SkipWhiteSpaceUnlikely()
-        {
-            Cursor.Advance();
-
             while (Character.IsWhiteSpace(Cursor.Current))
             {
                 Cursor.Advance();
