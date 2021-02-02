@@ -41,22 +41,25 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
             var variables = new List<ParameterExpression>();
             var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), "orSuccess");
-            var value = Expression.Variable(typeof(string), "orValue");
+            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = Expression.Variable(typeof(T), $"value{context.Counter}");
 
             variables.Add(success);
             variables.Add(value);
 
+            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+
             // var start = context.Scanner.Cursor.Position;
 
-            var start = Expression.Variable(typeof(TextPosition), "orStart");
+            var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
             variables.Add(start);
 
-            body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Position")));
+            body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), "Position")));
 
             // parse1 instructions
             // 
@@ -84,12 +87,12 @@ namespace Parlot.Fluent
             // Initialize the block variable with the inner else statement
             var block = Expression.Block(
                             Expression.Assign(success, Expression.Constant(false, typeof(bool))),
-                            Expression.Call(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
+                            Expression.Call(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
                             );
 
             foreach (var parser in _parsers.Reverse())
             {
-                var parserCompileResult = parser.Compile(parseContext);
+                var parserCompileResult = parser.Compile(context);
 
                 block = Expression.Block(
                     parserCompileResult.Variables,

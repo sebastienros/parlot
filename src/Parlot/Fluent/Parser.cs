@@ -5,14 +5,14 @@ namespace Parlot.Fluent
 {
     public interface ICompilable
     {
-        CompileResult Compile(Expression parseContext);
+        CompileResult Compile(CompilationContext context);
     }
 
     public abstract class Parser<T> : ICompilable
     { 
         public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
 
-        public virtual CompileResult Compile(Expression parseContext)
+        public virtual CompileResult Compile(CompilationContext context)
         {
             return CompileResult.Empty;
         }

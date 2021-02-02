@@ -7,26 +7,29 @@ namespace Parlot.Fluent
 {
     internal static class SequenceCompileHelper
     {
-        public static CompileResult CreateSequenceCompileResult(ICompilable[] parsers, Expression parseContext)
+        public static CompileResult CreateSequenceCompileResult(ICompilable[] parsers, CompilationContext context)
         {
-            var parserCompileResults = parsers.Select(x => x.Compile(parseContext)).ToArray();
+            var parserCompileResults = parsers.Select(x => x.Compile(context)).ToArray();
             var parserTypes = parserCompileResults.Select(x => x.Value.Type).ToArray();
             var resultType = GetValueTuple(parsers.Length).MakeGenericType(parserTypes);
 
             var variables = new List<ParameterExpression>();
             var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), "AndSuccess");
-            var value = Expression.Variable(resultType, "AndValue");
+            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = Expression.Variable(resultType, $"value{context.Counter}");
 
             variables.Add(success);
             variables.Add(value);
+            
+            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            body.Add(Expression.Assign(value, Expression.New(resultType)));
 
             // var start = context.Scanner.Cursor.Position;
 
-            var start = Expression.Variable(typeof(TextPosition), "AndStart");
+            var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
             variables.Add(start);
 
-            body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Position")));
+            body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), "Position")));
 
             // parse1 instructions
             // 
@@ -43,7 +46,7 @@ namespace Parlot.Fluent
             // }
             // 
 
-            Type GetValueTuple(int length)
+            static Type GetValueTuple(int length)
             {
                 return length switch
                 {
@@ -62,7 +65,7 @@ namespace Parlot.Fluent
 
             // Initialize the block variable with the inner else statement
             var block = Expression.Block(
-                            Expression.Assign(success, Expression.Constant(false, typeof(bool))),
+                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
                             Expression.Assign(value, Expression.New(valueTupleConstructor, parserCompileResults.Select(x => x.Value).ToArray()))
                             );
 
@@ -92,7 +95,7 @@ namespace Parlot.Fluent
 
             body.Add(Expression.IfThen(
                 Expression.Not(success),
-                Expression.Call(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
+                Expression.Call(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
                 ));
 
             return new CompileResult(variables, body, success, value);
@@ -135,9 +138,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
-            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, parseContext);
+            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, context);
         }
     }
 
@@ -187,9 +190,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
-            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, parseContext);
+            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, context);
         }
     }
 
@@ -237,12 +240,12 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
-            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, parseContext);
+            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, context);
         }
     }
-    
+
     public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
@@ -288,10 +291,11 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
-            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, parseContext);
+            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, context);
         }
+
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
@@ -341,9 +345,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
-            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, parseContext);
+            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, context);
         }
     }
 
@@ -395,9 +399,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
-            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, parseContext);
+            return SequenceCompileHelper.CreateSequenceCompileResult(Parsers, context);
         }
     }
 }

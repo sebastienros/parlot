@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
@@ -91,6 +94,72 @@ namespace Parlot.Fluent
             }
 
             return true;
+        }
+
+        public override CompileResult Compile(CompilationContext context)
+        {
+            var variables = new List<ParameterExpression>();
+            var body = new List<Expression>();
+            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = Expression.Variable(typeof(T), $"value{context.Counter}");
+
+            variables.Add(success);
+            variables.Add(value);
+
+            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+
+            // before instructions
+            // 
+            // if (before.Success)
+            // {
+            //    parser instructions
+            //    
+            //    if (parser.Success)
+            //    {
+            //       after instructions
+            //    
+            //       if (after.Success)
+            //       {
+            //          success = true;
+            //          value = parser.Value;
+            //       }  
+            //    }
+            // }
+
+            var beforeCompileResult = _before.Compile(context);
+            var parserCompileResult = _parser.Compile(context);
+            var afterCompileResult = _after.Compile(context);
+
+            var block = Expression.Block(
+                    beforeCompileResult.Variables,
+                    Expression.Block(beforeCompileResult.Body),
+                    Expression.IfThen(
+                        beforeCompileResult.Success,
+                        Expression.Block(
+                            parserCompileResult.Variables,
+                            Expression.Block(parserCompileResult.Body),
+                            Expression.IfThen(
+                                parserCompileResult.Success,
+                                Expression.Block(
+                                    afterCompileResult.Variables,
+                                    Expression.Block(afterCompileResult.Body),
+                                    Expression.IfThen(
+                                        afterCompileResult.Success,
+                                        Expression.Block(
+                                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                            Expression.Assign(value, parserCompileResult.Value)
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    );
+
+            body.Add(block);
+
+            return new CompileResult(variables, body, success, value);
         }
     }
 }

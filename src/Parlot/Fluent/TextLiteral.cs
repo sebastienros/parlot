@@ -38,40 +38,39 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(Expression parseContext)
+        public override CompileResult Compile(CompilationContext context)
         {
             var variables = new List<ParameterExpression>();
             var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), "textSuccess");
-            var value = Expression.Variable(typeof(string), "textValue");
+            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = Expression.Variable(typeof(string), $"value{context.Counter}");
 
             variables.Add(success);
             variables.Add(value);
+
+            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            body.Add(Expression.Assign(value, Expression.Constant(default(string), typeof(string))));
 
             //if (_skipWhiteSpace)
             //{
             //    context.SkipWhiteSpace();
             //}
-            
+
             if (_skipWhiteSpace)
             {
                 var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                body.Add(Expression.Call(parseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
             }
 
-            //if (context.Scanner.ReadText(Text, _comparer, null))
-            //{
-            //    success = true;
-            //    value = Text;
-            //}
-            //{
-            //    success = false;
-            //    value = null;
-            //}
+            // if (context.Scanner.ReadText(Text, _comparer, null))
+            // {
+            //     success = true;
+            //     value = Text;
+            // }
 
-            var ifReadText = Expression.IfThenElse(
+            var ifReadText = Expression.IfThen(
                 Expression.Call(
-                    Expression.Field(parseContext, "Scanner"),
+                    Expression.Field(context.ParseContext, "Scanner"),
                     ExpressionHelper.Scanner_ReadText,
                     Expression.Constant(Text, typeof(string)),
                     Expression.Constant(_comparer, typeof(StringComparer)),
@@ -80,10 +79,6 @@ namespace Parlot.Fluent
                 Expression.Block(
                     Expression.Assign(success, Expression.Constant(true, typeof(bool))),
                     Expression.Assign(value, Expression.Constant(Text, typeof(string)))
-                    ),
-                Expression.Block(
-                    Expression.Assign(success, Expression.Constant(false, typeof(bool))),
-                    Expression.Assign(value, Expression.Constant(null, typeof(string)))
                     )
                 );
 

@@ -13,6 +13,10 @@
 
         //internal static Expression< ParserContext_ScannerProperty = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
 
-        internal static Expression<Func<ParseContext, int>> GetOffsetExpression() => (context) => context.Scanner.Cursor.Offset;
+        internal static Expression ReadChar(Expression parseContext, char c) => Expression.Call(Expression.Field(parseContext, "Scanner"), typeof(Scanner).GetMethod(nameof(Scanner.ReadChar)), Expression.Constant(c), Expression.Constant(null, typeof(TokenResult)));
+        internal static Expression ReadDecimal(Expression parseContext) => Expression.Call(Expression.Field(parseContext, "Scanner"), typeof(Scanner).GetMethod(nameof(Scanner.ReadDecimal)), Expression.Constant(null, typeof(TokenResult)));
+        internal static Expression Offset(Expression parseContext) => Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Offset");
+        internal static Expression Eof(Expression parseContext) => Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Eof");
+        internal static Expression Buffer(Expression parseContext) => Expression.Field(Expression.Field(parseContext, "Scanner"), "Buffer");
     }
 }

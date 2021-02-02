@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
@@ -52,6 +55,62 @@ namespace Parlot.Fluent
             }
 
             return false;
+        }
+
+        public override CompileResult Compile(CompilationContext context)
+        {
+            var variables = new List<ParameterExpression>();
+            var body = new List<Expression>();
+            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = Expression.Variable(typeof(U), $"value{context.Counter}");
+
+            variables.Add(success);
+            variables.Add(value);
+
+            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            // parse1 instructions
+            // 
+            // if (parser1.Success)
+            // {
+            //    success = true;
+            //    value = action(parse1.Value);
+            // }
+
+            var parserCompileResult = _parser.Compile(context);
+
+            Expression transformation;
+
+            if (_action1 != null)
+            {
+                transformation = Expression.Invoke(Expression.Constant(_action1), new [] { parserCompileResult.Value });
+            }
+            else if (_action2 != null)
+            {
+                transformation = Expression.Invoke(Expression.Constant(_action2), context.ParseContext, parserCompileResult.Value);
+            }
+            else
+            {
+                transformation = Expression.Default(typeof(U));
+            }
+
+            var block = Expression.Block(
+                    parserCompileResult.Variables,
+                    parserCompileResult.Body
+                    .Append(
+                        Expression.IfThen(
+                            parserCompileResult.Success,
+                            Expression.Block(
+                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                Expression.Assign(value, transformation)
+                                )
+                            )
+                        )
+                    );
+
+            body.Add(block);
+
+            return new CompileResult(variables, body, success, value);
         }
     }
 }

@@ -5,7 +5,7 @@ namespace Parlot
 {
     public struct CompileResult
     {
-        public static readonly CompileResult Empty = new CompileResult();
+        public static readonly CompileResult Empty = new();
 
         public CompileResult(List<ParameterExpression> variables, List<Expression> body, ParameterExpression success, ParameterExpression value)
         {
