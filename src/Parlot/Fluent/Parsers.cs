@@ -80,6 +80,11 @@ namespace Parlot.Fluent
         public Parser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
 
         /// <summary>
+        /// Builds a parser that matches anything until whitespaces.
+        /// </summary>
+        public Parser<TextSpan> NonWhiteSpace() => new NonWhiteSpaceLiteral(skipWhiteSpace: false);
+
+        /// <summary>
         /// Builds a parser that matches the specified text.
         /// </summary>
         public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
@@ -112,6 +117,11 @@ namespace Parlot.Fluent
 
     public class TermBuilder
     {
+        /// <summary>
+        /// Builds a parser that matches anything until whitespaces.
+        /// </summary>
+        public Parser<TextSpan> NonWhiteSpace() => new NonWhiteSpaceLiteral();
+
         /// <summary>
         /// Builds a parser that matches the specified text.
         /// </summary>
