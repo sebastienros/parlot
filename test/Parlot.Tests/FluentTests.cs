@@ -19,6 +19,15 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void WhenShouldResetPositionWhenFalse()
+        {
+            var evenIntegers = ZeroOrOne(Literals.Integer().When(x => x % 2 == 0)).And(Literals.Integer());
+
+            Assert.True(evenIntegers.TryParse("1235", out var result1));
+            Assert.Equal(1235, result1.Item2);
+        }
+
+        [Fact]
         public void ThenShouldConvertParser()
         {
             var evenIntegers = Literals.Integer().Then(x => x % 2);
