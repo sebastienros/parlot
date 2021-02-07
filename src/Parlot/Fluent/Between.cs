@@ -45,7 +45,7 @@ namespace Parlot.Fluent
             {
                 if (_beforeSkipWhiteSpace)
                 {
-                    context.Scanner.SkipWhiteSpace();
+                    context.SkipWhiteSpace();
                 }
 
                 if (!context.Scanner.ReadChar(_beforeChar))
@@ -72,7 +72,7 @@ namespace Parlot.Fluent
             {
                 if (_afterSkipWhiteSpace)
                 {
-                    context.Scanner.SkipWhiteSpace();
+                    context.SkipWhiteSpace();
                 }
 
                 if (!context.Scanner.ReadChar(_afterChar))

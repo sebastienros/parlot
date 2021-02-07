@@ -24,7 +24,6 @@ namespace Parlot
         {
             return (ch == 32) || // space
                    (ch == '\t') || // horizontal tab
-                   (ch == '\v') || // vertical tab
                    (ch == 0xC) || // form feed - new page
                    (ch == 0xA0) || // non-breaking space
                    (ch >= 0x1680 && (
@@ -38,7 +37,7 @@ namespace Parlot
         }
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
-            => (ch == '\n') || (ch == '\r') || IsWhiteSpace(ch);
+            => (ch == '\n') || (ch == '\r') || (ch == '\v') || IsWhiteSpace(ch);
 
         public static char ScanHexEscape(string text, int index, out int length)
         {
