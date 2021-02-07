@@ -49,9 +49,9 @@ namespace Parlot.Fluent
 
     public static class ParserExtensions
     {
-        public static T Parse<T>(this Parser<T> parser, string text)
+        public static T Parse<T>(this Parser<T> parser, string text, ParseContext context = null)
         {
-            var context = new ParseContext(new Scanner(text));
+            context ??= new ParseContext(new Scanner(text));
 
             var localResult = new ParseResult<T>();
 
@@ -70,7 +70,7 @@ namespace Parlot.Fluent
             return parser.TryParse(text, out value, out _);
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult> parser, string text, out TResult value, out ParseError error)
+        public static bool TryParse<TResult>(this Parser<TResult> parser, string text,out TResult value, out ParseError error)
         {
             return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
         }

@@ -66,7 +66,7 @@ namespace Parlot.Fluent
                 {
                     if (_separatorWhiteSpace)
                     {
-                        context.Scanner.SkipWhiteSpace();
+                        context.SkipWhiteSpace();
                     }
 
                     if (!context.Scanner.ReadChar(_separatorChar))

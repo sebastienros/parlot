@@ -3,25 +3,36 @@
     public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>
     {
         private readonly bool _skipWhiteSpace;
+        private readonly bool _includeNewLines;
 
-        public NonWhiteSpaceLiteral(bool skipWhiteSpace = true)
+        public NonWhiteSpaceLiteral(bool skipWhiteSpace = true, bool includeNewLines = false)
         {
             _skipWhiteSpace = skipWhiteSpace;
+            _includeNewLines = includeNewLines;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {
             if (_skipWhiteSpace)
             {
-                context.Scanner.SkipWhiteSpace();
+                context.SkipWhiteSpace();
+            }
+
+            if (context.Scanner.Cursor.Eof)
+            {
+                return false;
             }
 
             var start = context.Scanner.Cursor.Offset;
 
-            while (!context.Scanner.Cursor.Eof && context.Scanner.ReadNonWhiteSpace())
+            if (_includeNewLines)
             {
-                context.Scanner.Cursor.Advance();
+                context.Scanner.ReadNonWhiteSpace();
             }
+            else
+            {
+                context.Scanner.ReadNonWhiteSpaceOrNewLine();
+            }            
 
             var end = context.Scanner.Cursor.Offset;
 

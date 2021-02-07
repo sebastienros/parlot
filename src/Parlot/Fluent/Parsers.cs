@@ -82,7 +82,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.
         /// </summary>
-        public Parser<TextSpan> NonWhiteSpace() => new NonWhiteSpaceLiteral(skipWhiteSpace: false);
+        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = false) => new NonWhiteSpaceLiteral(skipWhiteSpace: false, includeNewLines: includeNewLines);
 
         /// <summary>
         /// Builds a parser that matches the specified text.
@@ -120,7 +120,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.
         /// </summary>
-        public Parser<TextSpan> NonWhiteSpace() => new NonWhiteSpaceLiteral();
+        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = false) => new NonWhiteSpaceLiteral(includeNewLines: includeNewLines);
 
         /// <summary>
         /// Builds a parser that matches the specified text.

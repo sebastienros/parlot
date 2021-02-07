@@ -71,6 +71,12 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ParseContextShouldUseNewLines()
+        {
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse("\n\r\v a"));
+        }
+
+        [Fact]
         public void LiteralsShouldNotSkipWhiteSpaceByDefault()
         {
             Assert.False(Literals.Char('a').TryParse(" a", out _));
@@ -280,6 +286,22 @@ namespace Parlot.Tests
 
             Assert.Equal("abcd", choice.Parse("abcd"));
             Assert.Equal("abed", choice.Parse("abed"));
+        }
+
+        [Fact]
+        public void NonWhiteSpaceShouldStopAtSpaceOrEof()
+        {
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a "));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a b"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse("a b"));
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc b"));
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc\nb"));
+            Assert.Equal("abc\nb", Terms.NonWhiteSpace(true).Parse("abc\nb"));
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc"));
+
+            Assert.False(Terms.NonWhiteSpace().TryParse("", out _));
+            Assert.False(Terms.NonWhiteSpace().TryParse(" ", out _));
         }
     }
 }
