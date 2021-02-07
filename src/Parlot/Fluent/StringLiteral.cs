@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Parlot.Fluent
+﻿namespace Parlot.Fluent
 {
     public enum StringLiteralQuotes
     {

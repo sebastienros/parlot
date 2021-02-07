@@ -5,7 +5,7 @@ using Parlot.Tests.Json;
 
 namespace Parlot.Benchmarks
 {
-    [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
+    [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     public class ParlotBenchmarks
     {
         private const string _stringWithEscapes = "This is a new line \\n \\t and a tab and some \\xa0";

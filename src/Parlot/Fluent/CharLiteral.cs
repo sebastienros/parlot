@@ -25,7 +25,7 @@
 
             if (context.Scanner.ReadChar(Char))
             {
-                result.Set(start, context.Scanner.Cursor.Offset,  Char);
+                result.Set(start, context.Scanner.Cursor.Offset, Char);
                 return true;
             }
 

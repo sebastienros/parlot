@@ -4,8 +4,6 @@ namespace Parlot.Fluent
 {
     public class ParseContext
     {
-        private ParseResult<TextSpan> _whiteSpaceResult = new();
-
         /// <summary>
         /// Whether new lines are treated as normal chars or white spaces.
         /// </summary>
@@ -39,11 +37,7 @@ namespace Parlot.Fluent
 
         public void SkipWhiteSpace()
         {
-            if (WhiteSpaceParser != null)
-            {
-                WhiteSpaceParser.Parse(this, ref _whiteSpaceResult);
-            }
-            else
+            if (WhiteSpaceParser is null)
             {
                 if (UseNewLines)
                 {
@@ -53,6 +47,11 @@ namespace Parlot.Fluent
                 {
                     Scanner.SkipWhiteSpaceOrNewLine();
                 }
+            }
+            else
+            {
+                ParseResult<TextSpan> _ = new();
+                WhiteSpaceParser.Parse(this, ref _);
             }
         }
 

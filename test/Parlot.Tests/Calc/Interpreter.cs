@@ -1,5 +1,3 @@
-using System;
-
 namespace Parlot.Tests.Calc
 {
     /*
@@ -110,11 +108,13 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            var number = new TokenResult();
-
-            if (_scanner.ReadDecimal(number))
+            if (_scanner.ReadDecimal(out var number))
             {
-                return decimal.Parse(number.Text);
+#if NETCOREAPP2_1
+                return decimal.Parse(number.GetText());
+#else
+                return decimal.Parse(number.Span);
+#endif
             }
 
             if (_scanner.ReadChar('('))

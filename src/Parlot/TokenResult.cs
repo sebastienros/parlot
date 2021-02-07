@@ -2,47 +2,35 @@
 
 namespace Parlot
 {
-    public sealed class TokenResult
+    using System.Runtime.CompilerServices;
+
+    public readonly struct TokenResult
     {
-        private string _text;
+        private readonly string _buffer;
+        
+        public readonly int Start;
+        public readonly int Length;
 
-        public bool Success { get; private set; }
+        private TokenResult(string buffer, int start, int length)
+        {
+            _buffer = buffer;
+            Start = start;
+            Length = length;
+        }
 
-        public int Start { get; private set; }
-
-        public int End { get; private set; }
-
-        public int Length { get; private set; }
-        public string Buffer { get; private set; }
-
-        public string Text => _text ??= Buffer?.Substring(Start, Length);
+        public string GetText() => _buffer.Substring(Start, Length);
 
 #if !NETSTANDARD2_0
-        public ReadOnlySpan<char> Span => Buffer.AsSpan(Start, Length);
+        public ReadOnlySpan<char> Span => _buffer.AsSpan(Start, Length);
 #endif
-        
-        public TokenResult Succeed(string buffer, int start, int end)
-        {
-            Success = true;
-            Buffer = buffer;
-            Start = start;
-            End = end;
-            Length = end - start;
-            _text = null;
 
-            return this;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static TokenResult Succeed(string buffer, int start, int end)
+        {
+            return new(buffer, start, end - start);
         }
 
-        public TokenResult Fail()
-        {
-            Success = false;
-            Buffer = null;
-            _text = null;
-            Start = 0;
-            End = 0;
-            Length = 0;
-
-            return this;
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static TokenResult Fail() => default;
     }
 }

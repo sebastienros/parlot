@@ -34,49 +34,71 @@ namespace Parlot
         /// <summary>
         /// Advances the cursor.
         /// </summary>
-        public void Advance(int count = 1)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Advance()
+        {
+            if (!Eof)
+            {
+                AdvanceOnce();
+            }
+        }
+
+        /// <summary>
+        /// Advances the cursor.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Advance(int count)
         {
             if (Eof)
             {
                 return;
             }
 
-            for (var i = 0; i < count; i++)
+            do
             {
-                _offset++;
-
-                if (_offset >= _textLength)
+                if (!AdvanceOnce())
                 {
-                    Eof = true;
-                    _column++;
-                    _current = NullChar;
-                    return;
+                    count = 0;
                 }
+                count--;
+            } while (count > 0);
+        }
 
-                var c = _buffer[_offset];
+        internal bool AdvanceOnce()
+        {
+            _offset++;
 
-                if (_current == '\n')
-                {
-                    _line++;
-                    _column = 1;
-                }
-                else if (c == '\r')
-                {
-                    // Don't increase the column count
-                }
-                else
-                {
-                    _column++;
-                }
-
-                _current = c;
+            if (_offset >= _textLength)
+            {
+                Eof = true;
+                _column++;
+                _current = NullChar;
+                return false;
             }
+
+            var c = _buffer[_offset];
+
+            // most probable first 
+            if (_current != '\n' && c != '\r')
+            {
+                _column++;
+            }
+            else if (_current == '\n')
+            {
+                _line++;
+                _column = 1;
+            }
+
+            // if c == '\r', don't increase the column count
+
+            _current = c;
+            return true;
         }
 
         /// <summary>
         /// Moves the cursor to the specific position
         /// </summary>
-        public void ResetPosition(TextPosition position)
+        public void ResetPosition(in TextPosition position)
         {
             if (position.Offset == _offset)
             {

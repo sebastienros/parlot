@@ -25,10 +25,9 @@ namespace Parlot.Tests
         public void ShouldReadEscapedStringWithMatchingQuotes(string text, string expected)
         {
             Scanner s = new(text);
-            var result = new TokenResult();
-            var success = s.ReadQuotedString(result);
+            var success = s.ReadQuotedString(out var result);
             Assert.True(success);
-            Assert.Equal(expected, result.Text);
+            Assert.Equal(expected, result.GetText());
         }
 
         [Theory]
@@ -40,10 +39,9 @@ namespace Parlot.Tests
         public void ShouldReadStringWithEscapes(string text, string expected)
         {
             Scanner s = new(text);
-            var result = new TokenResult();
-            var success = s.ReadQuotedString(result);
+            var success = s.ReadQuotedString(out var result);
             Assert.True(success);
-            Assert.Equal(expected, result.Text);
+            Assert.Equal(expected, result.GetText());
         }
 
         [Theory]
@@ -86,102 +84,93 @@ namespace Parlot.Tests
         public void ReadIdentifierShouldReadIdentifier()
         {
             Scanner s = new("a $abc 123");
-            var result = new TokenResult();
 
-            Assert.True(s.ReadIdentifier(result));
-            Assert.Equal("a", result.Text);
-
-            s.SkipWhiteSpace();
-
-            Assert.True(s.ReadIdentifier(result));
-            Assert.Equal("$abc", result.Text);
+            Assert.True(s.ReadIdentifier(out var result));
+            Assert.Equal("a", result.GetText());
 
             s.SkipWhiteSpace();
 
-            Assert.False(s.ReadIdentifier(result));
+            Assert.True(s.ReadIdentifier(out result));
+            Assert.Equal("$abc", result.GetText());
+
+            s.SkipWhiteSpace();
+
+            Assert.False(s.ReadIdentifier());
         }
 
         [Fact]
         public void ReadCharShouldReadSingleChar()
         {
             Scanner s = new("aaa");
-            var result = new TokenResult();
 
-            Assert.True(s.ReadChar('a', result));
-            Assert.Equal("a", result.Text);
+            Assert.True(s.ReadChar('a', out var result));
+            Assert.Equal("a", result.GetText());
 
-            Assert.True(s.ReadChar('a', result));
-            Assert.Equal("a", result.Text);
+            Assert.True(s.ReadChar('a', out result));
+            Assert.Equal("a", result.GetText());
 
-            Assert.True(s.ReadChar('a', result));
-            Assert.Equal("a", result.Text);
+            Assert.True(s.ReadChar('a', out result));
+            Assert.Equal("a", result.GetText());
 
-            Assert.False(s.ReadChar('a', result));
+            Assert.False(s.ReadChar('a'));
         }
 
         [Fact]
         public void ReadTextShouldBeCaseSensitiveByDefault()
         {
             Scanner s = new("abcd");
-            var result = new TokenResult();
 
             // We test each char position because to verify specific optimizations
             // in the implementation.
-            Assert.False(s.ReadText("Abcd", result: result));
-            Assert.False(s.ReadText("aBcd", result: result));
-            Assert.False(s.ReadText("abCd", result: result));
-            Assert.False(s.ReadText("abcD", result: result));
-            Assert.True(s.ReadText("ABCD", comparer: StringComparer.OrdinalIgnoreCase, result: result));
-            Assert.Equal("abcd", result.Text);
+            Assert.False(s.ReadText("Abcd"));
+            Assert.False(s.ReadText("aBcd"));
+            Assert.False(s.ReadText("abCd"));
+            Assert.False(s.ReadText("abcD"));
+            Assert.True(s.ReadText("ABCD", comparer: StringComparer.OrdinalIgnoreCase, out var result));
+            Assert.Equal("abcd", result.GetText());
         }
 
         [Fact]
         public void ReadTextShouldReadTheFullTextOrNothing()
         {
             Scanner s = new("abcd");
-            var result = new TokenResult();
 
-            Assert.False(s.ReadText("abcde", result: result));
-            Assert.False(s.ReadText("abd", result: result));
+            Assert.False(s.ReadText("abcde"));
+            Assert.False(s.ReadText("abd"));
 
-            Assert.True(s.ReadText("abc", result: result));
-            Assert.Equal("abc", result.Text);
+            Assert.True(s.ReadText("abc", out var result));
+            Assert.Equal("abc", result.GetText());
 
-            Assert.True(s.ReadText("d", result: result));
-            Assert.Equal("d", result.Text);
+            Assert.True(s.ReadText("d", out result));
+            Assert.Equal("d", result.GetText());
         }
 
         [Fact]
         public void ReadSingleQuotedStringShouldReadSingleQuotedStrings()
         {
-            var result = new TokenResult();
+            new Scanner("'abcd'").ReadSingleQuotedString(out var result);
+            Assert.Equal("'abcd'", result.GetText());
 
-            new Scanner("'abcd'").ReadSingleQuotedString(result);
-            Assert.Equal("'abcd'", result.Text);
+            new Scanner("'a\\nb'").ReadSingleQuotedString(out result);
+            Assert.Equal("'a\\nb'", result.GetText());
 
-            new Scanner("'a\\nb'").ReadSingleQuotedString(result);
-            Assert.Equal("'a\\nb'", result.Text);
-
-            Assert.False(new Scanner("'abcd").ReadSingleQuotedString(result));
-            Assert.False(new Scanner("abcd'").ReadSingleQuotedString(result));
-            Assert.False(new Scanner("ab\\'cd").ReadSingleQuotedString(result));
-
+            Assert.False(new Scanner("'abcd").ReadSingleQuotedString());
+            Assert.False(new Scanner("abcd'").ReadSingleQuotedString());
+            Assert.False(new Scanner("ab\\'cd").ReadSingleQuotedString());
         }
 
         [Fact]
         public void ReadDoubleQuotedStringShouldReadDoubleQuotedStrings()
         {
-            var result = new TokenResult();
+            new Scanner("\"abcd\"").ReadDoubleQuotedString(out var result);
+            Assert.Equal("\"abcd\"", result.GetText());
 
-            new Scanner("\"abcd\"").ReadDoubleQuotedString(result);
-            Assert.Equal("\"abcd\"", result.Text);
-
-            new Scanner("\"a\\nb\"").ReadDoubleQuotedString(result);
-            Assert.Equal("\"a\\nb\"", result.Text);
+            new Scanner("\"a\\nb\"").ReadDoubleQuotedString(out result);
+            Assert.Equal("\"a\\nb\"", result.GetText());
 
             Assert.False(new Scanner("\"abcd").ReadDoubleQuotedString());
             Assert.False(new Scanner("abcd\"").ReadDoubleQuotedString());
-            Assert.False(new Scanner("\"ab\\\"cd").ReadDoubleQuotedString(result));
+            Assert.False(new Scanner("\"ab\\\"cd").ReadDoubleQuotedString());
         }
 
         [Theory]
@@ -193,10 +182,8 @@ namespace Parlot.Tests
         [InlineData("123.01", "123.01")]
         public void ShouldReadValidDecimal(string text, string expected)
         {
-            var result = new TokenResult();
-
-            Assert.True(new Scanner(text).ReadDecimal(result));
-            Assert.Equal(expected, result.Text);
+            Assert.True(new Scanner(text).ReadDecimal(out var result));
+            Assert.Equal(expected, result.GetText());
         }
 
         [Theory]
@@ -212,10 +199,8 @@ namespace Parlot.Tests
         [InlineData("'a\r\nb' ", "'a\r\nb'")]
         public void ShouldReadStringsWithLineBreaks(string text, string expected)
         {
-            var result = new TokenResult();
-
-            Assert.True(new Scanner(text).ReadSingleQuotedString(result));
-            Assert.Equal(expected, result.Text);
+            Assert.True(new Scanner(text).ReadSingleQuotedString(out var result));
+            Assert.Equal(expected, result.GetText());
         }
 
         [Theory]
@@ -230,10 +215,8 @@ namespace Parlot.Tests
 
         public void ShouldReadUnicodeSequence(string text, string expected)
         {
-            var result = new TokenResult();
-
-            new Scanner(text).ReadQuotedString(result);
-            Assert.Equal(expected, result.Text);
+            new Scanner(text).ReadQuotedString(out var result);
+            Assert.Equal(expected, result.GetText());
         }
     }
 }

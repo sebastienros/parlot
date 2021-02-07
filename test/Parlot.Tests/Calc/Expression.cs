@@ -7,25 +7,25 @@ namespace Parlot.Tests.Calc
 
     public abstract class BinaryExpression : Expression
     {
-        public BinaryExpression(Expression left, Expression right)
+        protected BinaryExpression(Expression left, Expression right)
         {
             Left = left;
             Right = right;
         }
 
-        public Expression Left { get; set; }
-        public Expression Right { get; set; }
+        public Expression Left { get; }
+        public Expression Right { get; }
 
     }
 
     public abstract class UnaryExpression : Expression
     {
-        public UnaryExpression(Expression inner)
+        protected UnaryExpression(Expression inner)
         {
             Inner = inner;
         }
 
-        public Expression Inner { get; set; }
+        public Expression Inner { get; }
     }
 
     public class NegateExpression : UnaryExpression
@@ -45,8 +45,6 @@ namespace Parlot.Tests.Calc
     {
         public Addition(Expression left, Expression right) : base(left, right)
         {
-            Left = left;
-            Right = right;
         }
 
         public override decimal Evaluate()
@@ -59,8 +57,6 @@ namespace Parlot.Tests.Calc
     {
         public Subtraction(Expression left, Expression right) : base(left, right)
         {
-            Left = left;
-            Right = right;
         }
 
         public override decimal Evaluate()
@@ -74,8 +70,6 @@ namespace Parlot.Tests.Calc
     {
         public Multiplication(Expression left, Expression right) : base(left, right)
         {
-            Left = left;
-            Right = right;
         }
 
         public override decimal Evaluate()
@@ -89,8 +83,6 @@ namespace Parlot.Tests.Calc
     {
         public Division(Expression left, Expression right) : base(left, right)
         {
-            Left = left;
-            Right = right;
         }
 
         public override decimal Evaluate()
@@ -106,7 +98,7 @@ namespace Parlot.Tests.Calc
             Value = value;
         }
 
-        public decimal Value { get; set; }
+        public decimal Value { get; }
 
         public override decimal Evaluate()
         {

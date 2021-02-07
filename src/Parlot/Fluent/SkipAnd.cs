@@ -7,8 +7,6 @@ namespace Parlot.Fluent
         internal readonly Parser<A> _parser1;
         internal readonly Parser<T> _parser2;
 
-        static ParseResult<A> _parseResult1 = new ParseResult<A>();
-
         public SkipAnd(Parser<A> parser1, Parser<T> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
@@ -21,7 +19,8 @@ namespace Parlot.Fluent
 
             var start = context.Scanner.Cursor.Position;
 
-            if (_parser1.Parse(context, ref _parseResult1))
+            ParseResult<A> _ = new();
+            if (_parser1.Parse(context, ref _))
             {
                 var parseResult2 = new ParseResult<T>();
 
