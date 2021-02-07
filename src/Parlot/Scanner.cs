@@ -206,7 +206,7 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpace(out _); 
+        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _); 
 
         public bool ReadNonWhiteSpaceOrNewLine(out TokenResult result)
         {
