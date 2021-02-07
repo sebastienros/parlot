@@ -205,9 +205,12 @@ namespace Parlot
             return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
         }
 
-        public bool ReadNonWhiteSpaceOrNewLine(TokenResult result = null)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpace(out _); 
+
+        public bool ReadNonWhiteSpaceOrNewLine(out TokenResult result)
         {
-            return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), result);
+            return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
         }
 
         /// <summary>
