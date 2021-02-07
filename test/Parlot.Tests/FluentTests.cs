@@ -19,6 +19,15 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void WhenShouldResetPositionWhenFalse()
+        {
+            var evenIntegers = ZeroOrOne(Literals.Integer().When(x => x % 2 == 0)).And(Literals.Integer());
+
+            Assert.True(evenIntegers.TryParse("1235", out var result1));
+            Assert.Equal(1235, result1.Item2);
+        }
+
+        [Fact]
         public void ThenShouldConvertParser()
         {
             var evenIntegers = Literals.Integer().Then(x => x % 2);
@@ -59,6 +68,12 @@ namespace Parlot.Tests
             Assert.False(code.TryParse("123", out _));
             Assert.False(code.TryParse("[[123", out _));
             Assert.False(code.TryParse("[[123]", out _));
+        }
+
+        [Fact]
+        public void ParseContextShouldUseNewLines()
+        {
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse("\n\r\v a"));
         }
 
         [Fact]
@@ -271,6 +286,22 @@ namespace Parlot.Tests
 
             Assert.Equal("abcd", choice.Parse("abcd"));
             Assert.Equal("abed", choice.Parse("abed"));
+        }
+
+        [Fact]
+        public void NonWhiteSpaceShouldStopAtSpaceOrEof()
+        {
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a "));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a b"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse("a b"));
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc b"));
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc\nb"));
+            Assert.Equal("abc\nb", Terms.NonWhiteSpace(true).Parse("abc\nb"));
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc"));
+
+            Assert.False(Terms.NonWhiteSpace().TryParse("", out _));
+            Assert.False(Terms.NonWhiteSpace().TryParse(" ", out _));
         }
     }
 }

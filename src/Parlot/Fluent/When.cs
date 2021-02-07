@@ -3,7 +3,7 @@
 namespace Parlot.Fluent
 {
     /// <summary>
-    /// Ensure the given parser is valid based on a condition
+    /// Ensure the given parser is valid based on a condition, and backtracks if not.
     /// </summary>
     /// <typeparam name="T">The output parser type.</typeparam>
     public sealed class When<T> : Parser<T>
@@ -20,8 +20,17 @@ namespace Parlot.Fluent
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
+
+            var start = context.Scanner.Cursor.Position;
             
-            return _parser.Parse(context, ref result) && _action(result.Value);
+            var valid = _parser.Parse(context, ref result) && _action(result.Value);
+
+            if (!valid)
+            {
+                context.Scanner.Cursor.ResetPosition(start);
+            }
+
+            return valid;
         }
     }
 }

@@ -205,6 +205,11 @@ namespace Parlot
             return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
         }
 
+        public bool ReadNonWhiteSpaceOrNewLine(TokenResult result = null)
+        {
+            return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), result);
+        }
+
         /// <summary>
         /// Reads the specified text.
         /// </summary>

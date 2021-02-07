@@ -57,6 +57,7 @@ namespace Parlot.Tests
         [Fact]
         public void SkipWhitespaceShouldSkipWhitespace()
         {
+            // New lines are not considered white spaces
             Scanner s = new("Lorem ipsum   \r\n   ");
 
             Assert.False(s.SkipWhiteSpace());
