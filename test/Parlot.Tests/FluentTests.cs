@@ -101,6 +101,28 @@ namespace Parlot.Tests
             Assert.False(Literals.Char('a').TryParse("B", out _));
         }
 
+        [Fact]
+        public void CharLiteralPredicate()
+        {
+            Assert.True(Literals.Char(c => c == 'a').TryParse("a", out _));
+            Assert.False(Literals.Char(c => c == 'a').TryParse("b", out _));
+            Assert.True(Literals.Char(c => c == 'a' || c == 'b').TryParse("b", out _));
+            Assert.True(Literals.Char(c => Character.IsHexDigit(c)).TryParse("b", out _));
+            Assert.True(Literals.Char(c => Character.IsHexDigit(c)).TryParse("B", out _));
+            Assert.False(Literals.Char(c => Character.IsHexDigit(c)).TryParse("X", out _));
+        }
+
+        [Fact]
+        public void TermCharLiteralPredicate()
+        {
+            Assert.True(Terms.Char(c => c == 'a').TryParse(" a", out _));
+            Assert.False(Terms.Char(c => c == 'a').TryParse(" b", out _));
+            Assert.True(Terms.Char(c => c == 'a' || c == 'b').TryParse(" b", out _));
+            Assert.True(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" b", out _));
+            Assert.True(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" B", out _));
+            Assert.False(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" X", out _));
+        }                
+
         [Theory]
         [InlineData("'a\nb' ", "a\nb")]
         [InlineData("'a\r\nb' ", "a\r\nb")]

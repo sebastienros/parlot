@@ -93,6 +93,11 @@ namespace Parlot.Fluent
         /// Builds a parser that matches the specified char.
         /// </summary>
         public Parser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
+
+        /// <summary>
+        /// Builds a parser that matches a char against a predicate.
+        /// </summary>
+        public Parser<char> Char(Func<char, bool> predicate) => new CharLiteral(predicate, skipWhiteSpace: false);        
         
         /// <summary>
         /// Builds a parser that matches an integer.
@@ -131,6 +136,11 @@ namespace Parlot.Fluent
         /// Builds a parser that matches the specified char.
         /// </summary>
         public Parser<char> Char(char c) => new CharLiteral(c);
+
+        /// <summary>
+        /// Builds a parser that matches a char against a predicate.
+        /// </summary>
+        public Parser<char> Char(Func<char, bool> predicate) => new CharLiteral(predicate);        
 
         /// <summary>
         /// Builds a parser that matches an integer.
