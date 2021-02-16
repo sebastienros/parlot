@@ -35,8 +35,9 @@ namespace Parlot.Fluent
 
             if (_predicate != null && _predicate(context.Scanner.Cursor.Current))
             {
-                result.Set(start, context.Scanner.Cursor.Offset, context.Scanner.Cursor.Current);
+                var current = context.Scanner.Cursor.Current;
                 context.Scanner.Cursor.Advance();
+                result.Set(start, context.Scanner.Cursor.Offset, current);
 
                 return true;
             }

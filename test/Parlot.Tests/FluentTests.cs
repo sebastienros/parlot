@@ -104,22 +104,22 @@ namespace Parlot.Tests
         [Fact]
         public void CharLiteralPredicate()
         {
-            Assert.True(Literals.Char(c => c == 'a').TryParse("a", out _));
-            Assert.False(Literals.Char(c => c == 'a').TryParse("b", out _));
-            Assert.True(Literals.Char(c => c == 'a' || c == 'b').TryParse("b", out _));
-            Assert.True(Literals.Char(c => Character.IsHexDigit(c)).TryParse("b", out _));
-            Assert.True(Literals.Char(c => Character.IsHexDigit(c)).TryParse("B", out _));
+            Assert.Equal('a', Literals.Char(c => c == 'a').Parse("a"));
+            Assert.Equal('b', Literals.Char(c => c == 'a' || c == 'b').Parse("b"));
+            Assert.Equal('b', Literals.Char(c => Character.IsHexDigit(c)).Parse("b"));
+            Assert.Equal('B', Literals.Char(c => Character.IsHexDigit(c)).Parse("B"));
             Assert.False(Literals.Char(c => Character.IsHexDigit(c)).TryParse("X", out _));
+            Assert.False(Literals.Char(c => c == 'a').TryParse("b", out _));
         }
 
         [Fact]
         public void TermCharLiteralPredicate()
         {
-            Assert.True(Terms.Char(c => c == 'a').TryParse(" a", out _));
+            Assert.Equal('a', Terms.Char(c => c == 'a').Parse(" a"));
+            Assert.Equal('b', Terms.Char(c => c == 'a' || c == 'b').Parse(" b"));
+            Assert.Equal('b', Terms.Char(c => Character.IsHexDigit(c)).Parse(" b"));
+            Assert.Equal('B', Terms.Char(c => Character.IsHexDigit(c)).Parse(" B"));
             Assert.False(Terms.Char(c => c == 'a').TryParse(" b", out _));
-            Assert.True(Terms.Char(c => c == 'a' || c == 'b').TryParse(" b", out _));
-            Assert.True(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" b", out _));
-            Assert.True(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" B", out _));
             Assert.False(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" X", out _));
         }                
 
