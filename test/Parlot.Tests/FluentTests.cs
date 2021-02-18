@@ -102,6 +102,25 @@ namespace Parlot.Tests
         }
 
         [Theory]
+        [InlineData("a", "a")]
+        [InlineData("abc", "abc")]
+        [InlineData(" abc", "abc")]
+        public void ShouldReadPatterns(string text, string expected)
+        {
+            Assert.Equal(expected, Terms.Pattern(c => Character.IsHexDigit(c)).Parse(text).ToString());
+        }
+
+        [Fact]
+        public void ShouldReadPatternsWithSizes()
+        {
+            Assert.False(Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).TryParse("ab", out _));
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).Parse("abc".ToString()));
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), maxSize: 3).Parse("abcd").ToString());
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3, maxSize: 3).Parse("abcd").ToString());
+            Assert.False(Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3, maxSize: 2).TryParse("ab", out _));
+        }
+
+        [Theory]
         [InlineData("'a\nb' ", "a\nb")]
         [InlineData("'a\r\nb' ", "a\r\nb")]
         public void ShouldReadStringsWithLineBreaks(string text, string expected)
@@ -176,11 +195,11 @@ namespace Parlot.Tests
             var i = Literals.Text("i:");
             var s = Literals.Text("s:");
 
-            var parser = d.Or(i).Or(s).Switch((context, result) => 
-            { 
-                switch (result) 
-                { 
-                    case "d:": return Literals.Decimal().Then<object>(x => x); 
+            var parser = d.Or(i).Or(s).Switch((context, result) =>
+            {
+                switch (result)
+                {
+                    case "d:": return Literals.Decimal().Then<object>(x => x);
                     case "i:": return Literals.Integer().Then<object>(x => x);
                     case "s:": return Literals.String().Then<object>(x => x);
                 }
@@ -204,14 +223,14 @@ namespace Parlot.Tests
             var i = Literals.Text("i:");
             var s = Literals.Text("s:");
 
-            var parser = d.Or(i).Or(s).Switch((context, result) => 
-            { 
-                switch (result) 
-                { 
-                    case "d:": return Literals.Decimal().Then(x => x.ToString()); 
-                    case "i:": return Literals.Integer().Then(x => x.ToString()); 
-                    case "s:": return Literals.String().Then(x => x.ToString()); 
-                } 
+            var parser = d.Or(i).Or(s).Switch((context, result) =>
+            {
+                switch (result)
+                {
+                    case "d:": return Literals.Decimal().Then(x => x.ToString());
+                    case "i:": return Literals.Integer().Then(x => x.ToString());
+                    case "s:": return Literals.String().Then(x => x.ToString());
+                }
                 return null;
             });
 

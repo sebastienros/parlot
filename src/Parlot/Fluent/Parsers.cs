@@ -60,7 +60,7 @@ namespace Parlot.Fluent
         /// Builds a parser that matches any chars before a specific parser.
         /// </summary>
         public static Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
-        
+
         /// <summary>
         /// Ensure the specified parser follows the previous one. The previous parser's result is then ignored.
         /// </summary>
@@ -93,7 +93,7 @@ namespace Parlot.Fluent
         /// Builds a parser that matches the specified char.
         /// </summary>
         public Parser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
-        
+
         /// <summary>
         /// Builds a parser that matches an integer.
         /// </summary>
@@ -113,6 +113,14 @@ namespace Parlot.Fluent
         /// Builds a parser that matches an identifier.
         /// </summary>
         public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
+
+        /// <summary>
+        /// Builds a parser that matches a char against a predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to match against each char.</param>
+        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+        public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize, skipWhiteSpace: false);
     }
 
     public class TermBuilder
@@ -151,5 +159,13 @@ namespace Parlot.Fluent
         /// Builds a parser that matches an identifier.
         /// </summary>
         public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
+
+        /// <summary>
+        /// Builds a parser that matches a char against a predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to match against each char.</param>
+        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+        public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize);
     }
 }
