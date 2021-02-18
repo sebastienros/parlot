@@ -101,27 +101,24 @@ namespace Parlot.Tests
             Assert.False(Literals.Char('a').TryParse("B", out _));
         }
 
-        [Fact]
-        public void CharLiteralPredicate()
+        [Theory]
+        [InlineData("a", "a")]
+        [InlineData("abc", "abc")]
+        [InlineData(" abc", "abc")]
+        public void ShouldReadPatterns(string text, string expected)
         {
-            Assert.Equal('a', Literals.Char(c => c == 'a').Parse("a"));
-            Assert.Equal('b', Literals.Char(c => c == 'a' || c == 'b').Parse("b"));
-            Assert.Equal('b', Literals.Char(c => Character.IsHexDigit(c)).Parse("b"));
-            Assert.Equal('B', Literals.Char(c => Character.IsHexDigit(c)).Parse("B"));
-            Assert.False(Literals.Char(c => Character.IsHexDigit(c)).TryParse("X", out _));
-            Assert.False(Literals.Char(c => c == 'a').TryParse("b", out _));
+            Assert.Equal(expected, Terms.Pattern(c => Character.IsHexDigit(c)).Parse(text).ToString());
         }
 
         [Fact]
-        public void TermCharLiteralPredicate()
+        public void ShouldReadPatternsWithSizes()
         {
-            Assert.Equal('a', Terms.Char(c => c == 'a').Parse(" a"));
-            Assert.Equal('b', Terms.Char(c => c == 'a' || c == 'b').Parse(" b"));
-            Assert.Equal('b', Terms.Char(c => Character.IsHexDigit(c)).Parse(" b"));
-            Assert.Equal('B', Terms.Char(c => Character.IsHexDigit(c)).Parse(" B"));
-            Assert.False(Terms.Char(c => c == 'a').TryParse(" b", out _));
-            Assert.False(Terms.Char(c => Character.IsHexDigit(c)).TryParse(" X", out _));
-        }                
+            Assert.False(Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).TryParse("ab", out _));
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).Parse("abc".ToString()));
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), maxSize: 3).Parse("abcd").ToString());
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3, maxSize: 3).Parse("abcd").ToString());
+            Assert.False(Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3, maxSize: 2).TryParse("ab", out _));
+        }
 
         [Theory]
         [InlineData("'a\nb' ", "a\nb")]
@@ -198,11 +195,11 @@ namespace Parlot.Tests
             var i = Literals.Text("i:");
             var s = Literals.Text("s:");
 
-            var parser = d.Or(i).Or(s).Switch((context, result) => 
-            { 
-                switch (result) 
-                { 
-                    case "d:": return Literals.Decimal().Then<object>(x => x); 
+            var parser = d.Or(i).Or(s).Switch((context, result) =>
+            {
+                switch (result)
+                {
+                    case "d:": return Literals.Decimal().Then<object>(x => x);
                     case "i:": return Literals.Integer().Then<object>(x => x);
                     case "s:": return Literals.String().Then<object>(x => x);
                 }
@@ -226,14 +223,14 @@ namespace Parlot.Tests
             var i = Literals.Text("i:");
             var s = Literals.Text("s:");
 
-            var parser = d.Or(i).Or(s).Switch((context, result) => 
-            { 
-                switch (result) 
-                { 
-                    case "d:": return Literals.Decimal().Then(x => x.ToString()); 
-                    case "i:": return Literals.Integer().Then(x => x.ToString()); 
-                    case "s:": return Literals.String().Then(x => x.ToString()); 
-                } 
+            var parser = d.Or(i).Or(s).Switch((context, result) =>
+            {
+                switch (result)
+                {
+                    case "d:": return Literals.Decimal().Then(x => x.ToString());
+                    case "i:": return Literals.Integer().Then(x => x.ToString());
+                    case "s:": return Literals.String().Then(x => x.ToString());
+                }
                 return null;
             });
 
