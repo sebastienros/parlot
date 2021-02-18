@@ -1,21 +1,11 @@
-﻿using System;
-
-namespace Parlot.Fluent
+﻿namespace Parlot.Fluent
 {
     public sealed class CharLiteral : Parser<char>
     {
-        private readonly Func<char, bool> _predicate;
-
         public CharLiteral(char c, bool skipWhiteSpace = true)
         {
             Char = c;
             SkipWhiteSpace = skipWhiteSpace;
-        }
-
-        public CharLiteral(Func<char, bool> predicate, bool skipWhiteSpace = true)
-        {
-            _predicate = predicate;
-            SkipWhiteSpace = skipWhiteSpace;            
         }
 
         public char Char { get; }
@@ -32,15 +22,6 @@ namespace Parlot.Fluent
             }
 
             var start = context.Scanner.Cursor.Offset;
-
-            if (_predicate != null && _predicate(context.Scanner.Cursor.Current))
-            {
-                var current = context.Scanner.Cursor.Current;
-                context.Scanner.Cursor.Advance();
-                result.Set(start, context.Scanner.Cursor.Offset, current);
-
-                return true;
-            }
 
             if (context.Scanner.ReadChar(Char))
             {
