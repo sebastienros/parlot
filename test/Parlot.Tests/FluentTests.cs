@@ -114,10 +114,22 @@ namespace Parlot.Tests
         public void ShouldReadPatternsWithSizes()
         {
             Assert.False(Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).TryParse("ab", out _));
-            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).Parse("abc".ToString()));
+            Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3).Parse("abc").ToString());
             Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), maxSize: 3).Parse("abcd").ToString());
             Assert.Equal("abc", Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3, maxSize: 3).Parse("abcd").ToString());
             Assert.False(Terms.Pattern(c => Character.IsHexDigit(c), minSize: 3, maxSize: 2).TryParse("ab", out _));
+        }
+
+        [Fact]
+        public void PatternShouldResetPositionWhenFalse()
+        {
+            Assert.False(Terms.Pattern(c => c == 'a', minSize: 3)
+                .And(Terms.Pattern(c => c == 'Z'))
+                .TryParse("aaZZ", out _));
+
+           Assert.True(Terms.Pattern(c => c == 'a', minSize: 3)
+                .And(Terms.Pattern(c => c == 'Z'))
+                .TryParse("aaaZZ", out _));                
         }
 
         [Theory]
