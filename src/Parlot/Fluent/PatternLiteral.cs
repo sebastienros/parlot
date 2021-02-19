@@ -31,7 +31,8 @@ namespace Parlot.Fluent
                 return false;
             }
 
-            var start = context.Scanner.Cursor.Offset;
+            var startPosition = context.Scanner.Cursor.Position;
+            var start = startPosition.Offset;
 
             context.Scanner.Cursor.Advance();
             var found = 1;
@@ -49,6 +50,9 @@ namespace Parlot.Fluent
 
                 return true;
             }
+
+            // When the size constraint has not been met the parser may still have advanced the cursor.
+            context.Scanner.Cursor.ResetPosition(startPosition);            
 
             return false;
         }
