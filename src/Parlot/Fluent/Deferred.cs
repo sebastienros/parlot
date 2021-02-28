@@ -23,7 +23,7 @@ namespace Parlot.Fluent
             return Parser.Parse(context, ref result);
         }
 
-        private ParameterExpression _lambda;
+        private ParameterExpression _lambdaVar;
 
         public override CompileResult Compile(CompilationContext context)
         {
@@ -41,11 +41,11 @@ namespace Parlot.Fluent
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
             body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
 
-            if (_lambda == null)
+            if (_lambdaVar == null)
             {
                 // The lambda is defined globally so that all parsers can use it
-                _lambda = Expression.Variable(typeof(Func<ParseContext, ValueTuple<bool, T>>), $"deferred{context.Counter}");
-                context.GlobalVariables.Add(_lambda);
+                _lambdaVar = Expression.Variable(typeof(Func<ParseContext, ValueTuple<bool, T>>), $"deferred{context.Counter}");
+                context.GlobalVariables.Add(_lambdaVar);
 
                 // lambda (ParserContext)
                 // {
@@ -62,6 +62,24 @@ namespace Parlot.Fluent
                 var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
                 var returnLabelExpression = Expression.Label(returnLabelTarget, result);
 
+#if true
+                var lambda =
+                    Expression.Constant(
+                    Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
+                    Expression.Block(
+                        typeof(ValueTuple<bool, T>),
+                        parserCompileResult.Variables.Append(result),
+                        Expression.Block(parserCompileResult.Body),
+                        Expression.Assign(result, Expression.New(
+                            typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }),
+                            parserCompileResult.Success,
+                            parserCompileResult.Value)),
+                        returnLabelExpression),
+                    true,
+                    context.ParseContext)
+                    .Compile())
+                    ;
+#else
                 var lambda =
                     //Expression.Constant(
                     Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
@@ -78,18 +96,19 @@ namespace Parlot.Fluent
                     context.ParseContext)
                     //.Compile())
                     ;
-
-                context.GlobalExpressions.Add(Expression.Assign(_lambda, lambda));
+#endif
+                context.GlobalExpressions.Add(Expression.Assign(_lambdaVar, Expression.Constant(null, _lambdaVar.Type)));
+                context.GlobalExpressions.Add(Expression.Assign(_lambdaVar, lambda));
             }
 
             // var deferred = lambda(parserContext);
             // success = deferred.Item1;
             // value = deferred.Item2;
 
-            var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"deferred{context.Counter}");
+            var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.Counter}");
             variables.Add(deferred);
 
-            body.Add(Expression.Assign(deferred, Expression.Invoke(_lambda, context.ParseContext)));
+            body.Add(Expression.Assign(deferred, Expression.Invoke(_lambdaVar, context.ParseContext)));
             body.Add(Expression.Assign(success, Expression.Field(deferred, "Item1")));
             body.Add(Expression.Assign(value, Expression.Field(deferred, "Item2")));
 

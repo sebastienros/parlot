@@ -16,5 +16,6 @@ namespace Parlot.Fluent
         public int Counter { get; set; }
         public List<ParameterExpression> GlobalVariables = new List<ParameterExpression>();
         public List<Expression> GlobalExpressions = new List<Expression>();
+
     }
 }

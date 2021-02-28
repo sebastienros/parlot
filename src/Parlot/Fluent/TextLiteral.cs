@@ -71,10 +71,9 @@ namespace Parlot.Fluent
             var ifReadText = Expression.IfThen(
                 Expression.Call(
                     Expression.Field(context.ParseContext, "Scanner"),
-                    ExpressionHelper.Scanner_ReadText,
+                    ExpressionHelper.Scanner_ReadText_NoResult,
                     Expression.Constant(Text, typeof(string)),
-                    Expression.Constant(_comparer, typeof(StringComparer)),
-                    Expression.Constant(null, typeof(TokenResult))
+                    Expression.Constant(_comparer, typeof(StringComparer))
                     ),
                 Expression.Block(
                     Expression.Assign(success, Expression.Constant(true, typeof(bool))),

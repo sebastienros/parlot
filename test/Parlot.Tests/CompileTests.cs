@@ -41,8 +41,6 @@ namespace Parlot.Tests
 
             var result = Expression.Lambda<Func<ParseContext, T>>(body, parseContext);
 
-            var foo = body.ToString();
-
             return result.Compile();
         }
 
@@ -146,7 +144,6 @@ namespace Parlot.Tests
 
             var parse = Compile(deferred.And(deferred));
 
-
             var scanner = new Scanner(" hello hello hello");
             var context = new ParseContext(scanner);
             var result = parse(context);
@@ -155,7 +152,7 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ShouldCompileDeferreds2()
+        public void ShouldCompileCyclicDeferreds()
         {
             var openParen = Terms.Char('(');
             var closeParen = Terms.Char(')');
@@ -284,7 +281,7 @@ namespace Parlot.Tests
                     string value2 = null;
                     parseContext.SkipWhiteSpace();
 
-                    if (parseContext.Scanner.ReadText("hello", null, null))
+                    if (parseContext.Scanner.ReadText("hello", null))
                     {
                         success2 = true;
                         value2 = "hello";
