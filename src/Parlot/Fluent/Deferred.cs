@@ -23,7 +23,8 @@ namespace Parlot.Fluent
             return Parser.Parse(context, ref result);
         }
 
-        private ParameterExpression _lambdaVar;
+        private int _funcIndex;
+        private bool _initialized = false;
 
         public override CompileResult Compile(CompilationContext context)
         {
@@ -41,11 +42,16 @@ namespace Parlot.Fluent
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
             body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
 
-            if (_lambdaVar == null)
+            var contextScope = Expression.Constant(context);
+            var getFuncs = typeof(CompilationContext).GetMember("Funcs")[0];
+            var funcsAccess = Expression.MakeMemberAccess(contextScope, getFuncs);
+
+            var funcReturnType = typeof(Func<ParseContext, ValueTuple<bool, T>>);
+
+            // Create the body of this parser only once
+            if (!_initialized)
             {
-                // The lambda is defined globally so that all parsers can use it
-                _lambdaVar = Expression.Variable(typeof(Func<ParseContext, ValueTuple<bool, T>>), $"deferred{context.Counter}");
-                context.GlobalVariables.Add(_lambdaVar);
+                _initialized = true;
 
                 // lambda (ParserContext)
                 // {
@@ -62,9 +68,7 @@ namespace Parlot.Fluent
                 var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
                 var returnLabelExpression = Expression.Label(returnLabelTarget, result);
 
-#if true
                 var lambda =
-                    Expression.Constant(
                     Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
                     Expression.Block(
                         typeof(ValueTuple<bool, T>),
@@ -77,41 +81,32 @@ namespace Parlot.Fluent
                         returnLabelExpression),
                     true,
                     context.ParseContext)
-                    .Compile())
+                    .Compile()
                     ;
-#else
-                var lambda =
-                    //Expression.Constant(
-                    Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
-                    Expression.Block(
-                        typeof(ValueTuple<bool, T>),
-                        parserCompileResult.Variables.Append(result),
-                        Expression.Block(parserCompileResult.Body),
-                        Expression.Assign(result, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }),
-                            parserCompileResult.Success,
-                            parserCompileResult.Value)),
-                        returnLabelExpression),
-                    true,
-                    context.ParseContext)
-                    //.Compile())
-                    ;
-#endif
-                context.GlobalExpressions.Add(Expression.Assign(_lambdaVar, Expression.Constant(null, _lambdaVar.Type)));
-                context.GlobalExpressions.Add(Expression.Assign(_lambdaVar, lambda));
+
+                // The parser is added to CompilerContext.Funcs, and its index recorded
+                _funcIndex = context.Funcs.Count;
+                context.Funcs.Add(lambda);
             }
 
-            // var deferred = lambda(parserContext);
-            // success = deferred.Item1;
-            // value = deferred.Item2;
+            // ValueTuple<bool, T> def;
 
             var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.Counter}");
             variables.Add(deferred);
 
-            body.Add(Expression.Assign(deferred, Expression.Invoke(_lambdaVar, context.ParseContext)));
+            // def = ((Func<ParserContext, ValueTuple<bool, T>>)Funcs[_funcIndex]).Invoke(parseContext);
+
+            var listIndexer = typeof(List<object>).GetProperties().First(x => x.GetIndexParameters().Any()).GetGetMethod();
+            var funcInClosure = Expression.Call(funcsAccess, listIndexer, Expression.Constant(_funcIndex));
+            var castFunc = Expression.Convert(funcInClosure, funcReturnType);
+
+            body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));
+
+            // success = def.Item1;
+            // value = def.Item2;
+
             body.Add(Expression.Assign(success, Expression.Field(deferred, "Item1")));
             body.Add(Expression.Assign(value, Expression.Field(deferred, "Item2")));
-
 
             return new CompileResult(variables, body, success, value);
         }

@@ -39,7 +39,7 @@ namespace Parlot.Benchmarks
             return _parser.Parse(Expression1);
         }
 
-        //[Benchmark, BenchmarkCategory("Expression1")]
+        [Benchmark, BenchmarkCategory("Expression1")]
         public Expression ParlotFluentSmall()
         {
             FluentParser.Expression.TryParse(Expression1, out var result);
@@ -67,7 +67,7 @@ namespace Parlot.Benchmarks
             return _parser.Parse(Expression2);
         }
 
-        //[Benchmark, BenchmarkCategory("Expression2")]
+        [Benchmark, BenchmarkCategory("Expression2")]
         public Expression ParlotFluentBig()
         {
             FluentParser.Expression.TryParse(Expression2, out var result);
