@@ -59,7 +59,7 @@ namespace Parlot.Fluent
             var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
             variables.Add(start);
 
-            body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), "Position")));
+            body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
 
             // parse1 instructions
             // 
@@ -87,7 +87,7 @@ namespace Parlot.Fluent
             // Initialize the block variable with the inner else statement
             var block = Expression.Block(
                             Expression.Assign(success, Expression.Constant(false, typeof(bool))),
-                            Expression.Call(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
+                            ExpressionHelper.ResetPosition(context.ParseContext, start)
                             );
 
             foreach (var parser in _parsers.Reverse())

@@ -81,6 +81,18 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldCompileRangeLiterals()
+        {
+            var parse = Compile(Terms.Pattern(static c => Character.IsInRange(c, 'a', 'z')));
+
+            var scanner = new Scanner("helloWorld");
+            var context = new ParseContext(scanner);
+            var result = parse(context);
+
+            Assert.Equal("hello", result);
+        }
+
+        [Fact]
         public void ShouldCompileDecimalLiterals()
         {
             var parse = Compile(Terms.Decimal());
