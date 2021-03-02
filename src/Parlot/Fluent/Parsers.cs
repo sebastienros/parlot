@@ -70,6 +70,12 @@ namespace Parlot.Fluent
         /// Ensure the specified parser follows the previous one. The next parser's result is then ignored.
         /// </summary>
         public static Parser<T> AndSkip<T, U>(this Parser<T> parser, Parser<U> and) => new AndSkip<T, U>(parser, and);
+
+        /// <summary>
+        /// Builds a parser that captures the output of another parser.
+        /// </summary>
+        public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
+
     }
 
     public class LiteralBuilder
