@@ -23,8 +23,13 @@ namespace Parlot.Fluent
             return Parser.Parse(context, ref result);
         }
 
-        private int _funcIndex;
         private bool _initialized = false;
+        private readonly Closure _closure = new();
+
+        private class Closure
+        {
+            public object Func;
+        }
 
         public override CompileResult Compile(CompilationContext context)
         {
@@ -42,8 +47,8 @@ namespace Parlot.Fluent
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
             body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
 
-            var contextScope = Expression.Constant(context);
-            var getFuncs = typeof(CompilationContext).GetMember("Funcs")[0];
+            var contextScope = Expression.Constant(_closure);
+            var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
             var funcsAccess = Expression.MakeMemberAccess(contextScope, getFuncs);
 
             var funcReturnType = typeof(Func<ParseContext, ValueTuple<bool, T>>);
@@ -81,12 +86,12 @@ namespace Parlot.Fluent
                         returnLabelExpression),
                     true,
                     context.ParseContext)
-                    .Compile()
                     ;
 
-                // The parser is added to CompilerContext.Funcs, and its index recorded
-                _funcIndex = context.Funcs.Count;
-                context.Funcs.Add(lambda);
+                // Store the source lambda for debugging
+                context.Lambdas.Add(lambda);
+
+                _closure.Func = lambda.Compile();
             }
 
             // ValueTuple<bool, T> def;
@@ -94,12 +99,9 @@ namespace Parlot.Fluent
             var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.Counter}");
             variables.Add(deferred);
 
-            // def = ((Func<ParserContext, ValueTuple<bool, T>>)Funcs[_funcIndex]).Invoke(parseContext);
+            // def = ((Func<ParserContext, ValueTuple<bool, T>>)_closure.Func).Invoke(parseContext);
 
-            var listIndexer = typeof(List<object>).GetProperties().First(x => x.GetIndexParameters().Any()).GetGetMethod();
-            var funcInClosure = Expression.Call(funcsAccess, listIndexer, Expression.Constant(_funcIndex));
-            var castFunc = Expression.Convert(funcInClosure, funcReturnType);
-
+            var castFunc = Expression.Convert(funcsAccess, funcReturnType);
             body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));
 
             // success = def.Item1;

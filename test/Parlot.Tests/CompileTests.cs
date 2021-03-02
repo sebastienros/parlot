@@ -2,7 +2,6 @@ using System.Linq.Expressions;
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -54,6 +53,18 @@ namespace Parlot.Tests
             var result = parse(context);
 
             Assert.NotNull(result);
+            Assert.Equal("hello", result);
+        }
+
+        [Fact]
+        public void ShouldCompileStringLiterals()
+        {
+            var parse = Compile(Terms.String());
+
+            var scanner = new Scanner("'hello'");
+            var context = new ParseContext(scanner);
+            var result = parse(context);
+
             Assert.Equal("hello", result);
         }
 
@@ -171,6 +182,47 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldCompileMultipleDeferred()
+        {
+            var deferred1 = Deferred<decimal>();
+            var deferred2 = Deferred<decimal>();
+
+            deferred1.Parser = Terms.Decimal();
+            deferred2.Parser = Terms.Decimal();
+
+            var parser = deferred1.And(deferred2).Then(x => x.Item1 + x.Item2);
+
+            var parse = Compile(parser);
+
+            var scanner = new Scanner("1 2");
+            var context = new ParseContext(scanner);
+            var result = parse(context);
+
+            Assert.Equal(3, result);
+        }
+
+        [Fact]
+        public void ShouldCompileRecursive()
+        {
+            var number = Terms.Decimal();
+            var minus = Terms.Char('-');
+
+            var unary = Recursive<decimal>((u) =>
+                minus.And(u)
+                    .Then(static x => 0 - x.Item2)
+                .Or(number)
+                );
+
+            var parse = Compile(unary);
+
+            var scanner = new Scanner("--1");
+            var context = new ParseContext(scanner);
+            var result = parse(context);
+
+            Assert.Equal(1, result);
+        }
+
+        [Fact]
         public void ShouldCompileZeroOrManys()
         {
             var parse = Compile(ZeroOrMany(Terms.Text("hello").Or(Terms.Text("world"))));
@@ -196,65 +248,22 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldCompileSeparated()
+        {
+            var parse = Compile(Separated(Terms.Char(','), Terms.Decimal()));
+
+            var scanner = new Scanner("1, 2,3");
+            var context = new ParseContext(scanner);
+            var result = parse(context);
+
+            Assert.Equal(1, result[0]);
+            Assert.Equal(2, result[1]);
+            Assert.Equal(3, result[2]);
+        }
+
+        [Fact]
         public void ShouldCompileExpressionParser()
         {
-            var expression = Deferred<Calc.Expression>();
-
-            var number = Terms.Decimal()
-                .Then<Calc.Expression>(static d => new Calc.Number(d))
-                ;
-
-            var divided = Terms.Char('/');
-            var times = Terms.Char('*');
-            var minus = Terms.Char('-');
-            var plus = Terms.Char('+');
-            var openParen = Terms.Char('(');
-            var closeParen = Terms.Char(')');
-
-            var primary = number;
-
-            // factor => unary ( ( "/" | "*" ) unary )* ;
-            var factor = primary.And(ZeroOrMany(divided.Or(times).And(primary)))
-                .Then(static x =>
-                {
-                    // unary
-                    var result = x.Item1;
-
-                    // (("/" | "*") unary ) *
-                    foreach (var op in x.Item2)
-                    {
-                        result = op.Item1 switch
-                        {
-                            '/' => new Calc.Division(result, op.Item2),
-                            '*' => new Calc.Multiplication(result, op.Item2),
-                            _ => null
-                        };
-                    }
-
-                    return result;
-                });
-
-            // expression => factor ( ( "-" | "+" ) factor )* ;
-            expression.Parser = factor.And(ZeroOrMany(plus.Or(minus).And(factor)))
-                .Then(static x =>
-                {
-                    // factor
-                    var result = x.Item1;
-
-                    // (("-" | "+") factor ) *
-                    foreach (var op in x.Item2)
-                    {
-                        result = op.Item1 switch
-                        {
-                            '+' => new Calc.Addition(result, op.Item2),
-                            '-' => new Calc.Subtraction(result, op.Item2),
-                            _ => null
-                        };
-                    }
-
-                    return result;
-                });
-
             var parse = Compile(Calc.FluentParser.Expression);
 
             var scanner = new Scanner("(2 + 1) * 3");

@@ -14,8 +14,9 @@ namespace Parlot.Fluent
         public ParameterExpression ParseContext { get; }
         public Action<ParseContext, object> OnParse { get; set; }
         public int Counter { get; set; }
-        public List<ParameterExpression> GlobalVariables = new List<ParameterExpression>();
-        public List<Expression> GlobalExpressions = new List<Expression>();
-        public List<object> Funcs = new List<object>();
+        public List<ParameterExpression> GlobalVariables = new();
+        public List<Expression> GlobalExpressions = new();
+        
+        public List<Expression> Lambdas = new();
     }
 }

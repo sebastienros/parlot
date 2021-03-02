@@ -40,13 +40,6 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Expression1")]
-        public Expression ParlotFluentSmall()
-        {
-            FluentParser.Expression.TryParse(Expression1, out var result);
-            return result;
-        }
-
-        [Benchmark, BenchmarkCategory("Expression1")]
         public Expression ParlotCompiledSmall()
         {
             var scanner = new Scanner(Expression1);
@@ -55,7 +48,14 @@ namespace Parlot.Benchmarks
             return _compiled(context);
         }
 
-        //[Benchmark, BenchmarkCategory("Expression1")]
+        [Benchmark, BenchmarkCategory("Expression1")]
+        public Expression ParlotFluentSmall()
+        {
+            FluentParser.Expression.TryParse(Expression1, out var result);
+            return result;
+        }
+
+        [Benchmark, BenchmarkCategory("Expression1")]
         public Expression PidginSmall()
         {
             return ExprParser.ParseOrThrow(Expression1);
@@ -68,13 +68,6 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Expression2")]
-        public Expression ParlotFluentBig()
-        {
-            FluentParser.Expression.TryParse(Expression2, out var result);
-            return result;
-        }
-
-        [Benchmark, BenchmarkCategory("Expression2")]
         public Expression ParlotCompiledBig()
         {
             var scanner = new Scanner(Expression2);
@@ -83,7 +76,14 @@ namespace Parlot.Benchmarks
             return _compiled(context);
         }
 
-        //[Benchmark, BenchmarkCategory("Expression2")]
+        [Benchmark, BenchmarkCategory("Expression2")]
+        public Expression ParlotFluentBig()
+        {
+            FluentParser.Expression.TryParse(Expression2, out var result);
+            return result;
+        }
+
+        [Benchmark, BenchmarkCategory("Expression2")]
         public Expression PidginBig()
         {
             return ExprParser.ParseOrThrow(Expression2);

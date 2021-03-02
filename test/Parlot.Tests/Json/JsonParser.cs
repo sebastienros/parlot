@@ -7,7 +7,7 @@ namespace Parlot.Tests.Json
 {
     public class JsonParser
     {
-        private static readonly Parser<IJson> Json;
+        public static readonly Parser<IJson> Json;
 
         static JsonParser()
         {
