@@ -286,68 +286,26 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void Code()
+        public void ShouldCompileCapture()
         {
-            (string, string) Parse(ParseContext parseContext)
-            {
-                var success4 = false;
-                var value4 = new ValueTuple<string, string>();
-                var start4 = parseContext.Scanner.Cursor.Position;
-                var success1 = false;
-                string value1 = null;
-                Func<ParseContext, ValueTuple<bool, string>> lambda1 = parseContext =>
-                {
-                    ValueTuple<bool, string> result2;
-                    var success2 = false;
-                    string value2 = null;
-                    parseContext.SkipWhiteSpace();
+            Parser<char> Dot = Literals.Char('.');
+            Parser<char> Plus = Literals.Char('+');
+            Parser<char> Minus = Literals.Char('-');
+            Parser<char> At = Literals.Char('@');
+            Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
-                    if (parseContext.Scanner.ReadText("hello", null))
-                    {
-                        success2 = true;
-                        value2 = "hello";
-                    }
-                    result2.Item1 = success2;
-                    result2.Item2 = value2;
+            string _email = "sebastien.ros@gmail.com";
 
-                    return result2;
-                };
-
-                var deferred2 = lambda1.Invoke(parseContext);
-                success1 = deferred2.Item1;
-                value1 = deferred2.Item2;
-
-                if (success1)
-                {
-                    var success3 = false;
-                    string value3 = null;
-                    var deferred3 = lambda1.Invoke(parseContext);
-                    success3 = deferred3.Item1;
-                    value3 = deferred3.Item2;
-
-                    if (success3)
-                    {
-                        success4 = true;
-                        value4 = new ValueTuple<string, string>(value1, value3);
-                    }
-                }
-
-                if (!success4)
-                {
-                    parseContext.Scanner.Cursor.ResetPosition(start4);
-                }
-
-                var value = value4;
-
-                return value;
-            }
-
-            var scanner = new Scanner(" hello hello hello");
+            var scanner = new Scanner(_email);
             var context = new ParseContext(scanner);
-            var result = Parse(context);
+            var parse = Compile(Email);
+            var result = parse(context);
 
-            Assert.Equal(("hello", "hello"), result);
-
+            Assert.Equal(_email, result.ToString());
         }
     }
 }

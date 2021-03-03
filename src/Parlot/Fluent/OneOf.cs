@@ -49,10 +49,14 @@ namespace Parlot.Fluent
             var value = Expression.Variable(typeof(T), $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
 
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-            body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+
+            if (!context.IgnoreResults)
+            {
+                variables.Add(value);
+                body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+            }
 
             // var start = context.Scanner.Cursor.Position;
 
@@ -102,7 +106,9 @@ namespace Parlot.Fluent
                             parserCompileResult.Success,
                             Expression.Block(
                                 Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                Expression.Assign(value, parserCompileResult.Value)
+                                context.IgnoreResults
+                                ? Expression.Empty()
+                                : Expression.Assign(value, parserCompileResult.Value)
                                 ),
                             block
                             )

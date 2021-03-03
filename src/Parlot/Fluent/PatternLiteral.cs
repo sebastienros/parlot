@@ -67,7 +67,11 @@ namespace Parlot.Fluent
             var value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
+
+            if (!context.IgnoreResults)
+            {
+                variables.Add(value);
+            }
 
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
 
@@ -163,7 +167,9 @@ namespace Parlot.Fluent
                     Expression.LessThan(size, Expression.Constant(_minSize)),
                     ExpressionHelper.ResetPosition(context.ParseContext, start),
                     Expression.Block(
-                        Expression.Assign(value, 
+                        context.IgnoreResults 
+                        ? Expression.Empty()
+                        : Expression.Assign(value, 
                             Expression.New(textSpanCtor,
                                 ExpressionHelper.Buffer(context.ParseContext),
                                 startOffset,

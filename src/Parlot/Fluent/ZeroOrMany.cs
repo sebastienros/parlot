@@ -52,10 +52,14 @@ namespace Parlot.Fluent
             var value = Expression.Variable(typeof(List<T>), $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
 
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-            body.Add(Expression.Assign(value, Expression.New(typeof(List<T>))));
+
+            if (!context.IgnoreResults)
+            {
+                variables.Add(value);
+                body.Add(Expression.Assign(value, Expression.New(typeof(List<T>))));
+            }
 
             // value = new List<T>();
             //
@@ -92,7 +96,9 @@ namespace Parlot.Fluent
                         Expression.Block(parserCompileResult.Body),
                         Expression.IfThenElse(
                             parserCompileResult.Success,
-                            Expression.Call(value, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value),
+                            context.IgnoreResults
+                            ? Expression.Empty()
+                            : Expression.Call(value, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value),
                             Expression.Break(breakLabel)
                             ),
                         Expression.IfThen(

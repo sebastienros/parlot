@@ -44,10 +44,14 @@ namespace Parlot.Fluent
             var value = Expression.Variable(typeof(char), $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
 
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-            body.Add(Expression.Assign(value, Expression.Constant(default(char), typeof(char))));
+
+            if (!context.IgnoreResults)
+            {
+                variables.Add(value);
+                body.Add(Expression.Assign(value, Expression.Constant(default(char), typeof(char))));
+            }
 
             //if (_skipWhiteSpace)
             //{
@@ -70,7 +74,9 @@ namespace Parlot.Fluent
                 ExpressionHelper.ReadChar(context.ParseContext, Char),
                 Expression.Block(
                     Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                    Expression.Assign(value, Expression.Constant(Char, typeof(char)))
+                    context.IgnoreResults
+                    ? Expression.Empty()
+                    : Expression.Assign(value, Expression.Constant(Char, typeof(char)))
                     )
                 );
 

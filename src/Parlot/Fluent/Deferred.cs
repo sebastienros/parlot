@@ -39,12 +39,13 @@ namespace Parlot.Fluent
             var value = Expression.Variable(typeof(T), $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
-
+            
             // Compile the parser code as a lambda the first time,
             // then reuse the lambda the subsequent times.
 
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            variables.Add(value);
             body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
 
             var contextScope = Expression.Constant(_closure);

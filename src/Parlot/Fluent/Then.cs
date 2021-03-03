@@ -65,9 +65,13 @@ namespace Parlot.Fluent
             var value = Expression.Variable(typeof(U), $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
 
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            if (!context.IgnoreResults)
+            {
+                variables.Add(value);
+            }
 
             // parse1 instructions
             // 
@@ -102,7 +106,9 @@ namespace Parlot.Fluent
                             parserCompileResult.Success,
                             Expression.Block(
                                 Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                Expression.Assign(value, transformation)
+                                context.IgnoreResults
+                                ? Expression.Empty()
+                                : Expression.Assign(value, transformation)
                                 )
                             )
                         )

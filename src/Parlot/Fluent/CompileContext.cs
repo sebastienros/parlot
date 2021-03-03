@@ -18,5 +18,6 @@ namespace Parlot.Fluent
         public List<Expression> GlobalExpressions = new();
         
         public List<Expression> Lambdas = new();
+        public bool IgnoreResults = false;
     }
 }

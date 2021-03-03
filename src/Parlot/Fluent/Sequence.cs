@@ -19,10 +19,14 @@ namespace Parlot.Fluent
             var value = Expression.Variable(resultType, $"value{context.Counter}");
 
             variables.Add(success);
-            variables.Add(value);
             
             body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-            body.Add(Expression.Assign(value, Expression.New(resultType)));
+
+            if (!context.IgnoreResults)
+            {
+                body.Add(Expression.Assign(value, Expression.New(resultType)));
+                variables.Add(value);
+            }
 
             // var start = context.Scanner.Cursor.Position;
 
@@ -66,7 +70,9 @@ namespace Parlot.Fluent
             // Initialize the block variable with the inner else statement
             var block = Expression.Block(
                             Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                            Expression.Assign(value, Expression.New(valueTupleConstructor, parserCompileResults.Select(x => x.Value).ToArray()))
+                            context.IgnoreResults
+                            ? Expression.Empty()
+                            : Expression.Assign(value, Expression.New(valueTupleConstructor, parserCompileResults.Select(x => x.Value).ToArray()))
                             );
 
             for (var i = parsers.Length - 1; i >= 0; i--)
