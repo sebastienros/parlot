@@ -20,7 +20,7 @@ namespace Parlot
 
         public string GetText() => _buffer.Substring(Start, Length);
 
-#if !NETSTANDARD2_0
+#if SUPPORTS_READONLYSPAN
         public ReadOnlySpan<char> Span => _buffer.AsSpan(Start, Length);
 #endif
 

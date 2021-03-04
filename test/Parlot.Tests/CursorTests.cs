@@ -232,5 +232,32 @@ namespace Parlot.Tests
             Assert.False(c.Match("1"));
             Assert.False(c.Match("2"));
         }
+
+#pragma warning disable CS0649
+        private class TextSpanHolder
+        {
+            public TextSpan T;
+        }
+
+        [Fact]
+        public void TextSpanShoudNotThrow()
+        {
+            var t = new TextSpanHolder();
+
+            Assert.Null(t.T.ToString());
+            Assert.Equal(0, t.T.Length);
+            Assert.Equal(0, t.T.Offset);
+
+            var t2 = new TextSpan(null);
+
+            Assert.Null(t2.ToString());
+            Assert.Equal(0, t2.Length);
+            Assert.Equal(0, t2.Offset);
+
+#if NETCOREAPP3_1_OR_GREATER
+            Assert.True(ReadOnlySpan<char>.Empty == t2.Span);
+#endif
+        }
+#pragma warning restore
     }
 }
