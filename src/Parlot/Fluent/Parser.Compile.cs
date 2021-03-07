@@ -1,0 +1,130 @@
+﻿using Parlot.Compilation;
+using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+
+namespace Parlot.Fluent
+{
+    public abstract partial class Parser<T>
+    {
+        /// <summary>
+        /// Compiles the current parser.
+        /// </summary>
+        /// <returns>A compiled parser.</returns>
+        public Parser<T> Compile()
+        {
+            var parseContext = Expression.Parameter(typeof(ParseContext));
+            var compilationContext = new CompilationContext(parseContext);
+
+            var compilationResult = Build(compilationContext);
+
+            // return value;
+
+            var returnLabelTarget = Expression.Label(typeof(T));
+            var returnLabelExpression = Expression.Label(returnLabelTarget, compilationResult.Value);
+
+            compilationResult.Body.Add(returnLabelExpression);
+
+            // global variables;
+            
+            // parser variables;
+
+            var allVariables = new List<ParameterExpression>();
+            allVariables.AddRange(compilationContext.GlobalVariables);
+            allVariables.AddRange(compilationResult.Variables);
+
+            // global statements;
+
+            // parser statements;
+
+            var allExpressions = new List<Expression>();
+            allExpressions.AddRange(compilationContext.GlobalExpressions);
+            allExpressions.AddRange(compilationResult.Body);
+
+            var body = Expression.Block(
+                typeof(T),
+                allVariables,
+                allExpressions
+                );
+
+            var result = Expression.Lambda<Func<ParseContext, T>>(body, parseContext);
+
+            var parser = result.Compile();
+
+            return new CompiledParser<T>(parser);
+        }
+
+        /// <summary>
+        /// Invokes the <see cref="ICompilable.Compile(CompilationContext)"/> method of the <see cref="Parser{T}"/> if it's available or 
+        /// creates a generic one.
+        /// </summary>
+        /// <param name="context">The <see cref="CompilationContext"/> instance.</param>
+        public CompilationResult Build(CompilationContext context)
+        {
+            if (this is ICompilable compilable)
+            {
+                return compilable.Compile(context);
+            }
+            else
+            {
+                // The parser doesn't provide custom compiled instructions, so we are building generic ones based on its Parse() method.
+                // Any other parser it uses won't be compiled either, even if they implement ICompilable.
+
+                return BuildAsNonCompilableParser(context);
+            }
+        }
+
+        private CompilationResult BuildAsNonCompilableParser(CompilationContext context)
+        {
+            var result = new CompilationResult();
+
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+
+            result.Variables.Add(success);
+
+            // 
+            // T value;
+            // ParseResult parseResult;
+            //
+            // success = parser.Parse(context.ParseContext, ref parseResult)
+            // #if not DicardResult
+            // if (success)
+            // {
+            //    value = parseResult.Value;
+            // }
+            // #endif
+            // 
+
+            // ParseResult<T> parseResult;
+
+            var parseResult = Expression.Variable(typeof(ParseResult<T>), $"value{context.Counter}");
+            result.Variables.Add(parseResult);
+
+            // success = parser.Parse(context.ParseContext, ref parseResult)
+
+            result.Body.Add(
+                Expression.Assign(success, 
+                    Expression.Call(
+                        Expression.Constant(this), 
+                        GetType().GetMethod("Parse", new[] { typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType() }), 
+                        context.ParseContext, 
+                        parseResult))
+                );
+
+            if (!context.DiscardResult)
+            {
+                var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
+                result.Variables.Add(value);
+
+                result.Body.Add(
+                    Expression.IfThen(
+                        success,
+                        Expression.Assign(value, Expression.Field(parseResult, "Value"))
+                        )
+                    );
+            }
+
+            return result;
+        }
+    }
+}

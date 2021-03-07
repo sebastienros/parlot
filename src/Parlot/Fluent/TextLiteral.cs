@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class TextLiteral : Parser<string>
+    public sealed class TextLiteral : Parser<string>, ICompilable
     {
         private readonly StringComparer _comparer;
         private readonly bool _skipWhiteSpace;
@@ -38,21 +38,21 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(string), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(string), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Variables.Add(success);
 
-            if (!context.IgnoreResults)
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            if (!context.DiscardResult)
             {
-                variables.Add(value);
-                body.Add(Expression.Assign(value, Expression.Constant(default(string), typeof(string))));
+                result.Variables.Add(value);
+                result.Body.Add(Expression.Assign(value, Expression.Constant(default(string), typeof(string))));
             }
 
             //if (_skipWhiteSpace)
@@ -63,7 +63,7 @@ namespace Parlot.Fluent
             if (_skipWhiteSpace)
             {
                 var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
             }
 
             // if (context.Scanner.ReadText(Text, _comparer, null))
@@ -81,15 +81,15 @@ namespace Parlot.Fluent
                     ),
                 Expression.Block(
                     Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                    context.IgnoreResults
+                    context.DiscardResult
                     ? Expression.Empty()
                     : Expression.Assign(value, Expression.Constant(Text, typeof(string)))
                     )
                 );
 
-            body.Add(ifReadText);
+            result.Body.Add(ifReadText);
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

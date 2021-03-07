@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using Parlot.Compilation;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Capture<T> : Parser<TextSpan>
+    public sealed class Capture<T> : Parser<TextSpan>, ICompilable
     {
         private readonly Parser<T> _parser;
 
@@ -36,31 +36,31 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
-            variables.Add(value);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Variables.Add(success);
+            result.Variables.Add(value);
+
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
 
             // var start = context.Scanner.Cursor.Position;
 
             var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
-            variables.Add(start);
+            result.Variables.Add(start);
 
-            body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
 
-            var ignoreResults = context.IgnoreResults;
-            context.IgnoreResults = true;
+            var ignoreResults = context.DiscardResult;
+            context.DiscardResult = true;
 
-            var parserCompileResult = _parser.Compile(context);
+            var parserCompileResult = _parser.Build(context);
 
-            context.IgnoreResults = ignoreResults;
+            context.DiscardResult = ignoreResults;
 
             // parse1 instructions
             //
@@ -81,7 +81,7 @@ namespace Parlot.Fluent
             var textSpanCtor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
             var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
 
-            body.Add(
+            result.Body.Add(
                 Expression.Block(
                     parserCompileResult.Variables,
                     Expression.Block(parserCompileResult.Body),
@@ -101,7 +101,7 @@ namespace Parlot.Fluent
                 )
             );
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

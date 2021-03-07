@@ -1,11 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Parlot.Compilation;
+using System;
 using System.Globalization;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class DecimalLiteral : Parser<decimal>
+    public sealed class DecimalLiteral : Parser<decimal>, ICompilable
     {
         private readonly NumberOptions _numberOptions;
         private readonly bool _skipWhiteSpace;
@@ -55,18 +55,18 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(decimal), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
-            variables.Add(value);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(decimal), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-            body.Add(Expression.Assign(value, Expression.Constant(default(decimal), typeof(decimal))));
+            result.Variables.Add(success);
+            result.Variables.Add(value);
+
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Body.Add(Expression.Assign(value, Expression.Constant(default(decimal), typeof(decimal))));
 
             // if (_skipWhiteSpace)
             // {
@@ -76,15 +76,15 @@ namespace Parlot.Fluent
             if (_skipWhiteSpace)
             {
                 var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
             }
 
             // var start = context.Scanner.Cursor.Offset;
 
             var start = Expression.Variable(typeof(int), $"start{context.Counter}");
-            variables.Add(start);
-            
-            body.Add(Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)));
+            result.Variables.Add(start);
+
+            result.Body.Add(Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)));
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
@@ -93,7 +93,7 @@ namespace Parlot.Fluent
                 //     context.Scanner.ReadChar('+');
                 // }
 
-                body.Add(
+                result.Body.Add(
                     Expression.IfThen(
                         Expression.Not(ExpressionHelper.ReadChar(context.ParseContext, '-')),
                         ExpressionHelper.ReadChar(context.ParseContext, '+')
@@ -139,9 +139,9 @@ namespace Parlot.Fluent
                     )
                 );
 
-            body.Add(block);
+            result.Body.Add(block);
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

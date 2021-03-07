@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Parlot.Compilation;
+using System;
 using System.Linq;
 using System.Linq.Expressions;
 
@@ -10,7 +10,7 @@ namespace Parlot.Fluent
     /// We then return the actual result of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public sealed class OneOf<T> : Parser<T>
+    public sealed class OneOf<T> : Parser<T>, ICompilable
     {
         private readonly Parser<T>[] _parsers;
 
@@ -41,29 +41,29 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(T), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Variables.Add(success);
 
-            if (!context.IgnoreResults)
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            if (!context.DiscardResult)
             {
-                variables.Add(value);
-                body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+                result.Variables.Add(value);
+                result.Body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
             }
 
             // var start = context.Scanner.Cursor.Position;
 
             var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
-            variables.Add(start);
+            result.Variables.Add(start);
 
-            body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
 
             // parse1 instructions
             // 
@@ -96,7 +96,7 @@ namespace Parlot.Fluent
 
             foreach (var parser in _parsers.Reverse())
             {
-                var parserCompileResult = parser.Compile(context);
+                var parserCompileResult = parser.Build(context);
 
                 block = Expression.Block(
                     parserCompileResult.Variables,
@@ -106,7 +106,7 @@ namespace Parlot.Fluent
                             parserCompileResult.Success,
                             Expression.Block(
                                 Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                context.IgnoreResults
+                                context.DiscardResult
                                 ? Expression.Empty()
                                 : Expression.Assign(value, parserCompileResult.Value)
                                 ),
@@ -117,9 +117,9 @@ namespace Parlot.Fluent
 
             }
 
-            body.Add(block);
+            result.Body.Add(block);
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 

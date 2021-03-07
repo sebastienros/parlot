@@ -1,11 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Parlot.Compilation;
+using System;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Deferred<T> : Parser<T>
+    public sealed class Deferred<T> : Parser<T>, ICompilable
     {
         public Parser<T> Parser { get; set; }
 
@@ -31,22 +31,22 @@ namespace Parlot.Fluent
             public object Func;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(T), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
-            
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
+
+            result.Variables.Add(success);
+
             // Compile the parser code as a lambda the first time,
             // then reuse the lambda the subsequent times.
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
 
-            variables.Add(value);
-            body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+            result.Variables.Add(value);
+            result.Body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
 
             var contextScope = Expression.Constant(_closure);
             var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
@@ -67,20 +67,20 @@ namespace Parlot.Fluent
                 //   return result;
                 // }
 
-                var parserCompileResult = Parser.Compile(context);
+                var parserCompileResult = Parser.Build(context);
 
-                var result = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.Counter}");
+                var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.Counter}");
 
                 var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-                var returnLabelExpression = Expression.Label(returnLabelTarget, result);
+                var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
 
                 var lambda =
                     Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
                     Expression.Block(
                         typeof(ValueTuple<bool, T>),
-                        parserCompileResult.Variables.Append(result),
+                        parserCompileResult.Variables.Append(resultExpression),
                         Expression.Block(parserCompileResult.Body),
-                        Expression.Assign(result, Expression.New(
+                        Expression.Assign(resultExpression, Expression.New(
                             typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }),
                             parserCompileResult.Success,
                             parserCompileResult.Value)),
@@ -98,20 +98,20 @@ namespace Parlot.Fluent
             // ValueTuple<bool, T> def;
 
             var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.Counter}");
-            variables.Add(deferred);
+            result.Variables.Add(deferred);
 
             // def = ((Func<ParserContext, ValueTuple<bool, T>>)_closure.Func).Invoke(parseContext);
 
             var castFunc = Expression.Convert(funcsAccess, funcReturnType);
-            body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));
+            result.Body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));
 
             // success = def.Item1;
             // value = def.Item2;
 
-            body.Add(Expression.Assign(success, Expression.Field(deferred, "Item1")));
-            body.Add(Expression.Assign(value, Expression.Field(deferred, "Item2")));
+            result.Body.Add(Expression.Assign(success, Expression.Field(deferred, "Item1")));
+            result.Body.Add(Expression.Assign(value, Expression.Field(deferred, "Item2")));
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

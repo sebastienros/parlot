@@ -1,6 +1,4 @@
-using System.Linq.Expressions;
 using Parlot.Fluent;
-using System;
 using System.Collections.Generic;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -9,48 +7,12 @@ namespace Parlot.Tests
 {
     public class CompileTests
     {
-        public static Func<ParseContext, T> Compile<T>(Parser<T> parser)
-        {
-            var parseContext = Expression.Parameter(typeof(ParseContext));
-            var compilationContext = new CompilationContext(parseContext)
-            {
-                //OnParse = (context, parser) => { Console.WriteLine($"'{context.Scanner.Cursor.Current}' {context.Scanner.Cursor.Position}"); }
-            };
-
-            var compileResult = parser.Compile(compilationContext);
-
-            var returnLabelTarget = Expression.Label(typeof(T));
-            var returnLabelExpression = Expression.Label(returnLabelTarget, compileResult.Value);
-
-            compileResult.Body.Add(returnLabelExpression);
-
-            var allVariables = new List<ParameterExpression>();
-            allVariables.AddRange(compilationContext.GlobalVariables);
-            allVariables.AddRange(compileResult.Variables);
-
-            var allExpressions = new List<Expression>();
-            allExpressions.AddRange(compilationContext.GlobalExpressions);
-            allExpressions.AddRange(compileResult.Body);
-
-            var body = Expression.Block(
-                typeof(T),
-                allVariables,
-                allExpressions
-                );
-
-            var result = Expression.Lambda<Func<ParseContext, T>>(body, parseContext);
-
-            return result.Compile();
-        }
-
         [Fact]
         public void ShouldCompileTextLiterals()
         {
-            var parse = Compile(Terms.Text("hello"));
+            var parser = Terms.Text("hello").Compile();
 
-            var scanner = new Scanner(" hello world");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world");
 
             Assert.NotNull(result);
             Assert.Equal("hello", result);
@@ -59,11 +21,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileStringLiterals()
         {
-            var parse = Compile(Terms.String());
+            var parser = Terms.String().Compile();
 
-            var scanner = new Scanner("'hello'");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("'hello'");
 
             Assert.Equal("hello", result);
         }
@@ -71,11 +31,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileCharLiterals()
         {
-            var parse = Compile(Terms.Char('h'));
+            var parser = Terms.Char('h').Compile();
 
-            var scanner = new Scanner(" hello world");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world");
 
             Assert.Equal('h', result);
         }
@@ -83,11 +41,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileRangeLiterals()
         {
-            var parse = Compile(Terms.Pattern(static c => Character.IsInRange(c, 'a', 'z')));
+            var parser = Terms.Pattern(static c => Character.IsInRange(c, 'a', 'z')).Compile();
 
-            var scanner = new Scanner("helloWorld");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("helloWorld");
 
             Assert.Equal("hello", result);
         }
@@ -95,11 +51,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileDecimalLiterals()
         {
-            var parse = Compile(Terms.Decimal());
+            var parser = Terms.Decimal().Compile();
 
-            var scanner = new Scanner(" 123");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" 123");
 
             Assert.Equal(123, result);
         }
@@ -107,11 +61,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileLiteralsWithoutSkipWhiteSpace()
         {
-            var parse = Compile(Literals.Text("hello"));
+            var parser = Literals.Text("hello").Compile();
 
-            var scanner = new Scanner(" hello world");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world");
 
             Assert.Null(result);
         }
@@ -119,16 +71,14 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileOrs()
         {
-            var parse = Compile(Terms.Text("hello").Or(Terms.Text("world")));
+            var parser = Terms.Text("hello").Or(Terms.Text("world")).Compile();
 
-            var scanner = new Scanner(" hello world");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world");
 
             Assert.NotNull(result);
             Assert.Equal("hello", result);
 
-            result = parse(context);
+            result = parser.Parse(" world");
 
             Assert.NotNull(result);
             Assert.Equal("world", result);
@@ -137,11 +87,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileAnds()
         {
-            var parse = Compile(Terms.Text("hello").And(Terms.Text("world")));
+            var parser = Terms.Text("hello").And(Terms.Text("world")).Compile();
 
-            var scanner = new Scanner(" hello world");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world");
 
             Assert.Equal(("hello", "world"), result);
         }
@@ -149,11 +97,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileThens()
         {
-            var parse = Compile(Terms.Text("hello").And(Terms.Text("world")).Then(x => x.Item1.ToUpper()));
+            var parser = Terms.Text("hello").And(Terms.Text("world")).Then(x => x.Item1.ToUpper()).Compile();
 
-            var scanner = new Scanner(" hello world");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world");
 
             Assert.Equal("HELLO", result);
         }
@@ -165,11 +111,9 @@ namespace Parlot.Tests
 
             deferred.Parser = Terms.Text("hello");
 
-            var parse = Compile(deferred.And(deferred));
+            var parser = deferred.And(deferred).Compile();
 
-            var scanner = new Scanner(" hello hello hello");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello hello hello");
 
             Assert.Equal(("hello", "hello"), result);
         }
@@ -184,13 +128,11 @@ namespace Parlot.Tests
             var groupExpression = Between(openParen, expression, closeParen);
             expression.Parser = Terms.Decimal().Or(groupExpression);
 
-            var parse = Compile(ZeroOrMany(expression));
+            var parser = ZeroOrMany(expression).Compile();
 
-            var scanner = new Scanner("1 (2) 3");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("1 (2) 3");
 
-            Assert.Equal(new decimal[] {1, 2, 3 }, result);
+            Assert.Equal(new decimal[] { 1, 2, 3 }, result);
         }
 
         [Fact]
@@ -202,13 +144,9 @@ namespace Parlot.Tests
             deferred1.Parser = Terms.Decimal();
             deferred2.Parser = Terms.Decimal();
 
-            var parser = deferred1.And(deferred2).Then(x => x.Item1 + x.Item2);
+            var parser = deferred1.And(deferred2).Then(x => x.Item1 + x.Item2).Compile();
 
-            var parse = Compile(parser);
-
-            var scanner = new Scanner("1 2");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("1 2");
 
             Assert.Equal(3, result);
         }
@@ -225,11 +163,9 @@ namespace Parlot.Tests
                 .Or(number)
                 );
 
-            var parse = Compile(unary);
+            var parser = unary.Compile();
 
-            var scanner = new Scanner("--1");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("--1");
 
             Assert.Equal(1, result);
         }
@@ -237,11 +173,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileZeroOrManys()
         {
-            var parse = Compile(ZeroOrMany(Terms.Text("hello").Or(Terms.Text("world"))));
+            var parser = ZeroOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
 
-            var scanner = new Scanner(" hello world hello");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world hello");
 
             Assert.Equal(new[] { "hello", "world", "hello" }, result);
         }
@@ -250,11 +184,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileBetweens()
         {
-            var parse = Compile(Between(Terms.Text("hello"), Terms.Text("world"), Terms.Text("hello")));
+            var parser = Between(Terms.Text("hello"), Terms.Text("world"), Terms.Text("hello")).Compile();
 
-            var scanner = new Scanner(" hello world hello");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse(" hello world hello");
 
             Assert.Equal("world", result);
         }
@@ -262,11 +194,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileSeparated()
         {
-            var parse = Compile(Separated(Terms.Char(','), Terms.Decimal()));
+            var parser = Separated(Terms.Char(','), Terms.Decimal()).Compile();
 
-            var scanner = new Scanner("1, 2,3");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("1, 2,3");
 
             Assert.Equal(1, result[0]);
             Assert.Equal(2, result[1]);
@@ -276,11 +206,9 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileExpressionParser()
         {
-            var parse = Compile(Calc.FluentParser.Expression);
+            var parser = Calc.FluentParser.Expression.Compile();
 
-            var scanner = new Scanner("(2 + 1) * 3");
-            var context = new ParseContext(scanner);
-            var result = parse(context);
+            var result = parser.Parse("(2 + 1) * 3");
 
             Assert.Equal(9, result.Evaluate());
         }
@@ -300,12 +228,53 @@ namespace Parlot.Tests
 
             string _email = "sebastien.ros@gmail.com";
 
-            var scanner = new Scanner(_email);
-            var context = new ParseContext(scanner);
-            var parse = Compile(Email);
-            var result = parse(context);
+            var parser = Email.Compile();
+            var result = parser.Parse(_email);
 
             Assert.Equal(_email, result.ToString());
+        }
+
+        private sealed class NonCompilableCharLiteral : Parser<char>
+        {
+            public NonCompilableCharLiteral(char c, bool skipWhiteSpace = true)
+            {
+                Char = c;
+                SkipWhiteSpace = skipWhiteSpace;
+            }
+
+            public char Char { get; }
+
+            public bool SkipWhiteSpace { get; }
+
+            public override bool Parse(ParseContext context, ref ParseResult<char> result)
+            {
+                context.EnterParser(this);
+
+                if (SkipWhiteSpace)
+                {
+                    context.SkipWhiteSpace();
+                }
+
+                var start = context.Scanner.Cursor.Offset;
+
+                if (context.Scanner.ReadChar(Char))
+                {
+                    result.Set(start, context.Scanner.Cursor.Offset, Char);
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        [Fact]
+        public void ShouldCompileNonCompilableCharLiterals()
+        {
+            var parser = new NonCompilableCharLiteral('h').Compile();
+
+            var result = parser.Parse(" hello world");
+
+            Assert.Equal('h', result);
         }
     }
 }

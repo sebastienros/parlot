@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Between<A, T, B> : Parser<T>
+    public sealed class Between<A, T, B> : Parser<T>, ICompilable
     {
         private readonly Parser<T> _parser;
         private readonly Parser<A> _before;
@@ -96,21 +95,21 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(T), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Variables.Add(success);
 
-            if (!context.IgnoreResults)
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            if (!context.DiscardResult)
             {
-                variables.Add(value);
-                body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+                result.Variables.Add(value);
+                result.Body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
             }
 
             // before instructions
@@ -131,9 +130,9 @@ namespace Parlot.Fluent
             //    }
             // }
 
-            var beforeCompileResult = _before.Compile(context);
-            var parserCompileResult = _parser.Compile(context);
-            var afterCompileResult = _after.Compile(context);
+            var beforeCompileResult = _before.Build(context);
+            var parserCompileResult = _parser.Build(context);
+            var afterCompileResult = _after.Build(context);
 
             var block = Expression.Block(
                     beforeCompileResult.Variables,
@@ -152,7 +151,7 @@ namespace Parlot.Fluent
                                         afterCompileResult.Success,
                                         Expression.Block(
                                             Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                            context.IgnoreResults
+                                            context.DiscardResult
                                             ? Expression.Empty()
                                             : Expression.Assign(value, parserCompileResult.Value)
                                             )
@@ -163,9 +162,9 @@ namespace Parlot.Fluent
                         )
                     );
 
-            body.Add(block);
+            result.Body.Add(block);
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

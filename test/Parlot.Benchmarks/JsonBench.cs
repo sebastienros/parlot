@@ -20,8 +20,10 @@ namespace Parlot.Benchmarks
         private string _longJson;
         private string _wideJson;
         private string _deepJson;
-        private Func<ParseContext, IJson> _compiled;
+        private Parser<IJson> _compiled;
 #nullable restore
+
+        private static readonly Random _random = new();
 
         [GlobalSetup]
         public void Setup()
@@ -31,7 +33,7 @@ namespace Parlot.Benchmarks
             _wideJson = BuildJson(1, 1, 256).ToString()!;
             _deepJson = BuildJson(1, 256, 1).ToString()!;
 
-            _compiled = Tests.CompileTests.Compile(JsonParser.Json);
+            _compiled = JsonParser.Json.Compile();
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Big")]
@@ -43,9 +45,7 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("Big")]
         public IJson BigJson_ParlotCompiled()
         {
-            var scanner = new Scanner(_bigJson);
-            var context = new ParseContext(scanner);
-            return _compiled(context);
+            return _compiled.Parse(_bigJson);
         }
 
         [Benchmark, BenchmarkCategory("Big")]
@@ -75,9 +75,7 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("Long")]
         public IJson LongJson_ParlotCompiled()
         {
-            var scanner = new Scanner(_longJson);
-            var context = new ParseContext(scanner);
-            return _compiled(context);
+            return _compiled.Parse(_longJson);
         }
 
         [Benchmark, BenchmarkCategory("Long")]
@@ -107,9 +105,7 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("Deep")]
         public IJson DeepJson_ParlotCompiled()
         {
-            var scanner = new Scanner(_deepJson);
-            var context = new ParseContext(scanner);
-            return _compiled(context);
+            return _compiled.Parse(_deepJson);
         }
 
         [Benchmark, BenchmarkCategory("Deep")]
@@ -140,9 +136,7 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("Wide")]
         public IJson WideJson_ParlotCompiled()
         {
-            var scanner = new Scanner(_wideJson);
-            var context = new ParseContext(scanner);
-            return _compiled(context);
+            return _compiled.Parse(_wideJson);
         }
 
         [Benchmark, BenchmarkCategory("Wide")]
@@ -183,12 +177,11 @@ namespace Parlot.Benchmarks
             );
         }
 
-        private static readonly Random random = new();
         public static string RandomString(int length)
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
             return new string(Enumerable.Repeat(chars, length)
-            .Select(s => s[random.Next(s.Length)]).ToArray());
+            .Select(s => s[_random.Next(s.Length)]).ToArray());
         }
     }
 }

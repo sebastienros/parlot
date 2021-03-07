@@ -1,11 +1,10 @@
-﻿namespace Parlot.Fluent
-{
-    using System;
-    using System.Collections.Generic;
-    using System.Linq.Expressions;
-    using System.Reflection;
-    using System.Text;
+﻿using Parlot.Fluent;
+using System;
+using System.Linq.Expressions;
+using System.Reflection;
 
+namespace Parlot.Compilation
+{
     internal static class ExpressionHelper
     {
         internal static MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());

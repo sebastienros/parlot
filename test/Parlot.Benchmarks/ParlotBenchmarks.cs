@@ -5,14 +5,14 @@ using Parlot.Tests.Json;
 
 namespace Parlot.Benchmarks
 {
-    [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+    [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
     public class ParlotBenchmarks
     {
         private const string _stringWithEscapes = "This is a new line \\n \\t and a tab and some \\xa0";
         private const string _stringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
 
-        private JsonBench _jsonBench = new JsonBench();
-        private ExprBench _exprBench = new ExprBench();
+        private readonly JsonBench _jsonBench = new();
+        private readonly ExprBench _exprBench = new();
 
         [GlobalSetup]
         public void Setup()

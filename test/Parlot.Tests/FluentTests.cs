@@ -350,15 +350,22 @@ namespace Parlot.Tests
             Parser<char> Minus = Literals.Char('-');
             Parser<char> At = Literals.Char('@');
             Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
+            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
+            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
             Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
 
             Assert.True(Email.TryParse(_email, out var result));
             Assert.Equal(_email, result.ToString());
+        }
+
+        [Fact]
+        public void ShouldParseEof()
+        {
+            Assert.True(Terms.Decimal().Eof().TryParse("123", out var result) && result == 123);
+            Assert.False(Terms.Decimal().Eof().TryParse("123 ", out _));
         }
     }
 }

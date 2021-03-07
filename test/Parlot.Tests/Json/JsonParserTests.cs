@@ -15,19 +15,19 @@ namespace Parlot.Tests.Json
             Assert.Equal(json, result.ToString());
         }
 
-        [Theory]
-        [InlineData("{\"property\":\"value\"}")]
-        [InlineData("{\"property\":[\"value\",\"value\",\"value\"]}")]
-        [InlineData("{\"property\":{\"property\":\"value\"}}")]
-        public void ShouldParseJsonCompiled (string json)
-        {
-            var _compiled = CompileTests.Compile(JsonParser.Json);
+        //[Theory]
+        //[InlineData("{\"property\":\"value\"}")]
+        //[InlineData("{\"property\":[\"value\",\"value\",\"value\"]}")]
+        //[InlineData("{\"property\":{\"property\":\"value\"}}")]
+        //public void ShouldParseJsonCompiled (string json)
+        //{
+        //    var _compiled = CompileTests.Compile(JsonParser.Json);
 
-            var scanner = new Scanner(json);
-            var context = new ParseContext(scanner);
+        //    var scanner = new Scanner(json);
+        //    var context = new ParseContext(scanner);
 
-            var result = _compiled(context);
-            Assert.Equal(json, result.ToString());
-        }
+        //    var result = _compiled(context);
+        //    Assert.Equal(json, result.ToString());
+        //}
     }
 }

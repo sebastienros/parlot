@@ -11,20 +11,20 @@ namespace Parlot.Benchmarks
     [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
     public class RegexBenchmarks
     {
-        private readonly Regex EmailRegex = new Regex("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+");
-        private readonly Regex EmailRegexCompiled = new Regex("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+", RegexOptions.Compiled);
+        public static readonly Regex EmailRegex = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+");
+        public static readonly Regex EmailRegexCompiled = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+", RegexOptions.Compiled);
 
-        private static readonly Parser<char> Dot = Literals.Char('.');
-        private static readonly Parser<char> Plus = Literals.Char('+');
-        private static readonly Parser<char> Minus = Literals.Char('-');
-        private static readonly Parser<char> At = Literals.Char('@');
-        private static readonly Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-        private static readonly Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-        private static readonly Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-        private static readonly Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
-        private static readonly Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+        public static readonly Parser<char> Dot = Literals.Char('.');
+        public static readonly Parser<char> Plus = Literals.Char('+');
+        public static readonly Parser<char> Minus = Literals.Char('-');
+        public static readonly Parser<char> At = Literals.Char('@');
+        public static readonly Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+        public static readonly Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+        public static readonly Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+        public static readonly Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+        public static readonly Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
-        private static readonly Func<ParseContext, TextSpan> EmailCompiled = Tests.CompileTests.Compile(Email);
+        public static readonly Parser<TextSpan> EmailCompiled = Email.Compile();
 
         private static readonly string _email = "sebastien.ros@gmail.com";
 
@@ -51,17 +51,13 @@ namespace Parlot.Benchmarks
         [Benchmark]
         public bool ParlotEmail()
         {
-            return Email.TryParse(_email, out var result);
+            return Email.TryParse(_email, out _);
         }
-
-        private static readonly Scanner scanner = new Scanner(_email);
-        private static readonly ParseContext context = new ParseContext(scanner);
 
         [Benchmark]
         public bool ParlotEmailCompiled()
         {
-            scanner.Cursor.ResetPosition(TextPosition.Start);
-            return EmailCompiled(context).Length > 0;
+            return EmailCompiled.Parse(_email).Length > 0;
         }
     }
 }

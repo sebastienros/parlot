@@ -26,7 +26,7 @@
 
             var end = context.Scanner.Cursor.Offset;
 
-            result.Set(start, context.Scanner.Cursor.Offset,  new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
             return true;
         }
     }

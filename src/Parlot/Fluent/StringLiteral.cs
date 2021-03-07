@@ -1,7 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
-using System.Reflection;
 
 namespace Parlot.Fluent
 {
@@ -12,7 +11,7 @@ namespace Parlot.Fluent
         SingleOrDouble
     }
 
-    public sealed class StringLiteral : Parser<TextSpan>
+    public sealed class StringLiteral : Parser<TextSpan>, ICompilable
     {
         private readonly StringLiteralQuotes _quotes;
         private readonly bool _skipWhiteSpace;
@@ -58,21 +57,21 @@ namespace Parlot.Fluent
             }
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Variables.Add(success);
 
-            if (!context.IgnoreResults)
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            if (!context.DiscardResult)
             {
-                variables.Add(value);
-                body.Add(Expression.Assign(value, Expression.Constant(default(TextSpan), typeof(TextSpan))));
+                result.Variables.Add(value);
+                result.Body.Add(Expression.Assign(value, Expression.Constant(default(TextSpan), typeof(TextSpan))));
             }
 
             //if (_skipWhiteSpace)
@@ -83,15 +82,15 @@ namespace Parlot.Fluent
             if (_skipWhiteSpace)
             {
                 var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
             }
 
             // var start = context.Scanner.Cursor.Offset;
 
             var start = Expression.Variable(typeof(int), $"start{context.Counter}");
-            variables.Add(start);
+            result.Variables.Add(start);
 
-            body.Add(Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)));
 
             var parseStringExpression = _quotes switch
             {
@@ -113,14 +112,14 @@ namespace Parlot.Fluent
             var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", new[] { typeof(TextSpan) });
             var textSpanCtor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
 
-            body.Add(
+            result.Body.Add(
                 Expression.IfThen(
                     parseStringExpression,
                     Expression.Block(
                         new[] { end },
                         Expression.Assign(end, ExpressionHelper.Offset(context.ParseContext)),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                        context.IgnoreResults 
+                        context.DiscardResult 
                         ? Expression.Empty()
                         : Expression.Assign(value, 
                             Expression.Call(decodeStringMethodInfo, 
@@ -132,7 +131,7 @@ namespace Parlot.Fluent
                     )
                 ));
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

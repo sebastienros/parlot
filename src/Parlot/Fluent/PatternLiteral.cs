@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class PatternLiteral : Parser<TextSpan>
+    public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
     {
         private readonly Func<char, bool> _predicate;
         private readonly int _minSize;
@@ -39,7 +39,7 @@ namespace Parlot.Fluent
             context.Scanner.Cursor.Advance();
             var size = 1;
 
-            while (!context.Scanner.Cursor.Eof && (_maxSize > 0 ? size < _maxSize : true) && _predicate(context.Scanner.Cursor.Current))
+            while (!context.Scanner.Cursor.Eof && (_maxSize <= 0 || size < _maxSize) && _predicate(context.Scanner.Cursor.Current))
             {
                 context.Scanner.Cursor.Advance();
                 size++;
@@ -59,21 +59,21 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
 
-            if (!context.IgnoreResults)
+            result.Variables.Add(success);
+
+            if (!context.DiscardResult)
             {
-                variables.Add(value);
+                result.Variables.Add(value);
             }
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
 
             //if (_skipWhiteSpace)
             //{
@@ -83,21 +83,21 @@ namespace Parlot.Fluent
             if (_skipWhiteSpace)
             {
                 var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
             }
 
             // var start = context.Scanner.Cursor.Position;
 
             var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
-            variables.Add(start);
+            result.Variables.Add(start);
 
-            body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
 
             // var size = 0;
 
             var size = Expression.Variable(typeof(int), $"size{context.Counter}");
-            variables.Add(size);
-            body.Add(Expression.Assign(size, Expression.Constant(0, typeof(int))));
+            result.Variables.Add(size);
+            result.Body.Add(Expression.Assign(size, Expression.Constant(0, typeof(int))));
 
             // while (true)
             // {
@@ -125,7 +125,7 @@ namespace Parlot.Fluent
 
             var breakLabel = Expression.Label("break");
 
-            body.Add(
+            result.Body.Add(
                 Expression.Loop(
                     Expression.Block(
                         Expression.IfThen(
@@ -162,12 +162,12 @@ namespace Parlot.Fluent
             var textSpanCtor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
             var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
 
-            body.Add(
+            result.Body.Add(
                 Expression.IfThenElse(
                     Expression.LessThan(size, Expression.Constant(_minSize)),
                     ExpressionHelper.ResetPosition(context.ParseContext, start),
                     Expression.Block(
-                        context.IgnoreResults 
+                        context.DiscardResult 
                         ? Expression.Empty()
                         : Expression.Assign(value, 
                             Expression.New(textSpanCtor,
@@ -180,7 +180,7 @@ namespace Parlot.Fluent
                     )
                 );
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }

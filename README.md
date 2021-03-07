@@ -3,7 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Parlot.svg)](https://nuget.org/packages/Parlot)
 [![BSD 3-Clause](https://img.shields.io/github/license/sebastienros/parlot)](https://github.com/sebastienros/parlot/blob/main/LICENSE)
 
-Parlot is a __fast__,  __lightweight__ and simple to use .NET parser combinator.
+Parlot is a __fast__, __lightweight__ and simple to use .NET parser combinator.
 
 Parlot provides a fluent API based on parser combinators that provide a more readable grammar definition.
 Parlot also provides some classes to build lower level parsers that require even more optimization, while maintaining some simple to use APIs.

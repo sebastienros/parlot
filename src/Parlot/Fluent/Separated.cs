@@ -1,10 +1,11 @@
-﻿using System;
+﻿using Parlot.Compilation;
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Separated<U, T> : Parser<List<T>>
+    public sealed class Separated<U, T> : Parser<List<T>>, ICompilable
     {
         private readonly Parser<U> _separator;
         private readonly Parser<T> _parser;
@@ -87,21 +88,21 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public override CompileResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext context)
         {
-            var variables = new List<ParameterExpression>();
-            var body = new List<Expression>();
-            var success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = Expression.Variable(typeof(List<T>), $"value{context.Counter}");
+            var result = new CompilationResult();
 
-            variables.Add(success);
+            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            var value = result.Value = Expression.Variable(typeof(List<T>), $"value{context.Counter}");
 
-            body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            result.Variables.Add(success);
 
-            if (!context.IgnoreResults)
+            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+
+            if (!context.DiscardResult)
             {
-                variables.Add(value);
-                body.Add(Expression.Assign(value, Expression.New(typeof(List<T>))));
+                result.Variables.Add(value);
+                result.Body.Add(Expression.Assign(value, Expression.New(typeof(List<T>))));
             }
 
             // value = new List<T>();
@@ -127,7 +128,7 @@ namespace Parlot.Fluent
             //
             // success = true;
 
-            var parserCompileResult = _parser.Compile(context);
+            var parserCompileResult = _parser.Build(context);
             var breakLabel = Expression.Label("break");
 
             Expression parseSeparatorExpression;
@@ -141,7 +142,7 @@ namespace Parlot.Fluent
             }
             else
             {
-                var separatorCompileResult = _separator.Compile(context);
+                var separatorCompileResult = _separator.Build(context);
 
                 parseSeparatorExpression = Expression.Block(
                     Expression.Block(parserCompileResult.Body),
@@ -155,7 +156,7 @@ namespace Parlot.Fluent
             if (_separatorWhiteSpace)
             {
                 var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
             }
 
             var block = Expression.Block(
@@ -166,7 +167,7 @@ namespace Parlot.Fluent
                         Expression.IfThenElse(
                             parserCompileResult.Success,
                             Expression.Block(
-                                context.IgnoreResults
+                                context.DiscardResult
                                 ? Expression.Empty()
                                 : Expression.Call(value, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value),
                                 Expression.Assign(success, Expression.Constant(true))
@@ -182,9 +183,9 @@ namespace Parlot.Fluent
                     breakLabel)
                 );
 
-            body.Add(block);
+            result.Body.Add(block);
 
-            return new CompileResult(variables, body, success, value);
+            return result;
         }
     }
 }
