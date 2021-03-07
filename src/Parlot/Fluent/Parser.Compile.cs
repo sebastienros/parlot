@@ -13,8 +13,7 @@ namespace Parlot.Fluent
         /// <returns>A compiled parser.</returns>
         public Parser<T> Compile()
         {
-            var parseContext = Expression.Parameter(typeof(ParseContext));
-            var compilationContext = new CompilationContext(parseContext);
+            var compilationContext = new CompilationContext();
 
             var compilationResult = Build(compilationContext);
 
@@ -47,7 +46,7 @@ namespace Parlot.Fluent
                 allExpressions
                 );
 
-            var result = Expression.Lambda<Func<ParseContext, T>>(body, parseContext);
+            var result = Expression.Lambda<Func<ParseContext, T>>(body, compilationContext.ParseContext);
 
             var parser = result.Compile();
 

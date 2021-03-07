@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Parlot.Fluent;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 
 namespace Parlot.Compilation
@@ -8,15 +9,14 @@ namespace Parlot.Compilation
     /// </summary>
     public class CompilationContext
     {
-        public CompilationContext(ParameterExpression parseContext)
+        public CompilationContext()
         {
-            ParseContext = parseContext;
         }
 
         /// <summary>
         /// Gets the expression containing the the <see cref="ParseContext"/> instance for the parser.
         /// </summary>
-        public ParameterExpression ParseContext { get; }
+        public ParameterExpression ParseContext { get; } = Expression.Parameter(typeof(ParseContext));
 
         /// <summary>
         /// Gets or sets a counter used to generate unique variable names.
