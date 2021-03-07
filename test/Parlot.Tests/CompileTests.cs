@@ -276,5 +276,17 @@ namespace Parlot.Tests
 
             Assert.Equal('h', result);
         }
+
+        [Fact]
+        public void ShouldCompileOneOfABT()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Decimal();
+
+            var o2 = a.Or<char, decimal, object>(b).Compile();
+
+            Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
+            Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
+        }
     }
 }

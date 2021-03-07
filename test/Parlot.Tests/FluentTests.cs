@@ -72,6 +72,16 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void TextShouldResetPosition()
+        {
+            var code = OneOf(Terms.Text("substract"), Terms.Text("substitute"));
+
+            Assert.False(code.TryParse("sublime", out _));
+            Assert.True(code.TryParse("substract", out _));
+            Assert.True(code.TryParse("substitute", out _));
+        }
+
+        [Fact]
         public void ParseContextShouldUseNewLines()
         {
             Assert.Equal("a", Terms.NonWhiteSpace().Parse("\n\r\v a"));
@@ -162,6 +172,19 @@ namespace Parlot.Tests
             Assert.True(o3.TryParse("b", out _));
             Assert.True(o3.TryParse("c", out _));
             Assert.False(o3.TryParse("d", out _));
+        }
+
+        [Fact]
+        public void OrShouldReturnOneOfCommonType()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Decimal();
+
+            var o2 = a.Or<char, decimal, object>(b);
+
+            Assert.IsType<OneOf<char, decimal, object>>(o2);
+            Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
+            Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
         }
 
         [Fact]
