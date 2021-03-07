@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class OneOf<A, B, T> : Parser<T>
+    public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
         where A : T
         where B : T
     {
