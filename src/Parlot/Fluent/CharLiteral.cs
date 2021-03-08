@@ -44,7 +44,6 @@ namespace Parlot.Fluent
             var value = result.Value = Expression.Variable(typeof(char), $"value{context.Counter}");
 
             result.Variables.Add(success);
-
             result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
 
             if (!context.DiscardResult)

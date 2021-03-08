@@ -288,5 +288,19 @@ namespace Parlot.Tests
             Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
             Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
         }
+
+        [Fact]
+        public void ShouldCompileAndSkip()
+        {
+            var code =
+                OneOf(
+                    Terms.Text("hello").AndSkip(Terms.Text("world")),
+                    Terms.Text("hello").AndSkip(Terms.Text("universe"))
+                    ).Compile();
+
+            Assert.False(code.TryParse("hello country", out var result) && result == "hello");
+            Assert.True(code.TryParse("hello universe", out result) && result == "hello");
+            Assert.True(code.TryParse("hello world", out result) && result == "hello");
+        }
     }
 }
