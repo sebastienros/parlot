@@ -302,5 +302,13 @@ namespace Parlot.Tests
             Assert.True(code.TryParse("hello universe", out result) && result == "hello");
             Assert.True(code.TryParse("hello world", out result) && result == "hello");
         }
+
+        [Fact]
+        public void ShouldCompileEmpty()
+        {
+            Assert.True(Empty<object>().Compile().TryParse("123", out var result) && result == null);
+            Assert.True(Empty(1).Compile().TryParse("123", out var r2) && r2 == 1);
+        }
+
     }
 }

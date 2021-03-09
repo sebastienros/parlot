@@ -76,6 +76,16 @@ namespace Parlot.Fluent
         /// </summary>
         public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<T> Empty<T>() => new Empty<T>();
+
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<T> Empty<T>(T value) => new Empty<T>(value);
+
     }
 
     public class LiteralBuilder

@@ -404,5 +404,12 @@ namespace Parlot.Tests
             Assert.True(Terms.Decimal().Eof().TryParse("123", out var result) && result == 123);
             Assert.False(Terms.Decimal().Eof().TryParse("123 ", out _));
         }
+
+        [Fact]
+        public void EmptyShouldAlwaysSucceed()
+        {
+            Assert.True(Empty<object>().TryParse("123", out var result) && result == null);
+            Assert.True(Empty(1).TryParse("123", out var r2) && r2 == 1);
+        }
     }
 }
