@@ -19,8 +19,8 @@ namespace Parlot.Fluent
 
             // return value;
 
-            var returnLabelTarget = Expression.Label(typeof(T));
-            var returnLabelExpression = Expression.Label(returnLabelTarget, compilationResult.Value);
+            var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+            var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }), compilationResult.Success, compilationResult.Value));
 
             compilationResult.Body.Add(returnLabelExpression);
 
@@ -41,12 +41,12 @@ namespace Parlot.Fluent
             allExpressions.AddRange(compilationResult.Body);
 
             var body = Expression.Block(
-                typeof(T),
+                typeof(ValueTuple<bool, T>),
                 allVariables,
                 allExpressions
                 );
 
-            var result = Expression.Lambda<Func<ParseContext, T>>(body, compilationContext.ParseContext);
+            var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
 
             var parser = result.Compile();
 

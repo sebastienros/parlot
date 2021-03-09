@@ -401,6 +401,8 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldParseEof()
         {
+            Assert.True(Empty<object>().Eof().TryParse("", out _));
+            Assert.False(Empty<object>().Eof().TryParse(" ", out _));
             Assert.True(Terms.Decimal().Eof().TryParse("123", out var result) && result == 123);
             Assert.False(Terms.Decimal().Eof().TryParse("123 ", out _));
         }

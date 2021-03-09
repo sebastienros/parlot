@@ -12,9 +12,9 @@ namespace Parlot.Compilation
     /// </remarks>
     public class CompiledParser<T> : Parser<T>
     {
-        private readonly Func<ParseContext, T> _parse;
+        private readonly Func<ParseContext, ValueTuple<bool, T>> _parse;
 
-        public CompiledParser(Func<ParseContext, T> parse)
+        public CompiledParser(Func<ParseContext, ValueTuple<bool, T>> parse)
         {
             _parse = parse ?? throw new ArgumentNullException(nameof(parse));
         }
@@ -24,8 +24,13 @@ namespace Parlot.Compilation
             var start = context.Scanner.Cursor.Offset;
             var parsed = _parse(context);
 
-            result.Set(start, context.Scanner.Cursor.Offset, parsed);
-            return true;
+            if (parsed.Item1)
+            {
+                result.Set(start, context.Scanner.Cursor.Offset, parsed.Item2);
+                return true;
+            }
+
+            return false;
         }
     }
 }

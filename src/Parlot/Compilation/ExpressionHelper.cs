@@ -22,5 +22,6 @@ namespace Parlot.Compilation
         internal static Expression Current(Expression parseContext) => Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Current");
         internal static Expression Eof(Expression parseContext) => Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Eof");
         internal static Expression Buffer(Expression parseContext) => Expression.Field(Expression.Field(parseContext, "Scanner"), "Buffer");
+        internal static Expression ThrowObject(Expression o) => Expression.Throw(Expression.New(typeof(Exception).GetConstructor(new[] { typeof(string) }), Expression.Call(o, o.Type.GetMethod("ToString", new Type[0]))));
     }
 }
