@@ -413,5 +413,12 @@ namespace Parlot.Tests
             Assert.True(Empty<object>().TryParse("123", out var result) && result == null);
             Assert.True(Empty(1).TryParse("123", out var r2) && r2 == 1);
         }
+
+        [Fact]
+        public void NotShouldNegateParser()
+        {
+            Assert.False(Not(Terms.Decimal()).TryParse("123", out _));
+            Assert.True(Not(Terms.Decimal()).TryParse("Text", out _));
+        }
     }
 }
