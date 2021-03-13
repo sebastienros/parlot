@@ -517,11 +517,8 @@ namespace Parlot
 
             var start = Cursor.Position;
 
-            Cursor.Advance();
-            
-
-// If the next escape if not before the next quote, we can return the string as-is
-            Cursor.Advance(nextQuote + 1 - startOffset);
+            // If the next escape if not before the next quote, we can return the string as-is
+            Cursor.Advance(nextQuote + 2 - startOffset);
 
             result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
             return true;
