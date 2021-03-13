@@ -8,7 +8,7 @@ namespace Parlot
         {
             Buffer = value;
             Offset = 0;
-            Length = value.Length;
+            Length = value == null ? 0 : value.Length;
         }
 
         public TextSpan(string buffer, int offset, int count)
@@ -22,13 +22,13 @@ namespace Parlot
         public readonly int Offset;
         public readonly string Buffer;
 
-#if !NETSTANDARD2_0
-        public ReadOnlySpan<char> Span => Buffer.AsSpan(Offset, Length);
+#if SUPPORTS_READONLYSPAN
+        public ReadOnlySpan<char> Span => Buffer == null ? ReadOnlySpan<char>.Empty : Buffer.AsSpan(Offset, Length);
 #endif
 
         public override string ToString()
         {
-            return Buffer.Substring(Offset, Length);
+            return Buffer?.Substring(Offset, Length);
         }
 
         public bool Equals(string other)

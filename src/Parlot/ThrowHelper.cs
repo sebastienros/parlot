@@ -2,13 +2,13 @@ using System;
 
 namespace Parlot
 {
-#if !NETSTANDARD2_0
+#if SUPPORTS_CODENALYSIS
     using System.Diagnostics.CodeAnalysis;
 #endif
 
     internal static class ThrowHelper
     {
-#if !NETSTANDARD2_0
+#if SUPPORTS_CODENALYSIS
         [DoesNotReturn]
 #endif
         public static void ThrowArgumentNullException(string paramName)
