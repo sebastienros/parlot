@@ -48,11 +48,15 @@ namespace Parlot.Tests
         [InlineData("'Lorem ipsum'", "'Lorem ipsum'")]
         [InlineData("'Lorem \n ipsum'", "'Lorem \n ipsum'")]
         [InlineData("'Lorem '' ipsum'", "'Lorem '' ipsum'")]
+        [InlineData("'Lorem ' ipsum", "'Lorem '")]
+        [InlineData("'Lorem '' i''ps''um'", "'Lorem '' i''ps''um'")]
         [InlineData(@"""Lorem """" ipsum""", "\"Lorem \"\" ipsum\"")]
+        [InlineData("[mytable]", "[mytable]")]
+        [InlineData(@"""Lorem """""""" ipsum""", "\"Lorem \"\"\"\" ipsum\"")]
         public void ShouldReadNonEscapableString(string text, string expected)
         {
             Scanner s = new(text);
-            var success = s.ReadNonEscapableSequence(text[0], text[text.Length - 1], out var result);
+            var success = s.ReadNonEscapableSequence(expected[0], expected[expected.Length - 1], out var result);
             Assert.True(success);
             Assert.Equal(expected, result.GetText());
         }
