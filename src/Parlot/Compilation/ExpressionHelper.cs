@@ -23,5 +23,21 @@ namespace Parlot.Compilation
         internal static Expression Eof(Expression parseContext) => Expression.Property(Expression.Field(Expression.Field(parseContext, "Scanner"), "Cursor"), "Eof");
         internal static Expression Buffer(Expression parseContext) => Expression.Field(Expression.Field(parseContext, "Scanner"), "Buffer");
         internal static Expression ThrowObject(Expression o) => Expression.Throw(Expression.New(typeof(Exception).GetConstructor(new[] { typeof(string) }), Expression.Call(o, o.Type.GetMethod("ToString", new Type[0]))));
+
+        internal static Expression DeclareSuccessVariable<T>(this CompilationContext context, CompilationResult result, T defaultValue)
+        {
+            result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            result.Variables.Add(result.Success);
+            result.Body.Add(Expression.Assign(result.Success, Expression.Constant(defaultValue, typeof(T))));
+            return result.Success;
+        }
+
+        internal static Expression DeclareStartVariable(this CompilationContext context, CompilationResult result)
+        {
+            var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
+            result.Variables.Add(start);
+            result.Body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), "Position")));
+            return start;
+        }
     }
 }

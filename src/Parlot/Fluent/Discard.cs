@@ -1,9 +1,12 @@
-﻿namespace Parlot.Fluent
+﻿using Parlot.Compilation;
+using System.Linq.Expressions;
+
+namespace Parlot.Fluent
 {
     /// <summary>
     /// Doesn't parse anything and return the default value.
     /// </summary>
-    public sealed class Discard<T, U> : Parser<U>
+    public sealed class Discard<T, U> : Parser<U>, ICompilable
     {
         private readonly Parser<T> _parser;
         private readonly U _value;
@@ -33,6 +36,40 @@
             }
 
             return false;
+        }
+
+        public CompilationResult Compile(CompilationContext context)
+        {
+            var result = new CompilationResult();
+
+            var success = context.DeclareSuccessVariable(result, false);
+
+            var value = result.Value = Expression.Variable(typeof(U), $"value{context.Counter}");
+            
+            if (!context.DiscardResult)
+            {
+                result.Variables.Add(value);
+                result.Body.Add(Expression.Assign(value, Expression.Constant(_value, typeof(U))));
+            }
+
+            var parserCompileResult = _parser.Build(context);
+
+            // success = false;
+            // value = _value;
+            // 
+            // parser instructions
+            // 
+            // success = parser.success;
+
+            result.Body.Add(
+                Expression.Block(
+                    parserCompileResult.Variables,
+                    Expression.Block(parserCompileResult.Body),
+                    Expression.Assign(success, parserCompileResult.Success)
+                    )
+                );
+
+            return result;
         }
     }
 }

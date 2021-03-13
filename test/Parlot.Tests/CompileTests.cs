@@ -325,5 +325,13 @@ namespace Parlot.Tests
             Assert.False(Not(Terms.Decimal()).Compile().TryParse("123", out _));
             Assert.True(Not(Terms.Decimal()).Compile().TryParse("Text", out _));
         }
+
+        [Fact]
+        public void ShouldCompileDiscard()
+        {
+            Assert.True(Terms.Decimal().Discard<bool>().Compile().TryParse("123", out var r1) && r1 == false);
+            Assert.True(Terms.Decimal().Discard<bool>(true).Compile().TryParse("123", out var r2) && r2 == true);
+            Assert.False(Terms.Decimal().Discard<bool>(true).Compile().TryParse("abc", out _));
+        }
     }
 }
