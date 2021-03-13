@@ -45,6 +45,18 @@ namespace Parlot.Tests
         }
 
         [Theory]
+        [InlineData("'Lorem \n ipsum'", "'Lorem \n ipsum'")]
+        [InlineData("'Lorem '' ipsum'", "'Lorem '' ipsum'")]
+        [InlineData(@"""Lorem """""""" ipsum""", "\"Lorem \"\" ipsum\"")]
+        public void ShouldReadNonEscapableString(string text, string expected)
+        {
+            Scanner s = new(text);
+            var success = s.ReadNonEscapableSequence(text[0], text[text.Length - 1], out var result);
+            Assert.True(success);
+            Assert.Equal(expected, result.GetText());
+        }
+
+        [Theory]
         [InlineData("'Lorem \\w ipsum'")]
         [InlineData("'Lorem \\u12 ipsum'")]
         [InlineData("'Lorem \\xg ipsum'")]
