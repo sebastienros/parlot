@@ -492,20 +492,28 @@ namespace Parlot
 
             // Fast path if there aren't any escape char until next quote
             var startOffset = Cursor.Offset + 1;
+            var lastQuote = startOffset;
 
-            int nextQuote;
+            int nextQuote ;
             do
             {
-                nextQuote = Cursor.Buffer.IndexOf(endSequenceChar, startOffset);
+                nextQuote = Cursor.Buffer.IndexOf(endSequenceChar, lastQuote + 1);
 
                 if (nextQuote == -1)
                 {
-                    // There is no end sequence character, not a valid escapable sequence
-                    result = TokenResult.Fail();
-                    return false;
+                    if(startOffset == lastQuote)
+                    {
+                        // There is no end sequence character, not a valid escapable sequence
+                        result = TokenResult.Fail();
+                        return false;
+                    }
+                    nextQuote = lastQuote - 1;
+                    break;
                 }
+
+                lastQuote = nextQuote + 1;
             }
-            while(Cursor.Buffer.Length>nextQuote+1 && Cursor.Buffer[nextQuote+1]==endSequenceChar);
+            while(Cursor.Buffer.Length > lastQuote && Cursor.Buffer[lastQuote] == endSequenceChar);
 
             var start = Cursor.Position;
 
