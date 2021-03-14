@@ -333,5 +333,13 @@ namespace Parlot.Tests
             Assert.True(Terms.Decimal().Discard<bool>(true).Compile().TryParse("123", out var r2) && r2 == true);
             Assert.False(Terms.Decimal().Discard<bool>(true).Compile().TryParse("abc", out _));
         }
+
+        [Fact]
+        public void ShouldCompileNonWhiteSpace()
+        {
+            Assert.Equal("a", Terms.NonWhiteSpace().Compile().Parse("\n\r\v a"));
+        }
+
+
     }
 }

@@ -43,14 +43,7 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-
-            var value = result.Value = Expression.Variable(typeof(U), $"value{context.Counter}");
-            
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-                result.Body.Add(Expression.Assign(value, Expression.Constant(_value, typeof(U))));
-            }
+            _ = context.DeclareValueVariable(result, _value);
 
             var parserCompileResult = _parser.Build(context);
 
