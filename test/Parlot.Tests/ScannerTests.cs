@@ -48,17 +48,37 @@ namespace Parlot.Tests
         [InlineData("'Lorem ipsum'", "'Lorem ipsum'")]
         [InlineData("'Lorem \n ipsum'", "'Lorem \n ipsum'")]
         [InlineData("'Lorem '' ipsum'", "'Lorem '' ipsum'")]
+        [InlineData("'Lorem ipsum", "")]
+        [InlineData("Lorem ' ipsum", "")]
         [InlineData("'Lorem ' ipsum", "'Lorem '")]
+        [InlineData("Lorem ' ipsum'", "")]
         [InlineData("'Lorem '' i''ps''um'", "'Lorem '' i''ps''um'")]
         [InlineData(@"""Lorem """" ipsum""", "\"Lorem \"\" ipsum\"")]
         [InlineData("[mytable]", "[mytable]")]
+        [InlineData("[myta[ble]", "[myta[ble]")]
+        [InlineData("[myta]]ble]", "[myta]]ble]")]
         [InlineData(@"""Lorem """""""" ipsum""", "\"Lorem \"\"\"\" ipsum\"")]
         public void ShouldReadNonEscapableString(string text, string expected)
         {
             Scanner s = new(text);
-            var success = s.ReadNonEscapableSequence(expected[0], expected[expected.Length - 1], out var result);
-            Assert.True(success);
-            Assert.Equal(expected, result.GetText());
+            char start, end;
+            if(expected.Length==0)
+            {
+                start=end='\'';
+            }
+            else
+            {
+                start=expected[0];
+                end=expected[expected.Length - 1];
+            }
+            var success = s.ReadNonEscapableSequence(start, end, out var result);
+            if(expected.Length==0)
+                Assert.False(success);
+            else
+            {
+                Assert.True(success);
+                Assert.Equal(expected, result.GetText());
+            }
         }
 
         [Theory]
