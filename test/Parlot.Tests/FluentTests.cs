@@ -374,6 +374,13 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldParseWhiteSpace()
+        {
+            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Parse("\n\r\v a"));
+            Assert.Equal("  ", Literals.WhiteSpace(false).Parse("  \n\r\v a"));
+        }
+
+        [Fact]
         public void ShouldCapture()
         {
             Assert.Equal("../foo/bar", Capture(Literals.Text("..").AndSkip(OneOrMany(Literals.Char('/').AndSkip(Terms.Identifier())))).Parse("../foo/bar").ToString());

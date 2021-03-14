@@ -340,6 +340,11 @@ namespace Parlot.Tests
             Assert.Equal("a", Terms.NonWhiteSpace().Compile().Parse("\n\r\v a"));
         }
 
-
+        [Fact]
+        public void ShouldCompileWhiteSpace()
+        {
+            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Compile().Parse("\n\r\v a"));
+            Assert.Equal("  ", Literals.WhiteSpace(false).Compile().Parse("  \n\r\v a"));
+        }
     }
 }
