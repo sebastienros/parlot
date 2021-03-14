@@ -92,18 +92,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(List<T>), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-                result.Body.Add(Expression.Assign(value, Expression.New(typeof(List<T>))));
-            }
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.New(typeof(List<T>)));
 
             // value = new List<T>();
             //
@@ -136,7 +126,7 @@ namespace Parlot.Fluent
             if (_separatorIsChar)
             {
                 parseSeparatorExpression = Expression.IfThen(
-                    Expression.Not(ExpressionHelper.ReadChar(context.ParseContext, _separatorChar)),
+                    Expression.Not(context.ReadChar(_separatorChar)),
                     Expression.Break(breakLabel)
                     );
             }
@@ -176,7 +166,7 @@ namespace Parlot.Fluent
                             ),
                         parseSeparatorExpression,
                         Expression.IfThen(
-                            ExpressionHelper.Eof(context.ParseContext),
+                            context.Eof(),
                             Expression.Break(breakLabel)
                             )
                         ),

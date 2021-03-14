@@ -42,18 +42,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(string), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-                result.Body.Add(Expression.Assign(value, Expression.Constant(default(string), typeof(string))));
-            }
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(string)));
 
             //if (_skipWhiteSpace)
             //{
@@ -62,8 +52,7 @@ namespace Parlot.Fluent
 
             if (_skipWhiteSpace)
             {
-                var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(context.ParserSkipWhiteSpace());
             }
 
             // if (context.Scanner.ReadText(Text, _comparer, null))

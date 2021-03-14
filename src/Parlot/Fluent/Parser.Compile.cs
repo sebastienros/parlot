@@ -77,9 +77,7 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-
-            result.Variables.Add(success);
+            var success = context.DeclareSuccessVariable(result, false);
 
             // 
             // T value;

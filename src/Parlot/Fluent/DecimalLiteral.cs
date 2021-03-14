@@ -59,14 +59,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(decimal), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-            result.Variables.Add(value);
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-            result.Body.Add(Expression.Assign(value, Expression.Constant(default(decimal), typeof(decimal))));
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(decimal)));
 
             // if (_skipWhiteSpace)
             // {
@@ -75,8 +69,7 @@ namespace Parlot.Fluent
 
             if (_skipWhiteSpace)
             {
-                var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(context.ParserSkipWhiteSpace());
             }
 
             // var start = context.Scanner.Cursor.Offset;
@@ -84,7 +77,7 @@ namespace Parlot.Fluent
             var start = Expression.Variable(typeof(int), $"start{context.Counter}");
             result.Variables.Add(start);
 
-            result.Body.Add(Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, context.Offset()));
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
@@ -95,8 +88,8 @@ namespace Parlot.Fluent
 
                 result.Body.Add(
                     Expression.IfThen(
-                        Expression.Not(ExpressionHelper.ReadChar(context.ParseContext, '-')),
-                        ExpressionHelper.ReadChar(context.ParseContext, '+')
+                        Expression.Not(context.ReadChar('-')),
+                        context.ReadChar('+')
                         )
                     );
             }
@@ -112,21 +105,21 @@ namespace Parlot.Fluent
             var end = Expression.Variable(typeof(int), $"end{context.Counter}");
 #if NETSTANDARD2_0
             var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.Counter}");
-            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(ExpressionHelper.Buffer(context.ParseContext), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
+            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
             var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
 #else
             var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{++context.Counter}");
-            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), ExpressionHelper.Buffer(context.ParseContext), start, Expression.Subtract(end, start)));
+            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
             var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
 #endif
 
             // TODO: NETSTANDARD2_1 code path
             var block = 
                 Expression.IfThen(
-                    ExpressionHelper.ReadDecimal(context.ParseContext),
+                    context.ReadDecimal(),
                     Expression.Block(
                         new[] { end, sourceToParse },
-                        Expression.Assign(end, ExpressionHelper.Offset(context.ParseContext)),
+                        Expression.Assign(end, context.Offset()),
                         sliceExpression,
                         Expression.Assign(success,
                             Expression.Call(

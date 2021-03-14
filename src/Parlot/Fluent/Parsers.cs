@@ -84,6 +84,11 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
+        public static Parser<object> Empty() => new Empty<object>();
+
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
         public static Parser<T> Empty<T>(T value) => new Empty<T>(value);
 
     }

@@ -63,17 +63,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-            }
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
             //if (_skipWhiteSpace)
             //{
@@ -82,8 +73,7 @@ namespace Parlot.Fluent
 
             if (_skipWhiteSpace)
             {
-                var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(context.ParserSkipWhiteSpace());
             }
 
             // var start = context.Scanner.Cursor.Position;
@@ -91,7 +81,7 @@ namespace Parlot.Fluent
             var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
             result.Variables.Add(start);
 
-            result.Body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, context.Position()));
 
             // var size = 0;
 
@@ -129,14 +119,14 @@ namespace Parlot.Fluent
                 Expression.Loop(
                     Expression.Block(
                         Expression.IfThen(
-                            ExpressionHelper.Eof(context.ParseContext),
+                            context.Eof(),
                             Expression.Break(breakLabel)
                         ),
                         Expression.IfThen(
-                            Expression.Not(Expression.Invoke(Expression.Constant(_predicate), ExpressionHelper.Current(context.ParseContext))),
+                            Expression.Not(Expression.Invoke(Expression.Constant(_predicate), context.Current())),
                             Expression.Break(breakLabel)
                         ),
-                        ExpressionHelper.Advance(context.ParseContext),
+                        context.Advance(),
                         Expression.Assign(size, Expression.Add(size, Expression.Constant(1))),
                         _maxSize == 0 
                         ? Expression.Empty()
@@ -159,21 +149,20 @@ namespace Parlot.Fluent
             //     success = true;
             // }
 
-            var textSpanCtor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
             var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
 
             result.Body.Add(
                 Expression.IfThenElse(
                     Expression.LessThan(size, Expression.Constant(_minSize)),
-                    ExpressionHelper.ResetPosition(context.ParseContext, start),
+                    context.ResetPosition(start),
                     Expression.Block(
                         context.DiscardResult 
                         ? Expression.Empty()
-                        : Expression.Assign(value, 
-                            Expression.New(textSpanCtor,
-                                ExpressionHelper.Buffer(context.ParseContext),
+                        : Expression.Assign(value,
+                            context.NewTextSpan(
+                                context.Buffer(),
                                 startOffset,
-                                Expression.Subtract(ExpressionHelper.Offset(context.ParseContext), startOffset)
+                                Expression.Subtract(context.Offset(), startOffset)
                                 )),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                         )

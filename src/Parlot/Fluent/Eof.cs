@@ -32,17 +32,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-                result.Body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
-            }
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
 
             // parse1 instructions
             // 
@@ -59,7 +50,7 @@ namespace Parlot.Fluent
                     parserCompileResult.Variables,
                     Expression.Block(parserCompileResult.Body),
                     Expression.IfThen(
-                        Expression.AndAlso(parserCompileResult.Success, ExpressionHelper.Eof(context.ParseContext)),
+                        Expression.AndAlso(parserCompileResult.Success, context.Eof()),
                         Expression.Block(
                             context.DiscardResult
                                 ? Expression.Empty()

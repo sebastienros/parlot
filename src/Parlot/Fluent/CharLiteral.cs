@@ -40,17 +40,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(char), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-                result.Body.Add(Expression.Assign(value, Expression.Constant(default(char), typeof(char))));
-            }
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(char)));
 
             //if (_skipWhiteSpace)
             //{
@@ -59,8 +50,7 @@ namespace Parlot.Fluent
 
             if (SkipWhiteSpace)
             {
-                var skipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-                result.Body.Add(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod));
+                result.Body.Add(context.ParserSkipWhiteSpace());
             }
 
             // if (context.Scanner.ReadChar(Char))
@@ -69,17 +59,17 @@ namespace Parlot.Fluent
             //     value = Char;
             // }
 
-            var ifReadText = Expression.IfThen(
-                ExpressionHelper.ReadChar(context.ParseContext, Char),
-                Expression.Block(
-                    Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                    context.DiscardResult
-                    ? Expression.Empty()
-                    : Expression.Assign(value, Expression.Constant(Char, typeof(char)))
+            result.Body.Add(
+                Expression.IfThen(
+                    context.ReadChar(Char),
+                    Expression.Block(
+                        Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                        context.DiscardResult
+                        ? Expression.Empty()
+                        : Expression.Assign(value, Expression.Constant(Char, typeof(char)))
+                        )
                     )
-                );
-
-            result.Body.Add(ifReadText);
+            );
 
             return result;
         }

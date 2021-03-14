@@ -35,18 +35,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-
-            // Compile the parser code as a lambda the first time,
-            // then reuse the lambda the subsequent times.
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-
-            result.Variables.Add(value);
-            result.Body.Add(Expression.Assign(value, Expression.Constant(default(T), typeof(T))));
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
 
             var contextScope = Expression.Constant(_closure);
             var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];

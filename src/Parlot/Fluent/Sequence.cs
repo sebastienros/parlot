@@ -14,18 +14,9 @@ namespace Parlot.Fluent
             var parserTypes = parserCompileResults.Select(x => x.Value.Type).ToArray();
             var resultType = GetValueTuple(parserCompileResults.Length).MakeGenericType(parserTypes);
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(resultType, $"value{context.Counter}");
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.New(resultType));
 
-            result.Variables.Add(success);
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
-
-            if (!context.DiscardResult)
-            {
-                result.Body.Add(Expression.Assign(value, Expression.New(resultType)));
-                result.Variables.Add(value);
-            }
 
             // var start = context.Scanner.Cursor.Position;
 

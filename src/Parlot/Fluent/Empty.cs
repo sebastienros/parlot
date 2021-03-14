@@ -33,17 +33,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-            result.Body.Add(Expression.Assign(success, Expression.Constant(true, typeof(bool))));
-
-            if (!context.DiscardResult)
-            {
-                result.Variables.Add(value);
-                result.Body.Add(Expression.Assign(value, Expression.Constant(_value, typeof(T))));
-            }
+            _ = context.DeclareSuccessVariable(result, true);
+            _ = context.DeclareValueVariable(result, Expression.Constant(_value));
 
             return result;
         }

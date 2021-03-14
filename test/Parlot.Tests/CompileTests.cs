@@ -306,15 +306,15 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileEmpty()
         {
-            Assert.True(Empty<object>().Compile().TryParse("123", out var result) && result == null);
+            Assert.True(Empty().Compile().TryParse("123", out var result) && result == null);
             Assert.True(Empty(1).Compile().TryParse("123", out var r2) && r2 == 1);
         }
 
         [Fact]
         public void ShouldCompileEof()
         {
-            Assert.True(Empty<object>().Eof().Compile().TryParse("", out _));
-            Assert.False(Empty<object>().Eof().Compile().TryParse(" ", out _));
+            Assert.True(Empty().Eof().Compile().TryParse("", out _));
+            Assert.False(Empty().Eof().Compile().TryParse(" ", out _));
             Assert.True(Terms.Decimal().Eof().Compile().TryParse("123", out var result) && result == 123);
             Assert.False(Terms.Decimal().Eof().Compile().TryParse("123 ", out _));
         }

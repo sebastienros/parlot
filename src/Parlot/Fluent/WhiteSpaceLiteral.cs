@@ -37,27 +37,24 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            // var success = false;
             _ = context.DeclareSuccessVariable(result, true);
-
-            // TextSpan value;
-            var value = context.DeclareValueVariable(result, default(TextSpan));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
             var start = Expression.Parameter(typeof(int));
             result.Variables.Add(start);
-            result.Body.Add(Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, context.Offset()));
 
             result.Body.Add(
                 _includeNewLines
-                    ? ExpressionHelper.SkipWhiteSpaceOrNewLine(context.ParseContext)
-                    : ExpressionHelper.SkipWhiteSpace(context.ParseContext)
+                    ? context.SkipWhiteSpaceOrNewLine()
+                    : context.SkipWhiteSpace()
                 );
 
             var end = Expression.Parameter(typeof(int));
             result.Variables.Add(end);
-            result.Body.Add(Expression.Assign(end, ExpressionHelper.Offset(context.ParseContext)));
+            result.Body.Add(Expression.Assign(end, context.Offset()));
 
-            result.Body.Add(Expression.Assign(value, Expression.New(typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) }), new[] { ExpressionHelper.Buffer(context.ParseContext), start, Expression.Subtract(end, start) })));
+            result.Body.Add(Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start))));
 
             return result;
         }

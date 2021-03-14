@@ -40,20 +40,15 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
-            var value = result.Value = Expression.Variable(typeof(TextSpan), $"value{context.Counter}");
-
-            result.Variables.Add(success);
-            result.Variables.Add(value);
-
-            result.Body.Add(Expression.Assign(success, Expression.Constant(false, typeof(bool))));
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
             // var start = context.Scanner.Cursor.Position;
 
             var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
             result.Variables.Add(start);
 
-            result.Body.Add(Expression.Assign(start, ExpressionHelper.Position(context.ParseContext)));
+            result.Body.Add(Expression.Assign(start, context.Position()));
 
             var ignoreResults = context.DiscardResult;
             context.DiscardResult = true;
@@ -78,7 +73,6 @@ namespace Parlot.Fluent
             //     context.Scanner.Cursor.ResetPosition(start);
             // }
 
-            var textSpanCtor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
             var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
 
             result.Body.Add(
@@ -89,14 +83,14 @@ namespace Parlot.Fluent
                         parserCompileResult.Success,
                         Expression.Block(
                             Expression.Assign(value,
-                                Expression.New(textSpanCtor,
-                                    ExpressionHelper.Buffer(context.ParseContext),
+                                context.NewTextSpan(
+                                    context.Buffer(),
                                     startOffset,
-                                    Expression.Subtract(ExpressionHelper.Offset(context.ParseContext), startOffset)
+                                    Expression.Subtract(context.Offset(), startOffset)
                                     )),
                             Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                             ),
-                        ExpressionHelper.ResetPosition(context.ParseContext, start)
+                        context.ResetPosition(start)
                     )
                 )
             );

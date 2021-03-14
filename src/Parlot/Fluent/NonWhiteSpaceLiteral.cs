@@ -52,11 +52,8 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            // var success = false;
             var success = context.DeclareSuccessVariable(result, false);
-
-            // TextSpan value;
-            var value = context.DeclareValueVariable(result, default(TextSpan));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
             //if (_skipWhiteSpace)
             //{
@@ -65,7 +62,7 @@ namespace Parlot.Fluent
 
             if (_skipWhiteSpace)
             {
-                context.SkipWhiteSpace(result);
+                result.Body.Add(context.ParserSkipWhiteSpace());
             }
 
             // if (!context.Scanner.Cursor.Eof)
@@ -91,19 +88,19 @@ namespace Parlot.Fluent
 
             result.Body.Add(
                 Expression.IfThen(
-                    Expression.Not(ExpressionHelper.Eof(context.ParseContext)),
+                    Expression.Not(context.Eof()),
                     Expression.Block(
                         new ParameterExpression [] { start, end },
-                        Expression.Assign(start, ExpressionHelper.Offset(context.ParseContext)),
+                        Expression.Assign(start, context.Offset()),
                         _includeNewLines
-                            ? ExpressionHelper.ReadNonWhiteSpace(context.ParseContext)
-                            : ExpressionHelper.ReadNonWhiteSpaceOrNewLine(context.ParseContext),
-                        Expression.Assign(end, ExpressionHelper.Offset(context.ParseContext)),
+                            ? context.ReadNonWhiteSpace()
+                            : context.ReadNonWhiteSpaceOrNewLine(),
+                        Expression.Assign(end, context.Offset()),
                         Expression.IfThen(
                             Expression.NotEqual(start, end),
                             Expression.Block(
                                 Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                Expression.Assign(value, Expression.New(typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) }), new[] { ExpressionHelper.Buffer(context.ParseContext), start, Expression.Subtract(end, start) })
+                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start))
                                 )
                             )
                     )))

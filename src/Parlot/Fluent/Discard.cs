@@ -43,7 +43,7 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            _ = context.DeclareValueVariable(result, _value);
+            _ = context.DeclareValueVariable(result, Expression.Constant(_value));
 
             var parserCompileResult = _parser.Build(context);
 
