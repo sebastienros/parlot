@@ -142,6 +142,60 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ScopeShouldAllowScopedParserContext()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Char('b');
+            var c = Literals.Char('c');
+
+            var o2 = Scope(
+                    a.Then((c, t)=>{c.Set("lorem", "ipsum"); return "lorem";})
+                    .And(b).Then((c, t)=> c.Get<string>(t.Item1)));
+
+            Assert.IsType<ScopedParser<string>>(o2);
+            Assert.False(o2.TryParse("a", out _));
+            Assert.True(o2.TryParse("ab", out var result));
+            Assert.Equal("ipsum", result);
+
+            o2 = Scope(
+                    a.Then((c, t)=> "lorem")
+                    .And(b).Then((c, t)=> c.Get<string>(t.Item1)));
+
+            Assert.IsType<ScopedParser<string>>(o2);
+            Assert.True(o2.TryParse("ab", out result));
+            Assert.Null(result);
+
+
+            o2 = Scope(
+                    a.Then((c, t)=>{c.Set("lorem", "ipsum"); return t;})
+                    .SkipAnd(Scope(b.Then((c, t)=> c.Get<string>("lorem")))));
+
+            Assert.IsType<ScopedParser<string>>(o2);
+            Assert.True(o2.TryParse("ab", out result));
+            Assert.Equal("ipsum", result);
+
+            o2 = Scope(
+                    a.Then((c, t)=>{c.Set("lorem", "ipsum"); return t;})
+                    .SkipAnd(Scope(b.Then((c, t)=> {c.Set("lorem", "ipsumipsum"); return t;})))
+                    .SkipAnd(c.Then((c,t)=>c.Get<string>("lorem")))
+                    );
+
+            Assert.IsType<ScopedParser<string>>(o2);
+            Assert.True(o2.TryParse("abc", out result));
+            Assert.Equal("ipsumipsum", result);
+
+            o2 = Scope(
+                    a.Then((c, t)=>{c.Set("lorem", "ipsum"); return t;})
+                    .SkipAnd(Scope(b.Then((c, t)=> {c.Set("lorem2", "ipsum"); return t;})))
+                    .SkipAnd(c.Then((c,t)=>c.Get<string>("lorem2")))
+                    );
+
+            Assert.IsType<ScopedParser<string>>(o2);
+            Assert.True(o2.TryParse("abc", out result));
+            Assert.Null( result);
+        }
+
+        [Fact]
         public void OrShouldReturnOneOf()
         {
             var a = Literals.Char('a');

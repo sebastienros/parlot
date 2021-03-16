@@ -27,6 +27,11 @@ namespace Parlot.Fluent
         public static Parser<T> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
 
         /// <summary>
+        /// Builds a parser that creates a scope usable in the specified parser.
+        /// </summary>
+        public static Parser<T> Scope<T>(Parser<T> parser) => new ScopedParser<T>(parser);
+
+        /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
         /// </summary>
         public static Parser<List<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);

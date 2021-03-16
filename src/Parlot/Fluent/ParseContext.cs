@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public class ParseContext
+    public partial class ParseContext
     {
         /// <summary>
         /// Whether new lines are treated as normal chars or white spaces.
