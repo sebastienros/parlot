@@ -346,5 +346,38 @@ namespace Parlot.Tests
             Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Compile().Parse("\n\r\v a"));
             Assert.Equal("  ", Literals.WhiteSpace(false).Compile().Parse("  \n\r\v a"));
         }
+
+        [Theory]
+        [InlineData("a", "a")]
+        [InlineData("foo", "foo")]
+        [InlineData("$_", "$_")]
+        [InlineData("a-foo.", "a")]
+        [InlineData("abc=3", "abc")]
+        public void CompiledIdentifierShouldParseValidIdentifiers(string text, string identifier)
+        {
+            Assert.Equal(identifier, Literals.Identifier().Compile().Parse(text).ToString());
+        }
+
+        [Theory]
+        [InlineData("-foo")]
+        [InlineData("-")]
+        [InlineData("  ")]
+        public void CompiledIdentifierShouldNotParseInvalidIdentifiers(string text)
+        {
+            Assert.False(Literals.Identifier().Compile().TryParse(text, out _));
+        }
+
+        [Theory]
+        [InlineData("-foo")]
+        [InlineData("/foo")]
+        [InlineData("foo@asd")]
+        [InlineData("foo*")]
+        public void CompiledIdentifierShouldAcceptExtraChars(string text)
+        {
+            static bool start(char c) => c == '-' || c == '/';
+            static bool part(char c) => c == '@' || c == '*';
+
+            Assert.Equal(text, Literals.Identifier(start, part).Compile().Parse(text).ToString());
+        }
     }
 }
