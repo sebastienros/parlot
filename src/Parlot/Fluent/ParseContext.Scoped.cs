@@ -3,24 +3,24 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public partial class ParseContext 
+    public partial class ParseContext
     {
-        IDictionary<string, object> scope ;
+        IDictionary<string, object> scope;
         private ParseContext parent;
 
         private bool HasValue(string name)
         {
-            return scope!=null && scope.TryGetValue(name, out _) || parent != null && parent.HasValue(name);
+            return scope != null && scope.TryGetValue(name, out _) || parent != null && parent.HasValue(name);
         }
 
         public void Set(string name, object value)
         {
             if (parent != null && parent.HasValue(name))
                 parent.Set(name, value);
-            else 
+            else
             {
-                if(scope == null)
-                    scope = new Dictionary<string,object>();
+                if (scope == null)
+                    scope = new Dictionary<string, object>();
                 scope[name] = value;
             }
         }
@@ -37,11 +37,11 @@ namespace Parlot.Fluent
         public ParseContext(ParseContext context)
         {
 
-            Scanner=context.Scanner;
-            UseNewLines=context.UseNewLines;
-            OnEnterParser=context.OnEnterParser;
-            WhiteSpaceParser=context.WhiteSpaceParser;
-            parent = context ;
+            Scanner = context.Scanner;
+            UseNewLines = context.UseNewLines;
+            OnEnterParser = context.OnEnterParser;
+            WhiteSpaceParser = context.WhiteSpaceParser;
+            parent = context;
         }
     }
 }
