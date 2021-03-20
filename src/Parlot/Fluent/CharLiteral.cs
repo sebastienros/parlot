@@ -1,6 +1,7 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class CharLiteral : Parser<char>
+    public sealed class CharLiteral<TParseContext> : Parser<char, TParseContext>
+    where TParseContext : ParseContext
     {
         public CharLiteral(char c, bool skipWhiteSpace = true)
         {
@@ -12,7 +13,7 @@
 
         public bool SkipWhiteSpace { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<char> result)
+        public override bool Parse(TParseContext context, ref ParseResult<char> result)
         {
             context.EnterParser(this);
 

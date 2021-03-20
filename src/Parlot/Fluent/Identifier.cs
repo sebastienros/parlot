@@ -2,7 +2,8 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class Identifier : Parser<TextSpan>
+    public sealed class Identifier<TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly Func<char, bool> _extraStart;
         private readonly Func<char, bool> _extraPart;
@@ -15,7 +16,7 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
@@ -36,7 +37,7 @@ namespace Parlot.Fluent
             // At this point we have an identifier, read while it's an identifier part.
 
             context.Scanner.Cursor.Advance();
-            
+
             while (!context.Scanner.Cursor.Eof && (Character.IsIdentifierPart(context.Scanner.Cursor.Current) || (_extraPart != null && _extraPart(context.Scanner.Cursor.Current))))
             {
                 context.Scanner.Cursor.Advance();

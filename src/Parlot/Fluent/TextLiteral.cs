@@ -2,12 +2,13 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class TextLiteral : Parser<string>
+    public sealed class TextLiteral<TParseContext> : Parser<string, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly StringComparer _comparer;
         private readonly bool _skipWhiteSpace;
 
-        public TextLiteral(string text, StringComparer comparer = null,  bool skipWhiteSpace = true)
+        public TextLiteral(string text, StringComparer comparer = null, bool skipWhiteSpace = true)
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparer = comparer;
@@ -16,7 +17,7 @@ namespace Parlot.Fluent
 
         public string Text { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<string> result)
+        public override bool Parse(TParseContext context, ref ParseResult<string> result)
         {
             context.EnterParser(this);
 
@@ -29,7 +30,7 @@ namespace Parlot.Fluent
 
             if (context.Scanner.ReadText(Text, _comparer))
             {
-                result.Set(start, context.Scanner.Cursor.Offset,  Text);
+                result.Set(start, context.Scanner.Cursor.Offset, Text);
                 return true;
             }
             else

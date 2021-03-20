@@ -2,16 +2,17 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class Not<T> : Parser<T>
+    public sealed class Not<T, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly IParser<T, TParseContext> _parser;
 
-        public Not(Parser<T> parser)
+        public Not(IParser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 

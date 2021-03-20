@@ -2,28 +2,29 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class Else<T, U> : Parser<U>
+    public sealed class Else<T, U, TParseContext> : Parser<U, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly Func<T, U> _action1;
-        private readonly Func<ParseContext, T, U> _action2;
-        private readonly Parser<T> _parser;
+        private readonly Func<TParseContext, T, U> _action2;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public Else(Parser<T> parser, Func<T, U> action)
+        public Else(Parser<T, TParseContext> parser, Func<T, U> action)
         {
             _action1 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Else(Parser<T> parser, Func<ParseContext, T, U> action)
+        public Else(Parser<T, TParseContext> parser, Func<TParseContext, T, U> action)
         {
             _action2 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<U> result)
+        public override bool Parse(TParseContext context, ref ParseResult<U> result)
         {
             context.EnterParser(this);
-            
+
             var parsed = new ParseResult<T>();
 
             if (!_parser.Parse(context, ref parsed))
@@ -47,18 +48,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class ElseError<T> : Parser<T>
+    public sealed class ElseError<T, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public ElseError(Parser<T> parser, string message)
+        public ElseError(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -71,18 +73,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Error<T> : Parser<T>
+    public sealed class Error<T, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public Error(Parser<T> parser, string message)
+        public Error(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -95,18 +98,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Error<T, U> : Parser<U>
+    public sealed class Error<T, U, TParseContext> : Parser<U, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public Error(Parser<T> parser, string message)
+        public Error(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<U> result)
+        public override bool Parse(TParseContext context, ref ParseResult<U> result)
         {
             context.EnterParser(this);
 

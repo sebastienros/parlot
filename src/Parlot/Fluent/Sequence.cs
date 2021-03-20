@@ -2,17 +2,18 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>
+    public sealed class Sequence<T1, T2, TParseContext> : Parser<ValueTuple<T1, T2>, TParseContext>
+    where TParseContext : ParseContext
     {
-        internal readonly Parser<T1> _parser1;
-        internal readonly Parser<T2> _parser2;
-        public Sequence(Parser<T1> parser1, Parser<T2> parser2)
+        internal readonly IParser<T1, TParseContext> _parser1;
+        internal readonly IParser<T2, TParseContext> _parser2;
+        public Sequence(IParser<T1, TParseContext> parser1, IParser<T2, TParseContext> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
         {
             context.EnterParser(this);
 
@@ -37,21 +38,22 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>
+    public sealed class Sequence<T1, T2, T3, TParseContext> : Parser<ValueTuple<T1, T2, T3>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<ValueTuple<T1, T2>> _parser;
-        internal readonly Parser<T3> _lastParser;
+        private readonly IParser<ValueTuple<T1, T2>, TParseContext> _parser;
+        internal readonly IParser<T3, TParseContext> _lastParser;
 
-        public Sequence(Parser<ValueTuple<T1, T2>> 
+        public Sequence(IParser<ValueTuple<T1, T2>, TParseContext>
             parser,
-            Parser<T3> lastParser
+            IParser<T3, TParseContext> lastParser
             )
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
         {
             context.EnterParser(this);
 
@@ -70,7 +72,7 @@ namespace Parlot.Fluent
                         tupleResult.Value.Item2,
                         lastResult.Value
                         );
-                        
+
                     result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
@@ -82,18 +84,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>
+    public sealed class Sequence<T1, T2, T3, T4, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
-        internal readonly Parser<T4> _lastParser;
+        private readonly IParser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
+        internal readonly IParser<T4, TParseContext> _lastParser;
 
-        public Sequence(Parser<ValueTuple<T1, T2, T3>> parser, Parser<T4> lastParser)
+        public Sequence(IParser<ValueTuple<T1, T2, T3>, TParseContext> parser, IParser<T4, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
         {
             context.EnterParser(this);
 
@@ -124,19 +127,20 @@ namespace Parlot.Fluent
             return false;
         }
     }
-    
-    public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>
+
+    public sealed class Sequence<T1, T2, T3, T4, T5, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
-        internal readonly Parser<T5> _lastParser;
-        
-        public Sequence(Parser<ValueTuple<T1, T2, T3, T4>> parser, Parser<T5> lastParser)
+        private readonly IParser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
+        internal readonly IParser<T5, TParseContext> _lastParser;
+
+        public Sequence(IParser<ValueTuple<T1, T2, T3, T4>, TParseContext> parser, IParser<T5, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
         {
             context.EnterParser(this);
 
@@ -169,18 +173,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
-        internal readonly Parser<T6> _lastParser;        
+        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
+        internal readonly IParser<T6, TParseContext> _lastParser;
 
-        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5>> parser, Parser<T6> lastParser)
+        public Sequence(IParser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> parser, IParser<T6, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
         {
             context.EnterParser(this);
 
@@ -215,18 +220,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
-        internal readonly Parser<T7> _lastParser;
+        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;
+        internal readonly IParser<T7, TParseContext> _lastParser;
 
-        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
+        public Sequence(IParser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> parser, IParser<T7, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
         {
             context.EnterParser(this);
 

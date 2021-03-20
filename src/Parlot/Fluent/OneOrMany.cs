@@ -3,16 +3,17 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public sealed class OneOrMany<T> : Parser<List<T>>
+    public sealed class OneOrMany<T, TParseContext> : Parser<List<T>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly IParser<T, TParseContext> _parser;
 
-        public OneOrMany(Parser<T> parser)
+        public OneOrMany(IParser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<List<T>> result)
         {
             context.EnterParser(this);
 

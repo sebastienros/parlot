@@ -1,6 +1,7 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>
+    public sealed class NonWhiteSpaceLiteral<TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly bool _skipWhiteSpace;
         private readonly bool _includeNewLines;
@@ -11,7 +12,7 @@
             _includeNewLines = includeNewLines;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             if (_skipWhiteSpace)
             {
@@ -32,7 +33,7 @@
             else
             {
                 context.Scanner.ReadNonWhiteSpaceOrNewLine();
-            }            
+            }
 
             var end = context.Scanner.Cursor.Offset;
 

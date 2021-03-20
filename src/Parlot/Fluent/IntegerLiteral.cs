@@ -3,7 +3,8 @@ using System.Globalization;
 
 namespace Parlot.Fluent
 {
-    public sealed class IntegerLiteral : Parser<long>
+    public sealed class IntegerLiteral<TParseContext> : Parser<long, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly NumberOptions _numberOptions;
         private readonly bool _skipWhiteSpace;
@@ -13,7 +14,7 @@ namespace Parlot.Fluent
             _numberOptions = numberOptions;
             _skipWhiteSpace = skipWhiteSpace;
         }
-        public override bool Parse(ParseContext context, ref ParseResult<long> result)
+        public override bool Parse(TParseContext context, ref ParseResult<long> result)
         {
             context.EnterParser(this);
 
@@ -45,11 +46,11 @@ namespace Parlot.Fluent
 
                 if (long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
                 {
-                    result.Set(start, end,  value);
+                    result.Set(start, end, value);
                     return true;
                 }
             }
-         
+
             return false;
         }
     }

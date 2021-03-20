@@ -7,18 +7,20 @@ namespace Parlot.Fluent
     /// We then return the actual result of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public sealed class OneOf<T> : Parser<T>
+    /// <typeparam name="TParseContext"></typeparam>
+    public sealed class OneOf<T, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T>[] _parsers;
+        private readonly IParser<T, TParseContext>[] _parsers;
 
-        public OneOf(Parser<T>[] parsers)
+        public OneOf(IParser<T, TParseContext>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         }
 
-        public Parser<T>[] Parsers => _parsers;
+        public IParser<T, TParseContext>[] Parsers => _parsers;
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -39,20 +41,21 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class OneOf<A, B, T> : Parser<T>
-        where A: T
-        where B: T
+    public sealed class OneOf<A, B, T, TParseContext> : Parser<T, TParseContext>
+        where A : T
+        where B : T
+        where TParseContext : ParseContext
     {
-        private readonly Parser<A> _parserA;
-        private readonly Parser<B> _parserB;
+        private readonly IParser<A, TParseContext> _parserA;
+        private readonly IParser<B, TParseContext> _parserB;
 
-        public OneOf(Parser<A> parserA, Parser<B> parserB)
+        public OneOf(IParser<A, TParseContext> parserA, IParser<B, TParseContext> parserB)
         {
             _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
             _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 

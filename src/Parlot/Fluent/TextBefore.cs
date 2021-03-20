@@ -1,13 +1,14 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class TextBefore<T> : Parser<TextSpan>
+    public sealed class TextBefore<T, TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _delimiter;
+        private readonly IParser<T, TParseContext> _delimiter;
         private readonly bool _canBeEmpty;
         private readonly bool _failOnEof;
         private readonly bool _consumeDelimiter;
 
-        public TextBefore(Parser<T> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
+        public TextBefore(IParser<T, TParseContext> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
         {
             _delimiter = delimiter;
             _canBeEmpty = canBeEmpty;
@@ -15,7 +16,7 @@
             _consumeDelimiter = consumeDelimiter;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             if (context.Scanner.Cursor.Eof)
             {

@@ -3,7 +3,8 @@
     /// <summary>
     /// Doesn't parse anything and return the default value.
     /// </summary>
-    public sealed class Empty<T> : Parser<T>
+    public sealed class Empty<T, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly T _value;
 
@@ -17,7 +18,7 @@
             _value = value;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 

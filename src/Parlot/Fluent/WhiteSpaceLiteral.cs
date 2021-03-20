@@ -1,6 +1,7 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class WhiteSpaceLiteral : Parser<TextSpan>
+    public sealed class WhiteSpaceLiteral<TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly bool _includeNewLines;
 
@@ -9,7 +10,7 @@
             _includeNewLines = includeNewLines;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
@@ -26,7 +27,7 @@
 
             var end = context.Scanner.Cursor.Offset;
 
-            result.Set(start, context.Scanner.Cursor.Offset,  new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
             return true;
         }
     }

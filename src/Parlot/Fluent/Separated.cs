@@ -3,16 +3,17 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public sealed class Separated<U, T> : Parser<List<T>>
+    public sealed class Separated<U, T, TParseContext> : Parser<List<T>, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<U> _separator;
-        private readonly Parser<T> _parser;
+        private readonly IParser<U, TParseContext> _separator;
+        private readonly IParser<T, TParseContext> _parser;
 
         private readonly bool _separatorIsChar;
         private readonly char _separatorChar;
         private readonly bool _separatorWhiteSpace;
 
-        public Separated(Parser<U> separator, Parser<T> parser)
+        public Separated(IParser<U, TParseContext> separator, IParser<T, TParseContext> parser)
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -20,7 +21,7 @@ namespace Parlot.Fluent
             // TODO: more optimization could be done for other literals by creating different implementations of this class instead of doing 
             // ifs in the Parse method. Then the builders could check the kind of literal used and return the correct implementation.
 
-            if (separator is CharLiteral literal)
+            if (separator is CharLiteral<TParseContext> literal)
             {
                 _separatorIsChar = true;
                 _separatorChar = literal.Char;
@@ -28,7 +29,7 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<List<T>> result)
         {
             context.EnterParser(this);
 

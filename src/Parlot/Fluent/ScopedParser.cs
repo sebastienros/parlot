@@ -3,24 +3,26 @@
 namespace Parlot.Fluent
 {
     /// <summary>
-    /// Returns a new <see cref="Parser{U}" /> converting the input value of 
-    /// type T to the output value of type U using a custom function.
+    /// Returns a new <see cref="Parser{T,TParseContext}" /> converting the input parser of 
+    /// type T to a scoped parsed.
     /// </summary>
     /// <typeparam name="T">The input parser type.</typeparam>
-    public sealed class ScopedParser<T> : Parser<T>
+    /// <typeparam name="TParseContext">The parser context type.</typeparam>
+    public sealed class ScopedParser<T, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext<TParseContext>
     {
-        private readonly Parser<T> _parser;
+        private readonly IParser<T, TParseContext> _parser;
 
-        public ScopedParser(Parser<T> parser)
+        public ScopedParser(IParser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
-            return _parser.Parse(new ParseContext(context), ref result);
+            return _parser.Parse(context.Scope(), ref result);
         }
     }
 }

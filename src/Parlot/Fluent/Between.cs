@@ -2,11 +2,12 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class Between<A, T, B> : Parser<T>
+    public sealed class Between<A, T, B, TParseContext> : Parser<T, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
-        private readonly Parser<A> _before;
-        private readonly Parser<B> _after;
+        private readonly IParser<T, TParseContext> _parser;
+        private readonly IParser<A, TParseContext> _before;
+        private readonly IParser<B, TParseContext> _after;
 
         private readonly bool _beforeIsChar;
         private readonly char _beforeChar;
@@ -16,20 +17,20 @@ namespace Parlot.Fluent
         private readonly char _afterChar;
         private readonly bool _afterSkipWhiteSpace;
 
-        public Between(Parser<A> before, Parser<T> parser, Parser<B> after)
+        public Between(IParser<A, TParseContext> before, IParser<T, TParseContext> parser, IParser<B, TParseContext> after)
         {
             _before = before ?? throw new ArgumentNullException(nameof(before));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _after = after ?? throw new ArgumentNullException(nameof(after));
 
-            if (before is CharLiteral literal1)
+            if (before is CharLiteral<TParseContext> literal1)
             {
                 _beforeIsChar = true;
                 _beforeChar = literal1.Char;
                 _beforeSkipWhiteSpace = literal1.SkipWhiteSpace;
             }
 
-            if (after is CharLiteral literal2)
+            if (after is CharLiteral<TParseContext> literal2)
             {
                 _afterIsChar = true;
                 _afterChar = literal2.Char;
@@ -37,7 +38,7 @@ namespace Parlot.Fluent
             }
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -66,7 +67,7 @@ namespace Parlot.Fluent
             if (!_parser.Parse(context, ref result))
             {
                 return false;
-            }            
+            }
 
             if (_afterIsChar)
             {

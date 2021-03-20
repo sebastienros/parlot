@@ -1,15 +1,16 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class Capture<T> : Parser<TextSpan>
+    public sealed class Capture<T, TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly IParser<T, TParseContext> _parser;
 
-        public Capture(Parser<T> parser)
+        public Capture(IParser<T, TParseContext> parser)
         {
             _parser = parser;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 

@@ -2,7 +2,8 @@
 
 namespace Parlot.Fluent
 {
-    public sealed class PatternLiteral : Parser<TextSpan>
+    public sealed class PatternLiteral<TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly Func<char, bool> _predicate;
         private readonly int _minSize;
@@ -17,7 +18,7 @@ namespace Parlot.Fluent
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
@@ -52,7 +53,7 @@ namespace Parlot.Fluent
             }
 
             // When the size constraint has not been met the parser may still have advanced the cursor.
-            context.Scanner.Cursor.ResetPosition(startPosition);            
+            context.Scanner.Cursor.ResetPosition(startPosition);
 
             return false;
         }

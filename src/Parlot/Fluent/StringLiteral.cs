@@ -7,7 +7,8 @@
         SingleOrDouble
     }
 
-    public sealed class StringLiteral : Parser<TextSpan>
+    public sealed class StringLiteral<TParseContext> : Parser<TextSpan, TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly StringLiteralQuotes _quotes;
         private readonly bool _skipWhiteSpace;
@@ -18,7 +19,7 @@
             _skipWhiteSpace = skipWhiteSpace;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
