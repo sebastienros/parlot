@@ -2,11 +2,12 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
-    <LangVersion>latest</LangVersion>
+    <Title>Fast parser combinator for .NET</Title>
+    <Description>Parser utilities with performance and simplicity as its goals.</Description>
+    <PackageTags>parser;interpreter;</PackageTags>
+    <IsPackable>true</IsPackable>
     <AssemblyOriginatorKeyFile>Parlot.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>pdbonly</DebugType>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
