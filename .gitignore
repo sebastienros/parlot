@@ -54,7 +54,7 @@ nunit-*.xml
 dlldata.c
 
 # Benchmark Results
-BenchmarkDotNet.Artifacts/
+BenchmarkDotNet.Artifacts*/
 
 # .NET Core
 project.lock.json
@@ -348,3 +348,6 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Rider/Idea
+.idea
