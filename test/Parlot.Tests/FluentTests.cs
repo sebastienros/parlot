@@ -340,5 +340,12 @@ namespace Parlot.Tests
         {
             Assert.Equal("../foo/bar", Capture(Literals.Text("..").AndSkip(OneOrMany(Literals.Char('/').AndSkip(Terms.Identifier())))).Parse("../foo/bar").ToString());
         }
+
+        [Fact]
+        public void WhiteSpaceShouldFailOnEmpty()
+        {
+            Assert.True(Literals.WhiteSpace(failOnEmpty: true).TryParse(" ", out _));
+            Assert.False(Literals.WhiteSpace(failOnEmpty: true).TryParse("", out _));
+        }
     }
 }
