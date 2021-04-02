@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System.Linq;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -346,6 +347,30 @@ namespace Parlot.Tests
         {
             Assert.True(Literals.WhiteSpace(failOnEmpty: true).TryParse(" ", out _));
             Assert.False(Literals.WhiteSpace(failOnEmpty: true).TryParse("", out _));
+        }
+
+        [Fact]
+        public void SeparatedConsumesDelimiter()
+        {
+            Assert.Equal("a+b+c", string.Join('+', Separated(Literals.Char(','), Terms.Identifier()).Parse("a,b,c")));
+        }
+
+        [Fact]
+        public void SeparatedShouldNotConsumeDelimiter()
+        {
+            var terms = OneOf(Terms.Text("surname"), Terms.Text("title"));
+            var delimiter = terms.AndSkip(Terms.Char(':'));
+            var parser = Literals.WhiteSpace().SkipAnd(Capture(terms.SkipAnd(Terms.Char(':')).SkipAnd(Terms.Identifier())))
+                .Or(Terms.Identifier());
+
+            var separated = Separated(delimiter, parser, consumeDelimiter: false);
+
+            Assert.Equal(2, separated.Parse("fred surname:dagg").Count);
+            Assert.Equal("fred", separated.Parse("fred surname:dagg").FirstOrDefault());
+            Assert.Equal("surname:dagg", separated.Parse("fred surname:dagg").Skip(1).FirstOrDefault());
+            Assert.Equal("fred+surname:dagg", string.Join('+', separated.Parse("fred surname:dagg")));
+            Assert.Equal("fred+title:mr", string.Join('+', separated.Parse("fred title:mr")));
+            Assert.Equal("fred+title:mr+surname:dagg", string.Join('+', separated.Parse("fred title:mr surname:dagg")));
         }
     }
 }

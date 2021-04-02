@@ -19,7 +19,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or many times a parser separated by another one.
         /// </summary>
-        public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
+        public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser, bool consumeDelimiter = true) => new Separated<U, T>(separator, parser, consumeDelimiter);
 
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.

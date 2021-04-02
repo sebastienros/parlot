@@ -11,11 +11,13 @@ namespace Parlot.Fluent
         private readonly bool _separatorIsChar;
         private readonly char _separatorChar;
         private readonly bool _separatorWhiteSpace;
+        private readonly bool _consumeDelimiter;
 
-        public Separated(Parser<U> separator, Parser<T> parser)
+        public Separated(Parser<U> separator, Parser<T> parser, bool consumeDelimiter = true)
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            _consumeDelimiter = consumeDelimiter;
 
             // TODO: more optimization could be done for other literals by creating different implementations of this class instead of doing 
             // ifs in the Parse method. Then the builders could check the kind of literal used and return the correct implementation.
@@ -61,6 +63,7 @@ namespace Parlot.Fluent
                 end = parsed.End;
                 results ??= new List<T>();
                 results.Add(parsed.Value);
+                var position = context.Scanner.Cursor.Position;
 
                 if (_separatorIsChar)
                 {
@@ -69,18 +72,33 @@ namespace Parlot.Fluent
                         context.SkipWhiteSpace();
                     }
 
-                    if (!context.Scanner.ReadChar(_separatorChar))
+                    if (context.Scanner.ReadChar(_separatorChar))
+                    {
+                        if (!_consumeDelimiter)
+                        {
+                            context.Scanner.Cursor.ResetPosition(position);
+                        }
+                    }
+                    else
                     {
                         break;
                     }
                 }
-                else if (!_separator.Parse(context, ref separatorResult))
+                else if (_separator.Parse(context, ref separatorResult))
+                {
+                    if (!_consumeDelimiter)
+                    {
+                        context.Scanner.Cursor.ResetPosition(position);
+                    }
+                }
+                else
                 {
                     break;
                 }
             }
 
             result = new ParseResult<List<T>>(start, end, results);
+
             return true;
         }
     }
