@@ -72,7 +72,7 @@ namespace Parlot.Fluent
             //    value = action(parse1.Value);
             // }
 
-            var parserCompileResult = _parser.Build(context);
+            var parserCompileResult = _parser.Build(context, requireResult: true);
 
             Expression transformation;
 

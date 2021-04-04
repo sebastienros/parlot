@@ -29,6 +29,40 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ZeroOrOneShouldFindOptionalParser()
+        {
+            var parser = ZeroOrOne(Literals.Integer());
+
+            Assert.True(parser.TryParse("123", out var result1));
+            Assert.Equal(123, result1);
+
+            Assert.True(parser.TryParse(" 123", out var result2));
+            Assert.Equal(0, result2);
+        }
+
+        [Fact]
+        public void IntegerShouldResetPositionWhenItFails()
+        {
+            var parser = OneOf(Terms.Integer(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+
+            // The + sign will advance the first parser and should reset the position for the second to read it successfully
+
+            Assert.True(parser.TryParse("+abc", out var result1));
+            Assert.Equal("b", result1);
+        }
+
+        [Fact]
+        public void DecimalShouldResetPositionWhenItFails()
+        {
+            var parser = OneOf(Terms.Decimal(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+
+            // The + sign will advance the first parser and should reset the position for the second to read it successfully
+
+            Assert.True(parser.TryParse("+abc", out var result1));
+            Assert.Equal("b", result1);
+        }
+
+        [Fact]
         public void ThenShouldConvertParser()
         {
             var evenIntegers = Literals.Integer().Then(x => x % 2);

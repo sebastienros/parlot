@@ -12,6 +12,7 @@ namespace Parlot.Compilation
         internal static MethodInfo Scanner_ReadText_NoResult = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), new[] { typeof(string), typeof(StringComparer) });
         internal static MethodInfo Scanner_ReadChar = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadChar), new[] { typeof(char) });
         internal static MethodInfo Scanner_ReadDecimal = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), new Type[0] { });
+        internal static MethodInfo Scanner_ReadInteger = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadInteger), new Type[0] { });
         internal static MethodInfo Scanner_ReadNonWhiteSpace = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpace), new Type[0] { });
         internal static MethodInfo Scanner_ReadNonWhiteSpaceOrNewLine = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpaceOrNewLine), new Type[0] { });
         internal static MethodInfo Scanner_SkipWhiteSpace = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.SkipWhiteSpace), new Type[0] { });
@@ -38,6 +39,7 @@ namespace Parlot.Compilation
         public static MethodCallExpression ReadQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadQuotedString);
         public static MethodCallExpression ReadChar(this CompilationContext context, char c) => Expression.Call(context.Scanner(), Scanner_ReadChar, Expression.Constant(c));
         public static MethodCallExpression ReadDecimal(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDecimal);
+        public static MethodCallExpression ReadInteger(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadInteger);
         public static MethodCallExpression ReadNonWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpace);
         public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpaceOrNewLine);
         public static MethodCallExpression SkipWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_SkipWhiteSpace);
@@ -52,6 +54,11 @@ namespace Parlot.Compilation
             return result.Success;
         }
 
+        public static ParameterExpression DeclareValueVariable<T>(this CompilationContext context, CompilationResult result)
+        {
+            return DeclareValueVariable(context, result, Expression.Default(typeof(T)));
+        }
+            
         public static ParameterExpression DeclareValueVariable(this CompilationContext context, CompilationResult result, Expression defaultValue)
         {
             result.Value = Expression.Variable(defaultValue.Type, $"value{context.Counter}");
@@ -65,9 +72,9 @@ namespace Parlot.Compilation
             return result.Value;
         }
 
-        public static ParameterExpression DeclareStartVariable(this CompilationContext context, CompilationResult result)
+        public static ParameterExpression DeclarePositionVariable(this CompilationContext context, CompilationResult result)
         {
-            var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
+            var start = Expression.Variable(typeof(TextPosition), $"position{context.Counter}");
             result.Variables.Add(start);
             result.Body.Add(Expression.Assign(start, context.Position()));
             return start;

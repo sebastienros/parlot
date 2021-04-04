@@ -58,11 +58,22 @@ namespace Parlot.Fluent
         /// creates a generic one.
         /// </summary>
         /// <param name="context">The <see cref="CompilationContext"/> instance.</param>
-        public CompilationResult Build(CompilationContext context)
+        /// <param name="requireResult">Forces the instruction to compute the resulting value whatever the state of <see cref="CompilationContext.DiscardResult"/> is.</param>
+        public CompilationResult Build(CompilationContext context, bool requireResult = false)
         {
             if (this is ICompilable compilable)
             {
-                return compilable.Compile(context);
+                var discardResult = context.DiscardResult;
+                if (requireResult)
+                {
+                    context.DiscardResult = false;
+                }
+
+                var compilationResult = compilable.Compile(context);
+
+                context.DiscardResult = discardResult;
+
+                return compilationResult;
             }
             else
             {

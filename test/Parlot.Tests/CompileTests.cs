@@ -379,5 +379,26 @@ namespace Parlot.Tests
 
             Assert.Equal(text, Literals.Identifier(start, part).Compile().Parse(text).ToString());
         }
+
+        [Fact]
+        public void CompiledWhenShouldFailParserWhenFalse()
+        {
+            var evenIntegers = Literals.Integer().When(x => x % 2 == 0).Compile();
+
+            Assert.True(evenIntegers.TryParse("1234", out var result1));
+            Assert.Equal(1234, result1);
+
+            Assert.False(evenIntegers.TryParse("1235", out var result2));
+            Assert.Equal(default, result2);
+        }
+
+        [Fact]
+        public void CompiledWhenShouldResetPositionWhenFalse()
+        {
+            var evenIntegers = ZeroOrOne(Literals.Integer().When(x => x % 2 == 0)).And(Literals.Integer()).Compile();
+
+            Assert.True(evenIntegers.TryParse("1235", out var result1));
+            Assert.Equal(1235, result1.Item2);
+        }
     }
 }

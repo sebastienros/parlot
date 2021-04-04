@@ -51,7 +51,7 @@ namespace Parlot.Fluent
                             parserCompileResult.Success,
                             context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Call(value, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value),
+                            : Expression.Assign(value, parserCompileResult.Value),
                             Expression.Assign(success, Expression.Constant(true))
                             )
                         )

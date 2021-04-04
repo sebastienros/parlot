@@ -20,6 +20,8 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
+            var reset = context.Scanner.Cursor.Position;
+
             if (_skipWhiteSpace)
             {
                 context.SkipWhiteSpace();
@@ -51,7 +53,9 @@ namespace Parlot.Fluent
                     return true;
                 }
             }
-         
+
+            context.Scanner.Cursor.ResetPosition(reset);
+
             return false;
         }
 
@@ -62,10 +66,18 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(decimal)));
 
+            // TODO: if !_skiptWhiteSpace and !NumberOptions.AllowSign then we don't need to store the reset position
+            // since the ReadDecimal method will do it at the correct location.
+
+            //
+            // var reset = context.Scanner.Cursor.Position;
+            //
             // if (_skipWhiteSpace)
             // {
             //     context.SkipWhiteSpace();
             // }
+
+            var reset = context.DeclarePositionVariable(result);
 
             if (_skipWhiteSpace)
             {
@@ -101,6 +113,12 @@ namespace Parlot.Fluent
             //    NETSTANDARD2_1 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
             //    success = decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
             // }
+            //
+            // if (!success)
+            // {
+            //    context.Scanner.Cursor.ResetPosition(begin);
+            // }
+            //
 
             var end = Expression.Variable(typeof(int), $"end{context.Counter}");
 #if NETSTANDARD2_0
@@ -133,6 +151,13 @@ namespace Parlot.Fluent
                 );
 
             result.Body.Add(block);
+
+            result.Body.Add(
+                Expression.IfThen(
+                    Expression.Not(success),
+                    context.ResetPosition(reset)
+                    )
+                );
 
             return result;
         }
