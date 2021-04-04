@@ -59,7 +59,7 @@ static FluentParser()
             .Or(primary));
 
     // factor => unary ( ( "/" | "*" ) unary )* ;
-    var factor = unary.And(Star(divided.Or(times).And(unary)))
+    var factor = unary.And(ZeroOrMany(divided.Or(times).And(unary)))
         .Then(static x =>
         {
             // unary
