@@ -59,7 +59,7 @@ namespace Parlot.Fluent
 
                 var parserCompileResult = Parser.Build(context);
 
-                var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.Counter}");
+                var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
 
                 var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
                 var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
@@ -87,7 +87,7 @@ namespace Parlot.Fluent
 
             // ValueTuple<bool, T> def;
 
-            var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.Counter}");
+            var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.NextNumber}");
             result.Variables.Add(deferred);
 
             // def = ((Func<ParserContext, ValueTuple<bool, T>>)_closure.Func).Invoke(parseContext);

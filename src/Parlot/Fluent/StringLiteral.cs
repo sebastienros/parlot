@@ -76,7 +76,7 @@ namespace Parlot.Fluent
 
             // var start = context.Scanner.Cursor.Offset;
 
-            var start = Expression.Variable(typeof(int), $"start{context.Counter}");
+            var start = Expression.Variable(typeof(int), $"start{context.NextNumber}");
             result.Variables.Add(start);
 
             result.Body.Add(Expression.Assign(start, context.Offset()));
@@ -96,7 +96,7 @@ namespace Parlot.Fluent
             //     value = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
             // }
 
-            var end = Expression.Variable(typeof(int), $"end{context.Counter}");
+            var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 
             var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", new[] { typeof(TextSpan) });
 

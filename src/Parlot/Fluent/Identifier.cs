@@ -69,7 +69,7 @@ namespace Parlot.Fluent
 
             // var first = context.Scanner.Cursor.Current;
 
-            var first = Expression.Parameter(typeof(char), $"first{context.Counter}");
+            var first = Expression.Parameter(typeof(char), $"first{context.NextNumber}");
             result.Body.Add(Expression.Assign(first, context.Current()));
             result.Variables.Add(first);
 
@@ -92,7 +92,7 @@ namespace Parlot.Fluent
             // }
             //
 
-            var start = Expression.Parameter(typeof(int), $"start{context.Counter}");
+            var start = Expression.Parameter(typeof(int), $"start{context.NextNumber}");
 
             var breakLabel = Expression.Label("break");
 

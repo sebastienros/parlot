@@ -29,7 +29,13 @@ namespace Parlot.Fluent
 
             var end = context.Scanner.Cursor.Offset;
 
+            if (start == end)
+            {
+                return false;
+            }
+
             result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
+
             return true;
         }
 
@@ -37,12 +43,10 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            _ = context.DeclareSuccessVariable(result, true);
+            var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
-            var start = Expression.Parameter(typeof(int));
-            result.Variables.Add(start);
-            result.Body.Add(Expression.Assign(start, context.Offset()));
+            var start = context.DeclareOffsetVariable(result);
 
             result.Body.Add(
                 _includeNewLines
@@ -50,11 +54,17 @@ namespace Parlot.Fluent
                     : context.SkipWhiteSpace()
                 );
 
-            var end = Expression.Parameter(typeof(int));
-            result.Variables.Add(end);
-            result.Body.Add(Expression.Assign(end, context.Offset()));
+            var end = context.DeclareOffsetVariable(result);
 
-            result.Body.Add(Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start))));
+            result.Body.Add(
+                Expression.Block(
+                    Expression.IfThen(
+                        Expression.NotEqual(start, end),
+                        Expression.Assign(success, Expression.Constant(true, typeof(bool)))
+                        ),
+                    Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
+                    )
+                );
 
             return result;
         }

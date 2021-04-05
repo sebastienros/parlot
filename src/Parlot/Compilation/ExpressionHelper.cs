@@ -48,7 +48,7 @@ namespace Parlot.Compilation
 
         public static ParameterExpression DeclareSuccessVariable(this CompilationContext context, CompilationResult result, bool defaultValue)
         {
-            result.Success = Expression.Variable(typeof(bool), $"success{++context.Counter}");
+            result.Success = Expression.Variable(typeof(bool), $"success{context.NextNumber}");
             result.Variables.Add(result.Success);
             result.Body.Add(Expression.Assign(result.Success, Expression.Constant(defaultValue, typeof(bool))));
             return result.Success;
@@ -61,7 +61,7 @@ namespace Parlot.Compilation
             
         public static ParameterExpression DeclareValueVariable(this CompilationContext context, CompilationResult result, Expression defaultValue)
         {
-            result.Value = Expression.Variable(defaultValue.Type, $"value{context.Counter}");
+            result.Value = Expression.Variable(defaultValue.Type, $"value{context.NextNumber}");
 
             if (!context.DiscardResult)
             {
@@ -74,10 +74,18 @@ namespace Parlot.Compilation
 
         public static ParameterExpression DeclarePositionVariable(this CompilationContext context, CompilationResult result)
         {
-            var start = Expression.Variable(typeof(TextPosition), $"position{context.Counter}");
+            var start = Expression.Variable(typeof(TextPosition), $"position{context.NextNumber}");
             result.Variables.Add(start);
             result.Body.Add(Expression.Assign(start, context.Position()));
             return start;
+        }
+
+        public static ParameterExpression DeclareOffsetVariable(this CompilationContext context, CompilationResult result)
+        {
+            var offset = Expression.Variable(typeof(int), $"offset{context.NextNumber}");
+            result.Variables.Add(offset);
+            result.Body.Add(Expression.Assign(offset, context.Offset()));
+            return offset;
         }
 
         public static MethodCallExpression ParserSkipWhiteSpace(this CompilationContext context)

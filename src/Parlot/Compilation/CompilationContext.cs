@@ -9,6 +9,8 @@ namespace Parlot.Compilation
     /// </summary>
     public class CompilationContext
     {
+        private int _number = 0;
+
         public CompilationContext()
         {
         }
@@ -21,7 +23,7 @@ namespace Parlot.Compilation
         /// <summary>
         /// Gets or sets a counter used to generate unique variable names.
         /// </summary>
-        public int Counter { get; set; }
+        public int NextNumber => _number++;
 
         /// <summary>
         /// Gets the list of global variables to add the the final list of statements.

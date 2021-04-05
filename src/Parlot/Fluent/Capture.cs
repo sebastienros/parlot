@@ -45,7 +45,7 @@ namespace Parlot.Fluent
 
             // var start = context.Scanner.Cursor.Position;
 
-            var start = Expression.Variable(typeof(TextPosition), $"start{context.Counter}");
+            var start = Expression.Variable(typeof(TextPosition), $"start{context.NextNumber}");
             result.Variables.Add(start);
 
             result.Body.Add(Expression.Assign(start, context.Position()));

@@ -415,6 +415,13 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void WhiteSpaceShouldFailOnEmpty()
+        {
+            Assert.True(Literals.WhiteSpace().TryParse(" ", out _));
+            Assert.False(Literals.WhiteSpace().TryParse("", out _));
+        }
+
+        [Fact]
         public void ShouldCapture()
         {
             Assert.Equal("../foo/bar", Capture(Literals.Text("..").AndSkip(OneOrMany(Literals.Char('/').AndSkip(Terms.Identifier())))).Parse("../foo/bar").ToString());

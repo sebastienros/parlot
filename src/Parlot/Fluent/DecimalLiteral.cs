@@ -86,7 +86,7 @@ namespace Parlot.Fluent
 
             // var start = context.Scanner.Cursor.Offset;
 
-            var start = Expression.Variable(typeof(int), $"start{context.Counter}");
+            var start = Expression.Variable(typeof(int), $"start{context.NextNumber}");
             result.Variables.Add(start);
 
             result.Body.Add(Expression.Assign(start, context.Offset()));
@@ -120,13 +120,13 @@ namespace Parlot.Fluent
             // }
             //
 
-            var end = Expression.Variable(typeof(int), $"end{context.Counter}");
+            var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 #if NETSTANDARD2_0
-            var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.Counter}");
+            var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
             var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
 #else
-            var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{++context.Counter}");
+            var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
             var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
 #endif

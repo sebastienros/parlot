@@ -25,12 +25,12 @@ namespace Parlot
 #endif
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static TokenResult Succeed(string buffer, int start, int end)
+        public static TokenResult Succeed(string buffer, int start, int end)
         {
             return new(buffer, start, end - start);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static TokenResult Fail() => default;
+        public static TokenResult Fail() => default;
     }
 }

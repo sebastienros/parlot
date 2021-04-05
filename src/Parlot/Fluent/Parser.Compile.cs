@@ -105,7 +105,7 @@ namespace Parlot.Fluent
 
             // ParseResult<T> parseResult;
 
-            var parseResult = Expression.Variable(typeof(ParseResult<T>), $"value{context.Counter}");
+            var parseResult = Expression.Variable(typeof(ParseResult<T>), $"value{context.NextNumber}");
             result.Variables.Add(parseResult);
 
             // success = parser.Parse(context.ParseContext, ref parseResult)
@@ -121,7 +121,7 @@ namespace Parlot.Fluent
 
             if (!context.DiscardResult)
             {
-                var value = result.Value = Expression.Variable(typeof(T), $"value{context.Counter}");
+                var value = result.Value = Expression.Variable(typeof(T), $"value{context.NextNumber}");
                 result.Variables.Add(value);
 
                 result.Body.Add(
