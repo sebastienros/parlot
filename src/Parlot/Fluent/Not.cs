@@ -37,9 +37,7 @@ namespace Parlot.Fluent
 
             // var start = context.Scanner.Cursor.Position;
 
-            var start = Expression.Variable(typeof(TextPosition), $"start{context.NextNumber}");
-            result.Variables.Add(start);
-            result.Body.Add(Expression.Assign(start, Expression.Property(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), "Position")));
+            var start = context.Position();
 
             var parserCompileResult = _parser.Build(context);
 
@@ -47,7 +45,7 @@ namespace Parlot.Fluent
             //
             // parser instructions
             // 
-            // if (parser.succces)
+            // if (parser.succcess)
             // {
             //     context.Scanner.Cursor.ResetPosition(start);
             // }

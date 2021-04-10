@@ -2,11 +2,16 @@
 
 namespace Parlot.Fluent
 {
+    using Compilation;
+    using System.Linq.Expressions;
+
     /// <summary>
     /// Routes the parsing based on a custom delegate.
     /// </summary>
     public sealed class Switch<T, U> : Parser<U>
     {
+        // This parser doesn't implement ICompilable since the returned parser can't be compiled preemptively.
+        
         private readonly Parser<T> _previousParser;
         private readonly Func<ParseContext, T, Parser<U>> _action;
         public Switch(Parser<T> previousParser, Func<ParseContext, T, Parser<U>> action)

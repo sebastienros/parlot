@@ -1,6 +1,9 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class TextBefore<T> : Parser<TextSpan>
+    using Compilation;
+    using System.Linq.Expressions;
+
+    public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
     {
         private readonly Parser<T> _delimiter;
         private readonly bool _canBeEmpty;
@@ -17,11 +20,6 @@
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {
-            if (context.Scanner.Cursor.Eof)
-            {
-                return false;
-            }
-
             context.EnterParser(this);
 
             var start = context.Scanner.Cursor.Position;
@@ -76,6 +74,16 @@
                     }
                 }
             }
+        }
+
+        public CompilationResult Compile(CompilationContext context)
+        {
+            var result = new CompilationResult();
+
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            
+            return result;
         }
     }
 }

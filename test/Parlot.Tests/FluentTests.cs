@@ -518,5 +518,31 @@ namespace Parlot.Tests
             Assert.True(Literals.Char('a').ElseError("'a' was expected").TryParse("a", out var result));
             Assert.Equal('a', result);
         }
+        
+        [Fact]
+        public void TextBeforeShouldReturnAllCharBeforeDelimiter()
+        {
+            Assert.False(AnyCharBefore(Literals.Char('a')).TryParse("", out _));
+            Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: true).TryParse("", out var result1));
+            
+            Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hello", out var result2));
+            Assert.Equal("hello", result2);
+            Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: false).TryParse("hello", out _));
+            Assert.False(AnyCharBefore(Literals.Char('a'), failOnEof: true).TryParse("hello", out _));
+        }
+        
+        [Fact]
+        public void TextBeforeShouldStopAtDelimiter()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hellao", out var result1));
+            Assert.Equal("hell", result1);
+        }
+        
+        [Fact]
+        public void TextBeforeShouldNotConsumeDelimiter()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).And(Literals.Char('a')).TryParse("hellao", out _));
+            Assert.False(AnyCharBefore(Literals.Char('a'), consumeDelimiter: true).And(Literals.Char('a')).TryParse("hellao", out _));
+        }
     }
 }
