@@ -130,6 +130,20 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void SkipAndShouldResetPosition()
+        {
+            var code = 
+                OneOf(
+                    Terms.Text("hello").SkipAnd(Terms.Text("world")),
+                    Terms.Text("hello").AndSkip(Terms.Text("universe"))
+                );
+
+            Assert.False(code.TryParse("hello country", out _));
+            Assert.True(code.TryParse("hello universe", out _));
+            Assert.True(code.TryParse("hello world", out _));
+        }
+
+        [Fact]
         public void ParseContextShouldUseNewLines()
         {
             Assert.Equal("a", Terms.NonWhiteSpace().Parse("\n\r\v a"));

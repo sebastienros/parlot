@@ -296,11 +296,25 @@ namespace Parlot.Tests
                 OneOf(
                     Terms.Text("hello").AndSkip(Terms.Text("world")),
                     Terms.Text("hello").AndSkip(Terms.Text("universe"))
-                    ).Compile();
+                ).Compile();
 
             Assert.False(code.TryParse("hello country", out var result));
             Assert.True(code.TryParse("hello universe", out result) && result == "hello");
             Assert.True(code.TryParse("hello world", out result) && result == "hello");
+        }
+
+        [Fact]
+        public void ShouldCompileSkipAnd()
+        {
+            var code =
+                OneOf(
+                    Terms.Text("hello").SkipAnd(Terms.Text("world")),
+                    Terms.Text("hello").SkipAnd(Terms.Text("universe"))
+                ).Compile();
+
+            Assert.False(code.TryParse("hello country", out var result));
+            Assert.True(code.TryParse("hello universe", out result) && result == "universe");
+            Assert.True(code.TryParse("hello world", out result) && result == "world");
         }
 
         [Fact]
