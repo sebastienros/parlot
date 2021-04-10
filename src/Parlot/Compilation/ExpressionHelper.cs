@@ -5,6 +5,8 @@ using System.Reflection;
 
 namespace Parlot.Compilation
 {
+    using System.Linq;
+
     public static class ExpressionHelper
     {
         internal static MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
@@ -33,6 +35,7 @@ namespace Parlot.Compilation
         public static MemberExpression Eof(this CompilationContext context) => Expression.Property(context.Cursor(), "Eof");
         public static MemberExpression Buffer(this CompilationContext context) => Expression.Field(context.Scanner(), "Buffer");
         public static Expression ThrowObject(this CompilationContext _, Expression o) => Expression.Throw(Expression.New(typeof(Exception).GetConstructor(new[] { typeof(string) }), Expression.Call(o, o.Type.GetMethod("ToString", new Type[0]))));
+        public static Expression ThrowParseException(this CompilationContext context, Expression message) => Expression.Throw(Expression.New(typeof(ParseException).GetConstructors().First(), new [] { message, context.Position() } ));
 
         public static MethodCallExpression ReadSingleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadSingleQuotedString);
         public static MethodCallExpression ReadDoubleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDoubleQuotedString);

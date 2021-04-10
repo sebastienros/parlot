@@ -490,5 +490,33 @@ namespace Parlot.Tests
             Assert.True(Terms.Decimal().Discard<bool>(true).TryParse("123", out var r2) && r2 == true);
             Assert.False(Terms.Decimal().Discard<bool>(true).TryParse("abc", out _));
         }
+        
+        [Fact]
+        public void ErrorShouldThrowIfParserSucceeds()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
+            Assert.Equal("'a' was not expected", error.Message);
+        }
+        
+        [Fact]
+        public void ErrorShouldThrow()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
+            Assert.Equal("'a' was not expected", error.Message);
+        }
+        
+        [Fact]
+        public void ElseErrorShouldThrowIfParserFails()
+        {
+            Assert.False(Literals.Char('a').ElseError("'a' was expected").TryParse("b", out _, out var error));
+            Assert.Equal("'a' was expected", error.Message);
+        }
+        
+        [Fact]
+        public void ElseErrorShouldFlowResultIfParserSucceeds()
+        {
+            Assert.True(Literals.Char('a').ElseError("'a' was expected").TryParse("a", out var result));
+            Assert.Equal('a', result);
+        }
     }
 }

@@ -17,11 +17,6 @@ namespace Parlot.Fluent
         public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
 
         /// <summary>
-        /// Builds a parser that converts the previous result when it fails.
-        /// </summary>
-        public Parser<U> Else<U>(Func<T, U> conversion) => new Else<T, U>(this, conversion);
-
-        /// <summary>
         /// Builds a parser that emits an error when the previous parser failed.
         /// </summary>
         public Parser<T> ElseError(string message) => new ElseError<T>(this, message);
