@@ -442,5 +442,33 @@ namespace Parlot.Tests
             Assert.True(Literals.Char('a').ElseError("'a' was expected").Compile().TryParse("a", out var result));
             Assert.Equal('a', result);
         }
+
+        [Fact]
+        public void ShouldCompileSwitch()
+        {
+            var d = Literals.Text("d:");
+            var i = Literals.Text("i:");
+            var s = Literals.Text("s:");
+
+            var parser = d.Or(i).Or(s).Switch((context, result) =>
+            {
+                switch (result)
+                {
+                    case "d:": return Literals.Decimal().Then<object>(x => x);
+                    case "i:": return Literals.Integer().Then<object>(x => x);
+                    case "s:": return Literals.String().Then<object>(x => x);
+                }
+                return null;
+            }).Compile();
+
+            Assert.True(parser.TryParse("d:123.456", out var resultD));
+            Assert.Equal((decimal)123.456, resultD);
+
+            Assert.True(parser.TryParse("i:123", out var resultI));
+            Assert.Equal((long)123, resultI);
+
+            Assert.True(parser.TryParse("s:'123'", out var resultS));
+            Assert.Equal("123", ((TextSpan)resultS).ToString());
+        }
     }
 }
