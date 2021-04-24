@@ -76,6 +76,21 @@ namespace Parlot.Fluent
         /// </summary>
         public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<T> Empty<T>() => new Empty<T>();
+
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<object> Empty() => new Empty<object>();
+
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<T> Empty<T>(T value) => new Empty<T>(value);
+
     }
 
     public class LiteralBuilder
@@ -83,7 +98,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches whitespaces.
         /// </summary>
-        public Parser<TextSpan> WhiteSpace(bool includeNewLines = false, bool failOnEmpty = false) => new WhiteSpaceLiteral(includeNewLines, failOnEmpty);
+        public Parser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
 
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.

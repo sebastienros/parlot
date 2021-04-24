@@ -41,7 +41,7 @@ namespace Parlot.Tests.Calc
 
             // The Recursive helper allows to create parsers that depend on themselves.
             // ( "-" ) unary | primary;
-            var unary = Recursive<Expression>((u) => 
+            var unary = Recursive<Expression>((u) =>
                 minus.And(u)
                     .Then<Expression>(static x => new NegateExpression(x.Item2))
                     .Or(primary));

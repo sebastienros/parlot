@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public abstract class Parser<T>
+    public abstract partial class Parser<T>
     { 
         public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
 
@@ -15,11 +15,6 @@ namespace Parlot.Fluent
         /// Builds a parser that converts the previous result, and can alter the current <see cref="ParseContext"/>.
         /// </summary>
         public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
-
-        /// <summary>
-        /// Builds a parser that converts the previous result when it fails.
-        /// </summary>
-        public Parser<U> Else<U>(Func<T, U> conversion) => new Else<T, U>(this, conversion);
 
         /// <summary>
         /// Builds a parser that emits an error when the previous parser failed.
@@ -45,63 +40,20 @@ namespace Parlot.Fluent
         /// Builds a parser what returns another one based on the previous result.
         /// </summary>
         public Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action) => new Switch<T, U>(this, action);
-    }
 
-    public static class ParserExtensions
-    {
-        public static T Parse<T>(this Parser<T> parser, string text, ParseContext context = null)
-        {
-            context ??= new ParseContext(new Scanner(text));
+        /// <summary>
+        /// Builds a parser that ensure the cursor is tat the end of the input.
+        /// </summary>
+        public Parser<T> Eof() => new Eof<T>(this);
 
-            var localResult = new ParseResult<T>();
+        /// <summary>
+        /// Builds a parser that discards the previous result and replaces it by the specified type or value.
+        /// </summary>
+        public Parser<U> Discard<U>() => new Discard<T, U>(this);
 
-            var success = parser.Parse(context, ref localResult);
-
-            if (success)
-            {
-                return localResult.Value;
-            }
-
-            return default;
-        }
-
-        public static bool TryParse<TResult>(this Parser<TResult> parser, string text, out TResult value)
-        {
-            return parser.TryParse(text, out value, out _);
-        }
-
-        public static bool TryParse<TResult>(this Parser<TResult> parser, string text,out TResult value, out ParseError error)
-        {
-            return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
-        }
-
-        public static bool TryParse<TResult>(this Parser<TResult> parser, ParseContext context, out TResult value, out ParseError error)
-        {
-            error = null;
-
-            try
-            {
-                var localResult = new ParseResult<TResult>();
-
-                var success = parser.Parse(context, ref localResult);
-
-                if (success)
-                {
-                    value = localResult.Value;
-                    return true;
-                }
-            }
-            catch (ParseException e)
-            {
-                error = new ParseError
-                {
-                    Message = e.Message,
-                    Position = e.Position
-                };
-            }
-
-            value = default;
-            return false;
-        }
+        /// <summary>
+        /// Builds a parser that discards the previous result and replaces it by the specified type or value.
+        /// </summary>
+        public Parser<U> Discard<U>(U value) => new Discard<T, U>(this, value);
     }
 }

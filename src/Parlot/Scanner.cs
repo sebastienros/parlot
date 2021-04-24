@@ -217,7 +217,16 @@ namespace Parlot
         /// Reads the specified text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadChar(char c) => ReadChar(c, out _);
+        public bool ReadChar(char c)
+        {
+            if (!Cursor.Match(c))
+            {
+                return false;
+            }
+
+            Cursor.Advance();
+            return true;
+        }
 
         /// <summary>
         /// Reads the specified text.
