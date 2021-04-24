@@ -89,8 +89,8 @@ namespace Parlot.Fluent
                                 parser2CompileResult.Success,
                                 Expression.Block(
                                     context.DiscardResult
-                                        ? Expression.Empty()
-                                        : Expression.Assign(value, parser2CompileResult.Value),
+                                    ? Expression.Empty()
+                                    : Expression.Assign(value, parser2CompileResult.Value),
                                     Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                                 ),
                                 context.ResetPosition(start)

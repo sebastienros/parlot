@@ -57,7 +57,9 @@ namespace Parlot.Fluent
                             context.ThrowParseException(Expression.Constant(_message))
                         )
                     ).Append(
-                        Expression.Assign(value, parserCompileResult.Value)
+                        context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value, parserCompileResult.Value)
                     )
             );
             
@@ -114,7 +116,9 @@ namespace Parlot.Fluent
                         Expression.IfThen(
                             parserCompileResult.Success,
                             Expression.Block(
-                                Expression.Assign(value, parserCompileResult.Value),
+                                context.DiscardResult
+                                    ? Expression.Empty()
+                                    : Expression.Assign(value, parserCompileResult.Value),
                                 context.ThrowParseException(Expression.Constant(_message))
                             )
                         )

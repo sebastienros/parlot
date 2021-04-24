@@ -73,7 +73,7 @@ namespace Parlot.Fluent
                         Expression.Assign(resultExpression, Expression.New(
                             typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }),
                             parserCompileResult.Success,
-                            parserCompileResult.Value)),
+                            context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
                         returnLabelExpression),
                     true,
                     context.ParseContext)
