@@ -73,7 +73,7 @@ namespace Parlot.Fluent
             //     context.Scanner.Cursor.ResetPosition(start);
             // }
 
-            var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
+            var startOffset = context.Offset(start);
 
             result.Body.Add(
                 Expression.Block(

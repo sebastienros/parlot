@@ -544,5 +544,12 @@ namespace Parlot.Tests
             Assert.True(AnyCharBefore(Literals.Char('a')).And(Literals.Char('a')).TryParse("hellao", out _));
             Assert.False(AnyCharBefore(Literals.Char('a'), consumeDelimiter: true).And(Literals.Char('a')).TryParse("hellao", out _));
         }
+
+        [Fact]
+        public void TextBeforeShouldBeValidAtEof()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hella", out var result1));
+            Assert.Equal("hell", result1);
+        }
     }
 }

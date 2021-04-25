@@ -31,6 +31,7 @@ namespace Parlot.Compilation
         public static MemberExpression Position(this CompilationContext context) => Expression.Property(context.Cursor(), "Position");
         public static Expression ResetPosition(this CompilationContext context, Expression position) => Expression.Call(context.Cursor(), typeof(Cursor).GetMethod("ResetPosition"), position);
         public static MemberExpression Offset(this CompilationContext context) => Expression.Property(context.Cursor(), "Offset");
+        public static MemberExpression Offset(this CompilationContext context, Expression textPosition) => Expression.Field(textPosition, nameof(TextPosition.Offset));
         public static MemberExpression Current(this CompilationContext context) => Expression.Property(context.Cursor(), "Current");
         public static MemberExpression Eof(this CompilationContext context) => Expression.Property(context.Cursor(), "Eof");
         public static MemberExpression Buffer(this CompilationContext context) => Expression.Field(context.Scanner(), "Buffer");

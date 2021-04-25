@@ -470,5 +470,18 @@ namespace Parlot.Tests
             Assert.True(parser.TryParse("s:'123'", out var resultS));
             Assert.Equal("123", ((TextSpan)resultS).ToString());
         }
+
+        [Fact]
+        public void ShouldCompileTextBefore()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).Compile().TryParse("hellao", out var result1));
+            Assert.Equal("hell", result1);
+
+            Assert.True(AnyCharBefore(Literals.Char('a')).And(Literals.Char('a')).Compile().TryParse("hellao", out _));
+            Assert.False(AnyCharBefore(Literals.Char('a'), consumeDelimiter: true).And(Literals.Char('a')).TryParse("hellao", out _));
+
+            Assert.True(AnyCharBefore(Literals.Char('a')).Compile().TryParse("hella", out var result2));
+            Assert.Equal("hell", result2);
+        }
     }
 }
