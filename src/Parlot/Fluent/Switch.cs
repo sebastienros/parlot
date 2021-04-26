@@ -85,15 +85,20 @@ namespace Parlot.Fluent
                             Expression.Block(
                                 new[] { nextParser, parseResult }, 
                                 Expression.Assign(nextParser, Expression.Invoke(Expression.Constant(_action), new[] { context.ParseContext, previousParserCompileResult.Value })),
-                                Expression.Assign(success,
-                                    Expression.Call(
-                                        nextParser,
-                                        typeof(Parser<U>).GetMethod("Parse", new[] { typeof(ParseContext), typeof(ParseResult<U>).MakeByRefType() }),
-                                        context.ParseContext,
-                                        parseResult)),
-                                context.DiscardResult
-                                    ? Expression.Empty()
-                                    : Expression.IfThen(success, Expression.Assign(value, Expression.Field(parseResult, "Value")))
+                                Expression.IfThen(
+                                    Expression.NotEqual(Expression.Constant(null), nextParser),
+                                    Expression.Block(
+                                        Expression.Assign(success,
+                                            Expression.Call(
+                                                nextParser,
+                                                typeof(Parser<U>).GetMethod("Parse", new[] { typeof(ParseContext), typeof(ParseResult<U>).MakeByRefType() }),
+                                                context.ParseContext,
+                                                parseResult)),
+                                        context.DiscardResult
+                                            ? Expression.Empty()
+                                            : Expression.IfThen(success, Expression.Assign(value, Expression.Field(parseResult, "Value")))
+                                        )
+                                    )
                                 )
                             )
                         )

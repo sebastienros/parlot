@@ -13,6 +13,11 @@ namespace Parlot.Fluent
         /// <returns>A compiled parser.</returns>
         public Parser<T> Compile()
         {
+            if (this is ICompiledParser)
+            {
+                return this;
+            }
+
             var compilationContext = new CompilationContext();
 
             var compilationResult = Build(compilationContext);
@@ -50,6 +55,7 @@ namespace Parlot.Fluent
 
             var parser = result.Compile();
 
+            // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
             return new CompiledParser<T>(parser);
         }
 

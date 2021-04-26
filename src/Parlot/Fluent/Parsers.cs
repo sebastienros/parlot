@@ -62,16 +62,6 @@ namespace Parlot.Fluent
         public static Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
 
         /// <summary>
-        /// Ensure the specified parser follows the previous one. The previous parser's result is then ignored.
-        /// </summary>
-        public static Parser<U> SkipAnd<T, U>(this Parser<T> parser, Parser<U> and) => new SkipAnd<T, U>(parser, and);
-
-        /// <summary>
-        /// Ensure the specified parser follows the previous one. The next parser's result is then ignored.
-        /// </summary>
-        public static Parser<T> AndSkip<T, U>(this Parser<T> parser, Parser<U> and) => new AndSkip<T, U>(parser, and);
-
-        /// <summary>
         /// Builds a parser that captures the output of another parser.
         /// </summary>
         public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);

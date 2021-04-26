@@ -27,7 +27,7 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = context.DeclareSuccessVariable(result, false);
+            var success = context.DeclareSuccessVariable(result, true);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
 
             // T value;
@@ -37,7 +37,6 @@ namespace Parlot.Fluent
             // if (parser1.Success)
             // {
             //    value parse1.Value;
-            //    success = true;
             // }
             // 
 
@@ -47,12 +46,11 @@ namespace Parlot.Fluent
                 parserCompileResult.Variables,
                     Expression.Block(
                         Expression.Block(parserCompileResult.Body),
-                        Expression.IfThenElse(
+                        Expression.IfThen(
                             parserCompileResult.Success,
                             context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, parserCompileResult.Value),
-                            Expression.Assign(success, Expression.Constant(true))
+                            : Expression.Assign(value, parserCompileResult.Value)
                             )
                         )
                     );

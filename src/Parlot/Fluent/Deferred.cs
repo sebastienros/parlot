@@ -7,6 +7,7 @@ namespace Parlot.Fluent
 {
     public sealed class Deferred<T> : Parser<T>, ICompilable
     {
+
         public Parser<T> Parser { get; set; }
 
         public Deferred()
@@ -33,16 +34,15 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
+            if (Parser == null)
+            {
+                throw new InvalidOperationException("Can't compile a Deferred Parser until it is fully initialized");
+            }
+
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
-
-            var contextScope = Expression.Constant(_closure);
-            var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
-            var funcsAccess = Expression.MakeMemberAccess(contextScope, getFuncs);
-
-            var funcReturnType = typeof(Func<ParseContext, ValueTuple<bool, T>>);
 
             // Create the body of this parser only once
             if (!_initialized)
@@ -91,6 +91,11 @@ namespace Parlot.Fluent
             result.Variables.Add(deferred);
 
             // def = ((Func<ParserContext, ValueTuple<bool, T>>)_closure.Func).Invoke(parseContext);
+
+            var contextScope = Expression.Constant(_closure);
+            var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
+            var funcReturnType = typeof(Func<ParseContext, ValueTuple<bool, T>>);
+            var funcsAccess = Expression.MakeMemberAccess(contextScope, getFuncs);
 
             var castFunc = Expression.Convert(funcsAccess, funcReturnType);
             result.Body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));

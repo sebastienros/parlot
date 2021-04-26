@@ -551,5 +551,22 @@ namespace Parlot.Tests
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hella", out var result1));
             Assert.Equal("hell", result1);
         }
+
+
+        [Fact]
+        public void SeparatedShouldSplit()
+        {
+            var parser = Separated(Terms.Char(','), Terms.Decimal());
+
+            Assert.Null(parser.Parse(""));
+            Assert.Single(parser.Parse("1"));
+            Assert.Null(parser.Parse(",1,"));
+
+            var result = parser.Parse("1, 2,3");
+
+            Assert.Equal(1, result[0]);
+            Assert.Equal(2, result[1]);
+            Assert.Equal(3, result[2]);
+        }
     }
 }

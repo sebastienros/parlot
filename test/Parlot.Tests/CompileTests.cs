@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System;
 using System.Collections.Generic;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -180,6 +181,14 @@ namespace Parlot.Tests
             Assert.Equal(new[] { "hello", "world", "hello" }, result);
         }
 
+        [Fact]
+        public void ShouldCompileZeroOrOne()
+        {
+            var parser = ZeroOrOne(Terms.Text("hello")).Compile();
+
+            Assert.Equal("hello", parser.Parse(" hello world hello"));
+            Assert.Null(parser.Parse(" foo"));
+        }
 
         [Fact]
         public void ShouldCompileBetweens()
@@ -192,9 +201,13 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ShouldCompileSeparated()
+        public void ShouldCompileSeparatedChar()
         {
             var parser = Separated(Terms.Char(','), Terms.Decimal()).Compile();
+
+            Assert.Null(parser.Parse(""));
+            Assert.Single(parser.Parse("1"));
+            Assert.Null(parser.Parse(",1,"));
 
             var result = parser.Parse("1, 2,3");
 
@@ -482,6 +495,15 @@ namespace Parlot.Tests
 
             Assert.True(AnyCharBefore(Literals.Char('a')).Compile().TryParse("hella", out var result2));
             Assert.Equal("hell", result2);
+        }
+
+        [Fact]
+        public void ShouldCompileAndSkipAnd()
+        {
+            var parser = Terms.Char('a').And(Terms.Char('b')).AndSkip(Terms.Char('c')).And(Terms.Char('d')).Compile();
+
+            Assert.True(parser.TryParse("abcd", out var result1));
+            Assert.Equal("abd", result1.Item1.Item1.ToString() + result1.Item1.Item2.ToString() + result1.Item2);
         }
     }
 }

@@ -87,7 +87,7 @@ namespace Parlot.Fluent
                             Expression.IfThenElse(
                                 parser2CompileResult.Success,
                                 Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                Expression.Call(Expression.Field(Expression.Field(context.ParseContext, "Scanner"), "Cursor"), typeof(Cursor).GetMethod("ResetPosition"), start)
+                                context.ResetPosition(start)
                                 )
                             )
                         )

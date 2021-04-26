@@ -86,10 +86,7 @@ namespace Parlot.Fluent
 
             // var start = context.Scanner.Cursor.Offset;
 
-            var start = Expression.Variable(typeof(int), $"start{context.NextNumber}");
-            result.Variables.Add(start);
-
-            result.Body.Add(Expression.Assign(start, context.Offset()));
+            var start = context.DeclareOffsetVariable(result);
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {

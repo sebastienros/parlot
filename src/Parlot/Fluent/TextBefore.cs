@@ -52,24 +52,21 @@
 
                 var delimiterFound = _delimiter.Parse(context, ref parsed);
 
-                var current = context.Scanner.Cursor.Position;
-
                 if (delimiterFound)
                 {
+                    var length = previous - start;
+
                     if (!_consumeDelimiter)
                     {
-                        current = previous;
-                        context.Scanner.Cursor.ResetPosition(current);
+                        context.Scanner.Cursor.ResetPosition(previous);
                     }
-
-                    var length = current - start;
 
                     if (length == 0 && !_canBeEmpty)
                     {
                         return false;
                     }
 
-                    result.Set(start.Offset, current.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
                     return true;
                 }
 
@@ -115,17 +112,14 @@
             //  
             //      delimiter instructions
             //  
-            //      var current = context.Scanner.Cursor.Position;
-            //  
             //      if (delimiter.success)
             //      {
+            //          var length = previous - start;
+            //  
             //          [if !_consumeDelimiter]
             //          {
-            //              current = previous;
-            //              context.Scanner.Cursor.ResetPosition(current);
+            //              context.Scanner.Cursor.ResetPosition(previous);
             //          }
-            //  
-            //          var length = current - start;
             //  
             //          [if !_canBeEmpty]
             //          if (length == 0)
@@ -145,12 +139,11 @@
 
             var breakLabel = Expression.Label($"break_{context.NextNumber}");
             var previous = Expression.Parameter(typeof(TextPosition), $"previous_{context.NextNumber}");
-            var current = Expression.Parameter(typeof(TextPosition), $"current_{context.NextNumber}");
             var length = Expression.Parameter(typeof(int), $"length_{context.NextNumber}");
             var start = context.DeclarePositionVariable(result);
 
             var block = Expression.Block(
-                delimiterCompiledResult.Variables.Append(previous).Append(current).Append(length),
+                delimiterCompiledResult.Variables.Append(previous).Append(length),
                 Expression.Loop(
                     Expression.Block(
                         Expression.Assign(previous, context.Position()),
@@ -173,17 +166,14 @@
                             ),
 
                         Expression.Block(delimiterCompiledResult.Body),
-                        Expression.Assign(current, context.Position()),
+                        
                         Expression.IfThen(
                             delimiterCompiledResult.Success,
                             Expression.Block(
+                                Expression.Assign(length, Expression.Subtract(context.Offset(previous), context.Offset(start))),
                                 _consumeDelimiter
                                 ? Expression.Empty()
-                                : Expression.Block(
-                                    Expression.Assign(current, previous),
-                                    context.ResetPosition(current)
-                                    ),
-                                Expression.Assign(length, Expression.Subtract(context.Offset(current), context.Offset(start))),
+                                : context.ResetPosition(previous),
                                 _canBeEmpty
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
@@ -195,7 +185,7 @@
                         context.Advance()
                         ),
                     breakLabel)
-                );;
+                );
 
             result.Body.Add(block);
 

@@ -4,13 +4,21 @@ using System;
 namespace Parlot.Compilation
 {
     /// <summary>
+    /// Marker interface to detect a Parser has already been compiled.
+    /// </summary>
+    public interface ICompiledParser
+    {
+
+    }
+
+    /// <summary>
     /// An instance of this class encapsulates the result of a compiled parser
     /// in order to expose is as as standard parser contract.
     /// </summary>
     /// <remarks>
     /// This class is used in <see cref="Parser{T}.Compile"/>.
     /// </remarks>
-    public class CompiledParser<T> : Parser<T>
+    public class CompiledParser<T> : Parser<T>, ICompiledParser
     {
         private readonly Func<ParseContext, ValueTuple<bool, T>> _parse;
 

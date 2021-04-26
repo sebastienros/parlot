@@ -8,6 +8,7 @@ namespace Parlot.Fluent
     public sealed class ZeroOrMany<T> : Parser<List<T>>, ICompilable
     {
         private readonly Parser<T> _parser;
+
         public ZeroOrMany(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -48,10 +49,11 @@ namespace Parlot.Fluent
         {
             var result = new CompilationResult();
 
-            var success = context.DeclareSuccessVariable(result, false);
+            var _ = context.DeclareSuccessVariable(result, true);
             var value = context.DeclareValueVariable(result, Expression.New(typeof(List<T>)));
 
             // value = new List<T>();
+            // success = true;
             //
             // while (true)
             // {
@@ -72,17 +74,15 @@ namespace Parlot.Fluent
             //      break;
             //   }
             // }
-            //
-            // success = true;
 
             var parserCompileResult = _parser.Build(context);
 
             var breakLabel = Expression.Label("break");
-            
-            var block = Expression.Block(
-                parserCompileResult.Variables,
+
+            var block =
                 Expression.Loop(
                     Expression.Block(
+                        parserCompileResult.Variables,
                         Expression.Block(parserCompileResult.Body),
                         Expression.IfThenElse(
                             parserCompileResult.Success,
@@ -95,9 +95,8 @@ namespace Parlot.Fluent
                             context.Eof(),
                             Expression.Break(breakLabel)
                             )),
-                    breakLabel),
-                Expression.Assign(success, Expression.Constant(true))
-            );
+                    breakLabel
+                    );
 
             result.Body.Add(block);
 
