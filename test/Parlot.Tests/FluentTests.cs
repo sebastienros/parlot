@@ -143,6 +143,16 @@ namespace Parlot.Tests
             Assert.True(code.TryParse("hello world", out _));
         }
 
+
+        [Fact]
+        public void ShouldSkipSequences()
+        {
+            var parser = Terms.Char('a').And(Terms.Char('b')).AndSkip(Terms.Char('c')).And(Terms.Char('d'));
+
+            Assert.True(parser.TryParse("abcd", out var result1));
+            Assert.Equal("abd", result1.Item1.ToString() + result1.Item2 + result1.Item3);
+        }
+
         [Fact]
         public void ParseContextShouldUseNewLines()
         {
