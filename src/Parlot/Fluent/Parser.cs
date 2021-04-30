@@ -7,7 +7,7 @@ namespace Parlot.Fluent
         bool Parse(TParseContext context, ref ParseResult<T> result);
     }
 
-    public abstract class Parser<T, TParseContext> : IParser<T, TParseContext>
+    public abstract partial class Parser<T, TParseContext> : IParser<T, TParseContext>
     where TParseContext : ParseContext
     {
         public abstract bool Parse(TParseContext context, ref ParseResult<T> result);
@@ -33,11 +33,6 @@ namespace Parlot.Fluent
         public Parser<T, TParseContext> Then(Action<TParseContext, T> action) => new Then<T, TParseContext>(this, action);
 
         /// <summary>
-        /// Builds a parser that converts the previous result when it fails.
-        /// </summary>
-        public Parser<U, TParseContext> Else<U>(Func<T, U> conversion) => new Else<T, U, TParseContext>(this, conversion);
-
-        /// <summary>
         /// Builds a parser that emits an error when the previous parser failed.
         /// </summary>
         public Parser<T, TParseContext> ElseError(string message) => new ElseError<T, TParseContext>(this, message);
@@ -61,73 +56,20 @@ namespace Parlot.Fluent
         /// Builds a parser what returns another one based on the previous result.
         /// </summary>
         public Parser<U, TParseContext> Switch<U>(Func<ParseContext, T, Parser<U, TParseContext>> action) => new Switch<T, U, TParseContext>(this, action);
-    }
+    
+        /// <summary>
+        /// Builds a parser that ensure the cursor is tat the end of the input.
+        /// </summary>
+        public Parser<T, TParseContext> Eof() => new Eof<T, TParseContext>(this);
 
-    public static class ParserExtensions
-    {
-        public static T Parse<T, TParseContext>(this IParser<T, TParseContext> parser, string text, TParseContext context)
-        where TParseContext : ParseContext
-        {
-            var localResult = new ParseResult<T>();
+        /// <summary>
+        /// Builds a parser that discards the previous result and replaces it by the specified type or value.
+        /// </summary>
+        public Parser<U, TParseContext> Discard<U>() => new Discard<T, U, TParseContext>(this);
 
-            var success = parser.Parse(context, ref localResult);
+        /// <summary>
+        /// Builds a parser that discards the previous result and replaces it by the specified type or value.
+        /// </summary>
+        public Parser<U, TParseContext> Discard<U>(U value) => new Discard<T, U, TParseContext>(this, value);}
 
-            if (success)
-            {
-                return localResult.Value;
-            }
-
-            return default;
-        }
-        public static T Parse<T>(this IParser<T, ParseContext> parser, string text)
-        {
-            return parser.Parse(text, new ParseContext(new Scanner(text)));
-        }
-
-        public static bool TryParse<TResult>(this IParser<TResult, ParseContext> parser, string text, out TResult value)
-        {
-            return parser.TryParse(text, out value, out _);
-        }
-
-        public static bool TryParse<TResult>(this IParser<TResult, ParseContext> parser, string text, out TResult value, out ParseError error)
-        {
-            return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
-        }
-
-        public static bool TryParse<TResult, TParseContext>(this IParser<TResult, TParseContext> parser, TParseContext context, out TResult value)
-        where TParseContext : ParseContext
-        {
-            return parser.TryParse(context, out value, out _);
-        }
-
-        public static bool TryParse<TResult, TParseContext>(this IParser<TResult, TParseContext> parser, TParseContext context, out TResult value, out ParseError error)
-        where TParseContext : ParseContext
-        {
-            error = null;
-
-            try
-            {
-                var localResult = new ParseResult<TResult>();
-
-                var success = parser.Parse(context, ref localResult);
-
-                if (success)
-                {
-                    value = localResult.Value;
-                    return true;
-                }
-            }
-            catch (ParseException e)
-            {
-                error = new ParseError
-                {
-                    Message = e.Message,
-                    Position = e.Position
-                };
-            }
-
-            value = default;
-            return false;
-        }
-    }
 }

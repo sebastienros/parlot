@@ -1,6 +1,10 @@
 ﻿namespace Parlot.Fluent
 {
-    public sealed class TextBefore<T, TParseContext> : Parser<TextSpan, TParseContext>
+    using Compilation;
+    using System.Linq;
+    using System.Linq.Expressions;
+
+    public sealed class TextBefore<T, TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
         private readonly IParser<T, TParseContext> _delimiter;
@@ -18,55 +22,15 @@
 
         public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
-            if (context.Scanner.Cursor.Eof)
-            {
-                return false;
-            }
-
             context.EnterParser(this);
 
             var start = context.Scanner.Cursor.Position;
 
             var parsed = new ParseResult<T>();
 
-            // Is there any text before the expected token?
-            if (_delimiter.Parse(context, ref parsed))
-            {
-                if (!_consumeDelimiter)
-                {
-                    context.Scanner.Cursor.ResetPosition(start);
-                }
-
-                return _canBeEmpty;
-            }
-
             while (true)
             {
                 var previous = context.Scanner.Cursor.Position;
-
-                var delimiterFound = _delimiter.Parse(context, ref parsed);
-
-                if (delimiterFound || (!_failOnEof && context.Scanner.Cursor.Eof))
-                {
-                    var end = (!delimiterFound && context.Scanner.Cursor.Eof) ? context.Scanner.Cursor.Position : previous;
-
-                    var length = end - start;
-
-                    if (length == 0)
-                    {
-                        return _canBeEmpty;
-                    }
-
-                    if (!_consumeDelimiter)
-                    {
-                        context.Scanner.Cursor.ResetPosition(end);
-                    }
-
-                    result.Set(start.Offset, end.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
-                    return true;
-                }
-
-                context.Scanner.Cursor.Advance();
 
                 if (context.Scanner.Cursor.Eof)
                 {
@@ -75,8 +39,158 @@
                         context.Scanner.Cursor.ResetPosition(start);
                         return false;
                     }
+
+                    var length = previous - start;
+
+                    if (length == 0 && !_canBeEmpty)
+                    {
+                        return false;
+                    }
+
+                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    return true;
                 }
+
+                var delimiterFound = _delimiter.Parse(context, ref parsed);
+
+                if (delimiterFound)
+                {
+                    var length = previous - start;
+
+                    if (!_consumeDelimiter)
+                    {
+                        context.Scanner.Cursor.ResetPosition(previous);
+                    }
+
+                    if (length == 0 && !_canBeEmpty)
+                    {
+                        return false;
+                    }
+
+                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    return true;
+                }
+
+                context.Scanner.Cursor.Advance();
             }
+        }
+
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        {
+            var result = new CompilationResult();
+
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+
+            //  var start = context.Scanner.Cursor.Position;
+            //  
+            //  while (true)
+            //  {
+            //      var previous = context.Scanner.Cursor.Position;
+            //  
+            //      if (context.Scanner.Cursor.Eof)
+            //      {
+            //          [if _failOnEof]
+            //          {
+            //              context.Scanner.Cursor.ResetPosition(start);
+            //              return false;
+            //          }
+            //          [else]
+            //          {
+            //              var length = previous - start;
+            //  
+            //              [if !_canBeEmpty]
+            //              if (length == 0)
+            //              {
+            //                  break;
+            //              }
+            //  
+            //              success = true;
+            //              value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //              break;
+            //          }
+            //      }
+            //  
+            //      delimiter instructions
+            //  
+            //      if (delimiter.success)
+            //      {
+            //          var length = previous - start;
+            //  
+            //          [if !_consumeDelimiter]
+            //          {
+            //              context.Scanner.Cursor.ResetPosition(previous);
+            //          }
+            //  
+            //          [if !_canBeEmpty]
+            //          if (length == 0)
+            //          {
+            //              break;
+            //          }
+            //  
+            //          success = true;
+            //          value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //          break;
+            //      }
+            //  
+            //      context.Scanner.Cursor.Advance();
+            //  }
+
+            var delimiterCompiledResult = _delimiter.Build(context);
+
+            var breakLabel = Expression.Label($"break_{context.NextNumber}");
+            var previous = Expression.Parameter(typeof(TextPosition), $"previous_{context.NextNumber}");
+            var length = Expression.Parameter(typeof(int), $"length_{context.NextNumber}");
+            var start = context.DeclarePositionVariable(result);
+
+            var block = Expression.Block(
+                delimiterCompiledResult.Variables.Append(previous).Append(length),
+                Expression.Loop(
+                    Expression.Block(
+                        Expression.Assign(previous, context.Position()),
+                        Expression.IfThen(
+                            context.Eof(),
+                            _failOnEof 
+                            ? Expression.Block(
+                                context.ResetPosition(start),
+                                Expression.Break(breakLabel)
+                                )
+                            : Expression.Block(
+                                Expression.Assign(length, Expression.Subtract(context.Offset(previous), context.Offset(start))),
+                                _canBeEmpty
+                                ? Expression.Empty()
+                                : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
+                                Expression.Assign(success, Expression.Constant(true)),
+                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Break(breakLabel)
+                                )
+                            ),
+
+                        Expression.Block(delimiterCompiledResult.Body),
+                        
+                        Expression.IfThen(
+                            delimiterCompiledResult.Success,
+                            Expression.Block(
+                                Expression.Assign(length, Expression.Subtract(context.Offset(previous), context.Offset(start))),
+                                _consumeDelimiter
+                                ? Expression.Empty()
+                                : context.ResetPosition(previous),
+                                _canBeEmpty
+                                ? Expression.Empty()
+                                : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
+                                Expression.Assign(success, Expression.Constant(true)),
+                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Break(breakLabel)
+                                )
+                            ),
+                        context.Advance()
+                        ),
+                    breakLabel)
+                );
+
+            result.Body.Add(block);
+
+            return result;
         }
     }
 }

@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Parlot.Compilation;
+using System;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
@@ -8,7 +11,7 @@ namespace Parlot.Fluent
     /// </summary>
     /// <typeparam name="T"></typeparam>
     /// <typeparam name="TParseContext"></typeparam>
-    public sealed class OneOf<T, TParseContext> : Parser<T, TParseContext>
+    public sealed class OneOf<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
         private readonly IParser<T, TParseContext>[] _parsers;
@@ -24,69 +27,70 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            var start = context.Scanner.Cursor.Position;
-
             foreach (var parser in _parsers)
             {
                 if (parser.Parse(context, ref result))
                 {
                     return true;
                 }
-
-                // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
-                context.Scanner.Cursor.ResetPosition(start);
             }
 
             return false;
         }
-    }
 
-    public sealed class OneOf<A, B, T, TParseContext> : Parser<T, TParseContext>
-        where A : T
-        where B : T
-        where TParseContext : ParseContext
-    {
-        private readonly IParser<A, TParseContext> _parserA;
-        private readonly IParser<B, TParseContext> _parserB;
-
-        public OneOf(IParser<A, TParseContext> parserA, IParser<B, TParseContext> parserB)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
-            _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
-            _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
-        }
+            var result = new CompilationResult();
 
-        public override bool Parse(TParseContext context, ref ParseResult<T> result)
-        {
-            context.EnterParser(this);
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+
+            // parse1 instructions
+            // 
+            // if (parser1.Success)
+            // {
+            //    success = true;
+            //    value = parse1.Value;
+            // }
+            // else
+            // {
+            //   parse2 instructions
+            //   
+            //   if (parser2.Success)
+            //   {
+            //      success = true;
+            //      value = parse2.Value
+            //   }
+            //   
+            //   ...
+            // }
 
 
-            var resultA = new ParseResult<A>();
+            Expression block = Expression.Empty();
 
-            var start = context.Scanner.Cursor.Position;
-
-            if (_parserA.Parse(context, ref resultA))
+            foreach (var parser in _parsers.Reverse())
             {
-                result.Set(resultA.Start, resultA.End, resultA.Value);
+                var parserCompileResult = parser.Build(context);
 
-                return true;
+                block = Expression.Block(
+                    parserCompileResult.Variables,
+                    Expression.Block(parserCompileResult.Body),
+                    Expression.IfThenElse(
+                        parserCompileResult.Success,
+                        Expression.Block(
+                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                            context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value, parserCompileResult.Value)
+                            ),
+                        block
+                        )
+                    );
             }
 
-            // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
-            context.Scanner.Cursor.ResetPosition(start);
+            result.Body.Add(block);
 
-            var resultB = new ParseResult<B>();
-
-            if (_parserB.Parse(context, ref resultB))
-            {
-                result.Set(resultA.Start, resultA.End, resultA.Value);
-
-                return true;
-            }
-
-            // If the choice as a subset of its parsers that succeeded, it might have advanced the cursor
-            context.Scanner.Cursor.ResetPosition(start);
-
-            return false;
+            return result;
         }
     }
 }

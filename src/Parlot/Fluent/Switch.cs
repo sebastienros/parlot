@@ -1,11 +1,15 @@
-﻿using System;
+﻿using Parlot.Compilation;
+using System;
+using System.Linq;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
+
     /// <summary>
     /// Routes the parsing based on a custom delegate.
     /// </summary>
-    public sealed class Switch<T, U, TParseContext> : Parser<U, TParseContext>
+    public sealed class Switch<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
         private readonly IParser<T, TParseContext> _previousParser;
@@ -41,6 +45,68 @@ namespace Parlot.Fluent
             }
 
             return false;
+        }
+
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        {
+            var result = new CompilationResult();
+
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(U)));
+
+            // previousParser instructions
+            // 
+            // if (previousParser.Success)
+            // {
+            //    var nextParser = _action(context, previousParser.Value);
+            //
+            //    if (nextParser != null)
+            //    {
+            //       var parsed = new ParseResult<U>();
+            //
+            //       if (nextParser.Parse(context, ref parsed))
+            //       {
+            //           value = parsed.Value;
+            //           success = true;
+            //       }
+            //    }
+            // }
+
+            var previousParserCompileResult = _previousParser.Build(context, requireResult: true);
+            var nextParser = Expression.Parameter(typeof(IParser<U, TParseContext>));
+            var parseResult = Expression.Variable(typeof(ParseResult<U>), $"value{context.NextNumber}");
+
+            var block = Expression.Block(
+                    previousParserCompileResult.Variables,
+                    previousParserCompileResult.Body
+                    .Append(
+                        Expression.IfThen(
+                            previousParserCompileResult.Success,
+                            Expression.Block(
+                                new[] { nextParser, parseResult }, 
+                                Expression.Assign(nextParser, Expression.Invoke(Expression.Constant(_action), new[] { context.ParseContext, previousParserCompileResult.Value })),
+                                Expression.IfThen(
+                                    Expression.NotEqual(Expression.Constant(null), nextParser),
+                                    Expression.Block(
+                                        Expression.Assign(success,
+                                            Expression.Call(
+                                                nextParser,
+                                                typeof(IParser<U, TParseContext>).GetMethod("Parse", new[] { typeof(TParseContext), typeof(ParseResult<U>).MakeByRefType() }),
+                                                context.ParseContext,
+                                                parseResult)),
+                                        context.DiscardResult
+                                            ? Expression.Empty()
+                                            : Expression.IfThen(success, Expression.Assign(value, Expression.Field(parseResult, "Value")))
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    );
+
+            result.Body.Add(block);
+
+            return result;
         }
     }
 }

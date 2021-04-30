@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Parlot.Compilation;
+using System;
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Between<A, T, B, TParseContext> : Parser<T, TParseContext>
+    public sealed class Between<A, T, B, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
         private readonly IParser<T, TParseContext> _parser;
@@ -92,6 +94,68 @@ namespace Parlot.Fluent
             }
 
             return true;
+        }
+
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        {
+            var result = new CompilationResult();
+
+            var success = context.DeclareSuccessVariable(result, false);
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+
+            // before instructions
+            // 
+            // if (before.Success)
+            // {
+            //    parser instructions
+            //    
+            //    if (parser.Success)
+            //    {
+            //       after instructions
+            //    
+            //       if (after.Success)
+            //       {
+            //          success = true;
+            //          value = parser.Value;
+            //       }  
+            //    }
+            // }
+
+            var beforeCompileResult = _before.Build(context);
+            var parserCompileResult = _parser.Build(context);
+            var afterCompileResult = _after.Build(context);
+
+            var block = Expression.Block(
+                    beforeCompileResult.Variables,
+                    Expression.Block(beforeCompileResult.Body),
+                    Expression.IfThen(
+                        beforeCompileResult.Success,
+                        Expression.Block(
+                            parserCompileResult.Variables,
+                            Expression.Block(parserCompileResult.Body),
+                            Expression.IfThen(
+                                parserCompileResult.Success,
+                                Expression.Block(
+                                    afterCompileResult.Variables,
+                                    Expression.Block(afterCompileResult.Body),
+                                    Expression.IfThen(
+                                        afterCompileResult.Success,
+                                        Expression.Block(
+                                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                            context.DiscardResult
+                                            ? Expression.Empty()
+                                            : Expression.Assign(value, parserCompileResult.Value)
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    );
+
+            result.Body.Add(block);
+
+            return result;
         }
     }
 }

@@ -72,6 +72,21 @@ namespace Parlot.Fluent
         /// </summary>
         public static Parser<TextSpan, TParseContext> Capture<T>(IParser<T, TParseContext> parser) => new Capture<T, TParseContext>(parser);
 
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<T, TParseContext> Empty<T>() => new Empty<T, TParseContext>();
+
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<object, TParseContext> Empty() => new Empty<object, TParseContext>();
+
+        /// <summary>
+        /// Builds a parser that always succeeds.
+        /// </summary>
+        public static Parser<T, TParseContext> Empty<T>(T value) => new Empty<T, TParseContext>(value);
+
     }
 
     public static partial class Parsers
@@ -80,16 +95,6 @@ namespace Parlot.Fluent
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
         public static Parser<T, TParseContext> Scope<T, TParseContext>(IParser<T, TParseContext> parser) where TParseContext : ParseContext<TParseContext> => new ScopedParser<T, TParseContext>(parser);
-
-        /// <summary>
-        /// Ensure the specified parser follows the previous one. The previous parser's result is then ignored.
-        /// </summary>
-        public static Parser<U, TParseContext> SkipAnd<T, U, TParseContext>(this IParser<T, TParseContext> parser, IParser<U, TParseContext> and) where TParseContext : ParseContext => new SkipAnd<T, U, TParseContext>(parser, and);
-
-        /// <summary>
-        /// Ensure the specified parser follows the previous one. The next parser's result is then ignored.
-        /// </summary>
-        public static Parser<T, TParseContext> AndSkip<T, U, TParseContext>(this IParser<T, TParseContext> parser, IParser<U, TParseContext> and) where TParseContext : ParseContext => new AndSkip<T, U, TParseContext>(parser, and);
     }
 
     public class LiteralBuilder<TParseContext>

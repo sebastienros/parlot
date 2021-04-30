@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System.Collections.Generic;
 using Xunit;
 using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
 
@@ -25,6 +26,40 @@ namespace Parlot.Tests
 
             Assert.True(evenIntegers.TryParse("1235", out var result1));
             Assert.Equal(1235, result1.Item2);
+        }
+
+        [Fact]
+        public void ZeroOrOneShouldFindOptionalParser()
+        {
+            var parser = ZeroOrOne(Literals.Integer());
+
+            Assert.True(parser.TryParse("123", out var result1));
+            Assert.Equal(123, result1);
+
+            Assert.True(parser.TryParse(" 123", out var result2));
+            Assert.Equal(0, result2);
+        }
+
+        [Fact]
+        public void IntegerShouldResetPositionWhenItFails()
+        {
+            var parser = OneOf(Terms.Integer(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+
+            // The + sign will advance the first parser and should reset the position for the second to read it successfully
+
+            Assert.True(parser.TryParse("+abc", out var result1));
+            Assert.Equal("b", result1);
+        }
+
+        [Fact]
+        public void DecimalShouldResetPositionWhenItFails()
+        {
+            var parser = OneOf(Terms.Decimal(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+
+            // The + sign will advance the first parser and should reset the position for the second to read it successfully
+
+            Assert.True(parser.TryParse("+abc", out var result1));
+            Assert.Equal("b", result1);
         }
 
         [Fact]
@@ -68,6 +103,44 @@ namespace Parlot.Tests
             Assert.False(code.TryParse("123", out _));
             Assert.False(code.TryParse("[[123", out _));
             Assert.False(code.TryParse("[[123]", out _));
+        }
+
+        [Fact]
+        public void TextShouldResetPosition()
+        {
+            var code = OneOf(Terms.Text("substract"), Terms.Text("substitute"));
+
+            Assert.False(code.TryParse("sublime", out _));
+            Assert.True(code.TryParse("substract", out _));
+            Assert.True(code.TryParse("substitute", out _));
+        }
+
+        [Fact]
+        public void AndSkipShouldResetPosition()
+        {
+            var code = 
+                OneOf(
+                    Terms.Text("hello").AndSkip(Terms.Text("world")),
+                    Terms.Text("hello").AndSkip(Terms.Text("universe"))
+                    );
+
+            Assert.False(code.TryParse("hello country", out _));
+            Assert.True(code.TryParse("hello universe", out _));
+            Assert.True(code.TryParse("hello world", out _));
+        }
+
+        [Fact]
+        public void SkipAndShouldResetPosition()
+        {
+            var code = 
+                OneOf(
+                    Terms.Text("hello").SkipAnd(Terms.Text("world")),
+                    Terms.Text("hello").AndSkip(Terms.Text("universe"))
+                );
+
+            Assert.False(code.TryParse("hello country", out _));
+            Assert.True(code.TryParse("hello universe", out _));
+            Assert.True(code.TryParse("hello world", out _));
         }
 
         [Fact]
@@ -215,6 +288,19 @@ namespace Parlot.Tests
             Assert.True(o3.TryParse("b", out _));
             Assert.True(o3.TryParse("c", out _));
             Assert.False(o3.TryParse("d", out _));
+        }
+
+        [Fact]
+        public void OrShouldReturnOneOfCommonType()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Decimal();
+
+            var o2 = a.Or<char, decimal, object, ParseContext>(b);
+
+            Assert.IsType<OneOf<char, decimal, object, ParseContext>>(o2);
+            Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
+            Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
         }
 
         [Fact]
@@ -390,9 +476,151 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldParseWhiteSpace()
+        {
+            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Parse("\n\r\v a"));
+            Assert.Equal("  ", Literals.WhiteSpace(false).Parse("  \n\r\v a"));
+        }
+
+        [Fact]
+        public void WhiteSpaceShouldFailOnEmpty()
+        {
+            Assert.True(Literals.WhiteSpace().TryParse(" ", out _));
+            Assert.False(Literals.WhiteSpace().TryParse("", out _));
+        }
+
+        [Fact]
         public void ShouldCapture()
         {
             Assert.Equal("../foo/bar", Capture(Literals.Text("..").AndSkip(OneOrMany(Literals.Char('/').AndSkip(Terms.Identifier())))).Parse("../foo/bar").ToString());
+        }
+
+        [Fact]
+        public void ShouldParseEmails()
+        {
+            Parser<char, ParseContext> Dot = Literals.Char('.');
+            Parser<char, ParseContext> Plus = Literals.Char('+');
+            Parser<char, ParseContext> Minus = Literals.Char('-');
+            Parser<char, ParseContext> At = Literals.Char('@');
+            Parser<TextSpan, ParseContext> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+            Parser<List<char>, ParseContext> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
+            Parser<List<char>, ParseContext> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
+            Parser<List<char>, ParseContext> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
+            Parser<TextSpan, ParseContext> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+
+            string _email = "sebastien.ros@gmail.com";
+
+            Assert.True(Email.TryParse(_email, out var result));
+            Assert.Equal(_email, result.ToString());
+        }
+
+        [Fact]
+        public void ShouldParseEof()
+        {
+            Assert.True(Empty<object>().Eof().TryParse("", out _));
+            Assert.False(Empty<object>().Eof().TryParse(" ", out _));
+            Assert.True(Terms.Decimal().Eof().TryParse("123", out var result) && result == 123);
+            Assert.False(Terms.Decimal().Eof().TryParse("123 ", out _));
+        }
+
+        [Fact]
+        public void EmptyShouldAlwaysSucceed()
+        {
+            Assert.True(Empty<object>().TryParse("123", out var result) && result == null);
+            Assert.True(Empty(1).TryParse("123", out var r2) && r2 == 1);
+        }
+
+        [Fact]
+        public void NotShouldNegateParser()
+        {
+            Assert.False(Not(Terms.Decimal()).TryParse("123", out _));
+            Assert.True(Not(Terms.Decimal()).TryParse("Text", out _));
+        }
+
+        [Fact]
+        public void DiscardShouldReplaceValue()
+        {
+            Assert.True(Terms.Decimal().Discard<bool>().TryParse("123", out var r1) && r1 == false);
+            Assert.True(Terms.Decimal().Discard<bool>(true).TryParse("123", out var r2) && r2 == true);
+            Assert.False(Terms.Decimal().Discard<bool>(true).TryParse("abc", out _));
+        }
+        
+        [Fact]
+        public void ErrorShouldThrowIfParserSucceeds()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
+            Assert.Equal("'a' was not expected", error.Message);
+        }
+        
+        [Fact]
+        public void ErrorShouldThrow()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
+            Assert.Equal("'a' was not expected", error.Message);
+        }
+        
+        [Fact]
+        public void ElseErrorShouldThrowIfParserFails()
+        {
+            Assert.False(Literals.Char('a').ElseError("'a' was expected").TryParse("b", out _, out var error));
+            Assert.Equal("'a' was expected", error.Message);
+        }
+        
+        [Fact]
+        public void ElseErrorShouldFlowResultIfParserSucceeds()
+        {
+            Assert.True(Literals.Char('a').ElseError("'a' was expected").TryParse("a", out var result));
+            Assert.Equal('a', result);
+        }
+        
+        [Fact]
+        public void TextBeforeShouldReturnAllCharBeforeDelimiter()
+        {
+            Assert.False(AnyCharBefore(Literals.Char('a')).TryParse("", out _));
+            Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: true).TryParse("", out var result1));
+            
+            Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hello", out var result2));
+            Assert.Equal("hello", result2);
+            Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: false).TryParse("hello", out _));
+            Assert.False(AnyCharBefore(Literals.Char('a'), failOnEof: true).TryParse("hello", out _));
+        }
+        
+        [Fact]
+        public void TextBeforeShouldStopAtDelimiter()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hellao", out var result1));
+            Assert.Equal("hell", result1);
+        }
+        
+        [Fact]
+        public void TextBeforeShouldNotConsumeDelimiter()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).And(Literals.Char('a')).TryParse("hellao", out _));
+            Assert.False(AnyCharBefore(Literals.Char('a'), consumeDelimiter: true).And(Literals.Char('a')).TryParse("hellao", out _));
+        }
+
+        [Fact]
+        public void TextBeforeShouldBeValidAtEof()
+        {
+            Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hella", out var result1));
+            Assert.Equal("hell", result1);
+        }
+
+
+        [Fact]
+        public void SeparatedShouldSplit()
+        {
+            var parser = Separated(Terms.Char(','), Terms.Decimal());
+
+            Assert.Null(parser.Parse(""));
+            Assert.Single(parser.Parse("1"));
+            Assert.Null(parser.Parse(",1,"));
+
+            var result = parser.Parse("1, 2,3");
+
+            Assert.Equal(1, result[0]);
+            Assert.Equal(2, result[1]);
+            Assert.Equal(3, result[2]);
         }
     }
 }
