@@ -459,7 +459,7 @@ Result:
 [1, 2]
 ```
 
-## Between
+### Between
 
 Matches a parser when between two other ones.
 
@@ -482,7 +482,7 @@ Result:
 0 // failure
 ```
 
-## Deferred
+### Deferred
 
 Creates a parser that can be references before it is actually defined. This is used when there is a cyclic dependency between parsers.
 
@@ -508,7 +508,7 @@ Result:
 1
 ```
 
-## Recursive
+### Recursive
 
 Creates a parser that can reference itself.
 
@@ -537,7 +537,7 @@ Result:
 1
 ```
 
-## Capture
+### Capture
 
 Ignores the individual result of a parser and returns the whole matched string instead.
 
@@ -562,39 +562,59 @@ Result:
 "age = 12"
 ```
 
-#### Other parsers
-
-### AnyCharBefore
-
-```c#
-Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
-```
-
-### Empty
-
-```c#
-Parser<T> Empty<T>()
-Parser<object> Empty()
-Parser<T> Empty<T>(T value)
-```
-
-### OneOf
-
-```c#
-Parser<T> OneOf<T>(params Parser<T>[] parsers)
-```
+## Flow parsers
 
 ### Then
+
+Convert the result of a parser. This is usually used to create custom data structures when a parser succeeds, or to convert it to another type.
 
 ```c#
 Parser<U> Then<U>(Func<T, U> conversion)
 Parser<U> Then<U>(Func<ParseContext, T, U> conversion)
 ```
 
+Usage:
+
+```c#
+var parser = 
+    Terms.Integer()
+    .AndSkip(Terms.Char(','))
+    .And(Terms.Integer())
+    .Then(x => new Point(x.Item1, y.Item2));
+
+parser.Parse("1,2");
+```
+
+Result:
+
+```
+Point { x: 1, y: 2}
+```
+
 ### ElseError
+
+Fails parsing with a custom error message.
 
 ```c#
 Parser<T> ElseError(string message)
+```
+
+Usage:
+
+```c#
+var parser = 
+    Terms.Integer().ElseError("Expected an integer")
+    .AndSkip(Terms.Char(',').ElseError("Expected a comma"))
+    .And(Terms.Integer().ElseError("Expected an integer"))
+    .Then(x => new Point(x.Item1, y.Item2));
+
+parser.Parse("1,");
+```
+
+Result:
+
+```
+failure: "Expected an integer at (1:3)
 ```
 
 ### Error
@@ -604,7 +624,10 @@ Parser<T> Error(string message)
 Parser<U> Error<U>(string message)
 ```
 
+
 ### When
+
+Adds some additional logic for a parser to succeed.
 
 ```c#
 Parser<T> When(Func<T, bool> predicate)
@@ -612,11 +635,15 @@ Parser<T> When(Func<T, bool> predicate)
 
 ### Switch
 
+Returns the next parser based on some custom logic.
+
 ```c#
 Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action)
 ```
 
 ### Eof
+
+Expects the end of the string.
 
 ```c#
 Parser<T> Eof()
@@ -624,7 +651,37 @@ Parser<T> Eof()
 
 ### Discard
 
+Discards the previous result and replaces it with the default value or a custom one.
+
 ```c#
 Parser<U> Discard<U>()
 Parser<U> Discard<U>(U value)
+```
+
+#### Other parsers
+
+### AnyCharBefore
+
+Returns any characters until the specified parser is matched.
+
+```c#
+Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
+```
+
+### Empty
+
+Always returns successfully, with an optional return type or value.
+
+```c#
+Parser<T> Empty<T>()
+Parser<object> Empty()
+Parser<T> Empty<T>(T value)
+```
+
+### OneOf
+
+Like [Or](#Or), with an unlimited list of parsers.
+
+```c#
+Parser<T> OneOf<T>(params Parser<T>[] parsers)
 ```
