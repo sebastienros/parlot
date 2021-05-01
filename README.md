@@ -105,8 +105,8 @@ static FluentParser()
 
 ## Documentation
 
-1- [Existing parsers and usage examples](docs/parsers.md)
-2- [Best practices for custom parsers](docs/writing.md)
+- [Existing parsers and usage examples](docs/parsers.md)
+- [Best practices for custom parsers](docs/writing.md)
 
 ## Compilation
 
