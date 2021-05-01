@@ -434,9 +434,9 @@ hello // failure
 null // success
 ```
 
-### Coordination parsers
+## Coordination parsers
 
-## Separated
+### Separated
 
 Matches all occurrences of a parser that are separated by another one.
 
@@ -658,7 +658,7 @@ Parser<U> Discard<U>()
 Parser<U> Discard<U>(U value)
 ```
 
-#### Other parsers
+## Other parsers
 
 ### AnyCharBefore
 
