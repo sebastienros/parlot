@@ -7,9 +7,9 @@ namespace Parlot.Fluent
     public sealed class Not<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public Not(IParser<T, TParseContext> parser)
+        public Not(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

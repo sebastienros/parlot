@@ -7,12 +7,12 @@
     public sealed class TextBefore<T, TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _delimiter;
+        private readonly Parser<T, TParseContext> _delimiter;
         private readonly bool _canBeEmpty;
         private readonly bool _failOnEof;
         private readonly bool _consumeDelimiter;
 
-        public TextBefore(IParser<T, TParseContext> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
+        public TextBefore(Parser<T, TParseContext> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
         {
             _delimiter = delimiter;
             _canBeEmpty = canBeEmpty;
@@ -150,7 +150,7 @@
                         Expression.Assign(previous, context.Position()),
                         Expression.IfThen(
                             context.Eof(),
-                            _failOnEof 
+                            _failOnEof
                             ? Expression.Block(
                                 context.ResetPosition(start),
                                 Expression.Break(breakLabel)
@@ -167,7 +167,7 @@
                             ),
 
                         Expression.Block(delimiterCompiledResult.Body),
-                        
+
                         Expression.IfThen(
                             delimiterCompiledResult.Success,
                             Expression.Block(

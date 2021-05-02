@@ -58,7 +58,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Called whenever a parser is invoked. Will be used to detect invalid states and infinite loops.
         /// </summary>
-        public void EnterParser<T, TParseContext>(IParser<T, TParseContext> parser)
+        public void EnterParser<T, TParseContext>(Parser<T, TParseContext> parser)
         where TParseContext : ParseContext
         {
             OnEnterParser?.Invoke(parser, this);

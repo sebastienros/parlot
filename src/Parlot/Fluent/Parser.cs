@@ -2,12 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public interface IParser<T, TParseContext>
-    {
-        bool Parse(TParseContext context, ref ParseResult<T> result);
-    }
-
-    public abstract partial class Parser<T, TParseContext> : IParser<T, TParseContext>
+    public abstract partial class Parser<T, TParseContext>
     where TParseContext : ParseContext
     {
         public abstract bool Parse(TParseContext context, ref ParseResult<T> result);
@@ -56,7 +51,7 @@ namespace Parlot.Fluent
         /// Builds a parser what returns another one based on the previous result.
         /// </summary>
         public Parser<U, TParseContext> Switch<U>(Func<ParseContext, T, Parser<U, TParseContext>> action) => new Switch<T, U, TParseContext>(this, action);
-    
+
         /// <summary>
         /// Builds a parser that ensure the cursor is tat the end of the input.
         /// </summary>
@@ -70,6 +65,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that discards the previous result and replaces it by the specified type or value.
         /// </summary>
-        public Parser<U, TParseContext> Discard<U>(U value) => new Discard<T, U, TParseContext>(this, value);}
+        public Parser<U, TParseContext> Discard<U>(U value) => new Discard<T, U, TParseContext>(this, value);
+    }
 
 }

@@ -20,32 +20,32 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or many times a parser separated by another one.
         /// </summary>
-        public static Parser<List<T>, TParseContext> Separated<U, T>(IParser<U, TParseContext> separator, IParser<T, TParseContext> parser) => new Separated<U, T, TParseContext>(separator, parser);
+        public static Parser<List<T>, TParseContext> Separated<U, T>(Parser<U, TParseContext> separator, Parser<T, TParseContext> parser) => new Separated<U, T, TParseContext>(separator, parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
-        public static Parser<T, TParseContext> ZeroOrOne<T>(IParser<T, TParseContext> parser) => new ZeroOrOne<T, TParseContext>(parser);
+        public static Parser<T, TParseContext> ZeroOrOne<T>(Parser<T, TParseContext> parser) => new ZeroOrOne<T, TParseContext>(parser);
 
         /// <summary>
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
-        public static Parser<T, TParseContext2> Scope<T, TParseContext2>(IParser<T, TParseContext2> parser) where TParseContext2 : ParseContext<TParseContext2> => new ScopedParser<T, TParseContext2>(parser);
+        public static Parser<T, TParseContext2> Scope<T, TParseContext2>(Parser<T, TParseContext2> parser) where TParseContext2 : ParseContext<TParseContext2> => new ScopedParser<T, TParseContext2>(parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
         /// </summary>
-        public static Parser<List<T>, TParseContext> ZeroOrMany<T>(IParser<T, TParseContext> parser) => new ZeroOrMany<T, TParseContext>(parser);
+        public static Parser<List<T>, TParseContext> ZeroOrMany<T>(Parser<T, TParseContext> parser) => new ZeroOrMany<T, TParseContext>(parser);
 
         /// <summary>
         /// Builds a parser that looks for one or many times the specified parser.
         /// </summary>
-        public static Parser<List<T>, TParseContext> OneOrMany<T>(IParser<T, TParseContext> parser) => new OneOrMany<T, TParseContext>(parser);
+        public static Parser<List<T>, TParseContext> OneOrMany<T>(Parser<T, TParseContext> parser) => new OneOrMany<T, TParseContext>(parser);
 
         /// <summary>
         /// Builds a parser that succeed when the specified parser fails to match.
         /// </summary>
-        public static Parser<T, TParseContext> Not<T>(IParser<T, TParseContext> parser) => new Not<T, TParseContext>(parser);
+        public static Parser<T, TParseContext> Not<T>(Parser<T, TParseContext> parser) => new Not<T, TParseContext>(parser);
 
         /// <summary>
         /// Builds a parser that can be defined later one. Use it when a parser need to be declared before its rule can be set.
@@ -55,22 +55,22 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser than needs a reference to itself to be declared.
         /// </summary>
-        public static Deferred<T, TParseContext> Recursive<T>(Func<Deferred<T, TParseContext>, IParser<T, TParseContext>> parser) => new(parser);
+        public static Deferred<T, TParseContext> Recursive<T>(Func<Deferred<T, TParseContext>, Parser<T, TParseContext>> parser) => new(parser);
 
         /// <summary>
         /// Builds a parser that matches the specified parser between two other ones.
         /// </summary>
-        public static Parser<T, TParseContext> Between<A, T, B>(IParser<A, TParseContext> before, IParser<T, TParseContext> parser, IParser<B, TParseContext> after) => new Between<A, T, B, TParseContext>(before, parser, after);
+        public static Parser<T, TParseContext> Between<A, T, B>(Parser<A, TParseContext> before, Parser<T, TParseContext> parser, Parser<B, TParseContext> after) => new Between<A, T, B, TParseContext>(before, parser, after);
 
         /// <summary>
         /// Builds a parser that matches any chars before a specific parser.
         /// </summary>
-        public static Parser<TextSpan, TParseContext> AnyCharBefore<T>(IParser<T, TParseContext> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T, TParseContext>(parser, canBeEmpty, failOnEof, consumeDelimiter);
+        public static Parser<TextSpan, TParseContext> AnyCharBefore<T>(Parser<T, TParseContext> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T, TParseContext>(parser, canBeEmpty, failOnEof, consumeDelimiter);
 
         /// <summary>
         /// Builds a parser that captures the output of another parser.
         /// </summary>
-        public static Parser<TextSpan, TParseContext> Capture<T>(IParser<T, TParseContext> parser) => new Capture<T, TParseContext>(parser);
+        public static Parser<TextSpan, TParseContext> Capture<T>(Parser<T, TParseContext> parser) => new Capture<T, TParseContext>(parser);
 
         /// <summary>
         /// Builds a parser that always succeeds.
@@ -94,7 +94,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
-        public static Parser<T, TParseContext> Scope<T, TParseContext>(IParser<T, TParseContext> parser) where TParseContext : ParseContext<TParseContext> => new ScopedParser<T, TParseContext>(parser);
+        public static Parser<T, TParseContext> Scope<T, TParseContext>(Parser<T, TParseContext> parser) where TParseContext : ParseContext<TParseContext> => new ScopedParser<T, TParseContext>(parser);
     }
 
     public class LiteralBuilder<TParseContext>

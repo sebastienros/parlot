@@ -8,10 +8,10 @@ namespace Parlot.Fluent
     public sealed class Separated<U, T, TParseContext> : Parser<List<T>, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<U, TParseContext> _separator;
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<U, TParseContext> _separator;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public Separated(IParser<U, TParseContext> separator, IParser<T, TParseContext> parser)
+        public Separated(Parser<U, TParseContext> separator, Parser<T, TParseContext> parser)
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));

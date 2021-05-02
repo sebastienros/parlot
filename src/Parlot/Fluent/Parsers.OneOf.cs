@@ -10,7 +10,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that return either of the first successful of the specified parsers.
         /// </summary>
-        public static Parser<T, TParseContext> Or<T, TParseContext>(this IParser<T, TParseContext> parser, IParser<T, TParseContext> or)
+        public static Parser<T, TParseContext> Or<T, TParseContext>(this Parser<T, TParseContext> parser, Parser<T, TParseContext> or)
         where TParseContext : ParseContext
         {
             // We don't care about the performance of these helpers since they are called only once 
@@ -30,7 +30,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that return either of the first successful of the specified parsers.
         /// </summary>
-        public static Parser<T, TParseContext> Or<A, B, T, TParseContext>(this IParser<A, TParseContext> parser, IParser<B, TParseContext> or)
+        public static Parser<T, TParseContext> Or<A, B, T, TParseContext>(this Parser<A, TParseContext> parser, Parser<B, TParseContext> or)
             where A : T
             where B : T
             where TParseContext : ParseContext
@@ -46,6 +46,6 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that return either of the first successful of the specified parsers.
         /// </summary>
-        public static Parser<T, TParseContext> OneOf<T>(params IParser<T, TParseContext>[] parsers) => new OneOf<T, TParseContext>(parsers);
+        public static Parser<T, TParseContext> OneOf<T>(params Parser<T, TParseContext>[] parsers) => new OneOf<T, TParseContext>(parsers);
     }
 }

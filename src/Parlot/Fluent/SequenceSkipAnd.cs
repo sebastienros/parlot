@@ -8,10 +8,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, TParseContext> : Parser<T2, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        internal readonly IParser<T1, TParseContext> _parser1;
-        internal readonly IParser<T2, TParseContext> _parser2;
+        internal readonly Parser<T1, TParseContext> _parser1;
+        internal readonly Parser<T2, TParseContext> _parser2;
 
-        public SequenceSkipAnd(IParser<T1, TParseContext> parser1, IParser<T2, TParseContext> parser2)
+        public SequenceSkipAnd(Parser<T1, TParseContext> parser1, Parser<T2, TParseContext> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
@@ -119,10 +119,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, T3, TParseContext> : Parser<ValueTuple<T1, T3>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2>, TParseContext> _parser;
-        internal readonly IParser<T3, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2>, TParseContext> _parser;
+        internal readonly Parser<T3, TParseContext> _lastParser;
 
-        public SequenceSkipAnd(IParser<ValueTuple<T1, T2>, TParseContext> parser, IParser<T3, TParseContext> lastParser
+        public SequenceSkipAnd(Parser<ValueTuple<T1, T2>, TParseContext> parser, Parser<T3, TParseContext> lastParser
             )
         {
             _parser = parser;
@@ -147,7 +147,7 @@ namespace Parlot.Fluent
                         tupleResult.Value.Item1,
                         lastResult.Value
                         );
-                        
+
                     result.Set(tupleResult.Start, lastResult.End, tuple);
                     return true;
                 }
@@ -167,7 +167,7 @@ namespace Parlot.Fluent
 
             var parsers = sequenceParser.BuildSkippableParsers(context);
             parsers.Last().Skip = true;
-            
+
             return parsers.Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
@@ -180,10 +180,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, TParseContext> : Parser<ValueTuple<T1, T2, T4>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
-        internal readonly IParser<T4, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
+        internal readonly Parser<T4, TParseContext> _lastParser;
 
-        public SequenceSkipAnd(IParser<ValueTuple<T1, T2, T3>, TParseContext> parser, IParser<T4, TParseContext> lastParser)
+        public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3>, TParseContext> parser, Parser<T4, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -241,10 +241,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, TParseContext> : Parser<ValueTuple<T1, T2, T3, T5>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
-        internal readonly IParser<T5, TParseContext> _lastParser;
-        
-        public SequenceSkipAnd(IParser<ValueTuple<T1, T2, T3, T4>, TParseContext> parser, IParser<T5, TParseContext> lastParser)
+        private readonly Parser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
+        internal readonly Parser<T5, TParseContext> _lastParser;
+
+        public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4>, TParseContext> parser, Parser<T5, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -303,10 +303,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T6>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
-        internal readonly IParser<T6, TParseContext> _lastParser;        
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
+        internal readonly Parser<T6, TParseContext> _lastParser;
 
-        public SequenceSkipAnd(IParser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> parser, IParser<T6, TParseContext> lastParser)
+        public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> parser, Parser<T6, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -367,10 +367,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5, T7>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;
-        internal readonly IParser<T7, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;
+        internal readonly Parser<T7, TParseContext> _lastParser;
 
-        public SequenceSkipAnd(IParser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> parser, IParser<T7, TParseContext> lastParser)
+        public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> parser, Parser<T7, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -432,10 +432,10 @@ namespace Parlot.Fluent
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T8>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext> _parser;
-        internal readonly IParser<T8, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext> _parser;
+        internal readonly Parser<T8, TParseContext> _lastParser;
 
-        public SequenceSkipAnd(IParser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext> parser, IParser<T8, TParseContext> lastParser)
+        public SequenceSkipAnd(Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext> parser, Parser<T8, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));

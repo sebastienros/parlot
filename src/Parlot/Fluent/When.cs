@@ -14,9 +14,9 @@ namespace Parlot.Fluent
     where TParseContext : ParseContext
     {
         private readonly Func<T, bool> _action;
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public When(IParser<T, TParseContext> parser, Func<T, bool> action)
+        public When(Parser<T, TParseContext> parser, Func<T, bool> action)
         {
             _action = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));

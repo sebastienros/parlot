@@ -9,16 +9,16 @@ namespace Parlot.Fluent
     public sealed class Discard<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T,TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly U _value;
 
-        public Discard(IParser<T, TParseContext> parser)
+        public Discard(Parser<T, TParseContext> parser)
         {
             _value = default(U);
             _parser = parser;
         }
 
-        public Discard(IParser<T, TParseContext> parser, U value)
+        public Discard(Parser<T, TParseContext> parser, U value)
         {
             _parser = parser;
             _value = value;

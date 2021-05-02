@@ -7,9 +7,9 @@ namespace Parlot.Fluent
     public sealed class Between<A, T, B, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
-        private readonly IParser<A, TParseContext> _before;
-        private readonly IParser<B, TParseContext> _after;
+        private readonly Parser<T, TParseContext> _parser;
+        private readonly Parser<A, TParseContext> _before;
+        private readonly Parser<B, TParseContext> _after;
 
         private readonly bool _beforeIsChar;
         private readonly char _beforeChar;
@@ -19,7 +19,7 @@ namespace Parlot.Fluent
         private readonly char _afterChar;
         private readonly bool _afterSkipWhiteSpace;
 
-        public Between(IParser<A, TParseContext> before, IParser<T, TParseContext> parser, IParser<B, TParseContext> after)
+        public Between(Parser<A, TParseContext> before, Parser<T, TParseContext> parser, Parser<B, TParseContext> after)
         {
             _before = before ?? throw new ArgumentNullException(nameof(before));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));

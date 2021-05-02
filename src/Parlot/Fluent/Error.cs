@@ -9,10 +9,10 @@ namespace Parlot.Fluent
     public sealed class ElseError<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public ElseError(IParser<T, TParseContext> parser, string message)
+        public ElseError(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
@@ -63,7 +63,7 @@ namespace Parlot.Fluent
                             : Expression.Assign(value, parserCompileResult.Value)
                     )
             );
-            
+
             result.Body.Add(block);
 
             return result;
@@ -73,10 +73,10 @@ namespace Parlot.Fluent
     public sealed class Error<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public Error(IParser<T, TParseContext> parser, string message)
+        public Error(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
@@ -136,10 +136,10 @@ namespace Parlot.Fluent
     public sealed class Error<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public Error(IParser<T, TParseContext> parser, string message)
+        public Error(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;

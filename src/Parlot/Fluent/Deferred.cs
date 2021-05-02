@@ -8,13 +8,13 @@ namespace Parlot.Fluent
     public sealed class Deferred<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        public IParser<T, TParseContext> Parser { get; set; }
+        public Parser<T, TParseContext> Parser { get; set; }
 
         public Deferred()
         {
         }
 
-        public Deferred(Func<Deferred<T, TParseContext>, IParser<T, TParseContext>> parser)
+        public Deferred(Func<Deferred<T, TParseContext>, Parser<T, TParseContext>> parser)
         {
             Parser = parser(this);
         }

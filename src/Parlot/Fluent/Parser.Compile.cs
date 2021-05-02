@@ -11,7 +11,7 @@ namespace Parlot.Fluent
         /// Compiles the current parser.
         /// </summary>
         /// <returns>A compiled parser.</returns>
-        public static IParser<T, ParseContext> Compile<T>(this IParser<T, ParseContext> self)
+        public static Parser<T, ParseContext> Compile<T>(this Parser<T, ParseContext> self)
         {
             return self.Compile<T, ParseContext>();
         }
@@ -19,7 +19,7 @@ namespace Parlot.Fluent
         /// Compiles the current parser.
         /// </summary>
         /// <returns>A compiled parser.</returns>
-        public static IParser<T, TParseContext> Compile<T, TParseContext>(this IParser<T, TParseContext> self)
+        public static Parser<T, TParseContext> Compile<T, TParseContext>(this Parser<T, TParseContext> self)
         where TParseContext : ParseContext
         {
             if (self is ICompiledParser)
@@ -39,7 +39,7 @@ namespace Parlot.Fluent
             compilationResult.Body.Add(returnLabelExpression);
 
             // global variables;
-            
+
             // parser variables;
 
             var allVariables = new List<ParameterExpression>();
@@ -75,7 +75,7 @@ namespace Parlot.Fluent
         /// <param name="self">The <see cref="Parser{T, TParseContext}"/> instance.</param>
         /// <param name="context">The <see cref="CompilationContext{TParseContext}"/> instance.</param>
         /// <param name="requireResult">Forces the instruction to compute the resulting value whatever the state of <see cref="CompilationContext{TParseContext}.DiscardResult"/> is.</param>
-        public static CompilationResult Build<T, TParseContext>(this IParser<T, TParseContext> self, CompilationContext<TParseContext> context,  bool requireResult = false)
+        public static CompilationResult Build<T, TParseContext>(this Parser<T, TParseContext> self, CompilationContext<TParseContext> context, bool requireResult = false)
         where TParseContext : ParseContext
         {
             if (self is ICompilable<TParseContext> compilable)
@@ -101,7 +101,7 @@ namespace Parlot.Fluent
             }
         }
 
-        private static CompilationResult BuildAsNonCompilableParser<T, TParseContext>(CompilationContext<TParseContext> context, IParser<T, TParseContext> self)
+        private static CompilationResult BuildAsNonCompilableParser<T, TParseContext>(CompilationContext<TParseContext> context, Parser<T, TParseContext> self)
         where TParseContext : ParseContext
         {
             var result = new CompilationResult();
@@ -129,11 +129,11 @@ namespace Parlot.Fluent
             // success = parser.Parse(context.ParseContext, ref parseResult)
 
             result.Body.Add(
-                Expression.Assign(success, 
+                Expression.Assign(success,
                     Expression.Call(
-                        Expression.Constant(self), 
-                        self.GetType().GetMethod("Parse", new[] { typeof(TParseContext), typeof(ParseResult<T>).MakeByRefType() }), 
-                        context.ParseContext, 
+                        Expression.Constant(self),
+                        self.GetType().GetMethod("Parse", new[] { typeof(TParseContext), typeof(ParseResult<T>).MakeByRefType() }),
+                        context.ParseContext,
                         parseResult))
                 );
 

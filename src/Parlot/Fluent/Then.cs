@@ -17,20 +17,20 @@ namespace Parlot.Fluent
     {
         private readonly Func<T, U> _transform1;
         private readonly Func<TParseContext, T, U> _transform2;
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public Then(IParser<T, TParseContext> parser)
+        public Then(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Then(IParser<T, TParseContext> parser, Func<T, U> action)
+        public Then(Parser<T, TParseContext> parser, Func<T, U> action)
         {
             _transform1 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Then(IParser<T, TParseContext> parser, Func<TParseContext, T, U> action)
+        public Then(Parser<T, TParseContext> parser, Func<TParseContext, T, U> action)
         {
             _transform2 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -58,7 +58,7 @@ namespace Parlot.Fluent
 
             return false;
         }
-    
+
         public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
@@ -80,7 +80,7 @@ namespace Parlot.Fluent
 
             if (_transform1 != null)
             {
-                transformation = Expression.Invoke(Expression.Constant(_transform1), new [] { parserCompileResult.Value });
+                transformation = Expression.Invoke(Expression.Constant(_transform1), new[] { parserCompileResult.Value });
             }
             else if (_transform2 != null)
             {
@@ -113,7 +113,7 @@ namespace Parlot.Fluent
         }
     }
 
-     /// <summary>
+    /// <summary>
     /// Returns a new <see cref="Parser{U,TParseContext}" /> converting the input value of 
     /// type T to the output value of type U using a custom function.
     /// </summary>
@@ -124,20 +124,20 @@ namespace Parlot.Fluent
     {
         private readonly Action<T> _action1;
         private readonly Action<TParseContext, T> _action2;
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public Then(IParser<T, TParseContext> parser)
+        public Then(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Then(IParser<T, TParseContext> parser, Action<T> action)
+        public Then(Parser<T, TParseContext> parser, Action<T> action)
         {
             _action1 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Then(IParser<T, TParseContext> parser, Action<TParseContext, T> action)
+        public Then(Parser<T, TParseContext> parser, Action<TParseContext, T> action)
         {
             _action2 = action ?? throw new ArgumentNullException(nameof(action));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -164,7 +164,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        
+
         public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
@@ -186,7 +186,7 @@ namespace Parlot.Fluent
 
             if (_action1 != null)
             {
-                action = Expression.Invoke(Expression.Constant(_action1), new [] { parserCompileResult.Value });
+                action = Expression.Invoke(Expression.Constant(_action1), new[] { parserCompileResult.Value });
             }
             else if (_action2 != null)
             {

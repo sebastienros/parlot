@@ -8,8 +8,8 @@ namespace Parlot.Fluent
     public sealed class ZeroOrMany<T, TParseContext> : Parser<List<T>, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
-        public ZeroOrMany(IParser<T, TParseContext> parser)
+        private readonly Parser<T, TParseContext> _parser;
+        public ZeroOrMany(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

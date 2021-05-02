@@ -7,9 +7,9 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, TParseContext> : Parser<ValueTuple<T1, T2>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        internal readonly IParser<T1, TParseContext> _parser1;
-        internal readonly IParser<T2, TParseContext> _parser2;
-        public Sequence(IParser<T1, TParseContext> parser1, IParser<T2, TParseContext> parser2)
+        internal readonly Parser<T1, TParseContext> _parser1;
+        internal readonly Parser<T2, TParseContext> _parser2;
+        public Sequence(Parser<T1, TParseContext> parser1, Parser<T2, TParseContext> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
@@ -57,12 +57,12 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, TParseContext> : Parser<ValueTuple<T1, T2, T3>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2>, TParseContext> _parser;
-        internal readonly IParser<T3, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2>, TParseContext> _parser;
+        internal readonly Parser<T3, TParseContext> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2>, TParseContext>
+        public Sequence(Parser<ValueTuple<T1, T2>, TParseContext>
             parser,
-            IParser<T3, TParseContext> lastParser
+            Parser<T3, TParseContext> lastParser
             )
         {
             _parser = parser;
@@ -118,10 +118,10 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
-        internal readonly IParser<T4, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
+        internal readonly Parser<T4, TParseContext> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3>, TParseContext> parser, IParser<T4, TParseContext> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3>, TParseContext> parser, Parser<T4, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -177,10 +177,10 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
-        internal readonly IParser<T5, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
+        internal readonly Parser<T5, TParseContext> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3, T4>, TParseContext> parser, IParser<T5, TParseContext> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4>, TParseContext> parser, Parser<T5, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -237,10 +237,10 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
-        internal readonly IParser<T6, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
+        internal readonly Parser<T6, TParseContext> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> parser, IParser<T6, TParseContext> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> parser, Parser<T6, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
@@ -299,10 +299,10 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7, TParseContext> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext>, ICompilable<TParseContext>, ISkippableSequenceParser<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;
-        internal readonly IParser<T7, TParseContext> _lastParser;
+        private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;
+        internal readonly Parser<T7, TParseContext> _lastParser;
 
-        public Sequence(IParser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> parser, IParser<T7, TParseContext> lastParser)
+        public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> parser, Parser<T7, TParseContext> lastParser)
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));

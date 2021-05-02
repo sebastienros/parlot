@@ -14,14 +14,14 @@ namespace Parlot.Fluent
     public sealed class OneOf<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext>[] _parsers;
+        private readonly Parser<T, TParseContext>[] _parsers;
 
-        public OneOf(IParser<T, TParseContext>[] parsers)
+        public OneOf(Parser<T, TParseContext>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         }
 
-        public IParser<T, TParseContext>[] Parsers => _parsers;
+        public Parser<T, TParseContext>[] Parsers => _parsers;
 
         public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {

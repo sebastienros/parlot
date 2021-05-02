@@ -9,10 +9,10 @@ namespace Parlot.Fluent
         where A : T
         where B : T
     {
-        private readonly IParser<A, TParseContext> _parserA;
-        private readonly IParser<B, TParseContext> _parserB;
+        private readonly Parser<A, TParseContext> _parserA;
+        private readonly Parser<B, TParseContext> _parserB;
 
-        public OneOf(IParser<A,TParseContext> parserA, IParser<B,TParseContext> parserB)
+        public OneOf(Parser<A, TParseContext> parserA, Parser<B, TParseContext> parserB)
         {
             _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
             _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));

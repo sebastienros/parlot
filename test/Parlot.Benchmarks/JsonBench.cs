@@ -20,7 +20,7 @@ namespace Parlot.Benchmarks
         private string _longJson;
         private string _wideJson;
         private string _deepJson;
-        private IParser<IJson, ParseContext> _compiled;
+        private Parser<IJson, ParseContext> _compiled;
 #nullable restore
 
         private static readonly Random _random = new();

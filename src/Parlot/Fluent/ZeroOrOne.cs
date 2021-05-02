@@ -8,9 +8,9 @@ namespace Parlot.Fluent
     public sealed class ZeroOrOne<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public ZeroOrOne(IParser<T, TParseContext> parser)
+        public ZeroOrOne(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

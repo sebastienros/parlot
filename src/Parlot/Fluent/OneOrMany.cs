@@ -8,9 +8,9 @@ namespace Parlot.Fluent
     public sealed class OneOrMany<T, TParseContext> : Parser<List<T>, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public OneOrMany(IParser<T, TParseContext> parser)
+        public OneOrMany(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

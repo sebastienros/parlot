@@ -11,9 +11,9 @@ namespace Parlot.Fluent
     public sealed class ScopedParser<T, TParseContext> : Parser<T, TParseContext>
     where TParseContext : ParseContext<TParseContext>
     {
-        private readonly IParser<T, TParseContext> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public ScopedParser(IParser<T, TParseContext> parser)
+        public ScopedParser(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }

@@ -12,9 +12,9 @@ namespace Parlot.Fluent
     public sealed class Switch<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        private readonly IParser<T, TParseContext> _previousParser;
+        private readonly Parser<T, TParseContext> _previousParser;
         private readonly Func<TParseContext, T, Parser<U, TParseContext>> _action;
-        public Switch(IParser<T, TParseContext> previousParser, Func<TParseContext, T, Parser<U, TParseContext>> action)
+        public Switch(Parser<T, TParseContext> previousParser, Func<TParseContext, T, Parser<U, TParseContext>> action)
         {
             _previousParser = previousParser ?? throw new ArgumentNullException(nameof(previousParser));
             _action = action ?? throw new ArgumentNullException(nameof(action));
@@ -73,7 +73,7 @@ namespace Parlot.Fluent
             // }
 
             var previousParserCompileResult = _previousParser.Build(context, requireResult: true);
-            var nextParser = Expression.Parameter(typeof(IParser<U, TParseContext>));
+            var nextParser = Expression.Parameter(typeof(Parser<U, TParseContext>));
             var parseResult = Expression.Variable(typeof(ParseResult<U>), $"value{context.NextNumber}");
 
             var block = Expression.Block(
@@ -83,7 +83,7 @@ namespace Parlot.Fluent
                         Expression.IfThen(
                             previousParserCompileResult.Success,
                             Expression.Block(
-                                new[] { nextParser, parseResult }, 
+                                new[] { nextParser, parseResult },
                                 Expression.Assign(nextParser, Expression.Invoke(Expression.Constant(_action), new[] { context.ParseContext, previousParserCompileResult.Value })),
                                 Expression.IfThen(
                                     Expression.NotEqual(Expression.Constant(null), nextParser),
@@ -91,7 +91,7 @@ namespace Parlot.Fluent
                                         Expression.Assign(success,
                                             Expression.Call(
                                                 nextParser,
-                                                typeof(IParser<U, TParseContext>).GetMethod("Parse", new[] { typeof(TParseContext), typeof(ParseResult<U>).MakeByRefType() }),
+                                                typeof(Parser<U, TParseContext>).GetMethod("Parse", new[] { typeof(TParseContext), typeof(ParseResult<U>).MakeByRefType() }),
                                                 context.ParseContext,
                                                 parseResult)),
                                         context.DiscardResult

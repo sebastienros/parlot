@@ -24,7 +24,7 @@ namespace Parlot.Benchmarks
         public static readonly Parser<List<char>, ParseContext> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
         public static readonly Parser<TextSpan, ParseContext> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
-        public static readonly IParser<TextSpan, ParseContext> EmailCompiled = Email.Compile();
+        public static readonly Parser<TextSpan, ParseContext> EmailCompiled = Email.Compile();
 
         private static readonly string _email = "sebastien.ros@gmail.com";
 
