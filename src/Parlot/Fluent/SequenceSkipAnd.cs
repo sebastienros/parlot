@@ -56,7 +56,7 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T1)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T2)));
 
             // T value;
             //
