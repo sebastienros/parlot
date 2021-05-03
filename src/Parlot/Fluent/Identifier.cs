@@ -8,23 +8,16 @@ namespace Parlot.Fluent
     {
         private readonly Func<char, bool> _extraStart;
         private readonly Func<char, bool> _extraPart;
-        private readonly bool _skipWhiteSpace;
 
-        public Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null, bool skipWhiteSpace = true)
+        public Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null)
         {
             _extraStart = extraStart;
             _extraPart = extraPart;
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
-
-            if (_skipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
 
             var first = context.Scanner.Cursor.Current;
 
@@ -56,16 +49,6 @@ namespace Parlot.Fluent
 
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
-
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
 
             // var first = context.Scanner.Cursor.Current;
 

@@ -354,7 +354,7 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileNonWhiteSpace()
         {
-            Assert.Equal("a", Terms.NonWhiteSpace().Compile().Parse("\n\r\v a"));
+            Assert.Equal("a", Terms.NonWhiteSpace(includeNewLines: true).Compile().Parse(" a"));
         }
 
         [Fact]
@@ -503,6 +503,43 @@ namespace Parlot.Tests
 
             Assert.True(parser.TryParse("abcd", out var result1));
             Assert.Equal("acd", result1.Item1.ToString() + result1.Item2 + result1.Item3);
+        }
+
+        [Fact]
+        public void BetweenCompiledShouldresetPosition()
+        {
+            Assert.True(Between(Terms.Char('['), Terms.Text("abcd"), Terms.Char(']')).Then(x => x.ToString()).Or(Literals.Text(" [abc").Compile()).TryParse(" [abc]", out var result1));
+            Assert.Equal(" [abc", result1);
+        }
+
+        [Fact]
+        public void TextWithWhiteSpaceCompiledShouldResetPosition()
+        {
+            var code = OneOf(Terms.Text("a"), Literals.Text(" b"));
+
+            Assert.True(code.TryParse(" b", out _));
+        }
+
+        [Fact]
+        public void ShouldSkipWhiteSpaceCompiled()
+        {
+            var parser = SkipWhiteSpace(Literals.Text("abc")).Compile();
+
+            Assert.Null(parser.Parse(""));
+            Assert.True(parser.TryParse("abc", out var result1));
+            Assert.Equal("abc", result1);
+
+            Assert.True(parser.TryParse("  abc", out var result2));
+            Assert.Equal("abc", result2);
+        }
+
+        [Fact]
+        public void SkipWhiteSpaceCompiledShouldResetPosition()
+        {
+            var parser = SkipWhiteSpace(Literals.Text("abc")).Or(Literals.Text(" ab")).Compile();
+
+            Assert.True(parser.TryParse(" ab", out var result1));
+            Assert.Equal(" ab", result1);
         }
     }
 }

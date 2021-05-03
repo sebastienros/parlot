@@ -482,6 +482,32 @@ Result:
 0 // failure
 ```
 
+### SkipWhiteSpace
+
+Matches a parser after any blank spaces. This parser respects the `Scanner` options related to multi-line grammars.
+
+
+```c#
+Parser<T> SkipWhiteSpace<T>(Parser<T> parser)
+```
+
+Usage:
+
+```c#
+var parser = SkipWhiteSpace(Literals.Text('abc'));
+parser.Parse("abc");
+parser.Parse("  abc");
+```
+
+Result:
+
+```
+"abc"
+"abc"
+```
+
+> Note: This parser is used by all Terms (e.g., Terms.Text) to skip blank spaces before a Literal.
+
 ### Deferred
 
 Creates a parser that can be references before it is actually defined. This is used when there is a cyclic dependency between parsers.

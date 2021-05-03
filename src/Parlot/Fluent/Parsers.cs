@@ -22,6 +22,11 @@ namespace Parlot.Fluent
         public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
 
         /// <summary>
+        /// Builds a parser that skips white spaces before another one.
+        /// </summary>
+        public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
+
+        /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
         public static Parser<T> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
@@ -93,53 +98,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.
         /// </summary>
-        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = false) => new NonWhiteSpaceLiteral(skipWhiteSpace: false, includeNewLines: includeNewLines);
-
-        /// <summary>
-        /// Builds a parser that matches the specified text.
-        /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches the specified char.
-        /// </summary>
-        public Parser<char> Char(char c) => new CharLiteral(c, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches an integer.
-        /// </summary>
-        public Parser<long> Integer() => new IntegerLiteral(skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches a floating point number.
-        /// </summary>
-        public Parser<decimal> Decimal() => new DecimalLiteral(skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches an quoted string that can be escaped.
-        /// </summary>
-        public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches an identifier.
-        /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches a char against a predicate.
-        /// </summary>
-        /// <param name="predicate">The predicate to match against each char.</param>
-        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
-        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-        public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize, skipWhiteSpace: false);
-    }
-
-    public class TermBuilder
-    {
-        /// <summary>
-        /// Builds a parser that matches anything until whitespaces.
-        /// </summary>
-        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = false) => new NonWhiteSpaceLiteral(includeNewLines: includeNewLines);
+        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = true) => new NonWhiteSpaceLiteral(includeNewLines: includeNewLines);
 
         /// <summary>
         /// Builds a parser that matches the specified text.
@@ -154,12 +113,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an integer.
         /// </summary>
-        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral(numberOptions);
+        public Parser<long> Integer() => new IntegerLiteral();
 
         /// <summary>
         /// Builds a parser that matches a floating point number.
         /// </summary>
-        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral(numberOptions);
+        public Parser<decimal> Decimal() => new DecimalLiteral();
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.
@@ -178,5 +137,51 @@ namespace Parlot.Fluent
         /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
         /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
         public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize);
+    }
+
+    public class TermBuilder
+    {
+        /// <summary>
+        /// Builds a parser that matches anything until whitespaces.
+        /// </summary>
+        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = true) => Parsers.SkipWhiteSpace(new NonWhiteSpaceLiteral(includeNewLines: includeNewLines));
+
+        /// <summary>
+        /// Builds a parser that matches the specified text.
+        /// </summary>
+        public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null));
+
+        /// <summary>
+        /// Builds a parser that matches the specified char.
+        /// </summary>
+        public Parser<char> Char(char c) => Parsers.SkipWhiteSpace(new CharLiteral(c));
+
+        /// <summary>
+        /// Builds a parser that matches an integer.
+        /// </summary>
+        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new IntegerLiteral(numberOptions));
+
+        /// <summary>
+        /// Builds a parser that matches a floating point number.
+        /// </summary>
+        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DecimalLiteral(numberOptions));
+
+        /// <summary>
+        /// Builds a parser that matches an quoted string that can be escaped.
+        /// </summary>
+        public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => Parsers.SkipWhiteSpace(new StringLiteral(quotes));
+
+        /// <summary>
+        /// Builds a parser that matches an identifier.
+        /// </summary>
+        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
+
+        /// <summary>
+        /// Builds a parser that matches a char against a predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to match against each char.</param>
+        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+        public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new PatternLiteral(predicate, minSize, maxSize));
     }
 }

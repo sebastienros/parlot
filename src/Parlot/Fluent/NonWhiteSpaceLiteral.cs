@@ -5,22 +5,15 @@ namespace Parlot.Fluent
 {
     public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ICompilable
     {
-        private readonly bool _skipWhiteSpace;
         private readonly bool _includeNewLines;
 
-        public NonWhiteSpaceLiteral(bool skipWhiteSpace = true, bool includeNewLines = false)
+        public NonWhiteSpaceLiteral(bool includeNewLines = true)
         {
-            _skipWhiteSpace = skipWhiteSpace;
             _includeNewLines = includeNewLines;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {
-            if (_skipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
-
             if (context.Scanner.Cursor.Eof)
             {
                 return false;
@@ -30,11 +23,11 @@ namespace Parlot.Fluent
 
             if (_includeNewLines)
             {
-                context.Scanner.ReadNonWhiteSpace();
+                context.Scanner.ReadNonWhiteSpaceOrNewLine();
             }
             else
             {
-                context.Scanner.ReadNonWhiteSpaceOrNewLine();
+                context.Scanner.ReadNonWhiteSpace();
             }            
 
             var end = context.Scanner.Cursor.Offset;
@@ -55,24 +48,14 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
-
             // if (!context.Scanner.Cursor.Eof)
             // {
             //     var start = context.Scanner.Cursor.Offset;
             //     
             //     [if (_includeNewLines)]
-            //         context.Scanner.ReadNonWhiteSpace();
-            //     [else]
             //         context.Scanner.ReadNonWhiteSpaceOrNewLine();
+            //     [else]
+            //         context.Scanner.ReadNonWhiteSpace();
             //     
             //     var end = context.Scanner.Cursor.Offset;
             //     
@@ -93,8 +76,8 @@ namespace Parlot.Fluent
                         new ParameterExpression [] { start, end },
                         Expression.Assign(start, context.Offset()),
                         _includeNewLines
-                            ? context.ReadNonWhiteSpace()
-                            : context.ReadNonWhiteSpaceOrNewLine(),
+                            ? context.ReadNonWhiteSpaceOrNewLine()
+                            : context.ReadNonWhiteSpace(),
                         Expression.Assign(end, context.Offset()),
                         Expression.IfThen(
                             Expression.NotEqual(start, end),
