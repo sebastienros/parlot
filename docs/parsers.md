@@ -494,7 +494,7 @@ Parser<T> SkipWhiteSpace<T>(Parser<T> parser)
 Usage:
 
 ```c#
-var parser = SkipWhiteSpace(Literals.Text('abc'));
+var parser = SkipWhiteSpace(Literals.Text("abc"));
 parser.Parse("abc");
 parser.Parse("  abc");
 ```
