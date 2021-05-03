@@ -116,6 +116,14 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void TextWithWhiteSpaceShouldResetPosition()
+        {
+            var code = OneOf(Terms.Text("a"), Literals.Text(" b"));
+
+            Assert.True(code.TryParse(" b", out _));
+        }
+
+        [Fact]
         public void AndSkipShouldResetPosition()
         {
             var code = 
@@ -423,8 +431,8 @@ namespace Parlot.Tests
             Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a b"));
             Assert.Equal("a", Terms.NonWhiteSpace().Parse("a b"));
             Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc b"));
-            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc\nb"));
-            Assert.Equal("abc\nb", Terms.NonWhiteSpace(true).Parse("abc\nb"));
+            Assert.Equal("abc", Terms.NonWhiteSpace(includeNewLines: true).Parse("abc\nb"));
+            Assert.Equal("abc\nb", Terms.NonWhiteSpace(includeNewLines: false).Parse("abc\nb"));
             Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc"));
 
             Assert.False(Terms.NonWhiteSpace().TryParse("", out _));
@@ -562,6 +570,12 @@ namespace Parlot.Tests
             Assert.Equal("hell", result1);
         }
 
+        [Fact]
+        public void BetweenShouldresetPosition()
+        {
+            Assert.True(Between(Terms.Char('['), Terms.Text("abcd"), Terms.Char(']')).Then(x => x.ToString()).Or(Literals.Text(" [abc")).TryParse(" [abc]", out var result1));
+            Assert.Equal(" [abc", result1);
+        }
 
         [Fact]
         public void SeparatedShouldSplit()
@@ -577,6 +591,28 @@ namespace Parlot.Tests
             Assert.Equal(1, result[0]);
             Assert.Equal(2, result[1]);
             Assert.Equal(3, result[2]);
+        }
+
+        [Fact]
+        public void ShouldSkipWhiteSpace()
+        {
+            var parser = SkipWhiteSpace(Literals.Text("abc"));
+
+            Assert.Null(parser.Parse(""));
+            Assert.True(parser.TryParse("abc", out var result1));
+            Assert.Equal("abc", result1);
+
+            Assert.True(parser.TryParse("  abc", out var result2));
+            Assert.Equal("abc", result2);
+        }
+
+        [Fact]
+        public void SkipWhiteSpaceShouldResetPosition()
+        {
+            var parser = SkipWhiteSpace(Literals.Text("abc")).Or(Literals.Text(" ab"));
+
+            Assert.True(parser.TryParse(" ab", out var result1));
+            Assert.Equal(" ab", result1);
         }
     }
 }

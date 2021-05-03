@@ -8,12 +8,10 @@ namespace Parlot.Fluent
     public sealed class DecimalLiteral : Parser<decimal>, ICompilable
     {
         private readonly NumberOptions _numberOptions;
-        private readonly bool _skipWhiteSpace;
 
-        public DecimalLiteral(NumberOptions numberOptions = NumberOptions.Default, bool skipWhiteSpace = true)
+        public DecimalLiteral(NumberOptions numberOptions = NumberOptions.Default)
         {
             _numberOptions = numberOptions;
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<decimal> result)
@@ -21,13 +19,7 @@ namespace Parlot.Fluent
             context.EnterParser(this);
 
             var reset = context.Scanner.Cursor.Position;
-
-            if (_skipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
-
-            var start = context.Scanner.Cursor.Offset;
+            var start = reset.Offset;
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
@@ -42,7 +34,7 @@ namespace Parlot.Fluent
             {
                 var end = context.Scanner.Cursor.Offset;
 #if NETSTANDARD2_0
-                var sourceToParse = context.Scanner.Buffer.Substring(start, end -start);
+                var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #else
                 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
 #endif
@@ -66,30 +58,11 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(decimal)));
 
-            // TODO: if !_skiptWhiteSpace and !NumberOptions.AllowSign then we don't need to store the reset position
-            // since the ReadDecimal method will do it at the correct location.
-
-            //
-            // var reset = context.Scanner.Cursor.Position;
-            //
-            // if (_skipWhiteSpace)
-            // {
-            //     context.SkipWhiteSpace();
-            // }
-
-            var reset = context.DeclarePositionVariable(result);
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
-
             // var start = context.Scanner.Cursor.Offset;
+            // var reset = context.Scanner.Cursor.Position;
 
-            var start = Expression.Variable(typeof(int), $"start{context.NextNumber}");
-            result.Variables.Add(start);
-
-            result.Body.Add(Expression.Assign(start, context.Offset()));
+            var start = context.DeclareOffsetVariable(result);
+            var reset = context.DeclarePositionVariable(result);
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
