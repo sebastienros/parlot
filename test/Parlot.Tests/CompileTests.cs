@@ -1,5 +1,4 @@
 using Parlot.Fluent;
-using System;
 using System.Collections.Generic;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -540,6 +539,31 @@ namespace Parlot.Tests
 
             Assert.True(parser.TryParse(" ab", out var result1));
             Assert.Equal(" ab", result1);
+        }
+
+        [Fact]
+        public void SkipWhiteSpaceCompiledShouldResponseParseContextUseNewLines()
+        {
+            // Default behavior, newlines are skipped like any other space. The grammar is not "New Line Aware"
+            
+            Assert.True(
+                SkipWhiteSpace(Literals.Text("ab")).Compile()
+                .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: false), 
+                out var _, out var _));
+
+            // Here newlines are not skipped
+
+            Assert.False(
+                SkipWhiteSpace(Literals.Text("ab")).Compile()
+                .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
+                out var _, out var _));
+
+            // Here newlines are not skipped, and the grammar reads them explicitly
+
+            Assert.True(
+                SkipWhiteSpace(Literals.WhiteSpace(includeNewLines: true).SkipAnd(Literals.Text("ab"))).Compile()
+                .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
+                out var _, out var _));
         }
     }
 }

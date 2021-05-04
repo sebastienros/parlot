@@ -40,7 +40,10 @@ namespace Parlot
         }
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
-            => (ch == '\n') || (ch == '\r') || (ch == '\v') || IsWhiteSpace(ch);
+            => IsNewLine(ch) || IsWhiteSpace(ch);
+
+        public static bool IsNewLine(char ch)
+            => (ch == '\n') || (ch == '\r') || (ch == '\v');
 
         public static char ScanHexEscape(string text, int index, out int length)
         {

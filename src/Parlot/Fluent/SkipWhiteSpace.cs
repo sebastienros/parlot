@@ -44,7 +44,7 @@ namespace Parlot.Fluent
             result.Body.Add(
                 Expression.Block(
                     parserCompileResult.Variables,
-                    context.SkipWhiteSpace(),
+                    context.ParserSkipWhiteSpace(),
                     Expression.Block(parserCompileResult.Body),
                     Expression.IfThenElse(
                         parserCompileResult.Success,
