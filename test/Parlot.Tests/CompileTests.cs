@@ -1,5 +1,4 @@
 using Parlot.Fluent;
-using System;
 using System.Collections.Generic;
 using Xunit;
 using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
@@ -305,29 +304,19 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileAndSkip()
         {
-            var code =
-                OneOf(
-                    Terms.Text("hello").AndSkip(Terms.Text("world")),
-                    Terms.Text("hello").AndSkip(Terms.Text("universe"))
-                ).Compile();
+            var code = Terms.Text("hello").AndSkip(Terms.Integer()).Compile();
 
             Assert.False(code.TryParse("hello country", out var result));
-            Assert.True(code.TryParse("hello universe", out result) && result == "hello");
-            Assert.True(code.TryParse("hello world", out result) && result == "hello");
+            Assert.True(code.TryParse("hello 1", out result) && result == "hello");
         }
 
         [Fact]
         public void ShouldCompileSkipAnd()
         {
-            var code =
-                OneOf(
-                    Terms.Text("hello").SkipAnd(Terms.Text("world")),
-                    Terms.Text("hello").SkipAnd(Terms.Text("universe"))
-                ).Compile();
+            var code = Terms.Text("hello").SkipAnd(Terms.Integer()).Compile();
 
             Assert.False(code.TryParse("hello country", out var result));
-            Assert.True(code.TryParse("hello universe", out result) && result == "universe");
-            Assert.True(code.TryParse("hello world", out result) && result == "world");
+            Assert.True(code.TryParse("hello 1", out result) && result == 1);
         }
 
         [Fact]
@@ -364,7 +353,7 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileNonWhiteSpace()
         {
-            Assert.Equal("a", Terms.NonWhiteSpace().Compile().Parse("\n\r\v a"));
+            Assert.Equal("a", Terms.NonWhiteSpace(includeNewLines: true).Compile().Parse(" a"));
         }
 
         [Fact]
@@ -513,6 +502,68 @@ namespace Parlot.Tests
 
             Assert.True(parser.TryParse("abcd", out var result1));
             Assert.Equal("acd", result1.Item1.ToString() + result1.Item2 + result1.Item3);
+        }
+
+        [Fact]
+        public void BetweenCompiledShouldresetPosition()
+        {
+            Assert.True(Between(Terms.Char('['), Terms.Text("abcd"), Terms.Char(']')).Then(x => x.ToString()).Or(Literals.Text(" [abc").Compile()).TryParse(" [abc]", out var result1));
+            Assert.Equal(" [abc", result1);
+        }
+
+        [Fact]
+        public void TextWithWhiteSpaceCompiledShouldResetPosition()
+        {
+            var code = OneOf(Terms.Text("a"), Literals.Text(" b"));
+
+            Assert.True(code.TryParse(" b", out _));
+        }
+
+        [Fact]
+        public void ShouldSkipWhiteSpaceCompiled()
+        {
+            var parser = SkipWhiteSpace(Literals.Text("abc")).Compile();
+
+            Assert.Null(parser.Parse(""));
+            Assert.True(parser.TryParse("abc", out var result1));
+            Assert.Equal("abc", result1);
+
+            Assert.True(parser.TryParse("  abc", out var result2));
+            Assert.Equal("abc", result2);
+        }
+
+        [Fact]
+        public void SkipWhiteSpaceCompiledShouldResetPosition()
+        {
+            var parser = SkipWhiteSpace(Literals.Text("abc")).Or(Literals.Text(" ab")).Compile();
+
+            Assert.True(parser.TryParse(" ab", out var result1));
+            Assert.Equal(" ab", result1);
+        }
+
+        [Fact]
+        public void SkipWhiteSpaceCompiledShouldResponseParseContextUseNewLines()
+        {
+            // Default behavior, newlines are skipped like any other space. The grammar is not "New Line Aware"
+            
+            Assert.True(
+                SkipWhiteSpace(Literals.Text("ab")).Compile()
+                .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: false), 
+                out var _, out var _));
+
+            // Here newlines are not skipped
+
+            Assert.False(
+                SkipWhiteSpace(Literals.Text("ab")).Compile()
+                .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
+                out var _, out var _));
+
+            // Here newlines are not skipped, and the grammar reads them explicitly
+
+            Assert.True(
+                SkipWhiteSpace(Literals.WhiteSpace(includeNewLines: true).SkipAnd(Literals.Text("ab"))).Compile()
+                .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
+                out var _, out var _));
         }
     }
 }

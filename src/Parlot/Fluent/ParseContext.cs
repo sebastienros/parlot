@@ -31,7 +31,6 @@ namespace Parlot.Fluent
 
         /// <summary>
         /// The parser that is used to parse whitespaces and comments.
-        /// This can also include comments.
         /// </summary>
         public Parser<TextSpan, ParseContext> WhiteSpaceParser { get; set; }
 

@@ -8,13 +8,11 @@ namespace Parlot.Fluent
     where TParseContext : ParseContext
     {
         private readonly StringComparer _comparer;
-        private readonly bool _skipWhiteSpace;
 
-        public TextLiteral(string text, StringComparer comparer = null, bool skipWhiteSpace = true)
+        public TextLiteral(string text, StringComparer comparer = null)
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparer = comparer;
-            _skipWhiteSpace = skipWhiteSpace;
         }
 
         public string Text { get; }
@@ -23,11 +21,6 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            if (_skipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
-
             var start = context.Scanner.Cursor.Offset;
 
             if (context.Scanner.ReadText(Text, _comparer))
@@ -35,7 +28,7 @@ namespace Parlot.Fluent
                 result.Set(start, context.Scanner.Cursor.Offset, Text);
                 return true;
             }
-            
+
             return false;
         }
 
@@ -46,20 +39,16 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(string)));
 
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
-
             // if (context.Scanner.ReadText(Text, _comparer, null))
             // {
-            //     success = true;
-            //     value = Text;
+            //      success = true;
+            //      value = Text;
+            // }
+            //
+            // [if skipWhiteSpace]
+            // if (!success)
+            // {
+            //      resetPosition(beginning);
             // }
 
             var ifReadText = Expression.IfThen(

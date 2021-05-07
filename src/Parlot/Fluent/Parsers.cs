@@ -23,6 +23,11 @@ namespace Parlot.Fluent
         public static Parser<List<T>, TParseContext> Separated<U, T>(Parser<U, TParseContext> separator, Parser<T, TParseContext> parser) => new Separated<U, T, TParseContext>(separator, parser);
 
         /// <summary>
+        /// Builds a parser that skips white spaces before another one.
+        /// </summary>
+        public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
+
+        /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
         public static Parser<T, TParseContext> ZeroOrOne<T>(Parser<T, TParseContext> parser) => new ZeroOrOne<T, TParseContext>(parser);
@@ -113,54 +118,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.
         /// </summary>
-        public Parser<TextSpan, TParseContext> NonWhiteSpace(bool includeNewLines = false) => new NonWhiteSpaceLiteral<TParseContext>(skipWhiteSpace: false, includeNewLines: includeNewLines);
-
-        /// <summary>
-        /// Builds a parser that matches the specified text.
-        /// </summary>
-        public Parser<string, TParseContext> Text(string text, bool caseInsensitive = false) => new TextLiteral<TParseContext>(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches the specified char.
-        /// </summary>
-        public Parser<char, TParseContext> Char(char c) => new CharLiteral<TParseContext>(c, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches an integer.
-        /// </summary>
-        public Parser<long, TParseContext> Integer() => new IntegerLiteral<TParseContext>(skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches a floating point number.
-        /// </summary>
-        public Parser<decimal, TParseContext> Decimal() => new DecimalLiteral<TParseContext>(skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches an quoted string that can be escaped.
-        /// </summary>
-        public Parser<TextSpan, TParseContext> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral<TParseContext>(quotes, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches an identifier.
-        /// </summary>
-        public Parser<TextSpan, TParseContext> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier<TParseContext>(extraStart, extraPart, skipWhiteSpace: false);
-
-        /// <summary>
-        /// Builds a parser that matches a char against a predicate.
-        /// </summary>
-        /// <param name="predicate">The predicate to match against each char.</param>
-        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
-        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-        public Parser<TextSpan, TParseContext> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral<TParseContext>(predicate, minSize, maxSize, skipWhiteSpace: false);
-    }
-
-    public class TermBuilder<TParseContext>
-    where TParseContext : ParseContext
-    {
-        /// <summary>
-        /// Builds a parser that matches anything until whitespaces.
-        /// </summary>
-        public Parser<TextSpan, TParseContext> NonWhiteSpace(bool includeNewLines = false) => new NonWhiteSpaceLiteral<TParseContext>(includeNewLines: includeNewLines);
+        public Parser<TextSpan, TParseContext> NonWhiteSpace(bool includeNewLines = true) => new NonWhiteSpaceLiteral<TParseContext>(includeNewLines: includeNewLines);
 
         /// <summary>
         /// Builds a parser that matches the specified text.
@@ -175,12 +133,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an integer.
         /// </summary>
-        public Parser<long, TParseContext> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral<TParseContext>(numberOptions);
+        public Parser<long, TParseContext> Integer() => new IntegerLiteral<TParseContext>();
 
         /// <summary>
         /// Builds a parser that matches a floating point number.
         /// </summary>
-        public Parser<decimal, TParseContext> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral<TParseContext>(numberOptions);
+        public Parser<decimal, TParseContext> Decimal() => new DecimalLiteral<TParseContext>();
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.
@@ -198,6 +156,53 @@ namespace Parlot.Fluent
         /// <param name="predicate">The predicate to match against each char.</param>
         /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
         /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-        public Parser<TextSpan, TParseContext> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral<TParseContext>(predicate, minSize, maxSize);
+        public Parser<TextSpan, TParseContext> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral<TParseContext>(predicate, minSize, maxSiz);
+    }
+
+    public class TermBuilder<TParseContext>
+    where TParseContext : ParseContext
+    {
+        /// <summary>
+        /// Builds a parser that matches anything until whitespaces.
+        /// </summary>
+        public Parser<TextSpan, TParseContext> NonWhiteSpace(bool includeNewLines = true) => Parsers.SkipWhiteSpace(new NonWhiteSpaceLiteral<TParseContext>(includeNewLines: includeNewLines));
+
+        /// <summary>
+        /// Builds a parser that matches the specified text.
+        /// </summary>
+        public Parser<string, TParseContext> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral<TParseContext>(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null));
+
+        /// <summary>
+        /// Builds a parser that matches the specified char.
+        /// </summary>
+        public Parser<char, TParseContext> Char(char c) => Parsers.SkipWhiteSpace(new CharLiteral<TParseContext>(c));
+
+        /// <summary>
+        /// Builds a parser that matches an integer.
+        /// </summary>
+        public Parser<long, TParseContext> Integer(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new IntegerLiteral<TParseContext>(numberOptions));
+
+        /// <summary>
+        /// Builds a parser that matches a floating point number.
+        /// </summary>
+        public Parser<decimal, TParseContext> Decimal(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DecimalLiteral<TParseContext>(numberOptions));
+
+        /// <summary>
+        /// Builds a parser that matches an quoted string that can be escaped.
+        /// </summary>
+        public Parser<TextSpan, TParseContext> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => Parsers.SkipWhiteSpace(new StringLiteral<TParseContext>(quotes));
+
+        /// <summary>
+        /// Builds a parser that matches an identifier.
+        /// </summary>
+        public Parser<TextSpan, TParseContext> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => Parsers.SkipWhiteSpace(new Identifier<TParseContext>(extraStart, extraPart));
+
+        /// <summary>
+        /// Builds a parser that matches a char against a predicate.
+        /// </summary>
+        /// <param name="predicate">The predicate to match against each char.</param>
+        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+        public Parser<TextSpan, TParseContext> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new PatternLiteral<TParseContext>(predicate, minSize, maxSize));
     }
 }

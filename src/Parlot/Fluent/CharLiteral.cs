@@ -1,5 +1,4 @@
 ﻿using Parlot.Compilation;
-using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
@@ -7,24 +6,16 @@ namespace Parlot.Fluent
     public sealed class CharLiteral<TParseContext> : Parser<char, TParseContext>, ICompilable<TParseContext>
     where TParseContext : ParseContext
     {
-        public CharLiteral(char c, bool skipWhiteSpace = true)
+        public CharLiteral(char c)
         {
             Char = c;
-            SkipWhiteSpace = skipWhiteSpace;
         }
 
         public char Char { get; }
 
-        public bool SkipWhiteSpace { get; }
-
         public override bool Parse(TParseContext context, ref ParseResult<char> result)
         {
             context.EnterParser(this);
-
-            if (SkipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
 
             var start = context.Scanner.Cursor.Offset;
 
@@ -43,16 +34,6 @@ namespace Parlot.Fluent
 
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(char)));
-
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (SkipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
 
             // if (context.Scanner.ReadChar(Char))
             // {

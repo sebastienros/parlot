@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
-    <Title>Fast parser combinator for .NET</Title>
-    <Description>Parser utilities with performance and simplicity as its goals.</Description>
+    <Title>Parser combinator for .NET</Title>
+    <Description>Parlot is a fast, lightweight and simple to use .NET parser combinator.</Description>
     <PackageTags>parser;interpreter;</PackageTags>
     <IsPackable>true</IsPackable>
     <AssemblyOriginatorKeyFile>Parlot.snk</AssemblyOriginatorKeyFile>

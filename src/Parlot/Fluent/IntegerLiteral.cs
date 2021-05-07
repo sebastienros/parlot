@@ -9,25 +9,18 @@ namespace Parlot.Fluent
     where TParseContext : ParseContext
     {
         private readonly NumberOptions _numberOptions;
-        private readonly bool _skipWhiteSpace;
 
-        public IntegerLiteral(NumberOptions numberOptions = NumberOptions.Default, bool skipWhiteSpace = true)
+        public IntegerLiteral(NumberOptions numberOptions = NumberOptions.Default)
         {
             _numberOptions = numberOptions;
-            _skipWhiteSpace = skipWhiteSpace;
         }
+        
         public override bool Parse(TParseContext context, ref ParseResult<long> result)
         {
             context.EnterParser(this);
 
             var reset = context.Scanner.Cursor.Position;
-
-            if (_skipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
-
-            var start = context.Scanner.Cursor.Offset;
+            var start = reset.Offset;
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
             {
@@ -67,26 +60,7 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable<long, TParseContext>(result);
 
-            // TODO: if !_skiptWhiteSpace and !NumberOptions.AllowSign then we don't need to store the reset position
-            // since the ReadDecimal method will do it at the correct location.
-
-            //
-            // var reset = context.Scanner.Cursor.Position;
-            //
-            // if (_skipWhiteSpace)
-            // {
-            //     context.SkipWhiteSpace();
-            // }
-
             var reset = context.DeclarePositionVariable(result);
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
-
-            // var start = context.Scanner.Cursor.Offset;
-
             var start = context.DeclareOffsetVariable(result);
 
             if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
