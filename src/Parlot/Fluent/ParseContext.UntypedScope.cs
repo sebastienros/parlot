@@ -5,7 +5,7 @@ namespace Parlot.Fluent
 {
     public partial class ParseContext
     {
-        public class Untyped : ParseContext<Untyped>
+        public class Untyped : ParseContext<char, Untyped>
         {
             IDictionary<string, object> scope;
 
@@ -40,7 +40,7 @@ namespace Parlot.Fluent
             {
             }
 
-            public Untyped(Scanner scanner, bool useNewLines = false)
+            public Untyped(Scanner<char> scanner, bool useNewLines = false)
             : base(scanner, useNewLines)
             {
             }
@@ -50,7 +50,7 @@ namespace Parlot.Fluent
                 return new Untyped(this);
             }
 
-            public static Untyped Scan(Scanner scanner, bool useNewLines = false)
+            public static Untyped Scan(Scanner<char> scanner, bool useNewLines = false)
             {
                 return new Untyped(scanner, useNewLines);
             }

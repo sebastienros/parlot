@@ -11,25 +11,26 @@ namespace Parlot.Fluent
         /// Compiles the current parser.
         /// </summary>
         /// <returns>A compiled parser.</returns>
-        public static Parser<T, ParseContext> Compile<T>(this Parser<T, ParseContext> self)
+        public static Parser<T, StringParseContext, char> Compile<T>(this Parser<T, StringParseContext, char> self)
         {
-            return self.Compile<T, ParseContext>();
+            return self.Compile<T, StringParseContext, char>();
         }
         /// <summary>
         /// Compiles the current parser.
         /// </summary>
         /// <returns>A compiled parser.</returns>
-        public static Parser<T, TParseContext> Compile<T, TParseContext>(this Parser<T, TParseContext> self)
-        where TParseContext : ParseContext
+        public static Parser<T, TParseContext, TChar> Compile<T, TParseContext, TChar>(this Parser<T, TParseContext, TChar> self)
+        where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TChar : IEquatable<TChar>, IConvertible
         {
             if (self is ICompiledParser)
             {
                 return self;
             }
 
-            var compilationContext = new CompilationContext<TParseContext>();
+            var compilationContext = new CompilationContext<TParseContext, TChar>();
 
-            var compilationResult = Build<T, TParseContext>(self, compilationContext);
+            var compilationResult = self.Build(compilationContext);
 
             // return value;
 
@@ -65,7 +66,7 @@ namespace Parlot.Fluent
             var parser = result.Compile();
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
-            return new CompiledParser<T, TParseContext>(parser);
+            return new CompiledParser<T, TParseContext, TChar>(parser);
         }
 
         /// <summary>
@@ -79,6 +80,40 @@ namespace Parlot.Fluent
         where TParseContext : ParseContext
         {
             if (self is ICompilable<TParseContext> compilable)
+            {
+                var discardResult = context.DiscardResult;
+                if (requireResult)
+                {
+                    context.DiscardResult = false;
+                }
+
+                var compilationResult = compilable.Compile(context);
+
+                context.DiscardResult = discardResult;
+
+                return compilationResult;
+            }
+            else
+            {
+                // The parser doesn't provide custom compiled instructions, so we are building generic ones based on its Parse() method.
+                // Any other parser it uses won't be compiled either, even if they implement ICompilable.
+
+                return BuildAsNonCompilableParser<T, TParseContext>(context, self);
+            }
+        }
+
+        /// <summary>
+        /// Invokes the <see cref="ICompilable{TParseContext}.Compile(CompilationContext{TParseContext})"/> method of the <see cref="Parser{T, TParseContext}"/> if it's available or 
+        /// creates a generic one.
+        /// </summary>
+        /// <param name="self">The <see cref="Parser{T, TParseContext}"/> instance.</param>
+        /// <param name="context">The <see cref="CompilationContext{TParseContext}"/> instance.</param>
+        /// <param name="requireResult">Forces the instruction to compute the resulting value whatever the state of <see cref="CompilationContext{TParseContext}.DiscardResult"/> is.</param>
+        public static CompilationResult Build<T, TParseContext, TChar>(this Parser<T, TParseContext, TChar> self, CompilationContext<TParseContext, TChar> context, bool requireResult = false)
+        where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TChar : IEquatable<TChar>, IConvertible
+        {
+            if (self is ICompilable<TParseContext, TChar> compilable)
             {
                 var discardResult = context.DiscardResult;
                 if (requireResult)

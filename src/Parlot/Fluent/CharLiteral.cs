@@ -4,27 +4,33 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class CharLiteral<TParseContext> : Parser<char, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class CharLiteral<T, TParseContext> : Parser<T, TParseContext, T>, ICompilable<TParseContext, T>
+    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
+    where T : IEquatable<T>, IConvertible
     {
-        public CharLiteral(char c, bool skipWhiteSpace = true)
+        public CharLiteral(T c, bool skipWhiteSpace)
         {
             Char = c;
-            SkipWhiteSpace = skipWhiteSpace;
+            SkipWhiteSpace = skipWhiteSpace && typeof(T) == typeof(char);
+        }
+        public CharLiteral(T c)
+        : this(c, typeof(T) == typeof(char))
+        {
         }
 
-        public char Char { get; }
+        public T Char { get; }
 
         public bool SkipWhiteSpace { get; }
 
-        public override bool Parse(TParseContext context, ref ParseResult<char> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
             if (SkipWhiteSpace)
-            {
-                context.SkipWhiteSpace();
-            }
+                if (context is StringParseContext stringParseContext)
+                    stringParseContext.SkipWhiteSpace();
+                else if (context is ParseContextWithScanner<Scanner<char>, char> charContext)
+                    charContext.Scanner.SkipWhiteSpace();
 
             var start = context.Scanner.Cursor.Offset;
 
@@ -37,7 +43,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
         {
             var result = new CompilationResult();
 

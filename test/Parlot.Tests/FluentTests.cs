@@ -1,7 +1,7 @@
 using Parlot.Fluent;
 using System.Collections.Generic;
 using Xunit;
-using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
+using static Parlot.Fluent.StringParsers<Parlot.Fluent.StringParseContext>;
 
 namespace Parlot.Tests
 {
@@ -118,7 +118,7 @@ namespace Parlot.Tests
         [Fact]
         public void AndSkipShouldResetPosition()
         {
-            var code = 
+            var code =
                 OneOf(
                     Terms.Text("hello").AndSkip(Terms.Text("world")),
                     Terms.Text("hello").AndSkip(Terms.Text("universe"))
@@ -132,7 +132,7 @@ namespace Parlot.Tests
         [Fact]
         public void SkipAndShouldResetPosition()
         {
-            var code = 
+            var code =
                 OneOf(
                     Terms.Text("hello").SkipAnd(Terms.Text("world")),
                     Terms.Text("hello").AndSkip(Terms.Text("universe"))
@@ -156,7 +156,7 @@ namespace Parlot.Tests
         [Fact]
         public void ParseContextShouldUseNewLines()
         {
-            Assert.Equal("a", Terms.NonWhiteSpace().Parse("\n\r\v a"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse("\n\r\v a").ToString());
         }
 
         [Fact]
@@ -227,25 +227,25 @@ namespace Parlot.Tests
         [Fact]
         public void ScopeShouldAllowScopedParserContext()
         {
-            var a = Parsers<ParseContext.Untyped>.Literals.Char('a');
-            var b = Parsers<ParseContext.Untyped>.Literals.Char('b');
-            var c = Parsers<ParseContext.Untyped>.Literals.Char('c');
+            var a = StringParsers<ParseContext.Untyped>.Literals.Char('a');
+            var b = StringParsers<ParseContext.Untyped>.Literals.Char('b');
+            var c = StringParsers<ParseContext.Untyped>.Literals.Char('c');
 
-            var o2 = Scope(
+            var o2 = StringParsers<ParseContext.Untyped>.Scope(
                     a.Then((c, t) => { c.Set("lorem", "ipsum"); return "lorem"; })
                     .And(b).Then((c, t) => c.Get<string>(t.Item1)));
 
-            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
-            Assert.False(o2.TryParse(new ParseContext.Untyped(new Scanner("a")), out _));
-            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("ab")), out var result));
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped, char>>(o2);
+            Assert.False(o2.TryParse(new ParseContext.Untyped(new Scanner<char>("a".ToCharArray())), out _));
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner<char>("ab".ToCharArray())), out var result));
             Assert.Equal("ipsum", result);
 
             o2 = Scope(
                     a.Then((c, t) => "lorem")
                     .And(b).Then((c, t) => c.Get<string>(t.Item1)));
 
-            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
-            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("ab")), out result));
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped, char>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner<char>("ab".ToCharArray())), out result));
             Assert.Null(result);
 
 
@@ -253,8 +253,8 @@ namespace Parlot.Tests
                     a.Then((c, t) => c.Set("lorem", "ipsum"))
                     .SkipAnd(Scope(b.Then((c, t) => c.Get<string>("lorem")))));
 
-            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
-            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("ab")), out result));
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped, char>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner<char>("ab".ToCharArray())), out result));
             Assert.Equal("ipsum", result);
 
             o2 = Scope(
@@ -263,8 +263,8 @@ namespace Parlot.Tests
                     .SkipAnd(c.Then((c, t) => c.Get<string>("lorem")))
                     );
 
-            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
-            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("abc")), out result));
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped, char>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner<char>("abc".ToCharArray())), out result));
             Assert.Equal("ipsumipsum", result);
 
             o2 = Scope(
@@ -273,8 +273,8 @@ namespace Parlot.Tests
                     .SkipAnd(c.Then((c, t) => c.Get<string>("lorem2")))
                     );
 
-            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
-            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("abc")), out result));
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped, char>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner<char>("abc".ToCharArray())), out result));
             Assert.Null(result);
         }
 
@@ -288,12 +288,12 @@ namespace Parlot.Tests
             var o2 = a.Or(b);
             var o3 = a.Or(b).Or(c);
 
-            Assert.IsType<OneOf<char, ParseContext>>(o2);
+            Assert.IsType<OneOf<char, StringParseContext, char>>(o2);
             Assert.True(o2.TryParse("a", out _));
             Assert.True(o2.TryParse("b", out _));
             Assert.False(o2.TryParse("c", out _));
 
-            Assert.IsType<OneOf<char, ParseContext>>(o3);
+            Assert.IsType<OneOf<char, StringParseContext, char>>(o3);
             Assert.True(o3.TryParse("a", out _));
             Assert.True(o3.TryParse("b", out _));
             Assert.True(o3.TryParse("c", out _));
@@ -306,9 +306,9 @@ namespace Parlot.Tests
             var a = Literals.Char('a');
             var b = Literals.Decimal();
 
-            var o2 = a.Or<char, decimal, object, ParseContext>(b);
+            var o2 = a.Or<char, decimal, object, StringParseContext, char>(b);
 
-            Assert.IsType<OneOf<char, decimal, object, ParseContext>>(o2);
+            Assert.IsType<OneOf<char, decimal, object, StringParseContext, char>>(o2);
             Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
             Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
         }
@@ -325,27 +325,27 @@ namespace Parlot.Tests
             var s6 = s5.And(a);
             var s7 = s6.And(a);
 
-            Assert.IsType<Sequence<char, char, ParseContext>>(s2);
+            Assert.IsType<Sequence<char, char, StringParseContext, char>>(s2);
             Assert.False(s2.TryParse("a", out _));
             Assert.True(s2.TryParse("aab", out _));
 
-            Assert.IsType<Sequence<char, char, char, ParseContext>>(s3);
+            Assert.IsType<Sequence<char, char, char, StringParseContext, char>>(s3);
             Assert.False(s3.TryParse("aa", out _));
             Assert.True(s3.TryParse("aaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, ParseContext>>(s4);
+            Assert.IsType<Sequence<char, char, char, char, StringParseContext, char>>(s4);
             Assert.False(s4.TryParse("aaa", out _));
             Assert.True(s4.TryParse("aaaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, char, ParseContext>>(s5);
+            Assert.IsType<Sequence<char, char, char, char, char, StringParseContext, char>>(s5);
             Assert.False(s5.TryParse("aaaa", out _));
             Assert.True(s5.TryParse("aaaaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, char, char, ParseContext>>(s6);
+            Assert.IsType<Sequence<char, char, char, char, char, char, StringParseContext, char>>(s6);
             Assert.False(s6.TryParse("aaaaa", out _));
             Assert.True(s6.TryParse("aaaaaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, char, char, char, ParseContext>>(s7);
+            Assert.IsType<Sequence<char, char, char, char, char, char, char, StringParseContext, char>>(s7);
             Assert.False(s7.TryParse("aaaaaa", out _));
             Assert.True(s7.TryParse("aaaaaaab", out _));
         }
@@ -375,7 +375,7 @@ namespace Parlot.Tests
             Assert.Equal((long)123, resultI);
 
             Assert.True(parser.TryParse("s:'123'", out var resultS));
-            Assert.Equal("123", ((TextSpan)resultS).ToString());
+            Assert.Equal("123", ((BufferSpan<char>)resultS).ToString());
         }
 
         [Fact]
@@ -472,14 +472,14 @@ namespace Parlot.Tests
         [Fact]
         public void NonWhiteSpaceShouldStopAtSpaceOrEof()
         {
-            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a"));
-            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a "));
-            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a b"));
-            Assert.Equal("a", Terms.NonWhiteSpace().Parse("a b"));
-            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc b"));
-            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc\nb"));
-            Assert.Equal("abc\nb", Terms.NonWhiteSpace(true).Parse("abc\nb"));
-            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a").ToString());
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a ").ToString());
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse(" a b").ToString());
+            Assert.Equal("a", Terms.NonWhiteSpace().Parse("a b").ToString());
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc b").ToString());
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc\nb").ToString());
+            Assert.Equal("abc\nb", Terms.NonWhiteSpace(true).Parse("abc\nb").ToString());
+            Assert.Equal("abc", Terms.NonWhiteSpace().Parse("abc").ToString());
 
             Assert.False(Terms.NonWhiteSpace().TryParse("", out _));
             Assert.False(Terms.NonWhiteSpace().TryParse(" ", out _));
@@ -488,8 +488,8 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldParseWhiteSpace()
         {
-            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Parse("\n\r\v a"));
-            Assert.Equal("  ", Literals.WhiteSpace(false).Parse("  \n\r\v a"));
+            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Parse("\n\r\v a").ToString());
+            Assert.Equal("  ", Literals.WhiteSpace(false).Parse("  \n\r\v a").ToString());
         }
 
         [Fact]
@@ -508,15 +508,15 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldParseEmails()
         {
-            Parser<char, ParseContext> Dot = Literals.Char('.');
-            Parser<char, ParseContext> Plus = Literals.Char('+');
-            Parser<char, ParseContext> Minus = Literals.Char('-');
-            Parser<char, ParseContext> At = Literals.Char('@');
-            Parser<TextSpan, ParseContext> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>, ParseContext> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
-            Parser<List<char>, ParseContext> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
-            Parser<List<char>, ParseContext> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
-            Parser<TextSpan, ParseContext> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+            Parser<char, StringParseContext, char> Dot = Literals.Char('.');
+            Parser<char, StringParseContext, char> Plus = Literals.Char('+');
+            Parser<char, StringParseContext, char> Minus = Literals.Char('-');
+            Parser<char, StringParseContext, char> At = Literals.Char('@');
+            Parser<BufferSpan<char>, StringParseContext, char> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+            Parser<List<char>, StringParseContext, char> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
+            Parser<List<char>, StringParseContext, char> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
+            Parser<List<char>, StringParseContext, char> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
+            Parser<BufferSpan<char>, StringParseContext, char> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
 
@@ -554,54 +554,54 @@ namespace Parlot.Tests
             Assert.True(Terms.Decimal().Discard<bool>(true).TryParse("123", out var r2) && r2 == true);
             Assert.False(Terms.Decimal().Discard<bool>(true).TryParse("abc", out _));
         }
-        
+
         [Fact]
         public void ErrorShouldThrowIfParserSucceeds()
         {
             Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
             Assert.Equal("'a' was not expected", error.Message);
         }
-        
+
         [Fact]
         public void ErrorShouldThrow()
         {
             Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
             Assert.Equal("'a' was not expected", error.Message);
         }
-        
+
         [Fact]
         public void ElseErrorShouldThrowIfParserFails()
         {
             Assert.False(Literals.Char('a').ElseError("'a' was expected").TryParse("b", out _, out var error));
             Assert.Equal("'a' was expected", error.Message);
         }
-        
+
         [Fact]
         public void ElseErrorShouldFlowResultIfParserSucceeds()
         {
             Assert.True(Literals.Char('a').ElseError("'a' was expected").TryParse("a", out var result));
             Assert.Equal('a', result);
         }
-        
+
         [Fact]
         public void TextBeforeShouldReturnAllCharBeforeDelimiter()
         {
             Assert.False(AnyCharBefore(Literals.Char('a')).TryParse("", out _));
             Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: true).TryParse("", out var result1));
-            
+
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hello", out var result2));
-            Assert.Equal("hello", result2);
+            Assert.Equal("hello", result2.ToString());
             Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: false).TryParse("hello", out _));
             Assert.False(AnyCharBefore(Literals.Char('a'), failOnEof: true).TryParse("hello", out _));
         }
-        
+
         [Fact]
         public void TextBeforeShouldStopAtDelimiter()
         {
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hellao", out var result1));
-            Assert.Equal("hell", result1);
+            Assert.Equal("hell", result1.ToString());
         }
-        
+
         [Fact]
         public void TextBeforeShouldNotConsumeDelimiter()
         {
@@ -613,7 +613,7 @@ namespace Parlot.Tests
         public void TextBeforeShouldBeValidAtEof()
         {
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hella", out var result1));
-            Assert.Equal("hell", result1);
+            Assert.Equal("hell", result1.ToString());
         }
 
 

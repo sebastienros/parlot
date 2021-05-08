@@ -1,11 +1,13 @@
 ﻿namespace Parlot.Fluent
 {
     using Compilation;
+    using System;
     using System.Linq;
     using System.Linq.Expressions;
 
-    public sealed class TextBefore<T, TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class TextBefore<T, TParseContext, TChar> : Parser<BufferSpan<TChar>, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _delimiter;
         private readonly bool _canBeEmpty;
@@ -20,7 +22,7 @@
             _consumeDelimiter = consumeDelimiter;
         }
 
-        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<TChar>> result)
         {
             context.EnterParser(this);
 
@@ -47,7 +49,7 @@
                         return false;
                     }
 
-                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, previous.Offset, context.Scanner.Buffer.SubBuffer(start.Offset, length));
                     return true;
                 }
 
@@ -67,7 +69,7 @@
                         return false;
                     }
 
-                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, previous.Offset, context.Scanner.Buffer.SubBuffer(start.Offset, length));
                     return true;
                 }
 
@@ -75,12 +77,12 @@
             }
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
 
             //  var start = context.Scanner.Cursor.Position;
             //  
@@ -106,7 +108,7 @@
             //              }
             //  
             //              success = true;
-            //              value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //              value = new BufferSpan<char>(context.Scanner.Buffer, start.Offset, length);
             //              break;
             //          }
             //      }
@@ -129,7 +131,7 @@
             //          }
             //  
             //          success = true;
-            //          value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //          value = new BufferSpan<char>(context.Scanner.Buffer, start.Offset, length);
             //          break;
             //      }
             //  
@@ -161,7 +163,7 @@
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
                                 Expression.Assign(success, Expression.Constant(true)),
-                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Assign(value, context.SubBufferSpan(context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),
@@ -179,7 +181,7 @@
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
                                 Expression.Assign(success, Expression.Constant(true)),
-                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Assign(value, context.SubBufferSpan(context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),

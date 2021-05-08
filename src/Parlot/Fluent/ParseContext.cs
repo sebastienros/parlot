@@ -4,6 +4,38 @@ namespace Parlot.Fluent
 {
     public partial class ParseContext
     {
+
+        /// <summary>
+        /// Delegate that is executed whenever a parser is invoked.
+        /// </summary>
+        public Action<object, ParseContext> OnEnterParser { get; set; }
+
+        /// <summary>
+        /// Called whenever a parser is invoked. Will be used to detect invalid states and infinite loops.
+        /// </summary>
+        public void EnterParser<T, TParseContext>(Parser<T, TParseContext> parser)
+        where TParseContext : ParseContext
+        {
+            OnEnterParser?.Invoke(parser, this);
+        }
+    }
+    public partial class ParseContextWithScanner<TScanner, T> : ParseContext
+    where TScanner : Scanner<T>
+    where T : IEquatable<T>, IConvertible
+    {
+        /// <summary>
+        /// The scanner used for the parsing session.
+        /// </summary>
+        public readonly TScanner Scanner;
+
+        public ParseContextWithScanner(TScanner scanner)
+        {
+            Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
+        }
+    }
+
+    public class StringParseContext : ParseContextWithScanner<Scanner<char>, char>
+    {
         /// <summary>
         /// Whether new lines are treated as normal chars or white spaces.
         /// </summary>
@@ -13,27 +45,17 @@ namespace Parlot.Fluent
         /// </remarks>
         public bool UseNewLines { get; private set; }
 
-        /// <summary>
-        /// The scanner used for the parsing session.
-        /// </summary>
-        public readonly Scanner Scanner;
-
-        public ParseContext(Scanner scanner, bool useNewLines = false)
+        public StringParseContext(Scanner<char> scanner, bool useNewLines = false)
+        : base(scanner)
         {
-            Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
             UseNewLines = useNewLines;
         }
-
-        /// <summary>
-        /// Delegate that is executed whenever a parser is invoked.
-        /// </summary>
-        public Action<object, ParseContext> OnEnterParser { get; set; }
 
         /// <summary>
         /// The parser that is used to parse whitespaces and comments.
         /// This can also include comments.
         /// </summary>
-        public Parser<TextSpan, ParseContext> WhiteSpaceParser { get; set; }
+        public Parser<BufferSpan<char>, ParseContext> WhiteSpaceParser { get; set; }
 
         public void SkipWhiteSpace()
         {
@@ -50,18 +72,9 @@ namespace Parlot.Fluent
             }
             else
             {
-                ParseResult<TextSpan> _ = new();
+                ParseResult<BufferSpan<char>> _ = new();
                 WhiteSpaceParser.Parse(this, ref _);
             }
-        }
-
-        /// <summary>
-        /// Called whenever a parser is invoked. Will be used to detect invalid states and infinite loops.
-        /// </summary>
-        public void EnterParser<T, TParseContext>(Parser<T, TParseContext> parser)
-        where TParseContext : ParseContext
-        {
-            OnEnterParser?.Invoke(parser, this);
         }
     }
 }

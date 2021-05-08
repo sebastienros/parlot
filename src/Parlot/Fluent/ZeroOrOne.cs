@@ -5,8 +5,9 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class ZeroOrOne<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class ZeroOrOne<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;
 

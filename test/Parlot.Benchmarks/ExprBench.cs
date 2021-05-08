@@ -11,7 +11,7 @@ namespace Parlot.Benchmarks
     public class ExprBench
     {
         private readonly Parser _parser = new();
-        private readonly Parser<Expression, ParseContext> _compiled = FluentParser.Expression.Compile();
+        private readonly Parser<Expression, StringParseContext> _compiled = FluentParser.Expression.Compile();
 
         private const string _expression1 = "3 - 1 / 2 + 1";
         private const string _expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";

@@ -3,7 +3,7 @@
 
     public static class ParserExtensions
     {
-        public static T Parse<T, TParseContext>(this Parser<T, TParseContext> parser, string text, TParseContext context)
+        public static T Parse<T, TParseContext>(this Parser<T, TParseContext> parser, TParseContext context)
         where TParseContext : ParseContext
         {
             var localResult = new ParseResult<T>();
@@ -18,19 +18,19 @@
             return default;
         }
 
-        public static T Parse<T>(this Parser<T, ParseContext> parser, string text)
+        public static T Parse<T>(this Parser<T, StringParseContext> parser, string text)
         {
-            return parser.Parse(text, new ParseContext(new Scanner(text)));
+            return parser.Parse(new StringParseContext(new Scanner<char>(text.ToCharArray())));
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult, ParseContext> parser, string text, out TResult value)
+        public static bool TryParse<TResult>(this Parser<TResult, StringParseContext> parser, string text, out TResult value)
         {
             return parser.TryParse(text, out value, out _);
         }
 
-        public static bool TryParse<TResult>(this Parser<TResult, ParseContext> parser, string text, out TResult value, out ParseError error)
+        public static bool TryParse<TResult>(this Parser<TResult, StringParseContext> parser, string text, out TResult value, out ParseError error)
         {
-            return TryParse(parser, new ParseContext(new Scanner(text)), out value, out error);
+            return TryParse(parser, new StringParseContext(new Scanner<char>(text.ToCharArray())), out value, out error);
         }
 
         public static bool TryParse<TResult, TParseContext>(this Parser<TResult, TParseContext> parser, TParseContext context, out TResult value)

@@ -5,8 +5,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class IntegerLiteral<TParseContext> : Parser<long, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class IntegerLiteral<TParseContext> : Parser<long, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly NumberOptions _numberOptions;
         private readonly bool _skipWhiteSpace;
@@ -22,9 +22,9 @@ namespace Parlot.Fluent
 
             var reset = context.Scanner.Cursor.Position;
 
-            if (_skipWhiteSpace)
+            if (_skipWhiteSpace && context is StringParseContext stringParseContext)
             {
-                context.SkipWhiteSpace();
+                stringParseContext.SkipWhiteSpace();
             }
 
             var start = context.Scanner.Cursor.Offset;
@@ -43,9 +43,9 @@ namespace Parlot.Fluent
                 var end = context.Scanner.Cursor.Offset;
 
 #if NETSTANDARD2_0
-                var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
+                var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).ToString();
 #else
-                var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
+                var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).Span;
 #endif
 
                 if (long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
@@ -60,7 +60,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 

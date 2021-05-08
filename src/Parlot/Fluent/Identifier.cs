@@ -4,8 +4,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Identifier<TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class Identifier<TParseContext> : Parser<BufferSpan<char>, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly Func<char, bool> _extraStart;
         private readonly Func<char, bool> _extraPart;
@@ -15,16 +15,16 @@ namespace Parlot.Fluent
         {
             _extraStart = extraStart;
             _extraPart = extraPart;
-            _skipWhiteSpace = skipWhiteSpace;
+            _skipWhiteSpace = skipWhiteSpace && typeof(TParseContext).IsAssignableFrom(typeof(StringParseContext));
         }
 
-        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<char>> result)
         {
             context.EnterParser(this);
 
             if (_skipWhiteSpace)
             {
-                context.SkipWhiteSpace();
+                ((StringParseContext)(object)context).SkipWhiteSpace();
             }
 
             var first = context.Scanner.Cursor.Current;
@@ -44,19 +44,19 @@ namespace Parlot.Fluent
 
                 var end = context.Scanner.Cursor.Offset;
 
-                result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+                result.Set(start, end, context.Scanner.Buffer.SubBuffer(start, end - start));
                 return true;
             }
 
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
 
             //if (_skipWhiteSpace)
             //{
@@ -85,7 +85,7 @@ namespace Parlot.Fluent
             //        context.Scanner.Cursor.Advance();
             //    }
             //    
-            //    value = new TextSpan(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset - start);
+            //    value = new BufferSpan<char>(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset - start);
             //    success = true;
             // }
             // {
@@ -125,7 +125,7 @@ namespace Parlot.Fluent
                                 ),
                             breakLabel
                             ),
-                        Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
+                        Expression.Assign(value, context.SubBufferSpan(start, Expression.Subtract(context.Offset(), start))),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                     )
                 )

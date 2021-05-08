@@ -4,8 +4,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class TextLiteral<TParseContext> : Parser<string, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class TextLiteral<TParseContext> : Parser<string, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly StringComparer _comparer;
         private readonly bool _skipWhiteSpace;
@@ -14,7 +14,7 @@ namespace Parlot.Fluent
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparer = comparer;
-            _skipWhiteSpace = skipWhiteSpace;
+            _skipWhiteSpace = skipWhiteSpace && typeof(TParseContext).IsAssignableFrom(typeof(StringParseContext));
         }
 
         public string Text { get; }
@@ -25,7 +25,7 @@ namespace Parlot.Fluent
 
             if (_skipWhiteSpace)
             {
-                context.SkipWhiteSpace();
+                ((StringParseContext)(object)context).SkipWhiteSpace();
             }
 
             var start = context.Scanner.Cursor.Offset;
@@ -35,11 +35,11 @@ namespace Parlot.Fluent
                 result.Set(start, context.Scanner.Cursor.Offset, Text);
                 return true;
             }
-            
+
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 
@@ -64,8 +64,9 @@ namespace Parlot.Fluent
 
             var ifReadText = Expression.IfThen(
                 Expression.Call(
-                    Expression.Field(context.ParseContext, "Scanner"),
+null,
                     ExpressionHelper<TParseContext>.Scanner_ReadText_NoResult,
+                    context.Scanner(),
                     Expression.Constant(Text, typeof(string)),
                     Expression.Constant(_comparer, typeof(StringComparer))
                     ),

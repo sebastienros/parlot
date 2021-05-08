@@ -10,8 +10,10 @@ namespace Parlot.Fluent
     /// </summary>
     /// <typeparam name="T">The output parser type.</typeparam>
     /// <typeparam name="TParseContext">The parse context type.</typeparam>
-    public sealed class When<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    /// <typeparam name="TChar">The char or byte type.</typeparam>
+    public sealed class When<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Func<T, bool> _action;
         private readonly Parser<T, TParseContext> _parser;
@@ -38,7 +40,7 @@ namespace Parlot.Fluent
             return valid;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 

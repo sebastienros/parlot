@@ -16,10 +16,11 @@ namespace Parlot.Compilation
     /// in order to expose is as as standard parser contract.
     /// </summary>
     /// <remarks>
-    /// This class is used in <see cref="Parsers.Compile{T, TParseContext}"/>.
+    /// This class is used in <see cref="Parsers.Compile{T, TParseContext,TChar}"/>.
     /// </remarks>
-    public class CompiledParser<T, TParseContext> : Parser<T, TParseContext>, ICompiledParser
-    where TParseContext : ParseContext
+    public class CompiledParser<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompiledParser
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Func<TParseContext, ValueTuple<bool, T>> _parse;
 

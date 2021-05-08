@@ -2,7 +2,7 @@ using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
 using Xunit;
-using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
+using static Parlot.Fluent.StringParsers<Parlot.Fluent.StringParseContext>;
 
 namespace Parlot.Tests
 {
@@ -26,7 +26,7 @@ namespace Parlot.Tests
 
             var result = parser.Parse("'hello'");
 
-            Assert.Equal("hello", result);
+            Assert.Equal("hello", result.ToString());
         }
 
         [Fact]
@@ -46,7 +46,7 @@ namespace Parlot.Tests
 
             var result = parser.Parse("helloWorld");
 
-            Assert.Equal("hello", result);
+            Assert.Equal("hello", result.ToString());
         }
 
         [Fact]
@@ -229,15 +229,15 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileCapture()
         {
-            Parser<char, ParseContext> Dot = Literals.Char('.');
-            Parser<char, ParseContext> Plus = Literals.Char('+');
-            Parser<char, ParseContext> Minus = Literals.Char('-');
-            Parser<char, ParseContext> At = Literals.Char('@');
-            Parser<TextSpan, ParseContext> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>, ParseContext> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-            Parser<List<char>, ParseContext> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-            Parser<List<char>, ParseContext> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
-            Parser<TextSpan, ParseContext> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+            Parser<char, StringParseContext> Dot = Literals.Char('.');
+            Parser<char, StringParseContext> Plus = Literals.Char('+');
+            Parser<char, StringParseContext> Minus = Literals.Char('-');
+            Parser<char, StringParseContext, char> At = Literals.Char('@');
+            Parser<BufferSpan<char>, StringParseContext> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+            Parser<List<char>, StringParseContext> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+            Parser<List<char>, StringParseContext> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+            Parser<List<char>, StringParseContext> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<BufferSpan<char>, StringParseContext, char> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
 
@@ -247,7 +247,7 @@ namespace Parlot.Tests
             Assert.Equal(_email, result.ToString());
         }
 
-        private sealed class NonCompilableCharLiteral : Parser<char, ParseContext>
+        private sealed class NonCompilableCharLiteral : Parser<char, StringParseContext, char>
         {
             public NonCompilableCharLiteral(char c, bool skipWhiteSpace = true)
             {
@@ -259,7 +259,7 @@ namespace Parlot.Tests
 
             public bool SkipWhiteSpace { get; }
 
-            public override bool Parse(ParseContext context, ref ParseResult<char> result)
+            public override bool Parse(StringParseContext context, ref ParseResult<char> result)
             {
                 context.EnterParser(this);
 
@@ -296,7 +296,7 @@ namespace Parlot.Tests
             var a = Literals.Char('a');
             var b = Literals.Decimal();
 
-            var o2 = a.Or<char, decimal, object, ParseContext>(b).Compile();
+            var o2 = a.Or<char, decimal, object, StringParseContext, char>(b).Compile();
 
             Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
             Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
@@ -364,14 +364,14 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileNonWhiteSpace()
         {
-            Assert.Equal("a", Terms.NonWhiteSpace().Compile().Parse("\n\r\v a"));
+            Assert.Equal("a", Terms.NonWhiteSpace().Compile().Parse("\n\r\v a").ToString());
         }
 
         [Fact]
         public void ShouldCompileWhiteSpace()
         {
-            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Compile().Parse("\n\r\v a"));
-            Assert.Equal("  ", Literals.WhiteSpace(false).Compile().Parse("  \n\r\v a"));
+            Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Compile().Parse("\n\r\v a").ToString());
+            Assert.Equal("  ", Literals.WhiteSpace(false).Compile().Parse("  \n\r\v a").ToString());
         }
 
         [Theory]
@@ -427,7 +427,7 @@ namespace Parlot.Tests
             Assert.True(evenIntegers.TryParse("1235", out var result1));
             Assert.Equal(1235, result1.Item2);
         }
-        
+
         [Fact]
         public void ErrorShouldThrowIfParserSucceeds()
         {
@@ -441,14 +441,14 @@ namespace Parlot.Tests
             Assert.False(Literals.Char('a').Error("'a' was not expected").Compile().TryParse("a", out _, out var error));
             Assert.Equal("'a' was not expected", error.Message);
         }
-        
+
         [Fact]
         public void ElseErrorShouldThrowIfParserFails()
         {
             Assert.False(Literals.Char('a').ElseError("'a' was expected").Compile().TryParse("b", out _, out var error));
             Assert.Equal("'a' was expected", error.Message);
         }
-        
+
         [Fact]
         public void ElseErrorShouldFlowResultIfParserSucceeds()
         {
@@ -481,20 +481,20 @@ namespace Parlot.Tests
             Assert.Equal((long)123, resultI);
 
             Assert.True(parser.TryParse("s:'123'", out var resultS));
-            Assert.Equal("123", ((TextSpan)resultS).ToString());
+            Assert.Equal("123", ((BufferSpan<char>)resultS).ToString());
         }
 
         [Fact]
         public void ShouldCompileTextBefore()
         {
             Assert.True(AnyCharBefore(Literals.Char('a')).Compile().TryParse("hellao", out var result1));
-            Assert.Equal("hell", result1);
+            Assert.Equal("hell", result1.ToString());
 
             Assert.True(AnyCharBefore(Literals.Char('a')).And(Literals.Char('a')).Compile().TryParse("hellao", out _));
             Assert.False(AnyCharBefore(Literals.Char('a'), consumeDelimiter: true).And(Literals.Char('a')).TryParse("hellao", out _));
 
             Assert.True(AnyCharBefore(Literals.Char('a')).Compile().TryParse("hella", out var result2));
-            Assert.Equal("hell", result2);
+            Assert.Equal("hell", result2.ToString());
         }
 
         [Fact]

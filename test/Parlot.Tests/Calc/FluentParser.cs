@@ -1,11 +1,11 @@
 ﻿using Parlot.Fluent;
-using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
+using static Parlot.Fluent.StringParsers<Parlot.Fluent.StringParseContext>;
 
 namespace Parlot.Tests.Calc
 {
     public class FluentParser
     {
-        public static readonly Parser<Expression, ParseContext> Expression;
+        public static readonly Parser<Expression, StringParseContext, char> Expression;
 
         static FluentParser()
         {

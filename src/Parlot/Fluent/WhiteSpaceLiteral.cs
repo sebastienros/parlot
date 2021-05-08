@@ -3,8 +3,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class WhiteSpaceLiteral<TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class WhiteSpaceLiteral<TParseContext> : Parser<BufferSpan<char>, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly bool _includeNewLines;
 
@@ -13,7 +13,7 @@ namespace Parlot.Fluent
             _includeNewLines = includeNewLines;
         }
 
-        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<char>> result)
         {
             context.EnterParser(this);
 
@@ -35,17 +35,17 @@ namespace Parlot.Fluent
                 return false;
             }
 
-            result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, context.Scanner.Cursor.Offset, context.Scanner.Buffer.SubBuffer(start, end - start));
 
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
 
             var start = context.DeclareOffsetVariable(result);
 
@@ -63,7 +63,7 @@ namespace Parlot.Fluent
                         Expression.NotEqual(start, end),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                         ),
-                    Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
+                    Expression.Assign(value, context.SubBufferSpan(start, Expression.Subtract(end, start)))
                     )
                 );
 

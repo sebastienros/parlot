@@ -6,8 +6,9 @@ namespace Parlot.Fluent
 {
     using Compilation;
 
-    public sealed class ElseError<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class ElseError<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
@@ -30,7 +31,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
@@ -70,8 +71,9 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Error<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class Error<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
@@ -94,7 +96,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
@@ -133,8 +135,9 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Error<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class Error<T, U, TParseContext, TChar> : Parser<U, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
@@ -159,7 +162,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 

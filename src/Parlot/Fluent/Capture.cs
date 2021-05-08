@@ -1,10 +1,12 @@
 ﻿using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Capture<T, TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class Capture<T, TParseContext, TChar> : Parser<BufferSpan<TChar>, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;
 
@@ -13,7 +15,7 @@ namespace Parlot.Fluent
             _parser = parser;
         }
 
-        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<TChar>> result)
         {
             context.EnterParser(this);
 
@@ -27,7 +29,7 @@ namespace Parlot.Fluent
                 var end = context.Scanner.Cursor.Offset;
                 var length = end - start.Offset;
 
-                result.Set(start.Offset, end, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                result.Set(start.Offset, end, context.Scanner.Buffer.SubBuffer(start.Offset, length));
 
                 return true;
             }
@@ -37,12 +39,12 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<TChar>)));
 
             // var start = context.Scanner.Cursor.Position;
 
@@ -65,7 +67,7 @@ namespace Parlot.Fluent
             //     var end = context.Scanner.Cursor.Offset;
             //     var length = end - start.Offset;
             //   
-            //     value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //     value = new BufferSpan<char>(context.Scanner.Buffer, start.Offset, length);
             //   
             //     success = true;
             // }
@@ -84,8 +86,7 @@ namespace Parlot.Fluent
                         parserCompileResult.Success,
                         Expression.Block(
                             Expression.Assign(value,
-                                context.NewTextSpan(
-                                    context.Buffer(),
+                                context.SubBufferSpan(
                                     startOffset,
                                     Expression.Subtract(context.Offset(), startOffset)
                                     )),

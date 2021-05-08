@@ -15,11 +15,11 @@ namespace Parlot.Tests.Calc
     /// </summary>
     public class Parser
     {
-        private Scanner _scanner;
+        private Scanner<char> _scanner;
 
         public Expression Parse(string text)
         {
-            _scanner = new Scanner(text);
+            _scanner = new Scanner<char>(text.ToCharArray());
 
             return ParseExpression();
         }
@@ -118,7 +118,7 @@ namespace Parlot.Tests.Calc
             if (_scanner.ReadDecimal(out var number))
             {
 #if NETCOREAPP2_1
-                return new Number(decimal.Parse(number.GetText()));
+                return new Number(decimal.Parse(number.ToString()));
 #else
                 return new Number(decimal.Parse(number.Span));
 #endif

@@ -11,8 +11,8 @@ namespace Parlot.Fluent
         SingleOrDouble
     }
 
-    public sealed class StringLiteral<TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
-    where TParseContext : ParseContext
+    public sealed class StringLiteral<TParseContext> : Parser<BufferSpan<char>, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly StringLiteralQuotes _quotes;
         private readonly bool _skipWhiteSpace;
@@ -20,16 +20,16 @@ namespace Parlot.Fluent
         public StringLiteral(StringLiteralQuotes quotes, bool skipWhiteSpace = true)
         {
             _quotes = quotes;
-            _skipWhiteSpace = skipWhiteSpace;
+            _skipWhiteSpace = skipWhiteSpace && typeof(TParseContext).IsAssignableFrom(typeof(StringParseContext));
         }
 
-        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<char>> result)
         {
             context.EnterParser(this);
 
             if (_skipWhiteSpace)
             {
-                context.SkipWhiteSpace();
+                ((StringParseContext)(object)context).SkipWhiteSpace();
             }
 
             var start = context.Scanner.Cursor.Offset;
@@ -47,7 +47,7 @@ namespace Parlot.Fluent
             if (success)
             {
                 // Remove quotes
-                var decoded = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
+                var decoded = Character.DecodeString(context.Scanner.Buffer.SubBuffer(start + 1, end - start - 2));
 
                 result.Set(start, end, decoded);
                 return true;
@@ -58,12 +58,12 @@ namespace Parlot.Fluent
             }
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
 
             //if (_skipWhiteSpace)
             //{
@@ -94,12 +94,12 @@ namespace Parlot.Fluent
             // {
             //     var end = context.Scanner.Cursor.Offset;
             //     success = true;
-            //     value = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
+            //     value = Character.DecodeString(new BufferSpan<char>(context.Scanner.Buffer, start + 1, end - start - 2));
             // }
 
             var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 
-            var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", new[] { typeof(TextSpan) });
+            var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", new[] { typeof(BufferSpan<char>) });
 
             result.Body.Add(
                 Expression.IfThen(
@@ -108,12 +108,11 @@ namespace Parlot.Fluent
                         new[] { end },
                         Expression.Assign(end, context.Offset()),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                        context.DiscardResult 
+                        context.DiscardResult
                         ? Expression.Empty()
-                        : Expression.Assign(value, 
-                            Expression.Call(decodeStringMethodInfo, 
-                                context.NewTextSpan(
-                                    context.Buffer(),
+                        : Expression.Assign(value,
+                            Expression.Call(decodeStringMethodInfo,
+                                context.SubBufferSpan(
                                     Expression.Add(start, Expression.Constant(1)),
                                     Expression.Subtract(Expression.Subtract(end, start), Expression.Constant(2))
                                     )))
