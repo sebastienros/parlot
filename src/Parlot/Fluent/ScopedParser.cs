@@ -13,18 +13,27 @@ namespace Parlot.Fluent
     where TParseContext : ParseContext<TChar, TParseContext>
     where TChar : IEquatable<TChar>, IConvertible
     {
+        private readonly Action<TParseContext> _action;
         private readonly Parser<T, TParseContext> _parser;
 
-        public ScopedParser(Parser<T, TParseContext> parser)
+        public ScopedParser(Action<TParseContext> action, Parser<T, TParseContext> parser)
         {
+            _action = action;
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        }
+
+        public ScopedParser(Parser<T, TParseContext> parser)
+        : this(null, parser)
+        {
         }
 
         public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
-
-            return _parser.Parse(context.Scope(), ref result);
+            context = context.Scope();
+            if (_action != null)
+                _action(context);
+            return _parser.Parse(context, ref result);
         }
     }
 }

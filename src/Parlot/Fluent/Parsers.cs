@@ -29,6 +29,11 @@ namespace Parlot.Fluent
         public static Parser<T, TParseContext2, TChar> Scope<T, TParseContext2>(Parser<T, TParseContext2> parser) where TParseContext2 : ParseContext<TChar, TParseContext2> => new ScopedParser<T, TParseContext2, TChar>(parser);
 
         /// <summary>
+        /// Builds a parser that creates a scope usable in the specified parser.
+        /// </summary>
+        public static Parser<T, TParseContext2> Scope<T, TParseContext2>(Action<TParseContext2> action, Parser<T, TParseContext2> parser) where TParseContext2 : ParseContext<TChar, TParseContext2> => new ScopedParser<T, TParseContext2, TChar>(action, parser);
+
+        /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
         /// </summary>
         public static Parser<List<T>, TParseContext, TChar> ZeroOrMany<T>(Parser<T, TParseContext> parser) => new ZeroOrMany<T, TParseContext, TChar>(parser);
@@ -91,7 +96,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches the specified char.
         /// </summary>
-        public static Parser<TChar, TParseContext, TChar> Char(TChar c) => new CharLiteral<TChar, TParseContext>(c, skipWhiteSpace: false);
+        public static Parser<TChar, TParseContext, TChar> Char(TChar c) => new CharLiteral<TChar, TParseContext>(c);
 
         /// <summary>
         /// Builds a parser that matches a char against a predicate.
@@ -99,9 +104,7 @@ namespace Parlot.Fluent
         /// <param name="predicate">The predicate to match against each char.</param>
         /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
         /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-        public static Parser<BufferSpan<TChar>, TParseContext, TChar> Pattern(Func<TChar, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral<TParseContext, TChar>(predicate, minSize, maxSize, skipWhiteSpace: false);
-
-
+        public static Parser<BufferSpan<TChar>, TParseContext, TChar> Pattern(Func<TChar, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral<TParseContext, TChar>(predicate, minSize, maxSize);
     }
 
     public partial class Parsers
@@ -110,6 +113,6 @@ namespace Parlot.Fluent
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
         public static Parser<T, TParseContext, TChar> Scope<T, TParseContext, TChar>(Parser<T, TParseContext, TChar> parser) where TParseContext : ParseContext<TChar, TParseContext> where TChar : IEquatable<TChar>, IConvertible => new ScopedParser<T, TParseContext, TChar>(parser);
-    }
 
+    }
 }

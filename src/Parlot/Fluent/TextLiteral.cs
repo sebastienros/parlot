@@ -8,13 +8,11 @@ namespace Parlot.Fluent
     where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly StringComparer _comparer;
-        private readonly bool _skipWhiteSpace;
 
-        public TextLiteral(string text, StringComparer comparer = null, bool skipWhiteSpace = true)
+        public TextLiteral(string text, StringComparer comparer = null)
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparer = comparer;
-            _skipWhiteSpace = skipWhiteSpace && typeof(TParseContext).IsAssignableFrom(typeof(StringParseContext));
         }
 
         public string Text { get; }
@@ -22,11 +20,6 @@ namespace Parlot.Fluent
         public override bool Parse(TParseContext context, ref ParseResult<string> result)
         {
             context.EnterParser(this);
-
-            if (_skipWhiteSpace)
-            {
-                ((StringParseContext)(object)context).SkipWhiteSpace();
-            }
 
             var start = context.Scanner.Cursor.Offset;
 
@@ -46,20 +39,16 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(string)));
 
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
-
             // if (context.Scanner.ReadText(Text, _comparer, null))
             // {
-            //     success = true;
-            //     value = Text;
+            //      success = true;
+            //      value = Text;
+            // }
+            //
+            // [if skipWhiteSpace]
+            // if (!success)
+            // {
+            //      resetPosition(beginning);
             // }
 
             var ifReadText = Expression.IfThen(

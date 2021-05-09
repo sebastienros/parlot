@@ -106,13 +106,17 @@ namespace Parlot
         /// <summary>
         /// Moves the cursor to the specific position
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ResetPosition(in TextPosition position)
         {
-            if (position.Offset == _offset)
+            if (position.Offset != _offset)
             {
-                return;
+                ResetPositionNotInlined(position);
             }
+        }
 
+        private void ResetPositionNotInlined(in TextPosition position)
+        {
             _offset = position.Offset;
             _line = position.Line;
             _column = position.Column;

@@ -116,89 +116,39 @@ namespace Parlot.Fluent
         private readonly Parser<A, TParseContext> _before;
         private readonly Parser<B, TParseContext> _after;
 
-        private readonly bool _beforeIsChar;
-        private readonly TChar _beforeChar;
-        private readonly bool _beforeSkipWhiteSpace;
-
-        private readonly bool _afterIsChar;
-        private readonly TChar _afterChar;
-        private readonly bool _afterSkipWhiteSpace;
-
         public Between(Parser<A, TParseContext> before, Parser<T, TParseContext> parser, Parser<B, TParseContext> after)
         {
             _before = before ?? throw new ArgumentNullException(nameof(before));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _after = after ?? throw new ArgumentNullException(nameof(after));
-
-            if (before is CharLiteral<TChar, TParseContext> literal1)
-            {
-                _beforeIsChar = true;
-                _beforeChar = literal1.Char;
-                _beforeSkipWhiteSpace = literal1.SkipWhiteSpace;
-            }
-
-            if (after is CharLiteral<TChar, TParseContext> literal2)
-            {
-                _afterIsChar = true;
-                _afterChar = literal2.Char;
-                _afterSkipWhiteSpace = literal2.SkipWhiteSpace;
-            }
         }
 
         public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
-            StringParseContext contextWithScanner = null;
-            if (_beforeIsChar || _afterIsChar)
-                contextWithScanner = context as StringParseContext;
 
-            if (_beforeIsChar && contextWithScanner != null)
+            var start = context.Scanner.Cursor.Position;
+
+            var parsedA = new ParseResult<A>();
+
+            if (!_before.Parse(context, ref parsedA))
             {
-                if (_beforeSkipWhiteSpace)
-                {
-                    contextWithScanner.SkipWhiteSpace();
-                }
-
-                if (!context.Scanner.ReadChar(_beforeChar))
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                var parsedA = new ParseResult<A>();
-
-                if (!_before.Parse(context, ref parsedA))
-                {
-                    return false;
-                }
+                // Don't reset position since _before should do it
+                return false;
             }
 
             if (!_parser.Parse(context, ref result))
             {
+                context.Scanner.Cursor.ResetPosition(start);
                 return false;
             }
 
-            if (_afterIsChar && contextWithScanner != null)
-            {
-                if (_afterSkipWhiteSpace)
-                {
-                    contextWithScanner.SkipWhiteSpace();
-                }
+            var parsedB = new ParseResult<B>();
 
-                if (!context.Scanner.ReadChar(_afterChar))
-                {
-                    return false;
-                }
-            }
-            else
+            if (!_after.Parse(context, ref parsedB))
             {
-                var parsedB = new ParseResult<B>();
-
-                if (!_after.Parse(context, ref parsedB))
-                {
-                    return false;
-                }
+                context.Scanner.Cursor.ResetPosition(start);
+                return false;
             }
 
             return true;
@@ -211,27 +161,36 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
 
+            // start = context.Scanner.Cursor.Position;
+            //
             // before instructions
-            // 
+            //
             // if (before.Success)
             // {
-            //    parser instructions
-            //    
-            //    if (parser.Success)
-            //    {
-            //       after instructions
-            //    
-            //       if (after.Success)
-            //       {
-            //          success = true;
-            //          value = parser.Value;
-            //       }  
-            //    }
+            //      parser instructions
+            //      
+            //      if (parser.Success)
+            //      {
+            //         after instructions
+            //      
+            //         if (after.Success)
+            //         {
+            //            success = true;
+            //            value = parser.Value;
+            //         }  
+            //      }
+            //
+            //      if (!success)
+            //      {  
+            //          resetPosition(start);
+            //      }
             // }
 
             var beforeCompileResult = _before.Build(context);
             var parserCompileResult = _parser.Build(context);
             var afterCompileResult = _after.Build(context);
+
+            var start = context.DeclarePositionVariable(result);
 
             var block = Expression.Block(
                     beforeCompileResult.Variables,
@@ -256,6 +215,10 @@ namespace Parlot.Fluent
                                             )
                                         )
                                     )
+                                ),
+                            Expression.IfThen(
+                                Expression.Not(success),
+                                context.ResetPosition(start)
                                 )
                             )
                         )

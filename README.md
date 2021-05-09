@@ -102,6 +102,12 @@ static FluentParser()
     Expression = expression;
 }
 ```
+
+## Documentation
+
+- [Existing parsers and usage examples](docs/parsers.md)
+- [Best practices for custom parsers](docs/writing.md)
+
 ## Compilation
 
 Grammar trees built using the Fluent API can optionally be compiled with the `Compile()` method. At that point instead of evaluating recursively all the parsers in the grammar tree, these 

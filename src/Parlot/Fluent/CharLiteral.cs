@@ -8,29 +8,16 @@ namespace Parlot.Fluent
     where TParseContext : ParseContextWithScanner<Scanner<T>, T>
     where T : IEquatable<T>, IConvertible
     {
-        public CharLiteral(T c, bool skipWhiteSpace)
+        public CharLiteral(T c)
         {
             Char = c;
-            SkipWhiteSpace = skipWhiteSpace && typeof(T) == typeof(char);
-        }
-        public CharLiteral(T c)
-        : this(c, typeof(T) == typeof(char))
-        {
         }
 
         public T Char { get; }
 
-        public bool SkipWhiteSpace { get; }
-
         public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
-
-            if (SkipWhiteSpace)
-                if (context is StringParseContext stringParseContext)
-                    stringParseContext.SkipWhiteSpace();
-                else if (context is ParseContextWithScanner<Scanner<char>, char> charContext)
-                    charContext.Scanner.SkipWhiteSpace();
 
             var start = context.Scanner.Cursor.Offset;
 
@@ -49,16 +36,6 @@ namespace Parlot.Fluent
 
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(char)));
-
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (SkipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
 
             // if (context.Scanner.ReadChar(Char))
             // {

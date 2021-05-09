@@ -51,30 +51,10 @@ namespace Parlot.Fluent
             UseNewLines = useNewLines;
         }
 
-        /// <summary>
-        /// The parser that is used to parse whitespaces and comments.
-        /// This can also include comments.
-        /// </summary>
-        public Parser<BufferSpan<char>, ParseContext> WhiteSpaceParser { get; set; }
-
-        public void SkipWhiteSpace()
+        public StringParseContext(string text, bool useNewLines = false)
+        : this(new Scanner<char>(text.ToCharArray()), useNewLines)
         {
-            if (WhiteSpaceParser is null)
-            {
-                if (UseNewLines)
-                {
-                    Scanner.SkipWhiteSpace();
-                }
-                else
-                {
-                    Scanner.SkipWhiteSpaceOrNewLine();
-                }
-            }
-            else
-            {
-                ParseResult<BufferSpan<char>> _ = new();
-                WhiteSpaceParser.Parse(this, ref _);
-            }
         }
+
     }
 }

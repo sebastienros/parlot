@@ -15,22 +15,15 @@ namespace Parlot.Fluent
     where TParseContext : ParseContextWithScanner<Scanner<char>, char>
     {
         private readonly StringLiteralQuotes _quotes;
-        private readonly bool _skipWhiteSpace;
 
-        public StringLiteral(StringLiteralQuotes quotes, bool skipWhiteSpace = true)
+        public StringLiteral(StringLiteralQuotes quotes)
         {
             _quotes = quotes;
-            _skipWhiteSpace = skipWhiteSpace && typeof(TParseContext).IsAssignableFrom(typeof(StringParseContext));
         }
 
         public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<char>> result)
         {
             context.EnterParser(this);
-
-            if (_skipWhiteSpace)
-            {
-                ((StringParseContext)(object)context).SkipWhiteSpace();
-            }
 
             var start = context.Scanner.Cursor.Offset;
 
@@ -64,16 +57,6 @@ namespace Parlot.Fluent
 
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
-
-            //if (_skipWhiteSpace)
-            //{
-            //    context.SkipWhiteSpace();
-            //}
-
-            if (_skipWhiteSpace)
-            {
-                result.Body.Add(context.ParserSkipWhiteSpace());
-            }
 
             // var start = context.Scanner.Cursor.Offset;
 

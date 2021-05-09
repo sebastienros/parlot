@@ -83,27 +83,6 @@ namespace Parlot.Compilation
             result.Body.Add(Expression.Assign(offset, context.Offset()));
             return offset;
         }
-
-        public static MethodCallExpression ParserSkipWhiteSpace<TParseContext>(this CompilationContext<TParseContext> context)
-    where TParseContext : ParseContext
-        {
-            if (context is StringParseContext stringParseContext)
-                return Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod);
-            else if (context is ParseContextWithScanner<Scanner<char>, char> charContext)
-                charContext.Scanner.SkipWhiteSpace();
-            return Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod);
-        }
-        public static MethodCallExpression ParserSkipWhiteSpace<TParseContext>(this CompilationContext<TParseContext, char> context)
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
-        {
-            if (typeof(TParseContext).IsAssignableFrom(typeof(StringParseContext)))
-                return Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod);
-            else
-                return Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_SkipWhiteSpace, context.Scanner());
-        }
-
-        internal static MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(StringParseContext).GetMethod(nameof(StringParseContext.SkipWhiteSpace), Array.Empty<Type>());
-
     }
 
     public static class ExpressionHelper<TParseContext>
@@ -132,11 +111,6 @@ namespace Parlot.Compilation
         // public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadNonWhiteSpaceOrNewLine);
         // public static MethodCallExpression SkipWhiteSpace(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_SkipWhiteSpace);
         // public static MethodCallExpression SkipWhiteSpaceOrNewLine(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_SkipWhiteSpaceOrNewLine);
-
-        public static MethodCallExpression ParserSkipWhiteSpace(CompilationContext<TParseContext> context)
-        {
-            return Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_SkipWhiteSpaceMethod);
-        }
     }
 
     public static class ExpressionHelper<TParseContext, T>

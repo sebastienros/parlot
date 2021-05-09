@@ -345,9 +345,9 @@ namespace Parlot
             }
 
             // Fast path if there aren't any escape char until next quote
-            var startOffset = 1;
+            var start = scanner.Cursor.Position;
 
-            var nextQuote = scanner.Cursor.Buffer.IndexOf(startChar, 1);
+            var nextQuote = scanner.Cursor.Buffer.IndexOf(startChar, start.Offset + 1);
 
             if (nextQuote == -1)
             {
@@ -356,16 +356,14 @@ namespace Parlot
                 return false;
             }
 
-            var start = scanner.Cursor.Position;
-
             scanner.Cursor.Advance();
 
-            var nextEscape = scanner.Cursor.Buffer.IndexOf('\\', 1, nextQuote);
+            var nextEscape = scanner.Cursor.Buffer.IndexOf('\\', start.Offset, nextQuote - start.Offset);
 
             // If the next escape if not before the next quote, we can return the string as-is
             if (nextEscape == -1 || nextEscape > nextQuote)
             {
-                scanner.Cursor.Advance(nextQuote + 1 - startOffset);
+                scanner.Cursor.Advance(nextQuote - start.Offset);
 
                 result = TokenResult.Succeed(scanner.Buffer, start.Offset, scanner.Cursor.Offset);
                 return true;
