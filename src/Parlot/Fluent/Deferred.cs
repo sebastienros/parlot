@@ -115,7 +115,7 @@ namespace Parlot.Fluent
     where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
-        public Parser<T, TParseContext> Parser { get; set; }
+        public Parser<T, TParseContext, TChar> Parser { get; set; }
 
         public Deferred()
         {
