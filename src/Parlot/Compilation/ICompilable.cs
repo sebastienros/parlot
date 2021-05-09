@@ -12,7 +12,7 @@ namespace Parlot.Compilation
         CompilationResult Compile(CompilationContext<TParseContext> context);
     }
     public interface ICompilable<TParseContext, TChar>
-        where TParseContext : Fluent.ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TParseContext : Fluent.ParseContextWithScanner<TChar>
         where TChar : IEquatable<TChar>, IConvertible
     {
         /// <summary>

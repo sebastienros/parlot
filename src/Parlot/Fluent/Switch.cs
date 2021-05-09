@@ -10,7 +10,7 @@ namespace Parlot.Fluent
     /// Routes the parsing based on a custom delegate.
     /// </summary>
     public sealed class Switch<T, U, TParseContext, TChar> : Parser<U, TParseContext, TChar>, ICompilable<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _previousParser;

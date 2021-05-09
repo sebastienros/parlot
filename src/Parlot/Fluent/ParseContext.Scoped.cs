@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace Parlot.Fluent
 {
 
-    public abstract class ParseContext<TChar, TParseContext> : ParseContextWithScanner<Scanner<TChar>, TChar>
+    public abstract class ParseContext<TChar, TParseContext> : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     {
         protected TParseContext parent;
 

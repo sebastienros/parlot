@@ -8,7 +8,7 @@ namespace Parlot.Fluent
     /// Doesn't parse anything and return the default value.
     /// </summary>
     public sealed class Discard<T, U, TParseContext, TChar> : Parser<U, TParseContext, TChar>, ICompilable<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;

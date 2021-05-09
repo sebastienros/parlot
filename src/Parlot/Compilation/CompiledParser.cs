@@ -19,7 +19,7 @@ namespace Parlot.Compilation
     /// This class is used in <see cref="Parsers.Compile{T, TParseContext,TChar}"/>.
     /// </remarks>
     public class CompiledParser<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompiledParser
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Func<TParseContext, ValueTuple<bool, T>> _parse;

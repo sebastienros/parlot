@@ -12,7 +12,7 @@ namespace Parlot.Fluent
     }
 
     public sealed class StringLiteral<TParseContext> : Parser<BufferSpan<char>, TParseContext, char>, ICompilable<TParseContext, char>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         private readonly StringLiteralQuotes _quotes;
 

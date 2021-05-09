@@ -8,7 +8,7 @@ namespace Parlot.Fluent
     /// Successful when the cursor is at the end of the string.
     /// </summary>
     public sealed class Eof<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext> _parser;

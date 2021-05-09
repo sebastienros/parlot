@@ -103,7 +103,7 @@ namespace Parlot.Fluent
     /// <typeparam name="TParseContext"></typeparam>
     /// <typeparam name="TChar"></typeparam>
     public sealed class OneOf<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<T, TParseContext>[] _parsers;

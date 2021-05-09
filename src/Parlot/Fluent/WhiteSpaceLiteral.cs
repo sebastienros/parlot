@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 namespace Parlot.Fluent
 {
     public sealed class WhiteSpaceLiteral<TParseContext> : Parser<BufferSpan<char>, TParseContext, char>, ICompilable<TParseContext, char>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         private readonly bool _includeNewLines;
 

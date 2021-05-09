@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 namespace Parlot.Fluent
 {
     public sealed class TextLiteral<TParseContext> : Parser<string, TParseContext, char>, ICompilable<TParseContext, char>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         private readonly StringComparer _comparer;
 

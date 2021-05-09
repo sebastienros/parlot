@@ -14,7 +14,7 @@ namespace Parlot.Fluent
     /// <typeparam name="TParseContext">The parse context type.</typeparam>
     /// <typeparam name="TChar">The char type.</typeparam>
     public sealed class ThenWithScanner<T, U, TParseContext, TChar> : Parser<U, TParseContext, TChar>, ICompilable<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Func<T, U> _transform1;
@@ -123,7 +123,7 @@ namespace Parlot.Fluent
     /// <typeparam name="TParseContext">The parse context type.</typeparam>
     /// <typeparam name="TChar">The char type.</typeparam>
     public sealed class ThenWithScanner<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Action<T> _action1;

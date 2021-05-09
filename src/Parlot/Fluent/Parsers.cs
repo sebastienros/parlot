@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace Parlot.Fluent
 {
     public static class Parsers<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         /// <summary>

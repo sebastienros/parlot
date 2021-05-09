@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 namespace Parlot.Fluent
 {
     public static class StringParsers<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
 
         /// <summary>
@@ -127,7 +127,7 @@ namespace Parlot.Fluent
 
 
     public class LiteralBuilder<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         /// <summary>
         /// Builds a parser that matches whitespaces.
@@ -180,7 +180,7 @@ namespace Parlot.Fluent
     }
 
     public class TermBuilder<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.

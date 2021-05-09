@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 namespace Parlot.Fluent
 {
     public sealed class OneOf<A, B, T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext>
-        where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TParseContext : ParseContextWithScanner<TChar>
         where A : T
         where B : T
         where TChar : IEquatable<TChar>, IConvertible

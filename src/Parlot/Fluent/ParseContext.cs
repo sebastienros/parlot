@@ -19,22 +19,21 @@ namespace Parlot.Fluent
             OnEnterParser?.Invoke(parser, this);
         }
     }
-    public partial class ParseContextWithScanner<TScanner, TChar> : ParseContext
-    where TScanner : Scanner<TChar>
+    public partial class ParseContextWithScanner<TChar> : ParseContext
     where TChar : IEquatable<TChar>, IConvertible
     {
         /// <summary>
         /// The scanner used for the parsing session.
         /// </summary>
-        public readonly TScanner Scanner;
+        public readonly Scanner<TChar> Scanner;
 
-        public ParseContextWithScanner(TScanner scanner)
+        public ParseContextWithScanner(Scanner<TChar> scanner)
         {
             Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         }
     }
 
-    public class StringParseContext : ParseContextWithScanner<Scanner<char>, char>
+    public class StringParseContext : ParseContextWithScanner<char>
     {
         /// <summary>
         /// Whether new lines are treated as normal chars or white spaces.

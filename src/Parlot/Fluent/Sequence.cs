@@ -5,7 +5,7 @@ using System.Linq;
 namespace Parlot.Fluent
 {
     public sealed class Sequence<T1, T2, TParseContext, TChar> : Parser<ValueTuple<T1, T2>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         internal readonly Parser<T1, TParseContext> _parser1;
@@ -56,7 +56,7 @@ namespace Parlot.Fluent
     }
 
     public sealed class Sequence<T1, T2, T3, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2>, TParseContext> _parser;
@@ -118,7 +118,7 @@ namespace Parlot.Fluent
     }
 
     public sealed class Sequence<T1, T2, T3, T4, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
@@ -178,7 +178,7 @@ namespace Parlot.Fluent
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
@@ -239,7 +239,7 @@ namespace Parlot.Fluent
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
@@ -302,7 +302,7 @@ namespace Parlot.Fluent
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;

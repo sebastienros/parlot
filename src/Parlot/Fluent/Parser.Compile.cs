@@ -20,7 +20,7 @@ namespace Parlot.Fluent
         /// </summary>
         /// <returns>A compiled parser.</returns>
         public static Parser<T, TParseContext, TChar> Compile<T, TParseContext, TChar>(this Parser<T, TParseContext, TChar> self)
-        where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TParseContext : ParseContextWithScanner<TChar>
         where TChar : IEquatable<TChar>, IConvertible
         {
             if (self is ICompiledParser)
@@ -110,7 +110,7 @@ namespace Parlot.Fluent
         /// <param name="context">The <see cref="CompilationContext{TParseContext}"/> instance.</param>
         /// <param name="requireResult">Forces the instruction to compute the resulting value whatever the state of <see cref="CompilationContext{TParseContext}.DiscardResult"/> is.</param>
         public static CompilationResult Build<T, TParseContext, TChar>(this Parser<T, TParseContext, TChar> self, CompilationContext<TParseContext, TChar> context, bool requireResult = false)
-        where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TParseContext : ParseContextWithScanner<TChar>
         where TChar : IEquatable<TChar>, IConvertible
         {
             if (self is ICompilable<TParseContext, TChar> compilable)

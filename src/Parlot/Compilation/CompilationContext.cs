@@ -66,7 +66,7 @@ namespace Parlot.Compilation
     /// Reprensents the context of a compilation phase, coordinating all the parsers involved.
     /// </summary>
     public class CompilationContext<TParseContext, TChar> : CompilationContext<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
     }

@@ -12,7 +12,7 @@ namespace Parlot.Fluent
         /// Builds a parser that return either of the first successful of the specified parsers.
         /// </summary>
         public static Parser<T, TParseContext, TChar> Or<T, TParseContext, TChar>(this Parser<T, TParseContext, TChar> parser, Parser<T, TParseContext> or)
-        where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TParseContext : ParseContextWithScanner<TChar>
         where TChar : IEquatable<TChar>, IConvertible
         {
             // We don't care about the performance of these helpers since they are called only once 
@@ -40,7 +40,7 @@ namespace Parlot.Fluent
         public static Parser<T, TParseContext, TChar> Or<A, B, T, TParseContext, TChar>(this Parser<A, TParseContext, TChar> parser, Parser<B, TParseContext, TChar> or)
             where A : T
             where B : T
-            where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+            where TParseContext : ParseContextWithScanner<TChar>
             where TChar : IEquatable<TChar>, IConvertible
         {
             return new OneOf<A, B, T, TParseContext, TChar>(parser, or);

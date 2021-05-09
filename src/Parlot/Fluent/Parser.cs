@@ -45,7 +45,7 @@ namespace Parlot.Fluent
 
 
     public abstract partial class Parser<T, TParseContext, TChar> : Parser<T, TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
 

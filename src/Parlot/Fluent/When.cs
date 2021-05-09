@@ -12,7 +12,7 @@ namespace Parlot.Fluent
     /// <typeparam name="TParseContext">The parse context type.</typeparam>
     /// <typeparam name="TChar">The char or byte type.</typeparam>
     public sealed class When<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext, TChar>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Func<T, bool> _action;

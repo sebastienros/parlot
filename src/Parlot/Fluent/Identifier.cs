@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 namespace Parlot.Fluent
 {
     public sealed class Identifier<TParseContext> : Parser<BufferSpan<char>, TParseContext, char>, ICompilable<TParseContext, char>
-    where TParseContext : ParseContextWithScanner<Scanner<char>, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         private readonly Func<char, bool> _extraStart;
         private readonly Func<char, bool> _extraPart;

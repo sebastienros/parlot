@@ -112,7 +112,7 @@ namespace Parlot.Fluent
 
 
     public sealed class Deferred<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompilable<TParseContext>
-    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     {
         public Parser<T, TParseContext, TChar> Parser { get; set; }
