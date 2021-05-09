@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace Parlot.Fluent
 {
-    public sealed class Sequence<T1, T2, TParseContext, T> : Parser<ValueTuple<T1, T2>, TParseContext, T>, ICompilable<TParseContext, T>, ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public sealed class Sequence<T1, T2, TParseContext, TChar> : Parser<ValueTuple<T1, T2>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         internal readonly Parser<T1, TParseContext> _parser1;
         internal readonly Parser<T2, TParseContext> _parser2;
@@ -40,7 +40,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context)
+        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context)
         {
             return new[]
                 {
@@ -49,15 +49,15 @@ namespace Parlot.Fluent
                 };
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, TParseContext, T> : Parser<ValueTuple<T1, T2, T3>, TParseContext, T>, ICompilable<TParseContext, T>, ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public sealed class Sequence<T1, T2, T3, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2>, TParseContext> _parser;
         internal readonly Parser<T3, TParseContext> _lastParser;
@@ -101,9 +101,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context)
+        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context)
         {
-            if (_parser is not ISkippableSequenceParser<TParseContext, T> sequenceParser)
+            if (_parser is not ISkippableSequenceParser<TParseContext, TChar> sequenceParser)
             {
                 throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
             }
@@ -111,15 +111,15 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, TParseContext, T> : Parser<ValueTuple<T1, T2, T3, T4>, TParseContext, T>, ICompilable<TParseContext, T>, ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public sealed class Sequence<T1, T2, T3, T4, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3>, TParseContext> _parser;
         internal readonly Parser<T4, TParseContext> _lastParser;
@@ -161,9 +161,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context)
+        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context)
         {
-            if (_parser is not ISkippableSequenceParser<TParseContext, T> sequenceParser)
+            if (_parser is not ISkippableSequenceParser<TParseContext, TChar> sequenceParser)
             {
                 throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
             }
@@ -171,15 +171,15 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, TParseContext, T> : Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext, T>, ICompilable<TParseContext, T>, ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public sealed class Sequence<T1, T2, T3, T4, T5, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4>, TParseContext> _parser;
         internal readonly Parser<T5, TParseContext> _lastParser;
@@ -222,9 +222,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context)
+        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context)
         {
-            if (_parser is not ISkippableSequenceParser<TParseContext, T> sequenceParser)
+            if (_parser is not ISkippableSequenceParser<TParseContext, TChar> sequenceParser)
             {
                 throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
             }
@@ -232,15 +232,15 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, T6, TParseContext, T> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext, T>, ICompilable<TParseContext, T>, ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext> _parser;
         internal readonly Parser<T6, TParseContext> _lastParser;
@@ -285,9 +285,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context)
+        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context)
         {
-            if (_parser is not ISkippableSequenceParser<TParseContext, T> sequenceParser)
+            if (_parser is not ISkippableSequenceParser<TParseContext, TChar> sequenceParser)
             {
                 throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
             }
@@ -295,15 +295,15 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7, TParseContext, T> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext, T>, ICompilable<TParseContext, T>, ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7, TParseContext, TChar> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext, TChar>, ICompilable<TParseContext, TChar>, ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext> _parser;
         internal readonly Parser<T7, TParseContext> _lastParser;
@@ -349,9 +349,9 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context)
+        public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context)
         {
-            if (_parser is not ISkippableSequenceParser<TParseContext, T> sequenceParser)
+            if (_parser is not ISkippableSequenceParser<TParseContext, TChar> sequenceParser)
             {
                 throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
             }
@@ -359,7 +359,7 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext<TParseContext, T> context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
         }

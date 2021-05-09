@@ -3,10 +3,10 @@ using System;
 
 namespace Parlot.Fluent
 {
-    public interface ISkippableSequenceParser<TParseContext, T>
-    where TParseContext : ParseContextWithScanner<Scanner<T>, T>
-    where T : IEquatable<T>, IConvertible
+    public interface ISkippableSequenceParser<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<Scanner<TChar>, TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, T> context);
+        SkippableCompilationResult[] BuildSkippableParsers(CompilationContext<TParseContext, TChar> context);
     }
 }

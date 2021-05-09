@@ -19,9 +19,9 @@ namespace Parlot.Fluent
             OnEnterParser?.Invoke(parser, this);
         }
     }
-    public partial class ParseContextWithScanner<TScanner, T> : ParseContext
-    where TScanner : Scanner<T>
-    where T : IEquatable<T>, IConvertible
+    public partial class ParseContextWithScanner<TScanner, TChar> : ParseContext
+    where TScanner : Scanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         /// <summary>
         /// The scanner used for the parsing session.

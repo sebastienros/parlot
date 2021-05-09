@@ -3,19 +3,19 @@ using System.Runtime.CompilerServices;
 
 namespace Parlot
 {
-    public class Cursor<T>
-    where T : IEquatable<T>, IConvertible
+    public class Cursor<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        public static readonly T NullChar = default(T);
+        public static readonly TChar NullChar = default(TChar);
 
         private readonly int _textLength;
-        private T _current;
+        private TChar _current;
         private int _offset;
         private int _line;
         private int _column;
-        private readonly BufferSpan<T> _buffer;
+        private readonly BufferSpan<TChar> _buffer;
 
-        public Cursor(BufferSpan<T> buffer, in TextPosition position)
+        public Cursor(BufferSpan<TChar> buffer, in TextPosition position)
         {
             _buffer = buffer;
             _textLength = buffer.Length;
@@ -24,12 +24,12 @@ namespace Parlot
             _offset = 0;
             _line = 1;
             _column = 1;
-            this.IsChar = typeof(T) == typeof(char);
+            this.IsChar = typeof(TChar) == typeof(char);
         }
 
         public readonly bool IsChar;
 
-        public Cursor(BufferSpan<T> buffer) : this(buffer, TextPosition.Start)
+        public Cursor(BufferSpan<TChar> buffer) : this(buffer, TextPosition.Start)
         {
         }
 
@@ -137,7 +137,7 @@ namespace Parlot
         /// <summary>
         /// Evaluates the char at the current position.
         /// </summary>
-        public T Current => _current;
+        public TChar Current => _current;
 
         /// <summary>
         /// Returns the cursor's position in the _buffer.
@@ -147,7 +147,7 @@ namespace Parlot
         /// <summary>
         /// Evaluates a char forward in the _buffer.
         /// </summary>
-        public T PeekNext(int index = 1)
+        public TChar PeekNext(int index = 1)
         {
             var nextIndex = _offset + index;
 
@@ -161,13 +161,13 @@ namespace Parlot
 
         public bool Eof { get; private set; }
 
-        public BufferSpan<T> Buffer => _buffer;
+        public BufferSpan<TChar> Buffer => _buffer;
 
         /// <summary>
         /// Whether a char is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(T c)
+        public bool Match(TChar c)
         {
             if (Eof)
             {
@@ -182,7 +182,7 @@ namespace Parlot
         /// Whether any char of the string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAnyOf(T[] s)
+        public bool MatchAnyOf(TChar[] s)
         {
             if (s == null)
             {
@@ -216,7 +216,7 @@ namespace Parlot
         /// Whether any char of an array is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAny(params T[] chars)
+        public bool MatchAny(params TChar[] chars)
         {
             if (chars == null)
             {
@@ -249,7 +249,7 @@ namespace Parlot
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
-        public bool Match(T[] s)
+        public bool Match(TChar[] s)
         {
             if (s.Length == 0)
             {

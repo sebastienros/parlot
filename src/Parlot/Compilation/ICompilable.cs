@@ -11,14 +11,14 @@ namespace Parlot.Compilation
         /// <param name="context">The current compilation context.</param>
         CompilationResult Compile(CompilationContext<TParseContext> context);
     }
-    public interface ICompilable<TParseContext, T>
-        where TParseContext : Fluent.ParseContextWithScanner<Scanner<T>, T>
-        where T : IEquatable<T>, IConvertible
+    public interface ICompilable<TParseContext, TChar>
+        where TParseContext : Fluent.ParseContextWithScanner<Scanner<TChar>, TChar>
+        where TChar : IEquatable<TChar>, IConvertible
     {
         /// <summary>
         /// Creates a compiled representation of a parser.
         /// </summary>
         /// <param name="context">The current compilation context.</param>
-        CompilationResult Compile(CompilationContext<TParseContext, T> context);
+        CompilationResult Compile(CompilationContext<TParseContext, TChar> context);
     }
 }

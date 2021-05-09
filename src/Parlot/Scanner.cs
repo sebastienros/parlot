@@ -7,31 +7,31 @@ namespace Parlot
     /// <summary>
     /// This class is used to return tokens extracted from the input buffer.
     /// </summary>
-    public class Scanner<T>
-    where T : IEquatable<T>, IConvertible
+    public class Scanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        public readonly BufferSpan<T> Buffer;
-        public readonly Cursor<T> Cursor;
+        public readonly BufferSpan<TChar> Buffer;
+        public readonly Cursor<TChar> Cursor;
 
         /// <summary>
         /// Scans some text.
         /// </summary>
         /// <param name="buffer">The string containing the text to scan.</param>
-        public Scanner(BufferSpan<T> buffer)
+        public Scanner(BufferSpan<TChar> buffer)
         {
             Buffer = buffer.Buffer ?? throw new ArgumentNullException(nameof(buffer));
-            Cursor = new Cursor<T>(Buffer, TextPosition.Start);
+            Cursor = new Cursor<TChar>(Buffer, TextPosition.Start);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadFirstThenOthers(Func<T, bool> first, Func<T, bool> other)
+        public bool ReadFirstThenOthers(Func<TChar, bool> first, Func<TChar, bool> other)
             => ReadFirstThenOthers(first, other, out _);
 
-        public bool ReadFirstThenOthers(Func<T, bool> first, Func<T, bool> other, out BufferSpan<T> result)
+        public bool ReadFirstThenOthers(Func<TChar, bool> first, Func<TChar, bool> other, out BufferSpan<TChar> result)
         {
             if (!first(Cursor.Current))
             {
-                result = TokenResult.Fail<T>();
+                result = TokenResult.Fail<TChar>();
                 return false;
             }
 
@@ -53,16 +53,16 @@ namespace Parlot
         /// Reads a token while the specific predicate is valid.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadWhile(Func<T, bool> predicate) => ReadWhile(predicate, out _);
+        public bool ReadWhile(Func<TChar, bool> predicate) => ReadWhile(predicate, out _);
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public bool ReadWhile(Func<T, bool> predicate, out BufferSpan<T> result)
+        public bool ReadWhile(Func<TChar, bool> predicate, out BufferSpan<TChar> result)
         {
             if (Cursor.Eof || !predicate(Cursor.Current))
             {
-                result = TokenResult.Fail<T>();
+                result = TokenResult.Fail<TChar>();
                 return false;
             }
 
@@ -85,7 +85,7 @@ namespace Parlot
         /// Reads the specified text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadChar(T c)
+        public bool ReadChar(TChar c)
         {
             if (!Cursor.Match(c))
             {
@@ -99,11 +99,11 @@ namespace Parlot
         /// <summary>
         /// Reads the specified text.
         /// </summary>
-        public bool ReadChar(T c, out BufferSpan<T> result)
+        public bool ReadChar(TChar c, out BufferSpan<TChar> result)
         {
             if (!Cursor.Match(c))
             {
-                result = TokenResult.Fail<T>();
+                result = TokenResult.Fail<TChar>();
                 return false;
             }
 
