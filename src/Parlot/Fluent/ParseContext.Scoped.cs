@@ -3,21 +3,20 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-
-    public abstract class ParseContext<TChar, TParseContext> : ParseContextWithScanner<TChar>
+    public abstract class ScopeParseContext<TChar, TParseContext> : ParseContext
     where TChar : IEquatable<TChar>, IConvertible
     where TParseContext : ParseContextWithScanner<TChar>
     {
         protected TParseContext parent;
 
-        public ParseContext(TParseContext context)
+        public ScopeParseContext(TParseContext context)
         : this(context.Scanner)
         {
             OnEnterParser = context.OnEnterParser;
             parent = context;
         }
 
-        public ParseContext(Scanner<TChar> scanner, bool useNewLines = false)
+        public ScopeParseContext(Scanner<TChar> scanner, bool useNewLines = false)
         : base(scanner)
         {
         }
