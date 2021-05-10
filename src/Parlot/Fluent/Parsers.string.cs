@@ -39,7 +39,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
-        public static Parser<T, TParseContext2, char> Scope<T, TParseContext2>(Parser<T, TParseContext2, char> parser) where TParseContext2 : ParseContext<char, TParseContext2> => Parsers<TParseContext, char>.Scope(parser);
+        public static Parser<T, TParseContext2, char> Scope<T, TParseContext2>(Parser<T, TParseContext2, char> parser) where TParseContext2 : ScopeParseContext<char, TParseContext2> => Parsers<TParseContext, char>.Scope(parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.

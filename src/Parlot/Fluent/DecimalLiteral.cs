@@ -42,7 +42,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).Span;
 #endif
 
-                if (decimal.TryParse(sourceToParse.ToString(), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+                if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
                 {
                     result.Set(start, end, value);
                     return true;

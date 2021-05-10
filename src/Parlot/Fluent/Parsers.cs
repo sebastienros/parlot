@@ -26,7 +26,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
-        public static Parser<T, TParseContext2, TChar> Scope<T, TParseContext2>(Parser<T, TParseContext2> parser) where TParseContext2 : ScopeParseContext<TChar, TParseContext2> => new ScopedParser<T, TParseContext2>(parser);
+        public static Parser<T, TParseContext2, TChar> Scope<T, TParseContext2>(Parser<T, TParseContext2> parser) where TParseContext2 : ScopeParseContext<TChar, TParseContext2> => new ScopedParser<T, TParseContext2, TChar>(parser);
 
         /// <summary>
         /// Builds a parser that creates a scope usable in the specified parser.
@@ -112,7 +112,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
-        public static Parser<T, TParseContext, TChar> Scope<T, TParseContext, TChar>(Parser<T, TParseContext, TChar> parser) where TParseContext : ParseContext<TChar, TParseContext> where TChar : IEquatable<TChar>, IConvertible => new ScopedParser<T, TParseContext, TChar>(parser);
+        public static Parser<T, TParseContext, TChar> Scope<T, TParseContext, TChar>(Parser<T, TParseContext, TChar> parser) where TParseContext : ScopeParseContext<TChar, TParseContext> where TChar : IEquatable<TChar>, IConvertible => new ScopedParser<T, TParseContext, TChar>(parser);
 
     }
 }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public abstract class ScopeParseContext<TChar, TParseContext> : ParseContext
+    public abstract class ScopeParseContext<TChar, TParseContext> : ParseContextWithScanner<TChar>
     where TChar : IEquatable<TChar>, IConvertible
     where TParseContext : ParseContextWithScanner<TChar>
     {
