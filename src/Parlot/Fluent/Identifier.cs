@@ -4,7 +4,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Identifier : Parser<TextSpan>, ICompilable
+    public sealed class Identifier<TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly Func<char, bool> _extraStart;
         private readonly Func<char, bool> _extraPart;
@@ -15,7 +16,7 @@ namespace Parlot.Fluent
             _extraPart = extraPart;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
@@ -43,7 +44,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

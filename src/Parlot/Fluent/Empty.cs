@@ -6,7 +6,8 @@ namespace Parlot.Fluent
     /// <summary>
     /// Doesn't parse anything and return the default value.
     /// </summary>
-    public sealed class Empty<T> : Parser<T>, ICompilable
+    public sealed class Empty<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly T _value;
 
@@ -20,7 +21,7 @@ namespace Parlot.Fluent
             _value = value;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -29,7 +30,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

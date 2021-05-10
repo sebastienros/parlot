@@ -1,11 +1,11 @@
 ﻿using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
+using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
 
 namespace Parlot.Tests.Calc
 {
     public class FluentParser
     {
-        public static readonly Parser<Expression> Expression;
+        public static readonly Parser<Expression, ParseContext> Expression;
 
         static FluentParser()
         {
@@ -86,7 +86,7 @@ namespace Parlot.Tests.Calc
                     }
 
                     return result;
-                });            
+                });
 
             Expression = expression;
         }

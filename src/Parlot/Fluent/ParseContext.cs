@@ -2,7 +2,7 @@
 
 namespace Parlot.Fluent
 {
-    public class ParseContext
+    public partial class ParseContext
     {
         /// <summary>
         /// Whether new lines are treated as normal chars or white spaces.
@@ -32,7 +32,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// The parser that is used to parse whitespaces and comments.
         /// </summary>
-        public Parser<TextSpan> WhiteSpaceParser { get; set;}
+        public Parser<TextSpan, ParseContext> WhiteSpaceParser { get; set; }
 
         public void SkipWhiteSpace()
         {
@@ -57,7 +57,8 @@ namespace Parlot.Fluent
         /// <summary>
         /// Called whenever a parser is invoked. Will be used to detect invalid states and infinite loops.
         /// </summary>
-        public void EnterParser<T>(Parser<T> parser)
+        public void EnterParser<T, TParseContext>(Parser<T, TParseContext> parser)
+        where TParseContext : ParseContext
         {
             OnEnterParser?.Invoke(parser, this);
         }

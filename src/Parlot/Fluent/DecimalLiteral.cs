@@ -5,7 +5,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class DecimalLiteral : Parser<decimal>, ICompilable
+    public sealed class DecimalLiteral<TParseContext> : Parser<decimal, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly NumberOptions _numberOptions;
 
@@ -14,7 +15,7 @@ namespace Parlot.Fluent
             _numberOptions = numberOptions;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<decimal> result)
+        public override bool Parse(TParseContext context, ref ParseResult<decimal> result)
         {
             context.EnterParser(this);
 
@@ -40,8 +41,8 @@ namespace Parlot.Fluent
 #endif
 
                 if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
-                { 
-                    result.Set(start, end,  value);
+                {
+                    result.Set(start, end, value);
                     return true;
                 }
             }
@@ -51,7 +52,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

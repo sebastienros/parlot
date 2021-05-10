@@ -4,7 +4,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class TextLiteral : Parser<string>, ICompilable
+    public sealed class TextLiteral<TParseContext> : Parser<string, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly StringComparer _comparer;
 
@@ -16,7 +17,7 @@ namespace Parlot.Fluent
 
         public string Text { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<string> result)
+        public override bool Parse(TParseContext context, ref ParseResult<string> result)
         {
             context.EnterParser(this);
 
@@ -31,7 +32,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 
@@ -53,7 +54,7 @@ namespace Parlot.Fluent
             var ifReadText = Expression.IfThen(
                 Expression.Call(
                     Expression.Field(context.ParseContext, "Scanner"),
-                    ExpressionHelper.Scanner_ReadText_NoResult,
+                    ExpressionHelper<TParseContext>.Scanner_ReadText_NoResult,
                     Expression.Constant(Text, typeof(string)),
                     Expression.Constant(_comparer, typeof(StringComparer))
                     ),

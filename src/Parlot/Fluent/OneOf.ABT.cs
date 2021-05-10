@@ -4,20 +4,21 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
+    public sealed class OneOf<A, B, T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+        where TParseContext : ParseContext
         where A : T
         where B : T
     {
-        private readonly Parser<A> _parserA;
-        private readonly Parser<B> _parserB;
+        private readonly Parser<A, TParseContext> _parserA;
+        private readonly Parser<B, TParseContext> _parserB;
 
-        public OneOf(Parser<A> parserA, Parser<B> parserB)
+        public OneOf(Parser<A, TParseContext> parserA, Parser<B, TParseContext> parserB)
         {
             _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
             _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -42,7 +43,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

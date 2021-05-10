@@ -6,18 +6,19 @@ namespace Parlot.Fluent
 {
     using Compilation;
 
-    public sealed class ElseError<T> : Parser<T>, ICompilable
+    public sealed class ElseError<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public ElseError(Parser<T> parser, string message)
+        public ElseError(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -29,7 +30,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 
@@ -62,25 +63,26 @@ namespace Parlot.Fluent
                             : Expression.Assign(value, parserCompileResult.Value)
                     )
             );
-            
+
             result.Body.Add(block);
 
             return result;
         }
     }
 
-    public sealed class Error<T> : Parser<T>, ICompilable
+    public sealed class Error<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public Error(Parser<T> parser, string message)
+        public Error(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -92,7 +94,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 
@@ -131,18 +133,19 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Error<T, U> : Parser<U>, ICompilable
+    public sealed class Error<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly string _message;
 
-        public Error(Parser<T> parser, string message)
+        public Error(Parser<T, TParseContext> parser, string message)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _message = message;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<U> result)
+        public override bool Parse(TParseContext context, ref ParseResult<U> result)
         {
             context.EnterParser(this);
 
@@ -156,7 +159,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

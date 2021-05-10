@@ -1,7 +1,7 @@
 using Parlot.Fluent;
 using System.Collections.Generic;
 using Xunit;
-using static Parlot.Fluent.Parsers;
+using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
 
 namespace Parlot.Tests
 {
@@ -218,9 +218,9 @@ namespace Parlot.Tests
                 .And(Terms.Pattern(c => c == 'Z'))
                 .TryParse("aaZZ", out _));
 
-           Assert.True(Terms.Pattern(c => c == 'a', minSize: 3)
-                .And(Terms.Pattern(c => c == 'Z'))
-                .TryParse("aaaZZ", out _));                
+            Assert.True(Terms.Pattern(c => c == 'a', minSize: 3)
+                 .And(Terms.Pattern(c => c == 'Z'))
+                 .TryParse("aaaZZ", out _));
         }
 
         [Theory]
@@ -233,6 +233,60 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ScopeShouldAllowScopedParserContext()
+        {
+            var a = Parsers<ParseContext.Untyped>.Literals.Char('a');
+            var b = Parsers<ParseContext.Untyped>.Literals.Char('b');
+            var c = Parsers<ParseContext.Untyped>.Literals.Char('c');
+
+            var o2 = Scope(
+                    a.Then((c, t) => { c.Set("lorem", "ipsum"); return "lorem"; })
+                    .And(b).Then((c, t) => c.Get<string>(t.Item1)));
+
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
+            Assert.False(o2.TryParse(new ParseContext.Untyped(new Scanner("a")), out _));
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("ab")), out var result));
+            Assert.Equal("ipsum", result);
+
+            o2 = Scope(
+                    a.Then((c, t) => "lorem")
+                    .And(b).Then((c, t) => c.Get<string>(t.Item1)));
+
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("ab")), out result));
+            Assert.Null(result);
+
+
+            o2 = Scope(
+                    a.Then((c, t) => c.Set("lorem", "ipsum"))
+                    .SkipAnd(Scope(b.Then((c, t) => c.Get<string>("lorem")))));
+
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("ab")), out result));
+            Assert.Equal("ipsum", result);
+
+            o2 = Scope(
+                    a.Then((c, t) => c.Set("lorem", "ipsum"))
+                    .SkipAnd(Scope(b.Then((c, t) => c.Set("lorem", "ipsumipsum"))))
+                    .SkipAnd(c.Then((c, t) => c.Get<string>("lorem")))
+                    );
+
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("abc")), out result));
+            Assert.Equal("ipsumipsum", result);
+
+            o2 = Scope(
+                    a.Then((c, t) => c.Set("lorem", "ipsum"))
+                    .SkipAnd(Scope(b.Then((c, t) => c.Set("lorem2", "ipsum"))))
+                    .SkipAnd(c.Then((c, t) => c.Get<string>("lorem2")))
+                    );
+
+            Assert.IsType<ScopedParser<string, ParseContext.Untyped>>(o2);
+            Assert.True(o2.TryParse(new ParseContext.Untyped(new Scanner("abc")), out result));
+            Assert.Null(result);
+        }
+
+        [Fact]
         public void OrShouldReturnOneOf()
         {
             var a = Literals.Char('a');
@@ -242,12 +296,12 @@ namespace Parlot.Tests
             var o2 = a.Or(b);
             var o3 = a.Or(b).Or(c);
 
-            Assert.IsType<OneOf<char>>(o2);
+            Assert.IsType<OneOf<char, ParseContext>>(o2);
             Assert.True(o2.TryParse("a", out _));
             Assert.True(o2.TryParse("b", out _));
             Assert.False(o2.TryParse("c", out _));
 
-            Assert.IsType<OneOf<char>>(o3);
+            Assert.IsType<OneOf<char, ParseContext>>(o3);
             Assert.True(o3.TryParse("a", out _));
             Assert.True(o3.TryParse("b", out _));
             Assert.True(o3.TryParse("c", out _));
@@ -260,9 +314,9 @@ namespace Parlot.Tests
             var a = Literals.Char('a');
             var b = Literals.Decimal();
 
-            var o2 = a.Or<char, decimal, object>(b);
+            var o2 = a.Or<char, decimal, object, ParseContext>(b);
 
-            Assert.IsType<OneOf<char, decimal, object>>(o2);
+            Assert.IsType<OneOf<char, decimal, object, ParseContext>>(o2);
             Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
             Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);
         }
@@ -279,27 +333,27 @@ namespace Parlot.Tests
             var s6 = s5.And(a);
             var s7 = s6.And(a);
 
-            Assert.IsType<Sequence<char, char>>(s2);
+            Assert.IsType<Sequence<char, char, ParseContext>>(s2);
             Assert.False(s2.TryParse("a", out _));
             Assert.True(s2.TryParse("aab", out _));
 
-            Assert.IsType<Sequence<char, char, char>>(s3);
+            Assert.IsType<Sequence<char, char, char, ParseContext>>(s3);
             Assert.False(s3.TryParse("aa", out _));
             Assert.True(s3.TryParse("aaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char>>(s4);
+            Assert.IsType<Sequence<char, char, char, char, ParseContext>>(s4);
             Assert.False(s4.TryParse("aaa", out _));
             Assert.True(s4.TryParse("aaaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, char>>(s5);
+            Assert.IsType<Sequence<char, char, char, char, char, ParseContext>>(s5);
             Assert.False(s5.TryParse("aaaa", out _));
             Assert.True(s5.TryParse("aaaaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, char, char>>(s6);
+            Assert.IsType<Sequence<char, char, char, char, char, char, ParseContext>>(s6);
             Assert.False(s6.TryParse("aaaaa", out _));
             Assert.True(s6.TryParse("aaaaaab", out _));
 
-            Assert.IsType<Sequence<char, char, char, char, char, char, char>>(s7);
+            Assert.IsType<Sequence<char, char, char, char, char, char, char, ParseContext>>(s7);
             Assert.False(s7.TryParse("aaaaaa", out _));
             Assert.True(s7.TryParse("aaaaaaab", out _));
         }
@@ -462,15 +516,15 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldParseEmails()
         {
-            Parser<char> Dot = Literals.Char('.');
-            Parser<char> Plus = Literals.Char('+');
-            Parser<char> Minus = Literals.Char('-');
-            Parser<char> At = Literals.Char('@');
-            Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
-            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
-            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
-            Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+            Parser<char, ParseContext> Dot = Literals.Char('.');
+            Parser<char, ParseContext> Plus = Literals.Char('+');
+            Parser<char, ParseContext> Minus = Literals.Char('-');
+            Parser<char, ParseContext> At = Literals.Char('@');
+            Parser<TextSpan, ParseContext> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+            Parser<List<char>, ParseContext> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
+            Parser<List<char>, ParseContext> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
+            Parser<List<char>, ParseContext> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
+            Parser<TextSpan, ParseContext> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
 
