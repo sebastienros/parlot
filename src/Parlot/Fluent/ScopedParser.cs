@@ -9,7 +9,7 @@ namespace Parlot.Fluent
     /// <typeparam name="T">The input parser type.</typeparam>
     /// <typeparam name="TParseContext">The parser context type.</typeparam>
     public sealed class ScopedParser<T, TParseContext> : Parser<T, TParseContext>
-    where TParseContext : ParseContext<TParseContext>
+    where TParseContext : ScopeParseContext<TParseContext>
     {
         private readonly Action<TParseContext> _action;
         private readonly Parser<T, TParseContext> _parser;

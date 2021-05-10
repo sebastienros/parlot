@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent
 {
-    public abstract class ParseContext<TParseContext> : ParseContext
+    public abstract class ScopeParseContext<TParseContext> : ParseContext
     where TParseContext : ParseContext
     {
         protected TParseContext parent;
 
-        public ParseContext(TParseContext context)
+        public ScopeParseContext(TParseContext context)
         : this(context.Scanner, context.UseNewLines)
         {
             OnEnterParser = context.OnEnterParser;
@@ -16,7 +16,7 @@ namespace Parlot.Fluent
             parent = context;
         }
 
-        public ParseContext(Scanner scanner, bool useNewLines = false) : base(scanner, useNewLines)
+        public ScopeParseContext(Scanner scanner, bool useNewLines = false) : base(scanner, useNewLines)
         {
         }
 

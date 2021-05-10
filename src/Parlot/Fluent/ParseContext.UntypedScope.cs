@@ -5,7 +5,7 @@ namespace Parlot.Fluent
 {
     public partial class ParseContext
     {
-        public class Untyped : ParseContext<Untyped>
+        public class Untyped : ScopeParseContext<Untyped>
         {
             IDictionary<string, object> scope;
 
