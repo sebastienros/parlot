@@ -19,6 +19,69 @@ namespace Parlot.Fluent
         /// Compiles the current parser.
         /// </summary>
         /// <returns>A compiled parser.</returns>
+        public static Parser<T, StringParseContext> Compile<T>(this Parser<T, StringParseContext> self)
+        {
+            return self.Compile<T, StringParseContext, char>();
+        }
+        /// <summary>
+        /// Compiles the current parser.
+        /// </summary>
+        /// <returns>A compiled parser.</returns>
+        public static Parser<T, TParseContext> Compile<T, TParseContext, TChar>(this Parser<T, TParseContext> self)
+        where TParseContext : ParseContextWithScanner<TChar>
+        where TChar : IEquatable<TChar>, IConvertible
+        {
+            if (self is ICompiledParser)
+            {
+                return self;
+            }
+
+            var compilationContext = new CompilationContext<TParseContext>();
+
+            var compilationResult = self.Build(compilationContext);
+
+            // return value;
+
+            var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+            var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }), compilationResult.Success, compilationResult.Value));
+
+            compilationResult.Body.Add(returnLabelExpression);
+
+            // global variables;
+
+            // parser variables;
+
+            var allVariables = new List<ParameterExpression>();
+            allVariables.AddRange(compilationContext.GlobalVariables);
+            allVariables.AddRange(compilationResult.Variables);
+
+            // global statements;
+
+            // parser statements;
+
+            var allExpressions = new List<Expression>();
+            allExpressions.AddRange(compilationContext.GlobalExpressions);
+            allExpressions.AddRange(compilationResult.Body);
+
+            var body = Expression.Block(
+                typeof(ValueTuple<bool, T>),
+                allVariables,
+                allExpressions
+                );
+
+            var result = Expression.Lambda<Func<TParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
+
+            var parser = result.Compile();
+
+            // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
+            return new CompiledParser<T, TParseContext, TChar>(parser);
+        }
+
+
+        /// <summary>
+        /// Compiles the current parser.
+        /// </summary>
+        /// <returns>A compiled parser.</returns>
         public static Parser<T, TParseContext, TChar> Compile<T, TParseContext, TChar>(this Parser<T, TParseContext, TChar> self)
         where TParseContext : ParseContextWithScanner<TChar>
         where TChar : IEquatable<TChar>, IConvertible

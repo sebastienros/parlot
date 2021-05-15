@@ -16,7 +16,7 @@ namespace Parlot.Compilation
     /// in order to expose is as as standard parser contract.
     /// </summary>
     /// <remarks>
-    /// This class is used in <see cref="Parsers.Compile{T, TParseContext,TChar}"/>.
+    /// This class is used in <see cref="Parsers.Compile{T, TParseContext,TChar}(Parser{T,TParseContext, TChar})"/>.
     /// </remarks>
     public class CompiledParser<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompiledParser
     where TParseContext : ParseContextWithScanner<TChar>
