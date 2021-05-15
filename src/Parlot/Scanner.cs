@@ -7,71 +7,31 @@ namespace Parlot
     /// <summary>
     /// This class is used to return tokens extracted from the input buffer.
     /// </summary>
-    public class Scanner
+    public class Scanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        public readonly string Buffer;
-        public readonly Cursor Cursor;
+        public readonly BufferSpan<TChar> Buffer;
+        public readonly Cursor<TChar> Cursor;
 
         /// <summary>
         /// Scans some text.
         /// </summary>
         /// <param name="buffer">The string containing the text to scan.</param>
-        public Scanner(string buffer)
+        public Scanner(BufferSpan<TChar> buffer)
         {
-            Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-            Cursor = new Cursor(Buffer, TextPosition.Start);
-        }
-
-        /// <summary>
-        /// Reads any whitespace without generating a token.
-        /// </summary>
-        /// <returns>Whether some white space was read.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool SkipWhiteSpaceOrNewLine()
-        {
-            if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
-            {
-                return false;
-            }
-
-            return SkipWhiteSpaceOrNewLineUnlikely();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private bool SkipWhiteSpaceOrNewLineUnlikely()
-        {
-            Cursor.Advance();
-
-            while (Character.IsWhiteSpaceOrNewLine(Cursor.Current))
-            {
-                Cursor.Advance();
-            }
-
-            return true;
+            Buffer = buffer.Buffer ?? throw new ArgumentNullException(nameof(buffer));
+            Cursor = new Cursor<TChar>(Buffer, TextPosition.Start);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool SkipWhiteSpace()
-        {
-            bool found = false;
-            while (Character.IsWhiteSpace(Cursor.Current))
-            {
-                Cursor.AdvanceOnce();
-                found = true;
-            }
+        public bool ReadFirstThenOthers(Func<TChar, bool> first, Func<TChar, bool> other)
+            => ReadFirstThenOthers(first, other, out _);
 
-            return found;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
-            => ReadFirstThenOthers(first, other, out _); 
-
-        public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out TokenResult result)
+        public bool ReadFirstThenOthers(Func<TChar, bool> first, Func<TChar, bool> other, out BufferSpan<TChar> result)
         {
             if (!first(Cursor.Current))
             {
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<TChar>();
                 return false;
             }
 
@@ -88,98 +48,21 @@ namespace Parlot
             return true;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadIdentifier() => ReadIdentifier(out _);
-
-        public bool ReadIdentifier(out TokenResult result)
-        {
-            // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
-
-            return ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), out result);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDecimal() => ReadDecimal(out _);
-
-        public bool ReadDecimal(out TokenResult result)
-        {
-            // perf: fast path to prevent a copy of the position
-
-            if (!Character.IsDecimalDigit(Cursor.Current))
-            {
-                result = TokenResult.Fail();
-                return false;
-            }
-
-            var start = Cursor.Position;
-
-            do
-            {
-                Cursor.Advance();
-
-            } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
-
-            if (Cursor.Match('.'))
-            {
-                Cursor.Advance();
-
-                if (!Character.IsDecimalDigit(Cursor.Current))
-                {
-                    result = TokenResult.Fail();
-                    Cursor.ResetPosition(start);
-                    return false;
-                }
-
-                do
-                {
-                    Cursor.Advance();
-
-                } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
-            }
-
-            result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadInteger() => ReadInteger(out _);
-        
-        public bool ReadInteger(out TokenResult result)
-        {
-            // perf: fast path to prevent a copy of the position
-
-            if (!Character.IsDecimalDigit(Cursor.Current))
-            {
-                result = TokenResult.Fail();
-                return false;
-            }
-
-            var start = Cursor.Offset;
-
-            do
-            {
-                Cursor.Advance();
-
-            } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
-
-            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
-            return true;
-        }
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadWhile(Func<char, bool> predicate) => ReadWhile(predicate, out _);
+        public bool ReadWhile(Func<TChar, bool> predicate) => ReadWhile(predicate, out _);
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
         /// </summary>
-        public bool ReadWhile(Func<char, bool> predicate, out TokenResult result)
+        public bool ReadWhile(Func<TChar, bool> predicate, out BufferSpan<TChar> result)
         {
             if (Cursor.Eof || !predicate(Cursor.Current))
             {
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<TChar>();
                 return false;
             }
 
@@ -197,27 +80,12 @@ namespace Parlot
             return true;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _); 
-
-        public bool ReadNonWhiteSpace(out TokenResult result)
-        {
-            return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _); 
-
-        public bool ReadNonWhiteSpaceOrNewLine(out TokenResult result)
-        {
-            return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
-        }
 
         /// <summary>
         /// Reads the specified text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadChar(char c)
+        public bool ReadChar(TChar c)
         {
             if (!Cursor.Match(c))
             {
@@ -231,11 +99,11 @@ namespace Parlot
         /// <summary>
         /// Reads the specified text.
         /// </summary>
-        public bool ReadChar(char c, out TokenResult result)
+        public bool ReadChar(TChar c, out BufferSpan<TChar> result)
         {
             if (!Cursor.Match(c))
             {
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<TChar>();
                 return false;
             }
 
@@ -246,31 +114,170 @@ namespace Parlot
             return true;
         }
 
+    }
+
+    public static class CharScannerExtensions
+    {
+
+        /// <summary>
+        /// Reads any whitespace without generating a token.
+        /// </summary>
+        /// <returns>Whether some white space was read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool SkipWhiteSpaceOrNewLine(this Scanner<char> scanner)
+        {
+            if (!Character.IsWhiteSpaceOrNewLine(scanner.Cursor.Current))
+            {
+                return false;
+            }
+
+            return SkipWhiteSpaceOrNewLineUnlikely(scanner);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool SkipWhiteSpaceOrNewLineUnlikely(this Scanner<char> scanner)
+        {
+            scanner.Cursor.Advance();
+
+            while (Character.IsWhiteSpaceOrNewLine(scanner.Cursor.Current))
+            {
+                scanner.Cursor.Advance();
+            }
+
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool SkipWhiteSpace(this Scanner<char> scanner)
+        {
+            bool found = false;
+            while (Character.IsWhiteSpace(scanner.Cursor.Current))
+            {
+                scanner.Cursor.AdvanceOnce();
+                found = true;
+            }
+
+            return found;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ReadIdentifier(this Scanner<char> scanner) => ReadIdentifier(scanner, out _);
+
+        public static bool ReadIdentifier(this Scanner<char> scanner, out BufferSpan<char> result)
+        {
+            // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
+
+            return scanner.ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), out result);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ReadDecimal(this Scanner<char> scanner) => ReadDecimal(scanner, out _);
+
+        public static bool ReadDecimal(this Scanner<char> scanner, out BufferSpan<char> result)
+        {
+            // perf: fast path to prevent a copy of the position
+
+            if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+            {
+                result = TokenResult.Fail<char>();
+                return false;
+            }
+
+            var start = scanner.Cursor.Position;
+
+            do
+            {
+                scanner.Cursor.Advance();
+
+            } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
+
+            if (scanner.Cursor.Match('.'))
+            {
+                scanner.Cursor.Advance();
+
+                if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+                {
+                    result = TokenResult.Fail<char>();
+                    scanner.Cursor.ResetPosition(start);
+                    return false;
+                }
+
+                do
+                {
+                    scanner.Cursor.Advance();
+
+                } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
+            }
+
+            result = TokenResult.Succeed(scanner.Buffer, start.Offset, scanner.Cursor.Offset);
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ReadInteger(this Scanner<char> scanner) => ReadInteger(scanner, out _);
+
+        public static bool ReadInteger(this Scanner<char> scanner, out BufferSpan<char> result)
+        {
+            // perf: fast path to prevent a copy of the position
+
+            if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+            {
+                result = TokenResult.Fail<char>();
+                return false;
+            }
+
+            var start = scanner.Cursor.Offset;
+
+            do
+            {
+                scanner.Cursor.Advance();
+
+            } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
+
+            result = TokenResult.Succeed(scanner.Buffer, start, scanner.Cursor.Offset);
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ReadNonWhiteSpace(this Scanner<char> scanner) => ReadNonWhiteSpace(scanner, out _);
+
+        public static bool ReadNonWhiteSpace(this Scanner<char> scanner, out BufferSpan<char> result)
+        {
+            return scanner.ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ReadNonWhiteSpaceOrNewLine(this Scanner<char> scanner) => ReadNonWhiteSpaceOrNewLine(scanner, out _);
+
+        public static bool ReadNonWhiteSpaceOrNewLine(this Scanner<char> scanner, out BufferSpan<char> result)
+        {
+            return scanner.ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
+        }
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, StringComparer comparer) => ReadText(text, comparer, out _); 
-        
+        public static bool ReadText(this Scanner<char> scanner, string text, StringComparer comparer) => ReadText(scanner, text, comparer, out _);
+
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, StringComparer comparer, out TokenResult result)
+        public static bool ReadText(this Scanner<char> scanner, string text, StringComparer comparer, out BufferSpan<char> result)
         {
             var match = comparer is null
-                ? Cursor.Match(text)
-                : Cursor.Match(text, comparer);
+                ? scanner.Cursor.Match(text)
+                : scanner.Cursor.Match(text, comparer);
 
             if (!match)
             {
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<char>();
                 return false;
             }
 
-            int start = Cursor.Offset;
-            Cursor.Advance(text.Length);
-            result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
-            
+            int start = scanner.Cursor.Offset;
+            scanner.Cursor.Advance(text.Length);
+            result = TokenResult.Succeed(scanner.Buffer, start, scanner.Cursor.Offset);
+
             return true;
         }
 
@@ -278,46 +285,46 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text) => ReadText(text, out _);
+        public static bool ReadText(this Scanner<char> scanner, string text) => ReadText(scanner, text, out _);
 
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, out TokenResult result) => ReadText(text, comparer: null, out result);
+        public static bool ReadText(this Scanner<char> scanner, string text, out BufferSpan<char> result) => ReadText(scanner, text, comparer: null, out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadSingleQuotedString() => ReadSingleQuotedString(out _);
+        public static bool ReadSingleQuotedString(this Scanner<char> scanner) => ReadSingleQuotedString(scanner, out _);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadSingleQuotedString(out TokenResult result)
+        public static bool ReadSingleQuotedString(this Scanner<char> scanner, out BufferSpan<char> result)
         {
-            return ReadQuotedString('\'', out result);
+            return ReadQuotedString(scanner, '\'', out result);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDoubleQuotedString() => ReadDoubleQuotedString(out _);
+        public static bool ReadDoubleQuotedString(this Scanner<char> scanner) => ReadDoubleQuotedString(scanner, out _);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDoubleQuotedString(out TokenResult result)
+        public static bool ReadDoubleQuotedString(this Scanner<char> scanner, out BufferSpan<char> result)
         {
-            return ReadQuotedString('\"', out result);
+            return ReadQuotedString(scanner, '\"', out result);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadQuotedString() => ReadQuotedString(out _);
+        public static bool ReadQuotedString(this Scanner<char> scanner) => ReadQuotedString(scanner, out _);
 
-        public bool ReadQuotedString(out TokenResult result)
+        public static bool ReadQuotedString(this Scanner<char> scanner, out BufferSpan<char> result)
         {
-            var startChar = Cursor.Current;
+            var startChar = scanner.Cursor.Current;
 
             if (startChar != '\'' && startChar != '\"')
             {
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<char>();
                 return false;
             }
 
-            return ReadQuotedString(startChar, out result);
+            return ReadQuotedString(scanner, startChar, out result);
         }
 
         /// <summary>
@@ -327,57 +334,55 @@ namespace Parlot
         /// This method doesn't escape the string, but only validates its content is syntactically correct.
         /// The resulting Span contains the original quotes.
         /// </remarks>
-        private bool ReadQuotedString(char quoteChar, out TokenResult result)
+        private static bool ReadQuotedString(this Scanner<char> scanner, char quoteChar, out BufferSpan<char> result)
         {
-            var startChar = Cursor.Current;
+            var startChar = scanner.Cursor.Current;
 
             if (startChar != quoteChar)
             {
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<char>();
                 return false;
             }
 
             // Fast path if there aren't any escape char until next quote
-            var startOffset = Cursor.Offset + 1;
+            var start = scanner.Cursor.Position;
 
-            var nextQuote = Cursor.Buffer.IndexOf(startChar, startOffset);
+            var nextQuote = scanner.Cursor.Buffer.IndexOf(startChar, start.Offset + 1);
 
             if (nextQuote == -1)
             {
                 // There is no end quote, not a string
-                result = TokenResult.Fail();
+                result = TokenResult.Fail<char>();
                 return false;
             }
 
-            var start = Cursor.Position;
+            scanner.Cursor.Advance();
 
-            Cursor.Advance();
-
-            var nextEscape = Cursor.Buffer.IndexOf('\\', startOffset, nextQuote - startOffset);
+            var nextEscape = scanner.Cursor.Buffer.IndexOf('\\', start.Offset, nextQuote - start.Offset);
 
             // If the next escape if not before the next quote, we can return the string as-is
             if (nextEscape == -1 || nextEscape > nextQuote)
             {
-                Cursor.Advance(nextQuote + 1 - startOffset);
+                scanner.Cursor.Advance(nextQuote - start.Offset);
 
-                result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
+                result = TokenResult.Succeed(scanner.Buffer, start.Offset, scanner.Cursor.Offset);
                 return true;
             }
 
-            while (!Cursor.Match(startChar))
+            while (!scanner.Cursor.Match(startChar))
             {
                 // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
-                if (Cursor.Eof)
+                if (scanner.Cursor.Eof)
                 {
-                    result = TokenResult.Fail();
+                    result = TokenResult.Fail<char>();
                     return false;
                 }
 
-                if (Cursor.Match('\\'))
+                if (scanner.Cursor.Match('\\'))
                 {
-                    Cursor.Advance();
+                    scanner.Cursor.Advance();
 
-                    switch (Cursor.Current)
+                    switch (scanner.Cursor.Current)
                     {
                         case '0':
                         case '\\':
@@ -398,18 +403,18 @@ namespace Parlot
 
                             var isValidUnicode = false;
 
-                            Cursor.Advance();
+                            scanner.Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                            if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.Current))
                             {
-                                Cursor.Advance();
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                scanner.Cursor.Advance();
+                                if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.Current))
                                 {
-                                    Cursor.Advance();
-                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                    scanner.Cursor.Advance();
+                                    if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.Current))
                                     {
-                                        Cursor.Advance();
-                                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                                        scanner.Cursor.Advance();
+                                        if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.Current))
                                         {
                                             isValidUnicode = true;
                                         }
@@ -419,9 +424,9 @@ namespace Parlot
 
                             if (!isValidUnicode)
                             {
-                                Cursor.ResetPosition(start);
+                                scanner.Cursor.ResetPosition(start);
 
-                                result = TokenResult.Fail();
+                                result = TokenResult.Fail<char>();
                                 return false;
                             }
 
@@ -433,23 +438,23 @@ namespace Parlot
 
                             bool isValidHex = false;
 
-                            Cursor.Advance();
+                            scanner.Cursor.Advance();
 
-                            if (!Cursor.Eof && Character.IsHexDigit(Cursor.Current))
+                            if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.Current))
                             {
                                 isValidHex = true;
 
-                                if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
+                                if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.PeekNext()))
                                 {
-                                    Cursor.Advance();
+                                    scanner.Cursor.Advance();
 
-                                    if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
+                                    if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.PeekNext()))
                                     {
-                                        Cursor.Advance();
+                                        scanner.Cursor.Advance();
 
-                                        if (!Cursor.Eof && Character.IsHexDigit(Cursor.PeekNext()))
+                                        if (!scanner.Cursor.Eof && Character.IsHexDigit(scanner.Cursor.PeekNext()))
                                         {
-                                            Cursor.Advance();
+                                            scanner.Cursor.Advance();
                                         }
                                     }
                                 }
@@ -457,27 +462,27 @@ namespace Parlot
 
                             if (!isValidHex)
                             {
-                                Cursor.ResetPosition(start);
+                                scanner.Cursor.ResetPosition(start);
 
-                                result = TokenResult.Fail();
+                                result = TokenResult.Fail<char>();
                                 return false;
                             }
 
                             break;
                         default:
-                            Cursor.ResetPosition(start);
+                            scanner.Cursor.ResetPosition(start);
 
-                            result = TokenResult.Fail();
+                            result = TokenResult.Fail<char>();
                             return false;
                     }
                 }
 
-                Cursor.Advance();
+                scanner.Cursor.Advance();
             }
 
-            Cursor.Advance();
+            scanner.Cursor.Advance();
 
-            result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
+            result = TokenResult.Succeed(scanner.Buffer, start.Offset, scanner.Cursor.Offset);
 
             return true;
         }

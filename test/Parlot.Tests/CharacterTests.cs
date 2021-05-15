@@ -17,13 +17,13 @@ namespace Parlot.Tests
 
         public void ShouldDescodeString(string text, string expected)
         {
-            Assert.Equal(expected, Character.DecodeString(new TextSpan(text)).ToString());
+            Assert.Equal(expected, Character.DecodeString(new BufferSpan<char>(text.ToCharArray())).ToString());
         }
 
         [Fact]
         public void ShouldDescodeStringInBuffer()
         {
-            var span = new TextSpan("   a\\nbc   ", 3, 5);
+            var span = new BufferSpan<char>("   a\\nbc   ".ToCharArray(), 3, 5);
             Assert.Equal("a\nbc", Character.DecodeString(span).ToString());
         }
     }

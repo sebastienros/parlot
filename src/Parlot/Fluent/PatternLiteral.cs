@@ -4,20 +4,22 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
+    public sealed class PatternLiteral<TParseContext, TChar> : Parser<BufferSpan<TChar>, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        private readonly Func<char, bool> _predicate;
+        private readonly Func<TChar, bool> _predicate;
         private readonly int _minSize;
         private readonly int _maxSize;
 
-        public PatternLiteral(Func<char, bool> predicate, int minSize = 1, int maxSize = 0)
+        public PatternLiteral(Func<TChar, bool> predicate, int minSize = 1, int maxSize = 0)
         {
             _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
             _minSize = minSize;
             _maxSize = maxSize;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<TChar>> result)
         {
             context.EnterParser(this);
 
@@ -41,7 +43,7 @@ namespace Parlot.Fluent
             if (size >= _minSize)
             {
                 var end = context.Scanner.Cursor.Offset;
-                result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+                result.Set(start, end, context.Scanner.Buffer.SubBuffer(start, end - start));
 
                 return true;
             }
@@ -52,12 +54,12 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
 
             // var start = context.Scanner.Cursor.Position;
 
@@ -111,7 +113,7 @@ namespace Parlot.Fluent
                         ),
                         context.Advance(),
                         Expression.Assign(size, Expression.Add(size, Expression.Constant(1))),
-                        _maxSize == 0 
+                        _maxSize == 0
                         ? Expression.Empty()
                         : Expression.IfThen(
                             Expression.Equal(size, Expression.Constant(_maxSize)),
@@ -128,7 +130,7 @@ namespace Parlot.Fluent
             // }
             // else
             // {
-            //     value = new TextSpan(context.Scanner.Buffer, start, end - start);
+            //     value = new BufferSpan<char>(context.Scanner.Buffer, start, end - start);
             //     success = true;
             // }
 
@@ -139,11 +141,10 @@ namespace Parlot.Fluent
                     Expression.LessThan(size, Expression.Constant(_minSize)),
                     context.ResetPosition(start),
                     Expression.Block(
-                        context.DiscardResult 
+                        context.DiscardResult
                         ? Expression.Empty()
                         : Expression.Assign(value,
-                            context.NewTextSpan(
-                                context.Buffer(),
+                            context.SubBufferSpan(
                                 startOffset,
                                 Expression.Subtract(context.Offset(), startOffset)
                                 )),

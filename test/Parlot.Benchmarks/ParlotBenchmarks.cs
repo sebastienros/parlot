@@ -21,13 +21,13 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("DecodeString")]
-        public TextSpan DecodeStringWithoutEscapes()
+        public BufferSpan<char> DecodeStringWithoutEscapes()
         {
             return Character.DecodeString(_stringWithoutEscapes);
         }
 
         [Benchmark, BenchmarkCategory("DecodeString")]
-        public TextSpan DecodeStringWithEscapes()
+        public BufferSpan<char> DecodeStringWithEscapes()
         {
             return Character.DecodeString(_stringWithEscapes);
         }

@@ -1,18 +1,21 @@
 ﻿using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class CharLiteral : Parser<char>, ICompilable
+    public sealed class CharLiteral<TChar, TParseContext> : Parser<TChar, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        public CharLiteral(char c)
+        public CharLiteral(TChar c)
         {
             Char = c;
         }
 
-        public char Char { get; }
+        public TChar Char { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<char> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TChar> result)
         {
             context.EnterParser(this);
 
@@ -27,7 +30,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 

@@ -16,18 +16,20 @@ namespace Parlot.Compilation
     /// in order to expose is as as standard parser contract.
     /// </summary>
     /// <remarks>
-    /// This class is used in <see cref="Parser{T}.Compile"/>.
+    /// This class is used in <see cref="Parsers.Compile{T, TParseContext,TChar}(Parser{T,TParseContext, TChar})"/>.
     /// </remarks>
-    public class CompiledParser<T> : Parser<T>, ICompiledParser
+    public class CompiledParser<T, TParseContext, TChar> : Parser<T, TParseContext, TChar>, ICompiledParser
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        private readonly Func<ParseContext, ValueTuple<bool, T>> _parse;
+        private readonly Func<TParseContext, ValueTuple<bool, T>> _parse;
 
-        public CompiledParser(Func<ParseContext, ValueTuple<bool, T>> parse)
+        public CompiledParser(Func<TParseContext, ValueTuple<bool, T>> parse)
         {
             _parse = parse ?? throw new ArgumentNullException(nameof(parse));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             var start = context.Scanner.Cursor.Offset;
             var parsed = _parse(context);

@@ -5,7 +5,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class IntegerLiteral : Parser<long>, ICompilable
+    public sealed class IntegerLiteral<TParseContext> : Parser<long, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         private readonly NumberOptions _numberOptions;
 
@@ -14,7 +15,7 @@ namespace Parlot.Fluent
             _numberOptions = numberOptions;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<long> result)
+        public override bool Parse(TParseContext context, ref ParseResult<long> result)
         {
             context.EnterParser(this);
 
@@ -35,14 +36,14 @@ namespace Parlot.Fluent
                 var end = context.Scanner.Cursor.Offset;
 
 #if NETSTANDARD2_0
-                var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
+                var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).ToString();
 #else
-                var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
+                var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).Span;
 #endif
 
                 if (long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
                 {
-                    result.Set(start, end,  value);
+                    result.Set(start, end, value);
                     return true;
                 }
             }
@@ -52,12 +53,12 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable<long>(result);
+            var value = context.DeclareValueVariable<long, TParseContext>(result);
 
             var reset = context.DeclarePositionVariable(result);
             var start = context.DeclareOffsetVariable(result);

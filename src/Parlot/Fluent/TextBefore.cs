@@ -1,17 +1,20 @@
 ﻿namespace Parlot.Fluent
 {
     using Compilation;
+    using System;
     using System.Linq;
     using System.Linq.Expressions;
 
-    public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
+    public sealed class TextBefore<T, TParseContext, TChar> : Parser<BufferSpan<TChar>, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        private readonly Parser<T> _delimiter;
+        private readonly Parser<T, TParseContext> _delimiter;
         private readonly bool _canBeEmpty;
         private readonly bool _failOnEof;
         private readonly bool _consumeDelimiter;
 
-        public TextBefore(Parser<T> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
+        public TextBefore(Parser<T, TParseContext> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
         {
             _delimiter = delimiter;
             _canBeEmpty = canBeEmpty;
@@ -19,7 +22,7 @@
             _consumeDelimiter = consumeDelimiter;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<BufferSpan<TChar>> result)
         {
             context.EnterParser(this);
 
@@ -46,7 +49,7 @@
                         return false;
                     }
 
-                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, previous.Offset, context.Scanner.Buffer.SubBuffer(start.Offset, length));
                     return true;
                 }
 
@@ -66,7 +69,7 @@
                         return false;
                     }
 
-                    result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                    result.Set(start.Offset, previous.Offset, context.Scanner.Buffer.SubBuffer(start.Offset, length));
                     return true;
                 }
 
@@ -74,12 +77,12 @@
             }
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(BufferSpan<char>)));
 
             //  var start = context.Scanner.Cursor.Position;
             //  
@@ -105,7 +108,7 @@
             //              }
             //  
             //              success = true;
-            //              value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //              value = new BufferSpan<char>(context.Scanner.Buffer, start.Offset, length);
             //              break;
             //          }
             //      }
@@ -128,7 +131,7 @@
             //          }
             //  
             //          success = true;
-            //          value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
+            //          value = new BufferSpan<char>(context.Scanner.Buffer, start.Offset, length);
             //          break;
             //      }
             //  
@@ -149,7 +152,7 @@
                         Expression.Assign(previous, context.Position()),
                         Expression.IfThen(
                             context.Eof(),
-                            _failOnEof 
+                            _failOnEof
                             ? Expression.Block(
                                 context.ResetPosition(start),
                                 Expression.Break(breakLabel)
@@ -160,13 +163,13 @@
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
                                 Expression.Assign(success, Expression.Constant(true)),
-                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Assign(value, context.SubBufferSpan(context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),
 
                         Expression.Block(delimiterCompiledResult.Body),
-                        
+
                         Expression.IfThen(
                             delimiterCompiledResult.Success,
                             Expression.Block(
@@ -178,7 +181,7 @@
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
                                 Expression.Assign(success, Expression.Constant(true)),
-                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Assign(value, context.SubBufferSpan(context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),

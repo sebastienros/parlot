@@ -3,29 +3,33 @@ using System.Runtime.CompilerServices;
 
 namespace Parlot
 {
-    public class Cursor
+    public class Cursor<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        public const char NullChar = '\0';
+        public static readonly TChar NullChar = default(TChar);
 
         private readonly int _textLength;
-        private char _current;
+        private TChar _current;
         private int _offset;
         private int _line;
         private int _column;
-        private readonly string _buffer;
+        private readonly BufferSpan<TChar> _buffer;
 
-        public Cursor(string buffer, in TextPosition position)
+        public Cursor(BufferSpan<TChar> buffer, in TextPosition position)
         {
             _buffer = buffer;
-            _textLength = _buffer.Length;
+            _textLength = buffer.Length;
             Eof = _textLength == 0;
-            _current = _textLength == 0 ? NullChar : _buffer[position.Offset];
+            _current = _textLength == 0 ? NullChar : buffer[position.Offset];
             _offset = 0;
             _line = 1;
             _column = 1;
+            this.IsChar = typeof(TChar) == typeof(char);
         }
 
-        public Cursor(string buffer) : this(buffer, TextPosition.Start)
+        public readonly bool IsChar;
+
+        public Cursor(BufferSpan<TChar> buffer) : this(buffer, TextPosition.Start)
         {
         }
 
@@ -66,7 +70,7 @@ namespace Parlot
 
         internal bool AdvanceOnce()
         {
-            _offset++;
+            this._offset = _offset + 1;
 
             if (_offset >= _textLength)
             {
@@ -76,17 +80,21 @@ namespace Parlot
                 return false;
             }
 
-            var c = _buffer[_offset];
+            var c = PeekNext(0);
 
-            // most probable first 
-            if (_current != '\n' && c != '\r')
+            if (IsChar)
             {
-                _column++;
-            }
-            else if (_current == '\n')
-            {
-                _line++;
-                _column = 1;
+                var currentAsChar = _current.ToChar(null);
+                // most probable first 
+                if (currentAsChar != '\n' && c.ToChar(null) != '\r')
+                {
+                    _column++;
+                }
+                else if (currentAsChar == '\n')
+                {
+                    _line++;
+                    _column = 1;
+                }
             }
 
             // if c == '\r', don't increase the column count
@@ -114,14 +122,14 @@ namespace Parlot
             _column = position.Column;
 
             // Eof might have been recorded
-            if (_offset >= _buffer.Length)
+            if (_offset >= _textLength)
             {
                 _current = NullChar;
                 Eof = true;
             }
             else
             {
-                _current = _buffer[position.Offset];
+                _current = _buffer[_offset];
                 Eof = false;
             }
         }
@@ -129,7 +137,7 @@ namespace Parlot
         /// <summary>
         /// Evaluates the char at the current position.
         /// </summary>
-        public char Current => _current;
+        public TChar Current => _current;
 
         /// <summary>
         /// Returns the cursor's position in the _buffer.
@@ -139,7 +147,7 @@ namespace Parlot
         /// <summary>
         /// Evaluates a char forward in the _buffer.
         /// </summary>
-        public char PeekNext(int index = 1)
+        public TChar PeekNext(int index = 1)
         {
             var nextIndex = _offset + index;
 
@@ -150,16 +158,16 @@ namespace Parlot
 
             return _buffer[nextIndex];
         }
-        
+
         public bool Eof { get; private set; }
 
-        public string Buffer => _buffer;
+        public BufferSpan<TChar> Buffer => _buffer;
 
         /// <summary>
         /// Whether a char is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(char c)
+        public bool Match(TChar c)
         {
             if (Eof)
             {
@@ -167,14 +175,14 @@ namespace Parlot
             }
 
             // Ordinal comparison
-            return _current == c;
+            return _current.Equals(c);
         }
 
         /// <summary>
         /// Whether any char of the string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAnyOf(string s)
+        public bool MatchAnyOf(TChar[] s)
         {
             if (s == null)
             {
@@ -195,7 +203,7 @@ namespace Parlot
 
             for (var i = 0; i < length; i++)
             {
-                if (s[i] == _current)
+                if (s[i].Equals(_current))
                 {
                     return true;
                 }
@@ -208,7 +216,7 @@ namespace Parlot
         /// Whether any char of an array is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAny(params char[] chars)
+        public bool MatchAny(params TChar[] chars)
         {
             if (chars == null)
             {
@@ -229,13 +237,56 @@ namespace Parlot
 
             for (var i = 0; i < length; i++)
             {
-                if (chars[i] == _current)
+                if (chars[i].Equals(_current))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Whether a string is at the current position.
+        /// </summary>
+        public bool Match(TChar[] s)
+        {
+            if (s.Length == 0)
+            {
+                return true;
+            }
+
+            if (Eof)
+            {
+                return false;
+            }
+
+            if (!s[0].Equals(_current))
+            {
+                return false;
+            }
+
+            var length = s.Length;
+
+            if (_offset + length - 1 >= _textLength)
+            {
+                return false;
+            }
+
+            if (length > 1 && !PeekNext(1).Equals(s[1]))
+            {
+                return false;
+            }
+
+            for (var i = 2; i < length; i++)
+            {
+                if (!s[i].Equals(PeekNext(i)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -248,12 +299,12 @@ namespace Parlot
                 return true;
             }
 
-            if (Eof)
+            if (Eof || !IsChar)
             {
                 return false;
             }
-            
-            if (s[0] != _current)
+
+            if (!s[0].Equals(_current))
             {
                 return false;
             }
@@ -264,15 +315,15 @@ namespace Parlot
             {
                 return false;
             }
-            
-            if (length > 1 && _buffer[_offset + 1] != s[1])
+
+            if (length > 1 && !PeekNext(1).Equals(s[1]))
             {
                 return false;
             }
 
             for (var i = 2; i < length; i++)
             {
-                if (s[i] != _buffer[_offset + i])
+                if (!s[i].Equals(PeekNext(i)))
                 {
                     return false;
                 }
@@ -292,12 +343,12 @@ namespace Parlot
                 return true;
             }
 
-            if (Eof)
+            if (Eof || !IsChar)
             {
                 return false;
             }
 
-            var a = CharToStringTable.GetString(_current);
+            var a = CharToStringTable.GetString(_current.ToChar(null));
             var b = CharToStringTable.GetString(s[0]);
 
             if (comparer.Compare(a, b) != 0)
@@ -314,7 +365,7 @@ namespace Parlot
 
             if (length > 1)
             {
-                a = CharToStringTable.GetString(_buffer[_offset + 1]);
+                a = CharToStringTable.GetString(PeekNext(1).ToChar(null));
                 b = CharToStringTable.GetString(s[1]);
 
                 if (comparer.Compare(a, b) != 0)
@@ -325,7 +376,7 @@ namespace Parlot
 
             for (var i = 2; i < length; i++)
             {
-                a = CharToStringTable.GetString(_buffer[_offset + i]);
+                a = CharToStringTable.GetString(PeekNext(i).ToChar(null));
                 b = CharToStringTable.GetString(s[i]);
 
                 if (comparer.Compare(a, b) != 0)

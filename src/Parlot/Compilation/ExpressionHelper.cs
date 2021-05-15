@@ -9,48 +9,34 @@ namespace Parlot.Compilation
 
     public static class ExpressionHelper
     {
-        internal static MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-        internal static MethodInfo Scanner_ReadText = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), new[] { typeof(string), typeof(StringComparer), typeof(TokenResult) });
-        internal static MethodInfo Scanner_ReadText_NoResult = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), new[] { typeof(string), typeof(StringComparer) });
-        internal static MethodInfo Scanner_ReadChar = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadChar), new[] { typeof(char) });
-        internal static MethodInfo Scanner_ReadDecimal = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), new Type[0] { });
-        internal static MethodInfo Scanner_ReadInteger = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadInteger), new Type[0] { });
-        internal static MethodInfo Scanner_ReadNonWhiteSpace = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpace), new Type[0] { });
-        internal static MethodInfo Scanner_ReadNonWhiteSpaceOrNewLine = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpaceOrNewLine), new Type[0] { });
-        internal static MethodInfo Scanner_SkipWhiteSpace = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.SkipWhiteSpace), new Type[0] { });
-        internal static MethodInfo Scanner_SkipWhiteSpaceOrNewLine = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.SkipWhiteSpaceOrNewLine), new Type[0] { });
-        internal static MethodInfo Scanner_ReadSingleQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadSingleQuotedString), new Type[0] { });
-        internal static MethodInfo Scanner_ReadDoubleQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDoubleQuotedString), new Type[0] { });
-        internal static MethodInfo Scanner_ReadQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadQuotedString), new Type[0] { });
+        public static Expression NewBufferSpan<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> _, Expression buffer, Expression offset, Expression count) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.New(ExpressionHelper<TParseContext, TChar>.BufferSpan_Constructor, new[] { buffer, offset, count });
+        public static Expression SubBufferSpan<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, Expression offset, Expression count) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Call(context.Buffer(), ExpressionHelper<TParseContext, TChar>.BufferSpan_SubBuffer, new[] { offset, count });
+        public static MemberExpression Scanner<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Field(context.ParseContext, "Scanner");
+        public static MemberExpression Cursor<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Field(context.Scanner<TParseContext, TChar>(), "Cursor");
+        public static MemberExpression Position<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Property(context.Cursor<TParseContext, TChar>(), "Position");
+        public static Expression ResetPosition<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, Expression position) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Call(context.Cursor(), typeof(Cursor<TChar>).GetMethod("ResetPosition"), position);
+        public static MemberExpression Offset<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Property(context.Cursor(), "Offset");
+        public static MemberExpression Offset<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, Expression textPosition) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Field(textPosition, nameof(TextPosition.Offset));
+        public static MemberExpression Current<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Property(context.Cursor(), "Current");
+        public static MemberExpression Eof<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Property(context.Cursor(), "Eof");
+        public static MemberExpression Buffer<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Field(context.Scanner(), "Buffer");
+        public static Expression ThrowObject<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> _, Expression o) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Throw(Expression.New(typeof(Exception).GetConstructor(new[] { typeof(string) }), Expression.Call(o, o.Type.GetMethod("ToString", Type.EmptyTypes))));
+        public static Expression ThrowParseException<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, Expression message) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Throw(Expression.New(typeof(ParseException).GetConstructors().First(), new[] { message, context.Position<TParseContext, TChar>() }));
+        public static MethodCallExpression Advance<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => ExpressionHelper<TParseContext, TChar>.Advance(context);
 
-        internal static ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
+        public static MethodCallExpression ReadSingleQuotedString<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadSingleQuotedString, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadDoubleQuotedString<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadDoubleQuotedString, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadQuotedString<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadQuotedString, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadChar<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, TChar c) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Call(context.Scanner(), ExpressionHelper<TParseContext, TChar>.Scanner_ReadChar, Expression.Constant(c));
+        public static MethodCallExpression ReadDecimal<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadDecimal, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadInteger<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadInteger, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadNonWhiteSpace<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadNonWhiteSpace, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadNonWhiteSpaceOrNewLine<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadNonWhiteSpaceOrNewLine, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression SkipWhiteSpace<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_SkipWhiteSpace, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression SkipWhiteSpaceOrNewLine<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_SkipWhiteSpaceOrNewLine, context.Scanner<TParseContext, char>());
 
-        public static Expression NewTextSpan(this CompilationContext _, Expression buffer, Expression offset, Expression count) => Expression.New(TextSpan_Constructor, new[] { buffer, offset, count });
-        public static MemberExpression Scanner(this CompilationContext context) => Expression.Field(context.ParseContext, "Scanner");
-        public static MemberExpression Cursor(this CompilationContext context) => Expression.Field(context.Scanner(), "Cursor");
-        public static MemberExpression Position(this CompilationContext context) => Expression.Property(context.Cursor(), "Position");
-        public static Expression ResetPosition(this CompilationContext context, Expression position) => Expression.Call(context.Cursor(), typeof(Cursor).GetMethod("ResetPosition"), position);
-        public static MemberExpression Offset(this CompilationContext context) => Expression.Property(context.Cursor(), "Offset");
-        public static MemberExpression Offset(this CompilationContext context, Expression textPosition) => Expression.Field(textPosition, nameof(TextPosition.Offset));
-        public static MemberExpression Current(this CompilationContext context) => Expression.Property(context.Cursor(), "Current");
-        public static MemberExpression Eof(this CompilationContext context) => Expression.Property(context.Cursor(), "Eof");
-        public static MemberExpression Buffer(this CompilationContext context) => Expression.Field(context.Scanner(), "Buffer");
-        public static Expression ThrowObject(this CompilationContext _, Expression o) => Expression.Throw(Expression.New(typeof(Exception).GetConstructor(new[] { typeof(string) }), Expression.Call(o, o.Type.GetMethod("ToString", new Type[0]))));
-        public static Expression ThrowParseException(this CompilationContext context, Expression message) => Expression.Throw(Expression.New(typeof(ParseException).GetConstructors().First(), new [] { message, context.Position() } ));
-
-        public static MethodCallExpression ReadSingleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadSingleQuotedString);
-        public static MethodCallExpression ReadDoubleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDoubleQuotedString);
-        public static MethodCallExpression ReadQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadQuotedString);
-        public static MethodCallExpression ReadChar(this CompilationContext context, char c) => Expression.Call(context.Scanner(), Scanner_ReadChar, Expression.Constant(c));
-        public static MethodCallExpression ReadDecimal(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDecimal);
-        public static MethodCallExpression ReadInteger(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadInteger);
-        public static MethodCallExpression ReadNonWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpace);
-        public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpaceOrNewLine);
-        public static MethodCallExpression SkipWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_SkipWhiteSpace);
-        public static MethodCallExpression SkipWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_SkipWhiteSpaceOrNewLine);
-        public static MethodCallExpression Advance(this CompilationContext context) => Expression.Call(context.Cursor(), typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), new Type[0] { }));
-
-        public static ParameterExpression DeclareSuccessVariable(this CompilationContext context, CompilationResult result, bool defaultValue)
+        public static ParameterExpression DeclareSuccessVariable<TParseContext>(this CompilationContext<TParseContext> context, CompilationResult result, bool defaultValue)
+    where TParseContext : ParseContext
         {
             result.Success = Expression.Variable(typeof(bool), $"success{context.NextNumber}");
             result.Variables.Add(result.Success);
@@ -58,12 +44,14 @@ namespace Parlot.Compilation
             return result.Success;
         }
 
-        public static ParameterExpression DeclareValueVariable<T>(this CompilationContext context, CompilationResult result)
+        public static ParameterExpression DeclareValueVariable<T, TParseContext>(this CompilationContext<TParseContext> context, CompilationResult result)
+            where TParseContext : ParseContext
         {
             return DeclareValueVariable(context, result, Expression.Default(typeof(T)));
         }
-            
-        public static ParameterExpression DeclareValueVariable(this CompilationContext context, CompilationResult result, Expression defaultValue)
+
+        public static ParameterExpression DeclareValueVariable<TParseContext>(this CompilationContext<TParseContext> context, CompilationResult result, Expression defaultValue)
+            where TParseContext : ParseContext
         {
             result.Value = Expression.Variable(defaultValue.Type, $"value{context.NextNumber}");
 
@@ -76,7 +64,9 @@ namespace Parlot.Compilation
             return result.Value;
         }
 
-        public static ParameterExpression DeclarePositionVariable(this CompilationContext context, CompilationResult result)
+        public static ParameterExpression DeclarePositionVariable<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, CompilationResult result)
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
         {
             var start = Expression.Variable(typeof(TextPosition), $"position{context.NextNumber}");
             result.Variables.Add(start);
@@ -84,17 +74,108 @@ namespace Parlot.Compilation
             return start;
         }
 
-        public static ParameterExpression DeclareOffsetVariable(this CompilationContext context, CompilationResult result)
+        public static ParameterExpression DeclareOffsetVariable<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, CompilationResult result)
+    where TParseContext : ParseContextWithScanner<TChar>
+     where TChar : IEquatable<TChar>, IConvertible
         {
             var offset = Expression.Variable(typeof(int), $"offset{context.NextNumber}");
             result.Variables.Add(offset);
             result.Body.Add(Expression.Assign(offset, context.Offset()));
             return offset;
         }
+    }
 
-        public static MethodCallExpression ParserSkipWhiteSpace(this CompilationContext context)
+    public static class ExpressionHelper<TParseContext>
+    where TParseContext : ParseContextWithScanner<char>
+    {
+        internal static MethodInfo Scanner_ReadText = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadText), new[] { typeof(Scanner<char>), typeof(string), typeof(StringComparer), typeof(TokenResult) });
+        internal static MethodInfo Scanner_ReadText_NoResult = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadText), new[] { typeof(Scanner<char>), typeof(string), typeof(StringComparer) });
+        internal static MethodInfo Scanner_ReadDecimal = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadDecimal), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadInteger = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadInteger), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadNonWhiteSpace = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadNonWhiteSpace), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadNonWhiteSpaceOrNewLine = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadNonWhiteSpaceOrNewLine), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_SkipWhiteSpace = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.SkipWhiteSpace), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_SkipWhiteSpaceOrNewLine = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.SkipWhiteSpaceOrNewLine), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadSingleQuotedString = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadSingleQuotedString), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadDoubleQuotedString = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadDoubleQuotedString), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadQuotedString = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadQuotedString), new Type[] { typeof(Scanner<char>) });
+
+
+        // public static MethodCallExpression ReadSingleQuotedString(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadSingleQuotedString);
+        // public static MethodCallExpression ReadDoubleQuotedString(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadDoubleQuotedString);
+        // public static MethodCallExpression ReadQuotedString(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadQuotedString);
+        // public static MethodCallExpression ReadChar(CompilationContext<TParseContext> context, char c) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadChar, Expression.Constant(c));
+        // public static MethodCallExpression ReadDecimal(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadDecimal);
+        // public static MethodCallExpression ReadInteger(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadInteger);
+        // public static MethodCallExpression ReadNonWhiteSpace(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadNonWhiteSpace);
+        // public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_ReadNonWhiteSpaceOrNewLine);
+        // public static MethodCallExpression SkipWhiteSpace(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_SkipWhiteSpace);
+        // public static MethodCallExpression SkipWhiteSpaceOrNewLine(CompilationContext<TParseContext> context) => Expression.Call(ExpressionHelper<TParseContext, char>.Scanner(context), Scanner_SkipWhiteSpaceOrNewLine);
+    }
+
+    public static class ExpressionHelper<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+     where TChar : IEquatable<TChar>, IConvertible
+    {
+        internal static ConstructorInfo BufferSpan_Constructor = typeof(BufferSpan<TChar>).GetConstructor(new[] { typeof(TChar[]), typeof(int), typeof(int) });
+        internal static MethodInfo BufferSpan_SubBuffer = typeof(BufferSpan<TChar>).GetMethod(nameof(BufferSpan<TChar>.SubBuffer), new[] { typeof(int), typeof(int) });
+        internal static MethodInfo Scanner_ReadChar = typeof(Parlot.Scanner<TChar>).GetMethod(nameof(Parlot.Scanner<TChar>.ReadChar), new[] { typeof(TChar) });
+
+        public static Expression NewBufferSpan(CompilationContext<TParseContext> _, Expression buffer, Expression offset, Expression count) => Expression.New(BufferSpan_Constructor, new[] { buffer, offset, count
+    });
+        public static MemberExpression Scanner(CompilationContext<TParseContext> context) => Expression.Field(context.ParseContext, "Scanner");
+        public static MemberExpression Cursor(CompilationContext<TParseContext> context) => Expression.Field(Scanner(context), "Cursor");
+        public static MemberExpression Position(CompilationContext<TParseContext> context) => Expression.Property(Cursor(context), "Position");
+        public static Expression ResetPosition(CompilationContext<TParseContext> context, Expression position) => Expression.Call(Cursor(context), typeof(Cursor<TChar>).GetMethod("ResetPosition"), position);
+        public static MemberExpression Offset(CompilationContext<TParseContext> context) => Expression.Property(Cursor(context), "Offset");
+        public static MemberExpression Offset(CompilationContext<TParseContext> context, Expression textPosition) => Expression.Field(textPosition, nameof(TextPosition.Offset));
+        public static MemberExpression Current(CompilationContext<TParseContext> context) => Expression.Property(Cursor(context), "Current");
+        public static MemberExpression Eof(CompilationContext<TParseContext> context) => Expression.Property(Cursor(context), "Eof");
+        public static MemberExpression Buffer(CompilationContext<TParseContext> context) => Expression.Field(Scanner(context), "Buffer");
+        public static Expression ThrowObject(CompilationContext<TParseContext> _, Expression o) => Expression.Throw(Expression.New(typeof(Exception).GetConstructor(new[] { typeof(string) }), Expression.Call(o, o.Type.GetMethod("ToString", Type.EmptyTypes))));
+        public static Expression ThrowParseException(CompilationContext<TParseContext> context, Expression message) => Expression.Throw(Expression.New(typeof(ParseException).GetConstructors().First(), new[] { message, Position(context) }));
+        public static MethodCallExpression Advance(CompilationContext<TParseContext> context) => Expression.Call(Cursor(context), typeof(Cursor<TChar>).GetMethod("Advance", Type.EmptyTypes));
+
+        public static ParameterExpression DeclareSuccessVariable(CompilationContext<TParseContext> context, CompilationResult result, bool defaultValue)
         {
-            return Expression.Call(context.ParseContext, ParserContext_SkipWhiteSpaceMethod);
+            result.Success = Expression.Variable(typeof(bool), $"success{context.NextNumber}");
+            result.Variables.Add(result.Success);
+            result.Body.Add(Expression.Assign(result.Success, Expression.Constant(defaultValue, typeof(bool))));
+            return result.Success;
+        }
+
+        public static ParameterExpression DeclareValueVariable<T2>(CompilationContext<TParseContext> context, CompilationResult result)
+        {
+            return DeclareValueVariable(context, result, Expression.Default(typeof(T2)));
+        }
+
+        public static ParameterExpression DeclareValueVariable(CompilationContext<TParseContext> context, CompilationResult result, Expression defaultValue)
+        {
+            result.Value = Expression.Variable(defaultValue.Type, $"value{context.NextNumber}");
+
+            if (!context.DiscardResult)
+            {
+                result.Variables.Add(result.Value);
+                result.Body.Add(Expression.Assign(result.Value, defaultValue));
+            }
+
+            return result.Value;
+        }
+
+        public static ParameterExpression DeclarePositionVariable(CompilationContext<TParseContext> context, CompilationResult result)
+        {
+            var start = Expression.Variable(typeof(TextPosition), $"position{context.NextNumber}");
+            result.Variables.Add(start);
+            result.Body.Add(Expression.Assign(start, Position(context)));
+            return start;
+        }
+
+        public static ParameterExpression DeclareOffsetVariable(CompilationContext<TParseContext> context, CompilationResult result)
+        {
+            var offset = Expression.Variable(typeof(int), $"offset{context.NextNumber}");
+            result.Variables.Add(offset);
+            result.Body.Add(Expression.Assign(offset, Offset(context)));
+            return offset;
         }
     }
 }

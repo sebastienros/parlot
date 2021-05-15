@@ -8,7 +8,7 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldMatchString()
         {
-            var c = new Cursor("Lorem ipsum", TextPosition.Start);
+            var c = new Cursor<char>("Lorem ipsum".ToCharArray(), TextPosition.Start);
 
             Assert.True(c.Match(""));
             Assert.True(c.Match("Lorem"));
@@ -18,7 +18,7 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldMatchEmptyString()
         {
-            var c = new Cursor("Lorem ipsum", TextPosition.Start);
+            var c = new Cursor<char>("Lorem ipsum".ToCharArray(), TextPosition.Start);
 
             Assert.True(c.Match(""));
         }
@@ -26,7 +26,7 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldNotMatchString()
         {
-            var c = new Cursor("Lorem ipsum", TextPosition.Start);
+            var c = new Cursor<char>("Lorem ipsum".ToCharArray(), TextPosition.Start);
 
             Assert.False(c.Match("Lorem ipsum dolor"));
         }
@@ -34,7 +34,7 @@ namespace Parlot.Tests
         [Fact]
         public void AdvanceShouldReturnOnEof()
         {
-            var c = new Cursor("Lorem ipsum");
+            var c = new Cursor<char>("Lorem ipsum".ToCharArray());
 
             for (var i = 0; i < c.Buffer.Length - 1; i++)
             {
@@ -46,17 +46,17 @@ namespace Parlot.Tests
 
             c.Advance();
             Assert.True(c.Eof);
-            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(Cursor<char>.NullChar, c.Current);
 
             c.Advance();
             Assert.True(c.Eof);
-            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(Cursor<char>.NullChar, c.Current);
         }
 
         [Fact]
         public void PeekShouldReturnFirstChar()
         {
-            var c = new Cursor("123");
+            var c = new Cursor<char>("123".ToCharArray());
 
             Assert.Equal('1', c.Current);
             Assert.Equal('1', c.Current);
@@ -65,7 +65,7 @@ namespace Parlot.Tests
         [Fact]
         public void AdvanceShouldCountLinesAndColumns()
         {
-            var c = new Cursor("123\n456\r\n789");
+            var c = new Cursor<char>("123\n456\r\n789".ToCharArray());
 
             Assert.Equal('1', c.Current);
             Assert.Equal(0, c.Position.Offset);
@@ -141,7 +141,7 @@ namespace Parlot.Tests
             Assert.Equal(3, c.Position.Line);
             c.Advance();
 
-            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(Cursor<char>.NullChar, c.Current);
             Assert.Equal(12, c.Position.Offset);
             Assert.Equal(4, c.Position.Column);
             Assert.Equal(3, c.Position.Line);
@@ -150,53 +150,53 @@ namespace Parlot.Tests
         [Fact]
         public void ResetPositionShouldMoveToEof()
         {
-            var c = new Cursor("123");
+            var c = new Cursor<char>("123".ToCharArray());
 
             c.ResetPosition(new TextPosition(4, 1, 1));
 
             Assert.True(c.Eof);
-            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(Cursor<char>.NullChar, c.Current);
         }
 
         [Fact]
         public void PeekNextShouldReturnNullChar()
         {
-            var c = new Cursor("123");
+            var c = new Cursor<char>("123".ToCharArray());
 
             Assert.Equal('1', c.PeekNext(0));
             Assert.Equal('2', c.PeekNext());
             Assert.Equal('2', c.PeekNext(1));
             Assert.Equal('3', c.PeekNext(2));
-            Assert.Equal(Cursor.NullChar, c.PeekNext(3));
-            Assert.Equal(Cursor.NullChar, c.PeekNext(4));
+            Assert.Equal(Cursor<char>.NullChar, c.PeekNext(3));
+            Assert.Equal(Cursor<char>.NullChar, c.PeekNext(4));
         }
 
         [Fact]
         public void MatchAnyOfShouldMatchAny()
         {
-            var c = new Cursor("1234");
+            var c = new Cursor<char>("1234".ToCharArray());
 
             Assert.Throws<ArgumentNullException>(() => c.MatchAnyOf(null));
 
-            Assert.True(c.MatchAnyOf(""));
-            Assert.True(c.MatchAnyOf("1"));
-            Assert.True(c.MatchAnyOf("abc1"));
-            Assert.True(c.MatchAnyOf("123"));
-            Assert.False(c.MatchAnyOf("abc"));
+            Assert.True(c.MatchAnyOf("".ToCharArray()));
+            Assert.True(c.MatchAnyOf("1".ToCharArray()));
+            Assert.True(c.MatchAnyOf("abc1".ToCharArray()));
+            Assert.True(c.MatchAnyOf("123".ToCharArray()));
+            Assert.False(c.MatchAnyOf("abc".ToCharArray()));
 
             c.ResetPosition(new TextPosition(4, 0, 0));
 
-            Assert.False(c.MatchAnyOf(""));
-            Assert.False(c.MatchAnyOf("1"));
-            Assert.False(c.MatchAnyOf("abc1"));
-            Assert.False(c.MatchAnyOf("123"));
-            Assert.False(c.MatchAnyOf("abc"));
+            Assert.False(c.MatchAnyOf("".ToCharArray()));
+            Assert.False(c.MatchAnyOf("1".ToCharArray()));
+            Assert.False(c.MatchAnyOf("abc1".ToCharArray()));
+            Assert.False(c.MatchAnyOf("123".ToCharArray()));
+            Assert.False(c.MatchAnyOf("abc".ToCharArray()));
         }
 
         [Fact]
         public void MatchAnyShouldMatchAny()
         {
-            var c = new Cursor("1234");
+            var c = new Cursor<char>("1234".ToCharArray());
 
             Assert.Throws<ArgumentNullException>(() => c.MatchAny(null));
 
@@ -218,7 +218,7 @@ namespace Parlot.Tests
         [Fact]
         public void MatchShouldMatch()
         {
-            var c = new Cursor("1234");
+            var c = new Cursor<char>("1234".ToCharArray());
 
             Assert.True(c.Match("1"));
             Assert.False(c.Match("2"));
@@ -234,21 +234,21 @@ namespace Parlot.Tests
         }
 
 #pragma warning disable CS0649
-        private class TextSpanHolder
+        private class BufferSpanHolder
         {
-            public TextSpan T;
+            public BufferSpan<char> T;
         }
 
         [Fact]
-        public void TextSpanShoudNotThrow()
+        public void BufferSpanShoudNotThrow()
         {
-            var t = new TextSpanHolder();
+            var t = new BufferSpanHolder();
 
             Assert.Null(t.T.ToString());
             Assert.Equal(0, t.T.Length);
             Assert.Equal(0, t.T.Offset);
 
-            var t2 = new TextSpan(null);
+            var t2 = new BufferSpan<char>(null);
 
             Assert.Null(t2.ToString());
             Assert.Equal(0, t2.Length);

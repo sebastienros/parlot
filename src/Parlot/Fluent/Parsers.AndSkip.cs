@@ -7,36 +7,36 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<T1> AndSkip<T1, T2>(this Parser<T1> parser, Parser<T2> and) => new SequenceAndSkip<T1, T2>(parser, and);
+        public static Parser<T1, TParseContext, TChar> AndSkip<T1, T2, TParseContext, TChar>(this Parser<T1, TParseContext, TChar> parser, Parser<T2, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, TParseContext, TChar>(parser, and);
 
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<ValueTuple<T1, T2>> AndSkip<T1, T2, T3>(this Parser<ValueTuple<T1, T2>> parser, Parser<T3> and) => new SequenceAndSkip<T1, T2, T3>(parser, and);
+        public static Parser<ValueTuple<T1, T2>, TParseContext, TChar> AndSkip<T1, T2, T3, TParseContext, TChar>(this Parser<ValueTuple<T1, T2>, TParseContext, TChar> parser, Parser<T3, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, T3, TParseContext, TChar>(parser, and);
 
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<ValueTuple<T1, T2, T3>> AndSkip<T1, T2, T3, T4>(this Parser<ValueTuple<T1, T2, T3>> parser, Parser<T4> and) => new SequenceAndSkip<T1, T2, T3, T4>(parser, and);
+        public static Parser<ValueTuple<T1, T2, T3>, TParseContext, TChar> AndSkip<T1, T2, T3, T4, TParseContext, TChar>(this Parser<ValueTuple<T1, T2, T3>, TParseContext, TChar> parser, Parser<T4, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, T3, T4, TParseContext, TChar>(parser, and);
 
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<ValueTuple<T1, T2, T3, T4>> AndSkip<T1, T2, T3, T4, T5>(this Parser<ValueTuple<T1, T2, T3, T4>> parser, Parser<T5> and) => new SequenceAndSkip<T1, T2, T3, T4, T5>(parser, and);
+        public static Parser<ValueTuple<T1, T2, T3, T4>, TParseContext, TChar> AndSkip<T1, T2, T3, T4, T5, TParseContext, TChar>(this Parser<ValueTuple<T1, T2, T3, T4>, TParseContext, TChar> parser, Parser<T5, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, T3, T4, T5, TParseContext, TChar>(parser, and);
 
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<ValueTuple<T1, T2, T3, T4, T5>> AndSkip<T1, T2, T3, T4, T5, T6>(this Parser<ValueTuple<T1, T2, T3, T4, T5>> parser, Parser<T6> and) => new SequenceAndSkip<T1, T2, T3, T4, T5, T6>(parser, and);
+        public static Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext, TChar> AndSkip<T1, T2, T3, T4, T5, T6, TParseContext, TChar>(this Parser<ValueTuple<T1, T2, T3, T4, T5>, TParseContext, TChar> parser, Parser<T6, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, T3, T4, T5, T6, TParseContext, TChar>(parser, and);
 
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> AndSkip<T1, T2, T3, T4, T5, T6, T7>(this Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> and) => new SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7>(parser, and);
+        public static Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext, TChar> AndSkip<T1, T2, T3, T4, T5, T6, T7, TParseContext, TChar>(this Parser<ValueTuple<T1, T2, T3, T4, T5, T6>, TParseContext, TChar> parser, Parser<T7, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, TParseContext, TChar>(parser, and);
 
         /// <summary>
         /// Builds a parser that ensure the specified parsers match consecutively. The last parser's result is then ignored.
         /// </summary>
-        public static Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> AndSkip<T1, T2, T3, T4, T5, T6, T7, T8>(this Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> parser, Parser<T8> and) => new SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8>(parser, and);
+        public static Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext, TChar> AndSkip<T1, T2, T3, T4, T5, T6, T7, T8, TParseContext, TChar>(this Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>, TParseContext, TChar> parser, Parser<T8, TParseContext, TChar> and) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => new SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8, TParseContext, TChar>(parser, and);
     }
 }
