@@ -16,7 +16,7 @@ namespace Parlot
                 (ch >= 'a' && ch <= 'f');
 
         public static bool IsIdentifierStart(char ch)
-            => (ch == '$') || (ch == '_') ||
+            => (ch == '$') || (ch == '_') || (ch == '-') ||
                (ch >= 'A' && ch <= 'Z') ||
                (ch >= 'a' && ch <= 'z');
 
