@@ -204,3 +204,4 @@ WarmupCount=3
 Parlot is already used in these projects:
 - [Shortcodes](https://github.com/sebastienros/shortcodes)
 - [Fluid](https://github.com/sebastienros/fluid)
+- [OrchardCore](https://github.com/OrchardCMS/OrchardCore)
