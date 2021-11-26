@@ -46,7 +46,7 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(List<T>)));
+            var value = context.DeclareValueVariable(result, Expression.New(typeof(List<T>)));
 
             // value = new List<T>();
             //
