@@ -181,6 +181,16 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldCompileOneOrManys()
+        {
+            var parser = OneOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
+
+            var result = parser.Parse(" hello world hello");
+
+            Assert.Equal(new[] { "hello", "world", "hello" }, result);
+        }
+
+        [Fact]
         public void ShouldCompileZeroOrOne()
         {
             var parser = ZeroOrOne(Terms.Text("hello")).Compile();
