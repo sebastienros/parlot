@@ -438,7 +438,7 @@ null // success
 
 ### Separated
 
-Matches all occurrences of a parser that are separated by another one.
+Matches all occurrences of a parser that are separated by another one. If a separator is not followed by a value, it is not consumed.
 
 ```
 Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser)
