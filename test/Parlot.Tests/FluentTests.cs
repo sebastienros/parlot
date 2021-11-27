@@ -582,15 +582,28 @@ namespace Parlot.Tests
         {
             var parser = Separated(Terms.Char(','), Terms.Decimal());
 
-            Assert.Null(parser.Parse(""));
             Assert.Single(parser.Parse("1"));
+            Assert.Equal(2, parser.Parse("1,2").Count);
             Assert.Null(parser.Parse(",1,"));
+            Assert.Null(parser.Parse(""));
 
             var result = parser.Parse("1, 2,3");
 
             Assert.Equal(1, result[0]);
             Assert.Equal(2, result[1]);
             Assert.Equal(3, result[2]);
+        }
+
+        [Fact]
+        public void SeparatedShouldNotBeConsumedIfNotFollowedByValue()
+        {
+            // This test ensures that the separator is not consumed if there is no valid net value.
+
+            var parser = Separated(Terms.Char(','), Terms.Decimal()).AndSkip(Terms.Char(',')).And(Terms.Identifier()).Then(x => true);
+
+            Assert.False(parser.Parse("1"));
+            Assert.False(parser.Parse("1,"));
+            Assert.True(parser.Parse("1,x"));
         }
 
         [Fact]
