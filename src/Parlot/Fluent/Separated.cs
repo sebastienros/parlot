@@ -5,18 +5,20 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Separated<U, T> : Parser<List<T>>, ICompilable
+    public sealed class Separated<U, T, TParseContext, TChar> : Parser<List<T>, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        private readonly Parser<U> _separator;
-        private readonly Parser<T> _parser;
+        private readonly Parser<U, TParseContext> _separator;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public Separated(Parser<U> separator, Parser<T> parser)
+        public Separated(Parser<U, TParseContext> separator, Parser<T, TParseContext> parser)
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<List<T>> result)
         {
             context.EnterParser(this);
 
@@ -70,7 +72,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 

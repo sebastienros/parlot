@@ -5,16 +5,17 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class ZeroOrMany<T> : Parser<List<T>>, ICompilable
+    public sealed class ZeroOrMany<T, TParseContext, TChar> : Parser<List<T>, TParseContext, TChar>, ICompilable<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
-        private readonly Parser<T> _parser;
-
-        public ZeroOrMany(Parser<T> parser)
+        private readonly Parser<T, TParseContext> _parser;
+        public ZeroOrMany(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
+        public override bool Parse(TParseContext context, ref ParseResult<List<T>> result)
         {
             context.EnterParser(this);
 
@@ -45,7 +46,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, TChar> context)
         {
             var result = new CompilationResult();
 
@@ -92,7 +93,7 @@ namespace Parlot.Fluent
                             Expression.Break(breakLabel)
                             ),
                         Expression.IfThen(
-                            context.Eof(),
+                            context.Eof<TParseContext, TChar>(),
                             Expression.Break(breakLabel)
                             )),
                     breakLabel

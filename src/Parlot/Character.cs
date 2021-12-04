@@ -45,7 +45,7 @@ namespace Parlot
         public static bool IsNewLine(char ch)
             => (ch == '\n') || (ch == '\r') || (ch == '\v');
 
-        public static char ScanHexEscape(string text, int index, out int length)
+        public static char ScanHexEscape(char[] text, int index, out int length)
         {
             var lastIndex = Math.Min(4 + index, text.Length - 1);
             var code = 0;
@@ -68,75 +68,69 @@ namespace Parlot
             return (char)code;
         }
 
-        public static TextSpan DecodeString(string s) => DecodeString(new TextSpan(s));
+        public static BufferSpan<char> DecodeString(string s) => DecodeString(s.ToCharArray());
 
-        public static TextSpan DecodeString(TextSpan span)
+        public static BufferSpan<char> DecodeString(BufferSpan<char> span)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (span.Buffer.IndexOf('\\', span.Offset, span.Length) == -1)
+            if (span.IndexOf('\\') == -1)
             {
                 return span;
             }
 
-#if NETSTANDARD2_0
-            var result = CreateString(span.Length, span, static (chars, source) =>
-#else
-            var result = String.Create(span.Length, span, static (chars, source) =>
-#endif
+            var result = new char[span.Length];
+            // The asumption is that the new string will be shorter since escapes results are smaller than their source
+
+            var dataIndex = 0;
+            var buffer = span.Buffer;
+            var start = span.Offset;
+            var end = span.Offset + span.Length;
+
+            for (var i = start; i < end; i++)
             {
-                // The asumption is that the new string will be shorter since escapes results are smaller than their source
+                var c = buffer[i];
 
-                var dataIndex = 0;
-                var buffer = source.Buffer;
-                var start = source.Offset;
-                var end = source.Offset + source.Length;
-
-                for (var i = start; i < end; i++)
+                if (c == '\\')
                 {
-                    var c = buffer[i];
+                    i++;
+                    c = buffer[i];
 
-                    if (c == '\\')
+                    switch (c)
                     {
-                        i++;
-                        c = buffer[i];
-
-                        switch (c)
-                        {
-                            case '\'': c = '\''; break;
-                            case '"': c = '\"'; break;
-                            case '\\': c = '\\'; break;
-                            case 'b': c = '\b'; break;
-                            case 'f': c = '\f'; break;
-                            case 'n': c = '\n'; break;
-                            case 'r': c = '\r'; break;
-                            case 't': c = '\t'; break;
-                            case 'v': c = '\v'; break;
-                            case 'u':
-                                c = Character.ScanHexEscape(buffer, i, out var length);
-                                i += length;
-                                break;
-                            case 'x':
-                                c = Character.ScanHexEscape(buffer, i, out length);
-                                i += length;
-                                break;
-                        }
+                        case '\'': c = '\''; break;
+                        case '"': c = '\"'; break;
+                        case '\\': c = '\\'; break;
+                        case 'b': c = '\b'; break;
+                        case 'f': c = '\f'; break;
+                        case 'n': c = '\n'; break;
+                        case 'r': c = '\r'; break;
+                        case 't': c = '\t'; break;
+                        case 'v': c = '\v'; break;
+                        case 'u':
+                            c = Character.ScanHexEscape(buffer, i, out var length);
+                            i += length;
+                            break;
+                        case 'x':
+                            c = Character.ScanHexEscape(buffer, i, out length);
+                            i += length;
+                            break;
                     }
-
-                    chars[dataIndex++] = c;
                 }
 
-                chars[dataIndex++] = '\0';
-            });
+                result[dataIndex++] = c;
+            }
+
+            result[dataIndex++] = '\0';
 
             for (var i = result.Length - 1; i >= 0; i--)
             {
                 if (result[i] != '\0')
                 {
-                    return new TextSpan(result, 0, i + 1);
+                    return new BufferSpan<char>(result, 0, i + 1);
                 }
             }
 
-            return new TextSpan(result);
+            return result;
         }
 
         private static int HexValue(char ch)

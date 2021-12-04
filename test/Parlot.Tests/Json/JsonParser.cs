@@ -1,13 +1,13 @@
 using Parlot.Fluent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using static Parlot.Fluent.Parsers;
+using static Parlot.Fluent.StringParsers<Parlot.Fluent.StringParseContext>;
 
 namespace Parlot.Tests.Json
 {
     public class JsonParser
     {
-        public static readonly Parser<IJson> Json;
+        public static readonly Parser<IJson, StringParseContext, char> Json;
 
         static JsonParser()
         {

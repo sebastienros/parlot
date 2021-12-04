@@ -1,134 +1,102 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent
 {
-    public static partial class Parsers
+    public static class Parsers<TParseContext, TChar>
+    where TParseContext : ParseContextWithScanner<TChar>
+    where TChar : IEquatable<TChar>, IConvertible
     {
         /// <summary>
-        /// Provides parsers for literals. Literals do not skip spaces before being parsed and can be combined to
-        /// parse composite terms.
+        /// Builds a parser that return either of the first successful of the specified parsers.
         /// </summary>
-        public static LiteralBuilder Literals => new();
-
-        /// <summary>
-        /// Provides parsers for terms. Terms skip spaces before being parsed.
-        /// </summary>
-        public static TermBuilder Terms => new();
+        public static Parser<T, TParseContext, TChar> OneOf<T>(params Parser<T, TParseContext>[] parsers) => new OneOf<T, TParseContext, TChar>(parsers);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times a parser separated by another one.
         /// </summary>
-        public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
-
-        /// <summary>
-        /// Builds a parser that skips white spaces before another one.
-        /// </summary>
-        public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
+        public static Parser<List<T>, TParseContext, TChar> Separated<U, T>(Parser<U, TParseContext> separator, Parser<T, TParseContext> parser) => new Separated<U, T, TParseContext, TChar>(separator, parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
-        public static Parser<T> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
+        public static Parser<T, TParseContext, TChar> ZeroOrOne<T>(Parser<T, TParseContext> parser) => new ZeroOrOne<T, TParseContext, TChar>(parser);
+
+        /// <summary>
+        /// Builds a parser that creates a scope usable in the specified parser.
+        /// </summary>
+        public static Parser<T, TParseContext2, TChar> Scope<T, TParseContext2>(Parser<T, TParseContext2> parser) where TParseContext2 : ScopeParseContext<TChar, TParseContext2> => new ScopedParser<T, TParseContext2, TChar>(parser);
+
+        /// <summary>
+        /// Builds a parser that creates a scope usable in the specified parser.
+        /// </summary>
+        public static Parser<T, TParseContext2> Scope<T, TParseContext2>(Action<TParseContext2> action, Parser<T, TParseContext2> parser) where TParseContext2 : ScopeParseContext<TChar, TParseContext2> => new ScopedParser<T, TParseContext2, TChar>(action, parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
         /// </summary>
-        public static Parser<List<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
+        public static Parser<List<T>, TParseContext, TChar> ZeroOrMany<T>(Parser<T, TParseContext> parser) => new ZeroOrMany<T, TParseContext, TChar>(parser);
 
         /// <summary>
         /// Builds a parser that looks for one or many times the specified parser.
         /// </summary>
-        public static Parser<List<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
+        public static Parser<List<T>, TParseContext, TChar> OneOrMany<T>(Parser<T, TParseContext> parser) => new OneOrMany<T, TParseContext, TChar>(parser);
 
         /// <summary>
         /// Builds a parser that succeed when the specified parser fails to match.
         /// </summary>
-        public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
+        public static Parser<T, TParseContext, TChar> Not<T>(Parser<T, TParseContext> parser) => new Not<T, TParseContext, TChar>(parser);
 
         /// <summary>
         /// Builds a parser that can be defined later one. Use it when a parser need to be declared before its rule can be set.
         /// </summary>
-        public static Deferred<T> Deferred<T>() => new();
+        public static Deferred<T, TParseContext, TChar> Deferred<T>() => new();
 
         /// <summary>
         /// Builds a parser than needs a reference to itself to be declared.
         /// </summary>
-        public static Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser) => new(parser);
+        public static Deferred<T, TParseContext> Recursive<T>(Func<Deferred<T, TParseContext>, Parser<T, TParseContext>> parser) => new(parser);
+
+        /// <summary>
+        /// Builds a parser than needs a reference to itself to be declared.
+        /// </summary>
+        public static Deferred<T, TParseContext, TChar> Recursive<T>(Func<Deferred<T, TParseContext, TChar>, Parser<T, TParseContext, TChar>> parser) => new(parser);
 
         /// <summary>
         /// Builds a parser that matches the specified parser between two other ones.
         /// </summary>
-        public static Parser<T> Between<A, T, B>(Parser<A> before, Parser<T> parser, Parser<B> after) => new Between<A, T, B>(before, parser, after);
+        public static Parser<T, TParseContext, TChar> Between<A, T, B>(Parser<A, TParseContext> before, Parser<T, TParseContext> parser, Parser<B, TParseContext> after) => new Between<A, T, B, TParseContext, TChar>(before, parser, after);
 
         /// <summary>
         /// Builds a parser that matches any chars before a specific parser.
         /// </summary>
-        public static Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
+        public static Parser<BufferSpan<TChar>, TParseContext, TChar> AnyCharBefore<T>(Parser<T, TParseContext> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T, TParseContext, TChar>(parser, canBeEmpty, failOnEof, consumeDelimiter);
 
         /// <summary>
         /// Builds a parser that captures the output of another parser.
         /// </summary>
-        public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
+        public static Parser<BufferSpan<TChar>, TParseContext, TChar> Capture<T>(Parser<T, TParseContext> parser) => new Capture<T, TParseContext, TChar>(parser);
 
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<T> Empty<T>() => new Empty<T>();
+        public static Parser<T, TParseContext, TChar> Empty<T>() => new Empty<T, TParseContext, TChar>();
 
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<object> Empty() => new Empty<object>();
+        public static Parser<object, TParseContext, TChar> Empty() => new Empty<object, TParseContext, TChar>();
 
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<T> Empty<T>(T value) => new Empty<T>(value);
-
-    }
-
-    public class LiteralBuilder
-    {
-        /// <summary>
-        /// Builds a parser that matches whitespaces.
-        /// </summary>
-        public Parser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
-
-        /// <summary>
-        /// Builds a parser that matches anything until whitespaces.
-        /// </summary>
-        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = true) => new NonWhiteSpaceLiteral(includeNewLines: includeNewLines);
-
-        /// <summary>
-        /// Builds a parser that matches the specified text.
-        /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
+        public static Parser<T, TParseContext, TChar> Empty<T>(T value) => new Empty<T, TParseContext, TChar>(value);
 
         /// <summary>
         /// Builds a parser that matches the specified char.
         /// </summary>
-        public Parser<char> Char(char c) => new CharLiteral(c);
-
-        /// <summary>
-        /// Builds a parser that matches an integer.
-        /// </summary>
-        public Parser<long> Integer() => new IntegerLiteral();
-
-        /// <summary>
-        /// Builds a parser that matches a floating point number.
-        /// </summary>
-        public Parser<decimal> Decimal() => new DecimalLiteral();
-
-        /// <summary>
-        /// Builds a parser that matches an quoted string that can be escaped.
-        /// </summary>
-        public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
-
-        /// <summary>
-        /// Builds a parser that matches an identifier.
-        /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
+        public static Parser<TChar, TParseContext, TChar> Char(TChar c) => new CharLiteral<TChar, TParseContext>(c);
 
         /// <summary>
         /// Builds a parser that matches a char against a predicate.
@@ -136,52 +104,15 @@ namespace Parlot.Fluent
         /// <param name="predicate">The predicate to match against each char.</param>
         /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
         /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-        public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize);
+        public static Parser<BufferSpan<TChar>, TParseContext, TChar> Pattern(Func<TChar, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral<TParseContext, TChar>(predicate, minSize, maxSize);
     }
 
-    public class TermBuilder
+    public partial class Parsers
     {
         /// <summary>
-        /// Builds a parser that matches anything until whitespaces.
+        /// Builds a parser that creates a scope usable in the specified parser.
         /// </summary>
-        public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = true) => Parsers.SkipWhiteSpace(new NonWhiteSpaceLiteral(includeNewLines: includeNewLines));
+        public static Parser<T, TParseContext, TChar> Scope<T, TParseContext, TChar>(Parser<T, TParseContext, TChar> parser) where TParseContext : ScopeParseContext<TChar, TParseContext> where TChar : IEquatable<TChar>, IConvertible => new ScopedParser<T, TParseContext, TChar>(parser);
 
-        /// <summary>
-        /// Builds a parser that matches the specified text.
-        /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null));
-
-        /// <summary>
-        /// Builds a parser that matches the specified char.
-        /// </summary>
-        public Parser<char> Char(char c) => Parsers.SkipWhiteSpace(new CharLiteral(c));
-
-        /// <summary>
-        /// Builds a parser that matches an integer.
-        /// </summary>
-        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new IntegerLiteral(numberOptions));
-
-        /// <summary>
-        /// Builds a parser that matches a floating point number.
-        /// </summary>
-        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DecimalLiteral(numberOptions));
-
-        /// <summary>
-        /// Builds a parser that matches an quoted string that can be escaped.
-        /// </summary>
-        public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => Parsers.SkipWhiteSpace(new StringLiteral(quotes));
-
-        /// <summary>
-        /// Builds a parser that matches an identifier.
-        /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
-
-        /// <summary>
-        /// Builds a parser that matches a char against a predicate.
-        /// </summary>
-        /// <param name="predicate">The predicate to match against each char.</param>
-        /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
-        /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-        public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new PatternLiteral(predicate, minSize, maxSize));
     }
 }

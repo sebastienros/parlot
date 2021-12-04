@@ -5,7 +5,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class DecimalLiteral : Parser<decimal>, ICompilable
+    public sealed class DecimalLiteral<TParseContext> : Parser<decimal, TParseContext, char>, ICompilable<TParseContext, char>
+    where TParseContext : ParseContextWithScanner<char>
     {
         private readonly NumberOptions _numberOptions;
 
@@ -14,7 +15,7 @@ namespace Parlot.Fluent
             _numberOptions = numberOptions;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<decimal> result)
+        public override bool Parse(TParseContext context, ref ParseResult<decimal> result)
         {
             context.EnterParser(this);
 
@@ -33,15 +34,17 @@ namespace Parlot.Fluent
             if (context.Scanner.ReadDecimal())
             {
                 var end = context.Scanner.Cursor.Offset;
+
+
 #if NETSTANDARD2_0
-                var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
+                var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).ToString();
 #else
-                var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
+                var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).Span;
 #endif
 
                 if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
-                { 
-                    result.Set(start, end,  value);
+                {
+                    result.Set(start, end, value);
                     return true;
                 }
             }
@@ -51,7 +54,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext, char> context)
         {
             var result = new CompilationResult();
 
@@ -96,16 +99,16 @@ namespace Parlot.Fluent
             var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 #if NETSTANDARD2_0
             var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.NextNumber}");
-            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
+            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.SubBufferSpan(start, Expression.Subtract(end, start)), nameof(BufferSpan<char>.ToString), Type.EmptyTypes));
+            var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType() });
 #else
             var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
-            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
+            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.SubBufferSpan(start, Expression.Subtract(end, start))));
             var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
 #endif
 
             // TODO: NETSTANDARD2_1 code path
-            var block = 
+            var block =
                 Expression.IfThen(
                     context.ReadDecimal(),
                     Expression.Block(
@@ -114,8 +117,8 @@ namespace Parlot.Fluent
                         sliceExpression,
                         Expression.Assign(success,
                             Expression.Call(
-                                tryParseMethodInfo, 
-                                sourceToParse, 
+                                tryParseMethodInfo,
+                                sourceToParse,
                                 Expression.Constant(NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint),
                                 Expression.Constant(CultureInfo.InvariantCulture),
                                 value)
