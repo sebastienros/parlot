@@ -4,20 +4,21 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Between<A, T, B> : Parser<T>, ICompilable
+    public sealed class Between<A, T, B, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
-        private readonly Parser<A> _before;
-        private readonly Parser<B> _after;
+        private readonly Parser<T, TParseContext> _parser;
+        private readonly Parser<A, TParseContext> _before;
+        private readonly Parser<B, TParseContext> _after;
 
-        public Between(Parser<A> before, Parser<T> parser, Parser<B> after)
+        public Between(Parser<A, TParseContext> before, Parser<T, TParseContext> parser, Parser<B, TParseContext> after)
         {
             _before = before ?? throw new ArgumentNullException(nameof(before));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _after = after ?? throw new ArgumentNullException(nameof(after));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -35,7 +36,7 @@ namespace Parlot.Fluent
             {
                 context.Scanner.Cursor.ResetPosition(start);
                 return false;
-            }            
+            }
 
             var parsedB = new ParseResult<B>();
 
@@ -48,7 +49,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

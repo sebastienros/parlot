@@ -5,21 +5,21 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class Deferred<T> : Parser<T>, ICompilable
+    public sealed class Deferred<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-
-        public Parser<T> Parser { get; set; }
+        public Parser<T, TParseContext> Parser { get; set; }
 
         public Deferred()
         {
         }
 
-        public Deferred(Func<Deferred<T>, Parser<T>> parser)
+        public Deferred(Func<Deferred<T, TParseContext>, Parser<T, TParseContext>> parser)
         {
             Parser = parser(this);
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             return Parser.Parse(context, ref result);
         }
@@ -32,7 +32,7 @@ namespace Parlot.Fluent
             public object Func;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             if (Parser == null)
             {

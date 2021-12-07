@@ -3,7 +3,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class CharLiteral : Parser<char>, ICompilable
+    public sealed class CharLiteral<TParseContext> : Parser<char, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         public CharLiteral(char c)
         {
@@ -12,7 +13,7 @@ namespace Parlot.Fluent
 
         public char Char { get; }
 
-        public override bool Parse(ParseContext context, ref ParseResult<char> result)
+        public override bool Parse(TParseContext context, ref ParseResult<char> result)
         {
             context.EnterParser(this);
 
@@ -27,7 +28,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

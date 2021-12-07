@@ -3,7 +3,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ICompilable
+    public sealed class NonWhiteSpaceLiteral<TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly bool _includeNewLines;
 
@@ -12,7 +13,7 @@ namespace Parlot.Fluent
             _includeNewLines = includeNewLines;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             if (context.Scanner.Cursor.Eof)
             {
@@ -41,7 +42,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

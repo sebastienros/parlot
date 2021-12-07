@@ -7,9 +7,10 @@ namespace Parlot.Fluent
 {
     internal static class SequenceCompileHelper
     {
-        internal static string SequenceRequired = $"The parser needs to implement {nameof(ISkippableSequenceParser)}";
+        internal static string SequenceRequired = $"The parser needs to implement {nameof(ISkippableSequenceParser<ParseContext>)}";
 
-        public static CompilationResult CreateSequenceCompileResult(SkippableCompilationResult[] parserCompileResults, CompilationContext context)
+        public static CompilationResult CreateSequenceCompileResult<TParseContext>(SkippableCompilationResult[] parserCompileResults, CompilationContext<TParseContext> context)
+        where TParseContext : ParseContext
         {
             var result = new CompilationResult();
 

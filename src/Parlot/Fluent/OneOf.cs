@@ -10,18 +10,20 @@ namespace Parlot.Fluent
     /// We then return the actual result of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public sealed class OneOf<T> : Parser<T>, ICompilable
+    /// <typeparam name="TParseContext"></typeparam>
+    public sealed class OneOf<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T>[] _parsers;
+        private readonly Parser<T, TParseContext>[] _parsers;
 
-        public OneOf(Parser<T>[] parsers)
+        public OneOf(Parser<T, TParseContext>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         }
 
-        public Parser<T>[] Parsers => _parsers;
+        public Parser<T, TParseContext>[] Parsers => _parsers;
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -36,7 +38,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

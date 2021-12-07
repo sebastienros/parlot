@@ -1,7 +1,7 @@
 using Parlot.Fluent;
 using System.Collections.Generic;
 using Xunit;
-using static Parlot.Fluent.Parsers;
+using static Parlot.Fluent.Parsers<Parlot.Fluent.ParseContext>;
 
 namespace Parlot.Tests
 {
@@ -251,15 +251,15 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileCapture()
         {
-            Parser<char> Dot = Literals.Char('.');
-            Parser<char> Plus = Literals.Char('+');
-            Parser<char> Minus = Literals.Char('-');
-            Parser<char> At = Literals.Char('@');
-            Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
-            Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+            Parser<char, ParseContext> Dot = Literals.Char('.');
+            Parser<char, ParseContext> Plus = Literals.Char('+');
+            Parser<char, ParseContext> Minus = Literals.Char('-');
+            Parser<char, ParseContext> At = Literals.Char('@');
+            Parser<TextSpan, ParseContext> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+            Parser<List<char>, ParseContext> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+            Parser<List<char>, ParseContext> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+            Parser<List<char>, ParseContext> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<TextSpan, ParseContext> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
 
@@ -269,7 +269,7 @@ namespace Parlot.Tests
             Assert.Equal(_email, result.ToString());
         }
 
-        private sealed class NonCompilableCharLiteral : Parser<char>
+        private sealed class NonCompilableCharLiteral : Parser<char, ParseContext>
         {
             public NonCompilableCharLiteral(char c, bool skipWhiteSpace = true)
             {
@@ -318,7 +318,7 @@ namespace Parlot.Tests
             var a = Literals.Char('a');
             var b = Literals.Decimal();
 
-            var o2 = a.Or<char, decimal, object>(b).Compile();
+            var o2 = a.Or<char, decimal, object, ParseContext>(b).Compile();
 
             Assert.True(o2.TryParse("a", out var c) && (char)c == 'a');
             Assert.True(o2.TryParse("1", out var d) && (decimal)d == 1);

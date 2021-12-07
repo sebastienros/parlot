@@ -4,7 +4,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
+    public sealed class PatternLiteral<TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
         private readonly Func<char, bool> _predicate;
         private readonly int _minSize;
@@ -17,7 +18,7 @@ namespace Parlot.Fluent
             _maxSize = maxSize;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
@@ -52,7 +53,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

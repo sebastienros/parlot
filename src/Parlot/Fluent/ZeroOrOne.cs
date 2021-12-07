@@ -5,16 +5,17 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
+    public sealed class ZeroOrOne<T, TParseContext> : Parser<T, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
 
-        public ZeroOrOne(Parser<T> parser)
+        public ZeroOrOne(Parser<T, TParseContext> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(TParseContext context, ref ParseResult<T> result)
         {
             context.EnterParser(this);
 
@@ -23,7 +24,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

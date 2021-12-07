@@ -7,7 +7,8 @@ namespace Parlot.Compilation
     /// <summary>
     /// Reprensents the context of a compilation phase, coordinating all the parsers involved.
     /// </summary>
-    public class CompilationContext
+    public class CompilationContext<TParseContext>
+    where TParseContext : ParseContext
     {
         private int _number = 0;
 
@@ -18,7 +19,7 @@ namespace Parlot.Compilation
         /// <summary>
         /// Gets the expression containing the the <see cref="ParseContext"/> instance for the parser.
         /// </summary>
-        public ParameterExpression ParseContext { get; } = Expression.Parameter(typeof(ParseContext));
+        public ParameterExpression ParseContext { get; } = Expression.Parameter(typeof(TParseContext));
 
         /// <summary>
         /// Gets or sets a counter used to generate unique variable names.

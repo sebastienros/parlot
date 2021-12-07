@@ -6,24 +6,25 @@ namespace Parlot.Fluent
     /// <summary>
     /// Doesn't parse anything and return the default value.
     /// </summary>
-    public sealed class Discard<T, U> : Parser<U>, ICompilable
+    public sealed class Discard<T, U, TParseContext> : Parser<U, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _parser;
+        private readonly Parser<T, TParseContext> _parser;
         private readonly U _value;
 
-        public Discard(Parser<T> parser)
+        public Discard(Parser<T, TParseContext> parser)
         {
             _value = default(U);
             _parser = parser;
         }
 
-        public Discard(Parser<T> parser, U value)
+        public Discard(Parser<T, TParseContext> parser, U value)
         {
             _parser = parser;
             _value = value;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<U> result)
+        public override bool Parse(TParseContext context, ref ParseResult<U> result)
         {
             context.EnterParser(this);
 
@@ -38,7 +39,7 @@ namespace Parlot.Fluent
             return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 

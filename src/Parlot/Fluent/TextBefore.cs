@@ -4,14 +4,15 @@
     using System.Linq;
     using System.Linq.Expressions;
 
-    public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
+    public sealed class TextBefore<T, TParseContext> : Parser<TextSpan, TParseContext>, ICompilable<TParseContext>
+    where TParseContext : ParseContext
     {
-        private readonly Parser<T> _delimiter;
+        private readonly Parser<T, TParseContext> _delimiter;
         private readonly bool _canBeEmpty;
         private readonly bool _failOnEof;
         private readonly bool _consumeDelimiter;
 
-        public TextBefore(Parser<T> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
+        public TextBefore(Parser<T, TParseContext> delimiter, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
         {
             _delimiter = delimiter;
             _canBeEmpty = canBeEmpty;
@@ -19,7 +20,7 @@
             _consumeDelimiter = consumeDelimiter;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        public override bool Parse(TParseContext context, ref ParseResult<TextSpan> result)
         {
             context.EnterParser(this);
 
@@ -74,7 +75,7 @@
             }
         }
 
-        public CompilationResult Compile(CompilationContext context)
+        public CompilationResult Compile(CompilationContext<TParseContext> context)
         {
             var result = new CompilationResult();
 
@@ -149,7 +150,7 @@
                         Expression.Assign(previous, context.Position()),
                         Expression.IfThen(
                             context.Eof(),
-                            _failOnEof 
+                            _failOnEof
                             ? Expression.Block(
                                 context.ResetPosition(start),
                                 Expression.Break(breakLabel)
@@ -166,7 +167,7 @@
                             ),
 
                         Expression.Block(delimiterCompiledResult.Body),
-                        
+
                         Expression.IfThen(
                             delimiterCompiledResult.Success,
                             Expression.Block(
