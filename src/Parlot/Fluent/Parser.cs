@@ -42,7 +42,7 @@ namespace Parlot.Fluent
         public Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action) => new Switch<T, U>(this, action);
 
         /// <summary>
-        /// Builds a parser that ensure the cursor is tat the end of the input.
+        /// Builds a parser that ensures the cursor is at the end of the input.
         /// </summary>
         public Parser<T> Eof() => new Eof<T>(this);
 
