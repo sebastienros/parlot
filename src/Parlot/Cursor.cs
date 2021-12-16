@@ -37,7 +37,31 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance()
         {
-            Advance(1);
+            _offset++;
+
+            if (_offset >= _textLength)
+            {
+                Eof = true;
+                _column++;
+                _current = NullChar;
+                return;
+            }
+
+            var next = _buffer[_offset];
+
+            if (_current == '\n')
+            {
+                _line++;
+                _column = 1;
+            }
+            else if (next != '\r')
+            {
+                _column++;
+            }
+
+            // if c == '\r', don't increase the column count
+
+            _current = next;
         }
         
         /// <summary>
@@ -65,15 +89,14 @@ namespace Parlot
 
                 var next = _buffer[_offset];
 
-                // most probable first 
-                if (_current != '\n' && next != '\r')
-                {
-                    _column++;
-                }
-                else if (_current == '\n')
+                if (_current == '\n')
                 {
                     _line++;
                     _column = 1;
+                }
+                else if (next != '\r')
+                {
+                    _column++;
                 }
 
                 // if c == '\r', don't increase the column count
@@ -87,7 +110,6 @@ namespace Parlot
                 _offset = _textLength;
                 _column += 1;
             }
-
         }
 
         /// <summary>
