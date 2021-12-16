@@ -27,6 +27,7 @@ namespace Parlot.Fluent
             }
 
             context.Scanner.Cursor.ResetPosition(start);
+
             return false;
         }
 

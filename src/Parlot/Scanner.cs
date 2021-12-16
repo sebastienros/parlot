@@ -12,8 +12,10 @@ namespace Parlot
         public readonly string Buffer;
         public readonly Cursor Cursor;
 
+        private record struct WhiteSpaceMarker(int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine);
+
         // Caches the latest whitespace check. Remember that the current position is not a whitespace.
-        private (int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine) _whiteSpaceMarker = (-1, false, false);
+        private WhiteSpaceMarker _whiteSpaceMarker = new (-1, false, false);
 
         /// <summary>
         /// Scans some text.
@@ -41,7 +43,7 @@ namespace Parlot
             if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
             {
                 // Memorize the fact that the current offset is not a whitespace
-                _whiteSpaceMarker = (Cursor.Position.Offset, true, true);
+                _whiteSpaceMarker = new (Cursor.Position.Offset, true, true);
 
                 return false;
             }
@@ -60,7 +62,7 @@ namespace Parlot
             }
 
             // Memorize the fact that the current offset is not a whitespace or new line
-            _whiteSpaceMarker = (Cursor.Position.Offset, true, true);
+            _whiteSpaceMarker = new (Cursor.Position.Offset, true, true);
 
             return true;
         }
@@ -82,7 +84,7 @@ namespace Parlot
             }
 
             // Memorize the fact that the current offset is not a whitespace
-            _whiteSpaceMarker = (Cursor.Position.Offset, true, false);
+            _whiteSpaceMarker = new (Cursor.Position.Offset, true, false);
 
             return found;
         }
