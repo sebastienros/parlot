@@ -12,6 +12,9 @@ namespace Parlot
         public readonly string Buffer;
         public readonly Cursor Cursor;
 
+        // Caches the latest whitespace check. Remember that the current position is not a whitespace.
+        private (int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine) _whiteSpaceMarker = (-1, false, false);
+
         /// <summary>
         /// Scans some text.
         /// </summary>
@@ -29,8 +32,17 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpaceOrNewLine()
         {
+            // Don't read if we already know it's not a whitespace
+            if (Cursor.Position.Offset == _whiteSpaceMarker.Offset && _whiteSpaceMarker.IsNotWhiteSpaceOrNewLine)
+            {
+                return false;
+            }
+
             if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
             {
+                // Memorize the fact that the current offset is not a whitespace
+                _whiteSpaceMarker = (Cursor.Position.Offset, true, true);
+
                 return false;
             }
 
@@ -47,18 +59,30 @@ namespace Parlot
                 Cursor.Advance();
             }
 
+            // Memorize the fact that the current offset is not a whitespace or new line
+            _whiteSpaceMarker = (Cursor.Position.Offset, true, true);
+
             return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpace()
         {
+            // Don't read if we already know it's not a whitespace
+            if (Cursor.Position.Offset == _whiteSpaceMarker.Offset && _whiteSpaceMarker.IsNotWhiteSpace)
+            {
+                return false;
+            }
+
             bool found = false;
             while (Character.IsWhiteSpace(Cursor.Current))
             {
                 Cursor.AdvanceOnce();
                 found = true;
             }
+
+            // Memorize the fact that the current offset is not a whitespace
+            _whiteSpaceMarker = (Cursor.Position.Offset, true, false);
 
             return found;
         }
