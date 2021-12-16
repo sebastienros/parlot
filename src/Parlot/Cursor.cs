@@ -32,21 +32,17 @@ namespace Parlot
         public TextPosition Position => new(_offset, _line, _column);
 
         /// <summary>
-        /// Advances the cursor.
+        /// Advances the cursor by one character.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance()
         {
-            if (!Eof)
-            {
-                AdvanceOnce();
-            }
+            Advance(1);
         }
-
+        
         /// <summary>
         /// Advances the cursor.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
             if (Eof)
@@ -54,45 +50,44 @@ namespace Parlot
                 return;
             }
 
-            do
-            {
-                if (!AdvanceOnce())
-                {
-                    count = 0;
-                }
-                count--;
-            } while (count > 0);
-        }
+            var maxOffset = _offset + count;
 
-        internal bool AdvanceOnce()
-        {
-            _offset++;
-
-            if (_offset >= _textLength)
+            // Detect if the cursor will be over Eof
+            if (maxOffset > _textLength - 1)
             {
                 Eof = true;
-                _column++;
+                maxOffset = _textLength - 1;
+            }
+
+            while (_offset < maxOffset)
+            {
+                _offset++;
+
+                var next = _buffer[_offset];
+
+                // most probable first 
+                if (_current != '\n' && next != '\r')
+                {
+                    _column++;
+                }
+                else if (_current == '\n')
+                {
+                    _line++;
+                    _column = 1;
+                }
+
+                // if c == '\r', don't increase the column count
+
+                _current = next;
+            }
+
+            if (Eof)
+            {
                 _current = NullChar;
-                return false;
+                _offset = _textLength;
+                _column += 1;
             }
 
-            var c = _buffer[_offset];
-
-            // most probable first 
-            if (_current != '\n' && c != '\r')
-            {
-                _column++;
-            }
-            else if (_current == '\n')
-            {
-                _line++;
-                _column = 1;
-            }
-
-            // if c == '\r', don't increase the column count
-
-            _current = c;
-            return true;
         }
 
         /// <summary>

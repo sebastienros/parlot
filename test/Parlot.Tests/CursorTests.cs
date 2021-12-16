@@ -148,6 +148,24 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void AdvanceShouldStopAtEof()
+        {
+            var c = new Cursor("1234");
+
+            Assert.Equal('1', c.Current);
+            Assert.Equal(0, c.Position.Offset);
+            Assert.Equal(1, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+
+            c.Advance(4);
+
+            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(4, c.Position.Offset);
+            Assert.Equal(5, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+        }
+
+        [Fact]
         public void ResetPositionShouldMoveToEof()
         {
             var c = new Cursor("123");

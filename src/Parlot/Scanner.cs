@@ -79,7 +79,7 @@ namespace Parlot
             bool found = false;
             while (Character.IsWhiteSpace(Cursor.Current))
             {
-                Cursor.AdvanceOnce();
+                Cursor.Advance();
                 found = true;
             }
 
