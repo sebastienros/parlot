@@ -16,11 +16,13 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            var start = context.Scanner.Cursor.Offset;
+            var cursor = context.Scanner.Cursor;
 
-            if (context.Scanner.ReadChar(Char))
+            if (cursor.Match(Char))
             {
-                result.Set(start, context.Scanner.Cursor.Offset, Char);
+                var start = cursor.Offset;
+                cursor.Advance();
+                result.Set(start, cursor.Offset, Char);
                 return true;
             }
 

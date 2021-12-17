@@ -178,11 +178,6 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(char c)
         {
-            if (Eof)
-            {
-                return false;
-            }
-
             // Ordinal comparison
             return _current == c;
         }

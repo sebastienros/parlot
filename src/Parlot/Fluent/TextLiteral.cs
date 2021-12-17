@@ -20,11 +20,13 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            var start = context.Scanner.Cursor.Offset;
+            var cursor = context.Scanner.Cursor;
 
-            if (context.Scanner.ReadText(Text, _comparer))
+            if (cursor.Match(Text, _comparer))
             {
-                result.Set(start, context.Scanner.Cursor.Offset, Text);
+                var start = cursor.Offset;
+                cursor.Advance(Text.Length);
+                result.Set(start, cursor.Offset, Text);
                 return true;
             }
 
