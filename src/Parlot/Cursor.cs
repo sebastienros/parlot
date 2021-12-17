@@ -258,44 +258,13 @@ namespace Parlot
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
-        {
-            if (s.Length == 0)
-            {
-                return true;
-            }
-
-            if (Eof)
-            {
-                return false;
-            }
+        { 
+            var sSpan = s.AsSpan();
+            var bufferSpan = _buffer.AsSpan(_offset);
             
-            if (s[0] != _current)
-            {
-                return false;
-            }
-
-            var length = s.Length;
-
-            if (_offset + length - 1 >= _textLength)
-            {
-                return false;
-            }
-            
-            if (length > 1 && _buffer[_offset + 1] != s[1])
-            {
-                return false;
-            }
-
-            for (var i = 2; i < length; i++)
-            {
-                if (s[i] != _buffer[_offset + i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return bufferSpan.StartsWith(sSpan);
         }
 
         /// <summary>
@@ -304,6 +273,11 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s, StringComparer comparer)
         {
+            if (comparer == null)
+            {
+                return Match(s);
+            }
+
             if (s.Length == 0)
             {
                 return true;

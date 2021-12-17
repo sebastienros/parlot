@@ -14,7 +14,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="all" />
+    <PackageReference Include="System.Memory" Version="4.5.4" Condition="'$(TargetFramework)' == 'netstandard2.0'"/>
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0' ">
+    <DefineConstants>$(DefineConstants);SUPPORTS_READONLYSPAN</DefineConstants>
+  </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1' ">
     <DefineConstants>$(DefineConstants);SUPPORTS_READONLYSPAN;SUPPORTS_CODENALYSIS</DefineConstants>
