@@ -14,6 +14,9 @@ namespace Parlot.Benchmarks
         private const string _stringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
         private readonly Parser<char> _whiteSpaceExpression = Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d'));
 
+        // Exercises Cursor.Match(string)
+        private readonly Parser<string> _matchStringExpression = Parsers.OneOf(Parsers.Literals.Text("hello"), Parsers.Literals.Text("goodbye"));
+
         private readonly JsonBench _jsonBench = new();
         private readonly ExprBench _exprBench = new();
 
@@ -21,6 +24,24 @@ namespace Parlot.Benchmarks
         public void Setup()
         {
             _jsonBench.Setup();
+        }
+
+        [Benchmark, BenchmarkCategory("Cursor.Match(string)")]
+        public string CursorMatchHello()
+        {
+            return _matchStringExpression.Parse("hello");
+        }
+
+        [Benchmark, BenchmarkCategory("Cursor.Match(string)")]
+        public string CursorMatchGoodbye()
+        {
+            return _matchStringExpression.Parse("goodbye");
+        }
+
+        [Benchmark, BenchmarkCategory("Cursor.Match(string)")]
+        public string CursorMatchNone()
+        {
+            return _matchStringExpression.Parse("hellllo");
         }
 
         [Benchmark, BenchmarkCategory("WhiteSpace")]
