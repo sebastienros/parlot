@@ -1,5 +1,7 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 
@@ -13,10 +15,46 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable
     {
         private readonly Parser<T>[] _parsers;
+        private readonly Dictionary<char, Parser<T>> _nonWhiteSpacelookupTable;
+        private readonly Dictionary<char, Parser<T>> _whiteSpaceLookupTable;
+        private readonly bool _hasLookupTable;
 
         public OneOf(Parser<T>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+
+            _nonWhiteSpacelookupTable = new Dictionary<char, Parser<T>>();
+            _whiteSpaceLookupTable = new Dictionary<char, Parser<T>>();
+
+            foreach (var parser in _parsers)
+            {
+                // Not seekable ?
+                if (parser is not ISeekable seekable || !seekable.CanSeek)
+                {
+                    _nonWhiteSpacelookupTable = null;
+                    _whiteSpaceLookupTable = null;
+                    break;
+                }
+
+                var table = seekable.SkipWhitespace
+                    ? _whiteSpaceLookupTable
+                    : _nonWhiteSpacelookupTable
+                    ;
+
+                // Ambiguity ?
+                if (table.ContainsKey(seekable.ExpectedChar))
+                {
+                    // TODO: this can be rewritten in a separate OneOf<T> to isolate the ambiguous choices
+
+                    _nonWhiteSpacelookupTable = null;
+                    _whiteSpaceLookupTable = null;
+                    break;
+                }
+
+                table.Add(seekable.ExpectedChar, parser);
+            }
+
+            _hasLookupTable = _nonWhiteSpacelookupTable != null || _whiteSpaceLookupTable != null;
         }
 
         public Parser<T>[] Parsers => _parsers;
@@ -25,11 +63,36 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            foreach (var parser in _parsers)
+            if (_hasLookupTable)
             {
-                if (parser.Parse(context, ref result))
+                if (_nonWhiteSpacelookupTable != null)
                 {
-                    return true;
+                    if (_nonWhiteSpacelookupTable.TryGetValue(context.Scanner.Cursor.Current, out var seekable))
+                    {
+                        return seekable.Parse(context, ref result);
+                    }
+                }
+
+                if (_whiteSpaceLookupTable != null)
+                {
+                    context.SkipWhiteSpace();
+
+                    if (_whiteSpaceLookupTable.TryGetValue(context.Scanner.Cursor.Current, out var seekable))
+                    {
+                        return seekable.Parse(context, ref result);
+                    }
+                }
+            }
+            else
+            {
+                var parsers = _parsers;
+
+                for (var i = 0; i < parsers.Length; i++)
+                {
+                    if (parsers[i].Parse(context, ref result))
+                    {
+                        return true;
+                    }
                 }
             }
 

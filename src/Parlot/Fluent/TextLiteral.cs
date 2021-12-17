@@ -1,10 +1,11 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class TextLiteral : Parser<string>, ICompilable
+    public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
         private readonly StringComparer _comparer;
 
@@ -15,6 +16,12 @@ namespace Parlot.Fluent
         }
 
         public string Text { get; }
+
+        public bool CanSeek => Text.Length > 0;
+
+        public char ExpectedChar => Text[0];
+
+        public bool SkipWhitespace => false;
 
         public override bool Parse(ParseContext context, ref ParseResult<string> result)
         {
