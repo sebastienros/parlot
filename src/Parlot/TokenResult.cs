@@ -1,13 +1,12 @@
-﻿using System;
-
-namespace Parlot
+﻿namespace Parlot
 {
+    using System;
     using System.Runtime.CompilerServices;
 
     public readonly struct TokenResult
     {
         private readonly string _buffer;
-        
+
         public readonly int Start;
         public readonly int Length;
 
@@ -20,9 +19,7 @@ namespace Parlot
 
         public string GetText() => _buffer.Substring(Start, Length);
 
-#if SUPPORTS_READONLYSPAN
         public ReadOnlySpan<char> Span => _buffer.AsSpan(Start, Length);
-#endif
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TokenResult Succeed(string buffer, int start, int end)
