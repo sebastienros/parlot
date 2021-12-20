@@ -33,14 +33,14 @@ namespace Parlot.Fluent
             if (context.Scanner.ReadDecimal())
             {
                 var end = context.Scanner.Cursor.Offset;
-#if NETSTANDARD2_0
+#if !SUPPORTS_SPAN_PARSE
                 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #else
                 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
 #endif
 
                 if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
-                { 
+                {
                     result.Set(start, end,  value);
                     return true;
                 }
@@ -105,7 +105,7 @@ namespace Parlot.Fluent
 #endif
 
             // TODO: NETSTANDARD2_1 code path
-            var block = 
+            var block =
                 Expression.IfThen(
                     context.ReadDecimal(),
                     Expression.Block(
@@ -114,8 +114,8 @@ namespace Parlot.Fluent
                         sliceExpression,
                         Expression.Assign(success,
                             Expression.Call(
-                                tryParseMethodInfo, 
-                                sourceToParse, 
+                                tryParseMethodInfo,
+                                sourceToParse,
                                 Expression.Constant(NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint),
                                 Expression.Constant(CultureInfo.InvariantCulture),
                                 value)

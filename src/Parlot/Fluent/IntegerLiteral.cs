@@ -34,7 +34,7 @@ namespace Parlot.Fluent
             {
                 var end = context.Scanner.Cursor.Offset;
 
-#if NETSTANDARD2_0
+#if !SUPPORTS_SPAN_PARSE
                 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #else
                 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
