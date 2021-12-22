@@ -1,11 +1,11 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
+    public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
     {
         private readonly Parser<T> _parser;
 
@@ -13,6 +13,12 @@ namespace Parlot.Fluent
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
+
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {

@@ -1,10 +1,11 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq;
 
 namespace Parlot.Fluent
 {
-    public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser
+    public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         internal readonly Parser<T1> _parser1;
         internal readonly Parser<T2> _parser2;
@@ -13,6 +14,12 @@ namespace Parlot.Fluent
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
         }
+
+        public bool CanSeek => _parser1 is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser1 is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser1 is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
         {
@@ -53,7 +60,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser
+    public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2>> _parser;
         internal readonly Parser<T3> _lastParser;
@@ -66,6 +73,12 @@ namespace Parlot.Fluent
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
+
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
         {
@@ -113,7 +126,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser
+    public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
         internal readonly Parser<T4> _lastParser;
@@ -123,6 +136,12 @@ namespace Parlot.Fluent
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
+
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
         {
@@ -171,7 +190,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser
+    public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
         internal readonly Parser<T5> _lastParser;
@@ -181,6 +200,12 @@ namespace Parlot.Fluent
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
+
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
         {
@@ -230,7 +255,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
         internal readonly Parser<T6> _lastParser;        
@@ -240,6 +265,12 @@ namespace Parlot.Fluent
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
+
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
         {
@@ -291,7 +322,7 @@ namespace Parlot.Fluent
         }
     }
 
-    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser
+    public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
         internal readonly Parser<T7> _lastParser;
@@ -301,6 +332,12 @@ namespace Parlot.Fluent
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
         }
+
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
         {
