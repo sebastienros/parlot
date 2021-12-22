@@ -22,9 +22,7 @@ namespace Parlot
         public readonly int Offset;
         public readonly string Buffer;
 
-#if SUPPORTS_READONLYSPAN
         public ReadOnlySpan<char> Span => Buffer == null ? ReadOnlySpan<char>.Empty : Buffer.AsSpan(Offset, Length);
-#endif
 
         public override string ToString()
         {
@@ -38,46 +36,12 @@ namespace Parlot
                 return Buffer == null;
             }
 
-#if NETSTANDARD2_0
-            if (Length != other.Length)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < Length; i++)
-            {
-                if (Buffer[Offset + i] != other[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
-#else
-            return Span.SequenceEqual(other);
-#endif
+            return Span.SequenceEqual(other.AsSpan());
         }
 
         public bool Equals(TextSpan other)
         {
-#if NETSTANDARD2_0
-            if (Length != other.Length)
-            {
-                return false;
-            }
-
-            for (var i = 0; i < Length; i++)
-            {
-                if (Buffer[Offset + i] != other.Buffer[other.Offset + i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
-#else
             return Span.SequenceEqual(other.Span);
-#endif
         }
 
         public static implicit operator TextSpan(string s)
