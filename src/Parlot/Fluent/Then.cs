@@ -20,7 +20,7 @@ namespace Parlot.Fluent
         
         public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
 
-        public char ExpectedChar => _parser is ISeekable seekable ? seekable.ExpectedChar : default;
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
 
         public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 

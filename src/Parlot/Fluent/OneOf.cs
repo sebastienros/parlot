@@ -14,47 +14,48 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf<T> : Parser<T>, ICompilable
     {
-        private readonly Parser<T>[] _parsers;
-        private readonly Dictionary<char, Parser<T>> _nonWhiteSpacelookupTable;
-        private readonly Dictionary<char, Parser<T>> _whiteSpaceLookupTable;
-        private readonly bool _hasLookupTable;
+        internal readonly Parser<T>[] _parsers;
+        internal readonly Dictionary<char, Parser<T>> _lookupTable;
+        internal readonly bool _skipWhiteSpace;
 
         public OneOf(Parser<T>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
 
-            _nonWhiteSpacelookupTable = new Dictionary<char, Parser<T>>();
-            _whiteSpaceLookupTable = new Dictionary<char, Parser<T>>();
-
-            foreach (var parser in _parsers)
+            // All parsers are seekable
+            if (_parsers.All(x => x is ISeekable seekable && seekable.CanSeek))
             {
-                // Not seekable ?
-                if (parser is not ISeekable seekable || !seekable.CanSeek)
+                _lookupTable = new Dictionary<char, Parser<T>>();
+
+                foreach (var parser in _parsers)
                 {
-                    _nonWhiteSpacelookupTable = null;
-                    _whiteSpaceLookupTable = null;
-                    break;
+                    var expectedChars = (parser as ISeekable).ExpectedChars;
+
+                    foreach (var c in expectedChars)
+                    { 
+                        // Ambiguous lookup
+                        if (_lookupTable.ContainsKey(c))
+                        {
+                            _lookupTable = null;
+                            break;
+                        }
+
+                        _lookupTable.Add(c, parser);
+                    }
                 }
 
-                var table = seekable.SkipWhitespace
-                    ? _whiteSpaceLookupTable
-                    : _nonWhiteSpacelookupTable
-                    ;
-
-                // Ambiguity ?
-                if (table.ContainsKey(seekable.ExpectedChar))
+                // All parsers can start with white spaces
+                if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
                 {
-                    // TODO: this can be rewritten in a separate OneOf<T> to isolate the ambiguous choices
-
-                    _nonWhiteSpacelookupTable = null;
-                    _whiteSpaceLookupTable = null;
-                    break;
+                    _skipWhiteSpace = true;
                 }
+                else if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
+                {
+                    // If not all parsers accept a white space, we can't use a lookup table since the order matters
 
-                table.Add(seekable.ExpectedChar, parser);
+                    _lookupTable = null;
+                }
             }
-
-            _hasLookupTable = _nonWhiteSpacelookupTable != null || _whiteSpaceLookupTable != null;
         }
 
         public Parser<T>[] Parsers => _parsers;
@@ -63,21 +64,26 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            if (_hasLookupTable)
-            {
-                if (_nonWhiteSpacelookupTable != null)
-                {
-                    if (_nonWhiteSpacelookupTable.TryGetValue(context.Scanner.Cursor.Current, out var seekable))
-                    {
-                        return seekable.Parse(context, ref result);
-                    }
-                }
+            var cursor = context.Scanner.Cursor;
 
-                if (_whiteSpaceLookupTable != null)
+            if (_lookupTable != null)
+            {
+                if (_skipWhiteSpace)
                 {
+                    var start = context.Scanner.Cursor.Position;
+
                     context.SkipWhiteSpace();
 
-                    if (_whiteSpaceLookupTable.TryGetValue(context.Scanner.Cursor.Current, out var seekable))
+                    if (_lookupTable.TryGetValue(cursor.Current, out var seekable) && seekable.Parse(context, ref result))
+                    {
+                        return true;
+                    }
+
+                    context.Scanner.Cursor.ResetPosition(start);
+                }
+                else
+                {
+                    if (_lookupTable.TryGetValue(cursor.Current, out var seekable))
                     {
                         return seekable.Parse(context, ref result);
                     }
@@ -86,8 +92,9 @@ namespace Parlot.Fluent
             else
             {
                 var parsers = _parsers;
+                var length = parsers.Length;
 
-                for (var i = 0; i < parsers.Length; i++)
+                for (var i = 0; i < length; i++)
                 {
                     if (parsers[i].Parse(context, ref result))
                     {
@@ -106,47 +113,119 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
 
-            // parse1 instructions
-            // 
-            // if (parser1.Success)
-            // {
-            //    success = true;
-            //    value = parse1.Value;
-            // }
-            // else
-            // {
-            //   parse2 instructions
-            //   
-            //   if (parser2.Success)
-            //   {
-            //      success = true;
-            //      value = parse2.Value
-            //   }
-            //   
-            //   ...
-            // }
-
 
             Expression block = Expression.Empty();
 
-            foreach (var parser in _parsers.Reverse())
+            if (_lookupTable != null)
             {
-                var parserCompileResult = parser.Build(context);
+                // Lookup table is converted to a switch expression
 
-                block = Expression.Block(
-                    parserCompileResult.Variables,
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        Expression.Block(
-                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                            context.DiscardResult
-                            ? Expression.Empty()
-                            : Expression.Assign(value, parserCompileResult.Value)
+                // switch (Cursor.Current)
+                // {
+                //   case 'a' :
+                //     parse1 instructions
+                //     
+                //     if (parser1.Success)
+                //     {
+                //        success = true;
+                //        value = parse1.Value;
+                //     }
+                // 
+                //     break; // implicit in SwitchCase expression
+                //
+                //   case 'b' :
+                //   ...
+                // }
+
+                var cases = _lookupTable.Select(kvp =>
+                {
+                    var parserCompileResult = kvp.Value.Build(context);
+
+                    return Expression.SwitchCase(
+                            Expression.Block(
+                            parserCompileResult.Variables,
+                            Expression.Block(parserCompileResult.Body),
+                            Expression.IfThen(
+                                parserCompileResult.Success,
+                                Expression.Block(
+                                    Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                    context.DiscardResult
+                                    ? Expression.Empty()
+                                    : Expression.Assign(value, parserCompileResult.Value)
+                                    )
+                                )
                             ),
-                        block
-                        )
+                            Expression.Constant(kvp.Key)
+                        );
+                }).ToArray();
+
+                SwitchExpression switchExpr =
+                    Expression.Switch(
+                        context.Current(),
+                        Expression.Empty(), // no match => success = false
+                        cases
                     );
+
+                if (_skipWhiteSpace)
+                {
+                    var start = context.DeclarePositionVariable(result);
+
+                    block = Expression.Block(
+                        context.SkipWhiteSpace(),
+                        switchExpr,
+                        Expression.IfThen(
+                            Expression.IsFalse(success),
+                            context.ResetPosition(start))
+                        );
+                }
+                else
+                {
+                    block = Expression.Block(
+                        switchExpr
+                    );
+                }
+            }
+            else
+            {
+                // parse1 instructions
+                // 
+                // if (parser1.Success)
+                // {
+                //    success = true;
+                //    value = parse1.Value;
+                // }
+                // else
+                // {
+                //   parse2 instructions
+                //   
+                //   if (parser2.Success)
+                //   {
+                //      success = true;
+                //      value = parse2.Value
+                //   }
+                //   
+                //   ...
+                // }
+
+                foreach (var parser in _parsers.Reverse())
+                {
+                    var parserCompileResult = parser.Build(context);
+
+                    block = Expression.Block(
+                        parserCompileResult.Variables,
+                        Expression.Block(parserCompileResult.Body),
+                        Expression.IfThenElse(
+                            parserCompileResult.Success,
+                            Expression.Block(
+                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                context.DiscardResult
+                                ? Expression.Empty()
+                                : Expression.Assign(value, parserCompileResult.Value)
+                                ),
+                            block
+                            )
+                        );
+                }
             }
 
             result.Body.Add(block);

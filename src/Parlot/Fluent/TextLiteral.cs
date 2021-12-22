@@ -19,7 +19,7 @@ namespace Parlot.Fluent
 
         public bool CanSeek => Text.Length > 0;
 
-        public char ExpectedChar => Text[0];
+        public char[] ExpectedChars => new[] { Text[0] };
 
         public bool SkipWhitespace => false;
 

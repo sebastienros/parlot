@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Collections.Immutable;
+using System.Linq;
 using Parlot.Tests.Json;
 using Superpower;
 
@@ -35,7 +35,7 @@ namespace Parlot.Benchmarks.SuperpowerParsers
             Json.Between(Superpower.Parsers.Character.WhiteSpace.Many(), Superpower.Parsers.Character.WhiteSpace.Many())
                 .ManyDelimitedBy(Comma)
                 .Between(LBracket, RBracket)
-                .Select(els => (IJson)new JsonArray(els.ToImmutableArray()));
+                .Select(els => (IJson)new JsonArray(els.ToArray()));
 
         private static readonly TextParser<KeyValuePair<string, IJson>> JsonMember =
             from name in String.SelectMany(_ => ColonWhitespace, (name, ws) => name)  // avoid allocating a transparent identifier for a result we don't care about
@@ -46,7 +46,7 @@ namespace Parlot.Benchmarks.SuperpowerParsers
             JsonMember.Between(Superpower.Parsers.Character.WhiteSpace.Many(), Superpower.Parsers.Character.WhiteSpace.Many())
                 .ManyDelimitedBy(Comma)
                 .Between(LBrace, RBrace)
-                .Select(kvps => (IJson)new JsonObject(kvps.ToImmutableDictionary()));
+                .Select(kvps => (IJson)new JsonObject(new Dictionary<string, IJson>(kvps)));
 
         public static IJson Parse(string input) => Json.Parse(input);
     }

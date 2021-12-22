@@ -13,9 +13,9 @@
         bool CanSeek { get; }
 
         /// <summary>
-        /// Gets the char that should be matched next to evaluate this Parser.
+        /// Gets the chars that can be matched next to evaluate this Parser.
         /// </summary>
-        char ExpectedChar { get; }
+        char[] ExpectedChars { get; }
 
         /// <summary>
         /// Gets whether the current parser needs to skip whitespaces before being invoked.

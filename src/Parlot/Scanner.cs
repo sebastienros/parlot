@@ -366,7 +366,7 @@ namespace Parlot
             // Fast path if there aren't any escape char until next quote
             var startOffset = Cursor.Offset + 1;
 
-            var nextQuote = Cursor.Buffer.IndexOf(startChar, startOffset);
+            var nextQuote = Cursor.Buffer.AsSpan(startOffset).IndexOf(startChar);
 
             if (nextQuote == -1)
             {
@@ -379,19 +379,21 @@ namespace Parlot
 
             Cursor.Advance();
 
-            var nextEscape = Cursor.Buffer.IndexOf('\\', startOffset, nextQuote - startOffset);
+            var nextEscape = Cursor.Buffer.AsSpan(startOffset, nextQuote).IndexOf('\\');
 
             // If the next escape if not before the next quote, we can return the string as-is
-            if (nextEscape == -1 || nextEscape > nextQuote)
+            if (nextEscape == -1)
             {
-                Cursor.Advance(nextQuote + 1 - startOffset);
+                Cursor.Advance(nextQuote + 1);
 
                 result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
                 return true;
             }
 
-            while (!Cursor.Match(startChar))
+            while (nextEscape != -1)
             {
+                Cursor.Advance(nextEscape);
+
                 // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
                 if (Cursor.Eof)
                 {
@@ -415,6 +417,7 @@ namespace Parlot
                         case 'v':
                         case '\'':
                         case '"':
+                            Cursor.Advance();
                             break;
 
                         case 'u':
@@ -498,10 +501,21 @@ namespace Parlot
                     }
                 }
 
-                Cursor.Advance();
-            }
+                nextEscape = Cursor.Buffer.AsSpan(Cursor.Offset).IndexOfAny('\\', startChar);
 
-            Cursor.Advance();
+                if (Cursor.Match(startChar))
+                {
+                    Cursor.Advance(nextEscape + 1);
+                    break;
+                }
+                else if (nextEscape == -1)
+                {
+                    Cursor.ResetPosition(start);
+
+                    result = TokenResult.Fail();
+                    return false;
+                }
+            }            
 
             result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
 

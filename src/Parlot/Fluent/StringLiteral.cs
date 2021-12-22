@@ -1,4 +1,5 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
 
@@ -11,7 +12,7 @@ namespace Parlot.Fluent
         SingleOrDouble
     }
 
-    public sealed class StringLiteral : Parser<TextSpan>, ICompilable
+    public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
     {
         private readonly StringLiteralQuotes _quotes;
 
@@ -19,6 +20,12 @@ namespace Parlot.Fluent
         {
             _quotes = quotes;
         }
+
+        public bool CanSeek => true;
+
+        public char[] ExpectedChars => _quotes switch { StringLiteralQuotes.Single => new[] { '\'' }, StringLiteralQuotes.Double => new[] { '\"' }, StringLiteralQuotes.SingleOrDouble => new[] { '\'', '\"' }, _ => Array.Empty<char>() };
+
+        public bool SkipWhitespace => false;
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {

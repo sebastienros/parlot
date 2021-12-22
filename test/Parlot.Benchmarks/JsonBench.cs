@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -9,6 +8,7 @@ using Parlot.Benchmarks.SpracheParsers;
 using Parlot.Benchmarks.SuperpowerParsers;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
+using Newtonsoft.Json.Linq;
 
 namespace Parlot.Benchmarks
 {
@@ -66,6 +66,12 @@ namespace Parlot.Benchmarks
             return SuperpowerJsonParser.Parse(_bigJson);
         }
 
+        [Benchmark, BenchmarkCategory("Big")]
+        public JObject BigJson_Newtonsoft()
+        {
+            return JObject.Parse(_bigJson);
+        }
+
         [Benchmark(Baseline = true), BenchmarkCategory("Long")]
         public IJson LongJson_Parlot()
         {
@@ -96,6 +102,12 @@ namespace Parlot.Benchmarks
             return SuperpowerJsonParser.Parse(_longJson);
         }
 
+        [Benchmark, BenchmarkCategory("Long")]
+        public JObject LongJson_Newtonsoft()
+        {
+            return JObject.Parse(_longJson);
+        }
+
         [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
         public IJson DeepJson_Parlot()
         {
@@ -118,6 +130,12 @@ namespace Parlot.Benchmarks
         public IJson DeepJson_Sprache()
         {
             return SpracheJsonParser.Parse(_deepJson).Value;
+        }
+
+        [Benchmark, BenchmarkCategory("Deep")]
+        public JObject DeepJson_Newtonsoft()
+        {
+            return JObject.Parse(_deepJson);
         }
 
         //this one blows the stack
@@ -157,11 +175,17 @@ namespace Parlot.Benchmarks
             return SuperpowerJsonParser.Parse(_wideJson);
         }
 
+        [Benchmark, BenchmarkCategory("Wide")]
+        public JObject WideJson_Newtonsoft()
+        {
+            return JObject.Parse(_wideJson);
+        }
+
         private static IJson BuildJson(int length, int depth, int width)
             => new JsonArray(
                 Enumerable.Repeat(1, length)
                     .Select(_ => BuildObject(depth, width))
-                    .ToImmutableArray()
+                    .ToArray()
             );
 
         private static IJson BuildObject(int depth, int width)
@@ -171,9 +195,10 @@ namespace Parlot.Benchmarks
                 return new JsonString(RandomString(6));
             }
             return new JsonObject(
-                Enumerable.Repeat(1, width)
+                new Dictionary<string, IJson>(
+                    Enumerable.Repeat(1, width)
                     .Select(_ => new KeyValuePair<string, IJson>(RandomString(5), BuildObject(depth - 1, width)))
-                    .ToImmutableDictionary()
+                    )
             );
         }
 
