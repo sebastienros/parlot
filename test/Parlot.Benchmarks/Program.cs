@@ -7,7 +7,6 @@ namespace Parlot.Benchmarks
     {
         static void Main(string[] args)
         {
-
             BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
 
             //var benchmarks = new ParlotBenchmarks();

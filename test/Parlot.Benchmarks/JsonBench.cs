@@ -9,6 +9,7 @@ using Parlot.Benchmarks.SuperpowerParsers;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 namespace Parlot.Benchmarks
 {
@@ -23,6 +24,7 @@ namespace Parlot.Benchmarks
         private Parser<IJson> _compiled;
 #nullable restore
 
+        private static JsonSerializerSettings _jsonSerializerSettings = new JsonSerializerSettings() { MaxDepth = 1024 };
         private static readonly Random _random = new();
 
         [GlobalSetup]
@@ -67,9 +69,9 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Big")]
-        public JObject BigJson_Newtonsoft()
+        public JToken BigJson_Newtonsoft()
         {
-            return JObject.Parse(_bigJson);
+            return JToken.Parse(_bigJson);
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Long")]
@@ -103,9 +105,9 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Long")]
-        public JObject LongJson_Newtonsoft()
+        public JToken LongJson_Newtonsoft()
         {
-            return JObject.Parse(_longJson);
+            return JToken.Parse(_longJson);
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
@@ -133,9 +135,9 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Deep")]
-        public JObject DeepJson_Newtonsoft()
+        public JToken DeepJson_Newtonsoft()
         {
-            return JObject.Parse(_deepJson);
+            return JsonConvert.DeserializeObject<JToken>(_deepJson, _jsonSerializerSettings);
         }
 
         //this one blows the stack
@@ -176,9 +178,9 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Wide")]
-        public JObject WideJson_Newtonsoft()
+        public JToken WideJson_Newtonsoft()
         {
-            return JObject.Parse(_wideJson);
+            return JToken.Parse(_wideJson);
         }
 
         private static IJson BuildJson(int length, int depth, int width)
