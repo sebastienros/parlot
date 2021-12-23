@@ -255,7 +255,9 @@ namespace Parlot
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
-        { 
+        {
+            // Equivalent to StringComparison.Orinal copmarison
+
             var sSpan = s.AsSpan();
             var bufferSpan = _buffer.AsSpan(_offset);
             
@@ -266,61 +268,14 @@ namespace Parlot
         /// Whether a string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(string s, StringComparer comparer)
+        public bool Match(string s, StringComparison comparisonType)
         {
-            if (comparer == null)
-            {
-                return Match(s);
-            }
+            // StringComparison.Orinal is an optimized code path in Span.StartsWith
 
-            if (s.Length == 0)
-            {
-                return true;
-            }
+            var sSpan = s.AsSpan();
+            var bufferSpan = _buffer.AsSpan(_offset);
 
-            if (Eof)
-            {
-                return false;
-            }
-
-            var a = CharToStringTable.GetString(_current);
-            var b = CharToStringTable.GetString(s[0]);
-
-            if (comparer.Compare(a, b) != 0)
-            {
-                return false;
-            }
-
-            var length = s.Length;
-
-            if (_offset + length - 1 >= _textLength)
-            {
-                return false;
-            }
-
-            if (length > 1)
-            {
-                a = CharToStringTable.GetString(_buffer[_offset + 1]);
-                b = CharToStringTable.GetString(s[1]);
-
-                if (comparer.Compare(a, b) != 0)
-                {
-                    return false;
-                }
-            }
-
-            for (var i = 2; i < length; i++)
-            {
-                a = CharToStringTable.GetString(_buffer[_offset + i]);
-                b = CharToStringTable.GetString(s[i]);
-
-                if (comparer.Compare(a, b) != 0)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return bufferSpan.StartsWith(sSpan, comparisonType);
         }
     }
 }

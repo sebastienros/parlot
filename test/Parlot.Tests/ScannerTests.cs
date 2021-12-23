@@ -126,7 +126,7 @@ namespace Parlot.Tests
             Assert.False(s.ReadText("aBcd"));
             Assert.False(s.ReadText("abCd"));
             Assert.False(s.ReadText("abcD"));
-            Assert.True(s.ReadText("ABCD", comparer: StringComparer.OrdinalIgnoreCase, out var result));
+            Assert.True(s.ReadText("ABCD", StringComparison.OrdinalIgnoreCase, out var result));
             Assert.Equal("abcd", result.GetText());
         }
 

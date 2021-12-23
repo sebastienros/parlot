@@ -276,18 +276,14 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, StringComparer comparer) => ReadText(text, comparer, out _); 
+        public bool ReadText(string text, StringComparison comparisonType) => ReadText(text, comparisonType, out _); 
         
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, StringComparer comparer, out TokenResult result)
+        public bool ReadText(string text, StringComparison comparisonType, out TokenResult result)
         {
-            var match = comparer is null
-                ? Cursor.Match(text)
-                : Cursor.Match(text, comparer);
-
-            if (!match)
+            if (!Cursor.Match(text, comparisonType))
             {
                 result = TokenResult.Fail();
                 return false;
@@ -310,7 +306,7 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, out TokenResult result) => ReadText(text, comparer: null, out result);
+        public bool ReadText(string text, out TokenResult result) => ReadText(text, comparisonType: StringComparison.Ordinal, out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadSingleQuotedString() => ReadSingleQuotedString(out _);

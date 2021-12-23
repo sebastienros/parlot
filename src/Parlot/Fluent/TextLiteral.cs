@@ -7,12 +7,12 @@ namespace Parlot.Fluent
 {
     public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
-        private readonly StringComparer _comparer;
+        private readonly StringComparison _comparisonType;
 
-        public TextLiteral(string text, StringComparer comparer = null)
+        public TextLiteral(string text, StringComparison comparisonType)
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
-            _comparer = comparer;
+            _comparisonType = comparisonType;
         }
 
         public string Text { get; }
@@ -29,7 +29,7 @@ namespace Parlot.Fluent
 
             var cursor = context.Scanner.Cursor;
 
-            if (cursor.Match(Text, _comparer))
+            if (cursor.Match(Text, _comparisonType))
             {
                 var start = cursor.Offset;
                 cursor.Advance(Text.Length);
@@ -64,7 +64,7 @@ namespace Parlot.Fluent
                     Expression.Field(context.ParseContext, "Scanner"),
                     ExpressionHelper.Scanner_ReadText_NoResult,
                     Expression.Constant(Text, typeof(string)),
-                    Expression.Constant(_comparer, typeof(StringComparer))
+                    Expression.Constant(_comparisonType, typeof(StringComparison))
                     ),
                 Expression.Block(
                     Expression.Assign(success, Expression.Constant(true, typeof(bool))),

@@ -104,7 +104,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches the specified text.
         /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
+        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
         /// <summary>
         /// Builds a parser that matches the specified char.
@@ -150,7 +150,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches the specified text.
         /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null));
+        public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
 
         /// <summary>
         /// Builds a parser that matches the specified char.
