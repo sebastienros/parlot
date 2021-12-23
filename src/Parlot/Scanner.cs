@@ -12,7 +12,7 @@ namespace Parlot
         public readonly string Buffer;
         public readonly Cursor Cursor;
 
-        private record struct WhiteSpaceMarker(int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine);
+        private readonly record struct WhiteSpaceMarker(int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine);
 
         // Caches the latest whitespace check. Remember that the current position is not a whitespace.
         private WhiteSpaceMarker _whiteSpaceMarker = new (-1, false, false);
