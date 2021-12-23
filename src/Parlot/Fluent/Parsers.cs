@@ -68,6 +68,7 @@ namespace Parlot.Fluent
 
         /// <summary>
         /// Builds a parser that captures the output of another parser.
+        /// This is used to provide pattern matching capabilities, and optimized copmiled parsers that then don't need to materialize each parser result.
         /// </summary>
         public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 

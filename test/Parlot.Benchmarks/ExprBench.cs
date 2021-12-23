@@ -32,13 +32,13 @@ namespace Parlot.Benchmarks
             if (ParlotCompiledBig().Evaluate() != expected2) throw new Exception(nameof(ParlotCompiledBig));
         }
 
-        [Benchmark(Baseline = true), BenchmarkCategory("Expression1")]
+        [Benchmark, BenchmarkCategory("Expression1")]
         public Expression ParlotRawSmall()
         {
             return _parser.Parse(_expression1);
         }
 
-        [Benchmark, BenchmarkCategory("Expression1")]
+        [Benchmark(Baseline = true), BenchmarkCategory("Expression1")]
         public Expression ParlotCompiledSmall()
         {
             return _compiled.Parse(_expression1);
@@ -57,13 +57,13 @@ namespace Parlot.Benchmarks
             return ExprParser.ParseOrThrow(_expression1);
         }
 
-        [Benchmark(Baseline = true), BenchmarkCategory("Expression2")]
+        [Benchmark, BenchmarkCategory("Expression2")]
         public Expression ParlotRawBig()
         {
             return _parser.Parse(_expression2);
         }
 
-        [Benchmark, BenchmarkCategory("Expression2")]
+        [Benchmark(Baseline = true), BenchmarkCategory("Expression2")]
         public Expression ParlotCompiledBig()
         {
             return _compiled.Parse(_expression2);

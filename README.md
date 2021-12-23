@@ -136,68 +136,104 @@ In this benchmark Parlot Fluent is more than 10 times faster than Pidgin, and Pa
 When compiled the Parlot grammar shows even better results, without losing its simplicity.
 
 ```
-BenchmarkDotNet=v0.12.1, OS=Windows 10.0.19042
-Intel Core i7-1065G7 CPU 1.30GHz, 1 CPU, 8 logical and 4 physical cores
-.NET Core SDK=6.0.100-preview.4.21216.15
-  [Host]   : .NET Core 5.0.5 (CoreCLR 5.0.521.16609, CoreFX 5.0.521.16609), X64 RyuJIT
-  ShortRun : .NET Core 5.0.5 (CoreCLR 5.0.521.16609, CoreFX 5.0.521.16609), X64 RyuJIT
+BenchmarkDotNet=v0.13.1, OS=Windows 10.0.22000
+Intel Core i7-8700 CPU 3.20GHz (Coffee Lake), 1 CPU, 12 logical and 6 physical cores
+.NET SDK=6.0.100
+  [Host]   : .NET 6.0.0 (6.0.21.52210), X64 RyuJIT
+  ShortRun : .NET 6.0.0 (6.0.21.52210), X64 RyuJIT
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-|              Method |        Mean |       Error |      StdDev | Ratio | RatioSD |  Gen 0 | Gen 1 | Gen 2 | Allocated |
-|-------------------- |------------:|------------:|------------:|------:|--------:|-------:|------:|------:|----------:|
-| ParlotCompiledSmall |    769.6 ns |    709.4 ns |    38.89 ns |  1.70 |    0.08 | 0.1564 |     - |     - |     656 B |
-|   ParlotFluentSmall |    931.7 ns |    622.3 ns |    34.11 ns |  2.06 |    0.10 | 0.1564 |     - |     - |     656 B |
-|         PidginSmall | 11,668.0 ns | 10,591.9 ns |   580.58 ns | 25.77 |    1.64 | 0.1831 |     - |     - |     816 B |
-|                     |             |             |             |       |         |        |       |       |           |
-|   ParlotCompiledBig |  4,357.3 ns |  2,429.2 ns |   133.15 ns |  1.94 |    0.09 | 0.6866 |     - |     - |    2888 B |
-|     ParlotFluentBig |  5,312.8 ns |  3,441.7 ns |   188.65 ns |  2.36 |    0.06 | 0.6866 |     - |     - |    2888 B |
-|           PidginBig | 60,793.9 ns | 24,192.2 ns | 1,326.06 ns | 27.02 |    0.11 | 0.8545 |     - |     - |    4072 B |
-
+|              Method |        Mean |       Error |    StdDev | Ratio | RatioSD |  Gen 0 |  Gen 1 | Allocated |
+|-------------------- |------------:|------------:|----------:|------:|--------:|-------:|-------:|----------:|
+| ParlotCompiledSmall |    565.9 ns |   105.51 ns |   5.78 ns |  1.00 |    0.00 | 0.1049 |      - |     664 B |
+|   ParlotFluentSmall |    850.6 ns |   146.17 ns |   8.01 ns |  1.50 |    0.03 | 0.1049 |      - |     664 B |
+|         PidginSmall | 10,082.3 ns |   554.19 ns |  30.38 ns | 17.82 |    0.18 | 0.1221 |      - |     832 B |
+|                     |             |             |           |       |         |        |        |           |
+|   ParlotCompiledBig |  3,103.0 ns |    67.98 ns |   3.73 ns |  1.00 |    0.00 | 0.4616 | 0.0038 |   2,896 B |
+|     ParlotFluentBig |  4,464.1 ns |   237.26 ns |  13.01 ns |  1.44 |    0.00 | 0.4578 |      - |   2,896 B |
+|           PidginBig | 48,469.4 ns | 2,248.38 ns | 123.24 ns | 15.62 |    0.05 | 0.6104 |      - |   4,152 B |
 ```
 
 ### JSON Benchmarks
 
 This benchmark was taken from the Pidgin repository and demonstrates how to perform simple JSON document parsing. It exercises the parsers with different kinds of documents. Pidgin, Sprache, Superpower and Parlot are compared. The programming models are all based on parser combinator.
-
-The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides the best performance in all scenarios, being at least 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin.
+For reference Newtonsoft.Json is also added to show the differences with a dedicated parser.
+The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides the best performance in all scenarios, being at least 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin. This simple implementation is also faster than Newtonsoft, though it is far for being as rigourus.
 
 ```
-BenchmarkDotNet=v0.12.1, OS=Windows 10.0.19042
-Intel Core i7-1065G7 CPU 1.30GHz, 1 CPU, 8 logical and 4 physical cores
-.NET Core SDK=6.0.100-preview.4.21216.15
-  [Host]   : .NET Core 5.0.5 (CoreCLR 5.0.521.16609, CoreFX 5.0.521.16609), X64 RyuJIT
-  ShortRun : .NET Core 5.0.5 (CoreCLR 5.0.521.16609, CoreFX 5.0.521.16609), X64 RyuJIT
+BenchmarkDotNet=v0.13.1, OS=Windows 10.0.22000
+Intel Core i7-8700 CPU 3.20GHz (Coffee Lake), 1 CPU, 12 logical and 6 physical cores
+.NET SDK=6.0.100
+  [Host]   : .NET 6.0.0 (6.0.21.52210), X64 RyuJIT
+  ShortRun : .NET 6.0.0 (6.0.21.52210), X64 RyuJIT
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-|                  Method |       Mean |       Error |   StdDev | Ratio | RatioSD |     Gen 0 |    Gen 1 | Gen 2 |  Allocated |
-|------------------------ |-----------:|------------:|---------:|------:|--------:|----------:|---------:|------:|-----------:|
-|  BigJson_ParlotCompiled |   203.8 us |    34.68 us |  1.90 us |  0.85 |    0.02 |   24.9023 |   1.2207 |     - |  101.79 KB |
-|          BigJson_Parlot |   239.2 us |    47.22 us |  2.59 us |  1.00 |    0.00 |   24.9023 |   7.0801 |     - |  101.79 KB |
-|          BigJson_Pidgin |   470.1 us |    79.16 us |  4.34 us |  1.97 |    0.00 |   24.9023 |   7.3242 |     - |   101.7 KB |
-|         BigJson_Sprache | 3,348.1 us | 1,216.50 us | 66.68 us | 14.00 |    0.29 | 1308.5938 |   3.9063 |     - | 5349.63 KB |
-|      BigJson_Superpower | 2,059.3 us | 1,215.90 us | 66.65 us |  8.61 |    0.23 |  222.6563 |  66.4063 |     - |  913.43 KB |
-|                         |            |             |          |       |         |           |          |       |            |
-| LongJson_ParlotCompiled |   150.6 us |    57.08 us |  3.13 us |  0.89 |    0.02 |   25.3906 |   6.3477 |     - |  104.34 KB |
-|         LongJson_Parlot |   168.4 us |    27.75 us |  1.52 us |  1.00 |    0.00 |   25.3906 |   6.3477 |     - |  104.34 KB |
-|         LongJson_Pidgin |   391.9 us |    71.57 us |  3.92 us |  2.33 |    0.00 |   25.3906 |   6.3477 |     - |  104.25 KB |
-|        LongJson_Sprache | 2,443.5 us |   662.89 us | 36.34 us | 14.51 |    0.12 | 1054.6875 |   3.9063 |     - | 4311.36 KB |
-|     LongJson_Superpower | 1,646.8 us |   279.91 us | 15.34 us |  9.78 |    0.13 |  171.8750 |  42.9688 |     - |  706.79 KB |
-|                         |            |             |          |       |         |           |          |       |            |
-| DeepJson_ParlotCompiled |   109.3 us |     3.72 us |  0.20 us |  0.70 |    0.01 |   20.1416 |   0.6104 |     - |   82.33 KB |
-|         DeepJson_Parlot |   155.9 us |    26.57 us |  1.46 us |  1.00 |    0.00 |   20.0195 |   0.2441 |     - |   82.33 KB |
-|         DeepJson_Pidgin |   491.7 us |    87.57 us |  4.80 us |  3.15 |    0.01 |   49.8047 |   1.9531 |     - |  205.29 KB |
-|        DeepJson_Sprache | 2,809.1 us |   412.98 us | 22.64 us | 18.02 |    0.13 |  550.7813 | 222.6563 |     - | 2946.57 KB |
-|                         |            |             |          |       |         |           |          |       |            |
-| WideJson_ParlotCompiled |   139.6 us |    76.79 us |  4.21 us |  0.93 |    0.01 |   11.7188 |   2.1973 |     - |   48.51 KB |
-|         WideJson_Parlot |   150.3 us |    58.06 us |  3.18 us |  1.00 |    0.00 |   11.7188 |   2.1973 |     - |   48.51 KB |
-|         WideJson_Pidgin |   248.5 us |    56.74 us |  3.11 us |  1.65 |    0.04 |   11.7188 |   1.9531 |     - |   48.42 KB |
-|        WideJson_Sprache | 1,559.7 us |   841.64 us | 46.13 us | 10.38 |    0.37 |  683.5938 |   3.9063 |     - | 2797.28 KB |
-|     WideJson_Superpower | 1,020.0 us |   275.34 us | 15.09 us |  6.79 |    0.04 |  111.3281 |   7.8125 |     - |  459.74 KB |
+|                  Method |        Mean |      Error |    StdDev | Ratio | RatioSD |    Gen 0 |    Gen 1 | Allocated |
+|------------------------ |------------:|-----------:|----------:|------:|--------:|---------:|---------:|----------:|
+|  BigJson_ParlotCompiled |   116.14 us |   8.945 us |  0.490 us |  1.00 |    0.00 |  16.1133 |   4.8828 |     99 KB |
+|          BigJson_Parlot |   140.77 us |  22.625 us |  1.240 us |  1.21 |    0.01 |  16.1133 |   4.1504 |     99 KB |
+|          BigJson_Pidgin |   271.31 us |  44.236 us |  2.425 us |  2.34 |    0.03 |  16.1133 |   3.9063 |     99 KB |
+|      BigJson_Newtonsoft |   194.95 us | 223.703 us | 12.262 us |  1.68 |    0.11 |  32.9590 |  13.9160 |    203 KB |
+|         BigJson_Sprache | 1,987.39 us | 121.528 us |  6.661 us | 17.11 |    0.06 | 859.3750 | 214.8438 |  5,272 KB |
+|      BigJson_Superpower | 1,447.51 us | 295.441 us | 16.194 us | 12.46 |    0.12 | 148.4375 |  39.0625 |    911 KB |
+|                         |             |            |           |       |         |          |          |           |
+| LongJson_ParlotCompiled |    95.59 us |  20.169 us |  1.106 us |  1.00 |    0.00 |  21.4844 |   7.0801 |    132 KB |
+|         LongJson_Parlot |   114.71 us |  12.814 us |  0.702 us |  1.20 |    0.01 |  21.4844 |   7.0801 |    132 KB |
+|         LongJson_Pidgin |   249.60 us |  48.135 us |  2.638 us |  2.61 |    0.00 |  21.4844 |   6.8359 |    132 KB |
+|     LongJson_Newtonsoft |   143.27 us | 109.147 us |  5.983 us |  1.50 |    0.05 |  32.9590 |  14.6484 |    203 KB |
+|        LongJson_Sprache | 1,719.26 us | 242.870 us | 13.313 us | 17.99 |    0.18 | 697.2656 | 197.2656 |  4,273 KB |
+|     LongJson_Superpower | 1,226.01 us | 232.482 us | 12.743 us | 12.83 |    0.18 | 119.1406 |  39.0625 |    735 KB |
+|                         |             |            |           |       |         |          |          |           |
+| DeepJson_ParlotCompiled |    65.61 us |   7.158 us |  0.392 us |  1.00 |    0.00 |  17.9443 |   4.6387 |    110 KB |
+|         DeepJson_Parlot |    88.90 us |  18.409 us |  1.009 us |  1.35 |    0.01 |  17.9443 |   4.2725 |    110 KB |
+|         DeepJson_Pidgin |   362.94 us |  44.256 us |  2.426 us |  5.53 |    0.06 |  36.6211 |  12.2070 |    225 KB |
+|     DeepJson_Newtonsoft |   110.57 us |  16.565 us |  0.908 us |  1.69 |    0.02 |  29.1748 |  11.5967 |    179 KB |
+|        DeepJson_Sprache | 1,543.61 us | 168.665 us |  9.245 us | 23.53 |    0.07 | 476.5625 | 193.3594 |  2,926 KB |
+|                         |             |            |           |       |         |          |          |           |
+| WideJson_ParlotCompiled |    54.11 us |   1.390 us |  0.076 us |  1.00 |    0.00 |   6.5918 |   1.0986 |     41 KB |
+|         WideJson_Parlot |    65.62 us |   3.511 us |  0.192 us |  1.21 |    0.00 |   6.5918 |   1.0986 |     41 KB |
+|         WideJson_Pidgin |   123.58 us |   7.182 us |  0.394 us |  2.28 |    0.01 |   6.5918 |   0.9766 |     41 KB |
+|     WideJson_Newtonsoft |    95.25 us |  19.982 us |  1.095 us |  1.76 |    0.02 |  17.3340 |   5.7373 |    107 KB |
+|        WideJson_Sprache |   949.33 us | 199.824 us | 10.953 us | 17.54 |    0.22 | 451.1719 |  89.8438 |  2,767 KB |
+|     WideJson_Superpower |   708.42 us | 123.153 us |  6.750 us | 13.09 |    0.11 |  73.2422 |  11.7188 |    452 KB |
 ```
+
+### Regular Expressions
+
+Regular expression can also be replaced by more formal parser definitions. The following benchmarks show how Parlot compares to them when checking if string matches
+an email with the pattern `[\w\.+-]+@[\w-]+\.[\w\.-]+`. Note that in the case of pattern matching Parlot can use the pattern matching mode and do less allocations.
+
+```
+BenchmarkDotNet=v0.13.1, OS=Windows 10.0.22000
+Intel Core i7-8700 CPU 3.20GHz (Coffee Lake), 1 CPU, 12 logical and 6 physical cores
+.NET SDK=6.0.100
+  [Host]   : .NET 6.0.0 (6.0.21.52210), X64 RyuJIT
+  ShortRun : .NET 6.0.0 (6.0.21.52210), X64 RyuJIT
+
+Job=ShortRun  IterationCount=3  LaunchCount=1
+WarmupCount=3
+
+|              Method |     Mean |     Error |  StdDev | Ratio | RatioSD |  Gen 0 | Allocated |
+|-------------------- |---------:|----------:|--------:|------:|--------:|-------:|----------:|
+|  RegexEmailCompiled | 130.7 ns |  17.64 ns | 0.97 ns |  1.00 |    0.00 | 0.0331 |     208 B |
+|          RegexEmail | 269.5 ns | 131.09 ns | 7.19 ns |  2.06 |    0.07 | 0.0329 |     208 B |
+| ParlotEmailCompiled | 160.5 ns |  18.72 ns | 1.03 ns |  1.23 |    0.02 | 0.0215 |     136 B |
+|         ParlotEmail | 354.1 ns |  62.89 ns | 3.45 ns |  2.71 |    0.02 | 0.0520 |     328 B |
+```
+
+### Versions
+
+The benchmarks were executed with the following versions
+
+- Parlot 0.0.19
+- Pidgin 3.0.0
+- Sprache 2.3.1
+- Superpower 3.0.0
+- Newtonsoft.Json 13.0.1
 
 ### Usages
 
