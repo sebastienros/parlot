@@ -65,7 +65,7 @@ namespace Parlot
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
-            => ReadFirstThenOthers(first, other, out _); 
+            => ReadFirstThenOthers(first, other, out _);
 
         public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out TokenResult result)
         {
@@ -143,7 +143,7 @@ namespace Parlot
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadInteger() => ReadInteger(out _);
-        
+
         public bool ReadInteger(out TokenResult result)
         {
             // perf: fast path to prevent a copy of the position
@@ -198,7 +198,7 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _); 
+        public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _);
 
         public bool ReadNonWhiteSpace(out TokenResult result)
         {
@@ -206,7 +206,7 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _); 
+        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _);
 
         public bool ReadNonWhiteSpaceOrNewLine(out TokenResult result)
         {
@@ -250,8 +250,8 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, StringComparer comparer) => ReadText(text, comparer, out _); 
-        
+        public bool ReadText(string text, StringComparer comparer) => ReadText(text, comparer, out _);
+
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
@@ -270,7 +270,7 @@ namespace Parlot
             int start = Cursor.Offset;
             Cursor.Advance(text.Length);
             result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
-            
+
             return true;
         }
 
@@ -479,6 +479,57 @@ namespace Parlot
 
             result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
 
+            return true;
+        }
+
+        /// <summary>
+        /// Reads a sequence token enclosed in arbritrary start and end characters.
+        /// </summary>
+        /// <remarks>
+        /// This method doesn't escape the string, but only validates its content is syntactically correct.
+        /// The resulting Span contains the original quotes.
+        /// </remarks>
+        public bool ReadNonEscapableSequence(char startSequenceChar, char endSequenceChar, out TokenResult result)
+        {
+            var startChar = Cursor.Current;
+
+            if (startChar != startSequenceChar)
+            {
+                result = TokenResult.Fail();
+                return false;
+            }
+
+            // Fast path if there aren't any escape char until next quote
+            var startOffset = Cursor.Offset + 1;
+            var lastQuote = startOffset;
+
+            int nextQuote ;
+            do
+            {
+                nextQuote = Cursor.Buffer.IndexOf(endSequenceChar, lastQuote + 1);
+
+                if (nextQuote == -1)
+                {
+                    if(startOffset == lastQuote)
+                    {
+                        // There is no end sequence character, not a valid escapable sequence
+                        result = TokenResult.Fail();
+                        return false;
+                    }
+                    nextQuote = lastQuote - 1;
+                    break;
+                }
+
+                lastQuote = nextQuote + 1;
+            }
+            while(Cursor.Buffer.Length > lastQuote && Cursor.Buffer[lastQuote] == endSequenceChar);
+
+            var start = Cursor.Position;
+
+            // If the next escape if not before the next quote, we can return the string as-is
+            Cursor.Advance(nextQuote + 2 - startOffset);
+
+            result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
             return true;
         }
     }
