@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Collections.Immutable;
+using System.Linq;
 using Parlot.Tests.Json;
 using Sprache;
 using static Sprache.Parse;
@@ -33,7 +33,7 @@ namespace Parlot.Benchmarks.SpracheParsers
             Json.Contained(WhiteSpace.Many(), WhiteSpace.Many())
                 .DelimitedBy(Comma)
                 .Contained(LBracket, RBracket)
-                .Select(els => new JsonArray(els.ToImmutableArray()));
+                .Select(els => new JsonArray(els.ToArray()));
 
         private static readonly Sprache.Parser<KeyValuePair<string, IJson>> JsonMember =
             from name in String.SelectMany(_ => ColonWhitespace, (name, ws) => name)  // avoid allocating a transparent identifier for a result we don't care about
@@ -44,7 +44,7 @@ namespace Parlot.Benchmarks.SpracheParsers
             JsonMember.Contained(WhiteSpace.Many(), WhiteSpace.Many())
                 .DelimitedBy(Comma)
                 .Contained(LBrace, RBrace)
-                .Select(kvps => new JsonObject(kvps.ToImmutableDictionary()));
+                .Select(kvps => new JsonObject(new Dictionary<string, IJson>(kvps)));
 
         public static IResult<IJson> Parse(string input) => Json(new Input(input));
     }

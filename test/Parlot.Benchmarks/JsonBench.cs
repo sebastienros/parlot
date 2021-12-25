@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -9,6 +8,8 @@ using Parlot.Benchmarks.SpracheParsers;
 using Parlot.Benchmarks.SuperpowerParsers;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 namespace Parlot.Benchmarks
 {
@@ -23,6 +24,7 @@ namespace Parlot.Benchmarks
         private Parser<IJson> _compiled;
 #nullable restore
 
+        private static JsonSerializerSettings _jsonSerializerSettings = new JsonSerializerSettings() { MaxDepth = 1024 };
         private static readonly Random _random = new();
 
         [GlobalSetup]
@@ -37,21 +39,27 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Big")]
-        public IJson BigJson_Parlot()
-        {
-            return JsonParser.Parse(_bigJson);
-        }
-
-        [Benchmark, BenchmarkCategory("Big")]
         public IJson BigJson_ParlotCompiled()
         {
             return _compiled.Parse(_bigJson);
         }
 
         [Benchmark, BenchmarkCategory("Big")]
+        public IJson BigJson_Parlot()
+        {
+            return JsonParser.Parse(_bigJson);
+        }
+
+        [Benchmark, BenchmarkCategory("Big")]
         public IJson BigJson_Pidgin()
         {
             return PidginJsonParser.Parse(_bigJson).Value;
+        }
+
+        [Benchmark, BenchmarkCategory("Big")]
+        public JToken BigJson_Newtonsoft()
+        {
+            return JToken.Parse(_bigJson);
         }
 
         [Benchmark, BenchmarkCategory("Big")]
@@ -67,21 +75,27 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Long")]
-        public IJson LongJson_Parlot()
-        {
-            return JsonParser.Parse(_longJson);
-        }
-
-        [Benchmark, BenchmarkCategory("Long")]
         public IJson LongJson_ParlotCompiled()
         {
             return _compiled.Parse(_longJson);
         }
 
         [Benchmark, BenchmarkCategory("Long")]
+        public IJson LongJson_Parlot()
+        {
+            return JsonParser.Parse(_longJson);
+        }
+
+        [Benchmark, BenchmarkCategory("Long")]
         public IJson LongJson_Pidgin()
         {
             return PidginJsonParser.Parse(_longJson).Value;
+        }
+
+        [Benchmark, BenchmarkCategory("Long")]
+        public JToken LongJson_Newtonsoft()
+        {
+            return JToken.Parse(_longJson);
         }
 
         [Benchmark, BenchmarkCategory("Long")]
@@ -97,21 +111,27 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
-        public IJson DeepJson_Parlot()
-        {
-            return JsonParser.Parse(_deepJson);
-        }
-
-        [Benchmark, BenchmarkCategory("Deep")]
         public IJson DeepJson_ParlotCompiled()
         {
             return _compiled.Parse(_deepJson);
         }
 
         [Benchmark, BenchmarkCategory("Deep")]
+        public IJson DeepJson_Parlot()
+        {
+            return JsonParser.Parse(_deepJson);
+        }
+
+        [Benchmark, BenchmarkCategory("Deep")]
         public IJson DeepJson_Pidgin()
         {
             return PidginJsonParser.Parse(_deepJson).Value;
+        }
+
+        [Benchmark, BenchmarkCategory("Deep")]
+        public JToken DeepJson_Newtonsoft()
+        {
+            return JsonConvert.DeserializeObject<JToken>(_deepJson, _jsonSerializerSettings);
         }
 
         [Benchmark, BenchmarkCategory("Deep")]
@@ -128,21 +148,27 @@ namespace Parlot.Benchmarks
         //}
 
         [Benchmark(Baseline = true), BenchmarkCategory("Wide")]
-        public IJson WideJson_Parlot()
-        {
-            return JsonParser.Parse(_wideJson);
-        }
-
-        [Benchmark, BenchmarkCategory("Wide")]
         public IJson WideJson_ParlotCompiled()
         {
             return _compiled.Parse(_wideJson);
         }
 
         [Benchmark, BenchmarkCategory("Wide")]
+        public IJson WideJson_Parlot()
+        {
+            return JsonParser.Parse(_wideJson);
+        }
+
+        [Benchmark, BenchmarkCategory("Wide")]
         public IJson WideJson_Pidgin()
         {
             return PidginJsonParser.Parse(_wideJson).Value;
+        }
+
+        [Benchmark, BenchmarkCategory("Wide")]
+        public JToken WideJson_Newtonsoft()
+        {
+            return JToken.Parse(_wideJson);
         }
 
         [Benchmark, BenchmarkCategory("Wide")]
@@ -161,7 +187,7 @@ namespace Parlot.Benchmarks
             => new JsonArray(
                 Enumerable.Repeat(1, length)
                     .Select(_ => BuildObject(depth, width))
-                    .ToImmutableArray()
+                    .ToArray()
             );
 
         private static IJson BuildObject(int depth, int width)
@@ -171,9 +197,10 @@ namespace Parlot.Benchmarks
                 return new JsonString(RandomString(6));
             }
             return new JsonObject(
-                Enumerable.Repeat(1, width)
+                new Dictionary<string, IJson>(
+                    Enumerable.Repeat(1, width)
                     .Select(_ => new KeyValuePair<string, IJson>(RandomString(5), BuildObject(depth - 1, width)))
-                    .ToImmutableDictionary()
+                    )
             );
         }
 

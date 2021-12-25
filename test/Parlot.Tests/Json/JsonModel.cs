@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+﻿using System.Collections.Generic;
 using System.Linq;
 
 namespace Parlot.Tests.Json
@@ -9,8 +9,8 @@ namespace Parlot.Tests.Json
 
     public class JsonArray : IJson
     {
-        public ImmutableArray<IJson> Elements { get; }
-        public JsonArray(ImmutableArray<IJson> elements)
+        public IJson[] Elements { get; }
+        public JsonArray(IJson[] elements)
         {
             Elements = elements;
         }
@@ -20,8 +20,8 @@ namespace Parlot.Tests.Json
 
     public class JsonObject : IJson
     {
-        public IImmutableDictionary<string, IJson> Members { get; }
-        public JsonObject(IImmutableDictionary<string, IJson> members)
+        public IDictionary<string, IJson> Members { get; }
+        public JsonObject(IDictionary<string, IJson> members)
         {
             Members = members;
         }

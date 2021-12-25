@@ -1,4 +1,5 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -11,27 +12,31 @@ namespace Parlot.Fluent
     /// </summary>
     /// <typeparam name="T">The input parser type.</typeparam>
     /// <typeparam name="U">The output parser type.</typeparam>
-    public sealed class Then<T, U> : Parser<U>, ICompilable
+    public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
     {
         private readonly Func<T, U> _action1;
         private readonly Func<ParseContext, T, U> _action2;
         private readonly Parser<T> _parser;
+        
+        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+
+        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public Then(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Then(Parser<T> parser, Func<T, U> action)
+        public Then(Parser<T> parser, Func<T, U> action) : this(parser)
         {
             _action1 = action ?? throw new ArgumentNullException(nameof(action));
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public Then(Parser<T> parser, Func<ParseContext, T, U> action)
+        public Then(Parser<T> parser, Func<ParseContext, T, U> action) : this(parser)
         {
             _action2 = action ?? throw new ArgumentNullException(nameof(action));
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<U> result)

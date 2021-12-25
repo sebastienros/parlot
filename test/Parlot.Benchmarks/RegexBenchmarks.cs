@@ -36,6 +36,12 @@ namespace Parlot.Benchmarks
             if (!ParlotEmailCompiled()) throw new Exception(nameof(ParlotEmailCompiled));
         }
 
+        [Benchmark(Baseline = true)]
+        public bool RegexEmailCompiled()
+        {
+            return EmailRegexCompiled.Match(_email).Success;
+        }
+
         [Benchmark]
         public bool RegexEmail()
         {
@@ -43,21 +49,14 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark]
-        public bool RegexEmailCompiled()
+        public bool ParlotEmailCompiled()
         {
-            return EmailRegexCompiled.Match(_email).Success;
+            return EmailCompiled.Parse(_email).Length > 0;
         }
-
         [Benchmark]
         public bool ParlotEmail()
         {
             return Email.TryParse(_email, out _);
-        }
-
-        [Benchmark]
-        public bool ParlotEmailCompiled()
-        {
-            return EmailCompiled.Parse(_email).Length > 0;
         }
     }
 }

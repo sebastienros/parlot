@@ -68,6 +68,7 @@ namespace Parlot.Fluent
 
         /// <summary>
         /// Builds a parser that captures the output of another parser.
+        /// This is used to provide pattern matching capabilities, and optimized copmiled parsers that then don't need to materialize each parser result.
         /// </summary>
         public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 
@@ -103,7 +104,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches the specified text.
         /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null);
+        public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
         /// <summary>
         /// Builds a parser that matches the specified char.
@@ -149,7 +150,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches the specified text.
         /// </summary>
-        public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, comparer: caseInsensitive ? StringComparer.OrdinalIgnoreCase : null));
+        public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
 
         /// <summary>
         /// Builds a parser that matches the specified char.

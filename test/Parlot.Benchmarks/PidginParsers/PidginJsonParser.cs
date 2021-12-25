@@ -1,7 +1,7 @@
 ﻿using Parlot.Tests.Json;
 using Pidgin;
 using System.Collections.Generic;
-using System.Collections.Immutable;
+using System.Linq;
 using static Pidgin.Parser;
 using static Pidgin.Parser<char>;
 
@@ -33,7 +33,7 @@ namespace Parlot.Benchmarks.PidginParsers
             Json.Between(SkipWhitespaces)
                 .Separated(Comma)
                 .Between(LBracket, RBracket)
-                .Select<IJson>(els => new JsonArray(els.ToImmutableArray()));
+                .Select<IJson>(els => new JsonArray(els.ToArray()));
 
         private static readonly Parser<char, KeyValuePair<string, IJson>> JsonMember =
             String
@@ -44,7 +44,7 @@ namespace Parlot.Benchmarks.PidginParsers
             JsonMember.Between(SkipWhitespaces)
                 .Separated(Comma)
                 .Between(LBrace, RBrace)
-                .Select<IJson>(kvps => new JsonObject(kvps.ToImmutableDictionary()));
+                .Select<IJson>(kvps => new JsonObject(new Dictionary<string, IJson>(kvps)));
 
         public static Result<char, IJson> Parse(string input) => Json.Parse(input);
     }

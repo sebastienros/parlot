@@ -11,6 +11,7 @@
     <PackageReference Include="Pidgin" Version="3.0.0" />
     <PackageReference Include="Sprache" Version="2.3.1" />
     <PackageReference Include="Superpower" Version="3.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
   <ItemGroup>

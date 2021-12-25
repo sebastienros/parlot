@@ -537,7 +537,7 @@ namespace Parlot.Tests
         [Fact]
         public void TextWithWhiteSpaceCompiledShouldResetPosition()
         {
-            var code = OneOf(Terms.Text("a"), Literals.Text(" b"));
+            var code = OneOf(Terms.Text("a"), Literals.Text(" b")).Compile();
 
             Assert.True(code.TryParse(" b", out _));
         }

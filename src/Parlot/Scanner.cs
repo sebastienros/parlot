@@ -12,6 +12,11 @@ namespace Parlot
         public readonly string Buffer;
         public readonly Cursor Cursor;
 
+        private readonly record struct WhiteSpaceMarker(int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine);
+
+        // Caches the latest whitespace check. Remember that the current position is not a whitespace.
+        private WhiteSpaceMarker _whiteSpaceMarker = new (-1, false, false);
+
         /// <summary>
         /// Scans some text.
         /// </summary>
@@ -29,8 +34,17 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpaceOrNewLine()
         {
+            // Don't read if we already know it's not a whitespace
+            if (Cursor.Position.Offset == _whiteSpaceMarker.Offset && _whiteSpaceMarker.IsNotWhiteSpaceOrNewLine)
+            {
+                return false;
+            }
+
             if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
             {
+                // Memorize the fact that the current offset is not a whitespace
+                _whiteSpaceMarker = new (Cursor.Position.Offset, true, true);
+
                 return false;
             }
 
@@ -47,18 +61,30 @@ namespace Parlot
                 Cursor.Advance();
             }
 
+            // Memorize the fact that the current offset is not a whitespace or new line
+            _whiteSpaceMarker = new (Cursor.Position.Offset, true, true);
+
             return true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpace()
         {
+            // Don't read if we already know it's not a whitespace
+            if (Cursor.Position.Offset == _whiteSpaceMarker.Offset && _whiteSpaceMarker.IsNotWhiteSpace)
+            {
+                return false;
+            }
+
             bool found = false;
             while (Character.IsWhiteSpace(Cursor.Current))
             {
-                Cursor.AdvanceOnce();
+                Cursor.Advance();
                 found = true;
             }
+
+            // Memorize the fact that the current offset is not a whitespace
+            _whiteSpaceMarker = new (Cursor.Position.Offset, true, false);
 
             return found;
         }
@@ -250,18 +276,14 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, StringComparer comparer) => ReadText(text, comparer, out _); 
+        public bool ReadText(string text, StringComparison comparisonType) => ReadText(text, comparisonType, out _); 
         
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, StringComparer comparer, out TokenResult result)
+        public bool ReadText(string text, StringComparison comparisonType, out TokenResult result)
         {
-            var match = comparer is null
-                ? Cursor.Match(text)
-                : Cursor.Match(text, comparer);
-
-            if (!match)
+            if (!Cursor.Match(text, comparisonType))
             {
                 result = TokenResult.Fail();
                 return false;
@@ -284,7 +306,7 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, out TokenResult result) => ReadText(text, comparer: null, out result);
+        public bool ReadText(string text, out TokenResult result) => ReadText(text, comparisonType: StringComparison.Ordinal, out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadSingleQuotedString() => ReadSingleQuotedString(out _);
@@ -340,7 +362,7 @@ namespace Parlot
             // Fast path if there aren't any escape char until next quote
             var startOffset = Cursor.Offset + 1;
 
-            var nextQuote = Cursor.Buffer.IndexOf(startChar, startOffset);
+            var nextQuote = Cursor.Buffer.AsSpan(startOffset).IndexOf(startChar);
 
             if (nextQuote == -1)
             {
@@ -353,19 +375,21 @@ namespace Parlot
 
             Cursor.Advance();
 
-            var nextEscape = Cursor.Buffer.IndexOf('\\', startOffset, nextQuote - startOffset);
+            var nextEscape = Cursor.Buffer.AsSpan(startOffset, nextQuote).IndexOf('\\');
 
             // If the next escape if not before the next quote, we can return the string as-is
-            if (nextEscape == -1 || nextEscape > nextQuote)
+            if (nextEscape == -1)
             {
-                Cursor.Advance(nextQuote + 1 - startOffset);
+                Cursor.Advance(nextQuote + 1);
 
                 result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
                 return true;
             }
 
-            while (!Cursor.Match(startChar))
+            while (nextEscape != -1)
             {
+                Cursor.Advance(nextEscape);
+
                 // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
                 if (Cursor.Eof)
                 {
@@ -389,6 +413,7 @@ namespace Parlot
                         case 'v':
                         case '\'':
                         case '"':
+                            Cursor.Advance();
                             break;
 
                         case 'u':
@@ -472,10 +497,21 @@ namespace Parlot
                     }
                 }
 
-                Cursor.Advance();
-            }
+                nextEscape = Cursor.Buffer.AsSpan(Cursor.Offset).IndexOfAny('\\', startChar);
 
-            Cursor.Advance();
+                if (Cursor.Match(startChar))
+                {
+                    Cursor.Advance(nextEscape + 1);
+                    break;
+                }
+                else if (nextEscape == -1)
+                {
+                    Cursor.ResetPosition(start);
+
+                    result = TokenResult.Fail();
+                    return false;
+                }
+            }            
 
             result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
 

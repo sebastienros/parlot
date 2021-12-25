@@ -73,7 +73,7 @@ namespace Parlot
         public static TextSpan DecodeString(TextSpan span)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (span.Buffer.IndexOf('\\', span.Offset, span.Length) == -1)
+            if (span.Buffer.AsSpan(span.Offset, span.Length).IndexOf('\\') == -1)
             {
                 return span;
             }

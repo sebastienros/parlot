@@ -32,39 +32,10 @@ namespace Parlot
         public TextPosition Position => new(_offset, _line, _column);
 
         /// <summary>
-        /// Advances the cursor.
+        /// Advances the cursor by one character.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance()
-        {
-            if (!Eof)
-            {
-                AdvanceOnce();
-            }
-        }
-
-        /// <summary>
-        /// Advances the cursor.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Advance(int count)
-        {
-            if (Eof)
-            {
-                return;
-            }
-
-            do
-            {
-                if (!AdvanceOnce())
-                {
-                    count = 0;
-                }
-                count--;
-            } while (count > 0);
-        }
-
-        internal bool AdvanceOnce()
         {
             _offset++;
 
@@ -73,26 +44,72 @@ namespace Parlot
                 Eof = true;
                 _column++;
                 _current = NullChar;
-                return false;
+                return;
             }
 
-            var c = _buffer[_offset];
+            var next = _buffer[_offset];
 
-            // most probable first 
-            if (_current != '\n' && c != '\r')
-            {
-                _column++;
-            }
-            else if (_current == '\n')
+            if (_current == '\n')
             {
                 _line++;
                 _column = 1;
             }
+            else if (next != '\r')
+            {
+                _column++;
+            }
 
             // if c == '\r', don't increase the column count
 
-            _current = c;
-            return true;
+            _current = next;
+        }
+        
+        /// <summary>
+        /// Advances the cursor.
+        /// </summary>
+        public void Advance(int count)
+        {
+            if (Eof)
+            {
+                return;
+            }
+
+            var maxOffset = _offset + count;
+
+            // Detect if the cursor will be over Eof
+            if (maxOffset > _textLength - 1)
+            {
+                Eof = true;
+                maxOffset = _textLength - 1;
+            }
+
+            while (_offset < maxOffset)
+            {
+                _offset++;
+
+                var next = _buffer[_offset];
+
+                if (_current == '\n')
+                {
+                    _line++;
+                    _column = 1;
+                }
+                else if (next != '\r')
+                {
+                    _column++;
+                }
+
+                // if c == '\r', don't increase the column count
+
+                _current = next;
+            }
+
+            if (Eof)
+            {
+                _current = NullChar;
+                _offset = _textLength;
+                _column += 1;
+            }
         }
 
         /// <summary>
@@ -161,11 +178,6 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(char c)
         {
-            if (Eof)
-            {
-                return false;
-            }
-
             // Ordinal comparison
             return _current == c;
         }
@@ -241,100 +253,29 @@ namespace Parlot
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
         {
-            if (s.Length == 0)
-            {
-                return true;
-            }
+            // Equivalent to StringComparison.Orinal copmarison
 
-            if (Eof)
-            {
-                return false;
-            }
+            var sSpan = s.AsSpan();
+            var bufferSpan = _buffer.AsSpan(_offset);
             
-            if (s[0] != _current)
-            {
-                return false;
-            }
-
-            var length = s.Length;
-
-            if (_offset + length - 1 >= _textLength)
-            {
-                return false;
-            }
-            
-            if (length > 1 && _buffer[_offset + 1] != s[1])
-            {
-                return false;
-            }
-
-            for (var i = 2; i < length; i++)
-            {
-                if (s[i] != _buffer[_offset + i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return bufferSpan.StartsWith(sSpan);
         }
 
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(string s, StringComparer comparer)
+        public bool Match(string s, StringComparison comparisonType)
         {
-            if (s.Length == 0)
-            {
-                return true;
-            }
+            // StringComparison.Orinal is an optimized code path in Span.StartsWith
 
-            if (Eof)
-            {
-                return false;
-            }
+            var sSpan = s.AsSpan();
+            var bufferSpan = _buffer.AsSpan(_offset);
 
-            var a = CharToStringTable.GetString(_current);
-            var b = CharToStringTable.GetString(s[0]);
-
-            if (comparer.Compare(a, b) != 0)
-            {
-                return false;
-            }
-
-            var length = s.Length;
-
-            if (_offset + length - 1 >= _textLength)
-            {
-                return false;
-            }
-
-            if (length > 1)
-            {
-                a = CharToStringTable.GetString(_buffer[_offset + 1]);
-                b = CharToStringTable.GetString(s[1]);
-
-                if (comparer.Compare(a, b) != 0)
-                {
-                    return false;
-                }
-            }
-
-            for (var i = 2; i < length; i++)
-            {
-                a = CharToStringTable.GetString(_buffer[_offset + i]);
-                b = CharToStringTable.GetString(s[i]);
-
-                if (comparer.Compare(a, b) != 0)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return bufferSpan.StartsWith(sSpan, comparisonType);
         }
     }
 }

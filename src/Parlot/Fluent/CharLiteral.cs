@@ -1,9 +1,10 @@
 ﻿using Parlot.Compilation;
+using Parlot.Rewriting;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class CharLiteral : Parser<char>, ICompilable
+    public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     {
         public CharLiteral(char c)
         {
@@ -12,15 +13,23 @@ namespace Parlot.Fluent
 
         public char Char { get; }
 
+        public bool CanSeek => true;
+
+        public char[] ExpectedChars => new [] { Char } ;
+
+        public bool SkipWhitespace => false;
+
         public override bool Parse(ParseContext context, ref ParseResult<char> result)
         {
             context.EnterParser(this);
 
-            var start = context.Scanner.Cursor.Offset;
+            var cursor = context.Scanner.Cursor;
 
-            if (context.Scanner.ReadChar(Char))
+            if (cursor.Match(Char))
             {
-                result.Set(start, context.Scanner.Cursor.Offset, Char);
+                var start = cursor.Offset;
+                cursor.Advance();
+                result.Set(start, cursor.Offset, Char);
                 return true;
             }
 
