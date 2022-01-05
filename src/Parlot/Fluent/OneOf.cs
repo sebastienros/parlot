@@ -171,7 +171,7 @@ namespace Parlot.Fluent
                     var start = context.DeclarePositionVariable(result);
 
                     block = Expression.Block(
-                        context.SkipWhiteSpace(),
+                        context.ParserSkipWhiteSpace(),
                         switchExpr,
                         Expression.IfThen(
                             Expression.IsFalse(success),

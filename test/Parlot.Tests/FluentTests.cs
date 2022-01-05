@@ -514,15 +514,35 @@ namespace Parlot.Tests
         {
             Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
             Assert.Equal("'a' was not expected", error.Message);
+
+            Assert.False(Literals.Char('a').Error<int>("'a' was not expected").TryParse("a", out _, out error));
+            Assert.Equal("'a' was not expected", error.Message);
         }
-        
+
+        [Fact]
+        public void ErrorShouldReturnFalseThrowIfParserFails()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("b", out _, out var error));
+            Assert.Null(error);
+
+            Assert.False(Literals.Char('a').Error<int>("'a' was not expected").TryParse("b", out _, out error));
+            Assert.Null(error);
+        }
+
         [Fact]
         public void ErrorShouldThrow()
         {
             Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
             Assert.Equal("'a' was not expected", error.Message);
         }
-        
+
+        [Fact]
+        public void ErrorShouldResetPosition()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").TryParse("a", out _, out var error));
+            Assert.Equal("'a' was not expected", error.Message);
+        }
+
         [Fact]
         public void ElseErrorShouldThrowIfParserFails()
         {
