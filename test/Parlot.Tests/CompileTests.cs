@@ -439,12 +439,25 @@ namespace Parlot.Tests
             Assert.True(evenIntegers.TryParse("1235", out var result1));
             Assert.Equal(1235, result1.Item2);
         }
-        
+
         [Fact]
         public void ErrorShouldThrowIfParserSucceeds()
         {
             Assert.False(Literals.Char('a').Error("'a' was not expected").Compile().TryParse("a", out _, out var error));
             Assert.Equal("'a' was not expected", error.Message);
+
+            Assert.False(Literals.Char('a').Error<int>("'a' was not expected").Compile().TryParse("a", out _, out error));
+            Assert.Equal("'a' was not expected", error.Message);
+        }
+
+        [Fact]
+        public void ErrorShouldReturnFalseThrowIfParserFails()
+        {
+            Assert.False(Literals.Char('a').Error("'a' was not expected").Compile().TryParse("b", out _, out var error));
+            Assert.Null(error);
+
+            Assert.False(Literals.Char('a').Error<int>("'a' was not expected").Compile().TryParse("b", out _, out error));
+            Assert.Null(error);
         }
 
         [Fact]
