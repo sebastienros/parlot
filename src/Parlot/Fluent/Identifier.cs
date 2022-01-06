@@ -27,11 +27,11 @@ namespace Parlot.Fluent
 
                 // At this point we have an identifier, read while it's an identifier part.
 
-                context.Scanner.Cursor.Advance();
+                context.Scanner.Cursor.AdvanceNoNewLines(1);
 
                 while (!context.Scanner.Cursor.Eof && (Character.IsIdentifierPart(context.Scanner.Cursor.Current) || (_extraPart != null && _extraPart(context.Scanner.Cursor.Current))))
                 {
-                    context.Scanner.Cursor.Advance();
+                    context.Scanner.Cursor.AdvanceNoNewLines(1);
                 }
 
                 var end = context.Scanner.Cursor.Offset;

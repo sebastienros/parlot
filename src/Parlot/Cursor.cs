@@ -115,7 +115,7 @@ namespace Parlot
         /// <summary>
         /// Advances the cursor with the knowledge there are no new lines.
         /// </summary>
-        public void AdvanceNoNewLines(int offset, int line, int column)
+        public void AdvanceNoNewLines(int offset)
         {
             var newOffset = _offset + offset;
 
@@ -130,8 +130,6 @@ namespace Parlot
 
             _current = _buffer[newOffset];
             _offset = newOffset;
-            _line += line;
-            _column += column;
         }
 
         /// <summary>
@@ -292,10 +290,25 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s, StringComparison comparisonType)
         {
-            // StringComparison.Orinal is an optimized code path in Span.StartsWith
+            if (_textLength < _offset + s.Length)
+            {
+                return false;
+            }
 
             var sSpan = s.AsSpan();
             var bufferSpan = _buffer.AsSpan(_offset);
+
+            if (comparisonType == StringComparison.Ordinal && bufferSpan.Length > 0)
+            {
+                var length = sSpan.Length - 1;
+
+                if (bufferSpan[0] != sSpan[0] || bufferSpan[length] != sSpan[length])
+                {
+                    return false;
+                }
+            }
+
+            // StringComparison.Orinal is an optimized code path in Span.StartsWith
 
             return bufferSpan.StartsWith(sSpan, comparisonType);
         }

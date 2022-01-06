@@ -92,7 +92,7 @@ namespace Parlot
             // We can move the cursor without tracking new lines since we know these are only spaces
             if (offset > 0)
             {
-                Cursor.AdvanceNoNewLines(offset, 0, 0);
+                Cursor.Advance(offset);
                 return true;
             }
 
@@ -133,7 +133,7 @@ namespace Parlot
             // We can move the cursor without tracking new lines since we know these are only spaces
             if (offset > 0)
             {
-                Cursor.AdvanceNoNewLines(offset, 0, 0);
+                Cursor.AdvanceNoNewLines(offset);
                 return true;
             }
 
@@ -192,7 +192,7 @@ namespace Parlot
 
             do
             {
-                Cursor.Advance();
+                Cursor.AdvanceNoNewLines(1);
 
             } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 
@@ -209,7 +209,7 @@ namespace Parlot
 
                 do
                 {
-                    Cursor.Advance();
+                    Cursor.AdvanceNoNewLines(1);
 
                 } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
             }
@@ -235,7 +235,7 @@ namespace Parlot
 
             do
             {
-                Cursor.Advance();
+                Cursor.AdvanceNoNewLines(1);
 
             } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 

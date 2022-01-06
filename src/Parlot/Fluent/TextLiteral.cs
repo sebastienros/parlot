@@ -1,6 +1,7 @@
 ﻿using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
@@ -8,11 +9,13 @@ namespace Parlot.Fluent
     public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
         private readonly StringComparison _comparisonType;
+        private readonly bool _hasNewLines;
 
         public TextLiteral(string text, StringComparison comparisonType)
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparisonType = comparisonType;
+            _hasNewLines = text.Any(x => Character.IsNewLine(x));
         }
 
         public string Text { get; }
@@ -32,7 +35,16 @@ namespace Parlot.Fluent
             if (cursor.Match(Text, _comparisonType))
             {
                 var start = cursor.Offset;
-                cursor.Advance(Text.Length);
+                
+                if (_hasNewLines)
+                {
+                    cursor.Advance(Text.Length);
+                }
+                else
+                {
+                    cursor.AdvanceNoNewLines(Text.Length);
+                }
+
                 result.Set(start, cursor.Offset, Text);
                 return true;
             }
