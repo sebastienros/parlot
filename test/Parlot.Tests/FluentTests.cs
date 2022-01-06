@@ -649,6 +649,16 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void OneOfShouldNotFailWithLookupConflicts()
+        {
+            var parser = Literals.Text("abc").Or(Literals.Text("ab")).Or(Literals.Text("a"));
+            
+            Assert.True(parser.TryParse("a", out _));
+            Assert.True(parser.TryParse("ab", out _));
+            Assert.True(parser.TryParse("abc", out _));
+        }
+
+        [Fact]
         public void SkipWhiteSpaceShouldResponseParseContextUseNewLines()
         {
             // Default behavior, newlines are skipped like any other space. The grammar is not "New Line Aware"

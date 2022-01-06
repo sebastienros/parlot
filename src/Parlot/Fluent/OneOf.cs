@@ -15,7 +15,7 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable
     {
         internal readonly Parser<T>[] _parsers;
-        internal readonly Dictionary<char, Parser<T>> _lookupTable;
+        internal readonly Dictionary<char, List<Parser<T>>> _lookupTable;
         internal readonly bool _skipWhiteSpace;
 
         public OneOf(Parser<T>[] parsers)
@@ -25,7 +25,7 @@ namespace Parlot.Fluent
             // All parsers are seekable
             if (_parsers.All(x => x is ISeekable seekable && seekable.CanSeek))
             {
-                _lookupTable = new Dictionary<char, Parser<T>>();
+                _lookupTable = new Dictionary<char, List<Parser<T>>>();
 
                 foreach (var parser in _parsers)
                 {
@@ -33,20 +33,25 @@ namespace Parlot.Fluent
 
                     foreach (var c in expectedChars)
                     { 
-                        // Ambiguous lookup
-                        if (_lookupTable.ContainsKey(c))
+                        if (!_lookupTable.TryGetValue(c, out var list))
                         {
-                            _lookupTable = null;
-                            break;
+                            list = new List<Parser<T>>();
+                            _lookupTable[c] = list;
                         }
 
-                        _lookupTable.Add(c, parser);
+                        list.Add(parser);
                     }
                 }
 
-                // All parsers can start with white spaces
-                if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
+                if (_lookupTable.Count <= 1)
                 {
+                    // If all parsers have the same first char, no need to use a lookup table
+
+                    _lookupTable = null;
+                }
+                else if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
+                {
+                    // All parsers can start with white spaces
                     _skipWhiteSpace = true;
                 }
                 else if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
@@ -54,7 +59,7 @@ namespace Parlot.Fluent
                     // If not all parsers accept a white space, we can't use a lookup table since the order matters
 
                     _lookupTable = null;
-                }
+                }                
             }
         }
 
@@ -74,18 +79,34 @@ namespace Parlot.Fluent
 
                     context.SkipWhiteSpace();
 
-                    if (_lookupTable.TryGetValue(cursor.Current, out var seekable) && seekable.Parse(context, ref result))
+                    if (_lookupTable.TryGetValue(cursor.Current, out var seekableParsers))
                     {
-                        return true;
+                        var length = seekableParsers.Count;
+
+                        for (var i = 0; i < length; i++)
+                        {
+                            if (seekableParsers[i].Parse(context, ref result))
+                            {
+                                return true;
+                            }
+                        }
                     }
 
                     context.Scanner.Cursor.ResetPosition(start);
                 }
                 else
                 {
-                    if (_lookupTable.TryGetValue(cursor.Current, out var seekable))
+                    if (_lookupTable.TryGetValue(cursor.Current, out var seekableParsers))
                     {
-                        return seekable.Parse(context, ref result);
+                        var length = seekableParsers.Count;
+
+                        for (var i = 0; i < length; i++)
+                        {
+                            if (seekableParsers[i].Parse(context, ref result))
+                            {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
@@ -113,7 +134,6 @@ namespace Parlot.Fluent
             var success = context.DeclareSuccessVariable(result, false);
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
 
-
             Expression block = Expression.Empty();
 
             if (_lookupTable != null)
@@ -139,22 +159,32 @@ namespace Parlot.Fluent
 
                 var cases = _lookupTable.Select(kvp =>
                 {
-                    var parserCompileResult = kvp.Value.Build(context);
+                    Expression group = Expression.Empty();
+                    var parsers = kvp.Value;
+                    parsers.Reverse();
 
-                    return Expression.SwitchCase(
-                            Expression.Block(
-                            parserCompileResult.Variables,
-                            Expression.Block(parserCompileResult.Body),
-                            Expression.IfThen(
-                                parserCompileResult.Success,
+                    foreach (var parser in parsers)
+                    {
+                        var groupResult = parser.Build(context);
+
+                        group = Expression.Block(
+                            groupResult.Variables,
+                            Expression.Block(groupResult.Body),
+                            Expression.IfThenElse(
+                                groupResult.Success,
                                 Expression.Block(
                                     Expression.Assign(success, Expression.Constant(true, typeof(bool))),
                                     context.DiscardResult
                                     ? Expression.Empty()
-                                    : Expression.Assign(value, parserCompileResult.Value)
-                                    )
+                                    : Expression.Assign(value, groupResult.Value)
+                                    ),
+                                block
                                 )
-                            ),
+                            );
+                    }
+
+                    return Expression.SwitchCase(
+                            group,
                             Expression.Constant(kvp.Key)
                         );
                 }).ToArray();
