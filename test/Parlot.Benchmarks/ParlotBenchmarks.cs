@@ -12,7 +12,8 @@ namespace Parlot.Benchmarks
     {
         private const string _stringWithEscapes = "This is a new line \\n \\t and a tab and some \\xa0";
         private const string _stringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
-        private readonly Parser<char> _whiteSpaceExpression = Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d'));
+        private readonly Parser<char> _lookupExpression = Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d'));
+        private readonly Parser<char> _whitespaceExpression = Parsers.Terms.Char('a');
 
         // Exercises Cursor.Match(string)
         private readonly Parser<string> _matchStringExpression = Parsers.OneOf(Parsers.Literals.Text("hello"), Parsers.Literals.Text("goodbye"));
@@ -44,10 +45,22 @@ namespace Parlot.Benchmarks
             return _matchStringExpression.Parse("hellllo");
         }
 
-        [Benchmark, BenchmarkCategory("WhiteSpace")]
-        public char SkipWhiteSpace()
+        [Benchmark, BenchmarkCategory("Lookup")]
+        public char Lookup()
         {
-            return _whiteSpaceExpression.Parse("d");
+            return _lookupExpression.Parse("d");
+        }
+
+        [Benchmark, BenchmarkCategory("WhiteSpace")]
+        public char SkipWhiteSpace_1()
+        {
+            return _whitespaceExpression.Parse(" a");
+        }
+
+        [Benchmark, BenchmarkCategory("WhiteSpace")]
+        public char SkipWhiteSpace_10()
+        {
+            return _whitespaceExpression.Parse("          a");
         }
 
         [Benchmark, BenchmarkCategory("DecodeString")]
