@@ -37,7 +37,7 @@ namespace Parlot.Fluent
 
             // var start = context.Scanner.Cursor.Position;
 
-            var start = context.Position();
+            var start = context.DeclarePositionVariable(result);
 
             var parserCompileResult = _parser.Build(context);
 

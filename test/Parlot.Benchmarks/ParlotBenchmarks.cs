@@ -26,6 +26,18 @@ namespace Parlot.Benchmarks
             _jsonBench.Setup();
         }
 
+        [Benchmark, BenchmarkCategory("Compilation")]
+        public Parser<char> CreateCompiledSmallParser()
+        {
+            return Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d')).Compile();
+        }
+
+        [Benchmark, BenchmarkCategory("Compilation")]
+        public Parser<Expression> CreateCompiledExpressionParser()
+        {
+            return FluentParser.Expression.Compile();
+        }
+
         [Benchmark, BenchmarkCategory("Cursor.Match(string)")]
         public string CursorMatchHello()
         {

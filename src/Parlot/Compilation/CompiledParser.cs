@@ -29,12 +29,13 @@ namespace Parlot.Compilation
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
-            var start = context.Scanner.Cursor.Offset;
+            var cursor = context.Scanner.Cursor;
+            var start = cursor.Offset;
             var parsed = _parse(context);
 
             if (parsed.Item1)
             {
-                result.Set(start, context.Scanner.Cursor.Offset, parsed.Item2);
+                result.Set(start, cursor.Offset, parsed.Item2);
                 return true;
             }
 

@@ -1,4 +1,5 @@
-﻿using Parlot.Compilation;
+﻿using FastExpressionCompiler;
+using Parlot.Compilation;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -7,6 +8,8 @@ namespace Parlot.Fluent
 {
     public abstract partial class Parser<T>
     {
+        private CompilationResult _compiled;
+
         /// <summary>
         /// Compiles the current parser.
         /// </summary>
@@ -53,7 +56,7 @@ namespace Parlot.Fluent
 
             var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
 
-            var parser = result.Compile();
+            var parser = result.CompileFast();
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
             return new CompiledParser<T>(parser);
@@ -67,6 +70,11 @@ namespace Parlot.Fluent
         /// <param name="requireResult">Forces the instruction to compute the resulting value whatever the state of <see cref="CompilationContext.DiscardResult"/> is.</param>
         public CompilationResult Build(CompilationContext context, bool requireResult = false)
         {
+            if (_compiled != null)
+            {
+                return _compiled;
+            }
+
             if (this is ICompilable compilable)
             {
                 var discardResult = context.DiscardResult;
@@ -79,14 +87,14 @@ namespace Parlot.Fluent
 
                 context.DiscardResult = discardResult;
 
-                return compilationResult;
+                return _compiled = compilationResult;
             }
             else
             {
                 // The parser doesn't provide custom compiled instructions, so we are building generic ones based on its Parse() method.
                 // Any other parser it uses won't be compiled either, even if they implement ICompilable.
 
-                return BuildAsNonCompilableParser(context);
+                return _compiled = BuildAsNonCompilableParser(context);
             }
         }
 
