@@ -601,5 +601,15 @@ namespace Parlot.Tests
                 .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
                 out var _, out var _));
         }
+
+        [Fact]
+        public void OneOfCompileShouldNotFailWithLookupConflicts()
+        {
+            var parser = Literals.Text("abc").Or(Literals.Text("ab")).Or(Literals.Text("a")).Compile();
+
+            Assert.True(parser.TryParse("a", out _));
+            Assert.True(parser.TryParse("ab", out _));
+            Assert.True(parser.TryParse("abc", out _));
+        }
     }
 }
