@@ -26,18 +26,23 @@ namespace Parlot
         public static bool IsWhiteSpace(char ch)
         {
             return (ch == 32) || // space
-                   (ch == '\t') || // horizontal tab
-                   (ch == 0xC) || // form feed - new page
+                   (ch == 9) || // horizontal tab
                    (ch == 0xA0) || // non-breaking space
-                   (ch >= 0x1680 && (
-                                        ch == 0x1680 ||
-                                        ch == 0x180E ||
-                                        (ch >= 0x2000 && ch <= 0x200A) ||
-                                        ch == 0x202F ||
-                                        ch == 0x205F ||
-                                        ch == 0x3000 ||
-                                        ch == 0xFEFF));
+                   IsWhiteSpaceNonAscii(ch);
         }
+
+        public static bool IsWhiteSpaceNonAscii(char ch)
+        {
+            return (ch >= 0x1680 && (
+                        ch == 0x1680 ||
+                        ch == 0x180E ||
+                        (ch >= 0x2000 && ch <= 0x200A) ||
+                        ch == 0x202F ||
+                        ch == 0x205F ||
+                        ch == 0x3000 ||
+                        ch == 0xFEFF));
+        }
+
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
             => IsNewLine(ch) || IsWhiteSpace(ch);

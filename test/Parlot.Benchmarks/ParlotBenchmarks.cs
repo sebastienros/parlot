@@ -3,7 +3,6 @@ using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
-using System.Collections.Generic;
 
 namespace Parlot.Benchmarks
 {
@@ -54,13 +53,13 @@ namespace Parlot.Benchmarks
         [Benchmark, BenchmarkCategory("WhiteSpace")]
         public char SkipWhiteSpace_1()
         {
-            return _whitespaceExpression.Parse(" a");
+            return _whitespaceExpression.Parse(new ParseContext(new Scanner(" a"), useNewLines: true));
         }
 
         [Benchmark, BenchmarkCategory("WhiteSpace")]
         public char SkipWhiteSpace_10()
         {
-            return _whitespaceExpression.Parse("          a");
+            return _whitespaceExpression.Parse(new ParseContext(new Scanner("          a"), useNewLines: true));
         }
 
         [Benchmark, BenchmarkCategory("DecodeString")]

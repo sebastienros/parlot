@@ -113,6 +113,28 @@ namespace Parlot
         }
 
         /// <summary>
+        /// Advances the cursor with the knowledge there are no new lines.
+        /// </summary>
+        public void AdvanceNoNewLines(int offset, int line, int column)
+        {
+            var newOffset = _offset + offset;
+
+            // Detect if the cursor will be over Eof
+            if (newOffset > _textLength - 1)
+            {
+                Eof = true;
+                _offset = _textLength;
+                _current = NullChar;
+                return;
+            }
+
+            _current = _buffer[newOffset];
+            _offset = newOffset;
+            _line += line;
+            _column += column;
+        }
+
+        /// <summary>
         /// Moves the cursor to the specific position
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

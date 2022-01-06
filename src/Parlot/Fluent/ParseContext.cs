@@ -5,11 +5,11 @@ namespace Parlot.Fluent
     public class ParseContext
     {
         /// <summary>
-        /// Whether new lines are treated as normal chars or white spaces.
+        /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
         /// </summary>
         /// <remarks>
         /// When <c>false</c>, new lines will be skipped like any other white space.
-        /// Otherwise white spaces need to be read explicitely by a rule.
+        /// Otherwise new lines need to be read explicitely by a rule.
         /// </remarks>
         public bool UseNewLines { get; private set; }
 

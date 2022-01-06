@@ -2,10 +2,15 @@
 {
     public abstract partial class Parser<T>
     {
-        public T Parse(string text, ParseContext context = null)
+        public T Parse(string text)
         {
-            context ??= new ParseContext(new Scanner(text));
+            var context = new ParseContext(new Scanner(text));
 
+            return Parse(context);
+        }
+
+        public T Parse(ParseContext context)
+        {
             var localResult = new ParseResult<T>();
 
             var success = Parse(context, ref localResult);

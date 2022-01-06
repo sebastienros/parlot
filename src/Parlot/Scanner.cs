@@ -9,13 +9,40 @@ namespace Parlot
     /// </summary>
     public class Scanner
     {
+        private static readonly byte MaxWhiteSpacesValue = 162;
+
+        private static readonly byte[] WhiteSpaces = new byte[161] 
+        {
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
+        };
+
+        private static readonly byte MaxWhiteSpaceOrNewLinesValue = 162;
+
+        private static readonly byte[] WhiteSpaceOrNewLines = new byte[161]
+        {
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
+        };
+
         public readonly string Buffer;
         public readonly Cursor Cursor;
-
-        private readonly record struct WhiteSpaceMarker(int Offset, bool IsNotWhiteSpace, bool IsNotWhiteSpaceOrNewLine);
-
-        // Caches the latest whitespace check. Remember that the current position is not a whitespace.
-        private WhiteSpaceMarker _whiteSpaceMarker = new (-1, false, false);
 
         /// <summary>
         /// Scans some text.
@@ -34,59 +61,83 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpaceOrNewLine()
         {
-            // Don't read if we already know it's not a whitespace
-            if (Cursor.Position.Offset == _whiteSpaceMarker.Offset && _whiteSpaceMarker.IsNotWhiteSpaceOrNewLine)
+            var offset = 0;
+            var maxOffset = Cursor.Buffer.Length - Cursor.Offset;
+
+            while (offset < maxOffset)
             {
-                return false;
+                var current = Cursor.PeekNext(offset);
+
+                // Fast path using the lookup table for common chars
+                if (current < MaxWhiteSpaceOrNewLinesValue)
+                {
+                    var b = (byte)current;
+
+                    if (WhiteSpaceOrNewLines[b] != 0)
+                    {
+                        break;
+                    }
+
+                    offset++;
+                }
+                else
+                {
+                    if (Character.IsWhiteSpaceOrNewLine(current))
+                    {
+                        offset++;
+                    }
+                }
             }
 
-            if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
+            // We can move the cursor without tracking new lines since we know these are only spaces
+            if (offset > 0)
             {
-                // Memorize the fact that the current offset is not a whitespace
-                _whiteSpaceMarker = new (Cursor.Position.Offset, true, true);
-
-                return false;
+                Cursor.AdvanceNoNewLines(offset, 0, 0);
+                return true;
             }
 
-            return SkipWhiteSpaceOrNewLineUnlikely();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private bool SkipWhiteSpaceOrNewLineUnlikely()
-        {
-            Cursor.Advance();
-
-            while (Character.IsWhiteSpaceOrNewLine(Cursor.Current))
-            {
-                Cursor.Advance();
-            }
-
-            // Memorize the fact that the current offset is not a whitespace or new line
-            _whiteSpaceMarker = new (Cursor.Position.Offset, true, true);
-
-            return true;
+            return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SkipWhiteSpace()
         {
-            // Don't read if we already know it's not a whitespace
-            if (Cursor.Position.Offset == _whiteSpaceMarker.Offset && _whiteSpaceMarker.IsNotWhiteSpace)
+            var offset = 0;
+            var maxOffset = Cursor.Buffer.Length - Cursor.Offset;
+
+            while (offset < maxOffset)
             {
-                return false;
+                var current = Cursor.PeekNext(offset);
+
+                // Fast path using the lookup table for common chars
+                if (current < MaxWhiteSpacesValue)
+                {
+                    var b = (byte) current;
+
+                    if (WhiteSpaces[b] != 0)
+                    {
+                        break;
+                    }
+
+                    offset++;
+                }
+                else
+                {
+                    if (Character.IsWhiteSpace(current))
+                    {
+                        offset++;
+                    }
+                }
             }
 
-            bool found = false;
-            while (Character.IsWhiteSpace(Cursor.Current))
+            // We can move the cursor without tracking new lines since we know these are only spaces
+            if (offset > 0)
             {
-                Cursor.Advance();
-                found = true;
+                Cursor.AdvanceNoNewLines(offset, 0, 0);
+                return true;
             }
 
-            // Memorize the fact that the current offset is not a whitespace
-            _whiteSpaceMarker = new (Cursor.Position.Offset, true, false);
-
-            return found;
+            return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
