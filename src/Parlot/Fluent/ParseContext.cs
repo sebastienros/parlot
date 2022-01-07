@@ -9,7 +9,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// The number of usages of the parser before it is compiled automatically. <c>0</c> to disable automatic compilation. Default is 0.
         /// </summary>
-        public int CompilationThreshold { get; set; } = 0;
+        public int CompilationThreshold { get; set; } = DefaultCompilationThreshold;
 
         /// <summary>
         /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
