@@ -54,7 +54,10 @@ namespace Parlot.Fluent
             var block = Expression.Block(
                 parserCompileResult.Variables,
                 parserCompileResult.Body
-                .Append(Expression.Assign(value, parserCompileResult.Value))
+                .Append(
+                    context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value, parserCompileResult.Value))
                     .Append(
                         Expression.IfThenElse(
                             parserCompileResult.Success,

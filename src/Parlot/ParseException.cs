@@ -4,7 +4,7 @@ namespace Parlot
 {
     public class ParseException : Exception
     {
-        public ParseException(string message, in TextPosition position) : base(message)
+        public ParseException(string message, TextPosition position) : base(message)
         {
             Position = position;
         }

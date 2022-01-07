@@ -1,4 +1,5 @@
-﻿using Parlot.Compilation;
+﻿using FastExpressionCompiler;
+using Parlot.Compilation;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -53,10 +54,10 @@ namespace Parlot.Fluent
 
             var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
 
-            var parser = result.Compile();
+            var parser = result.CompileFast();
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
-            return new CompiledParser<T>(parser);
+            return new CompiledParser<T>(parser, this);
         }
 
         /// <summary>
@@ -80,6 +81,12 @@ namespace Parlot.Fluent
                 context.DiscardResult = discardResult;
 
                 return compilationResult;
+            }
+            else if (this is CompiledParser<T> compiled)
+            {
+                // If the parser is already compiled (reference on an already compiled parser, like a sub-tree) create a new build of the source parser.
+
+                return compiled.Source.Build(context, requireResult);
             }
             else
             {

@@ -22,19 +22,23 @@ namespace Parlot.Compilation
     {
         private readonly Func<ParseContext, ValueTuple<bool, T>> _parse;
 
-        public CompiledParser(Func<ParseContext, ValueTuple<bool, T>> parse)
+        public Parser<T> Source { get; }
+
+        public CompiledParser(Func<ParseContext, ValueTuple<bool, T>> parse, Parser<T> source)
         {
             _parse = parse ?? throw new ArgumentNullException(nameof(parse));
+            Source = source;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
-            var start = context.Scanner.Cursor.Offset;
+            var cursor = context.Scanner.Cursor;
+            var start = cursor.Offset;
             var parsed = _parse(context);
 
             if (parsed.Item1)
             {
-                result.Set(start, context.Scanner.Cursor.Offset, parsed.Item2);
+                result.Set(start, cursor.Offset, parsed.Item2);
                 return true;
             }
 

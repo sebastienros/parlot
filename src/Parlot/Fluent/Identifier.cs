@@ -27,11 +27,11 @@ namespace Parlot.Fluent
 
                 // At this point we have an identifier, read while it's an identifier part.
 
-                context.Scanner.Cursor.Advance();
+                context.Scanner.Cursor.AdvanceNoNewLines(1);
 
                 while (!context.Scanner.Cursor.Eof && (Character.IsIdentifierPart(context.Scanner.Cursor.Current) || (_extraPart != null && _extraPart(context.Scanner.Cursor.Current))))
                 {
-                    context.Scanner.Cursor.Advance();
+                    context.Scanner.Cursor.AdvanceNoNewLines(1);
                 }
 
                 var end = context.Scanner.Cursor.Offset;
@@ -56,6 +56,10 @@ namespace Parlot.Fluent
             result.Body.Add(Expression.Assign(first, context.Current()));
             result.Variables.Add(first);
 
+            //
+            // success = false;
+            // Textspan value;
+            // 
             // if (Character.IsIdentifierStart(first) [_extraStart != null] || _extraStart(first))
             // {
             //    var start = context.Scanner.Cursor.Offset;
@@ -70,16 +74,12 @@ namespace Parlot.Fluent
             //    value = new TextSpan(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset - start);
             //    success = true;
             // }
-            // {
-            //    success = false;
-            // }
-            //
 
             var start = Expression.Parameter(typeof(int), $"start{context.NextNumber}");
 
-            var breakLabel = Expression.Label("break");
+            var breakLabel = Expression.Label($"break_{context.NextNumber}");
 
-            result.Body.Add(
+            var block = Expression.Block(
                 Expression.IfThen(
                     Expression.OrElse(
                         Expression.Call(typeof(Character).GetMethod(nameof(Character.IsIdentifierStart)), first),
@@ -90,7 +90,7 @@ namespace Parlot.Fluent
                     Expression.Block(
                         new[] { start },
                         Expression.Assign(start, context.Offset()),
-                        context.Advance(),
+                        context.AdvanceNoNewLine(Expression.Constant(1)),
                         Expression.Loop(
                             Expression.IfThenElse(
                                 /* if */ Expression.AndAlso(
@@ -102,16 +102,20 @@ namespace Parlot.Fluent
                                                 : Expression.Constant(false, typeof(bool))
                                             )
                                     ),
-                                /* then */ context.Advance(),
+                                /* then */ context.AdvanceNoNewLine(Expression.Constant(1)),
                                 /* else */ Expression.Break(breakLabel)
                                 ),
                             breakLabel
                             ),
-                        Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
+                        context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                     )
                 )
             );
+
+            result.Body.Add(block);
 
             return result;
         }

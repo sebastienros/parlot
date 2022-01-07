@@ -44,11 +44,7 @@ namespace Parlot.Fluent
             var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
 
             // var start = context.Scanner.Cursor.Position;
-
-            var start = Expression.Variable(typeof(TextPosition), $"start{context.NextNumber}");
-            result.Variables.Add(start);
-
-            result.Body.Add(Expression.Assign(start, context.Position()));
+            var start = context.DeclarePositionVariable(result);
 
             var ignoreResults = context.DiscardResult;
             context.DiscardResult = true;
@@ -82,7 +78,9 @@ namespace Parlot.Fluent
                     Expression.IfThenElse(
                         parserCompileResult.Success,
                         Expression.Block(
-                            Expression.Assign(value,
+                            context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value,
                                 context.NewTextSpan(
                                     context.Buffer(),
                                     startOffset,

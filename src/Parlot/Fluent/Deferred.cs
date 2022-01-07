@@ -104,7 +104,11 @@ namespace Parlot.Fluent
             // value = def.Item2;
 
             result.Body.Add(Expression.Assign(success, Expression.Field(deferred, "Item1")));
-            result.Body.Add(Expression.Assign(value, Expression.Field(deferred, "Item2")));
+            result.Body.Add(
+                context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value, Expression.Field(deferred, "Item2"))
+            );
 
             return result;
         }

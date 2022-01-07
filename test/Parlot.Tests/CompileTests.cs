@@ -611,5 +611,26 @@ namespace Parlot.Tests
             Assert.True(parser.TryParse("ab", out _));
             Assert.True(parser.TryParse("abc", out _));
         }
+
+        [Fact]
+        public void CanCompileSubTree()
+        {
+            Parser<char> Dot = Literals.Char('.');
+            Parser<char> Plus = Literals.Char('+');
+            Parser<char> Minus = Literals.Char('-');
+            Parser<char> At = Literals.Char('@');
+            Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit).Compile();
+            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+
+            string _email = "sebastien.ros@gmail.com";
+
+            var parser = Email.Compile();
+            var result = parser.Parse(_email);
+
+            Assert.Equal(_email, result.ToString());
+        }
     }
 }
