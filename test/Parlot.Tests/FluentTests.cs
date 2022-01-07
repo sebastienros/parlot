@@ -682,5 +682,14 @@ namespace Parlot.Tests
                 .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
                 out var _, out var _));
         }
+
+        [Fact]
+        public void OneOfShouldHandleMultipleStrings()
+        {
+            var operators = OneOf(Literals.Text(">="), Literals.Text(">"), Literals.Text("<="));//.And(Literals.Text("@now")).Compile(); // throws compilation exception
+            var nowParser = Literals.Text("@now");
+            var parser = operators.And(nowParser).Compile(); // Complition bug, works fine without
+            Assert.True(parser.TryParse(">@now", out var _));
+        }
     }
 }
