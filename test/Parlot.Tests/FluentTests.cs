@@ -686,10 +686,21 @@ namespace Parlot.Tests
         [Fact]
         public void OneOfShouldHandleMultipleStrings()
         {
-            var operators = OneOf(Literals.Text(">="), Literals.Text(">"), Literals.Text("<="));//.And(Literals.Text("@now")).Compile(); // throws compilation exception
+            var operators = OneOf(Literals.Text(">="), Literals.Text(">"), Literals.Text("<="));
             var nowParser = Literals.Text("@now");
             var parser = operators.And(nowParser).Compile(); // Complition bug, works fine without
             Assert.True(parser.TryParse(">@now", out var _));
+        }
+
+        [Fact]
+        public void ShouldCompileOneOf()
+        {
+            // throws System.InvalidOperationException : The parser needs to implement ISkippableSequenceParser
+            var operators = OneOf(Literals.Text(">="), Literals.Text(">"), Literals.Text("<="))
+                .And(Literals.Text("@now"))
+                .Compile(); // throws compilation exception
+
+            Assert.True(operators.TryParse(">@now", out var _));
         }
     }
 }
