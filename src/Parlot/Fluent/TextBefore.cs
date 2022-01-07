@@ -160,7 +160,7 @@
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
                                 Expression.Assign(success, Expression.Constant(true)),
-                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                context.DiscardResult ? Expression.Empty() : Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),
@@ -178,7 +178,7 @@
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
                                 Expression.Assign(success, Expression.Constant(true)),
-                                Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                context.DiscardResult ? Expression.Empty() : Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),

@@ -3,7 +3,6 @@ using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
-using System.Collections.Generic;
 
 namespace Parlot.Benchmarks
 {
@@ -12,7 +11,8 @@ namespace Parlot.Benchmarks
     {
         private const string _stringWithEscapes = "This is a new line \\n \\t and a tab and some \\xa0";
         private const string _stringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
-        private readonly Parser<char> _whiteSpaceExpression = Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d'));
+        private readonly Parser<char> _lookupExpression = Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d'));
+        private readonly Parser<char> _whitespaceExpression = Parsers.Terms.Char('a');
 
         // Exercises Cursor.Match(string)
         private readonly Parser<string> _matchStringExpression = Parsers.OneOf(Parsers.Literals.Text("hello"), Parsers.Literals.Text("goodbye"));
@@ -24,6 +24,18 @@ namespace Parlot.Benchmarks
         public void Setup()
         {
             _jsonBench.Setup();
+        }
+
+        [Benchmark, BenchmarkCategory("Compilation")]
+        public Parser<char> CreateCompiledSmallParser()
+        {
+            return Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d')).Compile();
+        }
+
+        [Benchmark, BenchmarkCategory("Compilation")]
+        public Parser<Expression> CreateCompiledExpressionParser()
+        {
+            return FluentParser.Expression.Compile();
         }
 
         [Benchmark, BenchmarkCategory("Cursor.Match(string)")]
@@ -44,10 +56,22 @@ namespace Parlot.Benchmarks
             return _matchStringExpression.Parse("hellllo");
         }
 
-        [Benchmark, BenchmarkCategory("WhiteSpace")]
-        public char SkipWhiteSpace()
+        [Benchmark, BenchmarkCategory("Lookup")]
+        public char Lookup()
         {
-            return _whiteSpaceExpression.Parse("d");
+            return _lookupExpression.Parse("d");
+        }
+
+        [Benchmark, BenchmarkCategory("WhiteSpace")]
+        public char SkipWhiteSpace_1()
+        {
+            return _whitespaceExpression.Parse(new ParseContext(new Scanner(" a"), useNewLines: true));
+        }
+
+        [Benchmark, BenchmarkCategory("WhiteSpace")]
+        public char SkipWhiteSpace_10()
+        {
+            return _whitespaceExpression.Parse(new ParseContext(new Scanner("          a"), useNewLines: true));
         }
 
         [Benchmark, BenchmarkCategory("DecodeString")]
