@@ -26,5 +26,31 @@ namespace Parlot.Tests
             var span = new TextSpan("   a\\nbc   ", 3, 5);
             Assert.Equal("a\nbc", Character.DecodeString(span).ToString());
         }
+
+        [Theory]
+        [InlineData('\x09', true)]
+        [InlineData('\x20', true)]
+        [InlineData('\xa0', true)]
+        [InlineData('\v', false)]
+        [InlineData('\n', false)]
+        [InlineData('\r', false)]
+        [InlineData('a', false)]
+        public void ShouldDetectWhiteSpace(char c, bool isWhiteSpace)
+        {
+            Assert.Equal(isWhiteSpace, Character.IsWhiteSpace(c));
+        }
+
+        [Theory]
+        [InlineData('\x09', true)]
+        [InlineData('\x20', true)]
+        [InlineData('\xa0', true)]
+        [InlineData('\v', true)]
+        [InlineData('\n', true)]
+        [InlineData('\r', true)]
+        [InlineData('a', false)]
+        public void ShouldDetectWhiteSpaceOrNewLines(char c, bool isWhiteSpace)
+        {
+            Assert.Equal(isWhiteSpace, Character.IsWhiteSpace(c));
+        }
     }
 }

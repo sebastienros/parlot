@@ -9,38 +9,6 @@ namespace Parlot
     /// </summary>
     public class Scanner
     {
-        private static readonly byte MaxWhiteSpacesValue = 162;
-
-        private static readonly byte[] WhiteSpaces = new byte[161] 
-        {
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
-        };
-
-        private static readonly byte MaxWhiteSpaceOrNewLinesValue = 162;
-
-        private static readonly byte[] WhiteSpaceOrNewLines = new byte[161]
-        {
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
-        };
-
         public readonly string Buffer;
         public readonly Cursor Cursor;
 
@@ -64,29 +32,9 @@ namespace Parlot
             var offset = 0;
             var maxOffset = Cursor.Buffer.Length - Cursor.Offset;
 
-            while (offset < maxOffset)
+            while (offset < maxOffset && Character.IsWhiteSpaceOrNewLine(Cursor.PeekNext(offset)))
             {
-                var current = Cursor.PeekNext(offset);
-
-                // Fast path using the lookup table for common chars
-                if (current < MaxWhiteSpaceOrNewLinesValue)
-                {
-                    var b = (byte)current;
-
-                    if (WhiteSpaceOrNewLines[b] != 0)
-                    {
-                        break;
-                    }
-
-                    offset++;
-                }
-                else
-                {
-                    if (Character.IsWhiteSpaceOrNewLine(current))
-                    {
-                        offset++;
-                    }
-                }
+                offset++;
             }
 
             // We can move the cursor without tracking new lines since we know these are only spaces
@@ -105,29 +53,9 @@ namespace Parlot
             var offset = 0;
             var maxOffset = Cursor.Buffer.Length - Cursor.Offset;
 
-            while (offset < maxOffset)
+            while (offset < maxOffset && Character.IsWhiteSpace(Cursor.PeekNext(offset)))
             {
-                var current = Cursor.PeekNext(offset);
-
-                // Fast path using the lookup table for common chars
-                if (current < MaxWhiteSpacesValue)
-                {
-                    var b = (byte) current;
-
-                    if (WhiteSpaces[b] != 0)
-                    {
-                        break;
-                    }
-
-                    offset++;
-                }
-                else
-                {
-                    if (Character.IsWhiteSpace(current))
-                    {
-                        offset++;
-                    }
-                }
+                offset++;
             }
 
             // We can move the cursor without tracking new lines since we know these are only spaces
@@ -142,7 +70,7 @@ namespace Parlot
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
-            => ReadFirstThenOthers(first, other, out _); 
+            => ReadFirstThenOthers(first, other, out _);
 
         public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out TokenResult result)
         {
@@ -220,7 +148,7 @@ namespace Parlot
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadInteger() => ReadInteger(out _);
-        
+
         public bool ReadInteger(out TokenResult result)
         {
             // perf: fast path to prevent a copy of the position
@@ -275,7 +203,7 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _); 
+        public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _);
 
         public bool ReadNonWhiteSpace(out TokenResult result)
         {
@@ -283,7 +211,7 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _); 
+        public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _);
 
         public bool ReadNonWhiteSpaceOrNewLine(out TokenResult result)
         {
@@ -327,8 +255,8 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, StringComparison comparisonType) => ReadText(text, comparisonType, out _); 
-        
+        public bool ReadText(string text, StringComparison comparisonType) => ReadText(text, comparisonType, out _);
+
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
@@ -343,7 +271,7 @@ namespace Parlot
             int start = Cursor.Offset;
             Cursor.Advance(text.Length);
             result = TokenResult.Succeed(Buffer, start, Cursor.Offset);
-            
+
             return true;
         }
 
@@ -562,7 +490,7 @@ namespace Parlot
                     result = TokenResult.Fail();
                     return false;
                 }
-            }            
+            }
 
             result = TokenResult.Succeed(Buffer, start.Offset, Cursor.Offset);
 
