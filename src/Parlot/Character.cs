@@ -4,45 +4,6 @@ namespace Parlot
 {
     public static class Character
     {
-        private static ReadOnlySpan<byte> WhiteSpaces => new byte[]
-        {
-            // \t (0x09 == 9)
-            // SPACE (0x20 == 32)
-            // NON-BREAKING SPACE (0xA0 == 160)
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
-        };
-
-        private static readonly byte[] WhiteSpaceOrNewLines = new byte[]
-        {
-            // \t (0x09 == 9)
-            // \n (0x0A == 10)
-            // \v (0x0B == 11)
-            // \r (0x0C == 13)
-            // SPACE (0x20 == 32)
-            // NON-BREAKING SPACE (0xA0 == 160)
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
-        };
-
         public static bool IsDecimalDigit(char ch)
             => ch >= '0' && ch <= '9';
 
@@ -64,9 +25,11 @@ namespace Parlot
 
         public static bool IsWhiteSpace(char ch)
         {
-            return ch < WhiteSpaces.Length 
-                ? WhiteSpaces[ch] == 0
-                : ch >= 0x1680 && IsWhiteSpaceNonAscii(ch)
+            return (ch <= 32 &&
+                       ((ch == 32) || // space
+                       (ch == '\t')))  // horizontal tab
+                || (ch == 0xA0) // non-breaking space
+                || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
                 ;
         }
 
@@ -84,9 +47,14 @@ namespace Parlot
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
         {
-            return ch < WhiteSpaceOrNewLines.Length
-                ? WhiteSpaceOrNewLines[ch] == 0
-                : ch >= 0x1680 && IsWhiteSpaceNonAscii(ch)
+            return (ch <= 32 &&
+                       ((ch == 32) || // space
+                       (ch == '\n') ||
+                       (ch == '\r') ||
+                       (ch == '\t') || // horizontal tab
+                       (ch == '\v'))) 
+                || (ch == 0xA0) // non-breaking space
+                || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
                 ;
         }
 
