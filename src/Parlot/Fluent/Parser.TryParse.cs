@@ -5,7 +5,7 @@
     public abstract partial class Parser<T>
     {
         private int _invocations = 0;
-        private Parser<T> _compiledParser;
+        private volatile Parser<T> _compiledParser;
 
         public T Parse(string text)
         {
@@ -30,23 +30,18 @@
 
         private Parser<T> CheckCompiled(ParseContext context)
         {
-            if (_compiledParser != null)
-            {
-                return _compiledParser;
+            if (_compiledParser != null || context.CompilationThreshold == 0) 
+            { 
+                return _compiledParser ?? this; 
             }
 
-            if (context.CompilationThreshold > 0 && _invocations < context.CompilationThreshold)
+            // Only the thread that reaches CompilationThreshold compiles the parser.
+            // Any other concurrent call here will return 'this'. This prevents multiple compilations of 
+            // the same parser, and a lock.
+
+            if (Interlocked.Increment(ref _invocations) == context.CompilationThreshold)
             {
-                if (Interlocked.Increment(ref _invocations) >= context.CompilationThreshold)
-                {
-                    lock (this)
-                    {
-                        if (_compiledParser == null)
-                        {
-                            return _compiledParser = this.Compile();
-                        }
-                    }                    
-                }
+                return _compiledParser = this.Compile();
             }
 
             return this;
