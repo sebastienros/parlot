@@ -62,7 +62,7 @@ namespace Parlot.Fluent
                         Expression.NotEqual(start, end),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                         ),
-                    Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
+                    context.DiscardResult ? Expression.Empty() : Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
                     )
                 );
 

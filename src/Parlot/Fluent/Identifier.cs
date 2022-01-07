@@ -1,5 +1,6 @@
 ﻿using Parlot.Compilation;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
@@ -56,6 +57,10 @@ namespace Parlot.Fluent
             result.Body.Add(Expression.Assign(first, context.Current()));
             result.Variables.Add(first);
 
+            //
+            // success = false;
+            // Textspan value;
+            // 
             // if (Character.IsIdentifierStart(first) [_extraStart != null] || _extraStart(first))
             // {
             //    var start = context.Scanner.Cursor.Offset;
@@ -70,16 +75,12 @@ namespace Parlot.Fluent
             //    value = new TextSpan(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset - start);
             //    success = true;
             // }
-            // {
-            //    success = false;
-            // }
-            //
 
             var start = Expression.Parameter(typeof(int), $"start{context.NextNumber}");
 
-            var breakLabel = Expression.Label("break");
+            var breakLabel = Expression.Label($"break_{context.NextNumber}");
 
-            result.Body.Add(
+            var block = Expression.Block(
                 Expression.IfThen(
                     Expression.OrElse(
                         Expression.Call(typeof(Character).GetMethod(nameof(Character.IsIdentifierStart)), first),
@@ -107,11 +108,15 @@ namespace Parlot.Fluent
                                 ),
                             breakLabel
                             ),
-                        Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
+                        context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                     )
-                )
+                )                
             );
+
+            result.Body.Add(block);
 
             return result;
         }

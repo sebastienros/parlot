@@ -160,7 +160,7 @@ namespace Parlot.Fluent
                 var cases = _lookupTable.Select(kvp =>
                 {
                     Expression group = Expression.Empty();
-                    var parsers = kvp.Value;
+                    var parsers = kvp.Value.ToArray();
                     parsers.Reverse();
 
                     foreach (var parser in parsers)

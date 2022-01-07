@@ -8,8 +8,6 @@ namespace Parlot.Fluent
 {
     public abstract partial class Parser<T>
     {
-        private CompilationResult _compiled;
-
         /// <summary>
         /// Compiles the current parser.
         /// </summary>
@@ -56,10 +54,10 @@ namespace Parlot.Fluent
 
             var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
 
-            var parser = result.CompileFast();
+            var parser = result.Compile();
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
-            return new CompiledParser<T>(parser);
+            return new CompiledParser<T>(parser, this);
         }
 
         /// <summary>
@@ -70,11 +68,6 @@ namespace Parlot.Fluent
         /// <param name="requireResult">Forces the instruction to compute the resulting value whatever the state of <see cref="CompilationContext.DiscardResult"/> is.</param>
         public CompilationResult Build(CompilationContext context, bool requireResult = false)
         {
-            if (_compiled != null)
-            {
-                return _compiled;
-            }
-
             if (this is ICompilable compilable)
             {
                 var discardResult = context.DiscardResult;
@@ -87,14 +80,20 @@ namespace Parlot.Fluent
 
                 context.DiscardResult = discardResult;
 
-                return _compiled = compilationResult;
+                return compilationResult;
+            }
+            else if (this is CompiledParser<T> compiled)
+            {
+                // If the parser is already compiled (reference on an already compiled parser, like a sub-tree) create a new build of the source parser.
+
+                return compiled.Source.Build(context, requireResult);
             }
             else
             {
                 // The parser doesn't provide custom compiled instructions, so we are building generic ones based on its Parse() method.
                 // Any other parser it uses won't be compiled either, even if they implement ICompilable.
 
-                return _compiled = BuildAsNonCompilableParser(context);
+                return BuildAsNonCompilableParser(context);
             }
         }
 

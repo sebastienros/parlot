@@ -1,7 +1,12 @@
 ﻿namespace Parlot.Fluent
 {
+    using System.Threading;
+
     public abstract partial class Parser<T>
     {
+        private int _invocations = 0;
+        private Parser<T> _compiledParser;
+
         public T Parse(string text)
         {
             var context = new ParseContext(new Scanner(text));
@@ -12,8 +17,8 @@
         public T Parse(ParseContext context)
         {
             var localResult = new ParseResult<T>();
-
-            var success = Parse(context, ref localResult);
+            
+            var success = CheckCompiled(context).Parse(context, ref localResult);
 
             if (success)
             {
@@ -21,6 +26,30 @@
             }
 
             return default;
+        }
+
+        private Parser<T> CheckCompiled(ParseContext context)
+        {
+            if (_compiledParser != null)
+            {
+                return _compiledParser;
+            }
+
+            if (context.CompilationThreshold > 0 && _invocations < context.CompilationThreshold)
+            {
+                if (Interlocked.Increment(ref _invocations) >= context.CompilationThreshold)
+                {
+                    lock (this)
+                    {
+                        if (_compiledParser == null)
+                        {
+                            return _compiledParser = this.Compile();
+                        }
+                    }                    
+                }
+            }
+
+            return this;
         }
 
         public bool TryParse(string text, out T value)
@@ -41,7 +70,7 @@
             {
                 var localResult = new ParseResult<T>();
 
-                var success = this.Parse(context, ref localResult);
+                var success = CheckCompiled(context).Parse(context, ref localResult);
 
                 if (success)
                 {
