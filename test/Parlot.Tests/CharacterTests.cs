@@ -50,7 +50,7 @@ namespace Parlot.Tests
         [InlineData('a', false)]
         public void ShouldDetectWhiteSpaceOrNewLines(char c, bool isWhiteSpace)
         {
-            Assert.Equal(isWhiteSpace, Character.IsWhiteSpace(c));
+            Assert.Equal(isWhiteSpace, Character.IsWhiteSpaceOrNewLine(c));
         }
     }
 }

@@ -23,6 +23,9 @@ namespace Parlot.Compilation
         internal static MethodInfo Scanner_ReadDoubleQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDoubleQuotedString), new Type[0] { });
         internal static MethodInfo Scanner_ReadQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadQuotedString), new Type[0] { });
 
+        internal static MethodInfo Cursor_Advance = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), Array.Empty<Type>());
+        internal static MethodInfo Cursor_AdvanceNoNewLines = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.AdvanceNoNewLines), new Type[] { typeof(int) });
+
         internal static ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor(new[] { typeof(string), typeof(int), typeof(int) });
 
         public static Expression NewTextSpan(this CompilationContext _, Expression buffer, Expression offset, Expression count) => Expression.New(TextSpan_Constructor, new[] { buffer, offset, count });
@@ -48,7 +51,8 @@ namespace Parlot.Compilation
         public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpaceOrNewLine);
         public static MethodCallExpression SkipWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_SkipWhiteSpace);
         public static MethodCallExpression SkipWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_SkipWhiteSpaceOrNewLine);
-        public static MethodCallExpression Advance(this CompilationContext context) => Expression.Call(context.Cursor(), typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), new Type[0] { }));
+        public static MethodCallExpression Advance(this CompilationContext context) => Expression.Call(context.Cursor(), Cursor_Advance);
+        public static MethodCallExpression AdvanceNoNewLine(this CompilationContext context, Expression count) => Expression.Call(context.Cursor(), Cursor_AdvanceNoNewLines, new[] { count });
 
         public static ParameterExpression DeclareSuccessVariable(this CompilationContext context, CompilationResult result, bool defaultValue)
         {

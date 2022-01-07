@@ -90,7 +90,7 @@ namespace Parlot.Fluent
                     Expression.Block(
                         new[] { start },
                         Expression.Assign(start, context.Offset()),
-                        context.Advance(),
+                        context.AdvanceNoNewLine(Expression.Constant(1)),
                         Expression.Loop(
                             Expression.IfThenElse(
                                 /* if */ Expression.AndAlso(
@@ -102,7 +102,7 @@ namespace Parlot.Fluent
                                                 : Expression.Constant(false, typeof(bool))
                                             )
                                     ),
-                                /* then */ context.Advance(),
+                                /* then */ context.AdvanceNoNewLine(Expression.Constant(1)),
                                 /* else */ Expression.Break(breakLabel)
                                 ),
                             breakLabel
