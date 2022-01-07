@@ -1,6 +1,5 @@
 ﻿using Parlot.Compilation;
 using System;
-using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
@@ -113,7 +112,7 @@ namespace Parlot.Fluent
                             : Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool)))
                     )
-                )                
+                )
             );
 
             result.Body.Add(block);
