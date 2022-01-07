@@ -162,10 +162,7 @@ namespace Parlot.Fluent
                     Expression group = Expression.Empty();
 
                     // The list is reversed since the parsers are unwrapped
-                    var parsers = kvp.Value.ToArray();
-                    parsers.Reverse();
-
-                    foreach (var parser in parsers)
+                    foreach (var parser in kvp.Value.ToArray().Reverse())
                     {
                         var groupResult = parser.Build(context);
 
@@ -180,7 +177,7 @@ namespace Parlot.Fluent
                                     ? Expression.Empty()
                                     : Expression.Assign(value, groupResult.Value)
                                     ),
-                                block
+                                group
                                 )
                             );
                     }
