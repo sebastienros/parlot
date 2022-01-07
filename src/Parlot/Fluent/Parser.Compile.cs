@@ -54,7 +54,7 @@ namespace Parlot.Fluent
 
             var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
 
-            var parser = result.Compile();
+            var parser = result.CompileFast();
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
             return new CompiledParser<T>(parser, this);
