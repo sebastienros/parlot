@@ -605,11 +605,12 @@ namespace Parlot.Tests
         [Fact]
         public void OneOfCompileShouldNotFailWithLookupConflicts()
         {
-            var parser = Literals.Text("abc").Or(Literals.Text("ab")).Or(Literals.Text("a")).Compile();
+            var parser = OneOf(Literals.Text(">="), Literals.Text(">"), Literals.Text("<="), Literals.Text("<")).Compile();
 
-            Assert.True(parser.TryParse("a", out _));
-            Assert.True(parser.TryParse("ab", out _));
-            Assert.True(parser.TryParse("abc", out _));
+            Assert.Equal("<", parser.Parse("<"));
+            Assert.Equal("<=", parser.Parse("<="));
+            Assert.Equal(">", parser.Parse(">"));
+            Assert.Equal(">=", parser.Parse(">="));
         }
 
         [Fact]
