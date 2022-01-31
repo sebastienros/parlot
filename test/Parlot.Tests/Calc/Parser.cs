@@ -1,5 +1,7 @@
 namespace Parlot.Tests.Calc
 {
+    using System.Globalization;
+
     /*
      * Grammar:
      * expression     => factor ( ( "-" | "+" ) factor )* ;
@@ -118,9 +120,9 @@ namespace Parlot.Tests.Calc
             if (_scanner.ReadDecimal(out var number))
             {
 #if NETCOREAPP2_1
-                return new Number(decimal.Parse(number.GetText()));
+                return new Number(decimal.Parse(number.GetText(), provider: CultureInfo.InvariantCulture));
 #else
-                return new Number(decimal.Parse(number.Span));
+                return new Number(decimal.Parse(number.Span, provider: CultureInfo.InvariantCulture));
 #endif
             }
 
