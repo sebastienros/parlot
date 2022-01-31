@@ -413,8 +413,8 @@ namespace Parlot.Tests
         [InlineData("foo*")]
         public void CompiledIdentifierShouldAcceptExtraChars(string text)
         {
-            static bool start(char c) => c == '-' || c == '/';
-            static bool part(char c) => c == '@' || c == '*';
+            static bool start(char c) => Character.IsIdentifierStart(c) || c == '-' || c == '/';
+            static bool part(char c) => Character.IsIdentifierPart(c) || c == '@' || c == '*';
 
             Assert.Equal(text, Literals.Identifier(start, part).Compile().Parse(text).ToString());
         }

@@ -129,7 +129,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an identifier.
         /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
+        public Parser<TextSpan> Identifier(Func<char, bool> isStart = null, Func<char, bool> isPart = null) => new Identifier(isStart, isPart);
 
         /// <summary>
         /// Builds a parser that matches a char against a predicate.
@@ -175,7 +175,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an identifier.
         /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
+        public Parser<TextSpan> Identifier(Func<char, bool> isStart = null, Func<char, bool> isPart = null) => Parsers.SkipWhiteSpace(new Identifier(isStart, isPart));
 
         /// <summary>
         /// Builds a parser that matches a char against a predicate.

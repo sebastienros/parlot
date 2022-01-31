@@ -159,11 +159,11 @@ Result:
 
 ### Identifier
 
-Matches an identifier, optionally with extra allowed characters.
+Matches an identifier, optionally specifying allowed characters.
 Default start chars are `[$_a-zA-Z]`. Other chars also include digits.
 
 ```c#
-Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null)
+Parser<TextSpan> Identifier(Func<char, bool> isStart = null, Func<char, bool> isPart = null)
 ```
 
 Usage:
