@@ -1,14 +1,16 @@
 namespace Parlot.Tests.Calc
 {
+    using System.Globalization;
+
     /*
-     * Grammar:
-     * expression     => factor ( ( "-" | "+" ) factor )* ;
-     * factor         => unary ( ( "/" | "*" ) unary )* ;
-     * unary          => ( "-" ) unary
-     *                 | primary ;
-     * primary        => NUMBER
-     *                  | "(" expression ")" ;
-    */
+* Grammar:
+* expression     => factor ( ( "-" | "+" ) factor )* ;
+* factor         => unary ( ( "/" | "*" ) unary )* ;
+* unary          => ( "-" ) unary
+*                 | primary ;
+* primary        => NUMBER
+*                  | "(" expression ")" ;
+*/
 
     /// <summary>
     /// This version of the Parser creates and intermediate AST.
@@ -115,7 +117,7 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal(out var number))
+            if (_scanner.ReadDecimal(System.Globalization.NumberStyles.AllowLeadingSign | System.Globalization.NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture.NumberFormat, out var number))
             {
 #if NETCOREAPP2_1
                 return new Number(decimal.Parse(number.ToString()));

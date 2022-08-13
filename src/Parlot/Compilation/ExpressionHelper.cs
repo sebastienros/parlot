@@ -2,6 +2,7 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Globalization;
 
 namespace Parlot.Compilation
 {
@@ -28,8 +29,7 @@ namespace Parlot.Compilation
         public static MethodCallExpression ReadDoubleQuotedString<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadDoubleQuotedString, context.Scanner<TParseContext, char>());
         public static MethodCallExpression ReadQuotedString<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadQuotedString, context.Scanner<TParseContext, char>());
         public static MethodCallExpression ReadChar<TParseContext, TChar>(this CompilationContext<TParseContext, TChar> context, TChar c) where TParseContext : ParseContextWithScanner<TChar> where TChar : IEquatable<TChar>, IConvertible => Expression.Call(context.Scanner(), ExpressionHelper<TParseContext, TChar>.Scanner_ReadChar, Expression.Constant(c));
-        public static MethodCallExpression ReadDecimal<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadDecimal, context.Scanner<TParseContext, char>());
-        public static MethodCallExpression ReadInteger<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadInteger, context.Scanner<TParseContext, char>());
+        public static MethodCallExpression ReadDecimal<TParseContext>(this CompilationContext<TParseContext, char> context, NumberStyles style, CultureInfo culture) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadDecimal, context.Scanner<TParseContext, char>(), Expression.Constant(style), Expression.Constant(culture));
         public static MethodCallExpression ReadNonWhiteSpace<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadNonWhiteSpace, context.Scanner<TParseContext, char>());
         public static MethodCallExpression ReadNonWhiteSpaceOrNewLine<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_ReadNonWhiteSpaceOrNewLine, context.Scanner<TParseContext, char>());
         public static MethodCallExpression SkipWhiteSpace<TParseContext>(this CompilationContext<TParseContext, char> context) where TParseContext : ParseContextWithScanner<char> => Expression.Call(null, ExpressionHelper<TParseContext>.Scanner_SkipWhiteSpace, context.Scanner<TParseContext, char>());
@@ -90,8 +90,7 @@ namespace Parlot.Compilation
     {
         internal static MethodInfo Scanner_ReadText = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadText), new[] { typeof(Scanner<char>), typeof(string), typeof(StringComparer), typeof(TokenResult) });
         internal static MethodInfo Scanner_ReadText_NoResult = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadText), new[] { typeof(Scanner<char>), typeof(string), typeof(StringComparer) });
-        internal static MethodInfo Scanner_ReadDecimal = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadDecimal), new Type[] { typeof(Scanner<char>) });
-        internal static MethodInfo Scanner_ReadInteger = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadInteger), new Type[] { typeof(Scanner<char>) });
+        internal static MethodInfo Scanner_ReadDecimal = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadDecimal), new Type[] { typeof(Scanner<char>), typeof(NumberStyles), typeof(CultureInfo) });
         internal static MethodInfo Scanner_ReadNonWhiteSpace = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadNonWhiteSpace), new Type[] { typeof(Scanner<char>) });
         internal static MethodInfo Scanner_ReadNonWhiteSpaceOrNewLine = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.ReadNonWhiteSpaceOrNewLine), new Type[] { typeof(Scanner<char>) });
         internal static MethodInfo Scanner_SkipWhiteSpace = typeof(CharScannerExtensions).GetMethod(nameof(Parlot.CharScannerExtensions.SkipWhiteSpace), new Type[] { typeof(Scanner<char>) });

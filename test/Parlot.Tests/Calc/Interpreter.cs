@@ -108,7 +108,7 @@ namespace Parlot.Tests.Calc
         {
             _scanner.SkipWhiteSpace();
 
-            if (_scanner.ReadDecimal(out var number))
+            if (_scanner.ReadDecimal(System.Globalization.NumberStyles.AllowDecimalPoint | System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture.NumberFormat, out var number))
             {
 #if NETCOREAPP2_1
                 return decimal.Parse(number.ToString());

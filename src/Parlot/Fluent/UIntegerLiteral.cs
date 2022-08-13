@@ -5,24 +5,24 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class IntegerLiteral<TParseContext> : Parser<long, TParseContext, char>, ICompilable<TParseContext, char>
+    public sealed class UIntegerLiteral<TParseContext> : Parser<ulong, TParseContext, char>, ICompilable<TParseContext, char>
     where TParseContext : ParseContextWithScanner<char>
     {
-        private readonly NumberStyles _numberOptions;
+        private readonly NumberStyles _options;
 
-        public IntegerLiteral(NumberStyles numberOptions = NumberStyles.Integer)
+        public UIntegerLiteral(NumberStyles options)
         {
-            _numberOptions = numberOptions;
+            _options = options;
         }
 
-        public override bool Parse(TParseContext context, ref ParseResult<long> result)
+        public override bool Parse(TParseContext context, ref ParseResult<ulong> result)
         {
             context.EnterParser(this);
 
             var reset = context.Scanner.Cursor.Position;
             var start = reset.Offset;
 
-            if (context.Scanner.ReadDecimal(_numberOptions, CultureInfo.InvariantCulture.NumberFormat))
+            if (context.Scanner.ReadDecimal(_options, CultureInfo.InvariantCulture.NumberFormat))
             {
                 var end = context.Scanner.Cursor.Offset;
 
@@ -32,7 +32,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).Span;
 #endif
 
-                if (long.TryParse(sourceToParse, _numberOptions, CultureInfo.InvariantCulture, out var value))
+                if (ulong.TryParse(sourceToParse, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
                 {
                     result.Set(start, end, value);
                     return true;
@@ -72,17 +72,17 @@ namespace Parlot.Fluent
 #if NETSTANDARD2_0
             var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(long).GetMethod(nameof(long.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(long).MakeByRefType() });
+            var tryParseMethodInfo = typeof(ulong).GetMethod(nameof(ulong.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(ulong).MakeByRefType() });
 #else
             var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(long).GetMethod(nameof(long.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(long).MakeByRefType()});
+            var tryParseMethodInfo = typeof(ulong).GetMethod(nameof(ulong.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(ulong).MakeByRefType()});
 #endif
 
             // TODO: NETSTANDARD2_1 code path
             var block =
                 Expression.IfThen(
-                    context.ReadDecimal(_numberOptions, CultureInfo.InvariantCulture),
+                    context.ReadDecimal(_options, CultureInfo.InvariantCulture),
                     Expression.Block(
                         new[] { end, sourceToParse },
                         Expression.Assign(end, context.Offset()),
@@ -91,7 +91,7 @@ namespace Parlot.Fluent
                             Expression.Call(
                                 tryParseMethodInfo,
                                 sourceToParse,
-                                Expression.Constant(NumberStyles.AllowLeadingSign),
+                                Expression.Constant(NumberStyles.Integer),
                                 Expression.Constant(CultureInfo.InvariantCulture),
                                 value)
                             )

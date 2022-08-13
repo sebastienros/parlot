@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Xunit;
 using Scanner = Parlot.Scanner<char>;
 
@@ -183,7 +184,7 @@ namespace Parlot.Tests
         [InlineData("123.01", "123.01")]
         public void ShouldReadValidDecimal(string text, string expected)
         {
-            Assert.True(new Scanner(text.ToCharArray()).ReadDecimal(out var result));
+            Assert.True(new Scanner(text.ToCharArray()).ReadDecimal(System.Globalization.NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture.NumberFormat, out var result));
             Assert.Equal(expected, result.ToString());
         }
 
@@ -192,7 +193,7 @@ namespace Parlot.Tests
         [InlineData("123.")]
         public void ShouldNotReadInvalidDecimal(string text)
         {
-            Assert.False(new Scanner(text.ToCharArray()).ReadDecimal());
+            Assert.False(new Scanner(text.ToCharArray()).ReadDecimal(System.Globalization.NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture.NumberFormat));
         }
 
         [Theory]

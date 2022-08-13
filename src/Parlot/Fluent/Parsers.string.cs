@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent
@@ -8,17 +9,18 @@ namespace Parlot.Fluent
     public static class StringParsers<TParseContext>
     where TParseContext : ParseContextWithScanner<char>
     {
+        public static CultureInfo DefaultCulture = CultureInfo.InvariantCulture;
 
         /// <summary>
         /// Provides parsers for literals. Literals do not skip spaces before being parsed and can be combined to
         /// parse composite terms.
         /// </summary>
-        public static LiteralBuilder<TParseContext> Literals => new();
+        public static LiteralBuilder<TParseContext> Literals => new(DefaultCulture);
 
         /// <summary>
         /// Provides parsers for terms. Terms skip spaces before being parsed.
         /// </summary>
-        public static TermBuilder<TParseContext> Terms => new();
+        public static TermBuilder<TParseContext> Terms => new(DefaultCulture);
 
 
         /// <summary>
@@ -129,6 +131,13 @@ namespace Parlot.Fluent
     public class LiteralBuilder<TParseContext>
     where TParseContext : ParseContextWithScanner<char>
     {
+        public CultureInfo DefaultCulture;
+
+        public LiteralBuilder(CultureInfo culture)
+        {
+            DefaultCulture = culture;
+        }
+
         /// <summary>
         /// Builds a parser that matches whitespaces.
         /// </summary>
@@ -152,7 +161,11 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an integer.
         /// </summary>
-        public Parser<long, TParseContext, char> Integer() => new IntegerLiteral<TParseContext>();
+        public Parser<long, TParseContext, char> Integer(NumberStyles options = NumberStyles.Integer) => new IntegerLiteral<TParseContext>(options);
+        /// <summary>
+        /// Builds a parser that matches an unsigned integer.
+        /// </summary>
+        public Parser<ulong, TParseContext, char> UInteger(NumberStyles options = NumberStyles.Integer) => new UIntegerLiteral<TParseContext>(options);
 
         /// <summary>
         /// Builds a parser that matches a floating point number.
@@ -182,6 +195,13 @@ namespace Parlot.Fluent
     public class TermBuilder<TParseContext>
     where TParseContext : ParseContextWithScanner<char>
     {
+        public CultureInfo DefaultCulture;
+
+        public TermBuilder(CultureInfo culture)
+        {
+            DefaultCulture = culture;
+        }
+
         /// <summary>
         /// Builds a parser that matches anything until whitespaces.
         /// </summary>
@@ -200,12 +220,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an integer.
         /// </summary>
-        public Parser<long, TParseContext, char> Integer(NumberOptions numberOptions = NumberOptions.Default) => StringParsers<TParseContext>.SkipWhiteSpace(new IntegerLiteral<TParseContext>(numberOptions));
+        public Parser<long, TParseContext, char> Integer(NumberStyles numberOptions = NumberStyles.None) => StringParsers<TParseContext>.SkipWhiteSpace(new IntegerLiteral<TParseContext>(numberOptions));
 
         /// <summary>
         /// Builds a parser that matches a floating point number.
         /// </summary>
-        public Parser<decimal, TParseContext, char> Decimal(NumberOptions numberOptions = NumberOptions.Default) => StringParsers<TParseContext>.SkipWhiteSpace(new DecimalLiteral<TParseContext>(numberOptions));
+        public Parser<decimal, TParseContext, char> Decimal(NumberStyles numberOptions = NumberStyles.AllowDecimalPoint, CultureInfo culture = null) => StringParsers<TParseContext>.SkipWhiteSpace(new DecimalLiteral<TParseContext>(numberOptions, culture ?? DefaultCulture));
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.

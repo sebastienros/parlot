@@ -8,11 +8,13 @@ namespace Parlot.Fluent
     public sealed class DecimalLiteral<TParseContext> : Parser<decimal, TParseContext, char>, ICompilable<TParseContext, char>
     where TParseContext : ParseContextWithScanner<char>
     {
-        private readonly NumberOptions _numberOptions;
+        private readonly NumberStyles _numberOptions;
+        private readonly CultureInfo _culture;
 
-        public DecimalLiteral(NumberOptions numberOptions = NumberOptions.Default)
+        public DecimalLiteral(NumberStyles numberOptions = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo culture = null)
         {
             _numberOptions = numberOptions;
+            _culture = culture ?? CultureInfo.InvariantCulture;
         }
 
         public override bool Parse(TParseContext context, ref ParseResult<decimal> result)
@@ -22,16 +24,7 @@ namespace Parlot.Fluent
             var reset = context.Scanner.Cursor.Position;
             var start = reset.Offset;
 
-            if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
-            {
-                if (!context.Scanner.ReadChar('-'))
-                {
-                    // If there is no '-' try to read a '+' but don't read both.
-                    context.Scanner.ReadChar('+');
-                }
-            }
-
-            if (context.Scanner.ReadDecimal())
+            if (context.Scanner.ReadDecimal(_numberOptions, _culture.NumberFormat))
             {
                 var end = context.Scanner.Cursor.Offset;
 
@@ -42,7 +35,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.SubBuffer(start, end - start).Span;
 #endif
 
-                if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+                if (decimal.TryParse(sourceToParse, _numberOptions, _culture, out var value))
                 {
                     result.Set(start, end, value);
                     return true;
@@ -67,7 +60,7 @@ namespace Parlot.Fluent
             var start = context.DeclareOffsetVariable(result);
             var reset = context.DeclarePositionVariable(result);
 
-            if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
+            if (_numberOptions.HasFlag(NumberStyles.AllowLeadingSign))
             {
                 // if (!context.Scanner.ReadChar('-'))
                 // {
@@ -110,7 +103,7 @@ namespace Parlot.Fluent
             // TODO: NETSTANDARD2_1 code path
             var block =
                 Expression.IfThen(
-                    context.ReadDecimal(),
+                    context.ReadDecimal(_numberOptions, _culture),
                     Expression.Block(
                         new[] { end, sourceToParse },
                         Expression.Assign(end, context.Offset()),
@@ -119,7 +112,7 @@ namespace Parlot.Fluent
                             Expression.Call(
                                 tryParseMethodInfo,
                                 sourceToParse,
-                                Expression.Constant(NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint),
+                                Expression.Constant(_numberOptions),
                                 Expression.Constant(CultureInfo.InvariantCulture),
                                 value)
                             )

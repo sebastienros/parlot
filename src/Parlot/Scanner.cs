@@ -171,70 +171,87 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ReadDecimal(this Scanner<char> scanner) => ReadDecimal(scanner, out _);
+        public static bool ReadDecimal(this Scanner<char> scanner, System.Globalization.NumberStyles options, System.Globalization.NumberFormatInfo culture) => ReadDecimal(scanner, options, culture, out _);
 
-        public static bool ReadDecimal(this Scanner<char> scanner, out BufferSpan<char> result)
+        public static bool ReadDecimal(this Scanner<char> scanner, System.Globalization.NumberStyles options, System.Globalization.NumberFormatInfo culture, out BufferSpan<char> result)
         {
             // perf: fast path to prevent a copy of the position
 
-            if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+            if (options.HasFlag(System.Globalization.NumberStyles.AllowLeadingSign))
             {
-                result = TokenResult.Fail<char>();
-                return false;
+                if (!scanner.ReadChar('-'))
+                {
+                    // If there is no '-' try to read a '+' but don't read both.
+                    scanner.ReadChar('+');
+                }
             }
 
             var start = scanner.Cursor.Position;
-
-            do
+            if (options.HasFlag(System.Globalization.NumberStyles.AllowHexSpecifier))
             {
-                scanner.Cursor.Advance();
 
-            } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
-
-            if (scanner.Cursor.Match('.'))
-            {
-                scanner.Cursor.Advance();
-
-                if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+                if (!Character.IsHexDigit(scanner.Cursor.Current))
                 {
                     result = TokenResult.Fail<char>();
-                    scanner.Cursor.ResetPosition(start);
                     return false;
                 }
-
                 do
                 {
                     scanner.Cursor.Advance();
 
-                } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
+                } while (!scanner.Cursor.Eof && (Character.IsHexDigit(scanner.Cursor.Current)));
             }
+            else
+            {
 
+                if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+                {
+                    result = TokenResult.Fail<char>();
+                    return false;
+                }
+                do
+                {
+                    scanner.Cursor.Advance();
+
+                } while (!scanner.Cursor.Eof && (Character.IsDecimalDigit(scanner.Cursor.Current)));
+
+                if (scanner.Cursor.Match(culture.CurrencyDecimalSeparator))
+                {
+                    scanner.Cursor.Advance();
+
+                    if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+                    {
+                        result = TokenResult.Fail<char>();
+                        scanner.Cursor.ResetPosition(start);
+                        return false;
+                    }
+
+                    do
+                    {
+                        scanner.Cursor.Advance();
+
+                    } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
+                }
+
+                if (options.HasFlag(System.Globalization.NumberStyles.AllowExponent) && scanner.Cursor.Match('E'))
+                {
+                    scanner.Cursor.Advance();
+
+                    if (!Character.IsDecimalDigit(scanner.Cursor.Current))
+                    {
+                        result = TokenResult.Fail<char>();
+                        scanner.Cursor.ResetPosition(start);
+                        return false;
+                    }
+
+                    do
+                    {
+                        scanner.Cursor.Advance();
+
+                    } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
+                }
+            }
             result = TokenResult.Succeed(scanner.Buffer, start.Offset, scanner.Cursor.Offset);
-            return true;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool ReadInteger(this Scanner<char> scanner) => ReadInteger(scanner, out _);
-
-        public static bool ReadInteger(this Scanner<char> scanner, out BufferSpan<char> result)
-        {
-            // perf: fast path to prevent a copy of the position
-
-            if (!Character.IsDecimalDigit(scanner.Cursor.Current))
-            {
-                result = TokenResult.Fail<char>();
-                return false;
-            }
-
-            var start = scanner.Cursor.Offset;
-
-            do
-            {
-                scanner.Cursor.Advance();
-
-            } while (!scanner.Cursor.Eof && Character.IsDecimalDigit(scanner.Cursor.Current));
-
-            result = TokenResult.Succeed(scanner.Buffer, start, scanner.Cursor.Offset);
             return true;
         }
 

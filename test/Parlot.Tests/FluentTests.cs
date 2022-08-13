@@ -43,7 +43,7 @@ namespace Parlot.Tests
         [Fact]
         public void IntegerShouldResetPositionWhenItFails()
         {
-            var parser = OneOf(Terms.Integer(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+            var parser = OneOf(Terms.Integer(System.Globalization.NumberStyles.AllowLeadingSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
 
             // The + sign will advance the first parser and should reset the position for the second to read it successfully
 
@@ -54,7 +54,7 @@ namespace Parlot.Tests
         [Fact]
         public void DecimalShouldResetPositionWhenItFails()
         {
-            var parser = OneOf(Terms.Decimal(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+            var parser = OneOf(Terms.Decimal(System.Globalization.NumberStyles.AllowLeadingSign | System.Globalization.NumberStyles.AllowDecimalPoint).Then(x => "a"), Literals.Text("+").Then(x => "b"));
 
             // The + sign will advance the first parser and should reset the position for the second to read it successfully
 
@@ -459,10 +459,10 @@ namespace Parlot.Tests
         [Fact]
         public void NumbersShouldAcceptSignIfAllowed()
         {
-            Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowSign).Parse("-123"));
-            Assert.Equal(-123, Terms.Integer(NumberOptions.AllowSign).Parse("-123"));
-            Assert.Equal(123, Terms.Decimal(NumberOptions.AllowSign).Parse("+123"));
-            Assert.Equal(123, Terms.Integer(NumberOptions.AllowSign).Parse("+123"));
+            Assert.Equal(-123, Terms.Decimal(System.Globalization.NumberStyles.AllowLeadingSign).Parse("-123"));
+            Assert.Equal(-123, Terms.Integer(System.Globalization.NumberStyles.AllowLeadingSign).Parse("-123"));
+            Assert.Equal(123, Terms.Decimal(System.Globalization.NumberStyles.AllowLeadingSign).Parse("+123"));
+            Assert.Equal(123, Terms.Integer(System.Globalization.NumberStyles.AllowLeadingSign).Parse("+123"));
         }
 
         [Fact]
