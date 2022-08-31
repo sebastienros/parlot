@@ -1,7 +1,7 @@
+using System.Globalization;
+
 namespace Parlot.Tests.Calc
 {
-    using System.Globalization;
-
     /*
      * Grammar:
      * expression     => factor ( ( "-" | "+" ) factor )* ;
