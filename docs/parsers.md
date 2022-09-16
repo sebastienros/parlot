@@ -447,7 +447,7 @@ Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser)
 Usage:
 
 ```c#
-var parser = Separated(Terms.Text(","), Text.Integer());
+var parser = Separated(Terms.Text(","), Terms.Integer());
 parser.Parse("1, 2, 3");
 parser.Parse("1,2;3");
 ```
@@ -470,7 +470,7 @@ Parser<T> Between<A, T, B>(Parser<A> before, Parser<T> parser, Parser<B> after)
 Usage:
 
 ```c#
-var parser = Between(Terms.Char('['), Text.Integer(), Terms.Char(']'));
+var parser = Between(Terms.Char('['), Terms.Integer(), Terms.Char(']'));
 parser.Parse("[ 1 ]");
 parser.Parse("[ 1");
 ```
