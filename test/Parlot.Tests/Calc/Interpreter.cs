@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Parlot.Tests.Calc
 {
     /*
@@ -111,9 +113,9 @@ namespace Parlot.Tests.Calc
             if (_scanner.ReadDecimal(out var number))
             {
 #if NETCOREAPP2_1
-                return decimal.Parse(number.GetText());
+                return decimal.Parse(number.GetText(), provider: CultureInfo.InvariantCulture);
 #else
-                return decimal.Parse(number.Span);
+                return decimal.Parse(number.Span, provider: CultureInfo.InvariantCulture);
 #endif
             }
 
