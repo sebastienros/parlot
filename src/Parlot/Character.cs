@@ -1,36 +1,40 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot
 {
-    public static class Character
+    [Flags]
+    internal enum CharacterMask : byte
     {
-        public static bool IsDecimalDigit(char ch)
-            => ch >= '0' && ch <= '9';
+        None = 0,
+        IdentifierStart = 1,
+        IdentifierPart = 2,
+        WhiteSpace = 4,
+        WhiteSpaceOrNewLine = 8
+    }
 
-        public static bool IsInRange(char ch, char a, char b)
-            => ch >= a && ch <= b;
+    public static partial class Character
+    {
+        public static bool IsDecimalDigit(char ch) => IsInRange(ch, '0', '9');
 
-        public static bool IsHexDigit(char ch)
-            => IsDecimalDigit(ch) ||
-                (ch >= 'A' && ch <= 'F') ||
-                (ch >= 'a' && ch <= 'f');
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsInRange(char ch, char min, char max) => ch - (uint) min <= max - (uint) min;
+
+        public static bool IsHexDigit(char ch) => HexConverter.IsHexChar(ch);
 
         public static bool IsIdentifierStart(char ch)
-            => (ch == '$') || (ch == '_') ||
-               (ch >= 'A' && ch <= 'Z') ||
-               (ch >= 'a' && ch <= 'z');
+        {
+            return (_characterData[ch] & (byte) CharacterMask.IdentifierStart) != 0;
+        }
 
         public static bool IsIdentifierPart(char ch)
-            => IsIdentifierStart(ch) || IsDecimalDigit(ch);
+        {
+            return (_characterData[ch] & (byte) CharacterMask.IdentifierPart) != 0;
+        }
 
         public static bool IsWhiteSpace(char ch)
         {
-            return (ch <= 32 &&
-                       ((ch == 32) || // space
-                       (ch == '\t')))  // horizontal tab
-                || (ch == 0xA0) // non-breaking space
-                || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
-                ;
+            return (_characterData[ch] & (byte) CharacterMask.WhiteSpace) != 0;
         }
 
         public static bool IsWhiteSpaceNonAscii(char ch)
@@ -47,19 +51,10 @@ namespace Parlot
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
         {
-            return (ch <= 32 &&
-                       ((ch == 32) || // space
-                       (ch == '\n') ||
-                       (ch == '\r') ||
-                       (ch == '\t') || // horizontal tab
-                       (ch == '\v'))) 
-                || (ch == 0xA0) // non-breaking space
-                || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
-                ;
+            return (_characterData[ch] & (byte) CharacterMask.WhiteSpaceOrNewLine) != 0;
         }
 
-        public static bool IsNewLine(char ch)
-            => (ch == '\n') || (ch == '\r') || (ch == '\v');
+        public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v';
 
         public static char ScanHexEscape(string text, int index, out int length)
         {
@@ -155,25 +150,7 @@ namespace Parlot
             return new TextSpan(result);
         }
 
-        private static int HexValue(char ch)
-        {
-            if (ch >= '0' && ch <= '9')
-            {
-                return ch - 48;
-            }
-            else if (ch >= 'a' && ch <= 'f')
-            {
-                return ch - 'a' + 10;
-            }
-            else if (ch >= 'A' && ch <= 'F')
-            {
-                return ch - 'A' + 10;
-            }
-            else
-            {
-                return 0;
-            }
-        }
+        private static int HexValue(char ch) => HexConverter.FromChar(ch);
 
 #if NETSTANDARD2_0
         private delegate void SpanAction<T, in TArg>(T[] span, TArg arg);
