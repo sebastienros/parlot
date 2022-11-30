@@ -23,17 +23,7 @@ jobs:
 
     steps:
     - name: Checkout source code
-      uses: actions/checkout@v2
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v2
-      with:
-        include-prerelease: true
-        dotnet-version: | 
-          3.1.x
-          5.0.x
-          6.0.x
-          7.0.x
+      uses: actions/checkout@v3
 
     - name: Test
       run: dotnet test --configuration Release
