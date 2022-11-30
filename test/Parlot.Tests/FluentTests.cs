@@ -1,5 +1,6 @@
 using Parlot.Fluent;
 using System.Collections.Generic;
+using System.Globalization;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -343,7 +344,7 @@ namespace Parlot.Tests
             {
                 switch (result)
                 {
-                    case "d:": return Literals.Decimal().Then(x => x.ToString());
+                    case "d:": return Literals.Decimal().Then(x => x.ToString(CultureInfo.InvariantCulture));
                     case "i:": return Literals.Integer().Then(x => x.ToString());
                     case "s:": return Literals.String().Then(x => x.ToString());
                 }
