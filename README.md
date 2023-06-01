@@ -10,9 +10,9 @@ Parlot provides a fluent API based on parser combinators that provide a more rea
 ## Fluent API
 
 The Fluent API provides simple parser combinators that are assembled to express more complex expressions.
-The main goal of this API is to provide and easy-to-read grammar. Another advantage is that grammars are built at runtime, and they can be extended dynamically.
+The main goal of this API is to provide an easy-to-read grammar. Another advantage is that grammars are built at runtime, and they can be extended dynamically.
 
-The following example is a complete parser that create a mathematical expression tree (AST).
+The following example is a complete parser that creates a mathematical expression tree (AST).
 The source is available [here](./test/Parlot.Tests/Calc/FluentParser.cs).
 
 ```c#
@@ -30,12 +30,11 @@ static FluentParser()
      *                  | "(" expression ")" ;
     */
 
-    // The Deferred helper creates a parser that can be referenced by others before it is defined
+    // The Deferred helper creates a parser that can be referenced by others before it is defined.
     var expression = Deferred<Expression>();
 
     var number = Terms.Decimal()
-        .Then<Expression>(static d => new Number(d))
-        ;
+        .Then<Expression>(static d => new Number(d));
 
     var divided = Terms.Char('/');
     var times = Terms.Char('*');
@@ -110,14 +109,15 @@ static FluentParser()
 
 ## Compilation
 
-Grammar trees built using the Fluent API can optionally be compiled with the `Compile()` method. At that point instead of evaluating recursively all the parsers in the grammar tree, these 
-are converted to a more linear and optimized and equivalent compiled IL. This can improve the performance by 20% (see benchmarks results).
+Grammar trees built using the Fluent API can optionally be compiled with the `Compile()` method. At that point, instead of evaluating recursively all the parsers in the grammar tree, these 
+are converted to a more linear and optimized but equivalent compiled IL. This can improve the performance by 20% (see benchmarks results).
 
 ## Performance
 
-Parlot is faster and allocates less than all other known parser combinators for .NET.
+Parlot is faster and allocates less memory than all other known parser combinators for .NET.
 
-It was originally made to provide a more efficient alternative to projects like
+It was originally created to provide a more efficient alternative to projects like:
+
 - [Superpower](https://github.com/nblumhardt/superpower)
 - [Sprache](https://github.com/sprache/Sprache)
 - [Irony](https://github.com/IronyProject/Irony)
@@ -127,13 +127,14 @@ Finally, even though [Pidgin](https://github.com/benjamin-hodgson/Pidgin) showed
 ### Expression Benchmarks
 
 This benchmark creates an expression tree (AST) representing mathematical expressions with operator precedence and grouping. It exercises two expressions:
+
 - Small: `3 - 1 / 2 + 1`
 - Big: `1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2`
 
 Only Pidgin and Parlot are benchmarked here. These benchmarks don't evaluate the expressions but only parse them to create the same AST.
 
-In this benchmark Parlot Fluent is more than 10 times faster than Pidgin, and Parlot Raw gives another 2 times boost. Allocations are also smaller with Parlot.
-When compiled the Parlot grammar shows even better results, without losing its simplicity.
+In this benchmark, Parlot Fluent is more than 10 times faster than Pidgin, and Parlot Raw gives another 2 times boost. Allocations are also smaller with Parlot.
+When compiled, the Parlot grammar shows even better results, without losing its simplicity.
 
 ```
 BenchmarkDotNet=v0.13.1, OS=Windows 10.0.22000
@@ -159,8 +160,8 @@ WarmupCount=3
 ### JSON Benchmarks
 
 This benchmark was taken from the Pidgin repository and demonstrates how to perform simple JSON document parsing. It exercises the parsers with different kinds of documents. Pidgin, Sprache, Superpower and Parlot are compared. The programming models are all based on parser combinator.
-For reference Newtonsoft.Json is also added to show the differences with a dedicated parser.
-The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides the best performance in all scenarios, being at least 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin. This simple implementation is also faster than Newtonsoft, though it is far for being as rigourus.
+For reference, Newtonsoft.Json is also added to show the differences with a dedicated parser.
+The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides the best performance in all scenarios, being at least 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin. This simple implementation is also faster than Newtonsoft, though it is far from being as rigorous.
 
 ```
 BenchmarkDotNet=v0.13.1, OS=Windows 10.0.22000
@@ -204,8 +205,8 @@ WarmupCount=3
 
 ### Regular Expressions
 
-Regular expression can also be replaced by more formal parser definitions. The following benchmarks show how Parlot compares to them when checking if string matches
-an email with the pattern `[\w\.+-]+@[\w-]+\.[\w\.-]+`. Note that in the case of pattern matching Parlot can use the pattern matching mode and do less allocations.
+Regular expressions can also be replaced by more formal parser definitions. The following benchmarks show how Parlot compares to them when checking if a string matches
+an email with the pattern `[\w\.+-]+@[\w-]+\.[\w\.-]+`. Note that in the case of pattern matching Parlot can use the pattern matching mode and do fewer allocations.
 
 ```
 BenchmarkDotNet=v0.13.1, OS=Windows 10.0.22000
@@ -227,7 +228,7 @@ WarmupCount=3
 
 ### Versions
 
-The benchmarks were executed with the following versions
+The benchmarks were executed with the following versions:
 
 - Parlot 0.0.19
 - Pidgin 3.0.0
@@ -238,6 +239,7 @@ The benchmarks were executed with the following versions
 ### Usages
 
 Parlot is already used in these projects:
+
 - [Shortcodes](https://github.com/sebastienros/shortcodes)
 - [Fluid](https://github.com/sebastienros/fluid)
 - [OrchardCore](https://github.com/OrchardCMS/OrchardCore)
