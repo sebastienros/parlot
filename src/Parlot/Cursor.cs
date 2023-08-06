@@ -118,11 +118,13 @@ namespace Parlot
         public void AdvanceNoNewLines(int offset)
         {
             var newOffset = _offset + offset;
+            var length = _textLength - 1;
 
             // Detect if the cursor will be over Eof
-            if (newOffset > _textLength - 1)
+            if (newOffset > length)
             {
                 Eof = true;
+                _column += newOffset - length;
                 _offset = _textLength;
                 _current = NullChar;
                 return;
@@ -130,6 +132,7 @@ namespace Parlot
 
             _current = _buffer[newOffset];
             _offset = newOffset;
+            _column += offset;
         }
 
         /// <summary>

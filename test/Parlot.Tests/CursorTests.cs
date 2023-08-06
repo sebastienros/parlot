@@ -166,6 +166,63 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void AdvanceNoNewLinesShouldCountColumns()
+        {
+            var c = new Cursor("123456789");
+
+            Assert.Equal('1', c.Current);
+            Assert.Equal(0, c.Position.Offset);
+            Assert.Equal(1, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+
+            c.AdvanceNoNewLines(4);
+
+            Assert.Equal('5', c.Current);
+            Assert.Equal(4, c.Position.Offset);
+            Assert.Equal(5, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+
+            c.AdvanceNoNewLines(4);
+
+            Assert.Equal('9', c.Current);
+            Assert.Equal(8, c.Position.Offset);
+            Assert.Equal(9, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+
+            c.AdvanceNoNewLines(1);
+
+            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(9, c.Position.Offset);
+            Assert.Equal(10, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+        }
+
+        [Fact]
+        public void AdvanceNoNewLinesShouldStopAtEof()
+        {
+            var c = new Cursor("1234\n5678");
+
+            Assert.Equal('1', c.Current);
+            Assert.Equal(0, c.Position.Offset);
+            Assert.Equal(1, c.Position.Column);
+            Assert.Equal(1, c.Position.Line);
+
+            c.Advance(5);
+
+            Assert.Equal('5', c.Current);
+            Assert.Equal(5, c.Position.Offset);
+            Assert.Equal(1, c.Position.Column);
+            Assert.Equal(2, c.Position.Line);
+
+            c.AdvanceNoNewLines(6);
+
+            Assert.Equal(Cursor.NullChar, c.Current);
+            Assert.Equal(9, c.Position.Offset);
+            Assert.Equal(4, c.Position.Column);
+            Assert.Equal(2, c.Position.Line);
+        }
+
+        [Fact]
         public void ResetPositionShouldMoveToEof()
         {
             var c = new Cursor("123");
