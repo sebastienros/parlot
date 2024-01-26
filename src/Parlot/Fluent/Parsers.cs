@@ -117,9 +117,19 @@ namespace Parlot.Fluent
         public Parser<long> Integer() => new IntegerLiteral();
 
         /// <summary>
-        /// Builds a parser that matches a floating point number.
+        /// Builds a parser that matches a floating point number represented as a <lang cref="decimal"/> value.
         /// </summary>
         public Parser<decimal> Decimal() => new DecimalLiteral();
+
+        /// <summary>
+        /// Builds a parser that matches a floating point number represented as a <lang cref="float"/> value.
+        /// </summary>
+        public Parser<float> Float() => new FloatLiteral();
+
+        /// <summary>
+        /// Builds a parser that matches a floating point number represented as a <lang cref="double"/> value.
+        /// </summary>
+        public Parser<double> Double() => new DoubleLiteral();
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.
@@ -163,9 +173,19 @@ namespace Parlot.Fluent
         public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new IntegerLiteral(numberOptions));
 
         /// <summary>
-        /// Builds a parser that matches a floating point number.
+        /// Builds a parser that matches a floating point number represented as a <lang cref="decimal"/> value.
         /// </summary>
         public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DecimalLiteral(numberOptions));
+
+        /// <summary>
+        /// Builds a parser that matches a floating point number represented as a <lang cref="float"/> value.
+        /// </summary>
+        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new FloatLiteral(numberOptions));
+
+        /// <summary>
+        /// Builds a parser that matches a floating point number represented as a <lang cref="double"/> value.
+        /// </summary>
+        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DoubleLiteral(numberOptions));
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.

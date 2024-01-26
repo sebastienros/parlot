@@ -5,16 +5,16 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class DecimalLiteral : Parser<decimal>, ICompilable
+    public sealed class DoubleLiteral : Parser<double>, ICompilable
     {
         private readonly NumberOptions _numberOptions;
 
-        public DecimalLiteral(NumberOptions numberOptions = NumberOptions.Default)
+        public DoubleLiteral(NumberOptions numberOptions = NumberOptions.Default)
         {
             _numberOptions = numberOptions;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<decimal> result)
+        public override bool Parse(ParseContext context, ref ParseResult<double> result)
         {
             context.EnterParser(this);
 
@@ -39,7 +39,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
 #endif
 
-                if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+                if (double.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
                 {
                     result.Set(start, end, value);
                     return true;
@@ -56,7 +56,7 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(decimal)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(double)));
 
             // var start = context.Scanner.Cursor.Offset;
             // var reset = context.Scanner.Cursor.Position;
@@ -84,7 +84,7 @@ namespace Parlot.Fluent
             //    var end = context.Scanner.Cursor.Offset;
             //    NETSTANDARD2_0 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
             //    NETSTANDARD2_1 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
-            //    success = decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+            //    success = double.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
             // }
             //
             // if (!success)
@@ -97,11 +97,11 @@ namespace Parlot.Fluent
 #if NETSTANDARD2_0
             var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
+            var tryParseMethodInfo = typeof(double).GetMethod(nameof(double.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(double).MakeByRefType()});
 #else
             var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(decimal).GetMethod(nameof(decimal.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(decimal).MakeByRefType()});
+            var tryParseMethodInfo = typeof(double).GetMethod(nameof(double.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(double).MakeByRefType()});
 #endif
 
             // TODO: NETSTANDARD2_1 code path
