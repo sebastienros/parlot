@@ -188,12 +188,32 @@ namespace Parlot.Tests
 
         [Theory]
         [InlineData(" 1")]
+        public void ShouldNotReadInvalidInteger(string text)
+        {
+            Assert.False(new Scanner(text).ReadInteger());
+        }
+
+        [Theory]
+        [InlineData("1", "1")]
+        [InlineData("123", "123")]
+        [InlineData("123a", "123")]
+        [InlineData("123.0", "123")]
+        [InlineData("123.0a", "123")]
+        [InlineData("123 ", "123")]
+        public void ShouldReadValidInteger(string text, string expected)
+        {
+            Assert.True(new Scanner(text).ReadInteger(out var result));
+            Assert.Equal(expected, result.GetText());
+        }
+
+        [Theory]
+        [InlineData(" 1")]
         [InlineData("123.")]
         public void ShouldNotReadInvalidDecimal(string text)
         {
             Assert.False(new Scanner(text).ReadDecimal());
         }
-
+        
         [Theory]
         [InlineData("'a\nb' ", "'a\nb'")]
         [InlineData("'a\r\nb' ", "'a\r\nb'")]
