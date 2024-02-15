@@ -73,7 +73,7 @@ namespace Parlot.Fluent
                 Expression.IfThen(
                     Expression.Not(context.Eof()),
                     Expression.Block(
-                        new ParameterExpression [] { start, end },
+                        [start, end],
                         Expression.Assign(start, context.Offset()),
                         _includeNewLines
                             ? context.ReadNonWhiteSpaceOrNewLine()

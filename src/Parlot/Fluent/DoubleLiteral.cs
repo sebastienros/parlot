@@ -96,8 +96,8 @@ namespace Parlot.Fluent
             var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 #if NETSTANDARD2_0
             var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.NextNumber}");
-            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", new[] { typeof(int), typeof(int) }), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(double).GetMethod(nameof(double.TryParse), new[] { typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(double).MakeByRefType()});
+            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", [typeof(int), typeof(int)]), start, Expression.Subtract(end, start)));
+            var tryParseMethodInfo = typeof(double).GetMethod(nameof(double.TryParse), [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(double).MakeByRefType()]);
 #else
             var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
@@ -109,7 +109,7 @@ namespace Parlot.Fluent
                 Expression.IfThen(
                     context.ReadDecimal(),
                     Expression.Block(
-                        new[] { end, sourceToParse },
+                        [end, sourceToParse],
                         Expression.Assign(end, context.Offset()),
                         sliceExpression,
                         Expression.Assign(success,

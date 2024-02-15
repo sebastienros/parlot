@@ -71,7 +71,7 @@ namespace Parlot.Fluent
                         parserCompileResult.Variables.Append(resultExpression),
                         Expression.Block(parserCompileResult.Body),
                         Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }),
+                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)]),
                             parserCompileResult.Success,
                             context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
                         returnLabelExpression),

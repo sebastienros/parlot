@@ -26,7 +26,7 @@ namespace Parlot.Fluent
             // return value;
 
             var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-            var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(typeof(ValueTuple<bool, T>).GetConstructor(new[] { typeof(bool), typeof(T) }), compilationResult.Success, compilationResult.Value));
+            var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)]), compilationResult.Success, compilationResult.Value));
 
             compilationResult.Body.Add(returnLabelExpression);
 
@@ -127,7 +127,7 @@ namespace Parlot.Fluent
                 Expression.Assign(success, 
                     Expression.Call(
                         Expression.Constant(this), 
-                        GetType().GetMethod("Parse", new[] { typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType() }), 
+                        GetType().GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType()]), 
                         context.ParseContext, 
                         parseResult))
                 );

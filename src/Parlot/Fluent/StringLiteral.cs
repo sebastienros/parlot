@@ -23,7 +23,7 @@ namespace Parlot.Fluent
 
         public bool CanSeek => true;
 
-        public char[] ExpectedChars => _quotes switch { StringLiteralQuotes.Single => new[] { '\'' }, StringLiteralQuotes.Double => new[] { '\"' }, StringLiteralQuotes.SingleOrDouble => new[] { '\'', '\"' }, _ => Array.Empty<char>() };
+        public char[] ExpectedChars => _quotes switch { StringLiteralQuotes.Single => ['\''], StringLiteralQuotes.Double => ['\"'], StringLiteralQuotes.SingleOrDouble => ['\'', '\"'], _ => Array.Empty<char>() };
 
         public bool SkipWhitespace => false;
 
@@ -88,13 +88,13 @@ namespace Parlot.Fluent
 
             var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 
-            var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", new[] { typeof(TextSpan) });
+            var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(TextSpan)]);
 
             result.Body.Add(
                 Expression.IfThen(
                     parseStringExpression,
                     Expression.Block(
-                        new[] { end },
+                        [end],
                         Expression.Assign(end, context.Offset()),
                         Expression.Assign(success, Expression.Constant(true, typeof(bool))),
                         context.DiscardResult 

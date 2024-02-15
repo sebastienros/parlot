@@ -22,7 +22,7 @@ namespace Parlot.Fluent
             }
             else
             {
-                return new OneOf<T>(new[] { parser, or });
+                return new OneOf<T>([parser, or]);
             }
         }
 

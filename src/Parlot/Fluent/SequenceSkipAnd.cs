@@ -42,11 +42,11 @@ namespace Parlot.Fluent
 
         public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
         {
-            return new[]
-                {
+            return
+                [
                     new SkippableCompilationResult(_parser1.Build(context), true),
                     new SkippableCompilationResult(_parser2.Build(context), false)
-                };
+                ];
         }
 
         public CompilationResult Compile(CompilationContext context)
