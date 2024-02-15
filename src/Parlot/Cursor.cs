@@ -205,9 +205,6 @@ namespace Parlot
             return _current == c;
         }
 
-        /// <summary>
-        /// Whether any char of the string is at the current position.
-        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MatchAnyOf(string s)
         {
@@ -228,49 +225,7 @@ namespace Parlot
                 return true;
             }
 
-            for (var i = 0; i < length; i++)
-            {
-                if (s[i] == _current)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Whether any char of an array is at the current position.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAny(params char[] chars)
-        {
-            if (chars == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(nameof(chars));
-            }
-
-            if (Eof)
-            {
-                return false;
-            }
-
-            var length = chars.Length;
-
-            if (length == 0)
-            {
-                return true;
-            }
-
-            for (var i = 0; i < length; i++)
-            {
-                if (chars[i] == _current)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return s.IndexOf(_current) != -1;
         }
 
         /// <summary>
@@ -279,7 +234,7 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Match(string s)
         {
-            // Equivalent to StringComparison.Orinal copmarison
+            // Equivalent to StringComparison.Ordinal comparison
 
             var sSpan = s.AsSpan();
             var bufferSpan = _buffer.AsSpan(_offset);
@@ -311,7 +266,7 @@ namespace Parlot
                 }
             }
 
-            // StringComparison.Orinal is an optimized code path in Span.StartsWith
+            // StringComparison.Ordinal is an optimized code path in Span.StartsWith
 
             return bufferSpan.StartsWith(sSpan, comparisonType);
         }

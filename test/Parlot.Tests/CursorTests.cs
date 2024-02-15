@@ -269,28 +269,6 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void MatchAnyShouldMatchAny()
-        {
-            var c = new Cursor("1234");
-
-            Assert.Throws<ArgumentNullException>(() => c.MatchAny(null));
-
-            Assert.True(c.MatchAny(Array.Empty<char>()));
-            Assert.True(c.MatchAny('1'));
-            Assert.True(c.MatchAny('a', 'b', 'c', '1'));
-            Assert.True(c.MatchAny('1', '2', '3'));
-            Assert.False(c.MatchAny('a', 'b', 'c'));
-
-            c.ResetPosition(new TextPosition(4, 0, 0));
-
-            Assert.False(c.MatchAny('\0'));
-            Assert.False(c.MatchAny('1'));
-            Assert.False(c.MatchAny('a', 'b', 'c', '1'));
-            Assert.False(c.MatchAny('1', '2', '3'));
-            Assert.False(c.MatchAny('a', 'b', 'c'));
-        }
-
-        [Fact]
         public void MatchShouldMatch()
         {
             var c = new Cursor("1234");
