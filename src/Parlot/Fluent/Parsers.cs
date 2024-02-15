@@ -68,7 +68,7 @@ namespace Parlot.Fluent
 
         /// <summary>
         /// Builds a parser that captures the output of another parser.
-        /// This is used to provide pattern matching capabilities, and optimized copmiled parsers that then don't need to materialize each parser result.
+        /// This is used to provide pattern matching capabilities, and optimized compiled parsers that then don't need to materialize each parser result.
         /// </summary>
         public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 
@@ -114,23 +114,23 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an integer.
         /// </summary>
-        public Parser<long> Integer() => new IntegerLiteral();
+        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="decimal"/> value.
         /// </summary>
-        public Parser<decimal> Decimal() => new DecimalLiteral();
+        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="float"/> value.
         /// </summary>
-        public Parser<float> Float() => new FloatLiteral();
+        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Default) => new FloatLiteral(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="double"/> value.
         /// </summary>
-        public Parser<double> Double() => new DoubleLiteral();
-
+        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Default) => new DoubleLiteral(numberOptions);
+        
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.
         /// </summary>
