@@ -96,7 +96,7 @@ Result:
 
 ### Integer
 
-Matches an integral numeric value.
+Matches an integral numeric value. By default the plus `+` and `-` signs are not parsed unless the `NumberOptions.AllowSign` is specified.
 
 ```c#
 Parser<long> Integer()
@@ -106,7 +106,7 @@ Usage:
 
 ```c#
 var input = "-1234";
-var parser = Terms.Integer();
+var parser = Terms.Integer(NumberOptions.AllowSign);
 ```
 
 Result:
@@ -117,7 +117,7 @@ Result:
 
 ### Decimal
 
-Matches a numeric value with optional digits.
+Matches a numeric value with optional digits. By default the plus `+` and `-` signs are not parsed unless the `NumberOptions.AllowSign` is specified.
 
 ```c#
 Parser<decimal> Decimal()
@@ -127,7 +127,7 @@ Usage:
 
 ```c#
 var input = "-1234.56";
-var parser = Terms.Decimal();
+var parser = Terms.Decimal(NumberOptions.AllowSign);
 ```
 
 Result:
@@ -135,6 +135,8 @@ Result:
 ```
 -1,234.56
 ```
+
+The parsers `Float` and `Double` are identical to `Decimal` with the difference that they return `float` and `double` respectively.
 
 ### String
 
