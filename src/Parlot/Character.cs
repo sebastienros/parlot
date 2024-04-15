@@ -116,6 +116,8 @@ namespace Parlot
                             case '\'': c = '\''; break;
                             case '"': c = '\"'; break;
                             case '\\': c = '\\'; break;
+                            case '0': c = '\0'; break;
+                            case 'a': c = '\a'; break;
                             case 'b': c = '\b'; break;
                             case 'f': c = '\f'; break;
                             case 'n': c = '\n'; break;
