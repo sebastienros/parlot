@@ -14,6 +14,8 @@ namespace Parlot.Tests
         [InlineData(" \\xa0 ", " \xa0 ")]
         [InlineData(" \\xfh ", " \xfh ")]
         [InlineData(" \u03B2 ", " β ")]
+        [InlineData(" \\a ", " \a ")]
+        [InlineData(" \\0hello ", " \0hello ")]
 
         public void ShouldDescodeString(string text, string expected)
         {

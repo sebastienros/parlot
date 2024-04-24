@@ -384,6 +384,7 @@ namespace Parlot
                     {
                         case '0':
                         case '\\':
+                        case 'a':
                         case 'b':
                         case 'f':
                         case 'n':
