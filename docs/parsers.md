@@ -660,15 +660,15 @@ Usage:
 var parser = 
     Terms.Char('a')
     .Or(Terms.Char('b')
-    .Or(Terms.Char('c').Error("Unexpected char c")
+    .Or(Terms.Char('c').Error("Unexpected char c")));
 
-parser.Parse("1,");
+parser.Parse("c");
 ```
 
 Result:
 
 ```
-failure: "Expected an integer at (1:3)
+failure: "Unexpected char c"
 ```
 ### When
 
