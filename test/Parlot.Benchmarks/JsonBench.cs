@@ -10,6 +10,7 @@ using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace Parlot.Benchmarks
 {
@@ -24,7 +25,8 @@ namespace Parlot.Benchmarks
         private Parser<IJson> _compiled;
 #nullable restore
 
-        private static JsonSerializerSettings _jsonSerializerSettings = new JsonSerializerSettings() { MaxDepth = 1024 };
+        private static JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
+        private static JsonSerializerOptions _jsonSerializerOptions = new() { MaxDepth = 1024 };
         private static readonly Random _random = new();
 
         [GlobalSetup]
@@ -63,6 +65,12 @@ namespace Parlot.Benchmarks
         }
 
         [Benchmark, BenchmarkCategory("Big")]
+        public JsonDocument BigJson_SystemTextJson()
+        {
+            return JsonDocument.Parse(_bigJson);
+        }
+
+        [Benchmark, BenchmarkCategory("Big")]
         public IJson BigJson_Sprache()
         {
             return SpracheJsonParser.Parse(_bigJson).Value;
@@ -96,6 +104,13 @@ namespace Parlot.Benchmarks
         public JToken LongJson_Newtonsoft()
         {
             return JToken.Parse(_longJson);
+        }
+
+
+        [Benchmark, BenchmarkCategory("Long")]
+        public JsonDocument LongJson_SystemTextJson()
+        {
+            return JsonDocument.Parse(_longJson);
         }
 
         [Benchmark, BenchmarkCategory("Long")]
@@ -132,6 +147,12 @@ namespace Parlot.Benchmarks
         public JToken DeepJson_Newtonsoft()
         {
             return JsonConvert.DeserializeObject<JToken>(_deepJson, _jsonSerializerSettings);
+        }
+
+        [Benchmark, BenchmarkCategory("Deep")]
+        public JsonDocument DeepJson_SystemTextJson()
+        {
+            return JsonDocument.Parse(_deepJson);
         }
 
         [Benchmark, BenchmarkCategory("Deep")]
