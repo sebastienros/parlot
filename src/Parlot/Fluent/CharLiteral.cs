@@ -9,15 +9,16 @@ namespace Parlot.Fluent
         public CharLiteral(char c)
         {
             Char = c;
+            ExpectedChars = [c];
         }
 
         public char Char { get; }
 
-        public bool CanSeek => true;
+        public bool CanSeek { get; } = true;
 
-        public char[] ExpectedChars => [Char] ;
+        public char[] ExpectedChars { get; }
 
-        public bool SkipWhitespace => false;
+        public bool SkipWhitespace { get; } = false;
 
         public override bool Parse(ParseContext context, ref ParseResult<char> result)
         {

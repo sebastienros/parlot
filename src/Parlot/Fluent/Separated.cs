@@ -15,13 +15,20 @@ namespace Parlot.Fluent
         {
             _separator = separator ?? throw new ArgumentNullException(nameof(separator));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            
+            if (_parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
         {
@@ -51,7 +58,7 @@ namespace Parlot.Fluent
                     if (!first)
                     {
                         // A separator was found, but not followed by another value.
-                        // It's still succesful if there was one value parsed, but we reset the cursor to before the separator
+                        // It's still successful if there was one value parsed, but we reset the cursor to before the separator
                         context.Scanner.Cursor.ResetPosition(end);
                         break;
                     }
