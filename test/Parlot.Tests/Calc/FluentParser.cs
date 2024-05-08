@@ -1,94 +1,97 @@
 ﻿using Parlot.Fluent;
 using static Parlot.Fluent.Parsers;
 
-namespace Parlot.Tests.Calc
+namespace Parlot.Tests.Calc;
+
+using Domain;
+using System.Numerics;
+
+//TODO: FluentParser can be FluentParser<T>
+public static class FluentParser 
 {
-    public class FluentParser
+    public static readonly Parser<Expression<decimal>> Expression;
+
+    static FluentParser()
     {
-        public static readonly Parser<Expression> Expression;
+        /*
+         * Grammar:
+         * expression     => factor ( ( "-" | "+" ) factor )* ;
+         * factor         => unary ( ( "/" | "*" ) unary )* ;
+         * unary          => ( "-" ) unary
+         *                 | primary ;
+         * primary        => NUMBER
+         *                  | "(" expression ")" ;
+         */
 
-        static FluentParser()
-        {
-            /*
-             * Grammar:
-             * expression     => factor ( ( "-" | "+" ) factor )* ;
-             * factor         => unary ( ( "/" | "*" ) unary )* ;
-             * unary          => ( "-" ) unary
-             *                 | primary ;
-             * primary        => NUMBER
-             *                  | "(" expression ")" ;
-            */
-
-            // The Deferred helper creates a parser that can be referenced by others before it is defined
-            var expression = Deferred<Expression>();
+        // The Deferred helper creates a parser that can be referenced by others before it is defined
+        var expression = Deferred<Expression<decimal>>();
 
             var number = Terms.Decimal()
-                .Then<Expression>(static d => new Number(d))
+                .Then<Expression<decimal>>(static d => new Number<decimal>(d))
                 ;
 
-            var divided = Terms.Char('/');
-            var times = Terms.Char('*');
-            var minus = Terms.Char('-');
-            var plus = Terms.Char('+');
-            var openParen = Terms.Char('(');
-            var closeParen = Terms.Char(')');
+        var divided = Terms.Char('/');
+        var times = Terms.Char('*');
+        var minus = Terms.Char('-');
+        var plus = Terms.Char('+');
+        var openParen = Terms.Char('(');
+        var closeParen = Terms.Char(')');
 
-            // "(" expression ")"
-            var groupExpression = Between(openParen, expression, closeParen);
+        // "(" expression ")"
+        var groupExpression = Between(openParen, expression, closeParen);
 
-            // primary => NUMBER | "(" expression ")";
-            var primary = number.Or(groupExpression);
+        // primary => NUMBER | "(" expression ")";
+        var primary = number.Or<Expression<decimal>>(groupExpression);
 
-            // The Recursive helper allows to create parsers that depend on themselves.
-            // ( "-" ) unary | primary;
-            var unary = Recursive<Expression>((u) =>
-                minus.And(u)
-                    .Then<Expression>(static x => new NegateExpression(x.Item2))
-                    .Or(primary));
+        // The Recursive helper allows to create parsers that depend on themselves.
+        // ( "-" ) unary | primary;
+        var unary = Recursive<Expression<decimal>>((u) =>
+            minus.And(u)
+                .Then<Expression<decimal>>(static x => new NegateExpression<decimal>(x.Item2))
+                .Or(primary));
 
-            // factor => unary ( ( "/" | "*" ) unary )* ;
-            var factor = unary.And(ZeroOrMany(divided.Or(times).And(unary)))
-                .Then(static x =>
+        // factor => unary ( ( "/" | "*" ) unary )* ;
+        var factor = unary.And(ZeroOrMany(divided.Or(times).And(unary)))
+            .Then(static x =>
+            {
+                // unary
+                var result = x.Item1;
+
+                // (("/" | "*") unary ) *
+                foreach (var op in x.Item2)
                 {
-                    // unary
-                    var result = x.Item1;
-
-                    // (("/" | "*") unary ) *
-                    foreach (var op in x.Item2)
+                    result = op.Item1 switch
                     {
-                        result = op.Item1 switch
-                        {
-                            '/' => new Division(result, op.Item2),
-                            '*' => new Multiplication(result, op.Item2),
-                            _ => null
-                        };
-                    }
+                        '/' => new Division<decimal>(result, op.Item2),
+                        '*' => new Multiplication<decimal>(result, op.Item2),
+                        _ => null
+                    };
+                }
 
-                    return result;
-                });
+                return result;
+            });
 
-            // expression => factor ( ( "-" | "+" ) factor )* ;
-            expression.Parser = factor.And(ZeroOrMany(plus.Or(minus).And(factor)))
-                .Then(static x =>
+        // expression => factor ( ( "-" | "+" ) factor )* ;
+        expression.Parser = factor.And(ZeroOrMany(plus.Or(minus).And(factor)))
+            .Then(static x =>
+            {
+                // factor
+                var result = x.Item1;
+
+                // (("-" | "+") factor ) *
+                foreach (var op in x.Item2)
                 {
-                    // factor
-                    var result = x.Item1;
-
-                    // (("-" | "+") factor ) *
-                    foreach (var op in x.Item2)
+                    result = op.Item1 switch
                     {
-                        result = op.Item1 switch
-                        {
-                            '+' => new Addition(result, op.Item2),
-                            '-' => new Subtraction(result, op.Item2),
-                            _ => null
-                        };
-                    }
+                        '+' => new Addition<decimal>(result, op.Item2),
+                        '-' => new Subtraction<decimal>(result, op.Item2),
+                        _ => null
+                    };
+                }
 
-                    return result;
-                });            
+                return result;
+            });            
 
-            Expression = expression;
-        }
+        Expression = expression;
     }
 }

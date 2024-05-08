@@ -2,6 +2,8 @@ using System.Globalization;
 
 namespace Parlot.Tests.Calc
 {
+    using Domain;
+
     /*
      * Grammar:
      * expression     => factor ( ( "-" | "+" ) factor )* ;
@@ -19,14 +21,14 @@ namespace Parlot.Tests.Calc
     {
         private Scanner _scanner;
 
-        public Expression Parse(string text)
+        public Expression<decimal> Parse(string text)
         {
             _scanner = new Scanner(text);
 
             return ParseExpression();
         }
 
-        private Expression ParseExpression()
+        private Expression<decimal> ParseExpression()
         {
             var expression = ParseFactor();
 
@@ -38,13 +40,13 @@ namespace Parlot.Tests.Calc
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Addition(expression, ParseFactor());
+                    expression = new Addition<decimal>(expression, ParseFactor());
                 }
                 else if (_scanner.ReadChar('-'))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Subtraction(expression, ParseFactor());
+                    expression = new Subtraction<decimal>(expression, ParseFactor());
                 }
                 else
                 {
@@ -55,7 +57,7 @@ namespace Parlot.Tests.Calc
             return expression;
         }
 
-        private Expression ParseFactor()
+        private Expression<decimal> ParseFactor()
         {
             var expression = ParseUnaryExpression();
 
@@ -67,13 +69,13 @@ namespace Parlot.Tests.Calc
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Multiplication(expression, ParseUnaryExpression());
+                    expression = new Multiplication<decimal>(expression, ParseUnaryExpression());
                 }
                 else if (_scanner.ReadChar('/'))
                 {
                     _scanner.SkipWhiteSpace();
 
-                    expression = new Division(expression, ParseUnaryExpression());
+                    expression = new Division<decimal>(expression, ParseUnaryExpression());
                 }
                 else
                 {
@@ -89,7 +91,7 @@ namespace Parlot.Tests.Calc
                     | primary ;
         */
 
-        private Expression ParseUnaryExpression()
+        private Expression<decimal> ParseUnaryExpression()
         {
             _scanner.SkipWhiteSpace();
 
@@ -102,7 +104,7 @@ namespace Parlot.Tests.Calc
                     throw new ParseException("Expected expression after '-'", _scanner.Cursor.Position);
                 }
 
-                return new NegateExpression(inner);
+                return new NegateExpression<decimal>(inner);
             }
 
             return ParsePrimaryExpression();
@@ -113,17 +115,13 @@ namespace Parlot.Tests.Calc
                     | "(" expression ")" ;
         */
 
-        private Expression ParsePrimaryExpression()
+        private Expression<decimal> ParsePrimaryExpression()
         {
             _scanner.SkipWhiteSpace();
 
             if (_scanner.ReadDecimal(out var number))
             {
-#if NETCOREAPP2_1
-                return new Number(decimal.Parse(number.GetText(), provider: CultureInfo.InvariantCulture));
-#else
-                return new Number(decimal.Parse(number.Span, provider: CultureInfo.InvariantCulture));
-#endif
+                return new Decimal(decimal.Parse(number.Span, provider: CultureInfo.InvariantCulture));
             }
 
             if (_scanner.ReadChar('('))
