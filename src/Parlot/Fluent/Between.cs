@@ -16,13 +16,20 @@ namespace Parlot.Fluent
             _before = before ?? throw new ArgumentNullException(nameof(before));
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _after = after ?? throw new ArgumentNullException(nameof(after));
+
+            if (_before is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _before is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _before is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _before is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {

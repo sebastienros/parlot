@@ -16,15 +16,20 @@ namespace Parlot.Fluent
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparisonType = comparisonType;
             _hasNewLines = text.Any(x => Character.IsNewLine(x));
+
+            if (CanSeek = Text.Length > 0)
+            {
+                ExpectedChars = [Text[0]];
+            }
         }
 
         public string Text { get; }
 
-        public bool CanSeek => Text.Length > 0;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => [Text[0]];
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => false;
+        public bool SkipWhitespace { get; } = false;
 
         public override bool Parse(ParseContext context, ref ParseResult<string> result)
         {

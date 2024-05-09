@@ -1,5 +1,6 @@
 ﻿using Parlot.Compilation;
 using Parlot.Rewriting;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
@@ -10,14 +11,20 @@ namespace Parlot.Fluent
 
         public SkipWhiteSpace(Parser<T> parser)
         {
-            _parser = parser;
+            _parser = parser ?? throw new ArgumentNullException(nameof(parser)); 
+            
+            if (parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => true;
+        public bool SkipWhitespace { get; } = true;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {

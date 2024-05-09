@@ -13,13 +13,20 @@ namespace Parlot.Fluent
         public OneOrMany(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+
+            if (_parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
         {

@@ -14,18 +14,30 @@ namespace Parlot.Fluent
 
     public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
     {
+        static readonly char[] SingleQuotes = ['\''];
+        static readonly char[] DoubleQuotes = ['\"'];
+        static readonly char[] SingleOrDoubleQuotes = ['\'', '\"'];
+        
         private readonly StringLiteralQuotes _quotes;
 
         public StringLiteral(StringLiteralQuotes quotes)
         {
             _quotes = quotes;
+
+            ExpectedChars = _quotes switch 
+            { 
+                StringLiteralQuotes.Single => SingleQuotes, 
+                StringLiteralQuotes.Double => DoubleQuotes, 
+                StringLiteralQuotes.SingleOrDouble => SingleOrDoubleQuotes, 
+                _ => [] 
+            };
         }
 
-        public bool CanSeek => true;
+        public bool CanSeek { get; } = true;
 
-        public char[] ExpectedChars => _quotes switch { StringLiteralQuotes.Single => ['\''], StringLiteralQuotes.Double => ['\"'], StringLiteralQuotes.SingleOrDouble => ['\'', '\"'], _ => Array.Empty<char>() };
+        public char[] ExpectedChars { get; }
 
-        public bool SkipWhitespace => false;
+        public bool SkipWhitespace { get; } = false;
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {

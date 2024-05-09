@@ -2,6 +2,7 @@
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
+using System.Collections.Frozen;
 using System.Linq;
 using System.Linq.Expressions;
 
@@ -15,17 +16,17 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable
     {
         internal readonly Parser<T>[] _parsers;
-        internal readonly Dictionary<char, List<Parser<T>>> _lookupTable;
+        internal readonly FrozenDictionary<char, List<Parser<T>>> _lookupTable;
         internal readonly bool _skipWhiteSpace;
 
         public OneOf(Parser<T>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
 
-            // All parsers are seekable
+            // If all parsers are seekable we can build a lookup table
             if (_parsers.All(x => x is ISeekable seekable && seekable.CanSeek))
             {
-                _lookupTable = new Dictionary<char, List<Parser<T>>>();
+                var lookupTable = new Dictionary<char, List<Parser<T>>>();
 
                 foreach (var parser in _parsers)
                 {
@@ -33,21 +34,21 @@ namespace Parlot.Fluent
 
                     foreach (var c in expectedChars)
                     { 
-                        if (!_lookupTable.TryGetValue(c, out var list))
+                        if (!lookupTable.TryGetValue(c, out var list))
                         {
                             list = new List<Parser<T>>();
-                            _lookupTable[c] = list;
+                            lookupTable[c] = list;
                         }
 
                         list.Add(parser);
                     }
                 }
 
-                if (_lookupTable.Count <= 1)
+                if (lookupTable.Count <= 1)
                 {
                     // If all parsers have the same first char, no need to use a lookup table
 
-                    _lookupTable = null;
+                    lookupTable = null;
                 }
                 else if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
                 {
@@ -58,8 +59,13 @@ namespace Parlot.Fluent
                 {
                     // If not all parsers accept a white space, we can't use a lookup table since the order matters
 
-                    _lookupTable = null;
-                }                
+                    lookupTable = null;
+                }
+
+                if (lookupTable != null)
+                {
+                    _lookupTable = lookupTable.ToFrozenDictionary();
+                }
             }
         }
 

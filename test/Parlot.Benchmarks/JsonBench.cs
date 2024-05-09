@@ -25,8 +25,8 @@ namespace Parlot.Benchmarks
         private Parser<IJson> _compiled;
 #nullable restore
 
-        private static JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
-        private static JsonSerializerOptions _jsonSerializerOptions = new() { MaxDepth = 1024 };
+        private static readonly JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
+        private static readonly JsonSerializerOptions _jsonSerializerOptions = new() { MaxDepth = 1024 };
         private static readonly Random _random = new();
 
         [GlobalSetup]
