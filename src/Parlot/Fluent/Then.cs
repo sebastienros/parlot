@@ -17,16 +17,17 @@ namespace Parlot.Fluent
         private readonly Func<T, U> _action1;
         private readonly Func<ParseContext, T, U> _action2;
         private readonly Parser<T> _parser;
-        
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
-
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
-
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
         public Then(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+
+            if (parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
         public Then(Parser<T> parser, Func<T, U> action) : this(parser)
@@ -38,6 +39,12 @@ namespace Parlot.Fluent
         {
             _action2 = action ?? throw new ArgumentNullException(nameof(action));
         }
+
+        public bool CanSeek { get; }
+
+        public char[] ExpectedChars { get; } = [];
+
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<U> result)
         {

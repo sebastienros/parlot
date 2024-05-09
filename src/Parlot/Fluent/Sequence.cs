@@ -13,13 +13,20 @@ namespace Parlot.Fluent
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
             _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+
+            if (_parser1 is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser1 is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser1 is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser1 is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
         {
@@ -72,13 +79,20 @@ namespace Parlot.Fluent
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+
+            if (_parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
         {
@@ -135,13 +149,20 @@ namespace Parlot.Fluent
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+
+            if (_parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
         {
@@ -199,13 +220,20 @@ namespace Parlot.Fluent
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+
+            if (_parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
         {
@@ -264,13 +292,20 @@ namespace Parlot.Fluent
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+
+            if (_parser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
         {
@@ -331,13 +366,20 @@ namespace Parlot.Fluent
         {
             _parser = parser;
             _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+
+            if (_lastParser is ISeekable seekable)
+            {
+                CanSeek = seekable.CanSeek;
+                ExpectedChars = seekable.ExpectedChars;
+                SkipWhitespace = seekable.SkipWhitespace;
+            }
         }
 
-        public bool CanSeek => _parser is ISeekable seekable && seekable.CanSeek;
+        public bool CanSeek { get; }
 
-        public char[] ExpectedChars => _parser is ISeekable seekable ? seekable.ExpectedChars : default;
+        public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
         {

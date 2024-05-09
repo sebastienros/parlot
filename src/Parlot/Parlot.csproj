@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
     <Title>Parser combinator for .NET</Title>
     <Description>Parlot is a fast, lightweight and simple to use .NET parser combinator.</Description>
     <PackageTags>parser;interpreter;</PackageTags>
@@ -14,7 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'netstandard2.0' " />
+    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="System.Collections.Immutable" Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'netstandard2.1'" />
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
   </ItemGroup>
 
