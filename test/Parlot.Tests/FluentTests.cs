@@ -592,7 +592,7 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void BetweenShouldresetPosition()
+        public void BetweenShouldResetPosition()
         {
             Assert.True(Between(Terms.Char('['), Terms.Text("abcd"), Terms.Char(']')).Then(x => x.ToString()).Or(Literals.Text(" [abc")).TryParse(" [abc]", out var result1));
             Assert.Equal(" [abc", result1);
@@ -682,6 +682,17 @@ namespace Parlot.Tests
                 SkipWhiteSpace(Literals.WhiteSpace(includeNewLines: true).SkipAnd(Literals.Text("ab")))
                 .TryParse(new ParseContext(new Scanner(" \nab"), useNewLines: true),
                 out var _, out var _));
+        }
+
+        [Fact]
+        public void ZeroOrManyShouldHandleAllSizes()
+        {
+            var parser = ZeroOrMany(Terms.Text("+").Or(Terms.Text("-")).And(Terms.Integer())).Compile();
+
+            Assert.Equal([], parser.Parse(""));
+            Assert.Equal([("+", 1L)], parser.Parse("+1"));
+            Assert.Equal([("+", 1L), ("-", 2)], parser.Parse("+1-2"));
+
         }
     }
 }

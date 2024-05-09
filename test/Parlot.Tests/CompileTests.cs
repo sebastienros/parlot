@@ -171,17 +171,18 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ShouldCompileZeroOrManys()
+        public void ShouldCompileZeroOrMany()
         {
-            var parser = ZeroOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
+            var parser = ZeroOrMany(Terms.Text("+").Or(Terms.Text("-")).And(Terms.Integer())).Compile();
 
-            var result = parser.Parse(" hello world hello");
-
-            Assert.Equal(new[] { "hello", "world", "hello" }, result);
+            Assert.Equal([], parser.Parse(""));
+            Assert.Equal([("+", 1L)], parser.Parse("+1"));
+            Assert.Equal([("+", 1L), ("-", 2)], parser.Parse("+1-2"));
+            Assert.Equal([("+", 1L), ("-", 2), ("+", 3)], parser.Parse("+1-2+3"));
         }
 
         [Fact]
-        public void ShouldCompileOneOrManys()
+        public void ShouldCompileOneOrMany()
         {
             var parser = OneOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
 

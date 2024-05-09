@@ -67,10 +67,12 @@ namespace Parlot.Compilation
             return result.Success;
         }
 
-        public static ParameterExpression DeclareVariable<T>(this CompilationContext context, CompilationResult result, string name)
+        public static ParameterExpression DeclareVariable<T>(this CompilationContext context, CompilationResult result, string name, Expression defaultValue = null)
         {
             var variable = Expression.Variable(typeof(T), name);
             result.Variables.Add(variable);
+
+            result.Body.Add(Expression.Assign(variable, defaultValue ?? Expression.Constant(default(T), typeof(T))));
 
             return variable;
         }

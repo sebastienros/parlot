@@ -5,6 +5,9 @@ namespace Parlot.Tests
 {
     public class BenchmarksTests
     {
+        const decimal _expected1 = (decimal)3.5;
+        const decimal _expected2 = (decimal)-64.5;
+
         [Fact]
         public void CreateCompiledSmallParser()
         {
@@ -98,125 +101,125 @@ namespace Parlot.Tests
         [Fact]
         public void ExpressionRawSmall()
         {
-            var benchmarks = new ParlotBenchmarks();
-            benchmarks.Setup();
-            var result = benchmarks.ExpressionRawSmall();
+            var benchmarks = new ExprBench();
+            var result = benchmarks.ParlotRawSmall();
             Assert.NotNull(result);
+            Assert.Equal(_expected1, result.Evaluate());
         }
 
         [Fact]
         public void ExpressionCompiledSmall()
         {
-            var benchmarks = new ParlotBenchmarks();
-            benchmarks.Setup();
-            var result = benchmarks.ExpressionCompiledSmall();
+            var benchmarks = new ExprBench();
+            var result = benchmarks.ParlotCompiledSmall();
             Assert.NotNull(result);
+            Assert.Equal(_expected1, result.Evaluate());
         }
 
         [Fact]
         public void ExpressionFluentSmall()
         {
-            var benchmarks = new ParlotBenchmarks();
-            benchmarks.Setup();
-            var result = benchmarks.ExpressionCompiledSmall();
+            var benchmarks = new ExprBench();
+            var result = benchmarks.ParlotFluentSmall();
             Assert.NotNull(result);
+            Assert.Equal(_expected1, result.Evaluate());
         }
 
         [Fact]
         public void ExpressionRawBig()
         {
-            var benchmarks = new ParlotBenchmarks();
-            benchmarks.Setup();
-            var result = benchmarks.ExpressionRawBig();
+            var benchmarks = new ExprBench();
+            var result = benchmarks.ParlotRawBig();
             Assert.NotNull(result);
+            Assert.Equal(_expected2, result.Evaluate());
         }
 
         [Fact]
         public void ExpressionCompiledBig()
         {
-            var benchmarks = new ParlotBenchmarks();
-            benchmarks.Setup();
-            var result = benchmarks.ExpressionCompiledBig();
+            var benchmarks = new ExprBench();
+            var result = benchmarks.ParlotCompiledBig();
             Assert.NotNull(result);
+            Assert.Equal(_expected2, result.Evaluate());
         }
 
         [Fact]
         public void ExpressionFluentBig()
         {
-            var benchmarks = new ParlotBenchmarks();
-            benchmarks.Setup();
-            var result = benchmarks.ExpressionCompiledBig();
+            var benchmarks = new ExprBench();
+            var result = benchmarks.ParlotFluentBig();
             Assert.NotNull(result);
+            Assert.Equal(_expected2, result.Evaluate());
         }
 
         [Fact]
         public void BigJson()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.BigJson();
+            var result = benchmarks.BigJson_Parlot();
             Assert.NotNull(result);
         }
 
         [Fact]
         public void BigJsonCompiled()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.BigJsonCompiled();
+            var result = benchmarks.BigJson_ParlotCompiled();
             Assert.NotNull(result);
         }
 
         [Fact]
         public void DeepJson()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.DeepJson();
+            var result = benchmarks.DeepJson_Parlot();
             Assert.NotNull(result);
         }
 
         [Fact]
         public void DeepJsonCompiled()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.DeepJsonCompiled();
+            var result = benchmarks.DeepJson_ParlotCompiled();
             Assert.NotNull(result);
         }
 
         [Fact]
         public void LongJson()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.LongJson();
+            var result = benchmarks.LongJson_Parlot();
             Assert.NotNull(result);
         }
 
         [Fact]
         public void LongJsonCompiled()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.LongJsonCompiled();
+            var result = benchmarks.LongJson_ParlotCompiled();
             Assert.NotNull(result);
         }
 
         [Fact]
         public void WideJson()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.WideJson();
+            var result = benchmarks.WideJson_Parlot();
         }
 
         [Fact]
         public void WideJsonCompiled()
         {
-            var benchmarks = new ParlotBenchmarks();
+            var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.WideJsonCompiled();
+            var result = benchmarks.WideJson_ParlotCompiled();
             Assert.NotNull(result);
         }
 

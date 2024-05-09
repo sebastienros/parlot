@@ -3,7 +3,6 @@ using BenchmarkDotNet.Configs;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
-using System;
 
 namespace Parlot.Benchmarks
 {
@@ -15,22 +14,6 @@ namespace Parlot.Benchmarks
 
         private const string _expression1 = "3 - 1 / 2 + 1";
         private const string _expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";
-
-        public ExprBench()
-        {
-            var expected1 = (decimal)3.5;
-            var expected2 = (decimal)-64.5;
-
-            if (PidginSmall().Evaluate() != expected1) throw new Exception(nameof(PidginSmall));
-            if (ParlotRawSmall().Evaluate() != expected1) throw new Exception(nameof(ParlotRawSmall));
-            if (ParlotFluentSmall().Evaluate() != expected1) throw new Exception(nameof(ParlotFluentSmall));
-            if (ParlotCompiledSmall().Evaluate() != expected1) throw new Exception(nameof(ParlotCompiledSmall));
-
-            if (PidginBig().Evaluate() != expected2) throw new Exception(nameof(PidginBig));
-            if (ParlotRawBig().Evaluate() != expected2) throw new Exception(nameof(ParlotRawBig));
-            if (ParlotFluentBig().Evaluate() != expected2) throw new Exception(nameof(ParlotFluentBig));
-            if (ParlotCompiledBig().Evaluate() != expected2) throw new Exception(nameof(ParlotCompiledBig));
-        }
 
         [Benchmark, BenchmarkCategory("Expression1")]
         public Expression ParlotRawSmall()
