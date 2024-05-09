@@ -19,7 +19,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or many times a parser separated by another one.
         /// </summary>
-        public static Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
+        public static Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
 
         /// <summary>
         /// Builds a parser that skips white spaces before another one.
@@ -29,17 +29,17 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
-        public static Parser<T> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
+        public static Parser<OptionalResult<T>> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
         /// </summary>
-        public static Parser<List<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
+        public static Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
 
         /// <summary>
         /// Builds a parser that looks for one or many times the specified parser.
         /// </summary>
-        public static Parser<List<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
+        public static Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
 
         /// <summary>
         /// Builds a parser that succeed when the specified parser fails to match.

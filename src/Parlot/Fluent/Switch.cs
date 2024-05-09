@@ -86,7 +86,7 @@ namespace Parlot.Fluent
                                 [nextParser, parseResult], 
                                 Expression.Assign(nextParser, Expression.Invoke(Expression.Constant(_action), new[] { context.ParseContext, previousParserCompileResult.Value })),
                                 Expression.IfThen(
-                                    Expression.NotEqual(Expression.Constant(null), nextParser),
+                                    Expression.NotEqual(Expression.Constant(null, typeof(Parser<U>)), nextParser),
                                     Expression.Block(
                                         Expression.Assign(success,
                                             Expression.Call(

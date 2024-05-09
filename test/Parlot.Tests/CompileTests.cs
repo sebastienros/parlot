@@ -171,17 +171,18 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ShouldCompileZeroOrManys()
+        public void ShouldCompileZeroOrMany()
         {
-            var parser = ZeroOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
+            var parser = ZeroOrMany(Terms.Text("+").Or(Terms.Text("-")).And(Terms.Integer())).Compile();
 
-            var result = parser.Parse(" hello world hello");
-
-            Assert.Equal(new[] { "hello", "world", "hello" }, result);
+            Assert.Equal([], parser.Parse(""));
+            Assert.Equal([("+", 1L)], parser.Parse("+1"));
+            Assert.Equal([("+", 1L), ("-", 2)], parser.Parse("+1-2"));
+            Assert.Equal([("+", 1L), ("-", 2), ("+", 3)], parser.Parse("+1-2+3"));
         }
 
         [Fact]
-        public void ShouldCompileOneOrManys()
+        public void ShouldCompileOneOrMany()
         {
             var parser = OneOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
 
@@ -195,8 +196,9 @@ namespace Parlot.Tests
         {
             var parser = ZeroOrOne(Terms.Text("hello")).Compile();
 
-            Assert.Equal("hello", parser.Parse(" hello world hello"));
-            Assert.Null(parser.Parse(" foo"));
+            Assert.Equal("hello", parser.Parse(" hello world hello").Value);
+            Assert.False(parser.Parse(" foo").HasValue);
+            Assert.Null(parser.Parse(" foo").Value);
         }
 
         [Fact]
@@ -256,9 +258,9 @@ namespace Parlot.Tests
             Parser<char> Minus = Literals.Char('-');
             Parser<char> At = Literals.Char('@');
             Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+            Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+            Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
             Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
@@ -621,9 +623,9 @@ namespace Parlot.Tests
             Parser<char> Minus = Literals.Char('-');
             Parser<char> At = Literals.Char('@');
             Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit).Compile();
-            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+            Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+            Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+            Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
             Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
@@ -632,6 +634,15 @@ namespace Parlot.Tests
             var result = parser.Parse(_email);
 
             Assert.Equal(_email, result.ToString());
+        }
+
+        [Fact]
+        public void ShouldSkipSequences()
+        {
+            var parser = Terms.Char('a').And(Terms.Char('b')).AndSkip(Terms.Char('c')).And(Terms.Char('d')).Compile();
+
+            Assert.True(parser.TryParse("abcd", out var result1));
+            Assert.Equal("abd", result1.Item1.ToString() + result1.Item2 + result1.Item3);
         }
     }
 }

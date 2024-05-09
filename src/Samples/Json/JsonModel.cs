@@ -9,8 +9,8 @@ namespace Parlot.Tests.Json
 
     public class JsonArray : IJson
     {
-        public IJson[] Elements { get; }
-        public JsonArray(IJson[] elements)
+        public IReadOnlyList<IJson> Elements { get; }
+        public JsonArray(IReadOnlyList<IJson> elements)
         {
             Elements = elements;
         }
