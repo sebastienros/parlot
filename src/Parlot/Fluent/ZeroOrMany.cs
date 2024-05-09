@@ -75,15 +75,18 @@ namespace Parlot.Fluent
             // 
             //   if (parser1.Success)
             //   {
-            //      if (results == null) results = new List<T>();
+            //      if (results == null)
+            //      {
+            //          results = new List<T>();
+            //          value = results;
+            //      }
+            //
             //      results.Add(parse1.Value);
             //   }
             //   else
             //   {
             //      break;
             //   }
-            //
-            //   value = results;
             //
             //   if (context.Scanner.Cursor.Eof)
             //   {
