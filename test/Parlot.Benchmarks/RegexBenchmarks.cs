@@ -19,9 +19,9 @@ namespace Parlot.Benchmarks
         public static readonly Parser<char> Minus = Literals.Char('-');
         public static readonly Parser<char> At = Literals.Char('@');
         public static readonly Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-        public static readonly Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-        public static readonly Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-        public static readonly Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+        public static readonly Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
+        public static readonly Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
+        public static readonly Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
         public static readonly Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
         public static readonly Parser<TextSpan> EmailCompiled = Email.Compile();

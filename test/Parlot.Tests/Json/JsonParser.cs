@@ -27,7 +27,7 @@ namespace Parlot.Tests.Json
 
             var jsonArray =
                 Between(LBracket, Separated(Comma, json), RBracket)
-                    .Then<IJson>(static els => new JsonArray(els.ToArray()));
+                    .Then<IJson>(static els => new JsonArray(els));
 
             var jsonMember =
                 String.And(Colon).And(json)

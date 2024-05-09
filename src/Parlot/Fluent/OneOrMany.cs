@@ -6,7 +6,7 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class OneOrMany<T> : Parser<List<T>>, ICompilable, ISeekable
+    public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
     {
         private readonly Parser<T> _parser;
 
@@ -21,7 +21,7 @@ namespace Parlot.Fluent
 
         public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
-        public override bool Parse(ParseContext context, ref ParseResult<List<T>> result)
+        public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
         {
             context.EnterParser(this);
 
@@ -44,7 +44,7 @@ namespace Parlot.Fluent
 
             } while (_parser.Parse(context, ref parsed));
 
-            result = new ParseResult<List<T>>(start, end, results);
+            result = new ParseResult<IReadOnlyList<T>>(start, end, results);
             return true;
         }
 

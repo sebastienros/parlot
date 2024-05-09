@@ -35,10 +35,10 @@ namespace Parlot.Tests
             var parser = ZeroOrOne(Literals.Integer());
 
             Assert.True(parser.TryParse("123", out var result1));
-            Assert.Equal(123, result1);
+            Assert.Equal(123, result1.Value);
 
             Assert.True(parser.TryParse(" 123", out var result2));
-            Assert.Equal(0, result2);
+            Assert.Equal(0, result2.Value);
         }
 
         [Fact]
@@ -127,7 +127,7 @@ namespace Parlot.Tests
         [Fact]
         public void AndSkipShouldResetPosition()
         {
-            var code = 
+            var code =
                 OneOf(
                     Terms.Text("hello").AndSkip(Terms.Text("world")),
                     Terms.Text("hello").AndSkip(Terms.Text("universe"))
@@ -141,7 +141,7 @@ namespace Parlot.Tests
         [Fact]
         public void SkipAndShouldResetPosition()
         {
-            var code = 
+            var code =
                 OneOf(
                     Terms.Text("hello").SkipAnd(Terms.Text("world")),
                     Terms.Text("hello").AndSkip(Terms.Text("universe"))
@@ -219,9 +219,9 @@ namespace Parlot.Tests
                 .And(Terms.Pattern(c => c == 'Z'))
                 .TryParse("aaZZ", out _));
 
-           Assert.True(Terms.Pattern(c => c == 'a', minSize: 3)
-                .And(Terms.Pattern(c => c == 'Z'))
-                .TryParse("aaaZZ", out _));                
+            Assert.True(Terms.Pattern(c => c == 'a', minSize: 3)
+                 .And(Terms.Pattern(c => c == 'Z'))
+                 .TryParse("aaaZZ", out _));
         }
 
         [Theory]
@@ -468,9 +468,9 @@ namespace Parlot.Tests
             Parser<char> Minus = Literals.Char('-');
             Parser<char> At = Literals.Char('@');
             Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-            Parser<List<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
-            Parser<List<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
-            Parser<List<char>> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
+            Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
+            Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
+            Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
             Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
             string _email = "sebastien.ros@gmail.com";
@@ -509,7 +509,7 @@ namespace Parlot.Tests
             Assert.True(Terms.Decimal().Discard<bool>(true).TryParse("123", out var r2) && r2 == true);
             Assert.False(Terms.Decimal().Discard<bool>(true).TryParse("abc", out _));
         }
-        
+
         [Fact]
         public void ErrorShouldThrowIfParserSucceeds()
         {
@@ -550,33 +550,33 @@ namespace Parlot.Tests
             Assert.False(Literals.Char('a').ElseError("'a' was expected").TryParse("b", out _, out var error));
             Assert.Equal("'a' was expected", error.Message);
         }
-        
+
         [Fact]
         public void ElseErrorShouldFlowResultIfParserSucceeds()
         {
             Assert.True(Literals.Char('a').ElseError("'a' was expected").TryParse("a", out var result));
             Assert.Equal('a', result);
         }
-        
+
         [Fact]
         public void TextBeforeShouldReturnAllCharBeforeDelimiter()
         {
             Assert.False(AnyCharBefore(Literals.Char('a')).TryParse("", out _));
             Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: true).TryParse("", out var result1));
-            
+
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hello", out var result2));
             Assert.Equal("hello", result2);
             Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: false).TryParse("hello", out _));
             Assert.False(AnyCharBefore(Literals.Char('a'), failOnEof: true).TryParse("hello", out _));
         }
-        
+
         [Fact]
         public void TextBeforeShouldStopAtDelimiter()
         {
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hellao", out var result1));
             Assert.Equal("hell", result1);
         }
-        
+
         [Fact]
         public void TextBeforeShouldNotConsumeDelimiter()
         {
@@ -653,7 +653,7 @@ namespace Parlot.Tests
         public void OneOfShouldNotFailWithLookupConflicts()
         {
             var parser = Literals.Text("abc").Or(Literals.Text("ab")).Or(Literals.Text("a"));
-            
+
             Assert.True(parser.TryParse("a", out _));
             Assert.True(parser.TryParse("ab", out _));
             Assert.True(parser.TryParse("abc", out _));

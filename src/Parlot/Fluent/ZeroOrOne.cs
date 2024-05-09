@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
-    public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
+    public sealed class ZeroOrOne<T> : Parser<OptionalResult<T>>, ICompilable, ISeekable
     {
         private readonly Parser<T> _parser;
 
@@ -20,12 +20,17 @@ namespace Parlot.Fluent
 
         public bool SkipWhitespace => _parser is ISeekable seekable && seekable.SkipWhitespace;
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        public override bool Parse(ParseContext context, ref ParseResult<OptionalResult<T>> result)
         {
             context.EnterParser(this);
 
-            _parser.Parse(context, ref result);
+            var parsed = new ParseResult<T>();
 
+            var success = _parser.Parse(context, ref parsed);
+
+            result.Set(parsed.Start, parsed.End, new OptionalResult<T>(success, parsed.Value));
+
+            // ZeroOrOne always succeeds
             return true;
         }
 
@@ -34,17 +39,14 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, true);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(OptionalResult<T>)));
 
             // T value;
             //
             // parse1 instructions
             // 
-            // if (parser1.Success)
-            // {
-            //    value parse1.Value;
-            // }
-            // 
+            // value = new OptionalResult<T>(parser1.Success, parse1.Value);
+            //
 
             var parserCompileResult = _parser.Build(context);
 
@@ -52,12 +54,9 @@ namespace Parlot.Fluent
                 parserCompileResult.Variables,
                     Expression.Block(
                         Expression.Block(parserCompileResult.Body),
-                        Expression.IfThen(
-                            parserCompileResult.Success,
-                            context.DiscardResult
+                        context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, parserCompileResult.Value)
-                            )
+                            : Expression.Assign(value, context.NewOptionalResult<T>(parserCompileResult.Success, parserCompileResult.Value))
                         )
                     );
 
