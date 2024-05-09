@@ -13,7 +13,7 @@ The Fluent API provides simple parser combinators that are assembled to express 
 The main goal of this API is to provide an easy-to-read grammar. Another advantage is that grammars are built at runtime, and they can be extended dynamically.
 
 The following example is a complete parser that creates a mathematical expression tree (AST).
-The source is available [here](./test/Parlot.Tests/Calc/FluentParser.cs).
+The source is available [here](./src/Samples/Calc/FluentParser.cs).
 
 ```c#
 public static readonly Parser<Expression> Expression;
