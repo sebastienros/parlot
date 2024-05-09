@@ -13,9 +13,10 @@
     <PackageReference Include="Superpower" />
     <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
-
+  
   <ItemGroup>
-    <ProjectReference Include="..\Parlot.Tests\Parlot.Tests.csproj" />
+    <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
+    <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
   </ItemGroup>
 
 </Project>
