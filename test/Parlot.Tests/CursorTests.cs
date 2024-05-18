@@ -307,7 +307,7 @@ namespace Parlot.Tests
             Assert.Equal(0, t2.Length);
             Assert.Equal(0, t2.Offset);
 
-#if NETCOREAPP3_1_OR_GREATER
+#if NET6_0_OR_GREATER
             Assert.True(ReadOnlySpan<char>.Empty == t2.Span);
 #endif
         }

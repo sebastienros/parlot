@@ -89,13 +89,13 @@ namespace Parlot
                 return span;
             }
 
-#if NETSTANDARD2_0
-            var result = CreateString(span.Length, span, static (chars, source) =>
+#if NET6_0_OR_GREATER
+            var result = string.Create(span.Length, span, static (chars, source) =>
 #else
-            var result = String.Create(span.Length, span, static (chars, source) =>
+            var result = "".Create(span.Length, span, static (chars, source) =>
 #endif
             {
-                // The asumption is that the new string will be shorter since escapes results are smaller than their source
+                // The assumption is that the new string will be shorter since escapes results are smaller than their source
 
                 var dataIndex = 0;
                 var buffer = source.Buffer;
@@ -153,17 +153,5 @@ namespace Parlot
         }
 
         private static int HexValue(char ch) => HexConverter.FromChar(ch);
-
-#if NETSTANDARD2_0
-        private delegate void SpanAction<T, in TArg>(T[] span, TArg arg);
-        private static string CreateString<TState>(int length, TState state, SpanAction<char, TState> action)
-        {
-            var array = new char[length];
-
-            action(array, state);
-
-            return new string(array);
-        }
-#endif
     }
 }

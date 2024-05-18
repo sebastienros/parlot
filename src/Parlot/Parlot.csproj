@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
+    <TargetFrameworks>net462;net6.0;net8.0</TargetFrameworks>
     <Title>Parser combinator for .NET</Title>
     <Description>Parlot is a fast, lightweight and simple to use .NET parser combinator.</Description>
     <PackageTags>parser;interpreter;</PackageTags>
@@ -14,16 +14,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
-    <PackageReference Include="System.Collections.Immutable" Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'netstandard2.1'" />
+    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'net462' "/>
+    <PackageReference Include="System.Collections.Immutable" Condition="'$(TargetFramework)' == 'net462' or '$(TargetFramework)' == 'net6.0'" />
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0' ">
-    <DefineConstants>$(DefineConstants);SUPPORTS_READONLYSPAN</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1' ">
-    <DefineConstants>$(DefineConstants);SUPPORTS_SPAN_PARSE;SUPPORTS_CODENALYSIS</DefineConstants>
-  </PropertyGroup>
 </Project>

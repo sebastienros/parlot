@@ -108,7 +108,7 @@ namespace Parlot.Fluent
             // ParseResult parseResult;
             //
             // success = parser.Parse(context.ParseContext, ref parseResult)
-            // #if not DicardResult
+            // #if not DiscardResult
             // if (success)
             // {
             //    value = parseResult.Value;
