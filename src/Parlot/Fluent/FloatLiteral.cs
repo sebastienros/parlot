@@ -33,10 +33,10 @@ namespace Parlot.Fluent
             if (context.Scanner.ReadDecimal())
             {
                 var end = context.Scanner.Cursor.Offset;
-#if !SUPPORTS_SPAN_PARSE
-                var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
-#else
+#if NET6_0_OR_GREATER
                 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
+#else
+                var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #endif
 
                 if (float.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
@@ -94,14 +94,14 @@ namespace Parlot.Fluent
             //
 
             var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
-#if NETSTANDARD2_0
+#if NET6_0_OR_GREATER
+            var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
+            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
+            var tryParseMethodInfo = typeof(float).GetMethod(nameof(float.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(float).MakeByRefType() });
+#else
             var sourceToParse = Expression.Variable(typeof(string), $"sourceToParse{context.NextNumber}");
             var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(context.Buffer(), typeof(string).GetMethod("Substring", [typeof(int), typeof(int)]), start, Expression.Subtract(end, start)));
             var tryParseMethodInfo = typeof(float).GetMethod(nameof(float.TryParse), [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(float).MakeByRefType()]);
-#else
-            var sourceToParse = Expression.Variable(typeof(ReadOnlySpan<char>), $"sourceToParse{context.NextNumber}");
-            var sliceExpression = Expression.Assign(sourceToParse, Expression.Call(typeof(MemoryExtensions).GetMethod("AsSpan", new[] { typeof(string), typeof(int), typeof(int) }), context.Buffer(), start, Expression.Subtract(end, start)));
-            var tryParseMethodInfo = typeof(float).GetMethod(nameof(float.TryParse), new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(float).MakeByRefType()});
 #endif
 
             // TODO: NETSTANDARD2_1 code path

@@ -1,14 +1,13 @@
 using System;
+#if NET6_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
 
 namespace Parlot
 {
-#if SUPPORTS_CODENALYSIS
-    using System.Diagnostics.CodeAnalysis;
-#endif
-
     internal static class ThrowHelper
     {
-#if SUPPORTS_CODENALYSIS
+#if NET6_0_OR_GREATER
         [DoesNotReturn]
 #endif
         public static void ThrowArgumentNullException(string paramName)
