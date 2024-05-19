@@ -13,15 +13,20 @@ namespace Parlot.Fluent
     /// We then return the actual result of each parser.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public sealed class OneOf<T> : Parser<T>, ICompilable
+    public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
         internal readonly Parser<T>[] _parsers;
         internal readonly FrozenDictionary<char, List<Parser<T>>> _lookupTable;
-        internal readonly bool _skipWhiteSpace;
 
         public OneOf(Parser<T>[] parsers)
         {
             _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+
+            // We can't build a lookup table if there is only one parser
+            if (_parsers.Length <= 1)
+            {
+                return;
+            }
 
             // If all parsers are seekable we can build a lookup table
             if (_parsers.All(x => x is ISeekable seekable && seekable.CanSeek))
@@ -53,7 +58,7 @@ namespace Parlot.Fluent
                 else if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
                 {
                     // All parsers can start with white spaces
-                    _skipWhiteSpace = true;
+                    SkipWhitespace = true;
                 }
                 else if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
                 {
@@ -65,9 +70,18 @@ namespace Parlot.Fluent
                 if (lookupTable != null)
                 {
                     _lookupTable = lookupTable.ToFrozenDictionary();
+
+                    CanSeek = true;
+                    ExpectedChars = _lookupTable.Keys.ToArray();
                 }
             }
         }
+
+        public bool CanSeek { get; }
+
+        public char[] ExpectedChars { get; } = [];
+
+        public bool SkipWhitespace { get; }
 
         public Parser<T>[] Parsers => _parsers;
 
@@ -79,7 +93,7 @@ namespace Parlot.Fluent
 
             if (_lookupTable != null)
             {
-                if (_skipWhiteSpace)
+                if (SkipWhitespace)
                 {
                     var start = context.Scanner.Cursor.Position;
 
@@ -201,7 +215,7 @@ namespace Parlot.Fluent
                         cases
                     );
 
-                if (_skipWhiteSpace)
+                if (SkipWhitespace)
                 {
                     var start = context.DeclarePositionVariable(result);
 

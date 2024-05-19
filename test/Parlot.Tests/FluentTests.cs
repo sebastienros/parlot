@@ -1,6 +1,7 @@
 using Parlot.Fluent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net.WebSockets;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -693,6 +694,81 @@ namespace Parlot.Tests
             Assert.Equal([("+", 1L)], parser.Parse("+1"));
             Assert.Equal([("+", 1L), ("-", 2)], parser.Parse("+1-2"));
 
+        }
+
+        [Fact]
+        public void ShouldParseSequence()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Char('b');
+            var c = Literals.Char('c');
+            var d = Literals.Char('d');
+            var e = Literals.Char('e');
+            var f = Literals.Char('f');
+            var g = Literals.Char('g');
+            var h = Literals.Char('h');
+
+            Assert.True(a.And(b).TryParse("ab", out var r));
+            Assert.Equal(('a', 'b'), r);
+
+            Assert.True(a.And(b).And(c).TryParse("abc", out var r1));
+            Assert.Equal(('a', 'b', 'c'), r1);
+
+            Assert.True(a.And(b).AndSkip(c).TryParse("abc", out var r2));
+            Assert.Equal(('a', 'b'), r2);
+
+            Assert.True(a.And(b).SkipAnd(c).TryParse("abc", out var r3));
+            Assert.Equal(('a', 'c'), r3);
+        }
+
+        [Fact]
+        public void ShouldParseSequenceAndSkip()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Char('b');
+            var c = Literals.Char('c');
+            var d = Literals.Char('d');
+            var e = Literals.Char('e');
+            var f = Literals.Char('f');
+            var g = Literals.Char('g');
+            var h = Literals.Char('h');
+
+            Assert.True(a.AndSkip(b).TryParse("ab", out var r));
+            Assert.Equal(('a'), r);
+
+            Assert.True(a.AndSkip(b).And(c).TryParse("abc", out var r1));
+            Assert.Equal(('a', 'c'), r1);
+
+            Assert.True(a.AndSkip(b).AndSkip(c).TryParse("abc", out var r2));
+            Assert.Equal(('a'), r2);
+
+            Assert.True(a.AndSkip(b).SkipAnd(c).TryParse("abc", out var r3));
+            Assert.Equal(('c'), r3);
+        }
+
+        [Fact]
+        public void ShouldParseSequenceSkipAnd()
+        {
+            var a = Literals.Char('a');
+            var b = Literals.Char('b');
+            var c = Literals.Char('c');
+            var d = Literals.Char('d');
+            var e = Literals.Char('e');
+            var f = Literals.Char('f');
+            var g = Literals.Char('g');
+            var h = Literals.Char('h');
+
+            Assert.True(a.SkipAnd(b).TryParse("ab", out var r));
+            Assert.Equal(('b'), r);
+
+            Assert.True(a.SkipAnd(b).And(c).TryParse("abc", out var r1));
+            Assert.Equal(('b', 'c'), r1);
+
+            Assert.True(a.SkipAnd(b).AndSkip(c).TryParse("abc", out var r2));
+            Assert.Equal(('b'), r2);
+
+            Assert.True(a.SkipAnd(b).SkipAnd(c).TryParse("abc", out var r3));
+            Assert.Equal(('c'), r3);
         }
     }
 }
