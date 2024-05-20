@@ -779,6 +779,7 @@ namespace Parlot.Tests
 
             Assert.Equal(123, a.Parse("a"));
             Assert.Equal("1", b.Parse("b"));
+        }
 
         [Fact]
         public void ShouldParseWithCaseSensitivity()
