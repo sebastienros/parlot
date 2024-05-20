@@ -1,4 +1,4 @@
-﻿#if NET462
+﻿#if !NET6_0_OR_GREATER
 using System.Collections.Generic;
 #endif
 
@@ -6,7 +6,7 @@ namespace Parlot;
 
 internal static class Polyfill
 {
-#if NET462
+#if !NET6_0_OR_GREATER
     internal static IEnumerable<T> Append<T>(this IEnumerable<T> source, T element)
     {
         var result = new List<T>(source);
