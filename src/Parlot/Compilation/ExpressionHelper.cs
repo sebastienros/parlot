@@ -27,12 +27,12 @@ namespace Parlot.Compilation
         internal static MethodInfo Cursor_AdvanceNoNewLines = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.AdvanceNoNewLines), [typeof(int)]);
 
         internal static ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor([typeof(string), typeof(int), typeof(int)]);
-        internal static ConstructorInfo GetOptionalResult_Constructor<T>() => typeof(OptionalResult<T>).GetConstructor([typeof(bool), typeof(T)]);
+        //internal static ConstructorInfo GetOptionalResult_Constructor<T>() => typeof(OptionalResult<T>).GetConstructor([typeof(bool), typeof(T)]);
 
         public static Expression ArrayEmpty<T>() => ((Expression<Func<object>>)(() => Array.Empty<T>())).Body;
         public static Expression New<T>() where T : new() => ((Expression<Func<T>>)(() => new T())).Body;
 
-        public static Expression NewOptionalResult<T>(this CompilationContext _, Expression hasValue, Expression value) => Expression.New(GetOptionalResult_Constructor<T>(), [hasValue, value]);
+        //public static Expression NewOptionalResult<T>(this CompilationContext _, Expression hasValue, Expression value) => Expression.New(GetOptionalResult_Constructor<T>(), [hasValue, value]);
         public static Expression NewTextSpan(this CompilationContext _, Expression buffer, Expression offset, Expression count) => Expression.New(TextSpan_Constructor, [buffer, offset, count]);
         public static MemberExpression Scanner(this CompilationContext context) => Expression.Field(context.ParseContext, "Scanner");
         public static MemberExpression Cursor(this CompilationContext context) => Expression.Field(context.Scanner(), "Cursor");

@@ -31,15 +31,27 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ZeroOrOneShouldFindOptionalParser()
+        public void ShouldReturnElse()
         {
-            var parser = ZeroOrOne(Literals.Integer());
+            var parser = Literals.Integer().Then<long?>(x => x).Else(null);
 
             Assert.True(parser.TryParse("123", out var result1));
-            Assert.Equal(123, result1.Value);
+            Assert.Equal(123, result1);
 
             Assert.True(parser.TryParse(" 123", out var result2));
-            Assert.Equal(0, result2.Value);
+            Assert.Null(result2);
+        }
+
+        [Fact]
+        public void ShouldThenElse()
+        {
+            var parser = Literals.Integer().ThenElse<long?>(x => x, null);
+
+            Assert.True(parser.TryParse("123", out var result1));
+            Assert.Equal(123, result1);
+
+            Assert.True(parser.TryParse(" 123", out var result2));
+            Assert.Null(result2);
         }
 
         [Fact]
@@ -483,8 +495,8 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldParseEof()
         {
-            Assert.True(Empty<object>().Eof().TryParse("", out _));
-            Assert.False(Empty<object>().Eof().TryParse(" ", out _));
+            Assert.True(Always<object>().Eof().TryParse("", out _));
+            Assert.False(Always<object>().Eof().TryParse(" ", out _));
             Assert.True(Terms.Decimal().Eof().TryParse("123", out var result) && result == 123);
             Assert.False(Terms.Decimal().Eof().TryParse("123 ", out _));
         }
@@ -492,8 +504,8 @@ namespace Parlot.Tests
         [Fact]
         public void EmptyShouldAlwaysSucceed()
         {
-            Assert.True(Empty<object>().TryParse("123", out var result) && result == null);
-            Assert.True(Empty(1).TryParse("123", out var r2) && r2 == 1);
+            Assert.True(Always<object>().TryParse("123", out var result) && result == null);
+            Assert.True(Always(1).TryParse("123", out var r2) && r2 == 1);
         }
 
         [Fact]

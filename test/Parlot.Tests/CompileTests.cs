@@ -198,9 +198,8 @@ namespace Parlot.Tests
         {
             var parser = ZeroOrOne(Terms.Text("hello")).Compile();
 
-            Assert.Equal("hello", parser.Parse(" hello world hello").Value);
-            Assert.False(parser.Parse(" foo").HasValue);
-            Assert.Null(parser.Parse(" foo").Value);
+            Assert.Equal("hello", parser.Parse(" hello world hello"));
+            Assert.Null(parser.Parse(" foo"));
         }
 
         [Fact]
@@ -349,15 +348,15 @@ namespace Parlot.Tests
         [Fact]
         public void ShouldCompileEmpty()
         {
-            Assert.True(Empty().Compile().TryParse("123", out var result) && result == null);
-            Assert.True(Empty(1).Compile().TryParse("123", out var r2) && r2 == 1);
+            Assert.True(Always().Compile().TryParse("123", out var result) && result == null);
+            Assert.True(Always(1).Compile().TryParse("123", out var r2) && r2 == 1);
         }
 
         [Fact]
         public void ShouldCompileEof()
         {
-            Assert.True(Empty().Eof().Compile().TryParse("", out _));
-            Assert.False(Empty().Eof().Compile().TryParse(" ", out _));
+            Assert.True(Always().Eof().Compile().TryParse("", out _));
+            Assert.False(Always().Eof().Compile().TryParse(" ", out _));
             Assert.True(Terms.Decimal().Eof().Compile().TryParse("123", out var result) && result == 123);
             Assert.False(Terms.Decimal().Eof().Compile().TryParse("123 ", out _));
         }
@@ -781,6 +780,31 @@ namespace Parlot.Tests
             Assert.Equal("abc", parser.Parse("abc"));
             Assert.Equal("aBC", parser.Parse("aBC"));
             Assert.Null(parser.Parse("ABC"));
+        }
+
+
+        [Fact]
+        public void ShouldReturnElse()
+        {
+            var parser = Literals.Integer().Then<long?>(x => x).Else(null).Compile();
+
+            Assert.True(parser.TryParse("123", out var result1));
+            Assert.Equal(123, result1);
+
+            Assert.True(parser.TryParse(" 123", out var result2));
+            Assert.Null(result2);
+        }
+
+        [Fact]
+        public void ShouldThenElse()
+        {
+            var parser = Literals.Integer().ThenElse<long?>(x => x, null).Compile();
+
+            Assert.True(parser.TryParse("123", out var result1));
+            Assert.Equal(123, result1);
+
+            Assert.True(parser.TryParse(" 123", out var result2));
+            Assert.Null(result2);
         }
 
         private class LogicalExpression { }

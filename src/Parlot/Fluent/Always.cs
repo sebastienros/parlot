@@ -6,16 +6,16 @@ namespace Parlot.Fluent
     /// <summary>
     /// Doesn't parse anything and return the default value.
     /// </summary>
-    public sealed class Empty<T> : Parser<T>, ICompilable
+    public sealed class Always<T> : Parser<T>, ICompilable
     {
         private readonly T _value;
 
-        public Empty()
+        public Always()
         {
             _value = default;
         }
 
-        public Empty(T value)
+        public Always(T value)
         {
             _value = value;
         }

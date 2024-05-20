@@ -13,7 +13,7 @@ namespace Parlot.Fluent
 
         public Discard(Parser<T> parser)
         {
-            _value = default(U);
+            _value = default;
             _parser = parser;
         }
 

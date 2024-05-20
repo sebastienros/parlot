@@ -19,7 +19,7 @@ namespace Parlot.Fluent
         private readonly U _value = default;
         private readonly Parser<T> _parser;
 
-        public Then(Parser<T> parser)
+        private Then(Parser<T> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
 
