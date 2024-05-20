@@ -770,5 +770,15 @@ namespace Parlot.Tests
             Assert.True(a.SkipAnd(b).SkipAnd(c).TryParse("abc", out var r3));
             Assert.Equal(('c'), r3);
         }
+
+        [Fact]
+        public void ShouldReturnConstantResult()
+        {
+            var a = Literals.Char('a').Then(123);
+            var b = Literals.Char('b').Then("1");
+
+            Assert.Equal(123, a.Parse("a"));
+            Assert.Equal("1", b.Parse("b"));
+        }
     }
 }

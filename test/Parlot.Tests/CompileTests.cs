@@ -730,6 +730,16 @@ namespace Parlot.Tests
             Assert.Equal(('c'), r3);
         }
 
+        [Fact]
+        public void ShouldReturnConstantResult()
+        {
+            var a = Literals.Char('a').Then(123).Compile();
+            var b = Literals.Char('b').Then("1").Compile();
+
+            Assert.Equal(123, a.Parse("a"));
+            Assert.Equal("1", b.Parse("b"));
+        }
+
         private class LogicalExpression { }
 
         private class ValueExpression(decimal Value) : LogicalExpression
