@@ -19,7 +19,29 @@ namespace Parlot.Fluent
 
             if (CanSeek = Text.Length > 0)
             {
-                ExpectedChars = [Text[0]];
+                var ignoreCase = comparisonType switch
+                {
+                    StringComparison.OrdinalIgnoreCase => true,
+                    StringComparison.CurrentCultureIgnoreCase => true,
+                    StringComparison.InvariantCultureIgnoreCase => true,
+                    _ => false
+                };
+
+                var invariant = comparisonType switch
+                {
+                    StringComparison.InvariantCulture => true,
+                    StringComparison.InvariantCultureIgnoreCase => true,
+                    _ => false
+                };
+
+                if (invariant)
+                {
+                    ExpectedChars = ignoreCase ? [Text.ToUpperInvariant()[0], Text.ToLowerInvariant()[0]] : [Text[0]];
+                }
+                else
+                {
+                    ExpectedChars = ignoreCase ? [Text.ToUpper()[0], Text.ToLower()[0]] : [Text[0]];
+                }
             }
         }
 

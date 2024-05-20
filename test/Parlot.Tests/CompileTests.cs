@@ -739,6 +739,49 @@ namespace Parlot.Tests
             Assert.Equal(123, a.Parse("a"));
             Assert.Equal("1", b.Parse("b"));
         }
+      
+        [Fact]
+        public void ZeroOrManyShouldHandleAllSizes()
+        {
+            var parser = ZeroOrMany(Terms.Text("+").Or(Terms.Text("-")).And(Terms.Integer())).Compile();
+
+            Assert.Equal([], parser.Parse(""));
+            Assert.Equal([("+", 1L)], parser.Parse("+1"));
+            Assert.Equal([("+", 1L), ("-", 2)], parser.Parse("+1-2"));
+
+        }
+
+        [Fact]
+        public void ShouldParseWithCaseSensitivity()
+        {
+            var parser1 = Literals.Text("not", caseInsensitive: true).Compile();
+
+            Assert.Equal("not", parser1.Parse("not"));
+            Assert.Equal("not", parser1.Parse("nOt"));
+            Assert.Equal("not", parser1.Parse("NOT"));
+
+            var parser2 = Terms.Text("not", caseInsensitive: true).Compile();
+
+            Assert.Equal("not", parser2.Parse("not"));
+            Assert.Equal("not", parser2.Parse("nOt"));
+            Assert.Equal("not", parser2.Parse("NOT"));
+        }
+
+        [Fact]
+        public void ShouldBuildCaseInsensitiveLookupTable()
+        {
+            var parser = OneOf(
+                Literals.Text("not", caseInsensitive: true),
+                Literals.Text("abc", caseInsensitive: false),
+                Literals.Text("aBC", caseInsensitive: false)
+                ).Compile();
+
+            Assert.Equal("not", parser.Parse("not"));
+            Assert.Equal("not", parser.Parse("nOt"));
+            Assert.Equal("abc", parser.Parse("abc"));
+            Assert.Equal("aBC", parser.Parse("aBC"));
+            Assert.Null(parser.Parse("ABC"));
+        }
 
         private class LogicalExpression { }
 
