@@ -731,6 +731,16 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldReturnConstantResult()
+        {
+            var a = Literals.Char('a').Then(123).Compile();
+            var b = Literals.Char('b').Then("1").Compile();
+
+            Assert.Equal(123, a.Parse("a"));
+            Assert.Equal("1", b.Parse("b"));
+        }
+      
+        [Fact]
         public void ZeroOrManyShouldHandleAllSizes()
         {
             var parser = ZeroOrMany(Terms.Text("+").Or(Terms.Text("-")).And(Terms.Integer())).Compile();

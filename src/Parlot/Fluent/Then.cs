@@ -16,6 +16,7 @@ namespace Parlot.Fluent
     {
         private readonly Func<T, U> _action1;
         private readonly Func<ParseContext, T, U> _action2;
+        private readonly U _value = default;
         private readonly Parser<T> _parser;
 
         public Then(Parser<T> parser)
@@ -40,6 +41,11 @@ namespace Parlot.Fluent
             _action2 = action ?? throw new ArgumentNullException(nameof(action));
         }
 
+        public Then(Parser<T> parser, U value) : this(parser)
+        {
+            _value = value;
+        }
+
         public bool CanSeek { get; }
 
         public char[] ExpectedChars { get; } = [];
@@ -61,6 +67,10 @@ namespace Parlot.Fluent
                 else if (_action2 != null)
                 {
                     result.Set(parsed.Start, parsed.End, _action2.Invoke(context, parsed.Value));
+                }
+                else
+                {
+                    result.Set(parsed.Start, parsed.End, _value);
                 }
 
                 return true;
@@ -98,7 +108,7 @@ namespace Parlot.Fluent
             }
             else
             {
-                transformation = Expression.Default(typeof(U));
+                transformation = Expression.Constant(_value);
             }
 
             var block = Expression.Block(

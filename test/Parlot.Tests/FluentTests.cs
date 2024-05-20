@@ -772,6 +772,16 @@ namespace Parlot.Tests
         }
 
         [Fact]
+        public void ShouldReturnConstantResult()
+        {
+            var a = Literals.Char('a').Then(123);
+            var b = Literals.Char('b').Then("1");
+
+            Assert.Equal(123, a.Parse("a"));
+            Assert.Equal("1", b.Parse("b"));
+        }
+
+        [Fact]
         public void ShouldParseWithCaseSensitivity()
         {
             var parser1 = Literals.Text("not", caseInsensitive: true);

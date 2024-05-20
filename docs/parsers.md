@@ -599,6 +599,7 @@ Convert the result of a parser. This is usually used to create custom data struc
 ```c#
 Parser<U> Then<U>(Func<T, U> conversion)
 Parser<U> Then<U>(Func<ParseContext, T, U> conversion)
+Parser<U> Then<U>(U value)
 ```
 
 Usage:
@@ -617,6 +618,15 @@ Result:
 
 ```
 Point { x: 1, y: 2}
+```
+
+When the previous results or the `ParseContext` are not used then the version without delegates can be used:
+
+```c#
+var parser = OneOf(
+    Terms.Text("not").Then(UnaryOperator.Not),
+    Terms.Text("-").Then(UnaryOperator.Negate)
+);
 ```
 
 ### ElseError
