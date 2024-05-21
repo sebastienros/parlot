@@ -11,12 +11,6 @@ namespace Parlot.Fluent
         private readonly Parser<T> _parser;
         private readonly T _value;
 
-        public Else(Parser<T> parser)
-        {
-            _value = default;
-            _parser = parser;
-        }
-
         public Else(Parser<T> parser, T value)
         {
             _parser = parser;
@@ -40,7 +34,7 @@ namespace Parlot.Fluent
             var result = new CompilationResult();
 
             var success = context.DeclareSuccessVariable(result, true);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)), typeof(T));
 
             var parserCompileResult = _parser.Build(context);
 
@@ -48,7 +42,14 @@ namespace Parlot.Fluent
             //
             // parser instructions
             // 
-            // success = parser.success;
+            // if (parser.success)
+            // {
+            //    value = parser.Value
+            // }
+            // else
+            // {
+            //   value = defaultValue
+            // }
 
             result.Body.Add(
                 Expression.Block(
@@ -56,9 +57,10 @@ namespace Parlot.Fluent
                     Expression.Block(parserCompileResult.Body),
                     context.DiscardResult
                     ? Expression.Empty()
-                    : Expression.IfThen(
+                    : Expression.IfThenElse(
                         parserCompileResult.Success,
-                        Expression.Assign(value, Expression.Constant(_value))
+                        Expression.Assign(value, parserCompileResult.Value),
+                        Expression.Assign(value, Expression.Constant(_value, typeof(T)))
                     )
                 )
             );

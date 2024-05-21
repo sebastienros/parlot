@@ -108,7 +108,7 @@ namespace Parlot.Fluent
             }
             else
             {
-                transformation = Expression.Constant(_value);
+                transformation = Expression.Constant(_value, typeof(U));
             }
 
             var block = Expression.Block(
