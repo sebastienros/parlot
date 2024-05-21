@@ -629,6 +629,62 @@ var parser = OneOf(
 );
 ```
 
+### Else
+
+Returns a value if the previous parser failed.
+
+Usage:
+
+```c#
+var parser = Terms.Integer().Else<string>(0).And(Terms.Text("years"));
+
+capture.Parse("years");
+capture.Parse("123 years");
+```
+
+Result:
+
+```
+(0, "years")
+(123, "years")
+```
+
+### ThenElse
+
+Converts the result of a parser, or returns a value if it didn't succeed. This parser always succeeds.
+
+NB: It is implemented using `Then()` and `Else()` parsers.
+
+```c#
+Parser<U> ThenElse<U>(Func<T, U> conversion, U elseValue)
+Parser<U> ThenElse<U>(Func<ParseContext, T, U> conversion, U elseValue)
+Parser<U> ThenElse<U>(U value, U elseValue)
+```
+
+Usage:
+
+```c#
+var parser = 
+    Terms.Integer().ThenElse<long?>(x => x, null)
+
+parser.Parse("abc");
+```
+
+Result:
+
+```
+(long?)null
+```
+
+When the previous results or the `ParseContext` are not used then the version without delegates can be used:
+
+```c#
+var parser = OneOf(
+    Terms.Text("not").Then(UnaryOperator.Not),
+    Terms.Text("-").Then(UnaryOperator.Negate)
+);
+```
+
 ### ElseError
 
 Fails parsing with a custom error message when the inner parser didn't match.
@@ -723,14 +779,14 @@ Returns any characters until the specified parser is matched.
 Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
 ```
 
-### Empty
+### Always
 
 Always returns successfully, with an optional return type or value.
 
 ```c#
-Parser<T> Empty<T>()
-Parser<object> Empty()
-Parser<T> Empty<T>(T value)
+Parser<T> Always<T>()
+Parser<object> Always()
+Parser<T> Always<T>(T value)
 ```
 
 ### OneOf

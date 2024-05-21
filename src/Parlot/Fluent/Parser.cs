@@ -17,9 +17,24 @@ namespace Parlot.Fluent
         public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
 
         /// <summary>
-        /// Builds a parser that converts the previous result, and can alter the current <see cref="ParseContext"/>.
+        /// Builds a parser that converts the previous result.
         /// </summary>
         public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
+
+        /// <summary>
+        /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
+        /// </summary>
+        public Parser<U> ThenElse<U>(Func<T, U> conversion, U elseValue) => new Then<T, U>(this, conversion).Else(elseValue);
+
+        /// <summary>
+        /// Builds a parser that converts the previous result or returns a default value if it fails, and can alter the current <see cref="ParseContext"/>.
+        /// </summary>
+        public Parser<U> ThenElse<U>(Func<ParseContext, T, U> conversion, U elseValue) => new Then<T, U>(this, conversion).Else(elseValue);
+
+        /// <summary>
+        /// Builds a parser that converts the previous result or returns a default value if it fails.
+        /// </summary>
+        public Parser<U> ThenElse<U>(U value, U elseValue) => new Then<T, U>(this, value).Else(elseValue);
 
         /// <summary>
         /// Builds a parser that emits an error when the previous parser failed.
@@ -60,5 +75,10 @@ namespace Parlot.Fluent
         /// Builds a parser that discards the previous result and replaces it by the specified type or value.
         /// </summary>
         public Parser<U> Discard<U>(U value) => new Discard<T, U>(this, value);
+
+        /// <summary>
+        /// Builds a parser that returns a default value if the previous parser fails.
+        /// </summary>
+        public Parser<T> Else(T value) => new Else<T>(this, value);
     }
 }

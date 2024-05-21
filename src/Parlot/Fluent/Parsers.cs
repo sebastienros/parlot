@@ -29,7 +29,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
-        public static Parser<OptionalResult<T>> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
+        public static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue = default) => new ZeroOrOne<T>(parser);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
@@ -42,7 +42,7 @@ namespace Parlot.Fluent
         public static Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
 
         /// <summary>
-        /// Builds a parser that succeed when the specified parser fails to match.
+        /// Builds a parser that succeeds when the specified parser fails to match.
         /// </summary>
         public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
@@ -75,17 +75,17 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<T> Empty<T>() => new Empty<T>();
+        public static Parser<T> Always<T>() => new Always<T>();
 
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<object> Empty() => new Empty<object>();
+        public static Parser<object> Always() => new Always<object>();
 
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<T> Empty<T>(T value) => new Empty<T>(value);
+        public static Parser<T> Always<T>(T value) => new Always<T>(value);
 
     }
 
