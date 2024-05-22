@@ -39,7 +39,7 @@ namespace Parlot.Compilation
         /// Gets the list of shared lambda expressions representing intermediate parsers.
         /// </summary>
         /// <remarks>
-        /// This is used for debug only, in order to inpect the source generated for these intermediate parsers.
+        /// This is used for debug only, in order to inspect the source generated for these intermediate parsers.
         /// </remarks>
         public List<Expression> Lambdas { get; } = new();
 

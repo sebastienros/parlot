@@ -1,5 +1,7 @@
 namespace Parlot.Tests.Calc
 {
+    using System;
+
     public abstract class Expression
     {
         public abstract decimal Evaluate();
@@ -88,6 +90,18 @@ namespace Parlot.Tests.Calc
         public override decimal Evaluate()
         {
             return Left.Evaluate() / Right.Evaluate();
+        }
+    }
+
+    public class Exponent : BinaryExpression
+    {
+        public Exponent(Expression left, Expression right) : base(left, right)
+        {
+        }
+
+        public override decimal Evaluate()
+        {
+            return (decimal)Math.Pow((double)Left.Evaluate(), (double)Right.Evaluate());
         }
     }
 

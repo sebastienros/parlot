@@ -11,12 +11,14 @@ namespace Parlot.Tests.Calc
         {
             /*
              * Grammar:
-             * expression     => factor ( ( "-" | "+" ) factor )* ;
-             * factor         => unary ( ( "/" | "*" ) unary )* ;
+             * The top declaration has a lower priority than the lower one.
+             * 
+             * additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
+             * multiplicative => unary ( ( "/" | "*" ) unary )* ;
              * unary          => ( "-" ) unary
-             *                 | primary ;
+             *                   | primary ;
              * primary        => NUMBER
-             *                  | "(" expression ")" ;
+             *                   | "(" expression ")" ;
             */
 
             // The Deferred helper creates a parser that can be referenced by others before it is defined
@@ -39,54 +41,24 @@ namespace Parlot.Tests.Calc
             // primary => NUMBER | "(" expression ")";
             var primary = number.Or(groupExpression);
 
-            // The Recursive helper allows to create parsers that depend on themselves.
             // ( "-" ) unary | primary;
-            var unary = Recursive<Expression>((u) =>
-                minus.And(u)
-                    .Then<Expression>(static x => new NegateExpression(x.Item2))
-                    .Or(primary));
+            var unary = primary.Unary(
+                (minus, x => new NegateExpression(x))
+                );
 
-            // factor => unary ( ( "/" | "*" ) unary )* ;
-            var factor = unary.And(ZeroOrMany(divided.Or(times).And(unary)))
-                .Then(static x =>
-                {
-                    // unary
-                    var result = x.Item1;
+            // multiplicative => unary ( ( "/" | "*" ) unary )* ;
+            var multiplicative = unary.LeftAssociative(
+                (divided, static (a, b) => new Division(a, b)),
+                (times, static (a, b) => new Multiplication(a, b))
+                );
 
-                    // (("/" | "*") unary ) *
-                    foreach (var op in x.Item2)
-                    {
-                        result = op.Item1 switch
-                        {
-                            '/' => new Division(result, op.Item2),
-                            '*' => new Multiplication(result, op.Item2),
-                            _ => null
-                        };
-                    }
+            // additive => multiplicative(("-" | "+") multiplicative) * ;
+            var additive = multiplicative.LeftAssociative(
+                (plus, static (a, b) => new Addition(a, b)),
+                (minus, static (a, b) => new Subtraction(a, b))
+                );
 
-                    return result;
-                });
-
-            // expression => factor ( ( "-" | "+" ) factor )* ;
-            expression.Parser = factor.And(ZeroOrMany(plus.Or(minus).And(factor)))
-                .Then(static x =>
-                {
-                    // factor
-                    var result = x.Item1;
-
-                    // (("-" | "+") factor ) *
-                    foreach (var op in x.Item2)
-                    {
-                        result = op.Item1 switch
-                        {
-                            '+' => new Addition(result, op.Item2),
-                            '-' => new Subtraction(result, op.Item2),
-                            _ => null
-                        };
-                    }
-
-                    return result;
-                });            
+            expression.Parser = additive;
 
             Expression = expression;
         }
