@@ -246,3 +246,4 @@ Parlot is already used in these projects:
 - [Fluid](https://github.com/sebastienros/fluid)
 - [OrchardCore](https://github.com/OrchardCMS/OrchardCore)
 - [YesSql](https://github.com/sebastienros/yessql)
+- [NCalc](https://github.com/ncalc/ncalc)
