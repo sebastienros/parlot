@@ -1,7 +1,7 @@
 using Parlot.Fluent;
+using Parlot.Tests.Calc;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Net.WebSockets;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -823,6 +823,54 @@ namespace Parlot.Tests
             Assert.Equal("abc", parser.Parse("abc"));
             Assert.Equal("aBC", parser.Parse("aBC"));
             Assert.Null(parser.Parse("ABC"));
+        }
+
+        [Theory]
+        [InlineData("2", 2)]
+        [InlineData("2 ^ 3", 8)]
+        [InlineData("2 ^ 2 ^ 3", 256)]
+        public void ShouldParseRightAssociativity(string expression, double result)
+        {
+            var primary = Terms.Double();
+            var exponent = Terms.Char('^');
+
+            var exponentiation = primary.RightAssociative(
+                (exponent, static (a, b) => System.Math.Pow(a, b))
+                );
+
+            Assert.Equal(result, exponentiation.Parse(expression));
+        }
+
+
+        [Theory]
+        [InlineData("2", 2)]
+        [InlineData("2 / 4", 0.5)]
+        [InlineData("2 / 2 * 3", 3)]
+        public void ShouldParseLeftAssociativity(string expression, double result)
+        {
+            var primary = Terms.Double();
+
+            var multiplicative = primary.LeftAssociative(
+                (Terms.Char('*'), static (a, b) => a * b),
+                (Terms.Char('/'), static (a, b) => a / b)
+                );
+
+            Assert.Equal(result, multiplicative.Parse(expression));
+        }
+
+        [Theory]
+        [InlineData("2", 2)]
+        [InlineData("-2", -2)]
+        [InlineData("--2", 2)]
+        public void ShouldParsePrefix(string expression, double result)
+        {
+            var primary = Terms.Double();
+
+            var unary = primary.Unary(
+                (Terms.Char('-'), static (a) => 0 - a)
+                );
+
+            Assert.Equal(result, unary.Parse(expression));
         }
     }
 }
