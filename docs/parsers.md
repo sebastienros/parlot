@@ -746,11 +746,24 @@ Parser<T> When(Func<T, bool> predicate)
 
 ### Switch
 
-Returns the next parser based on some custom logic.
+Returns the next parser based on some custom logic that can't be defined statically. It is typically used in conjunction with a `ParseContext` instance
+which has custom options.
 
 ```c#
 Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action)
 ```
+
+Usage:
+
+```c#
+var parser = Terms.Integer().And(Switch((context, x) =>
+{
+    var customContext = context as CustomParseContext;
+    return Literals.Char(customContext.IntegerSeparator);
+});
+```
+
+For performance reasons it is recommended to return a static Parser instance. Otherwise each `Parse` execution will allocate and it will usually be the same objects.
 
 ### Eof
 
