@@ -27,7 +27,7 @@ namespace Parlot.Fluent
         private bool _initialized = false;
         private readonly Closure _closure = new();
 
-        private class Closure
+        private sealed class Closure
         {
             public object Func;
         }

@@ -15,7 +15,7 @@ namespace Parlot.Fluent
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparisonType = comparisonType;
-            _hasNewLines = text.Any(x => Character.IsNewLine(x));
+            _hasNewLines = text.Any(Character.IsNewLine);
 
             if (CanSeek = Text.Length > 0)
             {
