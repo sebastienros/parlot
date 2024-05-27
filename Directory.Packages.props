@@ -19,7 +19,7 @@
     <GlobalPackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
  
     <!-- Testing -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageVersion Include="xunit" Version="2.8.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
