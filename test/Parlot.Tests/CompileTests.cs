@@ -194,12 +194,21 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ShouldCompileZeroOrOne()
+        public void ShouldZeroOrOne()
         {
             var parser = ZeroOrOne(Terms.Text("hello")).Compile();
 
             Assert.Equal("hello", parser.Parse(" hello world hello"));
             Assert.Null(parser.Parse(" foo"));
+        }
+
+        [Fact]
+        public void ShouldZeroOrOneWithDefault()
+        {
+            var parser = ZeroOrOne(Terms.Text("hello"), "world").Compile();
+
+            Assert.Equal("world", parser.Parse(" this is an apple"));
+            Assert.Equal("hello", parser.Parse(" hello world"));
         }
 
         [Fact]

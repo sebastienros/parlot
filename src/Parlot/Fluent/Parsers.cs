@@ -29,7 +29,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
-        public static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue = default) => new ZeroOrOne<T>(parser);
+        public static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue = default) => new ZeroOrOne<T>(parser, defaultValue);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
