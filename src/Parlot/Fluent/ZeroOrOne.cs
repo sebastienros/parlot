@@ -67,7 +67,7 @@ namespace Parlot.Fluent
                             : Expression.IfThenElse(
                                 parserCompileResult.Success, 
                                 Expression.Assign(value,  parserCompileResult.Value),
-                                Expression.Assign(value, Expression.Default(typeof(T)))
+                                Expression.Assign(value, Expression.Constant(_defaultValue, typeof(T)))
                             )
                         )
                     );
