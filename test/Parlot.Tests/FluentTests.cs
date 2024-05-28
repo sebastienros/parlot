@@ -122,10 +122,10 @@ namespace Parlot.Tests
         [Fact]
         public void TextShouldResetPosition()
         {
-            var code = OneOf(Terms.Text("substract"), Terms.Text("substitute"));
+            var code = OneOf(Terms.Text("subtract"), Terms.Text("substitute"));
 
             Assert.False(code.TryParse("sublime", out _));
-            Assert.True(code.TryParse("substract", out _));
+            Assert.True(code.TryParse("subtract", out _));
             Assert.True(code.TryParse("substitute", out _));
         }
 
@@ -871,6 +871,24 @@ namespace Parlot.Tests
                 );
 
             Assert.Equal(result, unary.Parse(expression));
+        }
+
+        [Fact]
+        public void ShouldZeroOrOne()
+        {
+            var parser = ZeroOrOne(Terms.Text("hello"));
+
+            Assert.Equal("hello", parser.Parse(" hello world hello"));
+            Assert.Null(parser.Parse(" foo"));
+        }
+
+        [Fact]
+        public void ShouldZeroOrOneWithDefault()
+        {
+            var parser = ZeroOrOne(Terms.Text("hello"), "world");
+
+            Assert.Equal("world", parser.Parse(" this is an apple"));
+            Assert.Equal("hello", parser.Parse(" hello world"));
         }
     }
 }
