@@ -8,10 +8,18 @@ namespace Parlot.Fluent
     public sealed class IntegerLiteral : Parser<long>, ICompilable
     {
         private readonly NumberOptions _numberOptions;
+        private readonly CultureInfo _cultureInfo;
 
         public IntegerLiteral(NumberOptions numberOptions = NumberOptions.Default)
         {
             _numberOptions = numberOptions;
+            _cultureInfo = CultureInfo.InvariantCulture;
+        }
+
+        public IntegerLiteral(NumberOptions numberOptions = NumberOptions.Default, CultureInfo cultureInfo = null)
+        {
+            _numberOptions = numberOptions;
+            _cultureInfo = cultureInfo ?? CultureInfo.InvariantCulture;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<long> result)
@@ -40,7 +48,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #endif
 
-                if (long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+                if (long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, _cultureInfo, out var value))
                 {
                     result.Set(start, end,  value);
                     return true;
@@ -82,7 +90,7 @@ namespace Parlot.Fluent
             //    var end = context.Scanner.Cursor.Offset;
             //    NETSTANDARD2_0 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
             //    NETSTANDARD2_1 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
-            //    success = long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+            //    success = long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, _cultureInfo, out var value))
             // }
             //
             // if (!success)
@@ -115,7 +123,7 @@ namespace Parlot.Fluent
                                 tryParseMethodInfo,
                                 sourceToParse,
                                 Expression.Constant(NumberStyles.AllowLeadingSign),
-                                Expression.Constant(CultureInfo.InvariantCulture),
+                                Expression.Constant(_cultureInfo),
                                 value)
                             )
                     )

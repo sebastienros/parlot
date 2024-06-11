@@ -890,5 +890,53 @@ namespace Parlot.Tests
             Assert.Equal("world", parser.Parse(" this is an apple"));
             Assert.Equal("hello", parser.Parse(" hello world"));
         }
+
+        [Fact]
+        public void ShouldRespectDoubleWithCulture()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberDecimalSeparator = ",";
+
+            var parser = Literals.Double(NumberOptions.Default, culture).Then<double?>(x => x).Else(null);
+
+            Assert.True(parser.TryParse("123,456", out var result1));
+            Assert.Equal(123.456, result1);
+        }
+
+        [Fact]
+        public void ShouldRespectFloatWithCulture()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberDecimalSeparator = ",";
+
+            var parser = Literals.Float(NumberOptions.Default, culture).Then<float?>(x => x).Else(null);
+
+            Assert.True(parser.TryParse("123,456", out var result1));
+            Assert.Equal(123.456f, result1);
+        }
+
+        [Fact]
+        public void ShouldRespectDecimalWithCulture()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberDecimalSeparator = ",";
+
+            var parser = Literals.Decimal(NumberOptions.Default, culture).Then<decimal?>(x => x).Else(null);
+
+            Assert.True(parser.TryParse("123,456", out var result1));
+            Assert.Equal(123.456m, result1);
+        }
+
+        [Fact]
+        public void ShouldRespectIntegerWithCulture()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberDecimalSeparator = ",";
+
+            var parser = Literals.Integer(NumberOptions.Default, culture).Then<long?>(x => x).Else(null);
+
+            Assert.True(parser.TryParse("123,456", out var result1));
+            Assert.Equal(123, result1);
+        }
     }
 }

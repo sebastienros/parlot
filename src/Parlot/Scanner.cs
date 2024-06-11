@@ -2,6 +2,7 @@
 
 namespace Parlot
 {
+    using System.Globalization;
     using System.Runtime.CompilerServices;
 
     /// <summary>
@@ -108,6 +109,17 @@ namespace Parlot
 
         public bool ReadDecimal(out TokenResult result)
         {
+            var res = ReadDecimal(CultureInfo.InvariantCulture, out TokenResult tokenResult);
+            result = tokenResult;
+
+            return res;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadDecimal(CultureInfo cultureInfo) => ReadDecimal(cultureInfo, out _);
+
+        public bool ReadDecimal(CultureInfo cultureInfo, out TokenResult result)
+        {
             // perf: fast path to prevent a copy of the position
 
             if (!Character.IsDecimalDigit(Cursor.Current))
@@ -124,7 +136,7 @@ namespace Parlot
 
             } while (!Cursor.Eof && Character.IsDecimalDigit(Cursor.Current));
 
-            if (Cursor.Match('.'))
+            if (Cursor.Match(cultureInfo.NumberFormat.NumberDecimalSeparator))
             {
                 Cursor.Advance();
 

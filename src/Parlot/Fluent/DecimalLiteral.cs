@@ -8,10 +8,18 @@ namespace Parlot.Fluent
     public sealed class DecimalLiteral : Parser<decimal>, ICompilable
     {
         private readonly NumberOptions _numberOptions;
+        private readonly CultureInfo _cultureInfo;
 
         public DecimalLiteral(NumberOptions numberOptions = NumberOptions.Default)
         {
             _numberOptions = numberOptions;
+            _cultureInfo = CultureInfo.InvariantCulture;
+        }
+
+        public DecimalLiteral(NumberOptions numberOptions = NumberOptions.Default, CultureInfo cultureInfo = null)
+        {
+            _numberOptions = numberOptions;
+            _cultureInfo = cultureInfo ?? CultureInfo.InvariantCulture;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<decimal> result)
@@ -30,7 +38,7 @@ namespace Parlot.Fluent
                 }
             }
 
-            if (context.Scanner.ReadDecimal())
+            if (context.Scanner.ReadDecimal(_cultureInfo))
             {
                 var end = context.Scanner.Cursor.Offset;
 #if NET6_0_OR_GREATER
@@ -39,7 +47,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #endif
 
-                if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+                if (decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, _cultureInfo, out var value))
                 {
                     result.Set(start, end, value);
                     return true;
@@ -84,7 +92,7 @@ namespace Parlot.Fluent
             //    var end = context.Scanner.Cursor.Offset;
             //    NETSTANDARD2_0 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
             //    NETSTANDARD2_1 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
-            //    success = decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+            //    success = decimal.TryParse(sourceToParse, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, _cultureInfo, out var value))
             // }
             //
             // if (!success)
@@ -117,7 +125,7 @@ namespace Parlot.Fluent
                                 tryParseMethodInfo,
                                 sourceToParse,
                                 Expression.Constant(NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint),
-                                Expression.Constant(CultureInfo.InvariantCulture),
+                                Expression.Constant(_cultureInfo),
                                 value)
                             )
                     )
