@@ -16,7 +16,7 @@ namespace Parlot.Fluent
         /// </summary>
         /// <remarks>
         /// When <c>false</c>, new lines will be skipped like any other white space.
-        /// Otherwise new lines need to be read explicitely by a rule.
+        /// Otherwise new lines need to be read explicitly by a rule.
         /// </remarks>
         public bool UseNewLines { get; private set; }
 
@@ -43,7 +43,7 @@ namespace Parlot.Fluent
 
         public void SkipWhiteSpace()
         {
-            if (WhiteSpaceParser is null)
+            if (WhiteSpaceParser == null)
             {
                 if (UseNewLines)
                 {

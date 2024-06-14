@@ -27,7 +27,7 @@ namespace Parlot.Tests
             Scanner s = new(text);
             var success = s.ReadQuotedString(out var result);
             Assert.True(success);
-            Assert.Equal(expected, result.GetText());
+            Assert.Equal(expected, result);
         }
 
         [Theory]
@@ -42,7 +42,7 @@ namespace Parlot.Tests
             Scanner s = new(text);
             var success = s.ReadQuotedString(out var result);
             Assert.True(success);
-            Assert.Equal(expected, result.GetText());
+            Assert.Equal(expected, result);
         }
 
         [Theory]
@@ -87,12 +87,12 @@ namespace Parlot.Tests
             Scanner s = new("a $abc 123");
 
             Assert.True(s.ReadIdentifier(out var result));
-            Assert.Equal("a", result.GetText());
+            Assert.Equal("a", result);
 
             s.SkipWhiteSpace();
 
             Assert.True(s.ReadIdentifier(out result));
-            Assert.Equal("$abc", result.GetText());
+            Assert.Equal("$abc", result);
 
             s.SkipWhiteSpace();
 
@@ -105,13 +105,13 @@ namespace Parlot.Tests
             Scanner s = new("aaa");
 
             Assert.True(s.ReadChar('a', out var result));
-            Assert.Equal("a", result.GetText());
+            Assert.Equal("a", result);
 
             Assert.True(s.ReadChar('a', out result));
-            Assert.Equal("a", result.GetText());
+            Assert.Equal("a", result);
 
             Assert.True(s.ReadChar('a', out result));
-            Assert.Equal("a", result.GetText());
+            Assert.Equal("a", result);
 
             Assert.False(s.ReadChar('a'));
         }
@@ -128,7 +128,7 @@ namespace Parlot.Tests
             Assert.False(s.ReadText("abCd"));
             Assert.False(s.ReadText("abcD"));
             Assert.True(s.ReadText("ABCD", StringComparison.OrdinalIgnoreCase, out var result));
-            Assert.Equal("abcd", result.GetText());
+            Assert.Equal("abcd", result);
         }
 
         [Fact]
@@ -140,20 +140,20 @@ namespace Parlot.Tests
             Assert.False(s.ReadText("abd"));
 
             Assert.True(s.ReadText("abc", out var result));
-            Assert.Equal("abc", result.GetText());
+            Assert.Equal("abc", result);
 
             Assert.True(s.ReadText("d", out result));
-            Assert.Equal("d", result.GetText());
+            Assert.Equal("d", result);
         }
 
         [Fact]
         public void ReadSingleQuotedStringShouldReadSingleQuotedStrings()
         {
             new Scanner("'abcd'").ReadSingleQuotedString(out var result);
-            Assert.Equal("'abcd'", result.GetText());
+            Assert.Equal("'abcd'", result);
 
             new Scanner("'a\\nb'").ReadSingleQuotedString(out result);
-            Assert.Equal("'a\\nb'", result.GetText());
+            Assert.Equal("'a\\nb'", result);
 
             Assert.False(new Scanner("'abcd").ReadSingleQuotedString());
             Assert.False(new Scanner("abcd'").ReadSingleQuotedString());
@@ -164,10 +164,10 @@ namespace Parlot.Tests
         public void ReadDoubleQuotedStringShouldReadDoubleQuotedStrings()
         {
             new Scanner("\"abcd\"").ReadDoubleQuotedString(out var result);
-            Assert.Equal("\"abcd\"", result.GetText());
+            Assert.Equal("\"abcd\"", result);
 
             new Scanner("\"a\\nb\"").ReadDoubleQuotedString(out result);
-            Assert.Equal("\"a\\nb\"", result.GetText());
+            Assert.Equal("\"a\\nb\"", result);
 
             Assert.False(new Scanner("\"abcd").ReadDoubleQuotedString());
             Assert.False(new Scanner("abcd\"").ReadDoubleQuotedString());
@@ -184,7 +184,7 @@ namespace Parlot.Tests
         public void ShouldReadValidDecimal(string text, string expected)
         {
             Assert.True(new Scanner(text).ReadDecimal(out var result));
-            Assert.Equal(expected, result.GetText());
+            Assert.Equal(expected, result);
         }
 
         [Theory]
@@ -204,12 +204,12 @@ namespace Parlot.Tests
         public void ShouldReadValidInteger(string text, string expected)
         {
             Assert.True(new Scanner(text).ReadInteger(out var result));
-            Assert.Equal(expected, result.GetText());
+            Assert.Equal(expected, result);
         }
 
         [Theory]
         [InlineData(" 1")]
-        [InlineData("123.")]
+        [InlineData("123.e")]
         public void ShouldNotReadInvalidDecimal(string text)
         {
             Assert.False(new Scanner(text).ReadDecimal());
@@ -221,7 +221,7 @@ namespace Parlot.Tests
         public void ShouldReadStringsWithLineBreaks(string text, string expected)
         {
             Assert.True(new Scanner(text).ReadSingleQuotedString(out var result));
-            Assert.Equal(expected, result.GetText());
+            Assert.Equal(expected, result);
         }
 
         [Theory]
@@ -237,7 +237,7 @@ namespace Parlot.Tests
         public void ShouldReadUnicodeSequence(string text, string expected)
         {
             new Scanner(text).ReadQuotedString(out var result);
-            Assert.Equal(expected, result.GetText());
+            Assert.Equal(expected, result);
         }
     }
 }

@@ -96,7 +96,7 @@ Result:
 
 ### Integer
 
-Matches an integral numeric value. By default the plus `+` and `-` signs are not parsed unless the `NumberOptions.AllowSign` is specified.
+Matches an integral numeric value and an optional leading sign.
 
 ```c#
 Parser<long> Integer()
@@ -106,18 +106,17 @@ Usage:
 
 ```c#
 var input = "-1234";
-var parser = Terms.Integer(NumberOptions.AllowSign);
 ```
 
 Result:
 
 ```
--1,234
+-1234
 ```
 
 ### Decimal
 
-Matches a numeric value with optional digits. By default the plus `+` and `-` signs are not parsed unless the `NumberOptions.AllowSign` is specified.
+Matches a numeric value with optional digits and leading sign. The exponent is supported.
 
 ```c#
 Parser<decimal> Decimal()
@@ -133,10 +132,30 @@ var parser = Terms.Decimal(NumberOptions.AllowSign);
 Result:
 
 ```
--1,234.56
+-1234.56
 ```
 
-The parsers `Float` and `Double` are identical to `Decimal` with the difference that they return `float` and `double` respectively.
+### Number
+
+Matches a numeric value of any .NET type. The `NumberOptions` enumeration enables to customize how the number is parsed.
+The return type can be any numeric .NET type that is compatible with the selected options.
+
+```c#
+Parser<T> Number() where T : INumber<T>
+```
+
+Usage:
+
+```c#
+var input = "-1,234.56e1";
+var parser = Terms.Number<double>(NumberOptions.Float | NumberOptions.AllowGroupSeparators);
+```
+
+Result:
+
+```
+-12345.6
+```
 
 ### String
 

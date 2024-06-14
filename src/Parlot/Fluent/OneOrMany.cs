@@ -51,7 +51,7 @@ namespace Parlot.Fluent
 
             } while (_parser.Parse(context, ref parsed));
 
-            result = new ParseResult<IReadOnlyList<T>>(start, end, results);
+            result.Set(start, end, results);
             return true;
         }
 

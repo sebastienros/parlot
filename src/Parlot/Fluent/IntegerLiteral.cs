@@ -8,10 +8,12 @@ namespace Parlot.Fluent
     public sealed class IntegerLiteral : Parser<long>, ICompilable
     {
         private readonly NumberOptions _numberOptions;
+        private readonly NumberStyles _numberStyles;
 
-        public IntegerLiteral(NumberOptions numberOptions = NumberOptions.Default)
+        public IntegerLiteral(NumberOptions numberOptions = NumberOptions.Integer)
         {
             _numberOptions = numberOptions;
+            _numberStyles = _numberOptions.ToNumberStyles();
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<long> result)
@@ -21,7 +23,7 @@ namespace Parlot.Fluent
             var reset = context.Scanner.Cursor.Position;
             var start = reset.Offset;
 
-            if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
+            if (_numberOptions.HasFlag(NumberOptions.AllowLeadingSign))
             {
                 if (!context.Scanner.ReadChar('-'))
                 {
@@ -40,7 +42,7 @@ namespace Parlot.Fluent
                 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
 #endif
 
-                if (long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+                if (long.TryParse(sourceToParse, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
                 {
                     result.Set(start, end,  value);
                     return true;
@@ -62,7 +64,9 @@ namespace Parlot.Fluent
             var reset = context.DeclarePositionVariable(result);
             var start = context.DeclareOffsetVariable(result);
 
-            if ((_numberOptions & NumberOptions.AllowSign) == NumberOptions.AllowSign)
+            var numberStyles = context.DeclareVariable<NumberStyles>(result, $"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
+
+            if (_numberOptions.HasFlag(NumberOptions.AllowLeadingSign))
             {
                 // if (!context.Scanner.ReadChar('-'))
                 // {
@@ -82,7 +86,7 @@ namespace Parlot.Fluent
             //    var end = context.Scanner.Cursor.Offset;
             //    NETSTANDARD2_0 var sourceToParse = context.Scanner.Buffer.Substring(start, end - start);
             //    NETSTANDARD2_1 var sourceToParse = context.Scanner.Buffer.AsSpan(start, end - start);
-            //    success = long.TryParse(sourceToParse, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+            //    success = long.TryParse(sourceToParse, numberStyles, CultureInfo.InvariantCulture, out var value))
             // }
             //
             // if (!success)
@@ -114,7 +118,7 @@ namespace Parlot.Fluent
                             Expression.Call(
                                 tryParseMethodInfo,
                                 sourceToParse,
-                                Expression.Constant(NumberStyles.AllowLeadingSign),
+                                numberStyles,
                                 Expression.Constant(CultureInfo.InvariantCulture),
                                 value)
                             )

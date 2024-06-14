@@ -15,6 +15,7 @@ namespace Parlot
 
     public static partial class Character
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsDecimalDigit(char ch) => IsInRange(ch, '0', '9');
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

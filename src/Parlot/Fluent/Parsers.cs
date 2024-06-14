@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace Parlot.Fluent
 {
@@ -112,24 +113,35 @@ namespace Parlot.Fluent
         public Parser<char> Char(char c) => new CharLiteral(c);
 
         /// <summary>
-        /// Builds a parser that matches an integer.
+        /// Builds a parser that matches a number and returns any numeric type.
         /// </summary>
-        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => new IntegerLiteral(numberOptions);
+        public Parser<T> Number<T>(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = '.', char groupSeparator = ',')
+#if NET8_0_OR_GREATER
+        where T : INumber<T> 
+#endif
+        => NumberLiteral.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator);
+
+        /// <summary>
+        /// Builds a parser that matches an integer with an option leading sign.
+        /// </summary>
+        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Integer) => Number<long>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="decimal"/> value.
         /// </summary>
-        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => new DecimalLiteral(numberOptions);
+        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Float) => Number<decimal>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="float"/> value.
         /// </summary>
-        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Default) => new FloatLiteral(numberOptions);
+        [Obsolete("Prefer Number<float>(NumberOptions.Float) instead.")]
+        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Float) => new FloatLiteral(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="double"/> value.
         /// </summary>
-        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Default) => new DoubleLiteral(numberOptions);
+        [Obsolete("Prefer Number<double>(NumberOptions.Float) instead.")]
+        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => new DoubleLiteral(numberOptions);
         
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.
@@ -168,24 +180,35 @@ namespace Parlot.Fluent
         public Parser<char> Char(char c) => Parsers.SkipWhiteSpace(new CharLiteral(c));
 
         /// <summary>
-        /// Builds a parser that matches an integer.
+        /// Builds a parser that matches a number and returns any numeric type.
         /// </summary>
-        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new IntegerLiteral(numberOptions));
+        public Parser<T> Number<T>(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = '.', char groupSeparator = ',')
+#if NET8_0_OR_GREATER
+            where T : INumber<T> 
+#endif
+            => Parsers.SkipWhiteSpace(NumberLiteral.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator));
+
+        /// <summary>
+        /// Builds a parser that matches an integer with an option leading sign.
+        /// </summary>
+        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Integer) => Number<long>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="decimal"/> value.
         /// </summary>
-        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DecimalLiteral(numberOptions));
+        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Float) => Number<decimal>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="float"/> value.
         /// </summary>
-        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new FloatLiteral(numberOptions));
+        [Obsolete("Prefer Number<float>(NumberOptions.Float) instead.")] 
+        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Float) => Parsers.SkipWhiteSpace(new FloatLiteral(numberOptions));
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="double"/> value.
         /// </summary>
-        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Default) => Parsers.SkipWhiteSpace(new DoubleLiteral(numberOptions));
+        [Obsolete("Prefer Number<double>(NumberOptions.Float) instead.")] 
+        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Parsers.SkipWhiteSpace(new DoubleLiteral(numberOptions));
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.

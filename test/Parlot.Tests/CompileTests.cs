@@ -2,6 +2,7 @@ using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -821,6 +822,132 @@ namespace Parlot.Tests
         private class ValueExpression(decimal Value) : LogicalExpression
         {
             public decimal Value { get; } = Value;
+        }
+
+        [Fact]
+        public void IntegersShouldAcceptSignByDefault()
+        {
+            Assert.True(Terms.Integer().Compile().TryParse("-123", out _));
+            Assert.True(Terms.Integer().Compile().TryParse("+123", out _));
+        }
+
+        [Fact]
+        public void DecimalsShouldAcceptSignByDefault()
+        {
+            Assert.True(Terms.Decimal().Compile().TryParse("-123", out _));
+            Assert.True(Terms.Decimal().Compile().TryParse("+123", out _));
+        }
+
+        [Fact]
+        public void NumbersShouldAcceptSignIfAllowed()
+        {
+            Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowLeadingSign).Compile().Parse("-123"));
+            Assert.Equal(-123, Terms.Integer(NumberOptions.AllowLeadingSign).Compile().Parse("-123"));
+            Assert.Equal(123, Terms.Decimal(NumberOptions.AllowLeadingSign).Compile().Parse("+123"));
+            Assert.Equal(123, Terms.Integer(NumberOptions.AllowLeadingSign).Compile().Parse("+123"));
+        }
+
+        [Fact]
+        public void NumbersShouldNotAcceptSignIfNotAllowed()
+        {
+            Assert.False(Terms.Decimal(NumberOptions.None).Compile().TryParse("-123", out _));
+            Assert.False(Terms.Integer(NumberOptions.None).Compile().TryParse("-123", out _));
+            Assert.False(Terms.Decimal(NumberOptions.None).Compile().TryParse("+123", out _));
+            Assert.False(Terms.Integer(NumberOptions.None).Compile().TryParse("+123", out _));
+        }
+
+
+        [Fact]
+        public void NumberReturnsAnyType()
+        {
+            Assert.Equal((byte)123, Literals.Number<byte>().Compile().Parse("123"));
+            Assert.Equal((sbyte)123, Literals.Number<sbyte>().Compile().Parse("123"));
+            Assert.Equal((int)123, Literals.Number<int>().Compile().Parse("123"));
+            Assert.Equal((uint)123, Literals.Number<uint>().Compile().Parse("123"));
+            Assert.Equal((long)123, Literals.Number<long>().Compile().Parse("123"));
+            Assert.Equal((ulong)123, Literals.Number<ulong>().Compile().Parse("123"));
+            Assert.Equal((short)123, Literals.Number<short>().Compile().Parse("123"));
+            Assert.Equal((ushort)123, Literals.Number<ushort>().Compile().Parse("123"));
+            Assert.Equal((decimal)123, Literals.Number<decimal>().Compile().Parse("123"));
+            Assert.Equal((double)123, Literals.Number<double>().Compile().Parse("123"));
+            Assert.Equal((float)123, Literals.Number<float>().Compile().Parse("123"));
+            Assert.Equal((Half)123, Literals.Number<Half>().Compile().Parse("123"));
+            Assert.Equal((BigInteger)123, Literals.Number<BigInteger>().Compile().Parse("123"));
+#if NET8_0_OR_GREATER
+            Assert.Equal((nint)123, Literals.Number<nint>().Compile().Parse("123"));
+            Assert.Equal((nuint)123, Literals.Number<nuint>().Compile().Parse("123"));
+            Assert.Equal((Int128)123, Literals.Number<Int128>().Compile().Parse("123"));
+            Assert.Equal((UInt128)123, Literals.Number<UInt128>().Compile().Parse("123"));
+#endif
+        }
+
+        [Fact]
+        public void NumberCanReadExponent()
+        {
+            var e = NumberOptions.AllowExponent;
+
+            Assert.Equal((byte)120, Literals.Number<byte>(e).Compile().Parse("12e1"));
+            Assert.Equal((sbyte)120, Literals.Number<sbyte>(e).Compile().Parse("12e1"));
+            Assert.Equal((int)120, Literals.Number<int>(e).Compile().Parse("12e1"));
+            Assert.Equal((uint)120, Literals.Number<uint>(e).Compile().Parse("12e1"));
+            Assert.Equal((long)120, Literals.Number<long>(e).Compile().Parse("12e1"));
+            Assert.Equal((ulong)120, Literals.Number<ulong>(e).Compile().Parse("12e1"));
+            Assert.Equal((short)120, Literals.Number<short>(e).Compile().Parse("12e1"));
+            Assert.Equal((ushort)120, Literals.Number<ushort>(e).Compile().Parse("12e1"));
+            Assert.Equal((decimal)120, Literals.Number<decimal>(e).Compile().Parse("12e1"));
+            Assert.Equal((double)120, Literals.Number<double>(e).Compile().Parse("12e1"));
+            Assert.Equal((float)120, Literals.Number<float>(e).Compile().Parse("12e1"));
+            Assert.Equal((Half)120, Literals.Number<Half>(e).Compile().Parse("12e1"));
+            Assert.Equal((BigInteger)120, Literals.Number<BigInteger>(e).Compile().Parse("12e1"));
+#if NET8_0_OR_GREATER
+            Assert.Equal((nint)120, Literals.Number<nint>(e).Compile().Parse("12e1"));
+            Assert.Equal((nuint)120, Literals.Number<nuint>(e).Compile().Parse("12e1"));
+            Assert.Equal((Int128)120, Literals.Number<Int128>(e).Compile().Parse("12e1"));
+            Assert.Equal((UInt128)120, Literals.Number<UInt128>(e).Compile().Parse("12e1"));
+#endif
+        }
+
+        [Theory]
+        [InlineData(1, "1")]
+        [InlineData(1, "+1")]
+        [InlineData(-1, "-1")]
+        [InlineData(1, "1.0")]
+        [InlineData(1, "1.00")]
+        [InlineData(.1, ".1")]
+        [InlineData(1.1, "1.1")]
+        [InlineData(1.123, "1.123")]
+        [InlineData(1.123, "+1.123")]
+        [InlineData(-1.123, "-1.123")]
+        [InlineData(1123, "1,123")]
+        [InlineData(1123, "1,1,,2,3")]
+        [InlineData(1123, "+1,123")]
+        [InlineData(-1123, "-1,1,,2,3")]
+        [InlineData(1123.123, "1,123.123")]
+        [InlineData(1123.123, "1,1,,2,3.123")]
+        [InlineData(10, "1e1")]
+        [InlineData(11, "1.1e1")]
+        [InlineData(1, ".1e1")]
+        [InlineData(10, "1e+1")]
+        [InlineData(11, "1.1e+1")]
+        [InlineData(1, ".1e+1")]
+        [InlineData(0.1, "1e-1")]
+        [InlineData(0.11, "1.1e-1")]
+        [InlineData(0.01, ".1e-1")]
+        public void NumberParsesAllNumbers(decimal expected, string source)
+        {
+            Assert.Equal(expected, Literals.Number<decimal>(NumberOptions.Any).Compile().Parse(source));
+        }
+
+        [Fact]
+        public void NumberParsesCustomDecimalSeparator()
+        {
+            Assert.Equal((decimal)123.456, Literals.Number<decimal>(NumberOptions.Any, decimalSeparator: '|').Compile().Parse("123|456"));
+        }
+
+        [Fact]
+        public void NumberParsesCustomGroupSeparator()
+        {
+            Assert.Equal((decimal)123456, Literals.Number<decimal>(NumberOptions.Any, groupSeparator: '|').Compile().Parse("123|456"));
         }
     }
 }
