@@ -1,6 +1,6 @@
 ﻿namespace Parlot
 {
-    public ref struct ParseResult<T>
+    public struct ParseResult<T>
     {
         public ParseResult(int start, int end, T value)
         {
