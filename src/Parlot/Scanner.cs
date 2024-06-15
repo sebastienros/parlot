@@ -31,8 +31,7 @@ namespace Parlot
         public bool SkipWhiteSpaceOrNewLine()
         {
             // Fast path if we know the current char is not a whitespace
-            var current = Cursor.Current;
-            if (current > ' ' && current < 256)
+            if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
             {
                 return false;
             }
@@ -128,12 +127,11 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(NumberOptions.Float, out number);
 
-        public bool ReadDecimal(NumberOptions options, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
+        public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
         {
             var start = Cursor.Position;
-            number = [];
 
-            if (options.HasFlag(NumberOptions.AllowLeadingSign))
+            if ((numberOptions & NumberOptions.AllowLeadingSign) != 0)
             {
                 if (Cursor.Current == '-' || Cursor.Current == '+')
                 {
@@ -145,7 +143,7 @@ namespace Parlot
             {
                 // If there is no number, check if the decimal separator is allowed and present, otherwise fail
 
-                if (!options.HasFlag(NumberOptions.AllowDecimalSeparator) || Cursor.Current != decimalSeparator)
+                if ((numberOptions & NumberOptions.AllowDecimalSeparator) == 0 || Cursor.Current != decimalSeparator)
                 {
                     Cursor.ResetPosition(start);
                     return false;
@@ -153,7 +151,7 @@ namespace Parlot
             }
 
             // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
-            if (!number.IsEmpty && options.HasFlag(NumberOptions.AllowGroupSeparators) && Cursor.Current == groupSeparator)
+            if (!number.IsEmpty && (numberOptions & NumberOptions.AllowGroupSeparators) != 0 && Cursor.Current == groupSeparator)
             {
                 // Group separators can be repeated as many times
                 while (true)
@@ -162,14 +160,14 @@ namespace Parlot
                     {
                         Cursor.AdvanceNoNewLines(1);
                     }
-                    else if (!ReadInteger(out _))
+                    else if (!ReadInteger())
                     {
                         break;
                     }
                 }
             }
 
-            if (options.HasFlag(NumberOptions.AllowDecimalSeparator))
+            if ((numberOptions & NumberOptions.AllowDecimalSeparator) != 0)
             {
                 if (Cursor.Current == decimalSeparator)
                 {
@@ -179,7 +177,7 @@ namespace Parlot
                 }
             }
 
-            if (options.HasFlag(NumberOptions.AllowExponent) && (Cursor.Current == 'e' || Cursor.Current == 'E'))
+            if ((numberOptions & NumberOptions.AllowExponent) != 0 && (Cursor.Current == 'e' || Cursor.Current == 'E'))
             {
                 Cursor.AdvanceNoNewLines(1);
 

@@ -41,8 +41,8 @@ namespace Parlot.Fluent
             _groupSeparator = groupSeparator;
             _numberStyles = _numberOptions.ToNumberStyles();
             
-            if (decimalSeparator != CultureInfo.InvariantCulture.NumberFormat.NumberDecimalSeparator[0] || 
-                groupSeparator != CultureInfo.InvariantCulture.NumberFormat.NumberGroupSeparator[0])
+            if (decimalSeparator != NumberLiteral.DefaultDecimalSeparator ||
+                groupSeparator != NumberLiteral.DefaultGroupSeparator)
             {
                 _culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
                 _culture.NumberFormat.NumberDecimalSeparator = decimalSeparator.ToString();

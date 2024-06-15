@@ -43,7 +43,7 @@ namespace Parlot.Fluent
 
         public void SkipWhiteSpace()
         {
-            if (WhiteSpaceParser == null)
+            if (WhiteSpaceParser is null)
             {
                 if (UseNewLines)
                 {
