@@ -113,9 +113,9 @@ namespace Parlot.Tests.Calc
             if (_scanner.ReadDecimal(out var number))
             {
 #if NET6_0_OR_GREATER
-                return decimal.Parse(number.Span, provider: CultureInfo.InvariantCulture);
+                return decimal.Parse(number, provider: CultureInfo.InvariantCulture);
 #else
-                return decimal.Parse(number.GetText(), provider: CultureInfo.InvariantCulture);
+                return decimal.Parse(number.ToString(), provider: CultureInfo.InvariantCulture);
 #endif
             }
 

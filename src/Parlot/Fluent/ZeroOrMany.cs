@@ -57,7 +57,7 @@ namespace Parlot.Fluent
                 results.Add(parsed.Value);
             }
 
-            result = new ParseResult<IReadOnlyList<T>>(start, end, results ?? (IReadOnlyList<T>)Array.Empty<T>());
+            result.Set(start, end, results ?? []);
             return true;
         }
 

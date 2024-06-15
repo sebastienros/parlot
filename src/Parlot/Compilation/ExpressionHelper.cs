@@ -10,10 +10,10 @@ namespace Parlot.Compilation
     public static class ExpressionHelper
     {
         internal static MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>());
-        internal static MethodInfo Scanner_ReadText = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), [typeof(string), typeof(StringComparison), typeof(TokenResult)]);
         internal static MethodInfo Scanner_ReadText_NoResult = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), [typeof(string), typeof(StringComparison)]);
         internal static MethodInfo Scanner_ReadChar = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadChar), [typeof(char)]);
         internal static MethodInfo Scanner_ReadDecimal = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), []);
+        internal static MethodInfo Scanner_ReadDecimalAllArguments = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), [typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(ReadOnlySpan<char>).MakeByRefType(), typeof(char), typeof(char)]);
         internal static MethodInfo Scanner_ReadInteger = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadInteger), []);
         internal static MethodInfo Scanner_ReadNonWhiteSpace = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpace), []);
         internal static MethodInfo Scanner_ReadNonWhiteSpaceOrNewLine = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpaceOrNewLine), []);
@@ -39,7 +39,7 @@ namespace Parlot.Compilation
         public static MemberExpression Position(this CompilationContext context) => Expression.Property(context.Cursor(), "Position");
         public static Expression ResetPosition(this CompilationContext context, Expression position) => Expression.Call(context.Cursor(), typeof(Cursor).GetMethod("ResetPosition"), position);
         public static MemberExpression Offset(this CompilationContext context) => Expression.Property(context.Cursor(), "Offset");
-        public static MemberExpression Offset(this CompilationContext context, Expression textPosition) => Expression.Field(textPosition, nameof(TextPosition.Offset));
+        public static MemberExpression Offset(this CompilationContext _, Expression textPosition) => Expression.Field(textPosition, nameof(TextPosition.Offset));
         public static MemberExpression Current(this CompilationContext context) => Expression.Property(context.Cursor(), "Current");
         public static MemberExpression Eof(this CompilationContext context) => Expression.Property(context.Cursor(), "Eof");
         public static MemberExpression Buffer(this CompilationContext context) => Expression.Field(context.Scanner(), "Buffer");
@@ -51,6 +51,7 @@ namespace Parlot.Compilation
         public static MethodCallExpression ReadQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadQuotedString);
         public static MethodCallExpression ReadChar(this CompilationContext context, char c) => Expression.Call(context.Scanner(), Scanner_ReadChar, Expression.Constant(c));
         public static MethodCallExpression ReadDecimal(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDecimal);
+        public static MethodCallExpression ReadDecimal(this CompilationContext context, Expression allowLeadingSign, Expression allowDecimalSeparator, Expression allowGroupSeparator, Expression allowExponent, Expression number, Expression decimalSeparator, Expression groupSeparator) => Expression.Call(context.Scanner(), Scanner_ReadDecimalAllArguments, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, number, decimalSeparator, groupSeparator);
         public static MethodCallExpression ReadInteger(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadInteger);
         public static MethodCallExpression ReadNonWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpace);
         public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpaceOrNewLine);
@@ -67,12 +68,25 @@ namespace Parlot.Compilation
             return result.Success;
         }
 
-        public static ParameterExpression DeclareVariable<T>(this CompilationContext context, CompilationResult result, string name, Expression defaultValue = null)
+        public static ParameterExpression DeclareVariable<T>(this CompilationContext _, CompilationResult result, string name, Expression defaultValue = null)
         {
             var variable = Expression.Variable(typeof(T), name);
             result.Variables.Add(variable);
 
             result.Body.Add(Expression.Assign(variable, defaultValue ?? Expression.Constant(default(T), typeof(T))));
+
+            return variable;
+        }
+
+        public static ParameterExpression DeclareVariable(this CompilationContext _, CompilationResult result, string name, Type type, Expression defaultValue = null)
+        {
+            var variable = Expression.Variable(type, name);
+            result.Variables.Add(variable);
+
+            if (defaultValue != null)
+            {
+                result.Body.Add(Expression.Assign(variable, defaultValue));
+            }
 
             return variable;
         }

@@ -1,7 +1,9 @@
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -57,7 +59,7 @@ namespace Parlot.Tests
         [Fact]
         public void IntegerShouldResetPositionWhenItFails()
         {
-            var parser = OneOf(Terms.Integer(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+            var parser = OneOf(Terms.Integer(NumberOptions.AllowLeadingSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
 
             // The + sign will advance the first parser and should reset the position for the second to read it successfully
 
@@ -68,7 +70,7 @@ namespace Parlot.Tests
         [Fact]
         public void DecimalShouldResetPositionWhenItFails()
         {
-            var parser = OneOf(Terms.Decimal(NumberOptions.AllowSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
+            var parser = OneOf(Terms.Decimal(NumberOptions.AllowLeadingSign).Then(x => "a"), Literals.Text("+").Then(x => "b"));
 
             // The + sign will advance the first parser and should reset the position for the second to read it successfully
 
@@ -408,21 +410,35 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void NumbersShouldNotAcceptSignByDefault()
+        public void IntegersShouldAcceptSignByDefault()
         {
-            Assert.False(Terms.Decimal().TryParse("-123", out _));
-            Assert.False(Terms.Integer().TryParse("-123", out _));
-            Assert.False(Terms.Decimal().TryParse("+123", out _));
-            Assert.False(Terms.Integer().TryParse("+123", out _));
+            Assert.True(Terms.Integer().TryParse("-123", out _));
+            Assert.True(Terms.Integer().TryParse("+123", out _));
+        }
+
+        [Fact]
+        public void DecimalsShouldAcceptSignByDefault()
+        {
+            Assert.True(Terms.Decimal().TryParse("-123", out _));
+            Assert.True(Terms.Decimal().TryParse("+123", out _));
         }
 
         [Fact]
         public void NumbersShouldAcceptSignIfAllowed()
         {
-            Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowSign).Parse("-123"));
-            Assert.Equal(-123, Terms.Integer(NumberOptions.AllowSign).Parse("-123"));
-            Assert.Equal(123, Terms.Decimal(NumberOptions.AllowSign).Parse("+123"));
-            Assert.Equal(123, Terms.Integer(NumberOptions.AllowSign).Parse("+123"));
+            Assert.Equal(-123, Terms.Decimal(NumberOptions.AllowLeadingSign).Parse("-123"));
+            Assert.Equal(-123, Terms.Integer(NumberOptions.AllowLeadingSign).Parse("-123"));
+            Assert.Equal(123, Terms.Decimal(NumberOptions.AllowLeadingSign).Parse("+123"));
+            Assert.Equal(123, Terms.Integer(NumberOptions.AllowLeadingSign).Parse("+123"));
+        }
+
+        [Fact]
+        public void NumbersShouldNotAcceptSignIfNotAllowed()
+        {
+            Assert.False(Terms.Decimal(NumberOptions.None).TryParse("-123", out _));
+            Assert.False(Terms.Integer(NumberOptions.None).TryParse("-123", out _));
+            Assert.False(Terms.Decimal(NumberOptions.None).TryParse("+123", out _));
+            Assert.False(Terms.Integer(NumberOptions.None).TryParse("+123", out _));
         }
 
         [Fact]
@@ -831,7 +847,7 @@ namespace Parlot.Tests
         [InlineData("2 ^ 2 ^ 3", 256)]
         public void ShouldParseRightAssociativity(string expression, double result)
         {
-            var primary = Terms.Double();
+            var primary = Terms.Number<double>(NumberOptions.Float);
             var exponent = Terms.Char('^');
 
             var exponentiation = primary.RightAssociative(
@@ -848,7 +864,7 @@ namespace Parlot.Tests
         [InlineData("2 / 2 * 3", 3)]
         public void ShouldParseLeftAssociativity(string expression, double result)
         {
-            var primary = Terms.Double();
+            var primary = Terms.Number<double>(NumberOptions.Float);
 
             var multiplicative = primary.LeftAssociative(
                 (Terms.Char('*'), static (a, b) => a * b),
@@ -864,7 +880,7 @@ namespace Parlot.Tests
         [InlineData("--2", 2)]
         public void ShouldParsePrefix(string expression, double result)
         {
-            var primary = Terms.Double();
+            var primary = Terms.Number<double>(NumberOptions.Float);
 
             var unary = primary.Unary(
                 (Terms.Char('-'), static (a) => 0 - a)
@@ -889,6 +905,111 @@ namespace Parlot.Tests
 
             Assert.Equal("world", parser.Parse(" this is an apple"));
             Assert.Equal("hello", parser.Parse(" hello world"));
+        }
+
+        [Fact]
+        public void NumberReturnsAnyType()
+        {
+            Assert.Equal((byte)123, Literals.Number<byte>().Parse("123"));
+            Assert.Equal((sbyte)123, Literals.Number<sbyte>().Parse("123"));
+            Assert.Equal((int)123, Literals.Number<int>().Parse("123"));
+            Assert.Equal((uint)123, Literals.Number<uint>().Parse("123"));
+            Assert.Equal((long)123, Literals.Number<long>().Parse("123"));
+            Assert.Equal((ulong)123, Literals.Number<ulong>().Parse("123"));
+            Assert.Equal((short)123, Literals.Number<short>().Parse("123"));
+            Assert.Equal((ushort)123, Literals.Number<ushort>().Parse("123"));
+            Assert.Equal((decimal)123, Literals.Number<decimal>().Parse("123"));
+            Assert.Equal((double)123, Literals.Number<double>().Parse("123"));
+            Assert.Equal((float)123, Literals.Number<float>().Parse("123"));
+#if NET6_0_OR_GREATER
+            Assert.Equal((Half)123, Literals.Number<Half>().Parse("123"));
+#endif
+            Assert.Equal((BigInteger)123, Literals.Number<BigInteger>().Parse("123"));
+#if NET8_0_OR_GREATER
+            Assert.Equal((nint)123, Literals.Number<nint>().Parse("123"));
+            Assert.Equal((nuint)123, Literals.Number<nuint>().Parse("123"));
+            Assert.Equal((Int128)123, Literals.Number<Int128>().Parse("123"));
+            Assert.Equal((UInt128)123, Literals.Number<UInt128>().Parse("123"));
+#endif
+        }
+
+        [Fact]
+        public void NumberCanReadExponent()
+        {
+            var e = NumberOptions.AllowExponent;
+
+            Assert.Equal((byte)120, Literals.Number<byte>(e).Parse("12e1"));
+            Assert.Equal((sbyte)120, Literals.Number<sbyte>(e).Parse("12e1"));
+            Assert.Equal((int)120, Literals.Number<int>(e).Parse("12e1"));
+            Assert.Equal((uint)120, Literals.Number<uint>(e).Parse("12e1"));
+            Assert.Equal((long)120, Literals.Number<long>(e).Parse("12e1"));
+            Assert.Equal((ulong)120, Literals.Number<ulong>(e).Parse("12e1"));
+            Assert.Equal((short)120, Literals.Number<short>(e).Parse("12e1"));
+            Assert.Equal((ushort)120, Literals.Number<ushort>(e).Parse("12e1"));
+            Assert.Equal((decimal)120, Literals.Number<decimal>(e).Parse("12e1"));
+            Assert.Equal((double)120, Literals.Number<double>(e).Parse("12e1"));
+            Assert.Equal((float)120, Literals.Number<float>(e).Parse("12e1"));
+#if NET6_0_OR_GREATER
+            Assert.Equal((Half)120, Literals.Number<Half>(e).Parse("12e1"));
+#endif
+            Assert.Equal((BigInteger)120, Literals.Number<BigInteger>(e).Parse("12e1"));
+#if NET8_0_OR_GREATER
+            Assert.Equal((nint)120, Literals.Number<nint>(e).Parse("12e1"));
+            Assert.Equal((nuint)120, Literals.Number<nuint>(e).Parse("12e1"));
+            Assert.Equal((Int128)120, Literals.Number<Int128>(e).Parse("12e1"));
+            Assert.Equal((UInt128)120, Literals.Number<UInt128>(e).Parse("12e1"));
+#endif
+        }
+
+        [Theory]
+        [InlineData(1, "1")]
+        [InlineData(1, "+1")]
+        [InlineData(-1, "-1")]
+        [InlineData(1, "1.0")]
+        [InlineData(1, "1.00")]
+        [InlineData(.1, ".1")]
+        [InlineData(1.1, "1.1")]
+        [InlineData(1.123, "1.123")]
+        [InlineData(1.123, "+1.123")]
+        [InlineData(-1.123, "-1.123")]
+        [InlineData(1123, "1,123")]
+        [InlineData(1123, "1,1,,2,3")]
+        [InlineData(1123, "+1,123")]
+        [InlineData(-1123, "-1,1,,2,3")]
+        [InlineData(1123.123, "1,123.123")]
+        [InlineData(1123.123, "1,1,,2,3.123")]
+        [InlineData(10, "1e1")]
+        [InlineData(11, "1.1e1")]
+        [InlineData(1, ".1e1")]
+        [InlineData(10, "1e+1")]
+        [InlineData(11, "1.1e+1")]
+        [InlineData(1, ".1e+1")]
+        [InlineData(0.1, "1e-1")]
+        [InlineData(0.11, "1.1e-1")]
+        [InlineData(0.01, ".1e-1")]
+        public void NumberParsesAllNumbers(decimal expected, string source)
+        {
+            Assert.Equal(expected, Literals.Number<decimal>(NumberOptions.Any).Parse(source));
+        }
+
+        [Fact]
+        public void NumberParsesCustomDecimalSeparator()
+        {
+            Assert.Equal((decimal)123.456, Literals.Number<decimal>(NumberOptions.Any, decimalSeparator: '|').Parse("123|456"));
+        }
+
+        [Fact]
+        public void NumberParsesCustomGroupSeparator()
+        {
+            Assert.Equal((decimal)123456, Literals.Number<decimal>(NumberOptions.Any, groupSeparator: '|').Parse("123|456"));
+        }
+
+        [Theory]
+        [InlineData("-1")]
+        [InlineData("256")]
+        public void NumberShouldNotParseOverflow(string source)
+        {
+            Assert.False(Literals.Number<byte>().TryParse(source, out var _));
         }
     }
 }

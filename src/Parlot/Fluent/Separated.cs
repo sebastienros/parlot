@@ -80,7 +80,7 @@ namespace Parlot.Fluent
                 results.Add(parsed.Value);
             }
 
-            result = new ParseResult<IReadOnlyList<T>>(start, end.Offset, results ?? (IReadOnlyList<T>)Array.Empty<T>());
+            result.Set(start, end.Offset, results ?? []);
             return true;
         }
 

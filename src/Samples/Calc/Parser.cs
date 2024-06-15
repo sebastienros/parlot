@@ -120,9 +120,9 @@ namespace Parlot.Tests.Calc
             if (_scanner.ReadDecimal(out var number))
             {
 #if NET6_0_OR_GREATER
-                return new Number(decimal.Parse(number.Span, provider: CultureInfo.InvariantCulture));
+                return new Number(decimal.Parse(number, provider: CultureInfo.InvariantCulture));
 #else
-                return new Number(decimal.Parse(number.GetText(), provider: CultureInfo.InvariantCulture));
+                return new Number(decimal.Parse(number, provider: CultureInfo.InvariantCulture));
 #endif
             }
 
