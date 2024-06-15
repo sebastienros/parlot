@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 namespace Parlot.Compilation
 {
     /// <summary>
-    /// Reprensents the context of a compilation phase, coordinating all the parsers involved.
+    /// Represents the context of a compilation phase, coordinating all the parsers involved.
     /// </summary>
     public class CompilationContext
     {

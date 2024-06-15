@@ -56,7 +56,7 @@ namespace Parlot.Fluent
             }
             else
             {
-                ParseResult<TextSpan> _ = new();
+                ParseResult<TextSpan> _ = default;
                 WhiteSpaceParser.Parse(this, ref _);
             }
         }
