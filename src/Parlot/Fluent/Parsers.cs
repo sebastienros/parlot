@@ -119,7 +119,7 @@ namespace Parlot.Fluent
 #if NET8_0_OR_GREATER
         where T : INumber<T> 
 #endif
-        => NumberLiteral.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator);
+        => NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator);
 
         /// <summary>
         /// Builds a parser that matches an integer with an option leading sign.
@@ -186,7 +186,7 @@ namespace Parlot.Fluent
 #if NET8_0_OR_GREATER
             where T : INumber<T> 
 #endif
-            => Parsers.SkipWhiteSpace(NumberLiteral.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator));
+            => Parsers.SkipWhiteSpace(NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator));
 
         /// <summary>
         /// Builds a parser that matches an integer with an option leading sign.
