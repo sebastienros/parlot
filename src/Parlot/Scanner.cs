@@ -122,16 +122,29 @@ namespace Parlot
         public bool ReadHexNumber() => false;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDecimal() => ReadDecimal(NumberOptions.Float, out _);
+        public bool ReadDecimal() => ReadDecimal(out _);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(NumberOptions.Float, out number);
+        public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(true, true, false, true, out number);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
+        {
+            return ReadDecimal(
+                (numberOptions & NumberOptions.AllowLeadingSign) != 0,
+                (numberOptions & NumberOptions.AllowDecimalSeparator) != 0,
+                (numberOptions & NumberOptions.AllowGroupSeparators) != 0,
+                (numberOptions & NumberOptions.AllowExponent) != 0,
+                out number,
+                decimalSeparator,
+                groupSeparator);
+        }
+
+        public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
         {
             var start = Cursor.Position;
 
-            if ((numberOptions & NumberOptions.AllowLeadingSign) != 0)
+            if (allowLeadingSign)
             {
                 if (Cursor.Current == '-' || Cursor.Current == '+')
                 {
@@ -143,7 +156,7 @@ namespace Parlot
             {
                 // If there is no number, check if the decimal separator is allowed and present, otherwise fail
 
-                if ((numberOptions & NumberOptions.AllowDecimalSeparator) == 0 || Cursor.Current != decimalSeparator)
+                if (!allowDecimalSeparator || Cursor.Current != decimalSeparator)
                 {
                     Cursor.ResetPosition(start);
                     return false;
@@ -151,7 +164,7 @@ namespace Parlot
             }
 
             // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
-            if (!number.IsEmpty && (numberOptions & NumberOptions.AllowGroupSeparators) != 0 && Cursor.Current == groupSeparator)
+            if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
             {
                 // Group separators can be repeated as many times
                 while (true)
@@ -167,7 +180,7 @@ namespace Parlot
                 }
             }
 
-            if ((numberOptions & NumberOptions.AllowDecimalSeparator) != 0)
+            if (allowDecimalSeparator)
             {
                 if (Cursor.Current == decimalSeparator)
                 {
@@ -177,7 +190,7 @@ namespace Parlot
                 }
             }
 
-            if ((numberOptions & NumberOptions.AllowExponent) != 0 && (Cursor.Current == 'e' || Cursor.Current == 'E'))
+            if (allowExponent && (Cursor.Current == 'e' || Cursor.Current == 'E'))
             {
                 Cursor.AdvanceNoNewLines(1);
 

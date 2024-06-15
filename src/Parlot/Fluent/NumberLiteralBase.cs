@@ -16,12 +16,15 @@ namespace Parlot.Fluent
         private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()]);
         private static readonly MethodInfo _rosToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), []);
 
-        private readonly NumberOptions _numberOptions;
         private readonly char _decimalSeparator;
         private readonly char _groupSeparator;
         private readonly MethodInfo _tryParseMethodInfo;
         private readonly NumberStyles _numberStyles;
         private readonly CultureInfo _culture = CultureInfo.InvariantCulture;
+        private readonly bool _allowLeadingSign;
+        private readonly bool _allowDecimalSeparator;
+        private readonly bool _allowGroupSeparator;
+        private readonly bool _allowExponent;
 
         private delegate (bool, T) TryParseDelegate();
 
@@ -29,11 +32,10 @@ namespace Parlot.Fluent
         
         public NumberLiteralBase(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = NumberLiterals.DefaultDecimalSeparator, char groupSeparator = NumberLiterals.DefaultGroupSeparator, MethodInfo tryParseMethodInfo = null)
         {
-            _numberOptions = numberOptions;
             _decimalSeparator = decimalSeparator;
             _groupSeparator = groupSeparator;
             _tryParseMethodInfo = tryParseMethodInfo ?? _defaultTryParseMethodInfo;
-            _numberStyles = _numberOptions.ToNumberStyles();
+            _numberStyles = numberOptions.ToNumberStyles();
 
             if (decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
                 groupSeparator != NumberLiterals.DefaultGroupSeparator)
@@ -42,6 +44,11 @@ namespace Parlot.Fluent
                 _culture.NumberFormat.NumberDecimalSeparator = decimalSeparator.ToString();
                 _culture.NumberFormat.NumberGroupSeparator = groupSeparator.ToString();
             }
+
+            _allowLeadingSign = (numberOptions & NumberOptions.AllowLeadingSign) != 0;
+            _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
+            _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
+            _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -51,7 +58,7 @@ namespace Parlot.Fluent
             var reset = context.Scanner.Cursor.Position;
             var start = reset.Offset;
 
-            if (context.Scanner.ReadDecimal(_numberOptions, out var number, _decimalSeparator, _groupSeparator))
+            if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
             {
                 var end = context.Scanner.Cursor.Offset;
 
@@ -101,7 +108,11 @@ namespace Parlot.Fluent
 
             var block =
                 Expression.IfThen(
-                    context.ReadDecimal(Expression.Constant(_numberOptions), numberSpan, Expression.Constant(_decimalSeparator), Expression.Constant(_groupSeparator)),
+                    context.ReadDecimal(Expression.Constant(_allowLeadingSign),
+                        Expression.Constant(_allowDecimalSeparator),
+                        Expression.Constant(_allowGroupSeparator),
+                        Expression.Constant(_allowExponent), 
+                        numberSpan, Expression.Constant(_decimalSeparator), Expression.Constant(_groupSeparator)),
                     Expression.Block(
                         Expression.Assign(end, context.Offset()),
                         Expression.Assign(success,
