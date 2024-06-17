@@ -9,6 +9,8 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests
 {
+    using System;
+
     public class FluentTests
     {
         [Fact]
@@ -591,7 +593,7 @@ namespace Parlot.Tests
         public void TextBeforeShouldReturnAllCharBeforeDelimiter()
         {
             Assert.False(AnyCharBefore(Literals.Char('a')).TryParse("", out _));
-            Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: true).TryParse("", out var result1));
+            Assert.True(AnyCharBefore(Literals.Char('a'), canBeEmpty: true).TryParse("", out _));
 
             Assert.True(AnyCharBefore(Literals.Char('a')).TryParse("hello", out var result2));
             Assert.Equal("hello", result2);
@@ -852,7 +854,22 @@ namespace Parlot.Tests
 
             var exponentiation = primary.RightAssociative(
                 (exponent, static (a, b) => System.Math.Pow(a, b))
-                );
+            );
+
+            Assert.Equal(result, exponentiation.Parse(expression));
+        }
+        
+        [Theory]
+        [InlineData("2", 2)]
+        [InlineData("2 ^ 3", 8)]
+        [InlineData("2 ^ 2 ^ 3", 256)]
+        public void ShouldParseRightAssociativityUsingAlternativeOverload(string expression, double result)
+        {
+            var primary = Terms.Double();
+
+            var exponent = Terms.Char('^').Then(_ => (Func<double, double, double>)System.Math.Pow);
+
+            var exponentiation = primary.RightAssociative([exponent], (operation, a, b) => operation(a, b));
 
             Assert.Equal(result, exponentiation.Parse(expression));
         }
@@ -873,6 +890,22 @@ namespace Parlot.Tests
 
             Assert.Equal(result, multiplicative.Parse(expression));
         }
+        
+        [Theory]
+        [InlineData("2", 2)]
+        [InlineData("2 / 4", 0.5)]
+        [InlineData("2 / 2 * 3", 3)]
+        public void ShouldParseLeftAssociativityWithAlternativeOverload(string expression, double result)
+        {
+            var primary = Terms.Double();
+
+            var multiply = Terms.Char('*').Then(_ => (Func<double, double, double>)((a, b) => a * b));
+            var divide = Terms.Char('/').Then(_ => (Func<double, double, double>)((a, b) => a / b));
+
+            var multiplicative = primary.LeftAssociative([multiply, divide], (operation, a, b) => operation(a, b));
+
+            Assert.Equal(result, multiplicative.Parse(expression));
+        }
 
         [Theory]
         [InlineData("2", 2)]
@@ -888,7 +921,7 @@ namespace Parlot.Tests
 
             Assert.Equal(result, unary.Parse(expression));
         }
-
+        
         [Fact]
         public void ShouldZeroOrOne()
         {
