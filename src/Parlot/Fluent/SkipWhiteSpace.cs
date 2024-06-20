@@ -30,7 +30,16 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            var start = context.Scanner.Cursor.Position;
+            var cursor = context.Scanner.Cursor;
+
+            // If we know there is no custom whitespace parser we can skip the skipper by checking if the 
+            // current char is not part of the common alphanumeric chars
+            if (context.WhiteSpaceParser is null && Character.IsInRange(cursor.Current, (char)33, (char)126))
+            {
+                return _parser.Parse(context, ref result);
+            }
+
+            var start = cursor.Position;
 
             // Use the scanner's logic to ignore whitespaces since it knows about multi-line grammars
             context.SkipWhiteSpace();
@@ -40,17 +49,14 @@ namespace Parlot.Fluent
                 return true;
             }
 
-            context.Scanner.Cursor.ResetPosition(start);
+            cursor.ResetPosition(start);
 
             return false;
         }
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             var start = context.DeclarePositionVariable(result);
 
@@ -59,15 +65,22 @@ namespace Parlot.Fluent
             result.Body.Add(
                 Expression.Block(
                     parserCompileResult.Variables,
-                    context.ParserSkipWhiteSpace(),
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        Expression.Block(
-                            context.DiscardResult ? Expression.Empty() : Expression.Assign(value, parserCompileResult.Value),
-                            Expression.Assign(success, Expression.Constant(true, typeof(bool)))
-                            ),
-                        context.ResetPosition(start)
+                    Expression.IfThen(
+                        test: Expression.IsFalse(Expression.And(
+                            Expression.Equal(Expression.Call(context.ParseContext, ExpressionHelper.ParserContext_WhiteSpaceParser), Expression.Default(typeof(Parser<TextSpan>))),
+                            Expression.Invoke(ExpressionHelper.CharacterIsInRange, [ExpressionHelper.Cursor(context), Expression.Constant((char)33), Expression.Constant((char)126)]))),
+                        ifTrue: context.ParserSkipWhiteSpace()
+                        ),
+                    Expression.Block(
+                        Expression.Block(parserCompileResult.Body),
+                        Expression.IfThenElse(
+                            parserCompileResult.Success,
+                            Expression.Block(
+                                context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, parserCompileResult.Value),
+                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
+                                ),
+                            context.ResetPosition(start)
+                            )
                         )
                     )
                 );

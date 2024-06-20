@@ -11,12 +11,6 @@ namespace Parlot.Fluent
         private readonly Parser<T> _parser;
         private readonly U _value;
 
-        public Discard(Parser<T> parser)
-        {
-            _value = default;
-            _parser = parser;
-        }
-
         public Discard(Parser<T> parser, U value)
         {
             _parser = parser;
@@ -40,10 +34,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            _ = context.DeclareValueVariable(result, Expression.Constant(_value));
+            var result = context.CreateCompilationResult<U>(false, Expression.Constant(_value, typeof(U)));
 
             var parserCompileResult = _parser.Build(context);
 
@@ -58,7 +49,7 @@ namespace Parlot.Fluent
                 Expression.Block(
                     parserCompileResult.Variables,
                     Expression.Block(parserCompileResult.Body),
-                    Expression.Assign(success, parserCompileResult.Success)
+                    Expression.Assign(result.Success, parserCompileResult.Success)
                     )
                 );
 

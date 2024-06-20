@@ -31,10 +31,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            _ = context.DeclareSuccessVariable(result, true);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>(true);
 
             // parse1 instructions
             // success = true
@@ -57,13 +54,13 @@ namespace Parlot.Fluent
                 .Append(
                     context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, parserCompileResult.Value))
+                            : Expression.Assign(result.Value, parserCompileResult.Value))
                     .Append(
                         Expression.IfThenElse(
                             parserCompileResult.Success,
                             context.DiscardResult
                                 ? Expression.Empty()
-                                : Expression.Assign(value, parserCompileResult.Value),
+                                : Expression.Assign(result.Value, parserCompileResult.Value),
                             context.ThrowParseException(Expression.Constant(_message))
 
 
@@ -101,10 +98,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            _ = context.DeclareSuccessVariable(result, false);
-            _ = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             // parse1 instructions
             // success = false;
@@ -161,10 +155,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            _ = context.DeclareSuccessVariable(result, false);
-            _ = context.DeclareValueVariable(result, Expression.Default(typeof(U)));
+            var result = context.CreateCompilationResult<U>();
 
             // parse1 instructions
             // success = false;

@@ -1,15 +1,19 @@
 ﻿using Parlot.Compilation;
 using System;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
     public sealed class Identifier : Parser<TextSpan>, ICompilable
     {
-        private readonly Func<char, bool> _extraStart;
-        private readonly Func<char, bool> _extraPart;
+        private static readonly MethodInfo _isIdentifierStartMethodInfo = typeof(Character).GetMethod(nameof(Character.IsIdentifierStart))!;
+        private static readonly MethodInfo _isIdentifierPartMethodInfo = typeof(Character).GetMethod(nameof(Character.IsIdentifierPart))!;
 
-        public Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null)
+        private readonly Func<char, bool>? _extraStart;
+        private readonly Func<char, bool>? _extraPart;
+
+        public Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null)
         {
             _extraStart = extraStart;
             _extraPart = extraPart;
@@ -45,10 +49,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var result = context.CreateCompilationResult<TextSpan>();
 
             // var first = context.Scanner.Cursor.Current;
 
@@ -58,7 +59,7 @@ namespace Parlot.Fluent
 
             //
             // success = false;
-            // Textspan value;
+            // TextSpan value;
             // 
             // if (Character.IsIdentifierStart(first) [_extraStart != null] || _extraStart(first))
             // {
@@ -82,7 +83,7 @@ namespace Parlot.Fluent
             var block = Expression.Block(
                 Expression.IfThen(
                     Expression.OrElse(
-                        Expression.Call(typeof(Character).GetMethod(nameof(Character.IsIdentifierStart)), first),
+                        Expression.Call(_isIdentifierStartMethodInfo, first),
                         _extraStart != null
                             ? Expression.Invoke(Expression.Constant(_extraStart), first)
                             : Expression.Constant(false, typeof(bool))
@@ -96,7 +97,7 @@ namespace Parlot.Fluent
                                 /* if */ Expression.AndAlso(
                                     Expression.Not(context.Eof()),
                                         Expression.OrElse(
-                                            Expression.Call(typeof(Character).GetMethod(nameof(Character.IsIdentifierPart)), context.Current()),
+                                            Expression.Call(_isIdentifierPartMethodInfo, context.Current()),
                                             _extraPart != null
                                                 ? Expression.Invoke(Expression.Constant(_extraPart), context.Current())
                                                 : Expression.Constant(false, typeof(bool))
@@ -109,8 +110,8 @@ namespace Parlot.Fluent
                             ),
                         context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
-                        Expression.Assign(success, Expression.Constant(true, typeof(bool)))
+                            : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
+                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
                     )
                 )
             );

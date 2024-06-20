@@ -251,8 +251,6 @@ namespace Parlot.Tests
         {
             var c = new Cursor("1234");
 
-            Assert.Throws<ArgumentNullException>(() => c.MatchAnyOf(null));
-
             Assert.True(c.MatchAnyOf(""));
             Assert.True(c.MatchAnyOf("1"));
             Assert.True(c.MatchAnyOf("abc1"));

@@ -39,10 +39,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(char)));
+            var result = context.CreateCompilationResult<char>();
 
             // if (context.Scanner.ReadChar(Char))
             // {
@@ -54,10 +51,10 @@ namespace Parlot.Fluent
                 Expression.IfThen(
                     context.ReadChar(Char),
                     Expression.Block(
-                        Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                         context.DiscardResult
                         ? Expression.Empty()
-                        : Expression.Assign(value, Expression.Constant(Char, typeof(char)))
+                        : Expression.Assign(result.Value, Expression.Constant(Char, typeof(char)))
                         )
                     )
             );

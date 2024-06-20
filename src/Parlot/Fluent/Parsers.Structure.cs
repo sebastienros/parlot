@@ -23,9 +23,9 @@ namespace Parlot.Fluent
         /// </example>
         public static Parser<T> LeftAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<T, T, T> factory)[] list)
         {
-            var choices = list.Select(l => new Then<TInput, Func<T, T, T>>(l.op, l.factory));
+            var choices = list.Select(l => new Then<TInput, Func<T, T, T>>(l.op, l.factory)).ToArray();
 
-            return parser.And(ZeroOrMany(new OneOf<Func<T, T, T>>(choices.ToArray()).And(parser)))
+            return parser.And(ZeroOrMany(new OneOf<Func<T, T, T>>(choices).And(parser)))
                 .Then(static x =>
                 {
                     // multiplicative
@@ -59,9 +59,9 @@ namespace Parlot.Fluent
         /// </example>
         public static Parser<T> LeftAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list)
         {
-            var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory));
+            var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory)).ToArray();
 
-            return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices.ToArray()).And(parser)))
+            return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices).And(parser)))
                 .Then(static (context, x) =>
                 {
                     // multiplicative
@@ -94,16 +94,16 @@ namespace Parlot.Fluent
         /// </example>
         public static Parser<T> RightAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<T, T, T> factory)[] list)
         {
-            var choices = list.Select(l => new Then<TInput, Func<T, T, T>>(l.op, l.factory));
+            var choices = list.Select(l => new Then<TInput, Func<T, T, T>>(l.op, l.factory)).ToArray();
 
-            return parser.And(ZeroOrMany(new OneOf<Func<T, T, T>>(choices.ToArray()).And(parser)))
+            return parser.And(ZeroOrMany(new OneOf<Func<T, T, T>>(choices).And(parser)))
                 .Then(static x =>
                 {
                     // a; (=, b); (^, c) -> = (a, ^(b, c))
 
                     var operations = x.Item2;
 
-                    T result = default;
+                    T result;
 
                     if (operations.Count > 0)
                     {
@@ -142,16 +142,16 @@ namespace Parlot.Fluent
         /// </example>
         public static Parser<T> RightAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list)
         {
-            var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory));
+            var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory)).ToArray();
 
-            return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices.ToArray()).And(parser)))
+            return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices).And(parser)))
                 .Then(static (context, x) =>
                 {
                     // a; (=, b); (^, c) -> = (a, ^(b, c))
 
                     var operations = x.Item2;
 
-                    T result = default;
+                    T result;
 
                     if (operations.Count > 0)
                     {
@@ -185,8 +185,8 @@ namespace Parlot.Fluent
         {
             return Recursive<T>((u) =>
             {
-                var choices = list.Select(l => new Then<T, T>(l.op.SkipAnd(u), l.factory));
-                return new OneOf<T>(choices.ToArray()).Or(parser);
+                var choices = list.Select(l => new Then<T, T>(l.op.SkipAnd(u), l.factory)).ToArray();
+                return new OneOf<T>(choices).Or(parser);
             });
         }
 
@@ -202,8 +202,8 @@ namespace Parlot.Fluent
         {
             return Recursive<T>((u) =>
             {
-                var choices = list.Select(l => new Then<T, T>(l.op.SkipAnd(u), l.factory));
-                return new OneOf<T>(choices.ToArray()).Or(parser);
+                var choices = list.Select(l => new Then<T, T>(l.op.SkipAnd(u), l.factory)).ToArray();
+                return new OneOf<T>([.. choices, parser]);
             });
         }
     }

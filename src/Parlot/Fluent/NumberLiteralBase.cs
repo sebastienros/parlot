@@ -13,8 +13,8 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
     {
-        private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()]);
-        private static readonly MethodInfo _rosToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), []);
+        private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
+        private static readonly MethodInfo _rosToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), [])!;
 
         private readonly char _decimalSeparator;
         private readonly char _groupSeparator;
@@ -30,7 +30,7 @@ namespace Parlot.Fluent
 
         public abstract bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out T value);
         
-        public NumberLiteralBase(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = NumberLiterals.DefaultDecimalSeparator, char groupSeparator = NumberLiterals.DefaultGroupSeparator, MethodInfo tryParseMethodInfo = null)
+        public NumberLiteralBase(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = NumberLiterals.DefaultDecimalSeparator, char groupSeparator = NumberLiterals.DefaultGroupSeparator, MethodInfo? tryParseMethodInfo = null)
         {
             _decimalSeparator = decimalSeparator;
             _groupSeparator = groupSeparator;
@@ -78,10 +78,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             // var start = context.Scanner.Cursor.Offset;
             // var reset = context.Scanner.Cursor.Position;
@@ -89,10 +86,10 @@ namespace Parlot.Fluent
             var start = context.DeclareOffsetVariable(result);
             var reset = context.DeclarePositionVariable(result);
 
-            var numberStyles = context.DeclareVariable<NumberStyles>(result, $"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
-            var culture = context.DeclareVariable<CultureInfo>(result, $"culture{context.NextNumber}", Expression.Constant(_culture));
-            var numberSpan = context.DeclareVariable(result, $"number{context.NextNumber}", typeof(ReadOnlySpan<char>));
-            var end = context.DeclareVariable<int>(result, $"end{context.NextNumber}");
+            var numberStyles = result.DeclareVariable<NumberStyles>($"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
+            var culture = result.DeclareVariable<CultureInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
+            var numberSpan = result.DeclareVariable($"number{context.NextNumber}", typeof(ReadOnlySpan<char>));
+            var end = result.DeclareVariable<int>($"end{context.NextNumber}");
 
             // if (context.Scanner.ReadDecimal(_numberOptions, out var numberSpan, _decimalSeparator, _groupSeparator))
             // {
@@ -115,13 +112,13 @@ namespace Parlot.Fluent
                         numberSpan, Expression.Constant(_decimalSeparator), Expression.Constant(_groupSeparator)),
                     Expression.Block(
                         Expression.Assign(end, context.Offset()),
-                        Expression.Assign(success,
+                        Expression.Assign(result.Success,
                             Expression.Call(
                                 _tryParseMethodInfo,
                                 Expression.Call(numberSpan, _rosToString),
                                 numberStyles,
                                 culture,
-                                value)
+                                result.Value)
                             )
                     )
                 );
@@ -130,7 +127,7 @@ namespace Parlot.Fluent
 
             result.Body.Add(
                 Expression.IfThen(
-                    Expression.Not(success),
+                    Expression.Not(result.Success),
                     context.ResetPosition(reset)
                     )
                 );

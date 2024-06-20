@@ -34,12 +34,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Delegate that is executed whenever a parser is invoked.
         /// </summary>
-        public Action<object, ParseContext> OnEnterParser { get; set; }
+        public Action<object, ParseContext>? OnEnterParser { get; set; }
 
         /// <summary>
         /// The parser that is used to parse whitespaces and comments.
         /// </summary>
-        public Parser<TextSpan> WhiteSpaceParser { get; set;}
+        public Parser<TextSpan>? WhiteSpaceParser { get; set;}
 
         public void SkipWhiteSpace()
         {

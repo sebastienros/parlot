@@ -16,7 +16,7 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
         internal readonly Parser<T>[] _parsers;
-        internal readonly FrozenDictionary<char, List<Parser<T>>> _lookupTable;
+        internal readonly FrozenDictionary<char, List<Parser<T>>>? _lookupTable;
 
         public OneOf(Parser<T>[] parsers)
         {
@@ -35,7 +35,7 @@ namespace Parlot.Fluent
 
                 foreach (var parser in _parsers)
                 {
-                    var expectedChars = (parser as ISeekable).ExpectedChars;
+                    var expectedChars = (parser as ISeekable)!.ExpectedChars;
 
                     foreach (var c in expectedChars)
                     { 
@@ -149,10 +149,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             Expression block = Expression.Empty();
 
@@ -192,10 +189,10 @@ namespace Parlot.Fluent
                             Expression.IfThenElse(
                                 groupResult.Success,
                                 Expression.Block(
-                                    Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                     context.DiscardResult
                                     ? Expression.Empty()
-                                    : Expression.Assign(value, groupResult.Value)
+                                    : Expression.Assign(result.Value, groupResult.Value)
                                     ),
                                 group
                                 )
@@ -223,7 +220,7 @@ namespace Parlot.Fluent
                         context.ParserSkipWhiteSpace(),
                         switchExpr,
                         Expression.IfThen(
-                            Expression.IsFalse(success),
+                            Expression.IsFalse(result.Success),
                             context.ResetPosition(start))
                         );
                 }
@@ -266,10 +263,10 @@ namespace Parlot.Fluent
                         Expression.IfThenElse(
                             parserCompileResult.Success,
                             Expression.Block(
-                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                 context.DiscardResult
                                 ? Expression.Empty()
-                                : Expression.Assign(value, parserCompileResult.Value)
+                                : Expression.Assign(result.Value, parserCompileResult.Value)
                                 ),
                             block
                             )

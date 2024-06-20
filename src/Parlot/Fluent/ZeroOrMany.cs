@@ -3,11 +3,14 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
     public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
     {
+        private static readonly MethodInfo _listAdd = typeof(List<T>).GetMethod("Add")!;
+
         private readonly Parser<T> _parser;
 
         public ZeroOrMany(Parser<T> parser)
@@ -32,7 +35,7 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            List<T> results = null;
+            List<T>? results = null;
 
             var start = 0;
             var end = 0;
@@ -57,18 +60,16 @@ namespace Parlot.Fluent
                 results.Add(parsed.Value);
             }
 
-            result.Set(start, end, results ?? []);
+            result.Set(start, end, results ?? (IReadOnlyList<T>)[]);
             return true;
         }
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var _ = context.DeclareSuccessVariable(result, true);
-            var value = context.DeclareValueVariable(result, ExpressionHelper.ArrayEmpty<T>(), typeof(IReadOnlyList<T>));
+            var result = context.CreateCompilationResult<IReadOnlyList<T>>(true, ExpressionHelper.ArrayEmpty<T>());
             
-            var results = context.DeclareVariable<List<T>>(result, $"results{context.NextNumber}");
+            var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}");
+            var first = result.DeclareVariable<bool>($"first{context.NextNumber}", Expression.Constant(true));
 
             // success = true;
             //
@@ -116,13 +117,14 @@ namespace Parlot.Fluent
                             ? Expression.Empty()
                             : Expression.Block(
                                 Expression.IfThen(
-                                    Expression.Equal(results, Expression.Constant(null, typeof(List<T>))),
+                                    Expression.IsTrue(first),
                                     Expression.Block(
+                                        Expression.Assign(first, Expression.Constant(false)),
                                         Expression.Assign(results, ExpressionHelper.New<List<T>>()),
-                                        Expression.Assign(value, results)
+                                        Expression.Assign(result.Value, results)
                                         )
                                     ),
-                                Expression.Call(results, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value)
+                                Expression.Call(results, _listAdd, parserCompileResult.Value)
                                 ),
                             Expression.Break(breakLabel)
                             ),

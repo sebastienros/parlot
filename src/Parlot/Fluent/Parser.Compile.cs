@@ -3,11 +3,14 @@ using Parlot.Compilation;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
     public abstract partial class Parser<T>
     {
+        private static readonly ConstructorInfo _valueTupleConstructor = typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!;
+
         /// <summary>
         /// Compiles the current parser.
         /// </summary>
@@ -26,7 +29,7 @@ namespace Parlot.Fluent
             // return value;
 
             var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-            var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)]), compilationResult.Success, compilationResult.Value));
+            var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(_valueTupleConstructor, compilationResult.Success, compilationResult.Value));
 
             compilationResult.Body.Add(returnLabelExpression);
 
@@ -99,9 +102,7 @@ namespace Parlot.Fluent
 
         private CompilationResult BuildAsNonCompilableParser(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
+            var result = context.CreateCompilationResult<T>(false);
 
             // 
             // T value;
@@ -124,10 +125,10 @@ namespace Parlot.Fluent
             // success = parser.Parse(context.ParseContext, ref parseResult)
 
             result.Body.Add(
-                Expression.Assign(success, 
+                Expression.Assign(result.Success, 
                     Expression.Call(
                         Expression.Constant(this), 
-                        GetType().GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType()]), 
+                        GetType().GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType()])!, 
                         context.ParseContext, 
                         parseResult))
                 );
@@ -139,7 +140,7 @@ namespace Parlot.Fluent
 
                 result.Body.Add(
                     Expression.IfThen(
-                        success,
+                        result.Success,
                         Expression.Assign(value, Expression.Field(parseResult, "Value"))
                         )
                     );

@@ -14,9 +14,9 @@ namespace Parlot.Fluent
     /// <typeparam name="U">The output parser type.</typeparam>
     public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
     {
-        private readonly Func<T, U> _action1;
-        private readonly Func<ParseContext, T, U> _action2;
-        private readonly U _value = default;
+        private readonly Func<T, U>? _action1;
+        private readonly Func<ParseContext, T, U>? _action2;
+        private readonly U? _value = default;
         private readonly Parser<T> _parser;
 
         private Then(Parser<T> parser)
@@ -70,7 +70,8 @@ namespace Parlot.Fluent
                 }
                 else
                 {
-                    result.Set(parsed.Start, parsed.End, _value);
+                    // _value can't be null if action1 and action2 are null
+                    result.Set(parsed.Start, parsed.End, _value!);
                 }
 
                 return true;
@@ -81,10 +82,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(U)));
+            var result = context.CreateCompilationResult<U>(false, Expression.Default(typeof(U)));
 
             // parse1 instructions
             // 
@@ -96,19 +94,25 @@ namespace Parlot.Fluent
 
             var parserCompileResult = _parser.Build(context, requireResult: true);
 
-            Expression transformation;
+            Expression assignValue;
 
             if (_action1 != null)
             {
-                transformation = Expression.Invoke(Expression.Constant(_action1), new [] { parserCompileResult.Value });
+                assignValue = context.DiscardResult
+                    ? Expression.Invoke(Expression.Constant(_action1), [parserCompileResult.Value])
+                    : Expression.Assign(result.Value, Expression.Invoke(Expression.Constant(_action1), [parserCompileResult.Value]));
             }
             else if (_action2 != null)
             {
-                transformation = Expression.Invoke(Expression.Constant(_action2), context.ParseContext, parserCompileResult.Value);
+                assignValue = context.DiscardResult
+                    ? Expression.Invoke(Expression.Constant(_action2), [context.ParseContext, parserCompileResult.Value])
+                    : Expression.Assign(result.Value, Expression.Invoke(Expression.Constant(_action2), [context.ParseContext, parserCompileResult.Value]));
             }
             else
             {
-                transformation = Expression.Constant(_value, typeof(U));
+                assignValue = context.DiscardResult
+                    ? Expression.Empty()
+                    : Expression.Assign(result.Value, Expression.Constant(_value, typeof(U)));
             }
 
             var block = Expression.Block(
@@ -118,10 +122,8 @@ namespace Parlot.Fluent
                         Expression.IfThen(
                             parserCompileResult.Success,
                             Expression.Block(
-                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
-                                context.DiscardResult
-                                ? Expression.Empty()
-                                : Expression.Assign(value, transformation)
+                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
+                                assignValue
                                 )
                             )
                         )

@@ -38,10 +38,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var result = context.CreateCompilationResult<TextSpan>();
 
             // var start = context.Scanner.Cursor.Position;
             var start = context.DeclarePositionVariable(result);
@@ -80,13 +77,13 @@ namespace Parlot.Fluent
                         Expression.Block(
                             context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value,
+                            : Expression.Assign(result.Value,
                                 context.NewTextSpan(
                                     context.Buffer(),
                                     startOffset,
                                     Expression.Subtract(context.Offset(), startOffset)
                                     )),
-                            Expression.Assign(success, Expression.Constant(true, typeof(bool)))
+                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
                             ),
                         context.ResetPosition(start)
                     )

@@ -38,10 +38,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             var parserCompileResult = _parser.Build(context, requireResult: true);
 
@@ -73,10 +70,10 @@ namespace Parlot.Fluent
                                 Expression.Invoke(Expression.Constant(_action), new[] { parserCompileResult.Value })
                                 ),
                             Expression.Block(
-                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                 context.DiscardResult
                                     ? Expression.Empty()
-                                    : Expression.Assign(value, parserCompileResult.Value)
+                                    : Expression.Assign(result.Value, parserCompileResult.Value)
                                 ),
                             context.ResetPosition(start)
                             )

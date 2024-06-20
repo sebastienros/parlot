@@ -7,8 +7,7 @@ namespace Parlot.Fluent
 {
     public sealed class Deferred<T> : Parser<T>, ICompilable
     {
-
-        public Parser<T> Parser { get; set; }
+        public Parser<T>? Parser { get; set; }
 
         public Deferred()
         {
@@ -21,6 +20,11 @@ namespace Parlot.Fluent
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
+            if (Parser is null)
+            {
+                throw new ArgumentNullException(nameof(Parser));
+            }
+
             return Parser.Parse(context, ref result);
         }
 
@@ -29,7 +33,7 @@ namespace Parlot.Fluent
 
         private class Closure
         {
-            public object Func;
+            public object? Func;
         }
 
         public CompilationResult Compile(CompilationContext context)
@@ -39,10 +43,7 @@ namespace Parlot.Fluent
                 throw new InvalidOperationException("Can't compile a Deferred Parser until it is fully initialized");
             }
 
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             // Create the body of this parser only once
             if (!_initialized)
@@ -71,7 +72,7 @@ namespace Parlot.Fluent
                         parserCompileResult.Variables.Append(resultExpression),
                         Expression.Block(parserCompileResult.Body),
                         Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)]),
+                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
                             parserCompileResult.Success,
                             context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
                         returnLabelExpression),
@@ -103,11 +104,11 @@ namespace Parlot.Fluent
             // success = def.Item1;
             // value = def.Item2;
 
-            result.Body.Add(Expression.Assign(success, Expression.Field(deferred, "Item1")));
+            result.Body.Add(Expression.Assign(result.Success, Expression.Field(deferred, "Item1")));
             result.Body.Add(
                 context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, Expression.Field(deferred, "Item2"))
+                            : Expression.Assign(result.Value, Expression.Field(deferred, "Item2"))
             );
 
             return result;

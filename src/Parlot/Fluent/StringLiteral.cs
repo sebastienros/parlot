@@ -2,6 +2,7 @@
 using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
@@ -14,6 +15,8 @@ namespace Parlot.Fluent
 
     public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
     {
+        private static readonly MethodInfo _decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(TextSpan)])!;
+
         static readonly char[] SingleQuotes = ['\''];
         static readonly char[] DoubleQuotes = ['\"'];
         static readonly char[] SingleOrDoubleQuotes = ['\'', '\"'];
@@ -71,10 +74,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var result = context.CreateCompilationResult<TextSpan>();
 
             // var start = context.Scanner.Cursor.Offset;
 
@@ -100,19 +100,17 @@ namespace Parlot.Fluent
 
             var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 
-            var decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(TextSpan)]);
-
             result.Body.Add(
                 Expression.IfThen(
                     parseStringExpression,
                     Expression.Block(
                         [end],
                         Expression.Assign(end, context.Offset()),
-                        Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                         context.DiscardResult 
                         ? Expression.Empty()
-                        : Expression.Assign(value, 
-                            Expression.Call(decodeStringMethodInfo, 
+                        : Expression.Assign(result.Value, 
+                            Expression.Call(_decodeStringMethodInfo, 
                                 context.NewTextSpan(
                                     context.Buffer(),
                                     Expression.Add(start, Expression.Constant(1)),

@@ -15,7 +15,7 @@ namespace Parlot.Fluent
         {
             Text = text ?? throw new ArgumentNullException(nameof(text));
             _comparisonType = comparisonType;
-            _hasNewLines = text.Any(x => Character.IsNewLine(x));
+            _hasNewLines = text.Any(Character.IsNewLine);
 
             if (CanSeek = Text.Length > 0)
             {
@@ -59,7 +59,7 @@ namespace Parlot.Fluent
 
             var cursor = context.Scanner.Cursor;
 
-            if (cursor.Match(Text, _comparisonType))
+            if (cursor.Match(Text.AsSpan(), _comparisonType))
             {
                 var start = cursor.Offset;
                 
@@ -81,10 +81,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(string)));
+            var result = context.CreateCompilationResult<string>();
 
             // if (context.Scanner.ReadText(Text, _comparer, null))
             // {
@@ -102,14 +99,14 @@ namespace Parlot.Fluent
                 Expression.Call(
                     Expression.Field(context.ParseContext, "Scanner"),
                     ExpressionHelper.Scanner_ReadText_NoResult,
-                    Expression.Constant(Text, typeof(string)),
+                    Expression.Call(ExpressionHelper.MemoryExtensions_AsSpan, Expression.Constant(Text)),
                     Expression.Constant(_comparisonType, typeof(StringComparison))
                     ),
                 Expression.Block(
-                    Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                     context.DiscardResult
                     ? Expression.Empty()
-                    : Expression.Assign(value, Expression.Constant(Text, typeof(string)))
+                    : Expression.Assign(result.Value, Expression.Constant(Text, typeof(string)))
                     )
                 );
 

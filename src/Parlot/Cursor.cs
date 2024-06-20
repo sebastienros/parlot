@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Parlot
 {
@@ -206,61 +207,47 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAnyOf(string s)
+        public bool MatchAnyOf(ReadOnlySpan<char> s)
         {
-            if (s == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(nameof(s));
-            }
-
             if (Eof)
             {
                 return false;
             }
 
-            var length = s.Length;
-
-            if (length == 0)
-            {
-                return true;
-            }
-
-            return s.IndexOf(_current) != -1;
+            return s.Length == 0 || s.IndexOf(_current) > -1;
         }
 
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(string s)
+        public bool Match(ReadOnlySpan<char> s)
         {
             // Equivalent to StringComparison.Ordinal comparison
 
-            var sSpan = s.AsSpan();
             var bufferSpan = _buffer.AsSpan(_offset);
             
-            return bufferSpan.StartsWith(sSpan);
+            return bufferSpan.StartsWith(s);
         }
 
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(string s, StringComparison comparisonType)
+        public bool Match(ReadOnlySpan<char> s, StringComparison comparisonType)
         {
             if (_textLength < _offset + s.Length)
             {
                 return false;
             }
 
-            var sSpan = s.AsSpan();
             var bufferSpan = _buffer.AsSpan(_offset);
 
             if (comparisonType == StringComparison.Ordinal && bufferSpan.Length > 0)
             {
-                var length = sSpan.Length - 1;
+                var length = s.Length - 1;
 
-                if (bufferSpan[0] != sSpan[0] || bufferSpan[length] != sSpan[length])
+                if (bufferSpan[0] != s[0] || bufferSpan[length] != s[length])
                 {
                     return false;
                 }
@@ -268,7 +255,7 @@ namespace Parlot
 
             // StringComparison.Ordinal is an optimized code path in Span.StartsWith
 
-            return bufferSpan.StartsWith(sSpan, comparisonType);
+            return bufferSpan.StartsWith(s, comparisonType);
         }
     }
 }
