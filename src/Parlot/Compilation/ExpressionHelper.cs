@@ -6,7 +6,6 @@ using System.Reflection;
 namespace Parlot.Compilation
 {
     using System.Linq;
-    using System.Xml;
 
     public static class ExpressionHelper
     {

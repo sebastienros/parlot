@@ -67,18 +67,6 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void OneOfShouldRewriteAllSeekableSkipwhiteSpaceCompiled()
-        {
-            var hello = new FakeSeekable { CanSeek = true, ExpectedChars = new[] { 'a' }, SkipWhitespace = false, Success = true, Text = "hello" };
-            var goodbye = new FakeSeekable { CanSeek = true, ExpectedChars = new[] { 'b' }, SkipWhitespace = false, Success = true, Text = "goodbye" };
-            var oneof = Parsers.OneOf(hello, goodbye).Compile();
-
-            Assert.Equal("hello", oneof.Parse("a"));
-            Assert.Equal("goodbye", oneof.Parse("b"));
-            Assert.Null(oneof.Parse("hello"));
-        }
-
-        [Fact]
         public void OneOfShouldNotRewriteIfOneIsNotSeekable()
         {
             var hello = new FakeSeekable { CanSeek = true, ExpectedChars = new[] { 'a' }, SkipWhitespace = false, Success = true, Text = "hello" };

@@ -258,7 +258,7 @@ namespace Parlot.Tests
 
             var result = parser.Parse("(2 + 1) * 3");
 
-            Assert.Equal(9, result.Evaluate());
+            Assert.Equal(9, result.Evaluate()); 
         }
 
         [Fact]

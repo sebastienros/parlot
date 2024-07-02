@@ -1,5 +1,6 @@
 ﻿#if NET8_0_OR_GREATER
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -8,11 +9,13 @@ using System.Reflection;
 
 namespace Parlot.Fluent
 {
-    public sealed class NumberLiteral<T> : Parser<T>, ICompilable
+    public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         where T : INumber<T>
     {
         private const char DefaultDecimalSeparator = '.';
         private const char DefaultGroupSeparator = ',';
+
+        private static readonly MethodInfo _tryParseMethodInfo = typeof(T).GetMethod(nameof(INumber<T>.TryParse), [typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
 
         private readonly char _decimalSeparator;
         private readonly char _groupSeparator;
@@ -23,7 +26,11 @@ namespace Parlot.Fluent
         private readonly bool _allowGroupSeparator;
         private readonly bool _allowExponent;
 
-        private static readonly MethodInfo _tryParseMethodInfo = typeof(T).GetMethod(nameof(INumber<T>.TryParse), [typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
+        public bool CanSeek { get; } = true;
+
+        public char[] ExpectedChars { get; }
+
+        public bool SkipWhitespace { get; } = false;
 
         public NumberLiteral(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = DefaultDecimalSeparator, char groupSeparator = DefaultGroupSeparator)
         {
@@ -43,6 +50,25 @@ namespace Parlot.Fluent
             _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
             _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
             _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
+
+            ExpectedChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+            if (_allowLeadingSign)
+            {
+                ExpectedChars = [..ExpectedChars, '+', '-'];
+            }
+
+            if (_allowDecimalSeparator)
+            {
+                ExpectedChars = [.. ExpectedChars, decimalSeparator];
+            }
+
+            if (_allowGroupSeparator)
+            {
+                ExpectedChars = [.. ExpectedChars, groupSeparator];
+            }
+
+            // Exponent can't be a starting char
         }
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)

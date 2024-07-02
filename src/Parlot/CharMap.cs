@@ -1,22 +1,21 @@
-﻿using Parlot.Fluent;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace Parlot;
 
-public sealed class ParsersDictionary<T>
+public sealed class CharMap<T> where T : class
 {
-    private readonly List<Parser<T>>[] _asciiMap = new List<Parser<T>>[128];
-    private Dictionary<uint, List<Parser<T>>>? _nonAsciiMap;
+    private readonly T[] _asciiMap = new T[128];
+    private Dictionary<uint, T>? _nonAsciiMap;
 
-    public ParsersDictionary()
+    public CharMap()
     {
         ExpectedChars = Array.Empty<char>();
     }
 
-    public ParsersDictionary(IEnumerable<KeyValuePair<char, List<Parser<T>>>> map)
+    public CharMap(IEnumerable<KeyValuePair<char, T>> map)
     {
         var charSet = new HashSet<char>();
 
@@ -47,7 +46,7 @@ public sealed class ParsersDictionary<T>
         }
     }
 
-    public void Set(char c, List<Parser<T>> value)
+    public void Set(char c, T value)
     {
         ExpectedChars = new HashSet<char>([c, .. ExpectedChars]).ToArray();
         Array.Sort(ExpectedChars);
@@ -69,19 +68,19 @@ public sealed class ParsersDictionary<T>
 
     public char[] ExpectedChars { get; private set; }
 
-    public List<Parser<T>>? this[uint c]
+    public T? this[uint c]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            List<Parser<T>>[] asciiMap = _asciiMap;
+            T[] asciiMap = _asciiMap;
             if (c < (uint)asciiMap.Length)
             {
                 return asciiMap[c];
             }
             else
             {
-                List<Parser<T>>? map = null;
+                T? map = null;
                 _nonAsciiMap?.TryGetValue(c, out map);
                 return map;
             }

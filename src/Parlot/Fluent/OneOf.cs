@@ -16,7 +16,7 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
         internal readonly Parser<T>[] _parsers;
-        internal readonly ParsersDictionary<T>? _map;
+        internal readonly CharMap<List<Parser<T>>>? _map;
 
         public OneOf(Parser<T>[] parsers)
         {
@@ -70,7 +70,7 @@ namespace Parlot.Fluent
                 if (lookupTable != null)
                 {
                     CanSeek = true;
-                    _map = new ParsersDictionary<T>(lookupTable);
+                    _map = new CharMap<List<Parser<T>>>(lookupTable);
                     ExpectedChars = _map.ExpectedChars.ToArray();
                 }
             }
@@ -156,7 +156,10 @@ namespace Parlot.Fluent
 
             Expression block = Expression.Empty();
 
-            if (_map != null)
+            //if (_map != null) 
+            // For now don't use lookup maps for compiled code as there is no fast option in that case.
+            
+            if (false)
             {
                 // Lookup table is converted to a switch expression
 
@@ -177,6 +180,7 @@ namespace Parlot.Fluent
                 //   ...
                 // }
 
+#pragma warning disable CS0162 // Unreachable code detected
                 var cases = _map.ExpectedChars.Select(key =>
                 {
                     Expression group = Expression.Empty();
@@ -207,6 +211,7 @@ namespace Parlot.Fluent
                     return (Key: (uint)key, Body: group);
                     
                 }).ToArray();
+#pragma warning restore CS0162 // Unreachable code detected
 
                 // Creating the switch expression if we need it
                 SwitchExpression switchExpr =
@@ -220,8 +225,14 @@ namespace Parlot.Fluent
                     );
 
                 // Implement binary tree comparison
+                // Still slow with a few elements
 
-                var binarySwitch = BinarySwitch(Expression.Convert(context.Current(), typeof(uint)), cases);
+                var current = Expression.Variable(typeof(uint), $"current{context.NextNumber}");
+                var binarySwitch = Expression.Block(
+                    [current],
+                    Expression.Assign(current, Expression.Convert(context.Current(), typeof(uint))),
+                    BinarySwitch(current, cases)
+                );
 
                 static Expression BinarySwitch(Expression num, (uint Key, Expression Body)[] cases)
                 {
@@ -229,12 +240,12 @@ namespace Parlot.Fluent
                     {
                         // Split comparison in two recursive comparisons for each part of the cases
 
-                        var targetIndex = cases.Length / 2;
-                        var lowerValues = cases.Take(targetIndex).ToArray();
-                        var higherValues = cases.Skip(targetIndex + 1).ToArray();
+                        var lowerCount = (int)Math.Round((double)cases.Length / 2, MidpointRounding.ToEven);
+                        var lowerValues = cases.Take(lowerCount).ToArray();
+                        var higherValues = cases.Skip(lowerCount).ToArray();
 
                         return Expression.IfThenElse(
-                            Expression.LessThanOrEqual(Expression.Constant(cases[targetIndex].Key), num),
+                            Expression.LessThanOrEqual(num, Expression.Constant(lowerValues[^1].Key)),
                             // This value or lower
                             BinarySwitch(num, lowerValues),
                             // Higher values
@@ -270,6 +281,38 @@ namespace Parlot.Fluent
                             cases[0].Body);
                     }
                 }
+
+                // Implement lookup
+                // Doesn't work since each method can update the main state with the result (closure issue?)
+
+                var table = Expression.Variable(typeof(CharMap<Action>), $"table{context.NextNumber}");
+
+                var indexerMethodInfo = typeof(CharMap<Action>).GetMethod("get_Item", [typeof(uint)])!;
+
+                context.GlobalVariables.Add(table);
+                var action = result.DeclareVariable<Action>($"action{context.NextNumber}");
+
+                var lookupBlock = Expression.Block(
+                    [current, action, table],
+                    [
+                        Expression.Assign(current, Expression.Convert(context.Current(), typeof(uint))),
+                        // Initialize lookup table once
+                        Expression.IfThen(
+                            Expression.Equal(Expression.Constant(null, typeof(object)), table),
+                            Expression.Block([
+                                Expression.Assign(table, ExpressionHelper.New<CharMap<Action>>()),
+                                ..cases.Select(c => Expression.Call(table, typeof(CharMap<Action>).GetMethod("Set", [typeof(char), typeof(Action)])!, [Expression.Convert(Expression.Constant(c.Key), typeof(char)), Expression.Lambda<Action>(c.Body)]))
+                                ]
+                            )
+                        ),
+                        Expression.Assign(action, Expression.Call(table, indexerMethodInfo, [current])),
+                        Expression.IfThen(
+                            Expression.NotEqual(Expression.Constant(null), action),
+                            //ExpressionHelper.ThrowObject(context, current)
+                            Expression.Invoke(action)
+                            )
+                    ]
+                );
 
                 if (SkipWhitespace)
                 {

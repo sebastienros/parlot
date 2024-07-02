@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace Parlot
 {
@@ -31,6 +30,11 @@ namespace Parlot
         }
 
         public TextPosition Position => new(_offset, _line, _column);
+
+        /// <summary>
+        /// Returns the <see cref="ReadOnlySpan{T}"/> value of the <see cref="Buffer" /> at the current offset.
+        /// </summary>
+        public ReadOnlySpan<char> Span => _buffer.AsSpan(_offset);
 
         /// <summary>
         /// Advances the cursor by one character.
@@ -225,9 +229,12 @@ namespace Parlot
         {
             // Equivalent to StringComparison.Ordinal comparison
 
-            var bufferSpan = _buffer.AsSpan(_offset);
-            
-            return bufferSpan.StartsWith(s);
+            if (_textLength < _offset + s.Length)
+            {
+                return false;
+            }
+
+            return Span.StartsWith(s);
         }
 
         /// <summary>
@@ -241,21 +248,7 @@ namespace Parlot
                 return false;
             }
 
-            var bufferSpan = _buffer.AsSpan(_offset);
-
-            if (comparisonType == StringComparison.Ordinal && bufferSpan.Length > 0)
-            {
-                var length = s.Length - 1;
-
-                if (bufferSpan[0] != s[0] || bufferSpan[length] != s[length])
-                {
-                    return false;
-                }
-            }
-
-            // StringComparison.Ordinal is an optimized code path in Span.StartsWith
-
-            return bufferSpan.StartsWith(s, comparisonType);
+            return Span.StartsWith(s, comparisonType);
         }
     }
 }

@@ -38,18 +38,6 @@ namespace Parlot
             return (_characterData[ch] & (byte) CharacterMask.WhiteSpace) != 0;
         }
 
-        public static bool IsWhiteSpaceNonAscii(char ch)
-        {
-            return (ch >= 0x1680 && (
-                        ch == 0x1680 ||
-                        ch == 0x180E ||
-                        (ch >= 0x2000 && ch <= 0x200A) ||
-                        ch == 0x202F ||
-                        ch == 0x205F ||
-                        ch == 0x3000 ||
-                        ch == 0xFEFF));
-        }
-
         public static bool IsWhiteSpaceOrNewLine(char ch)
         {
             return (_characterData[ch] & (byte) CharacterMask.WhiteSpaceOrNewLine) != 0;

@@ -211,7 +211,7 @@ namespace Parlot.Tests
         {
             var benchmarks = new JsonBench();
             benchmarks.Setup();
-            var result = benchmarks.WideJson_Parlot();
+            benchmarks.WideJson_Parlot();
         }
 
         [Fact]

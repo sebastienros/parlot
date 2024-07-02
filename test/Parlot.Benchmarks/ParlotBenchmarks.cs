@@ -169,5 +169,26 @@ namespace Parlot.Benchmarks
         {
             return _jsonBench.WideJson_ParlotCompiled();
         }
+
+        [Benchmark, BenchmarkCategory("Constructors")]
+        public Cursor CursorCtor()
+        {
+            return new Cursor("hello", TextPosition.Start);
+        }
+
+        [Benchmark, BenchmarkCategory("Constructors")]
+        public Scanner ScannerCtor()
+        {
+            return new Scanner("hello");
+        }
+
+        private Scanner _scanner = new Scanner("hello");
+
+        [Benchmark, BenchmarkCategory("Constructors")]
+        public ParseContext ParseContextCtor()
+        {
+            return new ParseContext(_scanner);
+        }
+
     }
 }
