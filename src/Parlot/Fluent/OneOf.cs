@@ -2,7 +2,7 @@
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
-using System.Collections.Frozen;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 
@@ -16,7 +16,7 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
         internal readonly Parser<T>[] _parsers;
-        internal readonly FrozenDictionary<char, List<Parser<T>>>? _lookupTable;
+        internal readonly ParsersDictionary<T>? _map;
 
         public OneOf(Parser<T>[] parsers)
         {
@@ -69,10 +69,9 @@ namespace Parlot.Fluent
 
                 if (lookupTable != null)
                 {
-                    _lookupTable = lookupTable.ToFrozenDictionary();
-
                     CanSeek = true;
-                    ExpectedChars = _lookupTable.Keys.ToArray();
+                    _map = new ParsersDictionary<T>(lookupTable);
+                    ExpectedChars = _map.ExpectedChars.ToArray();
                 }
             }
         }
@@ -91,7 +90,7 @@ namespace Parlot.Fluent
 
             var cursor = context.Scanner.Cursor;
 
-            if (_lookupTable != null)
+            if (_map != null)
             {
                 if (SkipWhitespace)
                 {
@@ -99,9 +98,11 @@ namespace Parlot.Fluent
 
                     context.SkipWhiteSpace();
 
-                    if (_lookupTable.TryGetValue(cursor.Current, out var seekableParsers))
+                    var seekableParsers = _map[cursor.Current];
+
+                    if (seekableParsers != null)
                     {
-                        var length = seekableParsers.Count;
+                        var length = seekableParsers!.Count;
 
                         for (var i = 0; i < length; i++)
                         {
@@ -116,9 +117,11 @@ namespace Parlot.Fluent
                 }
                 else
                 {
-                    if (_lookupTable.TryGetValue(cursor.Current, out var seekableParsers))
+                    var seekableParsers = _map[cursor.Current];
+
+                    if (seekableParsers != null)
                     {
-                        var length = seekableParsers.Count;
+                        var length = seekableParsers!.Count;
 
                         for (var i = 0; i < length; i++)
                         {
@@ -153,7 +156,7 @@ namespace Parlot.Fluent
 
             Expression block = Expression.Empty();
 
-            if (_lookupTable != null)
+            if (_map != null)
             {
                 // Lookup table is converted to a switch expression
 
@@ -174,12 +177,14 @@ namespace Parlot.Fluent
                 //   ...
                 // }
 
-                var cases = _lookupTable.Select(kvp =>
+                var cases = _map.ExpectedChars.Select(key =>
                 {
                     Expression group = Expression.Empty();
 
+                    var parsers = _map[key];
+
                     // The list is reversed since the parsers are unwrapped
-                    foreach (var parser in kvp.Value.ToArray().Reverse())
+                    foreach (var parser in parsers!.ToArray().Reverse())
                     {
                         var groupResult = parser.Build(context);
 
@@ -199,18 +204,72 @@ namespace Parlot.Fluent
                             );
                     }
 
-                    return Expression.SwitchCase(
-                            group,
-                            Expression.Constant(kvp.Key)
-                        );
+                    return (Key: (uint)key, Body: group);
+                    
                 }).ToArray();
 
+                // Creating the switch expression if we need it
                 SwitchExpression switchExpr =
                     Expression.Switch(
-                        context.Current(),
+                        Expression.Convert(context.Current(), typeof(uint)),
                         Expression.Empty(), // no match => success = false
-                        cases
+                        cases.Select(c => Expression.SwitchCase(
+                            c.Body,
+                            Expression.Constant(c.Key)
+                        )).ToArray()
                     );
+
+                // Implement binary tree comparison
+
+                var binarySwitch = BinarySwitch(Expression.Convert(context.Current(), typeof(uint)), cases);
+
+                static Expression BinarySwitch(Expression num, (uint Key, Expression Body)[] cases)
+                {
+                    if (cases.Length > 3)
+                    {
+                        // Split comparison in two recursive comparisons for each part of the cases
+
+                        var targetIndex = cases.Length / 2;
+                        var lowerValues = cases.Take(targetIndex).ToArray();
+                        var higherValues = cases.Skip(targetIndex + 1).ToArray();
+
+                        return Expression.IfThenElse(
+                            Expression.LessThanOrEqual(Expression.Constant(cases[targetIndex].Key), num),
+                            // This value or lower
+                            BinarySwitch(num, lowerValues),
+                            // Higher values
+                            BinarySwitch(num, higherValues)
+                        );
+                    }
+                    else if (cases.Length == 1)
+                    {
+                        return Expression.IfThen(
+                            Expression.Equal(Expression.Constant(cases[0].Key), num),
+                            cases[0].Body
+                            );
+                    }
+                    else if (cases.Length == 2)
+                    {
+                        return Expression.IfThenElse(
+                            Expression.NotEqual(Expression.Constant(cases[0].Key), num),
+                            Expression.IfThen(
+                                Expression.Equal(Expression.Constant(cases[1].Key), num),
+                                cases[1].Body),
+                            cases[0].Body);
+                    }
+                    else // cases.Length == 3
+                    {
+                        return Expression.IfThenElse(
+                            Expression.NotEqual(Expression.Constant(cases[0].Key), num),
+                            Expression.IfThenElse(
+                                Expression.NotEqual(Expression.Constant(cases[1].Key), num),
+                                Expression.IfThen(
+                                    Expression.Equal(Expression.Constant(cases[2].Key), num),
+                                    cases[2].Body),
+                                cases[1].Body),
+                            cases[0].Body);
+                    }
+                }
 
                 if (SkipWhitespace)
                 {
@@ -218,7 +277,7 @@ namespace Parlot.Fluent
 
                     block = Expression.Block(
                         context.ParserSkipWhiteSpace(),
-                        switchExpr,
+                        binarySwitch,
                         Expression.IfThen(
                             Expression.IsFalse(result.Success),
                             context.ResetPosition(start))
@@ -226,9 +285,7 @@ namespace Parlot.Fluent
                 }
                 else
                 {
-                    block = Expression.Block(
-                        switchExpr
-                    );
+                    block = binarySwitch;
                 }
             }
             else
