@@ -1,7 +1,6 @@
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;

@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace Parlot.Fluent
+﻿namespace Parlot.Fluent
 {
     // We don't care about the performance of these helpers since they are called only once 
     // during the parser tree creation

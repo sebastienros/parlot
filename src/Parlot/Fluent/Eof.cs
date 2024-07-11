@@ -1,5 +1,4 @@
 ﻿using Parlot.Compilation;
-using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent
