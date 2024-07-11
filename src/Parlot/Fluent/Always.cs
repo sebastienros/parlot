@@ -10,11 +10,6 @@ namespace Parlot.Fluent
     {
         private readonly T _value;
 
-        public Always()
-        {
-            _value = default;
-        }
-
         public Always(T value)
         {
             _value = value;
@@ -31,12 +26,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            _ = context.DeclareSuccessVariable(result, true);
-            _ = context.DeclareValueVariable(result, Expression.Constant(_value));
-
-            return result;
+            return context.CreateCompilationResult<T>(true, Expression.Constant(_value, typeof(T)));
         }
     }
 }

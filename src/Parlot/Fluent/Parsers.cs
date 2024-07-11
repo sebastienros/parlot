@@ -30,7 +30,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that looks for zero or one time the specified parser.
         /// </summary>
-        public static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue = default) => new ZeroOrOne<T>(parser, defaultValue);
+        public static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue) => new ZeroOrOne<T>(parser, defaultValue);
+
+        /// <summary>
+        /// Builds a parser that looks for zero or one time the specified parser.
+        /// </summary>
+        public static Parser<T> ZeroOrOne<T>(Parser<T> parser) where T : notnull => new ZeroOrOne<T>(parser, default!);
 
         /// <summary>
         /// Builds a parser that looks for zero or many times the specified parser.
@@ -76,12 +81,12 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<T> Always<T>() => new Always<T>();
+        public static Parser<object?> Always() => Always<object>();
 
         /// <summary>
         /// Builds a parser that always succeeds.
         /// </summary>
-        public static Parser<object> Always() => new Always<object>();
+        public static Parser<T?> Always<T>() => new Always<T?>(default);
 
         /// <summary>
         /// Builds a parser that always succeeds.
@@ -151,7 +156,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an identifier.
         /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => new Identifier(extraStart, extraPart);
+        public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null) => new Identifier(extraStart, extraPart);
 
         /// <summary>
         /// Builds a parser that matches a char against a predicate.
@@ -191,24 +196,24 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an integer with an option leading sign.
         /// </summary>
-        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Integer) => Parsers.SkipWhiteSpace(Number<long>(numberOptions));
+        public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Integer) => Number<long>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="decimal"/> value.
         /// </summary>
-        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Float) => Parsers.SkipWhiteSpace(Number<decimal>(numberOptions));
+        public Parser<decimal> Decimal(NumberOptions numberOptions = NumberOptions.Float) => Number<decimal>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="float"/> value.
         /// </summary>
         [Obsolete("Prefer Number<float>(NumberOptions.Float) instead.")] 
-        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Float) => Parsers.SkipWhiteSpace(Number<float>(numberOptions));
+        public Parser<float> Float(NumberOptions numberOptions = NumberOptions.Float) => Number<float>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches a floating point number represented as a <lang cref="double"/> value.
         /// </summary>
         [Obsolete("Prefer Number<double>(NumberOptions.Float) instead.")] 
-        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Parsers.SkipWhiteSpace(Number<double>(numberOptions));
+        public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Number<double>(numberOptions);
 
         /// <summary>
         /// Builds a parser that matches an quoted string that can be escaped.
@@ -218,7 +223,7 @@ namespace Parlot.Fluent
         /// <summary>
         /// Builds a parser that matches an identifier.
         /// </summary>
-        public Parser<TextSpan> Identifier(Func<char, bool> extraStart = null, Func<char, bool> extraPart = null) => Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
+        public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null) => Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
 
         /// <summary>
         /// Builds a parser that matches a char against a predicate.

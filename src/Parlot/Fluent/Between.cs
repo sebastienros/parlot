@@ -66,10 +66,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             // start = context.Scanner.Cursor.Position;
             //
@@ -118,16 +115,16 @@ namespace Parlot.Fluent
                                     Expression.IfThen(
                                         afterCompileResult.Success,
                                         Expression.Block(
-                                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                             context.DiscardResult
                                             ? Expression.Empty()
-                                            : Expression.Assign(value, parserCompileResult.Value)
+                                            : Expression.Assign(result.Value, parserCompileResult.Value)
                                             )
                                         )
                                     )
                                 ),
                             Expression.IfThen(
-                                Expression.Not(success),
+                                Expression.Not(result.Success),
                                 context.ResetPosition(start)
                                 )
                             )

@@ -3,6 +3,7 @@
 namespace Parlot
 {
     using Parlot.Fluent;
+    using System.Buffers;
     using System.Runtime.CompilerServices;
 
     /// <summary>
@@ -10,6 +11,10 @@ namespace Parlot
     /// </summary>
     public class Scanner
     {
+#if NET8_0_OR_GREATER
+        private static readonly SearchValues<char> _decimalDigits = SearchValues.Create("0123456789");
+#endif
+
         public readonly string Buffer;
         public readonly Cursor Cursor;
 
@@ -117,10 +122,6 @@ namespace Parlot
             return ReadFirstThenOthers(static x => Character.IsIdentifierStart(x), static x => Character.IsIdentifierPart(x), out result);
         }
 
-        public bool ReadBinaryNumber() => false;
-
-        public bool ReadHexNumber() => false;
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadDecimal() => ReadDecimal(out _);
 
@@ -214,6 +215,35 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadInteger() => ReadInteger(out _);
 
+#if NET8_0_OR_GREATER
+        public bool ReadInteger(out ReadOnlySpan<char> result)
+        {
+            var span = Cursor.Span;
+
+            var noDigitIndex = span.IndexOfAnyExcept(_decimalDigits);
+
+            // If first char is not a digit, fail
+            if (noDigitIndex == 0 || span.IsEmpty)
+            {
+                result = [];
+                return false;
+            }
+
+            // If all chars are digits
+            if (noDigitIndex == -1)
+            {
+                result = span;
+            }
+            else
+            {
+                result = span[..noDigitIndex];
+            }
+
+            Cursor.AdvanceNoNewLines(result.Length);
+
+            return true;
+        }
+#else
         public bool ReadInteger(out ReadOnlySpan<char> result)
         {
             var next = 0;
@@ -234,6 +264,7 @@ namespace Parlot
 
             return true;
         }
+#endif
 
         /// <summary>
         /// Reads a token while the specific predicate is valid.
@@ -319,12 +350,12 @@ namespace Parlot
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, StringComparison comparisonType) => ReadText(text, comparisonType, out _);
+        public bool ReadText(ReadOnlySpan<char> text, StringComparison comparisonType) => ReadText(text, comparisonType, out _);
 
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
-        public bool ReadText(string text, StringComparison comparisonType, out ReadOnlySpan<char> result)
+        public bool ReadText(ReadOnlySpan<char> text, StringComparison comparisonType, out ReadOnlySpan<char> result)
         {
             if (!Cursor.Match(text, comparisonType))
             {
@@ -340,16 +371,75 @@ namespace Parlot
         }
 
         /// <summary>
-        /// Reads the specific expected text.
+        /// Reads the specific expected chars.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text) => ReadText(text, out _);
+        public bool ReadAnyOf(ReadOnlySpan<char> chars, StringComparison comparisonType, out ReadOnlySpan<char> result)
+        {
+            var current = Cursor.Buffer.AsSpan(Cursor.Offset, 1);
+
+            var index = chars.IndexOf(current, comparisonType);
+            
+            if (index == -1)
+            {
+                result = [];
+                return false;
+            }
+
+            int start = Cursor.Offset;
+            Cursor.Advance(index + 1);
+            result = Cursor.Buffer.AsSpan(start, index + 1);
+
+            return true;
+        }
+
+#if NET8_0_OR_GREATER
+        /// <summary>
+        /// Reads the specific expected chars.
+        /// </summary>
+        /// <remarks>
+        /// This overload uses <see cref="SearchValues"/> as this shouldn't be created on every call. The actual implementation of 
+        /// <see cref="SearchValues"/> is chosen based on the constituents of the list. The caller should thus reuse the instance.
+        /// </remarks>
+        public bool ReadAnyOf(SearchValues<char> values, out ReadOnlySpan<char> result)
+        {
+            var span = Cursor.Span;
+
+            var notInRangeIndex = span.IndexOfAnyExcept(values);
+
+            // If first char is not in range
+            if (notInRangeIndex == 0 || span.IsEmpty)
+            {
+                result = [];
+                return false;
+            }
+
+            // All chars match
+            if (notInRangeIndex == -1)
+            {
+                result = span;
+            }
+            else
+            {
+                result = span[..notInRangeIndex];
+            }
+
+            Cursor.Advance(result.Length);
+
+            return true;
+        }
+#endif
 
         /// <summary>
         /// Reads the specific expected text.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadText(string text, out ReadOnlySpan<char> result) => ReadText(text, comparisonType: StringComparison.Ordinal, out result);
+        public bool ReadText(ReadOnlySpan<char> text) => ReadText(text, out _);
+
+        /// <summary>
+        /// Reads the specific expected text.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadText(ReadOnlySpan<char> text, out ReadOnlySpan<char> result) => ReadText(text, comparisonType: StringComparison.Ordinal, out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadSingleQuotedString() => ReadSingleQuotedString(out _);

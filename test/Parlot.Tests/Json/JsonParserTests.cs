@@ -1,4 +1,3 @@
-using Parlot.Fluent;
 using Xunit;
 
 namespace Parlot.Tests.Json

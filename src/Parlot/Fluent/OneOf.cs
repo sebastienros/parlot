@@ -2,7 +2,6 @@
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
-using System.Collections.Frozen;
 using System.Linq;
 using System.Linq.Expressions;
 
@@ -16,7 +15,7 @@ namespace Parlot.Fluent
     public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
         internal readonly Parser<T>[] _parsers;
-        internal readonly FrozenDictionary<char, List<Parser<T>>> _lookupTable;
+        internal readonly CharMap<List<Parser<T>>>? _map;
 
         public OneOf(Parser<T>[] parsers)
         {
@@ -35,7 +34,7 @@ namespace Parlot.Fluent
 
                 foreach (var parser in _parsers)
                 {
-                    var expectedChars = (parser as ISeekable).ExpectedChars;
+                    var expectedChars = (parser as ISeekable)!.ExpectedChars;
 
                     foreach (var c in expectedChars)
                     { 
@@ -69,10 +68,9 @@ namespace Parlot.Fluent
 
                 if (lookupTable != null)
                 {
-                    _lookupTable = lookupTable.ToFrozenDictionary();
-
                     CanSeek = true;
-                    ExpectedChars = _lookupTable.Keys.ToArray();
+                    _map = new CharMap<List<Parser<T>>>(lookupTable);
+                    ExpectedChars = _map.ExpectedChars.ToArray();
                 }
             }
         }
@@ -91,7 +89,7 @@ namespace Parlot.Fluent
 
             var cursor = context.Scanner.Cursor;
 
-            if (_lookupTable != null)
+            if (_map != null)
             {
                 if (SkipWhitespace)
                 {
@@ -99,9 +97,11 @@ namespace Parlot.Fluent
 
                     context.SkipWhiteSpace();
 
-                    if (_lookupTable.TryGetValue(cursor.Current, out var seekableParsers))
+                    var seekableParsers = _map[cursor.Current];
+
+                    if (seekableParsers != null)
                     {
-                        var length = seekableParsers.Count;
+                        var length = seekableParsers!.Count;
 
                         for (var i = 0; i < length; i++)
                         {
@@ -116,9 +116,11 @@ namespace Parlot.Fluent
                 }
                 else
                 {
-                    if (_lookupTable.TryGetValue(cursor.Current, out var seekableParsers))
+                    var seekableParsers = _map[cursor.Current];
+
+                    if (seekableParsers != null)
                     {
-                        var length = seekableParsers.Count;
+                        var length = seekableParsers!.Count;
 
                         for (var i = 0; i < length; i++)
                         {
@@ -149,14 +151,14 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             Expression block = Expression.Empty();
 
-            if (_lookupTable != null)
+            //if (_map != null) 
+            // For now don't use lookup maps for compiled code as there is no fast option in that case.
+            
+            if (false)
             {
                 // Lookup table is converted to a switch expression
 
@@ -177,12 +179,15 @@ namespace Parlot.Fluent
                 //   ...
                 // }
 
-                var cases = _lookupTable.Select(kvp =>
+#pragma warning disable CS0162 // Unreachable code detected
+                var cases = _map.ExpectedChars.Select(key =>
                 {
                     Expression group = Expression.Empty();
 
+                    var parsers = _map[key];
+
                     // The list is reversed since the parsers are unwrapped
-                    foreach (var parser in kvp.Value.ToArray().Reverse())
+                    foreach (var parser in parsers!.ToArray().Reverse())
                     {
                         var groupResult = parser.Build(context);
 
@@ -192,28 +197,121 @@ namespace Parlot.Fluent
                             Expression.IfThenElse(
                                 groupResult.Success,
                                 Expression.Block(
-                                    Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                     context.DiscardResult
                                     ? Expression.Empty()
-                                    : Expression.Assign(value, groupResult.Value)
+                                    : Expression.Assign(result.Value, groupResult.Value)
                                     ),
                                 group
                                 )
                             );
                     }
 
-                    return Expression.SwitchCase(
-                            group,
-                            Expression.Constant(kvp.Key)
-                        );
+                    return (Key: (uint)key, Body: group);
+                    
                 }).ToArray();
+#pragma warning restore CS0162 // Unreachable code detected
 
+                // Creating the switch expression if we need it
                 SwitchExpression switchExpr =
                     Expression.Switch(
-                        context.Current(),
+                        Expression.Convert(context.Current(), typeof(uint)),
                         Expression.Empty(), // no match => success = false
-                        cases
+                        cases.Select(c => Expression.SwitchCase(
+                            c.Body,
+                            Expression.Constant(c.Key)
+                        )).ToArray()
                     );
+
+                // Implement binary tree comparison
+                // Still slow with a few elements
+
+                var current = Expression.Variable(typeof(uint), $"current{context.NextNumber}");
+                var binarySwitch = Expression.Block(
+                    [current],
+                    Expression.Assign(current, Expression.Convert(context.Current(), typeof(uint))),
+                    BinarySwitch(current, cases)
+                );
+
+                static Expression BinarySwitch(Expression num, (uint Key, Expression Body)[] cases)
+                {
+                    if (cases.Length > 3)
+                    {
+                        // Split comparison in two recursive comparisons for each part of the cases
+
+                        var lowerCount = (int)Math.Round((double)cases.Length / 2, MidpointRounding.ToEven);
+                        var lowerValues = cases.Take(lowerCount).ToArray();
+                        var higherValues = cases.Skip(lowerCount).ToArray();
+
+                        return Expression.IfThenElse(
+                            Expression.LessThanOrEqual(num, Expression.Constant(lowerValues[^1].Key)),
+                            // This value or lower
+                            BinarySwitch(num, lowerValues),
+                            // Higher values
+                            BinarySwitch(num, higherValues)
+                        );
+                    }
+                    else if (cases.Length == 1)
+                    {
+                        return Expression.IfThen(
+                            Expression.Equal(Expression.Constant(cases[0].Key), num),
+                            cases[0].Body
+                            );
+                    }
+                    else if (cases.Length == 2)
+                    {
+                        return Expression.IfThenElse(
+                            Expression.NotEqual(Expression.Constant(cases[0].Key), num),
+                            Expression.IfThen(
+                                Expression.Equal(Expression.Constant(cases[1].Key), num),
+                                cases[1].Body),
+                            cases[0].Body);
+                    }
+                    else // cases.Length == 3
+                    {
+                        return Expression.IfThenElse(
+                            Expression.NotEqual(Expression.Constant(cases[0].Key), num),
+                            Expression.IfThenElse(
+                                Expression.NotEqual(Expression.Constant(cases[1].Key), num),
+                                Expression.IfThen(
+                                    Expression.Equal(Expression.Constant(cases[2].Key), num),
+                                    cases[2].Body),
+                                cases[1].Body),
+                            cases[0].Body);
+                    }
+                }
+
+                // Implement lookup
+                // Doesn't work since each method can update the main state with the result (closure issue?)
+
+                var table = Expression.Variable(typeof(CharMap<Action>), $"table{context.NextNumber}");
+
+                var indexerMethodInfo = typeof(CharMap<Action>).GetMethod("get_Item", [typeof(uint)])!;
+
+                context.GlobalVariables.Add(table);
+                var action = result.DeclareVariable<Action>($"action{context.NextNumber}");
+
+                var lookupBlock = Expression.Block(
+                    [current, action, table],
+                    [
+                        Expression.Assign(current, Expression.Convert(context.Current(), typeof(uint))),
+                        // Initialize lookup table once
+                        Expression.IfThen(
+                            Expression.Equal(Expression.Constant(null, typeof(object)), table),
+                            Expression.Block([
+                                Expression.Assign(table, ExpressionHelper.New<CharMap<Action>>()),
+                                ..cases.Select(c => Expression.Call(table, typeof(CharMap<Action>).GetMethod("Set", [typeof(char), typeof(Action)])!, [Expression.Convert(Expression.Constant(c.Key), typeof(char)), Expression.Lambda<Action>(c.Body)]))
+                                ]
+                            )
+                        ),
+                        Expression.Assign(action, Expression.Call(table, indexerMethodInfo, [current])),
+                        Expression.IfThen(
+                            Expression.NotEqual(Expression.Constant(null), action),
+                            //ExpressionHelper.ThrowObject(context, current)
+                            Expression.Invoke(action)
+                            )
+                    ]
+                );
 
                 if (SkipWhitespace)
                 {
@@ -221,17 +319,15 @@ namespace Parlot.Fluent
 
                     block = Expression.Block(
                         context.ParserSkipWhiteSpace(),
-                        switchExpr,
+                        binarySwitch,
                         Expression.IfThen(
-                            Expression.IsFalse(success),
+                            Expression.IsFalse(result.Success),
                             context.ResetPosition(start))
                         );
                 }
                 else
                 {
-                    block = Expression.Block(
-                        switchExpr
-                    );
+                    block = binarySwitch;
                 }
             }
             else
@@ -266,10 +362,10 @@ namespace Parlot.Fluent
                         Expression.IfThenElse(
                             parserCompileResult.Success,
                             Expression.Block(
-                                Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                 context.DiscardResult
                                 ? Expression.Empty()
-                                : Expression.Assign(value, parserCompileResult.Value)
+                                : Expression.Assign(result.Value, parserCompileResult.Value)
                                 ),
                             block
                             )

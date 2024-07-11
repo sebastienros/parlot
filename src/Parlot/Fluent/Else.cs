@@ -31,10 +31,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, true);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)), typeof(T));
+            var result = context.CreateCompilationResult<T>(true);
 
             var parserCompileResult = _parser.Build(context);
 
@@ -59,8 +56,8 @@ namespace Parlot.Fluent
                     ? Expression.Empty()
                     : Expression.IfThenElse(
                         parserCompileResult.Success,
-                        Expression.Assign(value, parserCompileResult.Value),
-                        Expression.Assign(value, Expression.Constant(_value, typeof(T)))
+                        Expression.Assign(result.Value, parserCompileResult.Value),
+                        Expression.Assign(result.Value, Expression.Constant(_value, typeof(T)))
                     )
                 )
             );

@@ -76,10 +76,7 @@
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(TextSpan)));
+            var result = context.CreateCompilationResult<TextSpan>();
 
             //  var start = context.Scanner.Cursor.Position;
             //  
@@ -159,8 +156,8 @@
                                 _canBeEmpty
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
-                                Expression.Assign(success, Expression.Constant(true)),
-                                context.DiscardResult ? Expression.Empty() : Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Assign(result.Success, Expression.Constant(true)),
+                                context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),
@@ -177,8 +174,8 @@
                                 _canBeEmpty
                                 ? Expression.Empty()
                                 : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
-                                Expression.Assign(success, Expression.Constant(true)),
-                                context.DiscardResult ? Expression.Empty() : Expression.Assign(value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
+                                Expression.Assign(result.Success, Expression.Constant(true)),
+                                context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
                                 Expression.Break(breakLabel)
                                 )
                             ),

@@ -1,4 +1,5 @@
 ﻿using Parlot.Fluent;
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 
@@ -51,5 +52,43 @@ namespace Parlot.Compilation
         /// This is done to optimize compiled parser that are usually used for pattern matching only.
         /// </remarks>
         public bool DiscardResult { get; set; } = false;
+
+        /// <summary>
+        /// Creates a <see cref="CompilationResult"/> instance with a <see cref="CompilationResult.Value"/> and <see cref="CompilationResult.Success"/>
+        /// variables.
+        /// </summary>
+        /// <typeparam name="TValue">The type of the value returned by the parser instance.</typeparam>
+        /// <param name="defaultSuccess">The default value of the <see cref="CompilationResult.Success"/> variable.</param>
+        /// <param name="defaultValue">The default value of the <see cref="CompilationResult.Value"/> variable.</param>
+        /// <returns></returns>
+        public CompilationResult CreateCompilationResult<TValue>(bool defaultSuccess = false, Expression? defaultValue = null)
+        {
+            return CreateCompilationResult(typeof(TValue), defaultSuccess, defaultValue);
+        }
+
+        /// <summary>
+        /// Creates a <see cref="CompilationResult"/> instance with a <see cref="CompilationResult.Value"/> and <see cref="CompilationResult.Success"/>
+        /// variables.
+        /// </summary>
+        /// <param name="valueType">The type of the value returned by the parser instance.</param>
+        /// <param name="defaultSuccess">The default value of the <see cref="CompilationResult.Success"/> variable.</param>
+        /// <param name="defaultValue">The default value of the <see cref="CompilationResult.Value"/> variable.</param>
+        /// <returns></returns>
+        public CompilationResult CreateCompilationResult(Type valueType, bool defaultSuccess = false, Expression? defaultValue = null)
+        {
+            var successVariable = Expression.Variable(typeof(bool), $"success{this.NextNumber}");
+            var valueVariable = Expression.Variable(valueType, $"value{this.NextNumber}");
+
+            var result = new CompilationResult { Success = successVariable, Value = valueVariable };
+
+            result.Variables.Add(successVariable);
+            result.Variables.Add(valueVariable);
+
+            result.Body.Add(Expression.Assign(successVariable, Expression.Constant(defaultSuccess, typeof(bool))));
+            result.Body.Add(Expression.Assign(valueVariable, defaultValue ?? Expression.Default(valueType)));
+
+            return result;
+        }
+
     }
 }

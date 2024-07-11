@@ -1,7 +1,6 @@
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -122,7 +121,7 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void ShouldCompileCyclicDeferreds()
+        public void ShouldCompileCyclicDeferred()
         {
             var openParen = Terms.Char('(');
             var closeParen = Terms.Char(')');
@@ -258,7 +257,7 @@ namespace Parlot.Tests
 
             var result = parser.Parse("(2 + 1) * 3");
 
-            Assert.Equal(9, result.Evaluate());
+            Assert.Equal(9, result.Evaluate()); 
         }
 
         [Fact]
@@ -554,7 +553,7 @@ namespace Parlot.Tests
         }
 
         [Fact]
-        public void BetweenCompiledShouldresetPosition()
+        public void BetweenCompiledShouldResetPosition()
         {
             Assert.True(Between(Terms.Char('['), Terms.Text("abcd"), Terms.Char(']')).Then(x => x.ToString()).Or(Literals.Text(" [abc").Compile()).TryParse(" [abc]", out var result1));
             Assert.Equal(" [abc", result1);
@@ -948,6 +947,18 @@ namespace Parlot.Tests
         public void NumberParsesCustomGroupSeparator()
         {
             Assert.Equal((decimal)123456, Literals.Number<decimal>(NumberOptions.Any, groupSeparator: '|').Compile().Parse("123|456"));
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("+")]
+        [InlineData("+++")]
+        public void ZeroOrManyShouldSucceed(string source)
+        {
+            var parser = ZeroOrMany(Literals.Char('+')).Compile();
+
+            Assert.True(parser.TryParse(source, out var result));
+            Assert.Equal(source.Length, result.Count);
         }
     }
 }

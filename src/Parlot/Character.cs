@@ -38,18 +38,6 @@ namespace Parlot
             return (_characterData[ch] & (byte) CharacterMask.WhiteSpace) != 0;
         }
 
-        public static bool IsWhiteSpaceNonAscii(char ch)
-        {
-            return (ch >= 0x1680 && (
-                        ch == 0x1680 ||
-                        ch == 0x180E ||
-                        (ch >= 0x2000 && ch <= 0x200A) ||
-                        ch == 0x202F ||
-                        ch == 0x205F ||
-                        ch == 0x3000 ||
-                        ch == 0xFEFF));
-        }
-
         public static bool IsWhiteSpaceOrNewLine(char ch)
         {
             return (_characterData[ch] & (byte) CharacterMask.WhiteSpaceOrNewLine) != 0;
@@ -85,7 +73,7 @@ namespace Parlot
         public static TextSpan DecodeString(TextSpan span)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (span.Buffer.AsSpan(span.Offset, span.Length).IndexOf('\\') == -1)
+            if (string.IsNullOrEmpty(span.Buffer) || span.Buffer.AsSpan(span.Offset, span.Length).IndexOf('\\') == -1)
             {
                 return span;
             }
@@ -99,7 +87,7 @@ namespace Parlot
                 // The assumption is that the new string will be shorter since escapes results are smaller than their source
 
                 var dataIndex = 0;
-                var buffer = source.Buffer;
+                var buffer = source.Buffer!;
                 var start = source.Offset;
                 var end = source.Offset + source.Length;
 

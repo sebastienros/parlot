@@ -1,5 +1,3 @@
-using Parlot.Fluent;
-
 namespace Parlot.Tests.Calc
 {
     public class FluentParserTests : CalcTests

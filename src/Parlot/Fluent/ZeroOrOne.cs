@@ -10,7 +10,7 @@ namespace Parlot.Fluent
         private readonly Parser<T> _parser;
         private readonly T _defaultValue;
 
-        public ZeroOrOne(Parser<T> parser, T defaultValue = default)
+        public ZeroOrOne(Parser<T> parser, T defaultValue)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
             _defaultValue = defaultValue;
@@ -44,10 +44,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, true);
-            var value = context.DeclareValueVariable(result, Expression.Constant(_defaultValue, typeof(T)));
+            var result = context.CreateCompilationResult<T>(true, Expression.Constant(_defaultValue, typeof(T)));
 
             // T value = _defaultValue;
             //
@@ -66,8 +63,8 @@ namespace Parlot.Fluent
                             ? Expression.Empty()
                             : Expression.IfThenElse(
                                 parserCompileResult.Success, 
-                                Expression.Assign(value,  parserCompileResult.Value),
-                                Expression.Assign(value, Expression.Constant(_defaultValue, typeof(T)))
+                                Expression.Assign(result.Value,  parserCompileResult.Value),
+                                Expression.Assign(result.Value, Expression.Constant(_defaultValue, typeof(T)))
                             )
                         )
                     );

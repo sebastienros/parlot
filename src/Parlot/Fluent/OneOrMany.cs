@@ -3,12 +3,14 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
     public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
     {
         private readonly Parser<T> _parser;
+        private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
 
         public OneOrMany(Parser<T> parser)
         {
@@ -57,10 +59,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.New(typeof(List<T>)));
+            var result = context.CreateCompilationResult<List<T>>(false, Expression.New(typeof(List<T>)));
 
             // value = new List<T>();
             //
@@ -103,8 +102,8 @@ namespace Parlot.Fluent
                             Expression.Block(
                                 context.DiscardResult
                                 ? Expression.Empty()
-                                : Expression.Call(value, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value),
-                                Expression.Assign(success, Expression.Constant(true))
+                                : Expression.Call(result.Value, _listAddMethodInfo, parserCompileResult.Value),
+                                Expression.Assign(result.Success, Expression.Constant(true))
                                 ),
                             Expression.Break(breakLabel)
                             ),

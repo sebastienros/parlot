@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
@@ -11,6 +12,7 @@ namespace Parlot.Fluent
     /// </summary>
     public sealed class Switch<T, U> : Parser<U>, ICompilable
     {
+        private static readonly MethodInfo _uParse = typeof(Parser<U>).GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<U>).MakeByRefType()])!;
 
         private readonly Parser<T> _previousParser;
         private readonly Func<ParseContext, T, Parser<U>> _action;
@@ -49,10 +51,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(U)));
+            var result = context.CreateCompilationResult<U>();
 
             // previousParser instructions
             // 
@@ -88,15 +87,15 @@ namespace Parlot.Fluent
                                 Expression.IfThen(
                                     Expression.NotEqual(Expression.Constant(null, typeof(Parser<U>)), nextParser),
                                     Expression.Block(
-                                        Expression.Assign(success,
+                                        Expression.Assign(result.Success,
                                             Expression.Call(
                                                 nextParser,
-                                                typeof(Parser<U>).GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<U>).MakeByRefType()]),
+                                                _uParse,
                                                 context.ParseContext,
                                                 parseResult)),
                                         context.DiscardResult
                                             ? Expression.Empty()
-                                            : Expression.IfThen(success, Expression.Assign(value, Expression.Field(parseResult, "Value")))
+                                            : Expression.IfThen(result.Success, Expression.Assign(result.Value, Expression.Field(parseResult, "Value")))
                                         )
                                     )
                                 )

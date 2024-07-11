@@ -44,10 +44,7 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.Default(typeof(T)));
+            var result = context.CreateCompilationResult<T>();
 
             // T value;
             //
@@ -79,10 +76,10 @@ namespace Parlot.Fluent
                     Expression.IfThenElse(
                         parser1CompileResult.Success,
                         Expression.Block(
-                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                             context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, Expression.Convert(parser1CompileResult.Value, typeof(T)))
+                            : Expression.Assign(result.Value, Expression.Convert(parser1CompileResult.Value, typeof(T)))
                             ),
                         Expression.Block(
                             parser2CompileResult.Variables,
@@ -90,10 +87,10 @@ namespace Parlot.Fluent
                             Expression.IfThen(
                                 parser2CompileResult.Success,
                                 Expression.Block(
-                                    Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                                     context.DiscardResult
                                     ? Expression.Empty()
-                                    : Expression.Assign(value, Expression.Convert(parser2CompileResult.Value, typeof(T)))
+                                    : Expression.Assign(result.Value, Expression.Convert(parser2CompileResult.Value, typeof(T)))
                                     )
                                 )
                             )

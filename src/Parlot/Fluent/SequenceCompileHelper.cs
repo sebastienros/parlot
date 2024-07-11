@@ -11,14 +11,11 @@ namespace Parlot.Fluent
 
         public static CompilationResult CreateSequenceCompileResult(SkippableCompilationResult[] parserCompileResults, CompilationContext context)
         {
-            var result = new CompilationResult();
-
             var nonSkippableResults = parserCompileResults.Where(x => !x.Skip).ToArray();
             var parserTypes = nonSkippableResults.Select(x => x.CompilationResult.Value.Type).ToArray();
             var resultType = GetValueTuple(nonSkippableResults.Length).MakeGenericType(parserTypes);
 
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, Expression.New(resultType));
+            var result = context.CreateCompilationResult(resultType, false, Expression.New(resultType));
 
             // var start = context.Scanner.Cursor.Position;
 
@@ -50,18 +47,18 @@ namespace Parlot.Fluent
                     6 => typeof(ValueTuple<,,,,,>),
                     7 => typeof(ValueTuple<,,,,,,>),
                     8 => typeof(ValueTuple<,,,,,,,>),
-                    _ => null
+                    _ => throw new NotSupportedException("Unsupported number of type arguments")
                 };
             }
 
-            var valueTupleConstructor = resultType.GetConstructor(parserTypes);
+            var valueTupleConstructor = resultType.GetConstructor(parserTypes)!;
 
             // Initialize the block variable with the inner else statement
             var block = Expression.Block(
-                            Expression.Assign(success, Expression.Constant(true, typeof(bool))),
+                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                             context.DiscardResult
                             ? Expression.Empty()
-                            : Expression.Assign(value, Expression.New(valueTupleConstructor, nonSkippableResults.Select(x => x.CompilationResult.Value).ToArray()))
+                            : Expression.Assign(result.Value, Expression.New(valueTupleConstructor, nonSkippableResults.Select(x => x.CompilationResult.Value).ToArray()))
                             );
 
             for (var i = parserCompileResults.Length - 1; i >= 0; i--)
@@ -88,7 +85,7 @@ namespace Parlot.Fluent
             // }
 
             result.Body.Add(Expression.IfThen(
-                Expression.Not(success),
+                Expression.Not(result.Success),
                 context.ResetPosition(start)
                 ));
 

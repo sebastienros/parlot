@@ -3,11 +3,14 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent
 {
     public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
     {
+        private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
+
         private readonly Parser<U> _separator;
         private readonly Parser<T> _parser;
 
@@ -34,7 +37,7 @@ namespace Parlot.Fluent
         {
             context.EnterParser(this);
 
-            List<T> results = null;
+            List<T>? results = null;
 
             var start = 0;
             var end = context.Scanner.Cursor.Position;
@@ -72,12 +75,12 @@ namespace Parlot.Fluent
                  
                 if (first)
                 {
-                    results = new List<T>();
+                    results = [];
                     start = parsed.Start;
                     first = false;
                 }
                 
-                results.Add(parsed.Value);
+                results!.Add(parsed.Value);
             }
 
             result.Set(start, end.Offset, results ?? []);
@@ -86,12 +89,9 @@ namespace Parlot.Fluent
 
         public CompilationResult Compile(CompilationContext context)
         {
-            var result = new CompilationResult();
-
-            var success = context.DeclareSuccessVariable(result, false);
-            var value = context.DeclareValueVariable(result, ExpressionHelper.ArrayEmpty<T>(), typeof(IReadOnlyList<T>));
-
-            var results = context.DeclareVariable<List<T>>(result, $"results{context.NextNumber}");
+            var result = context.CreateCompilationResult<IReadOnlyList<T>>(false, ExpressionHelper.ArrayEmpty<T>());
+            var first = result.DeclareVariable<bool>($"first{context.NextNumber}", Expression.Constant(true));
+            var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}");
 
             var end = context.DeclarePositionVariable(result);
 
@@ -107,7 +107,12 @@ namespace Parlot.Fluent
             //   if (parser1.Success)
             //   {
             //      success = true;
-            //      if (results == null) results = new List<T>();
+            //      if (first)
+            //      {
+            //          results = new List<T>();
+            //          first = false;
+            //          value = results;
+            //      }
             //      results.Add(parse1.Value);
             //      end = currenPosition;
             //   }
@@ -144,15 +149,16 @@ namespace Parlot.Fluent
                                 ? Expression.Empty()
                                 : Expression.Block(
                                     Expression.IfThen(
-                                        Expression.Equal(results, Expression.Constant(null, typeof(List<T>))),
+                                        Expression.IsTrue(first),
                                         Expression.Block(
+                                            Expression.Assign(first, Expression.Constant(false)),
                                             Expression.Assign(results, ExpressionHelper.New<List<T>>()),
-                                            Expression.Assign(value, results)
+                                            Expression.Assign(result.Value, results)
                                             )
                                         ),
-                                    Expression.Call(results, typeof(List<T>).GetMethod("Add"), parserCompileResult.Value)
+                                    Expression.Call(results, _listAddMethodInfo, parserCompileResult.Value)
                                     ),
-                                Expression.Assign(success, Expression.Constant(true)),
+                                Expression.Assign(result.Success, Expression.Constant(true)),
                                 Expression.Assign(end, context.Position())
                                 ),
                             Expression.Break(breakLabel)

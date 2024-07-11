@@ -5,16 +5,16 @@
     public abstract partial class Parser<T>
     {
         private int _invocations = 0;
-        private volatile Parser<T> _compiledParser;
+        private volatile Parser<T>? _compiledParser;
 
-        public T Parse(string text)
+        public T? Parse(string text)
         {
             var context = new ParseContext(new Scanner(text));
 
             return Parse(context);
         }
 
-        public T Parse(ParseContext context)
+        public T? Parse(ParseContext context)
         {
             var localResult = new ParseResult<T>();
             
@@ -47,17 +47,17 @@
             return this;
         }
 
-        public bool TryParse(string text, out T value)
+        public bool TryParse(string text, out T? value)
         {
             return TryParse(text, out value, out _);
         }
 
-        public bool TryParse(string text, out T value, out ParseError error)
+        public bool TryParse(string text, out T value, out ParseError? error)
         {
             return TryParse(new ParseContext(new Scanner(text)), out value, out error);
         }
 
-        public bool TryParse(ParseContext context, out T value, out ParseError error)
+        public bool TryParse(ParseContext context, out T value, out ParseError? error)
         {
             error = null;
 
@@ -82,7 +82,7 @@
                 };
             }
 
-            value = default;
+            value = default!;
             return false;
         }
     }

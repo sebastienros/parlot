@@ -1,6 +1,4 @@
-﻿using System.Linq;
-
-namespace Parlot.Fluent
+﻿namespace Parlot.Fluent
 {
     // We don't care about the performance of these helpers since they are called only once 
     // during the parser tree creation
@@ -18,7 +16,7 @@ namespace Parlot.Fluent
             if (parser is OneOf<T> oneOf)
             {
                 // Return a single OneOf instance with this new one
-                return new OneOf<T>(oneOf.Parsers.Append(or).ToArray());
+                return new OneOf<T>([.. oneOf.Parsers, or]);
             }
             else
             {

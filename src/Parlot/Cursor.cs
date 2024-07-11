@@ -32,6 +32,11 @@ namespace Parlot
         public TextPosition Position => new(_offset, _line, _column);
 
         /// <summary>
+        /// Returns the <see cref="ReadOnlySpan{T}"/> value of the <see cref="Buffer" /> at the current offset.
+        /// </summary>
+        public ReadOnlySpan<char> Span => _buffer.AsSpan(_offset);
+
+        /// <summary>
         /// Advances the cursor by one character.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -206,69 +211,44 @@ namespace Parlot
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool MatchAnyOf(string s)
+        public bool MatchAnyOf(ReadOnlySpan<char> s)
         {
-            if (s == null)
-            {
-                ThrowHelper.ThrowArgumentNullException(nameof(s));
-            }
-
             if (Eof)
             {
                 return false;
             }
 
-            var length = s.Length;
-
-            if (length == 0)
-            {
-                return true;
-            }
-
-            return s.IndexOf(_current) != -1;
+            return s.Length == 0 || s.IndexOf(_current) > -1;
         }
 
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(string s)
+        public bool Match(ReadOnlySpan<char> s)
         {
             // Equivalent to StringComparison.Ordinal comparison
 
-            var sSpan = s.AsSpan();
-            var bufferSpan = _buffer.AsSpan(_offset);
-            
-            return bufferSpan.StartsWith(sSpan);
+            if (_textLength < _offset + s.Length)
+            {
+                return false;
+            }
+
+            return Span.StartsWith(s);
         }
 
         /// <summary>
         /// Whether a string is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(string s, StringComparison comparisonType)
+        public bool Match(ReadOnlySpan<char> s, StringComparison comparisonType)
         {
             if (_textLength < _offset + s.Length)
             {
                 return false;
             }
 
-            var sSpan = s.AsSpan();
-            var bufferSpan = _buffer.AsSpan(_offset);
-
-            if (comparisonType == StringComparison.Ordinal && bufferSpan.Length > 0)
-            {
-                var length = sSpan.Length - 1;
-
-                if (bufferSpan[0] != sSpan[0] || bufferSpan[length] != sSpan[length])
-                {
-                    return false;
-                }
-            }
-
-            // StringComparison.Ordinal is an optimized code path in Span.StartsWith
-
-            return bufferSpan.StartsWith(sSpan, comparisonType);
+            return Span.StartsWith(s, comparisonType);
         }
     }
 }
