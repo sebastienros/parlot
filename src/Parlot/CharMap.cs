@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace Parlot;
 
-public sealed class CharMap<T> where T : class
+internal sealed class CharMap<T> where T : class
 {
     private readonly T[] _asciiMap = new T[128];
     private Dictionary<uint, T>? _nonAsciiMap;
