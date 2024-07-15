@@ -16,7 +16,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.Memory" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net6.0'))" />
-    <PackageReference Include="System.Collections.Immutable" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
   </ItemGroup>
 
