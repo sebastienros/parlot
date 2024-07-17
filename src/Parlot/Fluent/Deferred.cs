@@ -13,10 +13,7 @@ namespace Parlot.Fluent
         {
         }
 
-        public Deferred(Func<Deferred<T>, Parser<T>> parser)
-        {
-            Parser = parser(this);
-        }
+        public Deferred(Func<Deferred<T>, Parser<T>> parser) => Parser = parser(this);
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {

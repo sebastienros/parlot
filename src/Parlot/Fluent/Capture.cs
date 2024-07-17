@@ -7,10 +7,7 @@ namespace Parlot.Fluent
     {
         private readonly Parser<T> _parser;
 
-        public Capture(Parser<T> parser)
-        {
-            _parser = parser;
-        }
+        public Capture(Parser<T> parser) => _parser = parser;
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {

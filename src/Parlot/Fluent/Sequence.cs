@@ -277,10 +277,8 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+        public CompilationResult Compile(CompilationContext context) => 
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -351,10 +349,9 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+
+        public CompilationResult Compile(CompilationContext context) => 
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -426,9 +423,7 @@ namespace Parlot.Fluent
             return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+        public CompilationResult Compile(CompilationContext context) => 
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 }

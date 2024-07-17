@@ -40,16 +40,7 @@ namespace Parlot.Tests.Json
             Json = json.Parser = jsonString.Or(jsonArray).Or(jsonObject);
         }
 
-        public static IJson Parse(string input)
-        {
-            if (Json.TryParse(input, out var result))
-            {
-                return result;
-            }
-            else
-            {
-                return null;
-            }
-        }
+        public static IJson Parse(string input) => Json.TryParse(input, out var result) ? result : null;
+
     }
 }

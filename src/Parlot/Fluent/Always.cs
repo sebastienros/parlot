@@ -10,10 +10,7 @@ namespace Parlot.Fluent
     {
         private readonly T _value;
 
-        public Always(T value)
-        {
-            _value = value;
-        }
+        public Always(T value) => _value = value;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {
@@ -24,9 +21,7 @@ namespace Parlot.Fluent
             return true;
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return context.CreateCompilationResult<T>(true, Expression.Constant(_value, typeof(T)));
-        }
+        public CompilationResult Compile(CompilationContext context) =>
+            context.CreateCompilationResult<T>(true, Expression.Constant(_value, typeof(T)));
     }
 }

@@ -10,10 +10,7 @@ internal sealed class CharMap<T> where T : class
     private readonly T[] _asciiMap = new T[128];
     private Dictionary<uint, T>? _nonAsciiMap;
 
-    public CharMap()
-    {
-        ExpectedChars = Array.Empty<char>();
-    }
+    public CharMap() => ExpectedChars = Array.Empty<char>();
 
     public CharMap(IEnumerable<KeyValuePair<char, T>> map)
     {

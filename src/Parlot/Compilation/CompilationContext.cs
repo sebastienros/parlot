@@ -61,10 +61,8 @@ namespace Parlot.Compilation
         /// <param name="defaultSuccess">The default value of the <see cref="CompilationResult.Success"/> variable.</param>
         /// <param name="defaultValue">The default value of the <see cref="CompilationResult.Value"/> variable.</param>
         /// <returns></returns>
-        public CompilationResult CreateCompilationResult<TValue>(bool defaultSuccess = false, Expression? defaultValue = null)
-        {
-            return CreateCompilationResult(typeof(TValue), defaultSuccess, defaultValue);
-        }
+        public CompilationResult CreateCompilationResult<TValue>(bool defaultSuccess = false, Expression? defaultValue = null) => 
+            CreateCompilationResult(typeof(TValue), defaultSuccess, defaultValue);
 
         /// <summary>
         /// Creates a <see cref="CompilationResult"/> instance with a <see cref="CompilationResult.Value"/> and <see cref="CompilationResult.Success"/>

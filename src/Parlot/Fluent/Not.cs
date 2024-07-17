@@ -8,10 +8,7 @@ namespace Parlot.Fluent
     {
         private readonly Parser<T> _parser;
 
-        public Not(Parser<T> parser)
-        {
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        }
+        public Not(Parser<T> parser) => _parser = parser ?? throw new ArgumentNullException(nameof(parser));
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {

@@ -204,11 +204,9 @@ namespace Parlot
         /// Whether a char is at the current position.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Match(char c)
-        {
+        public bool Match(char c) =>
             // Ordinal comparison
-            return _current == c;
-        }
+            _current == c;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MatchAnyOf(ReadOnlySpan<char> s)

@@ -129,9 +129,8 @@ namespace Parlot
         public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(true, true, false, true, out number);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
-        {
-            return ReadDecimal(
+        public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',') => 
+            ReadDecimal(
                 (numberOptions & NumberOptions.AllowLeadingSign) != 0,
                 (numberOptions & NumberOptions.AllowDecimalSeparator) != 0,
                 (numberOptions & NumberOptions.AllowGroupSeparators) != 0,
@@ -139,7 +138,6 @@ namespace Parlot
                 out number,
                 decimalSeparator,
                 groupSeparator);
-        }
 
         public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
         {
@@ -300,18 +298,14 @@ namespace Parlot
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _);
 
-        public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result)
-        {
-            return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
-        }
+        public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result) => 
+            ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _);
 
-        public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result)
-        {
-            return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
-        }
+        public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result) => 
+            ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
 
         /// <summary>
         /// Reads the specified text.
@@ -445,19 +439,13 @@ namespace Parlot
         public bool ReadSingleQuotedString() => ReadSingleQuotedString(out _);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadSingleQuotedString(out ReadOnlySpan<char> result)
-        {
-            return ReadQuotedString('\'', out result);
-        }
+        public bool ReadSingleQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString('\'', out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadDoubleQuotedString() => ReadDoubleQuotedString(out _);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadDoubleQuotedString(out ReadOnlySpan<char> result)
-        {
-            return ReadQuotedString('\"', out result);
-        }
+        public bool ReadDoubleQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString('\"', out result);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ReadQuotedString() => ReadQuotedString(out _);

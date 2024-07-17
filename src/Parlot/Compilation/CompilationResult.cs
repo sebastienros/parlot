@@ -38,10 +38,8 @@ namespace Parlot.Compilation
         /// </summary>
         public required ParameterExpression Value { get; set; }
 
-        public ParameterExpression DeclareVariable<T>(string name, Expression? defaultValue = null)
-        {
-            return DeclareVariable(name, typeof(T), defaultValue);
-        }
+        public ParameterExpression DeclareVariable<T>(string name, Expression? defaultValue = null) =>
+            DeclareVariable(name, typeof(T), defaultValue);
 
         public ParameterExpression DeclareVariable(string name, Type type, Expression? defaultValue = null)
         {

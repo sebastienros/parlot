@@ -83,9 +83,7 @@ namespace Parlot.Compilation
             return offset;
         }
 
-        public static MethodCallExpression ParserSkipWhiteSpace(this CompilationContext context)
-        {
-            return Expression.Call(context.ParseContext, ParserContext_SkipWhiteSpaceMethod);
-        }
+        public static MethodCallExpression ParserSkipWhiteSpace(this CompilationContext context) => 
+            Expression.Call(context.ParseContext, ParserContext_SkipWhiteSpaceMethod);
     }
 }
