@@ -21,4 +21,22 @@
 
   </PropertyGroup>
 
+  <PropertyGroup Label="Analysis rules">
+
+    <AnalysisLevel>latest-Recommended</AnalysisLevel>
+
+    <!-- Prefix generic type parameter name with 'T'  -->
+    <NoWarn>$(NoWarn);CA1715;</NoWarn>
+
+    <!-- Do not declare visible instance fields  -->
+    <NoWarn>$(NoWarn);CA1051;</NoWarn>
+
+    <!-- Identifier contains type name  -->
+    <NoWarn>$(NoWarn);CA1720;</NoWarn>
+
+    <!-- Identifiers should not match keywords  -->
+    <NoWarn>$(NoWarn);CA1716;</NoWarn>
+
+  </PropertyGroup>
+
 </Project>

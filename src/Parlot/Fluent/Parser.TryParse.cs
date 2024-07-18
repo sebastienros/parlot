@@ -4,7 +4,7 @@
 
     public abstract partial class Parser<T>
     {
-        private int _invocations = 0;
+        private int _invocations;
         private volatile Parser<T>? _compiledParser;
 
         public T? Parse(string text)

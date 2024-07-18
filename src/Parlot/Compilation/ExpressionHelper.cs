@@ -37,7 +37,9 @@ namespace Parlot.Compilation
         public static Expression ArrayEmpty<T>() => ((Expression<Func<object>>)(() => Array.Empty<T>())).Body;
         public static Expression New<T>() where T : new() => ((Expression<Func<T>>)(() => new T())).Body;
         
+#pragma warning disable CA2211 // Non-constant fields should not be visible
         public static Expression<Func<Cursor, char, char, bool>> CharacterIsInRange = (cursor,b,c) => Character.IsInRange(cursor.Current, b, c);
+#pragma warning restore CA2211
 
         //public static Expression NewOptionalResult<T>(this CompilationContext _, Expression hasValue, Expression value) => Expression.New(GetOptionalResult_Constructor<T>(), [hasValue, value]);
         public static Expression NewTextSpan(this CompilationContext _, Expression buffer, Expression offset, Expression count) => Expression.New(TextSpan_Constructor, [buffer, offset, count]);

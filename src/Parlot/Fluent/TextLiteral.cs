@@ -6,6 +6,8 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent
 {
+    using System.Globalization;
+
     public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
         private readonly StringComparison _comparisonType;
@@ -40,7 +42,7 @@ namespace Parlot.Fluent
                 }
                 else
                 {
-                    ExpectedChars = ignoreCase ? [Text.ToUpper()[0], Text.ToLower()[0]] : [Text[0]];
+                    ExpectedChars = ignoreCase ? [Text.ToUpper(CultureInfo.CurrentCulture)[0], Text.ToLower(CultureInfo.CurrentCulture)[0]] : [Text[0]];
                 }
             }
         }
@@ -51,7 +53,7 @@ namespace Parlot.Fluent
 
         public char[] ExpectedChars { get; } = [];
 
-        public bool SkipWhitespace { get; } = false;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<string> result)
         {

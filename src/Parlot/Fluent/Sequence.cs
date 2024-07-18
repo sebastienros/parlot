@@ -7,8 +7,8 @@ namespace Parlot.Fluent
 {
     public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
-        internal readonly Parser<T1> _parser1;
-        internal readonly Parser<T2> _parser2;
+        private readonly Parser<T1> _parser1;
+        private readonly Parser<T2> _parser2;
         public Sequence(Parser<T1> parser1, Parser<T2> parser2)
         {
             _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
@@ -70,7 +70,7 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2>> _parser;
-        internal readonly Parser<T3> _lastParser;
+        private readonly Parser<T3> _lastParser;
 
         public Sequence(Parser<ValueTuple<T1, T2>> 
             parser,
@@ -143,7 +143,7 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
-        internal readonly Parser<T4> _lastParser;
+        private readonly Parser<T4> _lastParser;
 
         public Sequence(Parser<ValueTuple<T1, T2, T3>> parser, Parser<T4> lastParser)
         {
@@ -214,7 +214,7 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
-        internal readonly Parser<T5> _lastParser;
+        private readonly Parser<T5> _lastParser;
         
         public Sequence(Parser<ValueTuple<T1, T2, T3, T4>> parser, Parser<T5> lastParser)
         {
@@ -286,7 +286,7 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
-        internal readonly Parser<T6> _lastParser;        
+        private readonly Parser<T6> _lastParser;        
 
         public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5>> parser, Parser<T6> lastParser)
         {
@@ -360,7 +360,7 @@ namespace Parlot.Fluent
     public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable
     {
         private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
-        internal readonly Parser<T7> _lastParser;
+        private readonly Parser<T7> _lastParser;
 
         public Sequence(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
         {

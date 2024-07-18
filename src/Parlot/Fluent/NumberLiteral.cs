@@ -30,7 +30,7 @@ namespace Parlot.Fluent
 
         public char[] ExpectedChars { get; }
 
-        public bool SkipWhitespace { get; } = false;
+        public bool SkipWhitespace { get; }
 
         public NumberLiteral(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = DefaultDecimalSeparator, char groupSeparator = DefaultGroupSeparator)
         {

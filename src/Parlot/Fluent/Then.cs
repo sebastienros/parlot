@@ -16,7 +16,7 @@ namespace Parlot.Fluent
     {
         private readonly Func<T, U>? _action1;
         private readonly Func<ParseContext, T, U>? _action2;
-        private readonly U? _value = default;
+        private readonly U? _value;
         private readonly Parser<T> _parser;
 
         private Then(Parser<T> parser)

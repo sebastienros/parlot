@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Numerics;
 
+#pragma warning disable CA1822 // Mark members as static
+
 namespace Parlot.Fluent
 {
     public static partial class Parsers

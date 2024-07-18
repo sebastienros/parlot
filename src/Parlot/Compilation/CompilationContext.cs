@@ -10,7 +10,7 @@ namespace Parlot.Compilation
     /// </summary>
     public class CompilationContext
     {
-        private int _number = 0;
+        private int _number;
 
         public CompilationContext()
         {
@@ -51,7 +51,7 @@ namespace Parlot.Compilation
         /// When set to false, the compiled statements don't need to record and define the <see cref="CompilationResult.Value"/> property.
         /// This is done to optimize compiled parser that are usually used for pattern matching only.
         /// </remarks>
-        public bool DiscardResult { get; set; } = false;
+        public bool DiscardResult { get; set; }
 
         /// <summary>
         /// Creates a <see cref="CompilationResult"/> instance with a <see cref="CompilationResult.Value"/> and <see cref="CompilationResult.Success"/>
