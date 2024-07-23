@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace Parlot
@@ -19,40 +20,45 @@ namespace Parlot
         public static bool IsDecimalDigit(char ch) => IsInRange(ch, '0', '9');
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsInRange(char ch, char min, char max) => ch - (uint) min <= max - (uint) min;
+        public static bool IsInRange(char ch, char min, char max) => ch - (uint)min <= max - (uint)min;
 
         public static bool IsHexDigit(char ch) => HexConverter.IsHexChar(ch);
 
         public static bool IsIdentifierStart(char ch)
         {
-            return (_characterData[ch] & (byte) CharacterMask.IdentifierStart) != 0;
+            return (_characterData[ch] & (byte)CharacterMask.IdentifierStart) != 0;
         }
 
         public static bool IsIdentifierPart(char ch)
         {
-            return (_characterData[ch] & (byte) CharacterMask.IdentifierPart) != 0;
+            return (_characterData[ch] & (byte)CharacterMask.IdentifierPart) != 0;
         }
 
         public static bool IsWhiteSpace(char ch)
         {
-            return (_characterData[ch] & (byte) CharacterMask.WhiteSpace) != 0;
+            return (_characterData[ch] & (byte)CharacterMask.WhiteSpace) != 0;
         }
 
         public static bool IsWhiteSpaceOrNewLine(char ch)
         {
-            return (_characterData[ch] & (byte) CharacterMask.WhiteSpaceOrNewLine) != 0;
+            return (_characterData[ch] & (byte)CharacterMask.WhiteSpaceOrNewLine) != 0;
         }
 
         public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v';
 
         public static char ScanHexEscape(string text, int index, out int length)
         {
-            var lastIndex = Math.Min(4 + index, text.Length - 1);
+            return ScanHexEscape(text.AsSpan(index), out length);
+        }
+
+        public static char ScanHexEscape(ReadOnlySpan<char> text, out int length)
+        {
+            var lastIndex = Math.Min(4, text.Length - 1);
             var code = 0;
 
             length = 0;
 
-            for (var i = index + 1; i < lastIndex + 1; i++)
+            for (var i = 1; i < lastIndex + 1; i++)
             {
                 var d = text[i];
 
@@ -68,37 +74,32 @@ namespace Parlot
             return (char)code;
         }
 
-        public static TextSpan DecodeString(string s) => DecodeString(new TextSpan(s));
-
-        public static TextSpan DecodeString(TextSpan span)
+        public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> span)
         {
             // Nothing to do if the string doesn't have any escape char
-            if (string.IsNullOrEmpty(span.Buffer) || span.Buffer.AsSpan(span.Offset, span.Length).IndexOf('\\') == -1)
+            if (span.IsEmpty || span.IndexOf('\\') == -1)
             {
                 return span;
             }
 
-#if NET6_0_OR_GREATER
-            var result = string.Create(span.Length, span, static (chars, source) =>
-#else
-            var result = "".Create(span.Length, span, static (chars, source) =>
-#endif
+            // The assumption is that the new string will be shorter since escapes results are smaller than their source
+            char[]? rentedBuffer = null;
+            Span<char> buffer = span.Length <= 128
+                ? stackalloc char[span.Length]
+                : (rentedBuffer = ArrayPool<char>.Shared.Rent(span.Length));
+
+            try
             {
-                // The assumption is that the new string will be shorter since escapes results are smaller than their source
-
                 var dataIndex = 0;
-                var buffer = source.Buffer!;
-                var start = source.Offset;
-                var end = source.Offset + source.Length;
 
-                for (var i = start; i < end; i++)
+                for (var i = 0; i < span.Length; i++)
                 {
-                    var c = buffer[i];
+                    var c = span[i];
 
                     if (c == '\\')
                     {
                         i++;
-                        c = buffer[i];
+                        c = span[i];
 
                         switch (c)
                         {
@@ -114,31 +115,44 @@ namespace Parlot
                             case 't': c = '\t'; break;
                             case 'v': c = '\v'; break;
                             case 'u':
-                                c = Character.ScanHexEscape(buffer, i, out var length);
+                                c = Character.ScanHexEscape(span[i..], out var length);
                                 i += length;
                                 break;
                             case 'x':
-                                c = Character.ScanHexEscape(buffer, i, out length);
+                                c = Character.ScanHexEscape(span[i..], out length);
                                 i += length;
                                 break;
                         }
                     }
 
-                    chars[dataIndex++] = c;
+                    buffer[dataIndex++] = c;
                 }
 
-                chars[dataIndex++] = '\0';
-            });
+                var result = buffer[..dataIndex].ToString().AsSpan();
 
-            for (var i = result.Length - 1; i >= 0; i--)
+                return result;
+            }
+            finally
             {
-                if (result[i] != '\0')
+                if (rentedBuffer != null)
                 {
-                    return new TextSpan(result, 0, i + 1);
+                    ArrayPool<char>.Shared.Return(rentedBuffer);
                 }
             }
+        }
 
-            return new TextSpan(result);
+        public static TextSpan DecodeString(string s) => DecodeString(new TextSpan(s));
+
+        public static TextSpan DecodeString(TextSpan span)
+        {
+            // Nothing to do if the string doesn't have any escape char
+            if (string.IsNullOrEmpty(span.Buffer) || span.Buffer.AsSpan(span.Offset, span.Length).IndexOf('\\') == -1)
+            {
+                return span;
+            }
+
+            return new TextSpan(DecodeString(span.Span).ToString());
+
         }
 
         private static int HexValue(char ch) => HexConverter.FromChar(ch);

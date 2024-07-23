@@ -149,7 +149,7 @@ namespace Parlot
             {
                 if (Cursor.Current == '-' || Cursor.Current == '+')
                 {
-                    Cursor.AdvanceNoNewLines(1); 
+                    Cursor.AdvanceNoNewLines(1);
                 }
             }
 
@@ -259,7 +259,7 @@ namespace Parlot
                 return false;
             }
 
-            Cursor.AdvanceNoNewLines(next);                
+            Cursor.AdvanceNoNewLines(next);
             result = Buffer.AsSpan(Cursor.Offset - next, next);
 
             return true;
@@ -379,7 +379,7 @@ namespace Parlot
             var current = Cursor.Buffer.AsSpan(Cursor.Offset, 1);
 
             var index = chars.IndexOf(current, comparisonType);
-            
+
             if (index == -1)
             {
                 result = [];
@@ -522,6 +522,7 @@ namespace Parlot
         private bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
         {
             var startChar = Cursor.Current;
+            var start = Cursor.Position;
 
             if (startChar != quoteChar)
             {
@@ -529,10 +530,7 @@ namespace Parlot
                 return false;
             }
 
-            // Fast path if there aren't any escape char until next quote
-            var startOffset = Cursor.Offset + 1;
-
-            var nextQuote = Cursor.Buffer.AsSpan(startOffset).IndexOf(startChar);
+            var nextQuote = Cursor.Span.Slice(1).IndexOf(startChar);
 
             if (nextQuote == -1)
             {
@@ -541,18 +539,14 @@ namespace Parlot
                 return false;
             }
 
-            var start = Cursor.Position;
+            var nextEscape = Cursor.Span.IndexOf('\\');
 
-            Cursor.Advance();
-
-            var nextEscape = Cursor.Buffer.AsSpan(startOffset, nextQuote).IndexOf('\\');
-
-            // If the next escape if not before the next quote, we can return the string as-is
-            if (nextEscape == -1)
+            // If the next escape is not before the next quote, we can return the string as-is
+            if (nextEscape == -1 || nextEscape > nextQuote)
             {
-                Cursor.Advance(nextQuote + 1);
+                Cursor.Advance(nextQuote + 2); // include start quote
 
-                result = Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                result = Cursor.Buffer.AsSpan().Slice(start.Offset, nextQuote + 2);
                 return true;
             }
 
@@ -672,7 +666,8 @@ namespace Parlot
 
                 if (Cursor.Match(startChar))
                 {
-                    Cursor.Advance(nextEscape + 1);
+                    // Read end quote
+                    Cursor.Advance(1);
                     break;
                 }
                 else if (nextEscape == -1)
@@ -684,7 +679,7 @@ namespace Parlot
                 }
             }
 
-            result = Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+            result = Cursor.Buffer.AsSpan()[start.Offset..Cursor.Offset];
 
             return true;
         }
