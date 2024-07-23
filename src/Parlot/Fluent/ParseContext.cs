@@ -4,7 +4,9 @@ namespace Parlot.Fluent
 {
     public class ParseContext
     {
-        public static int DefaultCompilationThreshold = 0;
+#pragma warning disable CA2211 // Non-constant fields should not be visible
+        public static int DefaultCompilationThreshold;
+#pragma warning restore CA2211
 
         /// <summary>
         /// The number of usages of the parser before it is compiled automatically. <c>0</c> to disable automatic compilation. Default is 0.

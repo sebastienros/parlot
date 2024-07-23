@@ -30,14 +30,14 @@ namespace Parlot.Compilation
 
         internal static readonly ConstructorInfo Exception_ToString = typeof(Exception).GetConstructor([typeof(string)])!;
 
-        internal static ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor([typeof(string), typeof(int), typeof(int)])!;
+        internal static readonly ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor([typeof(string), typeof(int), typeof(int)])!;
 
-        internal static MethodInfo MemoryExtensions_AsSpan = typeof(MemoryExtensions).GetMethod(nameof(MemoryExtensions.AsSpan), [typeof(string)])!;
+        internal static readonly MethodInfo MemoryExtensions_AsSpan = typeof(MemoryExtensions).GetMethod(nameof(MemoryExtensions.AsSpan), [typeof(string)])!;
 
         public static Expression ArrayEmpty<T>() => ((Expression<Func<object>>)(() => Array.Empty<T>())).Body;
         public static Expression New<T>() where T : new() => ((Expression<Func<T>>)(() => new T())).Body;
         
-        public static Expression<Func<Cursor, char, char, bool>> CharacterIsInRange = (cursor,b,c) => Character.IsInRange(cursor.Current, b, c);
+        public static readonly Expression<Func<Cursor, char, char, bool>> CharacterIsInRange = (cursor,b,c) => Character.IsInRange(cursor.Current, b, c);
 
         //public static Expression NewOptionalResult<T>(this CompilationContext _, Expression hasValue, Expression value) => Expression.New(GetOptionalResult_Constructor<T>(), [hasValue, value]);
         public static Expression NewTextSpan(this CompilationContext _, Expression buffer, Expression offset, Expression count) => Expression.New(TextSpan_Constructor, [buffer, offset, count]);

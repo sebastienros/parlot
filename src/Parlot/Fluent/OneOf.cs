@@ -14,7 +14,7 @@ namespace Parlot.Fluent
     /// <typeparam name="T"></typeparam>
     public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
-        internal readonly Parser<T>[] _parsers;
+        private readonly Parser<T>[] _parsers;
         internal readonly CharMap<List<Parser<T>>>? _map;
 
         public OneOf(Parser<T>[] parsers)

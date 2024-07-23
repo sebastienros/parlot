@@ -22,16 +22,16 @@ namespace Parlot.Fluent
         {
             if (Parser is null)
             {
-                throw new ArgumentNullException(nameof(Parser));
+                throw new InvalidOperationException("Parser has not been initialized");
             }
 
             return Parser.Parse(context, ref result);
         }
 
-        private bool _initialized = false;
+        private bool _initialized;
         private readonly Closure _closure = new();
 
-        private class Closure
+        private sealed class Closure
         {
             public object? Func;
         }

@@ -18,7 +18,7 @@ namespace Parlot.Fluent
 
         public char[] ExpectedChars { get; }
 
-        public bool SkipWhitespace { get; } = false;
+        public bool SkipWhitespace { get; }
 
         public override bool Parse(ParseContext context, ref ParseResult<char> result)
         {
