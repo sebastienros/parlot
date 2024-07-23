@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using Xunit;
 
 namespace Parlot.Tests
@@ -53,6 +54,47 @@ namespace Parlot.Tests
         {
             Scanner s = new(text);
             Assert.False(s.ReadQuotedString());
+        }
+
+        [Fact]
+        public void ShouldReadQuotedStringPartial()
+        {
+            var s = new Scanner("[h a='\\\"']");
+            Assert.True(s.ReadText("[h a="));
+            Assert.True(s.ReadSingleQuotedString(out var result));
+            Assert.Equal("'\\\"'", result);
+        }
+
+        [Theory]
+        [InlineData("hello world", "helo", "hello")]
+        [InlineData("hello world", "helo wrd", "hello world")]
+        [InlineData("hello world", "h", "h")]
+        public void ShouldReadAnyOf(string source, string pattern, string expected)
+        {
+            var s = new Scanner(source);
+            Assert.True(s.ReadAnyOf(pattern, out var result));
+            Assert.Equal(expected, result);
+
+#if NET8_0_OR_GREATER
+            s = new Scanner(source);
+            Assert.True(s.ReadAnyOf(SearchValues.Create(pattern), out result));
+            Assert.Equal(expected, result);
+#endif
+        }
+
+        [Theory]
+        [InlineData("hello world", "wrd")]
+        [InlineData("", "helo wrd")]
+        [InlineData("hello world", "")]
+        public void ShouldNotReadAnyOf(string source, string pattern)
+        {
+            var s = new Scanner(source);
+            Assert.False(s.ReadAnyOf(pattern, out var result));
+
+#if NET8_0_OR_GREATER
+            s = new Scanner(source);
+            Assert.False(s.ReadAnyOf(SearchValues.Create(pattern), out result));
+#endif
         }
 
         [Fact]
