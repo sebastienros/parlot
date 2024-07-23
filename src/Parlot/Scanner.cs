@@ -373,6 +373,7 @@ namespace Parlot
         /// <summary>
         /// Reads the specific expected chars.
         /// </summary>
+        [Obsolete("Prefer bool ReadAnyOf(ReadOnlySpan<char>, out ReadOnlySpan<char>)")]
         public bool ReadAnyOf(ReadOnlySpan<char> chars, StringComparison comparisonType, out ReadOnlySpan<char> result)
         {
             var current = Cursor.Buffer.AsSpan(Cursor.Offset, 1);
@@ -390,6 +391,42 @@ namespace Parlot
             result = Cursor.Buffer.AsSpan(start, index + 1);
 
             return true;
+        }
+
+        /// <summary>
+        /// Reads the specific expected chars.
+        /// </summary>
+        public bool ReadAnyOf(ReadOnlySpan<char> chars, out ReadOnlySpan<char> result)
+        {
+            var start = Cursor.Offset;
+
+            while (true)
+            {
+                var current = Cursor.Current;
+                var index = chars.IndexOf(current);
+
+                if (index == -1)
+                {
+                    if (Cursor.Offset == start)
+                    {
+                        result = [];
+                        return false;
+                    }
+
+                    var length = Cursor.Offset - start;
+
+                    result = Cursor.Buffer.AsSpan(start, length);
+                    return true;
+                }
+
+                if (Cursor.Eof)
+                {
+                    result = [];
+                    return false;
+                }
+
+                Cursor.Advance(1);
+            }
         }
 
 #if NET8_0_OR_GREATER
@@ -631,7 +668,7 @@ namespace Parlot
                     }
                 }
 
-                nextEscape = Cursor.Buffer.AsSpan(Cursor.Offset).IndexOfAny('\\', startChar);
+                nextEscape = Cursor.Span.IndexOfAny('\\', startChar);
 
                 if (Cursor.Match(startChar))
                 {
@@ -647,7 +684,7 @@ namespace Parlot
                 }
             }
 
-            result = Buffer.AsSpan(start.Offset, Cursor.Offset);
+            result = Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
 
             return true;
         }
