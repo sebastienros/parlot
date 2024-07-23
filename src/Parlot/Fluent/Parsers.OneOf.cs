@@ -27,12 +27,9 @@
         /// <summary>
         /// Builds a parser that return either of the first successful of the specified parsers.
         /// </summary>
-        public static Parser<T> Or<A, B, T>(this Parser<A> parser, Parser<B> or) 
-            where A: T 
-            where B: T
-        {
-            return new OneOf<A, B, T>(parser, or);
-        }
+        public static Parser<T> Or<A, B, T>(this Parser<A> parser, Parser<B> or)
+            where A : T
+            where B : T => new OneOf<A, B, T>(parser, or);
 
         /// <summary>
         /// Builds a parser that return either of the first successful of the specified parsers.

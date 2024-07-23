@@ -47,15 +47,10 @@
             return this;
         }
 
-        public bool TryParse(string text, out T? value)
-        {
-            return TryParse(text, out value, out _);
-        }
+        public bool TryParse(string text, out T? value) => TryParse(text, out value, out _);
 
-        public bool TryParse(string text, out T value, out ParseError? error)
-        {
-            return TryParse(new ParseContext(new Scanner(text)), out value, out error);
-        }
+        public bool TryParse(string text, out T value, out ParseError? error) => 
+            TryParse(new ParseContext(new Scanner(text)), out value, out error);
 
         public bool TryParse(ParseContext context, out T value, out ParseError? error)
         {

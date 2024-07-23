@@ -10,10 +10,7 @@ namespace Parlot.Fluent
     {
         private readonly Parser<T> _parser;
 
-        public Eof(Parser<T> parser)
-        {
-            _parser = parser;
-        }
+        public Eof(Parser<T> parser) => _parser = parser;
 
         public override bool Parse(ParseContext context, ref ParseResult<T> result)
         {

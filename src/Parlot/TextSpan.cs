@@ -25,10 +25,7 @@ namespace Parlot
 
         public ReadOnlySpan<char> Span => Buffer == null ? [] : Buffer.AsSpan(Offset, Length);
 
-        public override string? ToString()
-        {
-            return Buffer?.Substring(Offset, Length);
-        }
+        public override string? ToString() => Buffer?.Substring(Offset, Length);
 
         public bool Equals(string? other)
         {
@@ -40,20 +37,11 @@ namespace Parlot
             return Span.SequenceEqual(other.AsSpan());
         }
 
-        public bool Equals(TextSpan other)
-        {
-            return Span.SequenceEqual(other.Span);
-        }
+        public bool Equals(TextSpan other) => Span.SequenceEqual(other.Span);
 
-        public static implicit operator TextSpan(string s)
-        {
-            return new TextSpan(s);
-        }
+        public static implicit operator TextSpan(string s) => new TextSpan(s);
 
-        public override bool Equals(object? obj)
-        {
-            return obj is TextSpan t && Equals(t);
-        }
+        public override bool Equals(object? obj) => obj is TextSpan t && Equals(t);
 
         public override int GetHashCode()
         {
@@ -64,14 +52,8 @@ namespace Parlot
 #endif
         }
 
-        public static bool operator ==(TextSpan left, TextSpan right)
-        {
-            return left.Equals(right);
-        }
+        public static bool operator ==(TextSpan left, TextSpan right) => left.Equals(right);
 
-        public static bool operator !=(TextSpan left, TextSpan right)
-        {
-            return !(left == right);
-        }
+        public static bool operator !=(TextSpan left, TextSpan right) => !(left == right);
     }
 }

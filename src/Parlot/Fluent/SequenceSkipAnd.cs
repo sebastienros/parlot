@@ -268,10 +268,8 @@ namespace Parlot.Fluent
             return parsers.Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+        public CompilationResult Compile(CompilationContext context) =>
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T5>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -342,10 +340,8 @@ namespace Parlot.Fluent
             return parsers.Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+        public CompilationResult Compile(CompilationContext context) =>
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T6>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -495,10 +491,8 @@ namespace Parlot.Fluent
             return parsers.Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+        public CompilationResult Compile(CompilationContext context) =>
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
     public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T8>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -573,9 +567,7 @@ namespace Parlot.Fluent
             return parsers.Append(new SkippableCompilationResult(_lastParser.Build(context), false)).ToArray();
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-        }
+        public CompilationResult Compile(CompilationContext context) => 
+            SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 }

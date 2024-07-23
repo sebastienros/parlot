@@ -23,25 +23,17 @@ namespace Parlot
 
         public static bool IsHexDigit(char ch) => HexConverter.IsHexChar(ch);
 
-        public static bool IsIdentifierStart(char ch)
-        {
-            return (_characterData[ch] & (byte) CharacterMask.IdentifierStart) != 0;
-        }
+        public static bool IsIdentifierStart(char ch) => 
+            (_characterData[ch] & (byte)CharacterMask.IdentifierStart) != 0;
 
-        public static bool IsIdentifierPart(char ch)
-        {
-            return (_characterData[ch] & (byte) CharacterMask.IdentifierPart) != 0;
-        }
+        public static bool IsIdentifierPart(char ch) => 
+            (_characterData[ch] & (byte)CharacterMask.IdentifierPart) != 0;
 
-        public static bool IsWhiteSpace(char ch)
-        {
-            return (_characterData[ch] & (byte) CharacterMask.WhiteSpace) != 0;
-        }
+        public static bool IsWhiteSpace(char ch) => 
+            (_characterData[ch] & (byte)CharacterMask.WhiteSpace) != 0;
 
-        public static bool IsWhiteSpaceOrNewLine(char ch)
-        {
-            return (_characterData[ch] & (byte) CharacterMask.WhiteSpaceOrNewLine) != 0;
-        }
+        public static bool IsWhiteSpaceOrNewLine(char ch) => 
+            (_characterData[ch] & (byte)CharacterMask.WhiteSpaceOrNewLine) != 0;
 
         public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v';
 

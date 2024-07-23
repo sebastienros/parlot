@@ -22,10 +22,7 @@ namespace Parlot.Tests.Calc
 
     public abstract class UnaryExpression : Expression
     {
-        protected UnaryExpression(Expression inner)
-        {
-            Inner = inner;
-        }
+        protected UnaryExpression(Expression inner) => Inner = inner;
 
         public Expression Inner { get; }
     }
@@ -36,10 +33,7 @@ namespace Parlot.Tests.Calc
         {
         }
 
-        public override decimal Evaluate()
-        {
-            return -1 * Inner.Evaluate();
-        }
+        public override decimal Evaluate() => -1 * Inner.Evaluate();
     }
 
 
@@ -49,10 +43,7 @@ namespace Parlot.Tests.Calc
         {
         }
 
-        public override decimal Evaluate()
-        {
-            return Left.Evaluate() + Right.Evaluate();
-        }
+        public override decimal Evaluate() => Left.Evaluate() + Right.Evaluate();
     }
 
     public class Subtraction : BinaryExpression
@@ -61,10 +52,7 @@ namespace Parlot.Tests.Calc
         {
         }
 
-        public override decimal Evaluate()
-        {
-            return Left.Evaluate() - Right.Evaluate();
-        }
+        public override decimal Evaluate() => Left.Evaluate() - Right.Evaluate();
     }
 
 
@@ -74,10 +62,7 @@ namespace Parlot.Tests.Calc
         {
         }
 
-        public override decimal Evaluate()
-        {
-            return Left.Evaluate() * Right.Evaluate();
-        }
+        public override decimal Evaluate() => Left.Evaluate() * Right.Evaluate();
     }
 
 
@@ -87,10 +72,7 @@ namespace Parlot.Tests.Calc
         {
         }
 
-        public override decimal Evaluate()
-        {
-            return Left.Evaluate() / Right.Evaluate();
-        }
+        public override decimal Evaluate() => Left.Evaluate() / Right.Evaluate();
     }
 
     public class Exponent : BinaryExpression
@@ -99,24 +81,13 @@ namespace Parlot.Tests.Calc
         {
         }
 
-        public override decimal Evaluate()
-        {
-            return (decimal)Math.Pow((double)Left.Evaluate(), (double)Right.Evaluate());
-        }
+        public override decimal Evaluate() => (decimal)Math.Pow((double)Left.Evaluate(), (double)Right.Evaluate());
     }
 
-    public class Number : Expression
+    public class Number(decimal value) : Expression
     {
-        public Number(decimal value)
-        {
-            Value = value;
-        }
+        public decimal Value { get; } = value;
 
-        public decimal Value { get; }
-
-        public override decimal Evaluate()
-        {
-            return Value;
-        }
+        public override decimal Evaluate() => Value;
     }
 }

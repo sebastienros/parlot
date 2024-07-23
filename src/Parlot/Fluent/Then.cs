@@ -31,20 +31,14 @@ namespace Parlot.Fluent
             }
         }
 
-        public Then(Parser<T> parser, Func<T, U> action) : this(parser)
-        {
+        public Then(Parser<T> parser, Func<T, U> action) : this(parser) => 
             _action1 = action ?? throw new ArgumentNullException(nameof(action));
-        }
 
-        public Then(Parser<T> parser, Func<ParseContext, T, U> action) : this(parser)
-        {
+        public Then(Parser<T> parser, Func<ParseContext, T, U> action) : this(parser) => 
             _action2 = action ?? throw new ArgumentNullException(nameof(action));
-        }
 
-        public Then(Parser<T> parser, U value) : this(parser)
-        {
+        public Then(Parser<T> parser, U value) : this(parser) =>
             _value = value;
-        }
 
         public bool CanSeek { get; }
 

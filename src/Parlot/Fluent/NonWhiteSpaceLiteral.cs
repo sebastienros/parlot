@@ -7,10 +7,7 @@ namespace Parlot.Fluent
     {
         private readonly bool _includeNewLines;
 
-        public NonWhiteSpaceLiteral(bool includeNewLines = true)
-        {
-            _includeNewLines = includeNewLines;
-        }
+        public NonWhiteSpaceLiteral(bool includeNewLines = true) => _includeNewLines = includeNewLines;
 
         public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
         {

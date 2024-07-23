@@ -18,10 +18,7 @@ namespace Parlot
         public readonly int Line;
         public readonly int Column;
 
-        public static int operator -(in TextPosition left, in TextPosition right)
-        {
-            return left.Offset - right.Offset;
-        }
+        public static int operator -(in TextPosition left, in TextPosition right) => left.Offset - right.Offset;
 
         public override string ToString() => $"({Line}:{Column})";
     }
