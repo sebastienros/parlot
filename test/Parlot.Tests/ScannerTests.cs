@@ -38,6 +38,7 @@ namespace Parlot.Tests
         [InlineData("'Lorem \\u1234 ipsum'", "'Lorem \\u1234 ipsum'")]
         [InlineData("'Lorem \\xabcd ipsum'", "'Lorem \\xabcd ipsum'")]
         [InlineData("'\\a ding'", "'\\a ding'")]
+        [InlineData("'Lorem ipsum' \\xabcd", "'Lorem ipsum'")]
         public void ShouldReadStringWithEscapes(string text, string expected)
         {
             Scanner s = new(text);

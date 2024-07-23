@@ -16,14 +16,13 @@ namespace Parlot.Tests
         [InlineData(" \u03B2 ", " β ")]
         [InlineData(" \\a ", " \a ")]
         [InlineData(" \\0hello ", " \0hello ")]
-
-        public void ShouldDescodeString(string text, string expected)
+        public void ShouldDecodeString(string text, string expected)
         {
             Assert.Equal(expected, Character.DecodeString(new TextSpan(text)).ToString());
         }
 
         [Fact]
-        public void ShouldDescodeStringInBuffer()
+        public void ShouldDecodeStringInBuffer()
         {
             var span = new TextSpan("   a\\nbc   ", 3, 5);
             Assert.Equal("a\nbc", Character.DecodeString(span).ToString());

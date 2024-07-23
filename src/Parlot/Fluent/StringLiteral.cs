@@ -20,19 +20,19 @@ namespace Parlot.Fluent
         static readonly char[] SingleQuotes = ['\''];
         static readonly char[] DoubleQuotes = ['\"'];
         static readonly char[] SingleOrDoubleQuotes = ['\'', '\"'];
-        
+
         private readonly StringLiteralQuotes _quotes;
 
         public StringLiteral(StringLiteralQuotes quotes)
         {
             _quotes = quotes;
 
-            ExpectedChars = _quotes switch 
-            { 
-                StringLiteralQuotes.Single => SingleQuotes, 
-                StringLiteralQuotes.Double => DoubleQuotes, 
-                StringLiteralQuotes.SingleOrDouble => SingleOrDoubleQuotes, 
-                _ => [] 
+            ExpectedChars = _quotes switch
+            {
+                StringLiteralQuotes.Single => SingleQuotes,
+                StringLiteralQuotes.Double => DoubleQuotes,
+                StringLiteralQuotes.SingleOrDouble => SingleOrDoubleQuotes,
+                _ => []
             };
         }
 
@@ -107,10 +107,10 @@ namespace Parlot.Fluent
                         [end],
                         Expression.Assign(end, context.Offset()),
                         Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                        context.DiscardResult 
+                        context.DiscardResult
                         ? Expression.Empty()
-                        : Expression.Assign(result.Value, 
-                            Expression.Call(_decodeStringMethodInfo, 
+                        : Expression.Assign(result.Value,
+                            Expression.Call(_decodeStringMethodInfo,
                                 context.NewTextSpan(
                                     context.Buffer(),
                                     Expression.Add(start, Expression.Constant(1)),

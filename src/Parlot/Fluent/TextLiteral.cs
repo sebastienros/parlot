@@ -64,7 +64,7 @@ namespace Parlot.Fluent
             if (cursor.Match(Text.AsSpan(), _comparisonType))
             {
                 var start = cursor.Offset;
-                
+
                 if (_hasNewLines)
                 {
                     cursor.Advance(Text.Length);
