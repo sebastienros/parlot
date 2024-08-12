@@ -7,8 +7,8 @@
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="4.2.1" />
 
     <!-- Benchmarks -->
-    <PackageVersion Include="BenchmarkDotNet" Version="0.13.12" />
-    <PackageVersion Include="Pidgin" Version="3.2.3" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageVersion Include="Pidgin" Version="3.3.0" />
     <PackageVersion Include="Sprache" Version="3.0.0-develop-00049" />
     <PackageVersion Include="Superpower" Version="3.0.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
