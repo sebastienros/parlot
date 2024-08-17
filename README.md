@@ -136,7 +136,7 @@ WarmupCount=3
 
 This benchmark was taken from the Pidgin repository and demonstrates how to perform simple JSON document parsing. It exercises the parsers with different kinds of documents. Pidgin, Sprache, Superpower and Parlot are compared. The programming models are all based on parser combinator.
 For reference, Newtonsoft.Json is also added to show the differences with a dedicated parser.
-The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides the best performance in all scenarios, being 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin. This simple implementation is also faster than Newtonsoft, though it is far from being as rigorous. The best JSON parser if by far System.Text.Json, don't build your own!
+The results show that Sprache and Superpower are the slowest and most allocating ones. Parlot provides the best performance in all scenarios, being 2 times faster than the second fastest. The allocations of Parlot are also better or equivalent to the ones of Pidgin. This simple implementation is also faster than Newtonsoft, though it is far from being as rigorous. The best JSON parser is by far System.Text.Json, don't build your own!
 
 ```
 BenchmarkDotNet v0.14.0, Debian GNU/Linux 12 (bookworm) (container)
