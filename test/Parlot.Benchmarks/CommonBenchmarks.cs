@@ -29,7 +29,7 @@ namespace Parlot.Benchmarks
     /// 
     /// </summary>
     [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-    public class CommonBenchmarks
+    public class IndexOfBenchmarks
     {
         private const string _helloWorldNoEscape = "Hello World!!!/n";
         private const string _helloWorldEscape = "Hello World!!!\\n";
