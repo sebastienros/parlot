@@ -14,8 +14,8 @@
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
   
     <!-- Global Package References -->
-    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
-    <GlobalPackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
+    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
+    <GlobalPackageReference Include="PolySharp" Version="1.14.1" />
  
     <!-- Testing -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
