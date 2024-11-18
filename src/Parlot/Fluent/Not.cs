@@ -2,69 +2,68 @@
 using System;
 using System.Linq.Expressions;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+public sealed class Not<T> : Parser<T>, ICompilable
 {
-    public sealed class Not<T> : Parser<T>, ICompilable
+    private readonly Parser<T> _parser;
+
+    public Not(Parser<T> parser)
     {
-        private readonly Parser<T> _parser;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
 
-        public Not(Parser<T> parser)
+    public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var start = context.Scanner.Cursor.Position;
+
+        if (!_parser.Parse(context, ref result))
         {
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            return true;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
-        {
-            context.EnterParser(this);
+        context.Scanner.Cursor.ResetPosition(start);
+        return false;
+    }
 
-            var start = context.Scanner.Cursor.Position;
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<T>();
 
-            if (!_parser.Parse(context, ref result))
-            {
-                return true;
-            }
+        // var start = context.Scanner.Cursor.Position;
 
-            context.Scanner.Cursor.ResetPosition(start);
-            return false;
-        }
+        var start = context.DeclarePositionVariable(result);
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            var result = context.CreateCompilationResult<T>();
+        var parserCompileResult = _parser.Build(context);
 
-            // var start = context.Scanner.Cursor.Position;
+        // success = false;
+        //
+        // parser instructions
+        // 
+        // if (parser.succcess)
+        // {
+        //     context.Scanner.Cursor.ResetPosition(start);
+        // }
+        // else
+        // {
+        //     success = true;
+        // }
+        // 
 
-            var start = context.DeclarePositionVariable(result);
-
-            var parserCompileResult = _parser.Build(context);
-
-            // success = false;
-            //
-            // parser instructions
-            // 
-            // if (parser.succcess)
-            // {
-            //     context.Scanner.Cursor.ResetPosition(start);
-            // }
-            // else
-            // {
-            //     success = true;
-            // }
-            // 
-
-            result.Body.Add(
-                Expression.Block(
-                    parserCompileResult.Variables,
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        context.ResetPosition(start),
-                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                        )
+        result.Body.Add(
+            Expression.Block(
+                parserCompileResult.Variables,
+                Expression.Block(parserCompileResult.Body),
+                Expression.IfThenElse(
+                    parserCompileResult.Success,
+                    context.ResetPosition(start),
+                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
                     )
-                );
+                )
+            );
 
-            return result;
-        }
+        return result;
     }
 }

@@ -1,9 +1,8 @@
 ﻿using Parlot.Compilation;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+public interface ISkippableSequenceParser
 {
-    public interface ISkippableSequenceParser
-    {
-        SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context);
-    }
+    SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context);
 }

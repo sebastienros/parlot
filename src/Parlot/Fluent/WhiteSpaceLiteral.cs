@@ -1,69 +1,68 @@
 ﻿using Parlot.Compilation;
 using System.Linq.Expressions;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable
 {
-    public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable
+    private readonly bool _includeNewLines;
+
+    public WhiteSpaceLiteral(bool includeNewLines)
     {
-        private readonly bool _includeNewLines;
+        _includeNewLines = includeNewLines;
+    }
 
-        public WhiteSpaceLiteral(bool includeNewLines)
+    public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+    {
+        context.EnterParser(this);
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_includeNewLines)
         {
-            _includeNewLines = includeNewLines;
+            context.Scanner.SkipWhiteSpaceOrNewLine();
+        }
+        else
+        {
+            context.Scanner.SkipWhiteSpace();
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
+        var end = context.Scanner.Cursor.Offset;
+
+        if (start == end)
         {
-            context.EnterParser(this);
-
-            var start = context.Scanner.Cursor.Offset;
-
-            if (_includeNewLines)
-            {
-                context.Scanner.SkipWhiteSpaceOrNewLine();
-            }
-            else
-            {
-                context.Scanner.SkipWhiteSpace();
-            }
-
-            var end = context.Scanner.Cursor.Offset;
-
-            if (start == end)
-            {
-                return false;
-            }
-
-            result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
-
-            return true;
+            return false;
         }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            var result = context.CreateCompilationResult<TextSpan>();
+        result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
 
-            var start = context.DeclareOffsetVariable(result);
+        return true;
+    }
 
-            result.Body.Add(
-                _includeNewLines
-                    ? context.SkipWhiteSpaceOrNewLine()
-                    : context.SkipWhiteSpace()
-                );
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<TextSpan>();
 
-            var end = context.DeclareOffsetVariable(result);
+        var start = context.DeclareOffsetVariable(result);
 
-            result.Body.Add(
-                Expression.Block(
-                    Expression.IfThen(
-                        Expression.NotEqual(start, end),
-                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                        ),
-                    context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
-                    )
-                );
+        result.Body.Add(
+            _includeNewLines
+                ? context.SkipWhiteSpaceOrNewLine()
+                : context.SkipWhiteSpace()
+            );
 
-            return result;
-        }
+        var end = context.DeclareOffsetVariable(result);
+
+        result.Body.Add(
+            Expression.Block(
+                Expression.IfThen(
+                    Expression.NotEqual(start, end),
+                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
+                    ),
+                context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
+                )
+            );
+
+        return result;
     }
 }

@@ -1,63 +1,62 @@
 ﻿using Parlot.Compilation;
 using System.Linq.Expressions;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+/// <summary>
+/// Successful when the cursor is at the end of the string.
+/// </summary>
+public sealed class Eof<T> : Parser<T>, ICompilable
 {
-    /// <summary>
-    /// Successful when the cursor is at the end of the string.
-    /// </summary>
-    public sealed class Eof<T> : Parser<T>, ICompilable
+    private readonly Parser<T> _parser;
+
+    public Eof(Parser<T> parser)
     {
-        private readonly Parser<T> _parser;
+        _parser = parser;
+    }
 
-        public Eof(Parser<T> parser)
+    public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        if (_parser.Parse(context, ref result) && context.Scanner.Cursor.Eof)
         {
-            _parser = parser;
+            return true;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
-        {
-            context.EnterParser(this);
+        return false;
+    }
 
-            if (_parser.Parse(context, ref result) && context.Scanner.Cursor.Eof)
-            {
-                return true;
-            }
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<T>();
 
-            return false;
-        }
+        // parse1 instructions
+        // 
+        // if (parser1.Success && context.Scanner.Cursor.Eof)
+        // {
+        //    value = parse1.Value;
+        //    success = true;
+        // }
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            var result = context.CreateCompilationResult<T>();
+        var parserCompileResult = _parser.Build(context);
 
-            // parse1 instructions
-            // 
-            // if (parser1.Success && context.Scanner.Cursor.Eof)
-            // {
-            //    value = parse1.Value;
-            //    success = true;
-            // }
-
-            var parserCompileResult = _parser.Build(context);
-
-            result.Body.Add(
-                Expression.Block(
-                    parserCompileResult.Variables,
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThen(
-                        Expression.AndAlso(parserCompileResult.Success, context.Eof()),
-                        Expression.Block(
-                            context.DiscardResult
-                                ? Expression.Empty()
-                                : Expression.Assign(result.Value, parserCompileResult.Value),
-                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))                            
-                            )
+        result.Body.Add(
+            Expression.Block(
+                parserCompileResult.Variables,
+                Expression.Block(parserCompileResult.Body),
+                Expression.IfThen(
+                    Expression.AndAlso(parserCompileResult.Success, context.Eof()),
+                    Expression.Block(
+                        context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(result.Value, parserCompileResult.Value),
+                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
                         )
                     )
-                );
+                )
+            );
 
-            return result;
-        }
+        return result;
     }
 }

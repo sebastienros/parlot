@@ -50,7 +50,7 @@ internal sealed class CharMap<T> where T : class
     {
         ExpectedChars = new HashSet<char>([c, .. ExpectedChars]).ToArray();
         Array.Sort(ExpectedChars);
-        
+
         if (c < 128)
         {
             _asciiMap[c] ??= value;

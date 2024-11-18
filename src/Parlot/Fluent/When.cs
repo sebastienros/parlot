@@ -3,87 +3,86 @@ using System;
 using System.Linq;
 using System.Linq.Expressions;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+/// <summary>
+/// Ensure the given parser is valid based on a condition, and backtracks if not.
+/// </summary>
+/// <typeparam name="T">The output parser type.</typeparam>
+public sealed class When<T> : Parser<T>, ICompilable
 {
-    /// <summary>
-    /// Ensure the given parser is valid based on a condition, and backtracks if not.
-    /// </summary>
-    /// <typeparam name="T">The output parser type.</typeparam>
-    public sealed class When<T> : Parser<T>, ICompilable
+    private readonly Func<T, bool> _action;
+    private readonly Parser<T> _parser;
+
+    public When(Parser<T> parser, Func<T, bool> action)
     {
-        private readonly Func<T, bool> _action;
-        private readonly Parser<T> _parser;
+        _action = action ?? throw new ArgumentNullException(nameof(action));
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
 
-        public When(Parser<T> parser, Func<T, bool> action)
+    public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var start = context.Scanner.Cursor.Position;
+
+        var valid = _parser.Parse(context, ref result) && _action(result.Value);
+
+        if (!valid)
         {
-            _action = action ?? throw new ArgumentNullException(nameof(action));
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            context.Scanner.Cursor.ResetPosition(start);
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
-        {
-            context.EnterParser(this);
+        return valid;
+    }
 
-            var start = context.Scanner.Cursor.Position;
-            
-            var valid = _parser.Parse(context, ref result) && _action(result.Value);
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<T>();
 
-            if (!valid)
-            {
-                context.Scanner.Cursor.ResetPosition(start);
-            }
+        var parserCompileResult = _parser.Build(context, requireResult: true);
 
-            return valid;
-        }
+        // success = false;
+        // value = default;
+        // start = context.Scanner.Cursor.Position;
+        // parser instructions
+        // 
+        // if (parser.Success && _action(value))
+        // {
+        //   success = true;
+        //   value = parser.Value;
+        // }
+        // else
+        // {
+        //    context.Scanner.Cursor.ResetPosition(start);
+        // }
+        //
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            var result = context.CreateCompilationResult<T>();
+        var start = context.DeclarePositionVariable(result);
 
-            var parserCompileResult = _parser.Build(context, requireResult: true);
-
-            // success = false;
-            // value = default;
-            // start = context.Scanner.Cursor.Position;
-            // parser instructions
-            // 
-            // if (parser.Success && _action(value))
-            // {
-            //   success = true;
-            //   value = parser.Value;
-            // }
-            // else
-            // {
-            //    context.Scanner.Cursor.ResetPosition(start);
-            // }
-            //
-
-            var start = context.DeclarePositionVariable(result);
-
-            var block = Expression.Block(
-                    parserCompileResult.Variables,
-                    parserCompileResult.Body
-                    .Append(
-                        Expression.IfThenElse(
-                            Expression.AndAlso(
-                                parserCompileResult.Success,
-                                Expression.Invoke(Expression.Constant(_action), new[] { parserCompileResult.Value })
-                                ),
-                            Expression.Block(
-                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                                context.DiscardResult
-                                    ? Expression.Empty()
-                                    : Expression.Assign(result.Value, parserCompileResult.Value)
-                                ),
-                            context.ResetPosition(start)
-                            )
+        var block = Expression.Block(
+                parserCompileResult.Variables,
+                parserCompileResult.Body
+                .Append(
+                    Expression.IfThenElse(
+                        Expression.AndAlso(
+                            parserCompileResult.Success,
+                            Expression.Invoke(Expression.Constant(_action), new[] { parserCompileResult.Value })
+                            ),
+                        Expression.Block(
+                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
+                            context.DiscardResult
+                                ? Expression.Empty()
+                                : Expression.Assign(result.Value, parserCompileResult.Value)
+                            ),
+                        context.ResetPosition(start)
                         )
-                    );
+                    )
+                );
 
 
-            result.Body.Add(block);
+        result.Body.Add(block);
 
-            return result;
-        }
+        return result;
     }
 }

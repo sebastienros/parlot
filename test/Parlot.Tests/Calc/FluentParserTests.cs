@@ -1,11 +1,10 @@
-namespace Parlot.Tests.Calc
+namespace Parlot.Tests.Calc;
+
+public class FluentParserTests : CalcTests
 {
-    public class FluentParserTests : CalcTests
+    protected override decimal Evaluate(string text)
     {
-        protected override decimal Evaluate(string text)
-        {
-            FluentParser.Expression.TryParse(text, out var expression);
-            return expression.Evaluate();
-        }
+        FluentParser.Expression.TryParse(text, out var expression);
+        return expression.Evaluate();
     }
 }

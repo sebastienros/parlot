@@ -9,11 +9,11 @@ public static class NumberLiterals
 
     public static Parser<T> CreateNumberLiteralParser<T>(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = DefaultDecimalSeparator, char groupSeparator = DefaultGroupSeparator)
 #if NET8_0_OR_GREATER
-    where T : INumber<T> 
+    where T : INumber<T>
     {
-            return new NumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator);
+        return new NumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator);
 #else
-    { 
+    {
         if (typeof(T) == typeof(byte))
         {
             var literal = new ByteNumberLiteral(numberOptions, decimalSeparator, groupSeparator);

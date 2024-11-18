@@ -29,11 +29,11 @@ internal static class HexConverter
             // Then we only need to check whether this final result is less than 0: this will only be
             // the case if both `i` was in fact the index of a set bit in the magic constant, and also
             // `c` was in the allowed range (this ensures that false positive bit shifts are ignored).
-            ulong i = (uint) c - '0';
-            ulong shift = 18428868213665201664UL << (int) i;
-            ulong mask = i - 64;
+            ulong i = (uint)c - '0';
+            var shift = 18428868213665201664UL << (int)i;
+            var mask = i - 64;
 
-            return (long) (shift & mask) < 0 ? true : false;
+            return (long)(shift & mask) < 0;
         }
 
         return FromChar(c) != 0xFF;

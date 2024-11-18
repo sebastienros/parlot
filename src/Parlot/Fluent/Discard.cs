@@ -1,59 +1,58 @@
 ﻿using Parlot.Compilation;
 using System.Linq.Expressions;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+/// <summary>
+/// Doesn't parse anything and return the default value.
+/// </summary>
+public sealed class Discard<T, U> : Parser<U>, ICompilable
 {
-    /// <summary>
-    /// Doesn't parse anything and return the default value.
-    /// </summary>
-    public sealed class Discard<T, U> : Parser<U>, ICompilable
+    private readonly Parser<T> _parser;
+    private readonly U _value;
+
+    public Discard(Parser<T> parser, U value)
     {
-        private readonly Parser<T> _parser;
-        private readonly U _value;
+        _parser = parser;
+        _value = value;
+    }
 
-        public Discard(Parser<T> parser, U value)
+    public override bool Parse(ParseContext context, ref ParseResult<U> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+
+        if (_parser.Parse(context, ref parsed))
         {
-            _parser = parser;
-            _value = value;
+            result.Set(parsed.Start, parsed.End, _value);
+            return true;
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<U> result)
-        {
-            context.EnterParser(this);
+        return false;
+    }
 
-            var parsed = new ParseResult<T>();
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<U>(false, Expression.Constant(_value, typeof(U)));
 
-            if (_parser.Parse(context, ref parsed))
-            {
-                result.Set(parsed.Start, parsed.End, _value);
-                return true;
-            }
+        var parserCompileResult = _parser.Build(context);
 
-            return false;
-        }
+        // success = false;
+        // value = _value;
+        // 
+        // parser instructions
+        // 
+        // success = parser.success;
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            var result = context.CreateCompilationResult<U>(false, Expression.Constant(_value, typeof(U)));
+        result.Body.Add(
+            Expression.Block(
+                parserCompileResult.Variables,
+                Expression.Block(parserCompileResult.Body),
+                Expression.Assign(result.Success, parserCompileResult.Success)
+                )
+            );
 
-            var parserCompileResult = _parser.Build(context);
-
-            // success = false;
-            // value = _value;
-            // 
-            // parser instructions
-            // 
-            // success = parser.success;
-
-            result.Body.Add(
-                Expression.Block(
-                    parserCompileResult.Variables,
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.Assign(result.Success, parserCompileResult.Success)
-                    )
-                );
-
-            return result;
-        }
+        return result;
     }
 }

@@ -3,13 +3,12 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Esprima.Tests;
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
+namespace Esprima.Tests;
 /// <summary>
 /// Helper to generate some character lookup data.
 /// </summary>
@@ -66,7 +65,7 @@ public class CharMaskGeneratorTest
             sb.Append("        ");
             foreach (var value in chunk)
             {
-                sb.Append((int) value);
+                sb.Append((int)value);
                 sb.Append(", ");
             }
 
@@ -125,6 +124,6 @@ public class CharMaskGeneratorTest
     public static bool IsDecimalDigit(char cp)
     {
         return cp >= '0' && cp <= '9';
-   }
+    }
 }
 #endif

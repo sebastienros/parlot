@@ -3,115 +3,114 @@ using System;
 using System.Linq;
 using System.Linq.Expressions;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+public sealed class Deferred<T> : Parser<T>, ICompilable
 {
-    public sealed class Deferred<T> : Parser<T>, ICompilable
+    public Parser<T>? Parser { get; set; }
+
+    public Deferred()
     {
-        public Parser<T>? Parser { get; set; }
+    }
 
-        public Deferred()
+    public Deferred(Func<Deferred<T>, Parser<T>> parser)
+    {
+        Parser = parser(this);
+    }
+
+    public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        if (Parser is null)
         {
+            throw new InvalidOperationException("Parser has not been initialized");
         }
 
-        public Deferred(Func<Deferred<T>, Parser<T>> parser)
+        return Parser.Parse(context, ref result);
+    }
+
+    private bool _initialized;
+    private readonly Closure _closure = new();
+
+    private sealed class Closure
+    {
+        public object? Func;
+    }
+
+    public CompilationResult Compile(CompilationContext context)
+    {
+        if (Parser == null)
         {
-            Parser = parser(this);
+            throw new InvalidOperationException("Can't compile a Deferred Parser until it is fully initialized");
         }
 
-        public override bool Parse(ParseContext context, ref ParseResult<T> result)
-        {
-            if (Parser is null)
-            {
-                throw new InvalidOperationException("Parser has not been initialized");
-            }
+        var result = context.CreateCompilationResult<T>();
 
-            return Parser.Parse(context, ref result);
+        // Create the body of this parser only once
+        if (!_initialized)
+        {
+            _initialized = true;
+
+            // lambda (ParserContext)
+            // {
+            //   parse1 instructions
+            //   
+            //   var result = new ValueTuple<bool, T>(parser1.Success, parse1.Value);
+            //   return result;
+            // }
+
+            var parserCompileResult = Parser.Build(context);
+
+            var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
+
+            var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+            var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
+
+            var lambda =
+                Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
+                Expression.Block(
+                    typeof(ValueTuple<bool, T>),
+                    parserCompileResult.Variables.Append(resultExpression),
+                    Expression.Block(parserCompileResult.Body),
+                    Expression.Assign(resultExpression, Expression.New(
+                        typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                        parserCompileResult.Success,
+                        context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
+                    returnLabelExpression),
+                true,
+                context.ParseContext)
+                ;
+
+            // Store the source lambda for debugging
+            context.Lambdas.Add(lambda);
+
+            _closure.Func = lambda.Compile();
         }
 
-        private bool _initialized;
-        private readonly Closure _closure = new();
+        // ValueTuple<bool, T> def;
 
-        private sealed class Closure
-        {
-            public object? Func;
-        }
+        var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.NextNumber}");
+        result.Variables.Add(deferred);
 
-        public CompilationResult Compile(CompilationContext context)
-        {
-            if (Parser == null)
-            {
-                throw new InvalidOperationException("Can't compile a Deferred Parser until it is fully initialized");
-            }
+        // def = ((Func<ParserContext, ValueTuple<bool, T>>)_closure.Func).Invoke(parseContext);
 
-            var result = context.CreateCompilationResult<T>();
+        var contextScope = Expression.Constant(_closure);
+        var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
+        var funcReturnType = typeof(Func<ParseContext, ValueTuple<bool, T>>);
+        var funcsAccess = Expression.MakeMemberAccess(contextScope, getFuncs);
 
-            // Create the body of this parser only once
-            if (!_initialized)
-            {
-                _initialized = true;
+        var castFunc = Expression.Convert(funcsAccess, funcReturnType);
+        result.Body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));
 
-                // lambda (ParserContext)
-                // {
-                //   parse1 instructions
-                //   
-                //   var result = new ValueTuple<bool, T>(parser1.Success, parse1.Value);
-                //   return result;
-                // }
+        // success = def.Item1;
+        // value = def.Item2;
 
-                var parserCompileResult = Parser.Build(context);
+        result.Body.Add(Expression.Assign(result.Success, Expression.Field(deferred, "Item1")));
+        result.Body.Add(
+            context.DiscardResult
+                        ? Expression.Empty()
+                        : Expression.Assign(result.Value, Expression.Field(deferred, "Item2"))
+        );
 
-                var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
-
-                var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-                var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
-
-                var lambda =
-                    Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
-                    Expression.Block(
-                        typeof(ValueTuple<bool, T>),
-                        parserCompileResult.Variables.Append(resultExpression),
-                        Expression.Block(parserCompileResult.Body),
-                        Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                            parserCompileResult.Success,
-                            context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
-                        returnLabelExpression),
-                    true,
-                    context.ParseContext)
-                    ;
-
-                // Store the source lambda for debugging
-                context.Lambdas.Add(lambda);
-
-                _closure.Func = lambda.Compile();
-            }
-
-            // ValueTuple<bool, T> def;
-
-            var deferred = Expression.Variable(typeof(ValueTuple<bool, T>), $"def{context.NextNumber}");
-            result.Variables.Add(deferred);
-
-            // def = ((Func<ParserContext, ValueTuple<bool, T>>)_closure.Func).Invoke(parseContext);
-
-            var contextScope = Expression.Constant(_closure);
-            var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
-            var funcReturnType = typeof(Func<ParseContext, ValueTuple<bool, T>>);
-            var funcsAccess = Expression.MakeMemberAccess(contextScope, getFuncs);
-
-            var castFunc = Expression.Convert(funcsAccess, funcReturnType);
-            result.Body.Add(Expression.Assign(deferred, Expression.Invoke(castFunc, context.ParseContext)));
-
-            // success = def.Item1;
-            // value = def.Item2;
-
-            result.Body.Add(Expression.Assign(result.Success, Expression.Field(deferred, "Item1")));
-            result.Body.Add(
-                context.DiscardResult
-                            ? Expression.Empty()
-                            : Expression.Assign(result.Value, Expression.Field(deferred, "Item2"))
-            );
-
-            return result;
-        }
+        return result;
     }
 }

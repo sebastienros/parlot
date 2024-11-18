@@ -5,118 +5,117 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace Parlot.Fluent
+namespace Parlot.Fluent;
+
+public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
 {
-    public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
+    private readonly Parser<T> _parser;
+    private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
+
+    public OneOrMany(Parser<T> parser)
     {
-        private readonly Parser<T> _parser;
-        private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
 
-        public OneOrMany(Parser<T> parser)
+        if (_parser is ISeekable seekable)
         {
-            _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
+    }
 
-            if (_parser is ISeekable seekable)
-            {
-                CanSeek = seekable.CanSeek;
-                ExpectedChars = seekable.ExpectedChars;
-                SkipWhitespace = seekable.SkipWhitespace;
-            }
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
+
+    public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+
+        if (!_parser.Parse(context, ref parsed))
+        {
+            return false;
         }
 
-        public bool CanSeek { get; }
+        var start = parsed.Start;
+        var results = new List<T>();
 
-        public char[] ExpectedChars { get; } = [];
+        int end;
 
-        public bool SkipWhitespace { get; }
-
-        public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+        do
         {
-            context.EnterParser(this);
+            end = parsed.End;
+            results.Add(parsed.Value);
 
-            var parsed = new ParseResult<T>();
+        } while (_parser.Parse(context, ref parsed));
 
-            if (!_parser.Parse(context, ref parsed))
-            {
-                return false;
-            }
+        result.Set(start, end, results);
+        return true;
+    }
 
-            var start = parsed.Start;
-            var results = new List<T>();
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<List<T>>(false, Expression.New(typeof(List<T>)));
 
-            int end;
+        // value = new List<T>();
+        //
+        // while (true)
+        // {
+        //   parse1 instructions
+        // 
+        //   if (parser1.Success)
+        //   {
+        //      results.Add(parse1.Value);
+        //   }
+        //   else
+        //   {
+        //      break;
+        //   }
+        //
+        //   if (context.Scanner.Cursor.Eof)
+        //   {
+        //      break;
+        //   }
+        // }
+        //
+        // if (value.Count > 0)
+        // {
+        //     success = true;
+        // }
+        // 
 
-            do
-            {
-                end = parsed.End;
-                results.Add(parsed.Value);
+        var parserCompileResult = _parser.Build(context);
 
-            } while (_parser.Parse(context, ref parsed));
+        var breakLabel = Expression.Label("break");
 
-            result.Set(start, end, results);
-            return true;
-        }
-
-        public CompilationResult Compile(CompilationContext context)
-        {
-            var result = context.CreateCompilationResult<List<T>>(false, Expression.New(typeof(List<T>)));
-
-            // value = new List<T>();
-            //
-            // while (true)
-            // {
-            //   parse1 instructions
-            // 
-            //   if (parser1.Success)
-            //   {
-            //      results.Add(parse1.Value);
-            //   }
-            //   else
-            //   {
-            //      break;
-            //   }
-            //
-            //   if (context.Scanner.Cursor.Eof)
-            //   {
-            //      break;
-            //   }
-            // }
-            //
-            // if (value.Count > 0)
-            // {
-            //     success = true;
-            // }
-            // 
-
-            var parserCompileResult = _parser.Build(context);
-
-            var breakLabel = Expression.Label("break");
-
-            var block = Expression.Block(
-                parserCompileResult.Variables,
-                Expression.Loop(
-                    Expression.Block(
-                        Expression.Block(parserCompileResult.Body),
-                        Expression.IfThenElse(
-                            parserCompileResult.Success,
-                            Expression.Block(
-                                context.DiscardResult
-                                ? Expression.Empty()
-                                : Expression.Call(result.Value, _listAddMethodInfo, parserCompileResult.Value),
-                                Expression.Assign(result.Success, Expression.Constant(true))
-                                ),
-                            Expression.Break(breakLabel)
+        var block = Expression.Block(
+            parserCompileResult.Variables,
+            Expression.Loop(
+                Expression.Block(
+                    Expression.Block(parserCompileResult.Body),
+                    Expression.IfThenElse(
+                        parserCompileResult.Success,
+                        Expression.Block(
+                            context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Call(result.Value, _listAddMethodInfo, parserCompileResult.Value),
+                            Expression.Assign(result.Success, Expression.Constant(true))
                             ),
-                        Expression.IfThen(
-                            context.Eof(),
-                            Expression.Break(breakLabel)
-                            )),
-                    breakLabel)
-            );
+                        Expression.Break(breakLabel)
+                        ),
+                    Expression.IfThen(
+                        context.Eof(),
+                        Expression.Break(breakLabel)
+                        )),
+                breakLabel)
+        );
 
-            result.Body.Add(block);
+        result.Body.Add(block);
 
-            return result;
-        }
+        return result;
     }
 }
