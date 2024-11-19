@@ -228,7 +228,7 @@ public class BenchmarksTests
     {
         var benchmarks = new RegexBenchmarks();
         var result = benchmarks.ParlotEmailCompiled();
-        Assert.True(result);
+        Assert.Equal(RegexBenchmarks.Email, result);
     }
 
     [Fact]
@@ -236,6 +236,6 @@ public class BenchmarksTests
     {
         var benchmarks = new RegexBenchmarks();
         var result = benchmarks.ParlotEmail();
-        Assert.True(result);
+        Assert.Equal(RegexBenchmarks.Email, result);
     }
 }

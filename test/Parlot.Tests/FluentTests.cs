@@ -4,6 +4,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
 using Xunit;
+#if NET8_0_OR_GREATER
+using System.Buffers;
+#endif
+
 using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests;
@@ -506,6 +510,28 @@ public class FluentTests
         Assert.True(Email.TryParse(_email, out var result));
         Assert.Equal(_email, result.ToString());
     }
+
+#if NET8_0_OR_GREATER
+    [Fact]
+    public void ShouldParseEmailsWithSearchValues()
+    {
+        var letterOrDigitChars = "01234567890abcdefghijklmnopqrstuvwxyz";
+
+        var Dot = Literals.AnyOf(".");
+        var LetterOrDigit = Literals.AnyOf(letterOrDigitChars);
+        var LetterOrDigitDotPlusMinus = Literals.AnyOf(letterOrDigitChars + ".+-");
+        var LetterOrDigitDotMinus = Literals.AnyOf(letterOrDigitChars + ".-");
+        var LetterOrDigitMinus = Literals.AnyOf(letterOrDigitChars + "-");
+
+        Parser<char> At = Literals.Char('@');
+        Parser<TextSpan> Email = Capture(LetterOrDigitDotPlusMinus.And(At).And(LetterOrDigitMinus).And(Dot).And(LetterOrDigitDotMinus));
+
+        string _email = "sebastien.ros@gmail.com";
+
+        Assert.True(Email.TryParse(_email, out var result));
+        Assert.Equal(_email, result.ToString());
+    }
+#endif
 
     [Fact]
     public void ShouldParseEof()
