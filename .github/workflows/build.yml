@@ -24,6 +24,8 @@ jobs:
     steps:
     - name: Checkout source code
       uses: actions/checkout@v4
-
+    
+    - uses: actions/setup-dotnet@v4
+    
     - name: Test
       run: dotnet test --configuration Release
