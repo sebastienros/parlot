@@ -59,8 +59,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
         {
             var end = context.Scanner.Cursor.Offset;
 
-            var sourceToParse = number.ToString();
-
             if (TryParseNumber(number, _numberStyles, _culture, out T value))
             {
                 result.Set(start, end, value);
