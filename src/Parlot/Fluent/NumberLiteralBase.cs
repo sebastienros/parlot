@@ -14,7 +14,6 @@ namespace Parlot.Fluent;
 public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
 {
     private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
-    private static readonly MethodInfo _rosToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), [])!;
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -25,8 +24,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
-
-    private delegate (bool, T) TryParseDelegate();
 
     public abstract bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out T value);
 
@@ -61,8 +58,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
         if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
-
-            var sourceToParse = number.ToString();
 
             if (TryParseNumber(number, _numberStyles, _culture, out T value))
             {
@@ -115,7 +110,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
                     Expression.Assign(result.Success,
                         Expression.Call(
                             _tryParseMethodInfo,
-                            Expression.Call(numberSpan, _rosToString),
+                            Expression.Call(numberSpan, ExpressionHelper.ReadOnlySpan_ToString),
                             numberStyles,
                             culture,
                             result.Value)
