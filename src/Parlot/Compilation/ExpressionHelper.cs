@@ -31,7 +31,7 @@ public static class ExpressionHelper
 
     internal static readonly ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor([typeof(string), typeof(int), typeof(int)])!;
 
-    internal static readonly MethodInfo TextSpan_ToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), [])!;
+    internal static readonly MethodInfo ReadOnlySpan_ToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), [])!;
     
     internal static readonly MethodInfo MemoryExtensions_AsSpan = typeof(MemoryExtensions).GetMethod(nameof(MemoryExtensions.AsSpan), [typeof(string)])!;
     

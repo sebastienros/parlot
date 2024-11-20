@@ -110,7 +110,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
                     Expression.Assign(result.Success,
                         Expression.Call(
                             _tryParseMethodInfo,
-                            Expression.Call(numberSpan, ExpressionHelper.TextSpan_ToString),
+                            Expression.Call(numberSpan, ExpressionHelper.ReadOnlySpan_ToString),
                             numberStyles,
                             culture,
                             result.Value)
