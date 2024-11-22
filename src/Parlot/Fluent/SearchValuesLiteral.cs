@@ -1,10 +1,10 @@
-﻿#if NET8_0_OR_GREATER
+#if NET8_0_OR_GREATER
 using System;
 using System.Buffers;
 
 namespace Parlot.Fluent;
 
-public sealed class SearchValuesLiteral : Parser<TextSpan>
+internal sealed class SearchValuesLiteral : Parser<TextSpan>
 {
     private readonly SearchValues<char> _searchValues;
     private readonly int _minSize;
