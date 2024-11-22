@@ -1,6 +1,8 @@
 ﻿using System;
 using Parlot.Fluent;
+#if NET8_0_OR_GREATER
 using System.Buffers;
+#endif
 using System.Runtime.CompilerServices;
 
 namespace Parlot;
@@ -12,6 +14,7 @@ public class Scanner
 {
 #if NET8_0_OR_GREATER
     private static readonly SearchValues<char> _decimalDigits = SearchValues.Create("0123456789");
+    private static readonly SearchValues<char> _hexDigits = SearchValues.Create("01234567890abcdefABCDEF");
 #endif
 
     public readonly string Buffer;
@@ -63,7 +66,7 @@ public class Scanner
     {
         // Fast path if we know the current char is not a whitespace
         var current = Cursor.Current;
-        if (current > ' ' && current < 256)
+        if (current is > ' ' and < (char)256)
         {
             return false;
         }
@@ -146,7 +149,7 @@ public class Scanner
 
         if (allowLeadingSign)
         {
-            if (Cursor.Current == '-' || Cursor.Current == '+')
+            if (Cursor.Current is '-' or '+')
             {
                 Cursor.AdvanceNoNewLines(1);
             }
@@ -190,11 +193,11 @@ public class Scanner
             }
         }
 
-        if (allowExponent && (Cursor.Current == 'e' || Cursor.Current == 'E'))
+        if (allowExponent && (Cursor.Current is 'e' or 'E'))
         {
             Cursor.AdvanceNoNewLines(1);
 
-            if (Cursor.Current == '-' || Cursor.Current == '+')
+            if (Cursor.Current is '-' or '+')
             {
                 Cursor.AdvanceNoNewLines(1);
             }
@@ -362,7 +365,7 @@ public class Scanner
             return false;
         }
 
-        int start = Cursor.Offset;
+        var start = Cursor.Offset;
         Cursor.Advance(text.Length);
         result = Buffer.AsSpan(start, Cursor.Offset - start);
 
@@ -385,7 +388,7 @@ public class Scanner
             return false;
         }
 
-        int start = Cursor.Offset;
+        var start = Cursor.Offset;
         Cursor.Advance(index + 1);
         result = Cursor.Buffer.AsSpan(start, index + 1);
 
@@ -502,7 +505,7 @@ public class Scanner
     {
         var startChar = Cursor.Current;
 
-        if (startChar != '\'' && startChar != '\"')
+        if (startChar is not '\'' and not '\"')
         {
             result = [];
             return false;
@@ -584,7 +587,19 @@ public class Scanner
 
                         // https://stackoverflow.com/a/32175520/142772
                         // exactly 4 digits
+#if NET8_0_OR_GREATER
+                        var lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(_hexDigits);
+                        var isValidUnicode = lastHexIndex == 3;
 
+                        if (!isValidUnicode)
+                        {
+                            result = [];
+                            return false;
+                        }
+
+                        // Advance the cursor by the 4 digits
+                        Cursor.Advance(4);
+#else
                         var isValidUnicode = false;
 
                         Cursor.Advance();
@@ -613,14 +628,25 @@ public class Scanner
                             result = [];
                             return false;
                         }
-
+#endif
                         break;
                     case 'x':
 
-                        // https://stackoverflow.com/a/32175520/142772
-                        // exactly 4 digits
+                        // At least two digits
+#if NET8_0_OR_GREATER
+                        lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(_hexDigits);
+                        var isValidHex = lastHexIndex > 0;
 
-                        bool isValidHex = false;
+                        if (!isValidHex)
+                        {
+                            result = [];
+                            return false;
+                        }
+
+                        // Advance the cursor for the read digits
+                        Cursor.Advance(lastHexIndex + 1);
+#else
+                        var isValidHex = false;
 
                         Cursor.Advance();
 
@@ -651,6 +677,7 @@ public class Scanner
                             result = [];
                             return false;
                         }
+#endif
 
                         break;
                     default:

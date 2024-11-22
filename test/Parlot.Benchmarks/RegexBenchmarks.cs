@@ -9,8 +9,11 @@ using static Parlot.Fluent.Parsers;
 namespace Parlot.Benchmarks;
 
 [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
-public class RegexBenchmarks
+public partial class RegexBenchmarks
 {
+    [GeneratedRegex("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+")]
+    private static partial Regex EmailRegexGenerated();
+
     public static readonly Regex EmailRegex = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+");
     public static readonly Regex EmailRegexCompiled = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+", RegexOptions.Compiled);
 
@@ -22,40 +25,49 @@ public class RegexBenchmarks
     public static readonly Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
     public static readonly Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
     public static readonly Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
-    public static readonly Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+    public static readonly Parser<TextSpan> EmailParser = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
-    public static readonly Parser<TextSpan> EmailCompiled = Email.Compile();
+    public static readonly Parser<TextSpan> EmailCompiled = EmailParser.Compile();
 
-    private static readonly string _email = "sebastien.ros@gmail.com";
+    public static readonly string Email = "sebastien.ros@gmail.com";
 
     public RegexBenchmarks()
     {
-        if (!RegexEmail()) throw new Exception(nameof(RegexEmail));
-        if (!RegexEmailCompiled()) throw new Exception(nameof(RegexEmailCompiled));
-        if (!ParlotEmail()) throw new Exception(nameof(ParlotEmail));
-        if (!ParlotEmailCompiled()) throw new Exception(nameof(ParlotEmailCompiled));
+        if (RegexEmail() != Email) throw new Exception(nameof(RegexEmail));
+        if (RegexEmailCompiled() != Email) throw new Exception(nameof(RegexEmailCompiled));
+        if (ParlotEmail() != Email) throw new Exception(nameof(ParlotEmail));
+        if (ParlotEmailCompiled() != Email) throw new Exception(nameof(ParlotEmailCompiled));
     }
 
     [Benchmark(Baseline = true)]
-    public bool RegexEmailCompiled()
+    public string RegexEmailCompiled()
     {
-        return EmailRegexCompiled.Match(_email).Success;
+        return EmailRegexCompiled.Match(Email).Value;
     }
 
     [Benchmark]
-    public bool RegexEmail()
+    public string RegexEmail()
     {
-        return EmailRegex.Match(_email).Success;
+        return EmailRegex.Match(Email).Value;
+    }
+
+#if NET8_0_OR_GREATER
+    [Benchmark]
+    public string RegexEmailGenerated()
+    {
+        return EmailRegexGenerated().Match(Email).Value;
+    }
+#endif
+
+    [Benchmark]
+    public TextSpan ParlotEmailCompiled()
+    {
+        return EmailCompiled.Parse(Email);
     }
 
     [Benchmark]
-    public bool ParlotEmailCompiled()
+    public TextSpan ParlotEmail()
     {
-        return EmailCompiled.Parse(_email).Length > 0;
-    }
-    [Benchmark]
-    public bool ParlotEmail()
-    {
-        return Email.TryParse(_email, out _);
+        return EmailParser.Parse(Email);
     }
 }

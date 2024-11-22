@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+#if NET8_0_OR_GREATER
+using System.Buffers;
 using System.Numerics;
+#endif
 
 #pragma warning disable CA1822 // Mark members as static
 
@@ -167,6 +170,24 @@ public class LiteralBuilder
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize);
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Builds a parser that matches a list of chars.
+    /// </summary>
+    /// <param name="searchValues">The <see cref="SearchValues{T}"/> instance to match against each char.</param>
+    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => new SearchValuesLiteral(searchValues, minSize, maxSize);
+
+    /// <summary>
+    /// Builds a parser that matches a list of chars.
+    /// </summary>
+    /// <param name="values">The set of char to match.</param>
+    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => AnyOf(SearchValues.Create(values), minSize, maxSize);
+#endif
 }
 
 public class TermBuilder
@@ -234,4 +255,22 @@ public class TermBuilder
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new PatternLiteral(predicate, minSize, maxSize));
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Builds a parser that matches a list of chars.
+    /// </summary>
+    /// <param name="searchValues">The <see cref="SearchValues{T}"/> instance to match against each char.</param>
+    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new SearchValuesLiteral(searchValues, minSize, maxSize));
+
+    /// <summary>
+    /// Builds a parser that matches a list of chars.
+    /// </summary>
+    /// <param name="values">The set of char to match.</param>
+    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => AnyOf(SearchValues.Create(values), minSize, maxSize);
+#endif
 }
