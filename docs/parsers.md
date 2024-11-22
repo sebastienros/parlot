@@ -221,6 +221,28 @@ Result:
 abab
 ```
 
+### AnyOf
+
+Matches any chars from a list of chars.
+
+```c#
+Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0)
+Parser<TextSpan> AnyOf(SearchValue<char> searchValues, int minSize = 1, int maxSize = 0)
+```
+
+Usage:
+
+```c#
+var input = "ababcad";
+var parser = Terms.AnyOf("ab");
+```
+
+Result:
+
+```
+abab
+```
+
 ## Combining parsers
 
 ### Or
