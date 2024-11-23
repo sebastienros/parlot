@@ -98,10 +98,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
     {
         var result = context.CreateCompilationResult<T>();
 
-        // var start = context.Scanner.Cursor.Offset;
         // var reset = context.Scanner.Cursor.Position;
 
-        var start = context.DeclareOffsetVariable(result);
         var reset = context.DeclarePositionVariable(result);
 
         var numberStyles = result.DeclareVariable<NumberStyles>($"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));

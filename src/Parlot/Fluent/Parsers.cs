@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -159,9 +159,31 @@ public class LiteralBuilder
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
 
     /// <summary>
-    /// Builds a parser that matches an identifier.
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
-    public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null) => new Identifier(extraStart, extraPart);
+    public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null)
+    {
+#if NET8_0_OR_GREATER
+        if (extraStart == null && extraPart == null)
+        {
+            return new IdentifierLiteral(Character._identifierStart, Character._identifierPart);
+        }
+        else
+        {
+            // IdentifierLiteral doesn't support the Func<,> overload
+            return new Identifier(extraStart, extraPart);
+        }
+#else
+        return new Identifier(extraStart, extraPart);
+#endif
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
+    /// </summary>
+    public Parser<TextSpan> Identifier(SearchValues<char> identifierStart, SearchValues<char> identifierPart) => new IdentifierLiteral(identifierStart, identifierPart);
+#endif
 
     /// <summary>
     /// Builds a parser that matches a char against a predicate.
@@ -178,7 +200,7 @@ public class LiteralBuilder
     /// <param name="searchValues">The <see cref="SearchValues{T}"/> instance to match against each char.</param>
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-    public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => new SearchValuesLiteral(searchValues, minSize, maxSize);
+    public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => new SearchValuesCharLiteral(searchValues, minSize, maxSize);
 
     /// <summary>
     /// Builds a parser that matches a list of chars.
@@ -263,7 +285,7 @@ public class TermBuilder
     /// <param name="searchValues">The <see cref="SearchValues{T}"/> instance to match against each char.</param>
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-    public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new SearchValuesLiteral(searchValues, minSize, maxSize));
+    public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new SearchValuesCharLiteral(searchValues, minSize, maxSize));
 
     /// <summary>
     /// Builds a parser that matches a list of chars.

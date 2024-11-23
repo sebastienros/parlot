@@ -1,4 +1,4 @@
-﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
@@ -63,15 +63,21 @@ public class ParlotBenchmarks
     }
 
     [Benchmark, BenchmarkCategory("WhiteSpace")]
+    public char SkipWhiteSpace_0()
+    {
+        return _whitespaceExpression.Parse(new ParseContext(new Scanner("a")));
+    }
+
+    [Benchmark, BenchmarkCategory("WhiteSpace")]
     public char SkipWhiteSpace_1()
     {
-        return _whitespaceExpression.Parse(new ParseContext(new Scanner(" a"), useNewLines: true));
+        return _whitespaceExpression.Parse(new ParseContext(new Scanner(" a")));
     }
 
     [Benchmark, BenchmarkCategory("WhiteSpace")]
     public char SkipWhiteSpace_10()
     {
-        return _whitespaceExpression.Parse(new ParseContext(new Scanner("          a"), useNewLines: true));
+        return _whitespaceExpression.Parse(new ParseContext(new Scanner("          a")));
     }
 
     [Benchmark, BenchmarkCategory("DecodeString")]

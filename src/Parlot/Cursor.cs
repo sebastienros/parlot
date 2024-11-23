@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 
 namespace Parlot;
@@ -67,7 +67,7 @@ public class Cursor
     }
 
     /// <summary>
-    /// Advances the cursor.
+    /// Advances the cursor and tracks its current location (line and column).
     /// </summary>
     public void Advance(int count)
     {
@@ -115,7 +115,7 @@ public class Cursor
     }
 
     /// <summary>
-    /// Advances the cursor with the knowledge there are no new lines.
+    /// Advances the cursor and tracks its current location (line and column) with the knowledge there are no new lines (\r or \n).
     /// </summary>
     public void AdvanceNoNewLines(int offset)
     {
