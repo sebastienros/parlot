@@ -12,7 +12,7 @@
     <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' != 'net6.0'">
+  <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">
     <ProjectReference Include="../../test/Parlot.Benchmarks/Parlot.Benchmarks.csproj" />
   </ItemGroup>
 
