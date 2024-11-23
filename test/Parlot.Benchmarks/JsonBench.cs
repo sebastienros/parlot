@@ -26,7 +26,7 @@ public class JsonBench
 #nullable restore
 
     private static readonly JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
-    private static readonly JsonSerializerOptions _jsonSerializerOptions = new() { MaxDepth = 1024 };
+    private static readonly JsonDocumentOptions _jsonDocumentOptions = new() { MaxDepth = 1024 };
     private static readonly Random _random = new();
 
     [GlobalSetup]
@@ -152,7 +152,7 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Deep")]
     public JsonDocument DeepJson_SystemTextJson()
     {
-        return JsonDocument.Parse(_deepJson);
+        return JsonDocument.Parse(_deepJson, _jsonDocumentOptions);
     }
 
     [Benchmark, BenchmarkCategory("Deep")]
