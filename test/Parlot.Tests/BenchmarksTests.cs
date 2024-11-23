@@ -1,3 +1,4 @@
+#if NET8_0_OR_GREATER
 using Parlot.Benchmarks;
 using Xunit;
 
@@ -239,3 +240,4 @@ public class BenchmarksTests
         Assert.Equal(RegexBenchmarks.Email, result);
     }
 }
+#endif

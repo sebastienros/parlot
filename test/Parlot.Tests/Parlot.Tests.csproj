@@ -1,15 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net6.0;net8.0;net9.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
+    <SignAssembly>False</SignAssembly>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/Parlot/Parlot.csproj" />
-    <ProjectReference Include="../../test/Parlot.Benchmarks/Parlot.Benchmarks.csproj" />
     <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'net6.0'">
+    <ProjectReference Include="../../test/Parlot.Benchmarks/Parlot.Benchmarks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

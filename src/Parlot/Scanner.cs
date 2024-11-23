@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Parlot.Fluent;
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -12,11 +12,6 @@ namespace Parlot;
 /// </summary>
 public class Scanner
 {
-#if NET8_0_OR_GREATER
-    private static readonly SearchValues<char> _decimalDigits = SearchValues.Create("0123456789");
-    private static readonly SearchValues<char> _hexDigits = SearchValues.Create("01234567890abcdefABCDEF");
-#endif
-
     public readonly string Buffer;
     public readonly Cursor Cursor;
 
@@ -37,56 +32,63 @@ public class Scanner
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool SkipWhiteSpaceOrNewLine()
     {
-        // Fast path if we know the current char is not a whitespace
         if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
         {
             return false;
         }
 
-        var offset = 0;
-        var maxOffset = Cursor.Buffer.Length - Cursor.Offset;
+        var span = Cursor.Span;
+        var length = span.Length;
 
-        while (offset < maxOffset && Character.IsWhiteSpaceOrNewLine(Cursor.PeekNext(offset)))
+        for (var i = 1; i < length; i++)
         {
-            offset++;
+            var c = span[i];
+
+            if (!Character.IsWhiteSpaceOrNewLine(c))
+            {
+                if (i > 0)
+                {
+                    Cursor.Advance(i);
+                    return true;
+                }
+
+                return false;
+            }
         }
 
-        // We can move the cursor without tracking new lines since we know these are only spaces
-        if (offset > 0)
-        {
-            Cursor.Advance(offset);
-            return true;
-        }
-
-        return false;
+        Cursor.AdvanceNoNewLines(span.Length);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool SkipWhiteSpace()
     {
-        // Fast path if we know the current char is not a whitespace
-        var current = Cursor.Current;
-        if (current is > ' ' and < (char)256)
+        if (!Character.IsWhiteSpace(Cursor.Current))
         {
             return false;
         }
 
-        var offset = 0;
-        var maxOffset = Cursor.Buffer.Length - Cursor.Offset;
+        var span = Cursor.Span;
+        var length = span.Length;
 
-        while (offset < maxOffset && Character.IsWhiteSpace(Cursor.PeekNext(offset)))
+        for (var i = 1; i < length; i++)
         {
-            offset++;
+            var c = span[i];
+
+            if (!Character.IsWhiteSpace(c))
+            {
+                if (i > 0)
+                {
+                    Cursor.AdvanceNoNewLines(i);
+                    return true;
+                }
+
+                return false;
+            }
         }
 
-        // We can move the cursor without tracking new lines since we know these are only spaces
-        if (offset > 0)
-        {
-            Cursor.AdvanceNoNewLines(offset);
-            return true;
-        }
-
-        return false;
+        Cursor.AdvanceNoNewLines(span.Length);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -222,7 +224,7 @@ public class Scanner
     {
         var span = Cursor.Span;
 
-        var noDigitIndex = span.IndexOfAnyExcept(_decimalDigits);
+        var noDigitIndex = span.IndexOfAnyExcept(Character._decimalDigits);
 
         // If first char is not a digit, fail
         if (noDigitIndex == 0 || span.IsEmpty)
@@ -588,7 +590,7 @@ public class Scanner
                         // https://stackoverflow.com/a/32175520/142772
                         // exactly 4 digits
 #if NET8_0_OR_GREATER
-                        var lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(_hexDigits);
+                        var lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(Character._hexDigits);
                         var isValidUnicode = lastHexIndex == 3;
 
                         if (!isValidUnicode)
@@ -634,7 +636,7 @@ public class Scanner
 
                         // At least two digits
 #if NET8_0_OR_GREATER
-                        lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(_hexDigits);
+                        lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(Character._hexDigits);
                         var isValidHex = lastHexIndex > 0;
 
                         if (!isValidHex)

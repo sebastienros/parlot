@@ -1,7 +1,6 @@
-﻿#if NET8_0_OR_GREATER
+#if NET8_0_OR_GREATER
 using BenchmarkDotNet.Attributes;
 using System;
-using System.Buffers;
 namespace Parlot.Benchmarks;
 
 // BenchmarkDotNet v0.14.0, Windows 11 (10.0.26100.2314)
@@ -9,10 +8,10 @@ namespace Parlot.Benchmarks;
 // .NET SDK 9.0.100
 //   [Host]   : .NET 8.0.11 (8.0.1124.51707), X64 RyuJIT AVX2
 //   ShortRun : .NET 8.0.11 (8.0.1124.51707), X64 RyuJIT AVX2
-   
+
 // Job = ShortRun  IterationCount=3  LaunchCount=1
 // WarmupCount=3
-   
+
 // | Method                          | Mean      | Error     | StdDev    | Allocated |
 // |-------------------------------- |----------:|----------:|----------:|----------:|
 // | NaiveIdentifierMatch            | 11.216 ns | 1.0236 ns | 0.0561 ns |         - |
@@ -24,10 +23,8 @@ namespace Parlot.Benchmarks;
 [MemoryDiagnoser, ShortRunJob]
 public class IdentifiersBenchmarks
 {
-    private static SearchValues<char> _identifierStart = SearchValues.Create("$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    private static SearchValues<char> _identifierPart = SearchValues.Create("$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
-    private static string _identifier1 = "workflowIdentifier = 123";
-    private static int _length = 18;
+    private static readonly string _identifier1 = "workflowIdentifier = 123";
+    private static readonly int _length = 18;
     
     public IdentifiersBenchmarks()
     {
@@ -60,20 +57,20 @@ public class IdentifiersBenchmarks
     [Benchmark]
     public int SearchValuesIdentifierMatch()
     {
-        bool isIdentifier = _identifierStart.Contains(_identifier1[0]);
+        bool isIdentifier = SearchValuesHelper._identifierStart.Contains(_identifier1[0]);
 
         if (!isIdentifier)
         {
             return -1;
         }
 
-        return _identifier1.AsSpan().Slice(1).IndexOfAnyExcept(_identifierPart) + 1;
+        return _identifier1.AsSpan().Slice(1).IndexOfAnyExcept(SearchValuesHelper._identifierPart) + 1;
     }
 
     [Benchmark]
     public int NaiveIdentifierAndContainsMatch()
     {
-        bool isIdentifier = _identifierStart.Contains(_identifier1[0]);
+        bool isIdentifier = SearchValuesHelper._identifierStart.Contains(_identifier1[0]);
 
         if (!isIdentifier)
         {
@@ -82,7 +79,7 @@ public class IdentifiersBenchmarks
 
         for (var i = 1; i < _identifier1.Length; i++)
         {
-            if (!_identifierPart.Contains(_identifier1[i]))
+            if (!SearchValuesHelper._identifierPart.Contains(_identifier1[i]))
             {
                 return i;
             }
