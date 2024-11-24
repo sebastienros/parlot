@@ -122,6 +122,7 @@ public class ScannerTests
         Assert.True(s.Cursor.Eof);
 
         Assert.False(new Scanner("a").SkipWhiteSpaceOrNewLine());
+        Assert.False(new Scanner("a").SkipWhiteSpace());
     }
 
     [Fact]
