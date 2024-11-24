@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Parlot.Fluent;
 
@@ -43,8 +43,19 @@ public class ParseContext
     /// </summary>
     public Parser<TextSpan>? WhiteSpaceParser { get; set; }
 
+    private int _cacheOffset = -1;
+    private TextPosition _cachePosition;
+
     public void SkipWhiteSpace()
     {
+        var offset = Scanner.Cursor.Position.Offset;
+
+        if (offset == _cacheOffset)
+        {
+            Scanner.Cursor.ResetPosition(_cachePosition);
+            return;
+        }
+
         if (WhiteSpaceParser is null)
         {
             if (UseNewLines)
@@ -61,6 +72,9 @@ public class ParseContext
             ParseResult<TextSpan> _ = default;
             WhiteSpaceParser.Parse(this, ref _);
         }
+
+        _cacheOffset = offset;
+        _cachePosition = Scanner.Cursor.Position;
     }
 
     /// <summary>
