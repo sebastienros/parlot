@@ -84,18 +84,18 @@ public class SkipWhiteSpaceBenchmarks
         var index = span.IndexOfAnyExcept(SearchValuesHelper._whiteSpaces);
 
         // Only spaces ?
-        if (index == -1)
+        // Not tracking new lines since we know these are only spaces
+        switch (index)
         {
-            // Not tracking new lines since we know these are only spaces
-            cursor.AdvanceNoNewLines(span.Length);
+            case 0:
+                return false;
+            case -1:
+                cursor.AdvanceNoNewLines(span.Length);
+                return true;
+            default:
+                cursor.AdvanceNoNewLines(index);
+                return true;
         }
-        else
-        {
-            // Not tracking new lines since we know these are only spaces
-            cursor.AdvanceNoNewLines(index);
-        }
-
-        return true;
     }
 
     [Benchmark, BenchmarkCategory("Vectorized")]
@@ -114,16 +114,17 @@ public class SkipWhiteSpaceBenchmarks
         var index = span.IndexOfAnyExcept(SearchValuesHelper._whiteSpaceOrNewLines);
 
         // Only spaces ?
-        if (index == -1)
+        switch (index)
         {
-            cursor.Advance(span.Length);
+            case 0:
+                return false;
+            case -1:
+                cursor.Advance(span.Length);
+                return true;
+            default:
+                cursor.Advance(index);
+                return true;
         }
-        else
-        {
-            cursor.Advance(index);
-        }
-
-        return true;
     }
 
     [Benchmark, BenchmarkCategory("PeekSearchValue")]
