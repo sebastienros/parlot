@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
@@ -52,14 +52,18 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             {
                 // If all parsers have the same first char, no need to use a lookup table
 
+                ExpectedChars = lookupTable!.Keys.ToArray();
+                CanSeek = true;
                 lookupTable = null;
             }
-            else if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
+
+            if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 // All parsers can start with white spaces
                 SkipWhitespace = true;
             }
-            else if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
+
+            if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 // If not all parsers accept a white space, we can't use a lookup table since the order matters
 

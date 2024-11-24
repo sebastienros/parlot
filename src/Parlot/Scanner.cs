@@ -46,13 +46,8 @@ public class Scanner
 
             if (!Character.IsWhiteSpaceOrNewLine(c))
             {
-                if (i > 0)
-                {
-                    Cursor.Advance(i);
-                    return true;
-                }
-
-                return false;
+                Cursor.Advance(i);
+                return true;
             }
         }
 
