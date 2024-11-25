@@ -1,4 +1,4 @@
-﻿using Parlot.Fluent;
+using Parlot.Fluent;
 using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests.Calc;

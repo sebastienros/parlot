@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Parlot.Fluent;
 
@@ -9,17 +9,17 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds.
     /// </summary>
-    public Parser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
+    public Parser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion).Named(Name == null ? "Then" : $"{Name} (Then)");
 
     /// <summary>
     /// Builds a parser that converts the previous result, and can alter the current <see cref="ParseContext"/>.
     /// </summary>
-    public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
+    public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion).Named(Name == null ? "Then" : $"{Name} (Then)");
 
     /// <summary>
     /// Builds a parser that converts the previous result.
     /// </summary>
-    public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
+    public Parser<U> Then<U>(U value) => new Then<T, U>(this, value).Named(Name == null ? "Then" : $"{Name} (Then)");
 
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
@@ -50,6 +50,15 @@ public abstract partial class Parser<T>
     /// Builds a parser that emits an error.
     /// </summary>
     public Parser<U> Error<U>(string message) => new Error<T, U>(this, message);
+
+    /// <summary>
+    /// Names a parser.
+    /// </summary>
+    public Parser<T> Named(string name)
+    {
+        this.Name = name;
+        return this;
+    }
 
     /// <summary>
     /// Builds a parser that verifies the previous parser result matches a predicate.

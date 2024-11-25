@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
+using System.Xml;
 using Xunit;
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -711,6 +712,39 @@ public class FluentTests
         Assert.True(parser.TryParse("a", out _));
         Assert.True(parser.TryParse("ab", out _));
         Assert.True(parser.TryParse("abc", out _));
+    }
+
+    [Fact]
+    public void OneOfShouldHandleSkipWhiteSpaceMix()
+    {
+        var parser = Literals.Text("a").Or(Terms.Text("b"));
+
+        Assert.True(parser.TryParse("a", out _));
+        Assert.True(parser.TryParse("b", out _));
+        Assert.False(parser.TryParse(" a", out _));
+        Assert.True(parser.TryParse(" b", out _));
+    }
+
+    [Fact]
+    public void OneOfShouldHandleParsedWhiteSpace()
+    {
+        var parser = Literals.Text("a").Or(AnyCharBefore(Literals.Text("c"), false, true).Then(x => x.ToString()));
+
+        Assert.True(parser.TryParse("a", out _));
+        Assert.False(parser.TryParse("b", out _));
+        Assert.False(parser.TryParse(" a", out _));
+        Assert.True(parser.TryParse("\rcde", out _));
+    }
+
+    [Fact]
+    public void OneOfShouldHandleContextualWhiteSpace()
+    {
+        var parser = Terms.Text("a").Or(Terms.Text("b"));
+
+        Assert.True(parser.TryParse(new ParseContext(new Scanner("\rb")), out _, out _));
+        Assert.True(parser.TryParse(new ParseContext(new Scanner(" b")), out _, out _));
+        Assert.False(parser.TryParse(new ParseContext(new Scanner("\rb"), useNewLines: true), out _, out _));
+        Assert.True(parser.TryParse(new ParseContext(new Scanner(" b"), useNewLines: true), out _, out _));
     }
 
     [Fact]

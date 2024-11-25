@@ -1,13 +1,20 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Deferred<T> : Parser<T>, ICompilable
+public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 {
     public Parser<T>? Parser { get; set; }
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public Deferred()
     {
@@ -16,6 +23,13 @@ public sealed class Deferred<T> : Parser<T>, ICompilable
     public Deferred(Func<Deferred<T>, Parser<T>> parser)
     {
         Parser = parser(this);
+
+        if (Parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

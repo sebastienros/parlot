@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
@@ -12,6 +12,8 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
     public SkipWhiteSpace(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+
+        Name = parser.Name == null ? "SkipWhiteSpace" : $"{Name} (SkipWhiteSpace)";
 
         if (parser is ISeekable seekable)
         {

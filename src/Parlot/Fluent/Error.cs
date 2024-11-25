@@ -1,19 +1,33 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Linq.Expressions;
 using Parlot.Compilation;
+using Parlot.Rewriting;
 
 namespace Parlot.Fluent;
 
-public sealed class ElseError<T> : Parser<T>, ICompilable
+public sealed class ElseError<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public ElseError(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
+
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -127,15 +141,28 @@ public sealed class Error<T> : Parser<T>, ICompilable
     }
 }
 
-public sealed class Error<T, U> : Parser<U>, ICompilable
+public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public Error(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
+
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)

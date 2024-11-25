@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 
 namespace Parlot.Fluent;
 
@@ -6,6 +6,8 @@ public abstract partial class Parser<T>
 {
     private int _invocations;
     private volatile Parser<T>? _compiledParser;
+
+    public string? Name { get; set; }
 
     public T? Parse(string text)
     {
@@ -85,4 +87,6 @@ public abstract partial class Parser<T>
         value = default!;
         return false;
     }
+
+    public override string ToString() => $"{Name ?? GetType().Name}";
 }

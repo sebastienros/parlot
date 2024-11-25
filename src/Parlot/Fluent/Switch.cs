@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System;
 using System.Linq;
 using System.Linq.Expressions;

@@ -65,16 +65,4 @@ public partial class RewriteTests
         Assert.Equal("goodbye", helloOrGoodbye.Parse(" goodbye"));
         Assert.Null(helloOrGoodbye.Parse("yo!"));
     }
-
-    [Fact]
-    public void OneOfShouldNotRewriteIfOneIsNotSeekable()
-    {
-        var hello = new FakeSeekable { CanSeek = true, ExpectedChars = new[] { 'a' }, SkipWhitespace = false, Success = true, Text = "hello" };
-        var goodbye = OneOf(Parsers.Literals.Text("goodbye"));
-        var oneof = Parsers.OneOf(goodbye, hello);
-
-        Assert.Equal("hello", oneof.Parse("a"));
-        Assert.Equal("goodbye", oneof.Parse("goodbye"));
-        Assert.Equal("hello", oneof.Parse("b")); // b is not found in "goodbye" so the next parser is checked and always succeeds true
-    }
 }

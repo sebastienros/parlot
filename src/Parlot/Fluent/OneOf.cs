@@ -16,6 +16,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T>[] _parsers;
     internal readonly CharMap<List<Parser<T>>>? _map;
+    internal readonly List<Parser<T>>? _otherParsers;
 
     public OneOf(Parser<T>[] parsers)
     {
@@ -27,54 +28,69 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             return;
         }
 
-        // If all parsers are seekable we can build a lookup table
-        if (_parsers.All(x => x is ISeekable seekable && seekable.CanSeek))
+        // Technically we shouldn't be able to build a lookup table if not all parsers are seekable.
+        // For instance, "or" | identifier is not seekable since 'identifier' is not seekable.
+        // Also the order of the parsers need to be conserved in the lookup table results.
+        // The solution is to add the parsers that are not seekable in all the groups, and
+        // keep the relative order of each. So if the parser p1, p2 ('a'), p3, p4 ('b') are available,
+        // the group 'a' will have p1, p2, p3 and the group 'b' will have p1, p3, p4.
+        // And then when we parse, we need to try the non-seekable parsers when the _map doesn't have the character to lookup.
+
+        // NB:We could extract the lookup logic as a separate parser and then have a each lookup group as a OneOf one.
+
+        if (_parsers.Any(x => x is ISeekable seekable))
         {
-            var lookupTable = new Dictionary<char, List<Parser<T>>>();
+            var lookupTable = _parsers
+                            .Where(p => p is ISeekable seekable && seekable.CanSeek)
+                            .Cast<ISeekable>()
+                            .SelectMany(s => s.ExpectedChars.Select(x => (Key: x, Parser: (Parser<T>)s)))
+                            .GroupBy(s => s.Key)
+                            .ToDictionary(group => group.Key, group => new List<Parser<T>>());
 
             foreach (var parser in _parsers)
             {
-                var expectedChars = (parser as ISeekable)!.ExpectedChars;
-
-                foreach (var c in expectedChars)
+                if (parser is ISeekable seekable && seekable.CanSeek)
                 {
-                    if (!lookupTable.TryGetValue(c, out var list))
+                    foreach (var c in seekable.ExpectedChars)
                     {
-                        list = new List<Parser<T>>();
-                        lookupTable[c] = list;
+                        lookupTable[c].Add(parser);
                     }
+                }
+                else
+                {
+                    _otherParsers ??= new();
+                    _otherParsers.Add(parser);
 
-                    list.Add(parser);
+                    foreach (var entry in lookupTable)
+                    {
+                        entry.Value.Add(parser);
+                    }
                 }
             }
 
-            if (lookupTable.Count <= 1)
-            {
-                // If all parsers have the same first char, no need to use a lookup table
+            //if (lookupTable.Count <= 1)
+            //{
+            //    // If all parsers have the same first char, no need to use a lookup table
+            //    lookupTable = null;
+            //}
 
-                ExpectedChars = lookupTable!.Keys.ToArray();
-                CanSeek = true;
-                lookupTable = null;
-            }
-
+            // If only some parser use SkipWhiteSpace, we can't use a lookup table
+            // Meaning, All/None is fine, but not Any
             if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
-                // All parsers can start with white spaces
                 SkipWhitespace = true;
             }
-
-            if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
+            else if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
-                // If not all parsers accept a white space, we can't use a lookup table since the order matters
-
                 lookupTable = null;
             }
 
             if (lookupTable != null)
             {
-                CanSeek = true;
+                Name = $"OneOf([{String.Join("", lookupTable.Keys)}])";
                 _map = new CharMap<List<Parser<T>>>(lookupTable);
-                ExpectedChars = _map.ExpectedChars.ToArray();
+                CanSeek = true;
+                ExpectedChars = _map.ExpectedChars;
             }
         }
     }
@@ -93,45 +109,26 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 
         var cursor = context.Scanner.Cursor;
 
+        var start = context.Scanner.Cursor.Position;
+
+        if (SkipWhitespace)
+        {
+            context.SkipWhiteSpace();
+        }
+
         if (_map != null)
         {
-            if (SkipWhitespace)
+            var seekableParsers = _map[cursor.Current] ?? _otherParsers;
+
+            if (seekableParsers != null)
             {
-                var start = context.Scanner.Cursor.Position;
+                var length = seekableParsers.Count;
 
-                context.SkipWhiteSpace();
-
-                var seekableParsers = _map[cursor.Current];
-
-                if (seekableParsers != null)
+                for (var i = 0; i < length; i++)
                 {
-                    var length = seekableParsers!.Count;
-
-                    for (var i = 0; i < length; i++)
+                    if (seekableParsers[i].Parse(context, ref result))
                     {
-                        if (seekableParsers[i].Parse(context, ref result))
-                        {
-                            return true;
-                        }
-                    }
-                }
-
-                context.Scanner.Cursor.ResetPosition(start);
-            }
-            else
-            {
-                var seekableParsers = _map[cursor.Current];
-
-                if (seekableParsers != null)
-                {
-                    var length = seekableParsers!.Count;
-
-                    for (var i = 0; i < length; i++)
-                    {
-                        if (seekableParsers[i].Parse(context, ref result))
-                        {
-                            return true;
-                        }
+                        return true;
                     }
                 }
             }
@@ -148,6 +145,14 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                     return true;
                 }
             }
+        }
+
+        // We only need to reset the position if we are skipping whitespaces
+        // as the parsers would have reverted their own state
+
+        if (SkipWhitespace)
+        {
+            context.Scanner.Cursor.ResetPosition(start);
         }
 
         return false;

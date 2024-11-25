@@ -1,4 +1,4 @@
-﻿using Parlot.Fluent;
+using Parlot.Fluent;
 using System;
 
 namespace Parlot.Compilation;
