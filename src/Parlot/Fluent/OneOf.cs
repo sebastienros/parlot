@@ -68,12 +68,6 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                 }
             }
 
-            //if (lookupTable.Count <= 1)
-            //{
-            //    // If all parsers have the same first char, no need to use a lookup table
-            //    lookupTable = null;
-            //}
-
             // If only some parser use SkipWhiteSpace, we can't use a lookup table
             // Meaning, All/None is fine, but not Any
             if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
@@ -85,9 +79,11 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                 lookupTable = null;
             }
 
-            if (lookupTable != null)
+            var expectedChars = string.Join(",", lookupTable?.Keys.ToArray() ?? []);
+
+            Name = $"OneOf ({string.Join(",", _parsers.Select(x => x.Name))}) on '{expectedChars}'";
+            if (lookupTable != null && lookupTable.Count > 0)
             {
-                Name = $"OneOf([{String.Join("", lookupTable.Keys)}])";
                 _map = new CharMap<List<Parser<T>>>(lookupTable);
                 CanSeek = true;
                 ExpectedChars = _map.ExpectedChars;
