@@ -10,6 +10,7 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     {
         Char = c;
         ExpectedChars = [c];
+        Name = $"Char('{c}')";
     }
 
     public char Char { get; }
@@ -31,9 +32,12 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
             var start = cursor.Offset;
             cursor.Advance();
             result.Set(start, cursor.Offset, Char);
+
+            context.ExitParser(this);
             return true;
         }
 
+        context.ExitParser(this);
         return false;
     }
 

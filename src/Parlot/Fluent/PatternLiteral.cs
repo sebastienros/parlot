@@ -15,6 +15,8 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
         _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
         _minSize = minSize;
         _maxSize = maxSize;
+
+        Name = "PatternLiteral";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -23,6 +25,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
 
         if (context.Scanner.Cursor.Eof || !_predicate(context.Scanner.Cursor.Current))
         {
+            context.ExitParser(this);
             return false;
         }
 
@@ -43,12 +46,14 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
             var end = context.Scanner.Cursor.Offset;
             result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
 
+            context.ExitParser(this);
             return true;
         }
 
         // When the size constraint has not been met the parser may still have advanced the cursor.
         context.Scanner.Cursor.ResetPosition(startPosition);
 
+        context.ExitParser(this);
         return false;
     }
 

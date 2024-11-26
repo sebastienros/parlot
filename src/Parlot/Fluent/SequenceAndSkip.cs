@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
@@ -22,6 +22,8 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser1.Name}, {parser2.Name})";
     }
 
     public bool CanSeek { get; }
@@ -45,12 +47,15 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
             if (_parser2.Parse(context, ref parseResult2))
             {
                 result.Set(parseResult1.Start, parseResult2.End, parseResult1.Value);
+
+                context.ExitParser(this);
                 return true;
             }
 
             context.Scanner.Cursor.ResetPosition(start);
         }
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -145,6 +150,8 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IC
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -173,12 +180,15 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IC
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -214,6 +224,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -243,12 +255,15 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -284,6 +299,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -314,12 +331,15 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -355,6 +375,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -387,6 +409,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -394,6 +418,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -429,6 +454,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -462,6 +489,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -469,6 +498,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -504,6 +534,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -538,6 +570,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -545,6 +579,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 

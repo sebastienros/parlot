@@ -26,12 +26,15 @@ public class CompiledParser<T> : Parser<T>, ICompiledParser
 
     public CompiledParser(Func<ParseContext, ValueTuple<bool, T>> parse, Parser<T> source)
     {
+        Name = "Compiled";
         _parse = parse ?? throw new ArgumentNullException(nameof(parse));
         Source = source;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        context.EnterParser(this);
+
         var cursor = context.Scanner.Cursor;
         var start = cursor.Offset;
         var parsed = _parse(context);
@@ -39,6 +42,8 @@ public class CompiledParser<T> : Parser<T>, ICompiledParser
         if (parsed.Item1)
         {
             result.Set(start, cursor.Offset, parsed.Item2);
+
+            context.ExitParser(this);
             return true;
         }
 

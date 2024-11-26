@@ -31,6 +31,8 @@ internal sealed class Lookup : Parser<TextSpan>, ISeekable
         ExpectedChars = values.ToCharArray();
         _minSize = minSize;
         _maxSize = maxSize;
+
+        Name = "$Lookup '{values}'";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -56,6 +58,7 @@ internal sealed class Lookup : Parser<TextSpan>, ISeekable
 
         if (size < _minSize)
         {
+            context.ExitParser(this);
             return false;
         }
 
@@ -70,6 +73,7 @@ internal sealed class Lookup : Parser<TextSpan>, ISeekable
 
         result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
 
+        context.ExitParser(this);
         return true;
     }
 }

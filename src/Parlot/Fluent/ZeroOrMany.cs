@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
@@ -23,6 +23,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeek
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"ZeroOrMany({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -61,6 +63,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeek
         }
 
         result.Set(start, end, results ?? (IReadOnlyList<T>)[]);
+
+        context.ExitParser(this);
         return true;
     }
 

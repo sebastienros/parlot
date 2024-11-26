@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -10,6 +10,8 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable
     public WhiteSpaceLiteral(bool includeNewLines)
     {
         _includeNewLines = includeNewLines;
+
+        Name = "WhiteSpaceLiteral";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -31,11 +33,13 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable
 
         if (start == end)
         {
+            context.ExitParser(this);
             return false;
         }
 
         result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
 
+        context.ExitParser(this);
         return true;
     }
 

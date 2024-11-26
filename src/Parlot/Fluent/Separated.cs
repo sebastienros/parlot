@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
@@ -25,6 +25,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+        Name = $"Separated({separator.Name}, {parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -66,6 +67,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
                     break;
                 }
 
+                context.ExitParser(this);
                 return false;
             }
             else
@@ -84,6 +86,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         }
 
         result.Set(start, end.Offset, results ?? []);
+
+        context.ExitParser(this);
         return true;
     }
 

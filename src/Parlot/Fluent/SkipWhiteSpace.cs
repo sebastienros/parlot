@@ -13,7 +13,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
 
-        Name = parser.Name == null ? "SkipWhiteSpace" : $"{Name} (SkipWhiteSpace)";
+        Name = $"{Name} (SkipWhiteSpace)";
 
         if (parser is ISeekable seekable)
         {
@@ -38,6 +38,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
         // current char is not part of the common alphanumeric chars
         if (context.WhiteSpaceParser is null && Character.IsInRange(cursor.Current, (char)33, (char)126))
         {
+            context.ExitParser(this);
             return _parser.Parse(context, ref result);
         }
 
@@ -48,11 +49,13 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
 
         if (_parser.Parse(context, ref result))
         {
+            context.ExitParser(this);
             return true;
         }
 
         cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 

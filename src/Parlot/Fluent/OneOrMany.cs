@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
@@ -22,6 +22,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"OneOrMany({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -54,6 +56,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         } while (_parser.Parse(context, ref parsed));
 
         result.Set(start, end, results);
+
+        context.ExitParser(this);
         return true;
     }
 

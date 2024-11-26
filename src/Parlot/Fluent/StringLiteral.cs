@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
@@ -34,6 +34,8 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
             StringLiteralQuotes.SingleOrDouble => SingleOrDoubleQuotes,
             _ => []
         };
+
+        Name = "StringLiteral";
     }
 
     public bool CanSeek { get; } = true;
@@ -64,10 +66,13 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
             var decoded = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
 
             result.Set(start, end, decoded);
+
+            context.ExitParser(this);
             return true;
         }
         else
         {
+            context.ExitParser(this);
             return false;
         }
     }

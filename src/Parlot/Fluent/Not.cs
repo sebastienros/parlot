@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System;
 using System.Linq.Expressions;
 
@@ -11,6 +11,8 @@ public sealed class Not<T> : Parser<T>, ICompilable
     public Not(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+
+        Name = $"Not ({parser.Name}";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -21,10 +23,13 @@ public sealed class Not<T> : Parser<T>, ICompilable
 
         if (!_parser.Parse(context, ref result))
         {
+            context.ExitParser(this);
             return true;
         }
 
         context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
         return false;
     }
 

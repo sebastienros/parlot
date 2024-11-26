@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -10,6 +10,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable
     public Capture(Parser<T> parser)
     {
         _parser = parser;
+        Name = $"{parser.Name} (Capture)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -28,11 +29,13 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable
 
             result.Set(start.Offset, end, new TextSpan(context.Scanner.Buffer, start.Offset, length));
 
+            context.ExitParser(this);
             return true;
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 

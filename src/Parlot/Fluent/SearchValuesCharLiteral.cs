@@ -22,6 +22,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         _searchValues = searchValues ?? throw new ArgumentNullException(nameof(searchValues));
         _minSize = minSize;
         _maxSize = maxSize;
+        Name = $"AnyOf({searchValues})";
     }
 
     public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0)
@@ -32,6 +33,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
 
         CanSeek = true;
         ExpectedChars = searchValues.ToArray();
+        Name = $"AnyOf('{searchValues}')";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -48,12 +50,14 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
             // Too small?
             if (index == 0 || index < _minSize)
             {
+                context.ExitParser(this);
                 return false;
             }
 
             // Too large?
             if (_maxSize > 0 && index > _maxSize)
             {
+                context.ExitParser(this);
                 return false;
             }
         }
@@ -64,6 +68,8 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         var start = context.Scanner.Cursor.Position.Offset;
         context.Scanner.Cursor.Advance(size);
         result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+
+        context.ExitParser(this);
         return true;
     }
 }

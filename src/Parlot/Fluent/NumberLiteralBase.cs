@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -46,6 +46,8 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
         _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
+
+        Name = "NumberLiterl";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -62,12 +64,15 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
             if (TryParseNumber(number, _numberStyles, _culture, out T value))
             {
                 result.Set(start, end, value);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(reset);
 
+        context.ExitParser(this);
         return false;
     }
 

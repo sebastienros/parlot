@@ -39,7 +39,12 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
-        return Parser.Parse(context, ref result);
+        context.ExitParser(this);
+
+        var outcome = Parser.Parse(context, ref result);
+
+        context.ExitParser(this);
+        return outcome;
     }
 
     private bool _initialized;

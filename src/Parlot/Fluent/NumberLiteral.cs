@@ -1,4 +1,4 @@
-﻿#if NET8_0_OR_GREATER
+#if NET8_0_OR_GREATER
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
@@ -69,6 +69,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         }
 
         // Exponent can't be a starting char
+
+        Name = "NumberLiteral";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -85,12 +87,15 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
             if (T.TryParse(number, _numberStyles, _culture, out var value))
             {
                 result.Set(start, end, value);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(reset);
 
+        context.ExitParser(this);
         return false;
     }
 

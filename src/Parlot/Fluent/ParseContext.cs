@@ -39,6 +39,11 @@ public class ParseContext
     public Action<object, ParseContext>? OnEnterParser { get; set; }
 
     /// <summary>
+    /// Delegate that is executed whenever a parser is left.
+    /// </summary>
+    public Action<object, ParseContext>? OnExitParser { get; set; }
+
+    /// <summary>
     /// The parser that is used to parse whitespaces and comments.
     /// </summary>
     public Parser<TextSpan>? WhiteSpaceParser { get; set; }
@@ -78,10 +83,18 @@ public class ParseContext
     }
 
     /// <summary>
-    /// Called whenever a parser is invoked. Will be used to detect invalid states and infinite loops.
+    /// Called whenever a parser is invoked.
     /// </summary>
     public void EnterParser<T>(Parser<T> parser)
     {
         OnEnterParser?.Invoke(parser, this);
+    }
+
+    /// <summary>
+    /// Called whenever a parser exits.
+    /// </summary>
+    public void ExitParser<T>(Parser<T> parser)
+    {
+        OnExitParser?.Invoke(parser, this);
     }
 }

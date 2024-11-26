@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -12,6 +12,7 @@ public sealed class Always<T> : Parser<T>, ICompilable
 
     public Always(T value)
     {
+        Name = "Always";
         _value = value;
     }
 
@@ -21,6 +22,7 @@ public sealed class Always<T> : Parser<T>, ICompilable
 
         result.Set(context.Scanner.Cursor.Offset, context.Scanner.Cursor.Offset, _value);
 
+        context.ExitParser(this);
         return true;
     }
 
