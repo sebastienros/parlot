@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -11,7 +12,7 @@ namespace Parlot.Fluent;
 /// This class is used as a base class for custom number parsers which don't implement INumber<typeparamref name="T"/> after .NET 7.0.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
+public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
 {
     private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
 
@@ -24,6 +25,12 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
+
+    public bool CanSeek => true;
+
+    public char[] ExpectedChars { get; set; } = [];
+
+    public bool SkipWhitespace => false;
 
     public abstract bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out T value);
 
@@ -47,7 +54,26 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
 
-        Name = "NumberLiterl";
+        var expectedChars = "0123456789";
+
+        if (_allowLeadingSign)
+        {
+            expectedChars += "+-";
+        }
+
+        if (_allowDecimalSeparator)
+        {
+            expectedChars += _decimalSeparator;
+        }
+
+        if (_allowExponent)
+        {
+            expectedChars += "eE";
+        }
+
+        ExpectedChars = expectedChars.ToCharArray();
+
+        Name = "NumberLiteral";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

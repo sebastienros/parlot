@@ -134,6 +134,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                 {
                     if (seekableParsers[i].Parse(context, ref result))
                     {
+                        context.ExitParser(this);
                         return true;
                     }
                 }
@@ -148,6 +149,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             {
                 if (parsers[i].Parse(context, ref result))
                 {
+                    context.ExitParser(this);
                     return true;
                 }
             }
@@ -161,6 +163,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             context.Scanner.Cursor.ResetPosition(start);
         }
 
+        context.ExitParser(this);
         return false;
     }
 
