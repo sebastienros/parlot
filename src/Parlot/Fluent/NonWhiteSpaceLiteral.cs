@@ -15,6 +15,8 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ICompilable
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        context.EnterParser(this);
+
         if (context.Scanner.Cursor.Eof)
         {
             context.ExitParser(this);

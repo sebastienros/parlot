@@ -26,6 +26,8 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
+        context.EnterParser(this);
+
         var previousResult = new ParseResult<T>();
 
         if (!_previousParser.Parse(context, ref previousResult))

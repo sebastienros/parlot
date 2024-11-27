@@ -9,17 +9,17 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds.
     /// </summary>
-    public Parser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion).Named(Name == null ? "Then" : $"{Name} (Then)");
+    public Parser<U> Then<U>(Func<T, U> conversion) => new Then<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result, and can alter the current <see cref="ParseContext"/>.
     /// </summary>
-    public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion).Named(Name == null ? "Then" : $"{Name} (Then)");
+    public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
 
     /// <summary>
     /// Builds a parser that converts the previous result.
     /// </summary>
-    public Parser<U> Then<U>(U value) => new Then<T, U>(this, value).Named(Name == null ? "Then" : $"{Name} (Then)");
+    public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
 
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.

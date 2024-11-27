@@ -236,7 +236,7 @@ public class TermBuilder
     /// <summary>
     /// Builds a parser that matches the specified char.
     /// </summary>
-    public Parser<char> Char(char c) => Parsers.SkipWhiteSpace(new CharLiteral(c).Named($"'{c}'"));
+    public Parser<char> Char(char c) => Parsers.SkipWhiteSpace(new CharLiteral(c));
 
     /// <summary>
     /// Builds a parser that matches a number and returns any numeric type.

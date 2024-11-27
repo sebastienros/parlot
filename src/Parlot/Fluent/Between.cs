@@ -53,9 +53,9 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
 
         if (!_parser.Parse(context, ref result))
         {
-            context.ExitParser(this);
-
             cursor.ResetPosition(start);
+
+            context.ExitParser(this);
             return false;
         }
 

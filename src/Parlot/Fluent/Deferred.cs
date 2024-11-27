@@ -8,7 +8,17 @@ namespace Parlot.Fluent;
 
 public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 {
-    public Parser<T>? Parser { get; set; }
+    private Parser<T>? _parser;
+
+    public Parser<T>? Parser
+    {
+        get => _parser;
+        set
+        {
+            _parser = value ?? throw new ArgumentNullException(nameof(value));
+            Name = $"{_parser.Name} (Deferred)";
+        }
+    }
 
     public bool CanSeek { get; }
 
@@ -18,9 +28,10 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 
     public Deferred()
     {
+        Name = "Deferred";
     }
 
-    public Deferred(Func<Deferred<T>, Parser<T>> parser)
+    public Deferred(Func<Deferred<T>, Parser<T>> parser) : this()
     {
         Parser = parser(this);
 
@@ -39,7 +50,7 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
-        context.ExitParser(this);
+        context.EnterParser(this);
 
         var outcome = Parser.Parse(context, ref result);
 

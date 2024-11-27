@@ -42,8 +42,15 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
 
         var span = context.Scanner.Cursor.Span;
 
+        if (_minSize > span.Length)
+        {
+            return false;
+        }
+
         // First char not matching the searched values
         var index = span.IndexOfAnyExcept(_searchValues);
+
+        var size = 0;
 
         if (index != -1)
         {
@@ -54,16 +61,19 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
                 return false;
             }
 
-            // Too large?
-            if (_maxSize > 0 && index > _maxSize)
-            {
-                context.ExitParser(this);
-                return false;
-            }
+            size = index;
+        }
+        else
+        {
+            // If index == -1 the whole input is a match
+            size = span.Length;
         }
 
-        // If index == -1 the whole input is a match
-        var size = index == -1 ? span.Length : index;
+        // Too large? Take only the request size
+        if (_maxSize > 0 && size > _maxSize)
+        {
+            size = _maxSize;
+        }
 
         var start = context.Scanner.Cursor.Position.Offset;
         context.Scanner.Cursor.Advance(size);

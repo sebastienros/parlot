@@ -85,8 +85,18 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             if (lookupTable != null && lookupTable.Count > 0)
             {
                 _map = new CharMap<List<Parser<T>>>(lookupTable);
-                CanSeek = true;
-                ExpectedChars = _map.ExpectedChars;
+
+                // This parser is only seekable if there isn't a parser
+                // that can't be reached without a lookup. Unless ISeekable
+                // had an OtherParsers property too. In which case every "Or" would
+                // become a lookup, meaning every grammar would become a set of
+                // lookups (switches).
+
+                if (_otherParsers == null)
+                {
+                    CanSeek = true;
+                    ExpectedChars = _map.ExpectedChars;
+                }
             }
         }
     }
