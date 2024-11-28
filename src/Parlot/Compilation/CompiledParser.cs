@@ -47,6 +47,7 @@ public class CompiledParser<T> : Parser<T>, ICompiledParser
             return true;
         }
 
+        context.ExitParser(this);
         return false;
     }
 }

@@ -38,6 +38,7 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISeekable
 
         if (!_parser.Parse(context, ref result))
         {
+            context.ExitParser(this);
             throw new ParseException(_message, context.Scanner.Cursor.Position);
         }
 
@@ -108,6 +109,7 @@ public sealed class Error<T> : Parser<T>, ICompilable
 
         if (_parser.Parse(context, ref result))
         {
+            context.ExitParser(this);
             throw new ParseException(_message, context.Scanner.Cursor.Position);
         }
 
@@ -181,6 +183,7 @@ public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
 
         if (_parser.Parse(context, ref parsed))
         {
+            context.ExitParser(this);
             throw new ParseException(_message, context.Scanner.Cursor.Position);
         }
 

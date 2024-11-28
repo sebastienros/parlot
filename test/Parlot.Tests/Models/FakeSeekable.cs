@@ -25,9 +25,12 @@ public partial class RewriteTests
             if (Success)
             {
                 result.Set(0, 0, Text);
+
+                context.ExitParser(this);
                 return true;
             }
 
+            context.ExitParser(this);
             return false;
         }
     }

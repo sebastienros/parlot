@@ -307,9 +307,12 @@ public class CompileTests
             if (context.Scanner.ReadChar(Char))
             {
                 result.Set(start, context.Scanner.Cursor.Offset, Char);
+
+                context.ExitParser(this);
                 return true;
             }
 
+            context.ExitParser(this);
             return false;
         }
     }
