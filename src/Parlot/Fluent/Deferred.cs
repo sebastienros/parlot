@@ -91,24 +91,23 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             var parserCompileResult = Parser.Build(context);
 
             var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
-
             var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
             var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
 
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
-                Expression.Block(
-                    typeof(ValueTuple<bool, T>),
-                    parserCompileResult.Variables.Append(resultExpression),
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.Assign(resultExpression, Expression.New(
-                        typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                        parserCompileResult.Success,
-                        context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
-                    returnLabelExpression),
-                true,
-                context.ParseContext)
-                ;
+                    Expression.Block(
+                        type: typeof(ValueTuple<bool, T>),
+                        variables: parserCompileResult.Variables.Append(resultExpression),
+                        Expression.Block(parserCompileResult.Body),
+                        Expression.Assign(resultExpression, Expression.New(
+                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                            parserCompileResult.Success,
+                            context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
+                        returnLabelExpression),
+                    true,
+                    context.ParseContext
+                    );
 
             // Store the source lambda for debugging
             context.Lambdas.Add(lambda);

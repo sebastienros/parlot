@@ -1,4 +1,4 @@
-﻿using FastExpressionCompiler;
+using FastExpressionCompiler;
 using Parlot.Compilation;
 using System;
 using System.Collections.Generic;
@@ -56,6 +56,9 @@ public abstract partial class Parser<T>
             );
 
         var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
+
+        // In Debug mode, inspected the generated code with
+        // result.ToCSharpString();
 
         var parser = result.CompileFast();
 

@@ -94,12 +94,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         //      success = true;
         //      value = Text;
         // }
-        //
-        // [if skipWhiteSpace]
-        // if (!success)
-        // {
-        //      resetPosition(beginning);
-        // }
 
         var ifReadText = Expression.IfThen(
             Expression.Call(

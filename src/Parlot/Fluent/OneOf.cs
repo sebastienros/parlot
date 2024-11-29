@@ -14,16 +14,21 @@ namespace Parlot.Fluent;
 /// <typeparam name="T"></typeparam>
 public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 {
-    private readonly Parser<T>[] _parsers;
+    private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
+
+    // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
+    // be invoked when there is no match.
+
+    public const char OtherSeekableChar = '\0';
     internal readonly CharMap<List<Parser<T>>>? _map;
     internal readonly List<Parser<T>>? _otherParsers;
 
     public OneOf(Parser<T>[] parsers)
     {
-        _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+        Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
 
         // We can't build a lookup table if there is only one parser
-        if (_parsers.Length <= 1)
+        if (Parsers.Count <= 1)
         {
             return;
         }
@@ -38,27 +43,35 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 
         // NB:We could extract the lookup logic as a separate parser and then have a each lookup group as a OneOf one.
 
-        if (_parsers.Any(x => x is ISeekable seekable))
+        if (Parsers.Any(x => x is ISeekable seekable))
         {
-            var lookupTable = _parsers
+            var lookupTable = Parsers
                             .Where(p => p is ISeekable seekable && seekable.CanSeek)
                             .Cast<ISeekable>()
                             .SelectMany(s => s.ExpectedChars.Select(x => (Key: x, Parser: (Parser<T>)s)))
                             .GroupBy(s => s.Key)
                             .ToDictionary(group => group.Key, group => new List<Parser<T>>());
 
-            foreach (var parser in _parsers)
+            foreach (var parser in Parsers)
             {
                 if (parser is ISeekable seekable && seekable.CanSeek)
                 {
                     foreach (var c in seekable.ExpectedChars)
                     {
-                        lookupTable[c].Add(parser);
+                        if (c != OtherSeekableChar)
+                        {
+                            lookupTable[c].Add(parser);
+                        }
+                        else
+                        {
+                            _otherParsers ??= [];
+                            _otherParsers.Add(parser);
+                        }
                     }
                 }
                 else
                 {
-                    _otherParsers ??= new();
+                    _otherParsers ??= [];
                     _otherParsers.Add(parser);
 
                     foreach (var entry in lookupTable)
@@ -70,32 +83,44 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 
             // If only some parser use SkipWhiteSpace, we can't use a lookup table
             // Meaning, All/None is fine, but not Any
-            if (_parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
+            if (Parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 SkipWhitespace = true;
+
+                // Remove the SkipWhiteSpace parser if we can
+                Parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
             }
-            else if (_parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
+            else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 lookupTable = null;
             }
 
+            lookupTable?.Remove(OtherSeekableChar);
             var expectedChars = string.Join(",", lookupTable?.Keys.ToArray() ?? []);
 
-            Name = $"OneOf ({string.Join(",", _parsers.Select(x => x.Name))}) on '{expectedChars}'";
+            Name = $"OneOf ({string.Join(",", Parsers.Select(x => x.Name))}) on '{expectedChars}'";
             if (lookupTable != null && lookupTable.Count > 0)
             {
                 _map = new CharMap<List<Parser<T>>>(lookupTable);
 
                 // This parser is only seekable if there isn't a parser
-                // that can't be reached without a lookup. Unless ISeekable
-                // had an OtherParsers property too. In which case every "Or" would
-                // become a lookup, meaning every grammar would become a set of
-                // lookups (switches).
+                // that can't be reached without a lookup.
+                // However we use a trick to match other parsers
+                // by assigning them to `OtherSeekableChar` such that
+                // we can pass on this collection through parsers
+                // that forward the ISeekable implementation (e.g. Error, Then)
+                // This way we make more OneOf pasers seekable.
 
                 if (_otherParsers == null)
                 {
                     CanSeek = true;
                     ExpectedChars = _map.ExpectedChars;
+                }
+                else
+                {
+                    CanSeek = true;
+                    ExpectedChars = [.. _map.ExpectedChars, OtherSeekableChar];
+                    _map.Set(OtherSeekableChar, _otherParsers);
                 }
             }
         }
@@ -107,7 +132,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 
     public bool SkipWhitespace { get; }
 
-    public Parser<T>[] Parsers => _parsers;
+    public IReadOnlyList<Parser<T>> Parsers { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
@@ -142,8 +167,8 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
         }
         else
         {
-            var parsers = _parsers;
-            var length = parsers.Length;
+            var parsers = Parsers;
+            var length = parsers.Count;
 
             for (var i = 0; i < length; i++)
             {
@@ -171,182 +196,220 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     {
         var result = context.CreateCompilationResult<T>();
 
+        // var reset = context.Scanner.Cursor.Position;
+
+        ParameterExpression? reset = null;
+
+        if (SkipWhitespace)
+        {
+            reset = context.DeclarePositionVariable(result);
+            result.Body.Add(context.ParserSkipWhiteSpace());
+        }
+
         Expression block = Expression.Empty();
 
-        //if (_map != null) 
-        // For now don't use lookup maps for compiled code as there is no fast option in that case.
-
-        if (false)
+        if (_map != null)
         {
-            // Lookup table is converted to a switch expression
+            // UseSwitch();
+            UseLookup();
 
-            // switch (Cursor.Current)
-            // {
-            //   case 'a' :
-            //     parse1 instructions
-            //     
-            //     if (parser1.Success)
-            //     {
-            //        success = true;
-            //        value = parse1.Value;
-            //     }
-            // 
-            //     break; // implicit in SwitchCase expression
-            //
-            //   case 'b' :
-            //   ...
-            // }
-
-#pragma warning disable CS0162 // Unreachable code detected
-            var cases = _map.ExpectedChars.Select(key =>
+            void UseLookup()
             {
-                Expression group = Expression.Empty();
+                //var seekableParsers = _map[cursor.Current] ?? _otherParsers;
 
-                var parsers = _map[key];
+                //if (seekableParsers != null)
+                //{
+                //    var length = seekableParsers.Count;
 
-                // The list is reversed since the parsers are unwrapped
-                foreach (var parser in parsers!.ToArray().Reverse())
+                //    for (var i = 0; i < length; i++)
+                //    {
+                //        if (seekableParsers[i].Parse(context, ref result))
+                //        {
+                //            context.ExitParser(this);
+                //            return true;
+                //        }
+                //    }
+                //}
+
+                foreach (var key in _map!.ExpectedChars.Where(x => x != OtherSeekableChar))
                 {
-                    var groupResult = parser.Build(context);
+                    Expression group = Expression.Empty();
 
-                    group = Expression.Block(
-                        groupResult.Variables,
-                        Expression.Block(groupResult.Body),
-                        Expression.IfThenElse(
-                            groupResult.Success,
-                            Expression.Block(
-                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                                context.DiscardResult
-                                ? Expression.Empty()
-                                : Expression.Assign(result.Value, groupResult.Value)
+                    var parsers = _map[key];
+                    var lambdaSuccess = Expression.Variable(typeof(bool), $"successL{context.NextNumber}");
+                    var lambdaResult = Expression.Variable(typeof(T), $"resultL{context.NextNumber}");
+
+                    // The list is reversed since the parsers are unwrapped
+                    foreach (var parser in parsers!.ToArray().Reverse())
+                    {
+                        var groupResult = parser.Build(context);
+
+                        // lambdaSuccess and lambdaResult will be registered at the top of the method
+
+                        group = Expression.Block(
+                            groupResult.Variables,
+                            Expression.Block(groupResult.Body),
+                            Expression.IfThenElse(
+                                groupResult.Success,
+                                Expression.Block(
+                                    Expression.Assign(lambdaSuccess, Expression.Constant(true, typeof(bool))),
+                                    context.DiscardResult
+                                    ? Expression.Empty()
+                                    : Expression.Assign(lambdaResult, groupResult.Value)
+                                    ),
+                                group
+                                )
+                            );
+                    }
+
+                    var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
+                    var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+                    var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
+
+                    var groupBlock = (BlockExpression)group;
+
+                    var lambda = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
+                        body: Expression.Block(
+                            type: typeof(ValueTuple<bool, T>),
+                            variables: groupBlock.Variables
+                                .Append(resultExpression)
+                                .Append(lambdaSuccess)
+                                .Append(lambdaResult),
+                            group,
+                            context.DiscardResult ?
+                                Expression.Empty() :
+                                Expression.Assign(
+                                    resultExpression,
+                                    Expression.New(
+                                        typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                                        lambdaSuccess,
+                                        lambdaResult)
                                 ),
-                            group
-                            )
+                            returnLabelExpression),
+                        parameters: context.ParseContext // Only the name is used, so it will match the ones inside each compiler
                         );
+
+                    result.Body.Add(lambda);
+
+                    _lambdaMap.Set(key, lambda.Compile());
                 }
 
-                return (Key: (uint)key, Body: group);
+                var seekableParsers = result.DeclareVariable<Func<ParseContext, ValueTuple<bool, T>>>($"seekableParser{context.NextNumber}");
+                var mapValue = Expression.Constant(_lambdaMap);
 
-            }).ToArray();
-#pragma warning restore CS0162 // Unreachable code detected
+                var tupleResult = result.DeclareVariable<ValueTuple<bool, T>>($"tupleResult{context.NextNumber}");
 
-            // Creating the switch expression if we need it
-            SwitchExpression switchExpr =
-                Expression.Switch(
-                    Expression.Convert(context.Current(), typeof(uint)),
-                    Expression.Empty(), // no match => success = false
-                    cases.Select(c => Expression.SwitchCase(
-                        c.Body,
-                        Expression.Constant(c.Key)
-                    )).ToArray()
-                );
-
-            // Implement binary tree comparison
-            // Still slow with a few elements
-
-            var current = Expression.Variable(typeof(uint), $"current{context.NextNumber}");
-            var binarySwitch = Expression.Block(
-                [current],
-                Expression.Assign(current, Expression.Convert(context.Current(), typeof(uint))),
-                BinarySwitch(current, cases)
-            );
-
-            static Expression BinarySwitch(Expression num, (uint Key, Expression Body)[] cases)
-            {
-                if (cases.Length > 3)
-                {
-                    // Split comparison in two recursive comparisons for each part of the cases
-
-                    var lowerCount = (int)Math.Round((double)cases.Length / 2, MidpointRounding.ToEven);
-                    var lowerValues = cases.Take(lowerCount).ToArray();
-                    var higherValues = cases.Skip(lowerCount).ToArray();
-
-                    return Expression.IfThenElse(
-                        Expression.LessThanOrEqual(num, Expression.Constant(lowerValues[^1].Key)),
-                        // This value or lower
-                        BinarySwitch(num, lowerValues),
-                        // Higher values
-                        BinarySwitch(num, higherValues)
-                    );
-                }
-                else if (cases.Length == 1)
-                {
-                    return Expression.IfThen(
-                        Expression.Equal(Expression.Constant(cases[0].Key), num),
-                        cases[0].Body
-                        );
-                }
-                else if (cases.Length == 2)
-                {
-                    return Expression.IfThenElse(
-                        Expression.NotEqual(Expression.Constant(cases[0].Key), num),
+                // seekableParser = mapValue[key];
+                result.Body.Add(
+                    Expression.Block(
+                        Expression.Assign(seekableParsers, Expression.Call(mapValue, CharMap<Func<ParseContext, ValueTuple<bool, T>>>.IndexerMethodInfo, Expression.Convert(context.Current(), typeof(uint)))),
                         Expression.IfThen(
-                            Expression.Equal(Expression.Constant(cases[1].Key), num),
-                            cases[1].Body),
-                        cases[0].Body);
-                }
-                else // cases.Length == 3
-                {
-                    return Expression.IfThenElse(
-                        Expression.NotEqual(Expression.Constant(cases[0].Key), num),
-                        Expression.IfThenElse(
-                            Expression.NotEqual(Expression.Constant(cases[1].Key), num),
-                            Expression.IfThen(
-                                Expression.Equal(Expression.Constant(cases[2].Key), num),
-                                cases[2].Body),
-                            cases[1].Body),
-                        cases[0].Body);
-                }
+                            Expression.NotEqual(
+                                Expression.Constant(null),
+                                seekableParsers
+                                ),
+                            Expression.Block(
+                                Expression.Assign(tupleResult, Expression.Invoke(seekableParsers, context.ParseContext)),
+                                Expression.Assign(result.Success, Expression.Field(tupleResult, "Item1")),
+                                context.DiscardResult
+                                    ? Expression.Empty()
+                                    : Expression.Assign(result.Value, Expression.Field(tupleResult, "Item2"))
+                                )
+                        )
+                    )
+                );
             }
 
-            // Implement lookup
-            // Doesn't work since each method can update the main state with the result (closure issue?)
-
-            var table = Expression.Variable(typeof(CharMap<Action>), $"table{context.NextNumber}");
-
-            var indexerMethodInfo = typeof(CharMap<Action>).GetMethod("get_Item", [typeof(uint)])!;
-
-            context.GlobalVariables.Add(table);
-            var action = result.DeclareVariable<Action>($"action{context.NextNumber}");
-
-            var lookupBlock = Expression.Block(
-                [current, action, table],
-                [
-                    Expression.Assign(current, Expression.Convert(context.Current(), typeof(uint))),
-                    // Initialize lookup table once
-                    Expression.IfThen(
-                        Expression.Equal(Expression.Constant(null, typeof(object)), table),
-                        Expression.Block([
-                            Expression.Assign(table, ExpressionHelper.New<CharMap<Action>>()),
-                            ..cases.Select(c => Expression.Call(table, typeof(CharMap<Action>).GetMethod("Set", [typeof(char), typeof(Action)])!, [Expression.Convert(Expression.Constant(c.Key), typeof(char)), Expression.Lambda<Action>(c.Body)]))
-                            ]
-                        )
-                    ),
-                    Expression.Assign(action, Expression.Call(table, indexerMethodInfo, [current])),
-                    Expression.IfThen(
-                        Expression.NotEqual(Expression.Constant(null), action),
-                        //ExpressionHelper.ThrowObject(context, current)
-                        Expression.Invoke(action)
-                        )
-                ]
-            );
-
-            if (SkipWhitespace)
+#pragma warning disable CS8321 // Local function is declared but never used
+            void UseSwitch()
             {
-                var start = context.DeclarePositionVariable(result);
+                // Lookup table is converted to a switch expression
 
-                block = Expression.Block(
-                    context.ParserSkipWhiteSpace(),
-                    binarySwitch,
-                    Expression.IfThen(
-                        Expression.IsFalse(result.Success),
-                        context.ResetPosition(start))
+                // switch (Cursor.Current)
+                // {
+                //   case 'a' :
+                //     parse1 instructions
+                //     
+                //     if (parser1.Success)
+                //     {
+                //        success = true;
+                //        value = parse1.Value;
+                //     }
+                // 
+                //     break; // implicit in SwitchCase expression
+                //
+                //   case 'b' :
+                //   ...
+                // }
+
+                var cases = _map!.ExpectedChars.Where(x => x != OtherSeekableChar).Select(key =>
+                {
+                    Expression group = Expression.Empty();
+
+                    var parsers = _map[key];
+
+                    // The list is reversed since the parsers are unwrapped
+                    foreach (var parser in parsers!.ToArray().Reverse())
+                    {
+                        var groupResult = parser.Build(context);
+
+                        group = Expression.Block(
+                            groupResult.Variables,
+                            Expression.Block(groupResult.Body),
+                            Expression.IfThenElse(
+                                groupResult.Success,
+                                Expression.Block(
+                                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
+                                    context.DiscardResult
+                                    ? Expression.Empty()
+                                    : Expression.Assign(result.Value, groupResult.Value)
+                                    ),
+                                group
+                                )
+                            );
+                    }
+
+                    return (Key: (uint)key, Body: group);
+
+                }).ToArray();
+
+                // Construct default case body
+                Expression defaultBody = Expression.Empty();
+
+                if (_otherParsers != null)
+                {
+                    foreach (var parser in _otherParsers.ToArray().Reverse())
+                    {
+                        var defaultCompileResult = parser.Build(context);
+
+                        defaultBody = Expression.Block(
+                            defaultCompileResult.Variables,
+                            Expression.Block(defaultCompileResult.Body),
+                            Expression.IfThenElse(
+                                defaultCompileResult.Success,
+                                Expression.Block(
+                                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
+                                    context.DiscardResult
+                                    ? Expression.Empty()
+                                    : Expression.Assign(result.Value, defaultCompileResult.Value)
+                                    ),
+                                defaultBody
+                                )
+                            );
+                    }
+                }
+
+                block =
+                    Expression.Switch(
+                        Expression.Convert(context.Current(), typeof(uint)),
+                        defaultBody,
+                        cases.Select(c => Expression.SwitchCase(
+                            c.Body,
+                            Expression.Constant(c.Key)
+                        )).ToArray()
                     );
             }
-            else
-            {
-                block = binarySwitch;
-            }
+#pragma warning restore CS8321 // Local function is declared but never used
         }
         else
         {
@@ -370,7 +433,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             //   ...
             // }
 
-            foreach (var parser in _parsers.Reverse())
+            foreach (var parser in Parsers.Reverse())
             {
                 var parserCompileResult = parser.Build(context);
 
@@ -392,6 +455,22 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
         }
 
         result.Body.Add(block);
+
+        // [if skipwhitespace]
+        // if (!success)
+        // {
+        //    context.Scanner.Cursor.ResetPosition(begin);
+        // }
+
+        if (reset != null)
+        {
+            result.Body.Add(
+                Expression.IfThen(
+                    Expression.Not(result.Success),
+                    context.ResetPosition(reset)
+                    )
+                );
+        }
 
         return result;
     }

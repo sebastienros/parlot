@@ -7,11 +7,11 @@ namespace Parlot.Fluent;
 
 public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
 {
-    private readonly Parser<T> _parser;
+    public Parser<T> Parser { get; }
 
     public SkipWhiteSpace(Parser<T> parser)
     {
-        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        Parser = parser ?? throw new ArgumentNullException(nameof(parser));
 
         Name = $"{Name} (SkipWhiteSpace)";
 
@@ -39,7 +39,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
         if (context.WhiteSpaceParser is null && Character.IsInRange(cursor.Current, (char)33, (char)126))
         {
             context.ExitParser(this);
-            return _parser.Parse(context, ref result);
+            return Parser.Parse(context, ref result);
         }
 
         var start = cursor.Position;
@@ -47,7 +47,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
         // Use the scanner's logic to ignore whitespaces since it knows about multi-line grammars
         context.SkipWhiteSpace();
 
-        if (_parser.Parse(context, ref result))
+        if (Parser.Parse(context, ref result))
         {
             context.ExitParser(this);
             return true;
@@ -65,7 +65,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
 
         var start = context.DeclarePositionVariable(result);
 
-        var parserCompileResult = _parser.Build(context);
+        var parserCompileResult = Parser.Build(context);
 
         result.Body.Add(
             Expression.Block(

@@ -1,4 +1,4 @@
-﻿using Parlot.Fluent;
+using Parlot.Fluent;
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -8,7 +8,7 @@ namespace Parlot.Compilation;
 
 public static class ExpressionHelper
 {
-    internal static readonly MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), Array.Empty<Type>())!;
+    internal static readonly MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), [])!;
     internal static readonly MethodInfo ParserContext_WhiteSpaceParser = typeof(ParseContext).GetProperty(nameof(ParseContext.WhiteSpaceParser))?.GetGetMethod()!;
     internal static readonly MethodInfo Scanner_ReadText_NoResult = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), [typeof(ReadOnlySpan<char>), typeof(StringComparison)])!;
     internal static readonly MethodInfo Scanner_ReadChar = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadChar), [typeof(char)])!;
@@ -23,7 +23,7 @@ public static class ExpressionHelper
     internal static readonly MethodInfo Scanner_ReadDoubleQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDoubleQuotedString), [])!;
     internal static readonly MethodInfo Scanner_ReadQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadQuotedString), [])!;
 
-    internal static readonly MethodInfo Cursor_Advance = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), Array.Empty<Type>())!;
+    internal static readonly MethodInfo Cursor_Advance = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), [])!;
     internal static readonly MethodInfo Cursor_AdvanceNoNewLines = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.AdvanceNoNewLines), [typeof(int)])!;
     internal static readonly MethodInfo Cursor_ResetPosition = typeof(Cursor).GetMethod("ResetPosition")!;
 
@@ -32,9 +32,8 @@ public static class ExpressionHelper
     internal static readonly ConstructorInfo TextSpan_Constructor = typeof(TextSpan).GetConstructor([typeof(string), typeof(int), typeof(int)])!;
 
     internal static readonly MethodInfo ReadOnlySpan_ToString = typeof(ReadOnlySpan<char>).GetMethod(nameof(ToString), [])!;
-    
+
     internal static readonly MethodInfo MemoryExtensions_AsSpan = typeof(MemoryExtensions).GetMethod(nameof(MemoryExtensions.AsSpan), [typeof(string)])!;
-    
     public static Expression ArrayEmpty<T>() => ((Expression<Func<object>>)(() => Array.Empty<T>())).Body;
     public static Expression New<T>() where T : new() => ((Expression<Func<T>>)(() => new T())).Body;
 
@@ -58,6 +57,22 @@ public static class ExpressionHelper
     public static MethodCallExpression ReadDoubleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDoubleQuotedString);
     public static MethodCallExpression ReadQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadQuotedString);
     public static MethodCallExpression ReadChar(this CompilationContext context, char c) => Expression.Call(context.Scanner(), Scanner_ReadChar, Expression.Constant(c));
+
+    // Surprisingly whiting the same direct code with this helper is slower that calling scanner.ReadChar()
+    public static Expression ReadCharInlined(this CompilationContext context, char c, CompilationResult result)
+    {
+        var constant = Expression.Constant(c);
+        return Expression.IfThen(
+            Expression.Equal(context.Current(), constant), // if (cursor.Current == 'c')
+            Expression.Block(
+                Expression.Assign(result.Success, TrueExpression),
+                context.Advance(),
+                context.DiscardResult
+                    ? Expression.Empty()
+                    : Expression.Assign(result.Value, constant)
+                )
+            );
+    }
     public static MethodCallExpression ReadDecimal(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDecimal);
     public static MethodCallExpression ReadDecimal(this CompilationContext context, Expression allowLeadingSign, Expression allowDecimalSeparator, Expression allowGroupSeparator, Expression allowExponent, Expression number, Expression decimalSeparator, Expression groupSeparator) => Expression.Call(context.Scanner(), Scanner_ReadDecimalAllArguments, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, number, decimalSeparator, groupSeparator);
     public static MethodCallExpression ReadInteger(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadInteger);
@@ -88,4 +103,6 @@ public static class ExpressionHelper
     {
         return Expression.Call(context.ParseContext, ParserContext_SkipWhiteSpaceMethod);
     }
+
+    public static ConstantExpression TrueExpression { get; } = Expression.Constant(true, typeof(bool));
 }

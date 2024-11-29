@@ -1,4 +1,4 @@
-﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
@@ -9,7 +9,7 @@ namespace Parlot.Benchmarks;
 [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
 public class ExprBench
 {
-    private readonly Parser _parser = new();
+    private readonly Parser<Expression> _parser = FluentParser.Expression;
     private readonly Parser<Expression> _compiled = FluentParser.Expression.Compile();
 
     private const string _expression1 = "3 - 1 / 2 + 1";

@@ -1,4 +1,4 @@
-﻿using Parlot.Fluent;
+using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -85,7 +85,12 @@ public class CompilationContext
         result.Variables.Add(valueVariable);
 
         result.Body.Add(Expression.Assign(successVariable, Expression.Constant(defaultSuccess, typeof(bool))));
-        result.Body.Add(Expression.Assign(valueVariable, defaultValue ?? Expression.Default(valueType)));
+
+        // Don't need to assign a type's default value
+        if (defaultValue != null)
+        {
+            result.Body.Add(Expression.Assign(valueVariable, defaultValue ?? Expression.Default(valueType)));
+        }
 
         return result;
     }

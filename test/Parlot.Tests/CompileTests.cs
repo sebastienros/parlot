@@ -241,7 +241,7 @@ public class CompileTests
     [Fact]
     public void SeparatedShouldNotBeConsumedIfNotFollowedByValueCompiled()
     {
-        // This test ensures that the separator is not consumed if there is no valid net value.
+        // This test ensures that the separator is not consumed if there is no valid next value.
 
         var parser = Separated(Terms.Char(','), Terms.Decimal()).AndSkip(Terms.Char(',')).And(Terms.Identifier()).Then(x => true).Compile();
 
