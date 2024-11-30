@@ -183,6 +183,12 @@ public class LiteralBuilder
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
     public Parser<TextSpan> Identifier(SearchValues<char> identifierStart, SearchValues<char> identifierPart) => new IdentifierLiteral(identifierStart, identifierPart);
+
+    /// <summary>
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
+    /// </summary>
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart));
+
 #endif
 
     /// <summary>
@@ -274,9 +280,37 @@ public class TermBuilder
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => Parsers.SkipWhiteSpace(new StringLiteral(quotes));
 
     /// <summary>
-    /// Builds a parser that matches an identifier.
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
-    public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null) => Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
+    public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null)
+    {
+#if NET8_0_OR_GREATER
+        if (extraStart == null && extraPart == null)
+        {
+            return Parsers.SkipWhiteSpace(new IdentifierLiteral(Character._identifierStart, Character._identifierPart));
+        }
+        else
+        {
+            // IdentifierLiteral doesn't support the Func<,> overload
+            return Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
+        }
+#else
+        return Parsers.SkipWhiteSpace(new Identifier(extraStart, extraPart));
+#endif
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
+    /// </summary>
+    public Parser<TextSpan> Identifier(SearchValues<char> identifierStart, SearchValues<char> identifierPart) => Parsers.SkipWhiteSpace(new IdentifierLiteral(identifierStart, identifierPart));
+
+    /// <summary>
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
+    /// </summary>
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => Parsers.SkipWhiteSpace(new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart)));
+
+#endif
 
     /// <summary>
     /// Builds a parser that matches a char against a predicate.
