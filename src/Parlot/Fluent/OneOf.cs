@@ -57,16 +57,19 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             {
                 if (parser is ISeekable seekable && seekable.CanSeek)
                 {
+                    // If the parser is a Seekable<T> skip it and add directly the concrete parser
+                    var decoratedParser = (parser as Seekable<T>)?.Parser ?? parser;
+
                     foreach (var c in seekable.ExpectedChars)
                     {
                         if (c != OtherSeekableChar)
                         {
-                            lookupTable[c].Add(parser);
+                            lookupTable[c].Add(decoratedParser);
                         }
                         else
                         {
                             _otherParsers ??= [];
-                            _otherParsers.Add(parser);
+                            _otherParsers.Add(decoratedParser);
                         }
                     }
                 }

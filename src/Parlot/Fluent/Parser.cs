@@ -1,4 +1,6 @@
+using Parlot.Rewriting;
 using System;
+using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -89,4 +91,14 @@ public abstract partial class Parser<T>
     /// Builds a parser that returns a default value if the previous parser fails.
     /// </summary>
     public Parser<T> Else(T value) => new Else<T>(this, value);
+
+    /// <summary>
+    /// Builds a parser that lists all possible matches to improve performance.
+    /// </summary>
+    public Parser<T> Lookup(params ReadOnlySpan<char> expectedChars) => new Seekable<T>(this, expectedChars);
+
+    /// <summary>
+    /// Builds a parser that lists all possible matches to improve performance.
+    /// </summary>
+    public Parser<T> Lookup(params ISeekable[] parsers) => new Seekable<T>(this, parsers.SelectMany(x => x.ExpectedChars).ToArray());
 }

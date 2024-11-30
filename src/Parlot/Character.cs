@@ -7,7 +7,7 @@ namespace Parlot;
 public static partial class Character
 {
 
-    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsInRange(char ch, char min, char max) => ch - (uint)min <= max - (uint)min;
 
     public static char ScanHexEscape(string text, int index, out int length)

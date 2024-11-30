@@ -1,10 +1,8 @@
 using Parlot.Fluent;
 using Parlot.Rewriting;
-using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 using static Parlot.Tests.Models.RewriteTests;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Parlot.Tests;
 
