@@ -1,8 +1,10 @@
 using Parlot.Fluent;
 using Parlot.Rewriting;
+using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 using static Parlot.Tests.Models.RewriteTests;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Parlot.Tests;
 
@@ -24,6 +26,7 @@ public partial class RewriteTests
     public void SkipWhiteSpaceShouldBeSeekable()
     {
         var text = Terms.Text("hello");
+
         var seekable = text as ISeekable;
 
         Assert.NotNull(seekable);
@@ -36,6 +39,7 @@ public partial class RewriteTests
     public void CharLiteralShouldBeSeekable()
     {
         var text = Literals.Char('a');
+
         var seekable = text as ISeekable;
 
         Assert.NotNull(seekable);
@@ -44,26 +48,19 @@ public partial class RewriteTests
         Assert.False(seekable.SkipWhitespace);
     }
 
-    [Fact]
-    public void OneOfShouldRewriteAllSeekable()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OneOfShouldRewriteAllSeekable(bool compile)
     {
         var hello = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], SkipWhitespace = false, Success = true, Result = "hello" };
         var goodbye = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "goodbye" };
         var oneof = Parsers.OneOf(hello, goodbye);
+        if (compile) oneof = oneof.Compile();
 
         Assert.Equal("hello", oneof.Parse("a"));
         Assert.Equal("goodbye", oneof.Parse("b"));
         Assert.Null(oneof.Parse("hello"));
-    }
-
-    [Fact]
-    public void OneOfShouldRewriteAllSeekableCompiled()
-    {
-        var helloOrGoodbye = Parsers.OneOf(Terms.Text("hello"), Terms.Text("goodbye")).Compile();
-
-        Assert.Equal("hello", helloOrGoodbye.Parse(" hello"));
-        Assert.Equal("goodbye", helloOrGoodbye.Parse(" goodbye"));
-        Assert.Null(helloOrGoodbye.Parse("yo!"));
     }
 
     [Fact]
@@ -85,15 +82,18 @@ public partial class RewriteTests
         Assert.Equal("c", p.Parse("d"));
     }
     
-    [Fact]
-    public void LookupTableSkipsParsers()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LookupTableSkipsParsers(bool compile)
     {
         var p1 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], ThrowOnParse = true };
         var p2 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "b" };
         var p3 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['c'], SkipWhitespace = false, Success = true, Result = "c" };
         
         var p = OneOf(p1, p2, p3);
-        
+        if (compile) p = p.Compile();
+
         Assert.Equal("b", p.Parse("b"));
         Assert.Equal("c", p.Parse("c"));
     }

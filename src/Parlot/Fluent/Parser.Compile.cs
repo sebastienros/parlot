@@ -33,7 +33,7 @@ public abstract partial class Parser<T>
             var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{compilationContext.NextNumber}");
             var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
             var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
-            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.Constant(default(ValueTuple<bool, T>)));
+            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
 
             compilationResult.Variables.Add(resultExpression);
             compilationResult.Body.Add(

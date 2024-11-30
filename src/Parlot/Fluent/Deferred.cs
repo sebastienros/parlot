@@ -95,7 +95,7 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
             var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
             var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
-            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.Constant(default(ValueTuple<bool, T>)));
+            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
 
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(

@@ -12,7 +12,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
+public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -20,6 +20,9 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
     public const char OtherSeekableChar = '\0';
     internal readonly CharMap<List<Parser<T>>>? _map;
     internal readonly List<Parser<T>>? _otherParsers;
+
+    private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
+    private Func<ParseContext, ValueTuple<bool, T>>? _lambdaOtherParsers;
 
     public OneOf(Parser<T>[] parsers)
     {
@@ -192,8 +195,6 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
 
     public CompilationResult Compile(CompilationContext context)
     {
-        // Currently disabled since FastExpression generates invalid IL while it works with the standard .Compile() method.
-
         var result = context.CreateCompilationResult<T>();
 
         // var reset = context.Scanner.Cursor.Position;
@@ -210,12 +211,12 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
 
         if (_map != null)
         {
-            // UseSwitch();
-#pragma warning disable CS0162 // Unreachable code detected
-            UseLookup();
-#pragma warning restore CS0162 // Unreachable code detected
+            // Switch is too slow, even for 2 elements compared to CharMap
+            // Expression are also not optimized like the compiler can do.
 
-#pragma warning disable CS0162 // Unreachable code detected
+            // UseSwitch();
+            UseLookup();
+
             void UseLookup()
             {
                 //var seekableParsers = _map[cursor.Current] ?? _otherParsers;
@@ -236,10 +237,6 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
 
                 var charMapSetMethodInfo = typeof(CharMap<Func<ParseContext, ValueTuple<bool, T>>>).GetMethod("Set")!;
                 var nullSeekableParser = Expression.Constant(null, typeof(Func<ParseContext, ValueTuple<bool, T>>));
-                var lambdaMap = result.DeclareVariable<CharMap<Func<ParseContext, ValueTuple<bool, T>>>>($"lambdaMap{context.NextNumber}", Expression.New(typeof(CharMap<Func<ParseContext, ValueTuple<bool, T>>>)));
-                var lambdaOtherParsers = result.DeclareVariable<Func<ParseContext, ValueTuple<bool, T>>>($"otherParsers{context.NextNumber}", Expression.Constant(null, typeof(Func<ParseContext, ValueTuple<bool, T>>)));
-
-                var initBlockExpressions = new List<Expression>();
 
                 foreach (var key in _map!.ExpectedChars)
                 {
@@ -275,7 +272,7 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
                     var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
                     var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
                     var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
-                    var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.Constant(default(ValueTuple<bool, T>)));
+                    var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
 
                     var groupBlock = (BlockExpression)group;
 
@@ -302,43 +299,33 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
                         parameters: [context.ParseContext] // Only the name is used, so it will match the ones inside each compiler
                         );
 
-                    result.Body.Add(lambda);
+                    context.Lambdas.Add(lambda);
 
                     if (key == OtherSeekableChar)
                     {
-                        initBlockExpressions.Add(Expression.Assign(lambdaOtherParsers, Expression.Constant(lambda.Compile())));
+                        _lambdaOtherParsers = lambda.Compile();
                     }
                     else
                     {
-                        initBlockExpressions.Add(Expression.Call(lambdaMap, charMapSetMethodInfo, Expression.Constant(key), Expression.Constant(lambda.Compile())));
+                        _lambdaMap.Set(key, lambda.Compile());
                     }
                 }
 
                 var seekableParsers = result.DeclareVariable<Func<ParseContext, ValueTuple<bool, T>>>($"seekableParser{context.NextNumber}", nullSeekableParser);
 
                 var tupleResult = result.DeclareVariable<ValueTuple<bool, T>>($"tupleResult{context.NextNumber}");
-                var initialized = result.DeclareVariable<bool>($"lambdasInit{context.NextNumber}", Expression.Constant(false));
-                initBlockExpressions.Add(Expression.Assign(initialized, Expression.Constant(true)));
-
-                // if (!initialized) { initializeLambdas(); initialized = true; }
-
-                result.Body.Add(
-                    Expression.IfThen(
-                        Expression.IsFalse(initialized),
-                        Expression.Block(initBlockExpressions)
-                    ));
 
                 result.Body.Add(
                     Expression.Block(
                         // seekableParser = mapValue[key];
-                        Expression.Assign(seekableParsers, Expression.Call(lambdaMap, CharMap<Func<ParseContext, ValueTuple<bool, T>>>.IndexerMethodInfo, Expression.Convert(context.Current(), typeof(uint)))),
+                        Expression.Assign(seekableParsers, Expression.Call(Expression.Constant(_lambdaMap), CharMap<Func<ParseContext, ValueTuple<bool, T>>>.IndexerMethodInfo, Expression.Convert(context.Current(), typeof(uint)))),
                         // seekableParser ??= _otherParsers)
                         Expression.IfThen(
                             Expression.Equal(
                                 nullSeekableParser,
                                 seekableParsers
                                 ),
-                            Expression.Assign(seekableParsers, lambdaOtherParsers)
+                            Expression.Assign(seekableParsers, Expression.Constant(_lambdaOtherParsers, typeof(Func<ParseContext, ValueTuple<bool, T>>)))
                             ),
                         Expression.IfThen(
                             Expression.NotEqual(
@@ -356,7 +343,6 @@ public sealed class OneOf<T> : Parser<T>, /*ICompilable,*/ ISeekable
                     )
                 );
             }
-#pragma warning restore CS0162 // Unreachable code detected
 
 #pragma warning disable CS8321 // Local function is declared but never used
             void UseSwitch()
