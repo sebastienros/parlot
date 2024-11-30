@@ -6,13 +6,13 @@ namespace Parlot;
 
 public static partial class Character
 {
-    internal const string DecimalDigits = "0123456789";
-    internal const string Alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    internal const string AlphaNumeric = Alpha + DecimalDigits;
-    internal const string DefaultIdentifierStart = "$_" + Alpha;
-    internal const string DefaultIdentifierPart = "$_" + AlphaNumeric;
-    internal const string HexDigits = "0123456789abcdefABCDEF";
-    internal const string NewLines = "\n\r\v";
+    public const string DecimalDigits = "0123456789";
+    public const string Alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    public const string AlphaNumeric = Alpha + DecimalDigits;
+    public const string DefaultIdentifierStart = "$_" + Alpha;
+    public const string DefaultIdentifierPart = "$_" + AlphaNumeric;
+    public const string HexDigits = "0123456789abcdefABCDEF";
+    public const string NewLines = "\n\r\v";
 
     internal static readonly SearchValues<char> _decimalDigits = SearchValues.Create(DecimalDigits);
     internal static readonly SearchValues<char> _hexDigits = SearchValues.Create(HexDigits);

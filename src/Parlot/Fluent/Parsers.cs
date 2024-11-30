@@ -182,6 +182,13 @@ public class LiteralBuilder
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> start, ReadOnlySpan<char> part) => new IdentifierLiteral(SearchValues.Create(start), SearchValues.Create(part));
+#endif
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
+    /// </summary>
     public Parser<TextSpan> Identifier(SearchValues<char> identifierStart, SearchValues<char> identifierPart) => new IdentifierLiteral(identifierStart, identifierPart);
 #endif
 
