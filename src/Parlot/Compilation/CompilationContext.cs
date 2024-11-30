@@ -1,4 +1,4 @@
-﻿using Parlot.Fluent;
+using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -48,7 +48,7 @@ public class CompilationContext
     /// Gets or sets whether the current compilation phase should ignore the results of the parsers.
     /// </summary>
     /// <remarks>
-    /// When set to false, the compiled statements don't need to record and define the <see cref="CompilationResult.Value"/> property.
+    /// When set to true, the compiled statements don't need to record and define the <see cref="CompilationResult.Value"/> property.
     /// This is done to optimize compiled parser that are usually used for pattern matching only.
     /// </remarks>
     public bool DiscardResult { get; set; }
@@ -85,7 +85,12 @@ public class CompilationContext
         result.Variables.Add(valueVariable);
 
         result.Body.Add(Expression.Assign(successVariable, Expression.Constant(defaultSuccess, typeof(bool))));
-        result.Body.Add(Expression.Assign(valueVariable, defaultValue ?? Expression.Default(valueType)));
+
+        // Don't need to assign a type's default value
+        if (defaultValue != null)
+        {
+            result.Body.Add(Expression.Assign(valueVariable, defaultValue ?? Expression.Default(valueType)));
+        }
 
         return result;
     }

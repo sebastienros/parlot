@@ -14,6 +14,8 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
 
     public TextLiteral(string text, StringComparison comparisonType)
     {
+        Name = $"TextLiteral(\"{text}\")";
+
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
         _hasNewLines = text.Any(Character.IsNewLine);
@@ -74,9 +76,12 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
             }
 
             result.Set(start, cursor.Offset, Text);
+
+            context.ExitParser(this);
             return true;
         }
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -88,12 +93,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         // {
         //      success = true;
         //      value = Text;
-        // }
-        //
-        // [if skipWhiteSpace]
-        // if (!success)
-        // {
-        //      resetPosition(beginning);
         // }
 
         var ifReadText = Expression.IfThen(

@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -18,6 +18,8 @@ public sealed class When<T> : Parser<T>, ICompilable
     {
         _action = action ?? throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+
+        Name = $"{parser.Name} (When)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -33,6 +35,7 @@ public sealed class When<T> : Parser<T>, ICompilable
             context.Scanner.Cursor.ResetPosition(start);
         }
 
+        context.ExitParser(this);
         return valid;
     }
 

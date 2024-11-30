@@ -1,5 +1,6 @@
 #if NET9_0_OR_GREATER
 using Parlot.Benchmarks;
+using System.ComponentModel.DataAnnotations;
 using Xunit;
 
 namespace Parlot.Tests;
@@ -238,6 +239,22 @@ public class BenchmarksTests
         var benchmarks = new RegexBenchmarks();
         var result = benchmarks.ParlotEmail();
         Assert.Equal(RegexBenchmarks.Email, result);
+    }
+
+    [Fact]
+    public void ParlotLookupFluent()
+    {
+        var benchmarks = new SwitchExpressionBenchmarks() { Length = 2 };
+        benchmarks.Setup();
+        var result = benchmarks.LookupMatchFluent();
+    }
+
+    [Fact]
+    public void ParlotLookupCompiled()
+    {
+        var benchmarks = new SwitchExpressionBenchmarks() { Length = 2 };
+        benchmarks.Setup();
+        var result = benchmarks.LookupMatchCompiled();
     }
 }
 #endif

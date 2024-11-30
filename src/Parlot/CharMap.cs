@@ -1,12 +1,19 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Parlot;
 
+/// <summary>
+/// Combines maps of ascii and non-ascii characters.
+/// If all characters are ascii, the non-ascii dictionary is not used.
+/// </summary>
 internal sealed class CharMap<T> where T : class
 {
+    public static MethodInfo IndexerMethodInfo = typeof(CharMap<T>).GetMethod("get_Item", BindingFlags.Public | BindingFlags.Instance)!;
+
     private readonly T[] _asciiMap = new T[128];
     private Dictionary<uint, T>? _nonAsciiMap;
 

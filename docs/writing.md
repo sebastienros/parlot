@@ -25,12 +25,15 @@ public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, 
         if (_parser2.Parse(context, ref parseResult2))
         {
             result.Set(parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
+
+            context.ExitParser(this);
             return true;
         }
 
         context.Scanner.Cursor.ResetPosition(start);
     }
 
+    context.ExitParser(this);
     return false;
 }
 ```
@@ -51,10 +54,12 @@ public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         if (parser.Parse(context, ref result))
         {
+            context.ExitParser(this);
             return true;
         }
     }
 
+    context.ExitParser(this);
     return false;
 }
 ```

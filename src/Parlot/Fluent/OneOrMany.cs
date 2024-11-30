@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
@@ -22,6 +22,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"OneOrMany({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -54,12 +56,15 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         } while (_parser.Parse(context, ref parsed));
 
         result.Set(start, end, results);
+
+        context.ExitParser(this);
         return true;
     }
 
     public CompilationResult Compile(CompilationContext context)
     {
-        var result = context.CreateCompilationResult<List<T>>(false, Expression.New(typeof(List<T>)));
+        var result = context.CreateCompilationResult<IReadOnlyList<T>>();
+        var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}", Expression.New(typeof(List<T>)));
 
         // value = new List<T>();
         //
@@ -69,7 +74,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         // 
         //   if (parser1.Success)
         //   {
-        //      results.Add(parse1.Value);
+        //      value.Add(parse1.Value);
         //   }
         //   else
         //   {
@@ -85,12 +90,13 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         // if (value.Count > 0)
         // {
         //     success = true;
+        //     result = value;
         // }
         // 
 
         var parserCompileResult = _parser.Build(context);
 
-        var breakLabel = Expression.Label("break");
+        var breakLabel = Expression.Label($"exitWhile{context.NextNumber}");
 
         var block = Expression.Block(
             parserCompileResult.Variables,
@@ -100,9 +106,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
                     Expression.IfThenElse(
                         parserCompileResult.Success,
                         Expression.Block(
-                            context.DiscardResult
-                            ? Expression.Empty()
-                            : Expression.Call(result.Value, _listAddMethodInfo, parserCompileResult.Value),
+                            context.DiscardResult ?
+                                Expression.Empty() :
+                                Expression.Call(results, _listAddMethodInfo, parserCompileResult.Value),
                             Expression.Assign(result.Success, Expression.Constant(true))
                             ),
                         Expression.Break(breakLabel)
@@ -111,7 +117,10 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
                         context.Eof(),
                         Expression.Break(breakLabel)
                         )),
-                breakLabel)
+                breakLabel),
+            context.DiscardResult ?
+                Expression.Empty() :
+                Expression.Assign(result.Value, results)
         );
 
         result.Body.Add(block);

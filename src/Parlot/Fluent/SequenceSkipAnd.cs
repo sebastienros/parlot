@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
@@ -45,12 +45,15 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
             if (_parser2.Parse(context, ref parseResult2))
             {
                 result.Set(parseResult1.Start, parseResult2.End, parseResult2.Value);
+
+                context.ExitParser(this);
                 return true;
             }
 
             context.Scanner.Cursor.ResetPosition(start);
         }
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -173,12 +176,15 @@ public sealed class SequenceSkipAnd<T1, T2, T3> : Parser<ValueTuple<T1, T3>>, IC
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -246,12 +252,15 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -320,12 +329,15 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -395,6 +407,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -402,6 +416,7 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -472,6 +487,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -479,6 +496,7 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -550,6 +568,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -557,6 +577,7 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 

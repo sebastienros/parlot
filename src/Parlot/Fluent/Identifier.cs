@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -17,6 +17,8 @@ public sealed class Identifier : Parser<TextSpan>, ICompilable
     {
         _extraStart = extraStart;
         _extraPart = extraPart;
+
+        Name = "Identifier";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -41,9 +43,12 @@ public sealed class Identifier : Parser<TextSpan>, ICompilable
             var end = context.Scanner.Cursor.Offset;
 
             result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+
+            context.ExitParser(this);
             return true;
         }
 
+        context.ExitParser(this);
         return false;
     }
 

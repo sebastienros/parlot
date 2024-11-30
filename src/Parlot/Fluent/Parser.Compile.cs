@@ -1,4 +1,4 @@
-﻿using FastExpressionCompiler;
+using FastExpressionCompiler;
 using Parlot.Compilation;
 using System;
 using System.Collections.Generic;
@@ -17,50 +17,65 @@ public abstract partial class Parser<T>
     /// <returns>A compiled parser.</returns>
     public Parser<T> Compile()
     {
-        if (this is ICompiledParser)
+        lock (this)
         {
-            return this;
-        }
+            if (this is ICompiledParser)
+            {
+                return this;
+            }
 
-        var compilationContext = new CompilationContext();
+            var compilationContext = new CompilationContext();
 
-        var compilationResult = Build(compilationContext);
+            var compilationResult = Build(compilationContext);
 
-        // return value;
+            // return value;
 
-        var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-        var returnLabelExpression = Expression.Label(returnLabelTarget, Expression.New(_valueTupleConstructor, compilationResult.Success, compilationResult.Value));
+            var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{compilationContext.NextNumber}");
+            var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+            var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
+            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
 
-        compilationResult.Body.Add(returnLabelExpression);
-
-        // global variables;
-
-        // parser variables;
-
-        var allVariables = new List<ParameterExpression>();
-        allVariables.AddRange(compilationContext.GlobalVariables);
-        allVariables.AddRange(compilationResult.Variables);
-
-        // global statements;
-
-        // parser statements;
-
-        var allExpressions = new List<Expression>();
-        allExpressions.AddRange(compilationContext.GlobalExpressions);
-        allExpressions.AddRange(compilationResult.Body);
-
-        var body = Expression.Block(
-            typeof(ValueTuple<bool, T>),
-            allVariables,
-            allExpressions
+            compilationResult.Variables.Add(resultExpression);
+            compilationResult.Body.Add(
+                Expression.Block(
+                    Expression.Assign(resultExpression, Expression.New(_valueTupleConstructor, compilationResult.Success, compilationResult.Value)),
+                    returnExpression,
+                    returnLabel
+                )
             );
 
-        var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
+            // global variables;
 
-        var parser = result.CompileFast();
+            // parser variables;
 
-        // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
-        return new CompiledParser<T>(parser, this);
+            var allVariables = new List<ParameterExpression>();
+            allVariables.AddRange(compilationContext.GlobalVariables);
+            allVariables.AddRange(compilationResult.Variables);
+
+            // global statements;
+
+            // parser statements;
+
+            var allExpressions = new List<Expression>();
+            allExpressions.AddRange(compilationContext.GlobalExpressions);
+            allExpressions.AddRange(compilationResult.Body);
+
+            var body = Expression.Block(
+                typeof(ValueTuple<bool, T>),
+                allVariables,
+                allExpressions
+                );
+
+            var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
+
+            // In Debug mode, inspected the generated code with
+            // result.ToCSharpString();
+
+            var parser = result.CompileFast();
+
+            // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
+            return new CompiledParser<T>(parser, this);
+        }
     }
 
     /// <summary>

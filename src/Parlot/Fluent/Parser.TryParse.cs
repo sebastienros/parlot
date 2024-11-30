@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 
 namespace Parlot.Fluent;
 
@@ -6,6 +6,8 @@ public abstract partial class Parser<T>
 {
     private int _invocations;
     private volatile Parser<T>? _compiledParser;
+
+    public string? Name { get; set; }
 
     public T? Parse(string text)
     {
@@ -39,7 +41,9 @@ public abstract partial class Parser<T>
         // Any other concurrent call here will return 'this'. This prevents multiple compilations of 
         // the same parser, and a lock.
 
-        if (Interlocked.Increment(ref _invocations) == context.CompilationThreshold)
+        if (context.CompilationThreshold > 0 &&
+            _invocations < context.CompilationThreshold &&
+            Interlocked.Increment(ref _invocations) == context.CompilationThreshold)
         {
             return _compiledParser = this.Compile();
         }
@@ -85,4 +89,6 @@ public abstract partial class Parser<T>
         value = default!;
         return false;
     }
+
+    public override string ToString() => $"{Name ?? GetType().Name}";
 }

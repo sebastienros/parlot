@@ -1,4 +1,4 @@
-﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
 using System;
@@ -31,7 +31,8 @@ public partial class RegexBenchmarks
 
     public static readonly string Email = "sebastien.ros@gmail.com";
 
-    public RegexBenchmarks()
+    [GlobalSetup]
+    public void Setup()
     {
         if (RegexEmail() != Email) throw new Exception(nameof(RegexEmail));
         if (RegexEmailCompiled() != Email) throw new Exception(nameof(RegexEmailCompiled));

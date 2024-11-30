@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
@@ -20,6 +20,8 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"ZeroOrOne({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -39,6 +41,7 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
         result.Set(parsed.Start, parsed.End, success ? parsed.Value : _defaultValue);
 
         // ZeroOrOne always succeeds
+        context.ExitParser(this);
         return true;
     }
 

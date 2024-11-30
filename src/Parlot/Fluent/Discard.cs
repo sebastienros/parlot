@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -15,6 +15,8 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable
     {
         _parser = parser;
         _value = value;
+
+        Name = $"{parser.Name} (Discard)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
@@ -26,9 +28,12 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable
         if (_parser.Parse(context, ref parsed))
         {
             result.Set(parsed.Start, parsed.End, _value);
+
+            context.ExitParser(this);
             return true;
         }
 
+        context.ExitParser(this);
         return false;
     }
 

@@ -1,4 +1,5 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
+using Parlot.Rewriting;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -6,15 +7,30 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a default value if the previous parser failed.
 /// </summary>
-public sealed class Else<T> : Parser<T>, ICompilable
+public sealed class Else<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
     private readonly T _value;
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public Else(Parser<T> parser, T value)
     {
         _parser = parser;
         _value = value;
+
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
+
+        Name = $"{parser.Name} (Else)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -26,6 +42,7 @@ public sealed class Else<T> : Parser<T>, ICompilable
             result.Set(result.Start, result.End, _value);
         }
 
+        context.ExitParser(this);
         return true;
     }
 

@@ -1,4 +1,6 @@
-﻿using System;
+using Parlot.Rewriting;
+using System;
+using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -52,6 +54,15 @@ public abstract partial class Parser<T>
     public Parser<U> Error<U>(string message) => new Error<T, U>(this, message);
 
     /// <summary>
+    /// Names a parser.
+    /// </summary>
+    public Parser<T> Named(string name)
+    {
+        this.Name = name;
+        return this;
+    }
+
+    /// <summary>
     /// Builds a parser that verifies the previous parser result matches a predicate.
     /// </summary>
     public Parser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
@@ -80,4 +91,14 @@ public abstract partial class Parser<T>
     /// Builds a parser that returns a default value if the previous parser fails.
     /// </summary>
     public Parser<T> Else(T value) => new Else<T>(this, value);
+
+    /// <summary>
+    /// Builds a parser that lists all possible matches to improve performance.
+    /// </summary>
+    public Parser<T> Lookup(params ReadOnlySpan<char> expectedChars) => new Seekable<T>(this, expectedChars);
+
+    /// <summary>
+    /// Builds a parser that lists all possible matches to improve performance.
+    /// </summary>
+    public Parser<T> Lookup(params ISeekable[] parsers) => new Seekable<T>(this, parsers.SelectMany(x => x.ExpectedChars).ToArray());
 }

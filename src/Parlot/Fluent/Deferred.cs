@@ -1,21 +1,48 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
+#if NET
 using System.Linq;
+#endif
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Deferred<T> : Parser<T>, ICompilable
+public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 {
-    public Parser<T>? Parser { get; set; }
+    private Parser<T>? _parser;
+
+    public Parser<T>? Parser
+    {
+        get => _parser;
+        set
+        {
+            _parser = value ?? throw new ArgumentNullException(nameof(value));
+            Name = $"{_parser.Name} (Deferred)";
+        }
+    }
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public Deferred()
     {
+        Name = "Deferred";
     }
 
-    public Deferred(Func<Deferred<T>, Parser<T>> parser)
+    public Deferred(Func<Deferred<T>, Parser<T>> parser) : this()
     {
         Parser = parser(this);
+
+        if (Parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -25,7 +52,12 @@ public sealed class Deferred<T> : Parser<T>, ICompilable
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
-        return Parser.Parse(context, ref result);
+        context.EnterParser(this);
+
+        var outcome = Parser.Parse(context, ref result);
+
+        context.ExitParser(this);
+        return outcome;
     }
 
     private bool _initialized;
@@ -61,24 +93,25 @@ public sealed class Deferred<T> : Parser<T>, ICompilable
             var parserCompileResult = Parser.Build(context);
 
             var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
-
-            var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-            var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
+            var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+            var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
+            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
 
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
-                Expression.Block(
-                    typeof(ValueTuple<bool, T>),
-                    parserCompileResult.Variables.Append(resultExpression),
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.Assign(resultExpression, Expression.New(
-                        typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                        parserCompileResult.Success,
-                        context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
-                    returnLabelExpression),
-                true,
-                context.ParseContext)
-                ;
+                    Expression.Block(
+                        type: typeof(ValueTuple<bool, T>),
+                        variables: parserCompileResult.Variables.Append(resultExpression),
+                        Expression.Block(parserCompileResult.Body),
+                        Expression.Assign(resultExpression, Expression.New(
+                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                            parserCompileResult.Success,
+                            context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
+                        returnExpression,
+                        returnLabel),
+                    true,
+                    context.ParseContext
+                    );
 
             // Store the source lambda for debugging
             context.Lambdas.Add(lambda);

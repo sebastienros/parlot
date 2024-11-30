@@ -3,10 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
+using System.Xml;
 using Xunit;
-#if NET8_0_OR_GREATER
-using System.Buffers;
-#endif
 
 using static Parlot.Fluent.Parsers;
 
@@ -511,9 +509,8 @@ public class FluentTests
         Assert.Equal(_email, result.ToString());
     }
 
-#if NET8_0_OR_GREATER
     [Fact]
-    public void ShouldParseEmailsWithSearchValues()
+    public void ShouldParseEmailsWithAnyOf()
     {
         var letterOrDigitChars = "01234567890abcdefghijklmnopqrstuvwxyz";
 
@@ -531,7 +528,6 @@ public class FluentTests
         Assert.True(Email.TryParse(_email, out var result));
         Assert.Equal(_email, result.ToString());
     }
-#endif
 
     [Fact]
     public void ShouldParseEof()
@@ -711,6 +707,39 @@ public class FluentTests
         Assert.True(parser.TryParse("a", out _));
         Assert.True(parser.TryParse("ab", out _));
         Assert.True(parser.TryParse("abc", out _));
+    }
+
+    [Fact]
+    public void OneOfShouldHandleSkipWhiteSpaceMix()
+    {
+        var parser = Literals.Text("a").Or(Terms.Text("b"));
+
+        Assert.True(parser.TryParse("a", out _));
+        Assert.True(parser.TryParse("b", out _));
+        Assert.False(parser.TryParse(" a", out _));
+        Assert.True(parser.TryParse(" b", out _));
+    }
+
+    [Fact]
+    public void OneOfShouldHandleParsedWhiteSpace()
+    {
+        var parser = Literals.Text("a").Or(AnyCharBefore(Literals.Text("c"), false, true).Then(x => x.ToString()));
+
+        Assert.True(parser.TryParse("a", out _));
+        Assert.False(parser.TryParse("b", out _));
+        Assert.False(parser.TryParse(" a", out _));
+        Assert.True(parser.TryParse("\rcde", out _));
+    }
+
+    [Fact]
+    public void OneOfShouldHandleContextualWhiteSpace()
+    {
+        var parser = Terms.Text("a").Or(Terms.Text("b"));
+
+        Assert.True(parser.TryParse(new ParseContext(new Scanner("\rb")), out _, out _));
+        Assert.True(parser.TryParse(new ParseContext(new Scanner(" b")), out _, out _));
+        Assert.False(parser.TryParse(new ParseContext(new Scanner("\rb"), useNewLines: true), out _, out _));
+        Assert.True(parser.TryParse(new ParseContext(new Scanner(" b"), useNewLines: true), out _, out _));
     }
 
     [Fact]
@@ -1035,5 +1064,52 @@ public class FluentTests
     public void NumberShouldNotParseOverflow(string source)
     {
         Assert.False(Literals.Number<byte>().TryParse(source, out var _));
+    }
+
+    [Theory]
+    [InlineData("a", "a", "a")]
+    [InlineData("a", "aa", "aa")]
+    [InlineData("a", "aaaa", "aaaa")]
+    [InlineData("ab", "ab", "ab")]
+    [InlineData("ba", "ab", "ab")]
+    [InlineData("abc", "aaabbbccc", "aaabbbccc")]
+    [InlineData("a", "aaab", "aaa")]
+    [InlineData("aa", "aaaab", "aaaa")]
+    public void AnyOfShouldMatch(string chars, string source,  string expected)
+    {
+        Assert.Equal(expected, Literals.AnyOf(chars).Parse(source).ToString());
+    }
+
+    [Theory]
+    [InlineData("a", "b")]
+    [InlineData("a", "bbb")]
+    [InlineData("abc", "dabc")]
+    public void AnyOfShouldNotMAtch(string chars, string source)
+    {
+        Assert.False(Literals.AnyOf(chars).TryParse(source, out var _));
+    }
+    [Fact]
+    public void AnyOfShouldRespectSizeConstraints()
+    {
+        Assert.False(Literals.AnyOf("a", minSize: 4).TryParse("aaa", out _));
+        Assert.False(Literals.AnyOf("a", minSize: 2).TryParse("ab", out _));
+        Assert.False(Literals.AnyOf("a", minSize: 3).TryParse("ab", out _));
+        Assert.Equal("aa", Literals.AnyOf("a", minSize: 2, maxSize: 2).Parse("aa"));
+        Assert.Equal("aa", Literals.AnyOf("a", minSize: 2, maxSize: 3).Parse("aa"));
+        Assert.Equal("a", Literals.AnyOf("a", maxSize: 1).Parse("aa"));
+        Assert.Equal("aaaa", Literals.AnyOf("a", minSize: 2, maxSize: 4).Parse("aaaaaa"));
+        Assert.False(Literals.AnyOf("a", minSize: 2, maxSize: 2).TryParse("a", out _));
+    }
+
+    [Fact]
+    public void AnyOfShouldResetPositionWhenFalse()
+    {
+        Assert.False(Literals.AnyOf("a", minSize: 3)
+            .And(Literals.AnyOf("Z"))
+            .TryParse("aaZZ", out _));
+
+        Assert.True(Literals.AnyOf("a", minSize: 3)
+             .And(Literals.AnyOf("Z"))
+             .TryParse("aaaZZ", out _));
     }
 }

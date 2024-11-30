@@ -208,7 +208,15 @@ public class LiteralBuilder
     /// <param name="values">The set of char to match.</param>
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-    public Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => AnyOf(SearchValues.Create(values), minSize, maxSize);
+    public Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => new SearchValuesCharLiteral(values, minSize, maxSize);
+#else
+    /// <summary>
+    /// Builds a parser that matches a list of chars.
+    /// </summary>
+    /// <param name="values">The set of char to match.</param>
+    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> AnyOf(string values, int minSize = 1, int maxSize = 0) => new ListOfChars(values, minSize, maxSize);
 #endif
 }
 
@@ -294,5 +302,13 @@ public class TermBuilder
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => AnyOf(SearchValues.Create(values), minSize, maxSize);
+#else
+    /// <summary>
+    /// Builds a parser that matches a list of chars.
+    /// </summary>
+    /// <param name="values">The set of char to match.</param>
+    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> AnyOf(string values, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new ListOfChars(values, minSize, maxSize));
 #endif
 }

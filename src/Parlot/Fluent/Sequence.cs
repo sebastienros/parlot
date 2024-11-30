@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
@@ -20,6 +20,8 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"And({parser1.Name}, {parser2.Name})";
     }
 
     public bool CanSeek { get; }
@@ -43,12 +45,15 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
             if (_parser2.Parse(context, ref parseResult2))
             {
                 result.Set(parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
+
+                context.ExitParser(this);
                 return true;
             }
 
             context.Scanner.Cursor.ResetPosition(start);
         }
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -86,6 +91,8 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, IComp
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"And({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -115,12 +122,15 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, IComp
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -156,6 +166,8 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"And({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -186,12 +198,15 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -227,6 +242,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"And({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -258,12 +275,15 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
         }
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -299,6 +319,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"And({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -331,6 +353,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -338,6 +362,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 
@@ -373,6 +398,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"And({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -406,6 +433,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
                     );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -413,6 +442,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
 
         context.Scanner.Cursor.ResetPosition(start);
 
+        context.ExitParser(this);
         return false;
     }
 

@@ -19,6 +19,8 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
         {
             throw new InvalidOperationException("Identifiers cannot contain new lines.");
         }
+
+        Name = "IdentifierLiteral";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -29,6 +31,7 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
 
         if (span.Length == 0 || !_startSearchValues.Contains(span[0]))
         {
+            context.ExitParser(this);
             return false;
         }
 
@@ -40,6 +43,8 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
         var start = context.Scanner.Cursor.Position.Offset;
         context.Scanner.Cursor.AdvanceNoNewLines(size);
         result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+
+        context.ExitParser(this);
         return true;
     }
 }

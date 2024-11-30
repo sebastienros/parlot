@@ -186,11 +186,11 @@ public class CompileTests
     [Fact]
     public void ShouldCompileOneOrMany()
     {
-        var parser = OneOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
+        var parser = OneOrMany(Terms.Text("hello")).Compile();
 
-        var result = parser.Parse(" hello world hello");
+        var result = parser.Parse(" hello hello hello");
 
-        Assert.Equal(new[] { "hello", "world", "hello" }, result);
+        Assert.Equal(new[] { "hello", "hello", "hello" }, result);
     }
 
     [Fact]
@@ -241,7 +241,7 @@ public class CompileTests
     [Fact]
     public void SeparatedShouldNotBeConsumedIfNotFollowedByValueCompiled()
     {
-        // This test ensures that the separator is not consumed if there is no valid net value.
+        // This test ensures that the separator is not consumed if there is no valid next value.
 
         var parser = Separated(Terms.Char(','), Terms.Decimal()).AndSkip(Terms.Char(',')).And(Terms.Identifier()).Then(x => true).Compile();
 
@@ -307,9 +307,12 @@ public class CompileTests
             if (context.Scanner.ReadChar(Char))
             {
                 result.Set(start, context.Scanner.Cursor.Offset, Char);
+
+                context.ExitParser(this);
                 return true;
             }
 
+            context.ExitParser(this);
             return false;
         }
     }

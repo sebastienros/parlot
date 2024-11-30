@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -20,14 +20,19 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
     {
         _previousParser = previousParser ?? throw new ArgumentNullException(nameof(previousParser));
         _action = action ?? throw new ArgumentNullException(nameof(action));
+
+        Name = $"{previousParser.Name} (Switch)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
+        context.EnterParser(this);
+
         var previousResult = new ParseResult<T>();
 
         if (!_previousParser.Parse(context, ref previousResult))
         {
+            context.ExitParser(this);
             return false;
         }
 
@@ -35,6 +40,7 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
 
         if (nextParser == null)
         {
+            context.ExitParser(this);
             return false;
         }
 
@@ -43,9 +49,12 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
         if (nextParser.Parse(context, ref parsed))
         {
             result.Set(parsed.Start, parsed.End, parsed.Value);
+
+            context.ExitParser(this);
             return true;
         }
 
+        context.ExitParser(this);
         return false;
     }
 

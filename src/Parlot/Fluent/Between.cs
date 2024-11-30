@@ -1,4 +1,4 @@
-﻿using Parlot.Compilation;
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
@@ -23,6 +23,8 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+
+        Name = $"Between({before.Name},{parser.Name},{after.Name})";
     }
 
     public bool CanSeek { get; }
@@ -43,6 +45,8 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
 
         if (!_before.Parse(context, ref parsedA))
         {
+            context.ExitParser(this);
+
             // Don't reset position since _before should do it
             return false;
         }
@@ -50,6 +54,8 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
         if (!_parser.Parse(context, ref result))
         {
             cursor.ResetPosition(start);
+
+            context.ExitParser(this);
             return false;
         }
 
@@ -58,9 +64,12 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
         if (!_after.Parse(context, ref parsedB))
         {
             cursor.ResetPosition(start);
+
+            context.ExitParser(this);
             return false;
         }
 
+        context.ExitParser(this);
         return true;
     }
 

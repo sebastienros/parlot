@@ -43,6 +43,8 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 #endif
             _canJumpToNextExpectedChar = true;
         }
+
+        Name = $"TextBefore({delimiter.Name})";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -71,6 +73,8 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
                 if (_failOnEof)
                 {
                     context.Scanner.Cursor.ResetPosition(start);
+
+                    context.ExitParser(this);
                     return false;
                 }
 
@@ -78,10 +82,13 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 
                 if (length == 0 && !_canBeEmpty)
                 {
+                    context.ExitParser(this);
                     return false;
                 }
 
                 result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+
+                context.ExitParser(this);
                 return true;
             }
 
@@ -98,10 +105,13 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 
                 if (length == 0 && !_canBeEmpty)
                 {
+                    context.ExitParser(this);
                     return false;
                 }
 
                 result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+
+                context.ExitParser(this);
                 return true;
             }
 

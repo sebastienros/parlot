@@ -553,7 +553,7 @@ Result:
 
 ### Deferred
 
-Creates a parser that can be references before it is actually defined. This is used when there is a cyclic dependency between parsers.
+Creates a parser that can be referenced before it is actually defined. This is used when there is a cyclic dependency between parsers.
 
 ```c#
 Deferred<T> Deferred<T>()
@@ -777,6 +777,7 @@ Result:
 ```
 failure: "Unexpected char c"
 ```
+
 ### When
 
 Adds some additional logic for a parser to succeed.
@@ -821,6 +822,15 @@ Discards the previous result and replaces it with the default value or a custom 
 ```c#
 Parser<U> Discard<U>()
 Parser<U> Discard<U>(U value)
+```
+
+### Lookup
+
+Builds a parser that lists all possible matches to improve performance. Most parsers implement `ISeekable` parsers in order to provide `OneOf` a way to build a lookup table and identify the potential next parsers in the chain. Some parsers don't implement `ISeekable` because they are built too late, like `Deferred`. The `Lookup` parser circumvents that lack.
+
+```c#
+Parser<T> Lookup<U>(params ReadOnlySpan<char> expectedChars)
+Parser<T> Lookup(params ISeekable[] parsers)
 ```
 
 ## Other parsers
