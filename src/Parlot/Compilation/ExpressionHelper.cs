@@ -26,6 +26,7 @@ public static class ExpressionHelper
     internal static readonly MethodInfo Cursor_Advance = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), [])!;
     internal static readonly MethodInfo Cursor_AdvanceNoNewLines = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.AdvanceNoNewLines), [typeof(int)])!;
     internal static readonly MethodInfo Cursor_ResetPosition = typeof(Cursor).GetMethod("ResetPosition")!;
+    internal static readonly MethodInfo Character_IsWhiteSpace = typeof(Character).GetMethod(nameof(Character.IsWhiteSpace))!;
 
     internal static readonly ConstructorInfo Exception_ToString = typeof(Exception).GetConstructor([typeof(string)])!;
 
@@ -36,8 +37,6 @@ public static class ExpressionHelper
     internal static readonly MethodInfo MemoryExtensions_AsSpan = typeof(MemoryExtensions).GetMethod(nameof(MemoryExtensions.AsSpan), [typeof(string)])!;
     public static Expression ArrayEmpty<T>() => ((Expression<Func<object>>)(() => Array.Empty<T>())).Body;
     public static Expression New<T>() where T : new() => ((Expression<Func<T>>)(() => new T())).Body;
-
-    public static readonly Expression<Func<Cursor, char, char, bool>> CharacterIsInRange = (cursor, b, c) => Character.IsInRange(cursor.Current, b, c);
 
     //public static Expression NewOptionalResult<T>(this CompilationContext _, Expression hasValue, Expression value) => Expression.New(GetOptionalResult_Constructor<T>(), [hasValue, value]);
     public static Expression NewTextSpan(this CompilationContext _, Expression buffer, Expression offset, Expression count) => Expression.New(TextSpan_Constructor, [buffer, offset, count]);
@@ -52,6 +51,7 @@ public static class ExpressionHelper
     public static MemberExpression Buffer(this CompilationContext context) => Expression.Field(context.Scanner(), "Buffer");
     public static Expression ThrowObject(this CompilationContext _, Expression o) => Expression.Throw(Expression.New(Exception_ToString, Expression.Call(o, o.Type.GetMethod("ToString", [])!)));
     public static Expression ThrowParseException(this CompilationContext context, Expression message) => Expression.Throw(Expression.New(typeof(ParseException).GetConstructors().First(), [message, context.Position()]));
+    public static Expression BreakPoint(this CompilationContext _, Expression state, Action<object> action) => Expression.Invoke(Expression.Constant(action, typeof(Action<object>)), Expression.Convert(state, typeof(object)));
 
     public static MethodCallExpression ReadSingleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadSingleQuotedString);
     public static MethodCallExpression ReadDoubleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDoubleQuotedString);

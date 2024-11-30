@@ -48,7 +48,7 @@ public class CompilationContext
     /// Gets or sets whether the current compilation phase should ignore the results of the parsers.
     /// </summary>
     /// <remarks>
-    /// When set to false, the compiled statements don't need to record and define the <see cref="CompilationResult.Value"/> property.
+    /// When set to true, the compiled statements don't need to record and define the <see cref="CompilationResult.Value"/> property.
     /// This is done to optimize compiled parser that are usually used for pattern matching only.
     /// </remarks>
     public bool DiscardResult { get; set; }

@@ -98,7 +98,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
         //     #endif
         // }
 
-        var breakLabel = Expression.Label("break");
+        var breakLabel = Expression.Label($"break{context.NextNumber}");
 
         result.Body.Add(
             Expression.Loop(

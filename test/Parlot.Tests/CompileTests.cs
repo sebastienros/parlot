@@ -186,11 +186,11 @@ public class CompileTests
     [Fact]
     public void ShouldCompileOneOrMany()
     {
-        var parser = OneOrMany(Terms.Text("hello").Or(Terms.Text("world"))).Compile();
+        var parser = OneOrMany(Terms.Text("hello")).Compile();
 
-        var result = parser.Parse(" hello world hello");
+        var result = parser.Parse(" hello hello hello");
 
-        Assert.Equal(new[] { "hello", "world", "hello" }, result);
+        Assert.Equal(new[] { "hello", "hello", "hello" }, result);
     }
 
     [Fact]

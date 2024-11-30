@@ -33,8 +33,6 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable
             return true;
         }
 
-        context.Scanner.Cursor.ResetPosition(start);
-
         context.ExitParser(this);
         return false;
     }
@@ -64,31 +62,25 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable
         //   
         //     success = true;
         // }
-        // else
-        // {
-        //     context.Scanner.Cursor.ResetPosition(start);
-        // }
 
-        var startOffset = context.Offset(start);
+        var startOffset = result.DeclareVariable<int>($"startOffset{context.NextNumber}", context.Offset(start));
 
         result.Body.Add(
             Expression.Block(
                 parserCompileResult.Variables,
                 Expression.Block(parserCompileResult.Body),
-                Expression.IfThenElse(
-                    parserCompileResult.Success,
-                    Expression.Block(
-                        context.DiscardResult
-                        ? Expression.Empty()
-                        : Expression.Assign(result.Value,
+                Expression.IfThen(
+                    test: parserCompileResult.Success,
+                    ifTrue: Expression.Block(
+                        // Never discard result here, that would nullify this parser
+                        Expression.Assign(result.Value,
                             context.NewTextSpan(
                                 context.Buffer(),
                                 startOffset,
                                 Expression.Subtract(context.Offset(), startOffset)
                                 )),
                         Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                        ),
-                    context.ResetPosition(start)
+                        )
                 )
             )
         );

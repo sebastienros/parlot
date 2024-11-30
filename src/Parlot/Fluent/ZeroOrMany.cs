@@ -108,7 +108,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeek
 
         var parserCompileResult = _parser.Build(context);
 
-        var breakLabel = Expression.Label("break");
+        var breakLabel = Expression.Label($"break{context.NextNumber}");
 
         var block =
             Expression.Loop(

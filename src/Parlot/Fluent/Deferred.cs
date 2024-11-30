@@ -1,7 +1,9 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
+#if NET
 using System.Linq;
+#endif
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -91,8 +93,9 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             var parserCompileResult = Parser.Build(context);
 
             var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
-            var returnLabelTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-            var returnLabelExpression = Expression.Label(returnLabelTarget, resultExpression);
+            var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+            var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
+            var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.Constant(default(ValueTuple<bool, T>)));
 
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
@@ -104,7 +107,8 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
                             typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
                             parserCompileResult.Success,
                             context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
-                        returnLabelExpression),
+                        returnExpression,
+                        returnLabel),
                     true,
                     context.ParseContext
                     );

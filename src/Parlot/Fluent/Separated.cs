@@ -137,7 +137,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         // 
 
         var parserCompileResult = _parser.Build(context);
-        var breakLabel = Expression.Label("break");
+        var breakLabel = Expression.Label($"break{context.NextNumber}");
 
         var separatorCompileResult = _separator.Build(context);
 

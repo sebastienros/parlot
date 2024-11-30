@@ -246,7 +246,7 @@ public class BenchmarksTests
     {
         var benchmarks = new SwitchExpressionBenchmarks() { Length = 2 };
         benchmarks.Setup();
-        var result = benchmarks.LookupFluent();
+        var result = benchmarks.LookupMatchFluent();
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public class BenchmarksTests
     {
         var benchmarks = new SwitchExpressionBenchmarks() { Length = 2 };
         benchmarks.Setup();
-        var result = benchmarks.LookupCompiled();
+        var result = benchmarks.LookupMatchCompiled();
     }
 }
 #endif

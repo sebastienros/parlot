@@ -41,7 +41,9 @@ public abstract partial class Parser<T>
         // Any other concurrent call here will return 'this'. This prevents multiple compilations of 
         // the same parser, and a lock.
 
-        if (Interlocked.Increment(ref _invocations) == context.CompilationThreshold)
+        if (context.CompilationThreshold > 0 &&
+            _invocations < context.CompilationThreshold &&
+            Interlocked.Increment(ref _invocations) == context.CompilationThreshold)
         {
             return _compiledParser = this.Compile();
         }
