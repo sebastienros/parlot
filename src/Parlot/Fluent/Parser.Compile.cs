@@ -9,15 +9,6 @@ namespace Parlot.Fluent;
 
 public abstract partial class Parser<T>
 {
-#if DEBUG
-    internal static readonly CompilerFlags CompilerFlags = CompilerFlags.NoInvocationLambdaInlining;
-#else
-    internal static readonly CompilerFlags CompilerFlags =
-        CompilerFlags.NoInvocationLambdaInlining |
-        CompilerFlags.ThrowOnNotSupportedExpression |
-        CompilerFlags.EnableDelegateDebugInfo;
-#endif
-
     private static readonly ConstructorInfo _valueTupleConstructor = typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!;
 
     /// <summary>
@@ -80,7 +71,7 @@ public abstract partial class Parser<T>
             // In Debug mode, inspect the generated code with
             // result.ToCSharpString();
 
-            var parser = result.CompileFast(ifFastFailedReturnNull: false, CompilerFlags);
+            var parser = result.CompileFast(ifFastFailedReturnNull: false, ExpressionHelper.CompilerFlags);
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
             return new CompiledParser<T>(parser, this);
