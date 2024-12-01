@@ -95,10 +95,10 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that lists all possible matches to improve performance.
     /// </summary>
-    public Parser<T> Lookup(params ReadOnlySpan<char> expectedChars) => new Seekable<T>(this, expectedChars);
+    public Parser<T> Lookup(bool skipWhiteSpace = false, params ReadOnlySpan<char> expectedChars) => new Seekable<T>(this, skipWhiteSpace, expectedChars);
 
     /// <summary>
     /// Builds a parser that lists all possible matches to improve performance.
     /// </summary>
-    public Parser<T> Lookup(params ISeekable[] parsers) => new Seekable<T>(this, parsers.SelectMany(x => x.ExpectedChars).ToArray());
+    public Parser<T> Lookup(params ISeekable[] parsers) => new Seekable<T>(this, parsers.All(x => x.SkipWhitespace), parsers.SelectMany(x => x.ExpectedChars).ToArray());
 }

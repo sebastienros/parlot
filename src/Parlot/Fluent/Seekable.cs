@@ -1,6 +1,7 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -18,18 +19,11 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable
 
     public Parser<T> Parser { get; }
 
-    public Seekable(Parser<T> parser, params ReadOnlySpan<char> expectedChars)
+    public Seekable(Parser<T> parser, bool skipWhiteSpace, params ReadOnlySpan<char> expectedChars)
     {
         Parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        ExpectedChars = expectedChars.ToArray();
-        SkipWhitespace = parser is SkipWhiteSpace<T>;
-
-        if (Parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
+        ExpectedChars = expectedChars.ToArray().Distinct().ToArray();
+        SkipWhitespace = skipWhiteSpace;
 
         Name = $"{parser.Name} (Seekable)";
     }
