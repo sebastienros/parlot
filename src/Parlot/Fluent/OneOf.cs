@@ -1,3 +1,4 @@
+using FastExpressionCompiler;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
@@ -336,7 +337,7 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                             parameters: [context.ParseContext] // Only the name is used, so it will match the ones inside each compiler
                             );
 
-                        cacheCompiledLambda = lambda.Compile();
+                        cacheCompiledLambda = lambda.CompileFast();
                         lambdaCache.Add((parsers, cacheCompiledLambda));
 
                         context.Lambdas.Add(lambda);
