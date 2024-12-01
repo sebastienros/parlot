@@ -241,76 +241,114 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                 var charMapSetMethodInfo = typeof(CharMap<Func<ParseContext, ValueTuple<bool, T>>>).GetMethod("Set")!;
                 var nullSeekableParser = Expression.Constant(null, typeof(Func<ParseContext, ValueTuple<bool, T>>));
 
+                var lambdaCache = new List<(List<Parser<T>> Parsers, Func<ParseContext, ValueTuple<bool, T>> CompiledLambda)>();
+
                 foreach (var key in _map!.ExpectedChars)
                 {
                     Expression group = Expression.Empty();
 
-                    var parsers = _map[key];
-                    var lambdaSuccess = Expression.Variable(typeof(bool), $"successL{context.NextNumber}");
-                    var lambdaResult = Expression.Variable(typeof(T), $"resultL{context.NextNumber}");
+                    var parsers = _map[key]!;
 
-                    // The list is reversed since the parsers are unwrapped
-                    foreach (var parser in parsers!.ToArray().Reverse())
+                    // Search if the same parsers set was already generated and compiled
+
+                    Func<ParseContext, ValueTuple<bool, T>>? cacheCompiledLambda = null;
+
+                    for (var i = 0; i < lambdaCache.Count; i++)
                     {
-                        var groupResult = parser.Build(context);
+                        var cacheEntry = lambdaCache[i];
+                        if (cacheEntry.Parsers.Count != parsers.Count)
+                        {
+                            continue;
+                        }
 
-                        // lambdaSuccess and lambdaResult will be registered at the top of the method
+                        var match = true;
 
-                        group = Expression.Block(
-                            groupResult.Variables,
-                            Expression.Block(groupResult.Body),
-                            Expression.IfThenElse(
-                                groupResult.Success,
-                                Expression.Block(
-                                    Expression.Assign(lambdaSuccess, Expression.Constant(true, typeof(bool))),
-                                    context.DiscardResult
-                                    ? Expression.Empty()
-                                    : Expression.Assign(lambdaResult, groupResult.Value)
-                                    ),
-                                group
-                                )
-                            );
+                        for (var j = 0; j < parsers.Count; j++)
+                        {
+                            if (cacheEntry.Parsers[j] != parsers[j])
+                            {
+                                match = false;
+                                break;
+                            }
+                        }
+
+                        if (match)
+                        {
+                            cacheCompiledLambda = cacheEntry.CompiledLambda;
+                        }
                     }
 
-                    var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
-                    var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
-                    var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
-                    var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
+                    if (cacheCompiledLambda == null)
+                    {
+                        var lambdaSuccess = Expression.Variable(typeof(bool), $"successL{context.NextNumber}");
+                        var lambdaResult = Expression.Variable(typeof(T), $"resultL{context.NextNumber}");
 
-                    var groupBlock = (BlockExpression)group;
+                        // The list is reversed since the parsers are unwrapped
+                        foreach (var parser in parsers.ToArray().Reverse())
+                        {
+                            var groupResult = parser.Build(context);
 
-                    var lambda = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
-                        body: Expression.Block(
-                            type: typeof(ValueTuple<bool, T>),
-                            variables: groupBlock.Variables
-                                .Append(resultExpression)
-                                .Append(lambdaSuccess)
-                                .Append(lambdaResult),
-                            group,
-                            Expression.Assign(
-                                resultExpression,
-                                Expression.New(
-                                    typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                                    lambdaSuccess,
-                                    context.DiscardResult ?
-                                        Expression.Constant(default(T), typeof(T)) :
-                                        lambdaResult)
-                            ),
-                            returnExpression,
-                            returnLabel),
-                        name: $"_map_{key}_{context.NextNumber}",
-                        parameters: [context.ParseContext] // Only the name is used, so it will match the ones inside each compiler
-                        );
+                            // lambdaSuccess and lambdaResult will be registered at the top of the method
 
-                    context.Lambdas.Add(lambda);
+                            group = Expression.Block(
+                                groupResult.Variables,
+                                Expression.Block(groupResult.Body),
+                                Expression.IfThenElse(
+                                    groupResult.Success,
+                                    Expression.Block(
+                                        Expression.Assign(lambdaSuccess, Expression.Constant(true, typeof(bool))),
+                                        context.DiscardResult
+                                        ? Expression.Empty()
+                                        : Expression.Assign(lambdaResult, groupResult.Value)
+                                        ),
+                                    group
+                                    )
+                                );
+                        }
+
+                        var resultExpression = Expression.Variable(typeof(ValueTuple<bool, T>), $"result{context.NextNumber}");
+                        var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
+                        var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
+                        var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
+
+                        var groupBlock = (BlockExpression)group;
+
+                        var lambda = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
+                            body: Expression.Block(
+                                type: typeof(ValueTuple<bool, T>),
+                                variables: groupBlock.Variables
+                                    .Append(resultExpression)
+                                    .Append(lambdaSuccess)
+                                    .Append(lambdaResult),
+                                group,
+                                Expression.Assign(
+                                    resultExpression,
+                                    Expression.New(
+                                        typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                                        lambdaSuccess,
+                                        context.DiscardResult ?
+                                            Expression.Constant(default(T), typeof(T)) :
+                                            lambdaResult)
+                                ),
+                                returnExpression,
+                                returnLabel),
+                            name: $"_map_{key}_{context.NextNumber}",
+                            parameters: [context.ParseContext] // Only the name is used, so it will match the ones inside each compiler
+                            );
+
+                        cacheCompiledLambda = lambda.Compile();
+                        lambdaCache.Add((parsers, cacheCompiledLambda));
+
+                        context.Lambdas.Add(lambda);
+                    }
 
                     if (key == OtherSeekableChar)
                     {
-                        _lambdaOtherParsers = lambda.Compile();
+                        _lambdaOtherParsers = cacheCompiledLambda;
                     }
                     else
                     {
-                        _lambdaMap.Set(key, lambda.Compile());
+                        _lambdaMap.Set(key, cacheCompiledLambda!);
                     }
                 }
 
