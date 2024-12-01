@@ -340,7 +340,9 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
                         cacheCompiledLambda = lambda.CompileFast(ifFastFailedReturnNull: false, ExpressionHelper.CompilerFlags);
                         lambdaCache.Add((parsers, cacheCompiledLambda));
 
+#if DEBUG
                         context.Lambdas.Add(lambda);
+#endif
                     }
 
                     if (key == OtherSeekableChar)

@@ -115,7 +115,9 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
                     );
 
             // Store the source lambda for debugging
+#if DEBUG
             context.Lambdas.Add(lambda);
+#endif
 
             _closure.Func = lambda.CompileFast(ifFastFailedReturnNull: false, ExpressionHelper.CompilerFlags);
         }
