@@ -1,3 +1,4 @@
+using FastExpressionCompiler;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
@@ -114,9 +115,11 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
                     );
 
             // Store the source lambda for debugging
+#if DEBUG
             context.Lambdas.Add(lambda);
+#endif
 
-            _closure.Func = lambda.Compile();
+            _closure.Func = lambda.CompileFast(ifFastFailedReturnNull: false, ExpressionHelper.CompilerFlags);
         }
 
         // ValueTuple<bool, T> def;

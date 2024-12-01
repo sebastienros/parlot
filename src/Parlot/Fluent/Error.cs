@@ -1,8 +1,10 @@
-using System;
-using System.Linq;
-using System.Linq.Expressions;
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using System;
+#if NET
+using System.Linq;
+#endif
+using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 

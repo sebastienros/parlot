@@ -3,11 +3,20 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Linq;
+using FastExpressionCompiler;
 
 namespace Parlot.Compilation;
 
 public static class ExpressionHelper
 {
+#if DEBUG
+    internal static readonly CompilerFlags CompilerFlags =
+        CompilerFlags.ThrowOnNotSupportedExpression |
+        CompilerFlags.EnableDelegateDebugInfo;
+#else
+    internal static readonly CompilerFlags CompilerFlags = CompilerFlags.Default;
+#endif
+
     internal static readonly MethodInfo ParserContext_SkipWhiteSpaceMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.SkipWhiteSpace), [])!;
     internal static readonly MethodInfo ParserContext_WhiteSpaceParser = typeof(ParseContext).GetProperty(nameof(ParseContext.WhiteSpaceParser))?.GetGetMethod()!;
     internal static readonly MethodInfo Scanner_ReadText_NoResult = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), [typeof(ReadOnlySpan<char>), typeof(StringComparison)])!;

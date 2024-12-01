@@ -68,10 +68,10 @@ public abstract partial class Parser<T>
 
             var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
 
-            // In Debug mode, inspected the generated code with
+            // In Debug mode, inspect the generated code with
             // result.ToCSharpString();
 
-            var parser = result.CompileFast();
+            var parser = result.CompileFast(ifFastFailedReturnNull: false, ExpressionHelper.CompilerFlags);
 
             // parser is a Func, so we use CompiledParser to encapsulate it in a Parser<T>
             return new CompiledParser<T>(parser, this);
