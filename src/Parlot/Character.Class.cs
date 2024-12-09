@@ -12,6 +12,6 @@ public static partial class Character
     public const string AZ = AZLower + AZUpper;
     public const string AlphaNumeric = AZ + DecimalDigits;
     public const string DefaultIdentifierStart = "$_" + AZ;
-    public const string DefaultIdentifierPart = "$_" + AZ;
+    public const string DefaultIdentifierPart = "$_" + AZ + DecimalDigits;
     public const string NewLines = "\n\r\v";
 }
