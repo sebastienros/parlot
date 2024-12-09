@@ -407,6 +407,9 @@ public class CompileTests
     [InlineData("$_", "$_")]
     [InlineData("a-foo.", "a")]
     [InlineData("abc=3", "abc")]
+    [InlineData("abc3", "abc3")]
+    [InlineData("abc123", "abc123")]
+    [InlineData("abc_3", "abc_3")]
     public void CompiledIdentifierShouldParseValidIdentifiers(string text, string identifier)
     {
         Assert.Equal(identifier, Literals.Identifier().Compile().Parse(text).ToString());

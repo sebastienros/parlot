@@ -383,6 +383,9 @@ public class FluentTests
     [InlineData("$_", "$_")]
     [InlineData("a-foo.", "a")]
     [InlineData("abc=3", "abc")]
+    [InlineData("abc3", "abc3")]
+    [InlineData("abc123", "abc123")]
+    [InlineData("abc_3", "abc_3")]
     public void IdentifierShouldParseValidIdentifiers(string text, string identifier)
     {
         Assert.Equal(identifier, Literals.Identifier().Parse(text).ToString());
