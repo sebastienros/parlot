@@ -1,5 +1,7 @@
 using Parlot.Fluent;
 using Parlot.Rewriting;
+using System.Collections.Generic;
+using System.Reflection;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 using static Parlot.Tests.Models.RewriteTests;
@@ -149,20 +151,21 @@ public partial class RewriteTests
 
     }
 
-    [Fact]
-    public void OneOfCanForwardSeekable()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OneOfCanForwardSeekable(bool compiled)
     {
         // OneOf can create a lookup table based on ISeekable.
-        // However it can only be an ISeekable itself if all its parsers are.
-        // If one is not, then the caller would not be able to invoke it.
-        // This test ensures that such a parser is correctly invoked.
+        // It can bee seekable even if one of its parsers is not seekable.
+        // In that case it creates a custom `\0` with the non-seekable parsers.
 
         var pa = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], Success = true, Result = "a" };
         var pb = new FakeParser<string> { CanSeek = false, ExpectedChars = ['b'], Success = true, Result = "b" };
         var pc = new FakeParser<string> { CanSeek = true, ExpectedChars = ['c'], Success = true, Result = "c" };
         var pd = new FakeParser<string> { CanSeek = false, ExpectedChars = ['d'], Success = true, Result = "d" };
 
-        // These ones are seekable because one is at least. 
+        // These ones are seekable because one is at least.
         var p1 = OneOf(pa, pb);
         var p2 = OneOf(pc, pd);
 
@@ -173,15 +176,46 @@ public partial class RewriteTests
 
         var p3 = OneOf(p1, p2);
 
+        if (compiled) p3 = p3.Compile();
+
         Assert.Equal("a", p3.Parse("a"));
         Assert.Equal("b", p3.Parse("b"));
-        Assert.Equal("c", p3.Parse("c"));
+        Assert.Equal("b", p3.Parse("c"));  // p1's non-seekable are invoked, and pb is always successful
         Assert.Equal("b", p3.Parse("d"));
 
         pb.Success = false;
 
         Assert.Equal("a", p3.Parse("a"));
-        Assert.Equal("d", p3.Parse("b"));
+        Assert.Equal("d", p3.Parse("b")); // p1's non-seekable are invoked, now fail, p2 is invoked, 'c' doesn't match so pd is invoked and succeeds
+        Assert.Equal("c", p3.Parse("c")); 
+        Assert.Equal("d", p3.Parse("d"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OneOfShouldFoldOneOfs(bool compiled)
+    {
+        // Recursive one-ofs should build a lookup table that is a combination of all the lookups.
+        // There should be a single lookup to find the best match
+
+        var pa = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], Success = true, Result = "a" };
+        var pb = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], Success = true, Result = "b" };
+        var pc = new FakeParser<string> { CanSeek = true, ExpectedChars = ['c'], Success = true, Result = "c" };
+        var pd = new FakeParser<string> { CanSeek = true, ExpectedChars = ['d'], Success = true, Result = "d" };
+
+        var p1 = OneOf(pa, pb);
+        var p2 = OneOf(pc, pd);
+
+        var p3 = OneOf(p1, p2);
+
+        Assert.True(p3 is ISeekable seekable && seekable.CanSeek);
+        Assert.Equal(['a', 'b', 'c', 'd'], ((ISeekable)p3).ExpectedChars);
+
+        if (compiled) p3 = p3.Compile();
+
+        Assert.Equal("a", p3.Parse("a"));
+        Assert.Equal("b", p3.Parse("b"));
         Assert.Equal("c", p3.Parse("c"));
         Assert.Equal("d", p3.Parse("d"));
     }

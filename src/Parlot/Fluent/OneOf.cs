@@ -63,14 +63,21 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 
                     foreach (var c in seekable.ExpectedChars)
                     {
+                        IReadOnlyList<Parser<T>> subParsers = parser is OneOf<T> oneof ? oneof._map?[c] ?? [parser] : [parser!];
+
                         if (c != OtherSeekableChar)
                         {
-                            lookupTable[c].Add(decoratedParser);
+                            lookupTable[c].AddRange(subParsers);
                         }
                         else
                         {
                             _otherParsers ??= [];
-                            _otherParsers.Add(decoratedParser);
+                            _otherParsers.AddRange(subParsers!);
+
+                            foreach (var entry in lookupTable)
+                            {
+                                entry.Value.AddRange(subParsers);
+                            }
                         }
                     }
                 }
