@@ -97,6 +97,15 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
             }
             else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
+                // There is a mix of parsers that can skip whitespaces.
+                // If the ones that can skip don't have a custom WS parser then
+                // we can group them in a special OneOf and add them to a lookup
+                // with space chars.
+
+                // But there are still cases where this can't be done, like if the
+                // parsers have a space in their lookup table, or if non-seekable
+                // accept a space. So we can't always redirect spaces automatically.
+
                 lookupTable = null;
             }
 
