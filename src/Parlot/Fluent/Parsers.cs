@@ -58,6 +58,26 @@ public static partial class Parsers
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
     /// <summary>
+    /// Builds a parser that invoked the next one if a condition is true.
+    /// </summary>
+    public static Parser<T> If<C, S, T>(Func<C, S?, bool> predicate, S? state, Parser<T> parser) where C : ParseContext => new If<C, S, T>(parser, predicate, state);
+
+    /// <summary>
+    /// Builds a parser that invoked the next one if a condition is true.
+    /// </summary>
+    public static Parser<T> If<S, T>(Func<ParseContext, S?, bool> predicate, S? state, Parser<T> parser) => new If<ParseContext, S, T>(parser, predicate, state);
+
+    /// <summary>
+    /// Builds a parser that invoked the next one if a condition is true.
+    /// </summary>
+    public static Parser<T> If<C, T>(Func<C, bool> predicate, Parser<T> parser) where C : ParseContext => new If<C, object?, T>(parser, (c, s) => predicate(c), null);
+
+    /// <summary>
+    /// Builds a parser that invoked the next one if a condition is true.
+    /// </summary>
+    public static Parser<T> If<T>(Func<ParseContext, bool> predicate, Parser<T> parser) => new If<ParseContext, object?, T>(parser, (c, s) => predicate(c), null);
+
+    /// <summary>
     /// Builds a parser that can be defined later one. Use it when a parser need to be declared before its rule can be set.
     /// </summary>
     public static Deferred<T> Deferred<T>() => new();

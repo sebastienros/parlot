@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Numerics;
-using System.Xml;
 using Xunit;
 
 using static Parlot.Fluent.Parsers;
@@ -15,7 +14,7 @@ public class FluentTests
     [Fact]
     public void WhenShouldFailParserWhenFalse()
     {
-        var evenIntegers = Literals.Integer().When(x => x % 2 == 0);
+        var evenIntegers = Literals.Integer().When((c, x) => x % 2 == 0);
 
         Assert.True(evenIntegers.TryParse("1234", out var result1));
         Assert.Equal(1234, result1);
@@ -25,9 +24,24 @@ public class FluentTests
     }
 
     [Fact]
+    public void IfShouldNotInvokeParserWhenFalse()
+    {
+        bool invoked = false;
+
+        var evenState = If(predicate: (context, x) => x % 2 == 0, state: 0, parser: Literals.Integer().Then(x => invoked = true));
+        var oddState = If(predicate: (context, x) => x % 2 == 0, state: 1, parser: Literals.Integer().Then(x => invoked = true));
+
+        Assert.False(oddState.TryParse("1234", out var result1));
+        Assert.False(invoked);
+
+        Assert.True(evenState.TryParse("1234", out var result2));
+        Assert.True(invoked);
+    }
+
+    [Fact]
     public void WhenShouldResetPositionWhenFalse()
     {
-        var evenIntegers = ZeroOrOne(Literals.Integer().When(x => x % 2 == 0)).And(Literals.Integer());
+        var evenIntegers = ZeroOrOne(Literals.Integer().When((c, x) => x % 2 == 0)).And(Literals.Integer());
 
         Assert.True(evenIntegers.TryParse("1235", out var result1));
         Assert.Equal(1235, result1.Item2);
