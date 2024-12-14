@@ -3,14 +3,11 @@ using Parlot.Compilation;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
 public abstract partial class Parser<T>
 {
-    private static readonly ConstructorInfo _valueTupleConstructor = typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!;
-
     /// <summary>
     /// Compiles the current parser.
     /// </summary>
@@ -38,7 +35,8 @@ public abstract partial class Parser<T>
             compilationResult.Variables.Add(resultExpression);
             compilationResult.Body.Add(
                 Expression.Block(
-                    Expression.Assign(resultExpression, Expression.New(_valueTupleConstructor, compilationResult.Success, compilationResult.Value)),
+                    Expression.Assign(Expression.Field(resultExpression, nameof(ValueTuple<bool, T>.Item1)), compilationResult.Success), 
+                    Expression.Assign(Expression.Field(resultExpression, nameof(ValueTuple<bool, T>.Item2)), compilationResult.Value), 
                     returnExpression,
                     returnLabel
                 )
@@ -58,6 +56,7 @@ public abstract partial class Parser<T>
 
             var allExpressions = new List<Expression>();
             allExpressions.AddRange(compilationContext.GlobalExpressions);
+            //allExpressions.AddRange(compilationContext.Lambdas);
             allExpressions.AddRange(compilationResult.Body);
 
             var body = Expression.Block(
@@ -66,7 +65,7 @@ public abstract partial class Parser<T>
                 allExpressions
                 );
 
-            var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, compilationContext.ParseContext);
+            var result = Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(body, name: $"Parse_{compilationContext.NextNumber}", parameters: [compilationContext.ParseContext]);
 
             // In Debug mode, inspect the generated code with
             // result.ToCSharpString();

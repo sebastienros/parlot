@@ -76,7 +76,6 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable where C : ParseContext
         //
 
         var start = context.DeclarePositionVariable(result);
-//                                    parserCompileResult.Success
 
         var block = Expression.Block(
                 Expression.IfThen(

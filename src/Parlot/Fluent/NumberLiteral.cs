@@ -38,8 +38,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         _groupSeparator = groupSeparator;
         _numberStyles = numberOptions.ToNumberStyles();
 
-        if (decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
-            groupSeparator != NumberLiterals.DefaultGroupSeparator)
+        if (_decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
+            _groupSeparator != NumberLiterals.DefaultGroupSeparator)
         {
             _culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
             _culture.NumberFormat.NumberDecimalSeparator = decimalSeparator.ToString();
@@ -107,10 +107,24 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
 
         var reset = context.DeclarePositionVariable(result);
 
+        // Automatically converted to e.g., numberStyles16 = NumberStyles.AllowLeadingSign|NumberStyles.AllowDecimalPoint|NumberStyles.AllowExponent;
         var numberStyles = result.DeclareVariable<NumberStyles>($"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
-        var culture = result.DeclareVariable<CultureInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
+        var culture = result.DeclareVariable<CultureInfo>($"culture{context.NextNumber}");
         var numberSpan = result.DeclareVariable($"number{context.NextNumber}", typeof(ReadOnlySpan<char>));
         var end = result.DeclareVariable<int>($"end{context.NextNumber}");
+
+        if (_decimalSeparator != NumberLiterals.DefaultDecimalSeparator || _groupSeparator != NumberLiterals.DefaultGroupSeparator)
+        {
+            // culture = CultureInfo.InvariantCulture.Clone();
+            result.Body.Add(Expression.Assign(culture, Expression.Convert(Expression.Call(Expression.Property(null, typeof(CultureInfo), nameof(CultureInfo.InvariantCulture)), methodName: nameof(CultureInfo.Clone), Array.Empty<Type>()), typeof(CultureInfo))));
+            result.Body.Add(Expression.Assign(Expression.Property(Expression.Property(culture, nameof(CultureInfo.NumberFormat)), nameof(NumberFormatInfo.NumberDecimalSeparator)), Expression.Constant(_decimalSeparator.ToString())));
+            result.Body.Add(Expression.Assign(Expression.Property(Expression.Property(culture, nameof(CultureInfo.NumberFormat)), nameof(NumberFormatInfo.NumberGroupSeparator)), Expression.Constant(_groupSeparator.ToString())));
+        }
+        else
+        {
+            // culture = CultureInfo.InvariantCulture;
+            result.Body.Add(Expression.Assign(culture, Expression.Property(null, typeof(CultureInfo), nameof(CultureInfo.InvariantCulture))));
+        }
 
         // if (context.Scanner.ReadDecimal(_numberOptions, out var numberSpan, _decimalSeparator, _groupSeparator))
         // {
