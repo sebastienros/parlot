@@ -1,10 +1,7 @@
-using FastExpressionCompiler;
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -13,7 +10,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
+public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -22,8 +19,9 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
     internal readonly CharMap<List<Parser<T>>>? _map;
     internal readonly List<Parser<T>>? _otherParsers;
 
-    private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
-    private Func<ParseContext, ValueTuple<bool, T>>? _lambdaOtherParsers;
+    // For compilation, ignored for now
+    //private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
+    //private Func<ParseContext, ValueTuple<bool, T>>? _lambdaOtherParsers;
 
     public OneOf(Parser<T>[] parsers)
     {
@@ -204,6 +202,9 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
         return false;
     }
 
+/* We don't use the ICompilable interface anymore since the generated code is still slower than the original one.
+ * Furthermore the current implementation is creating too many lambdas (there might be a bug in the code).
+ 
     public CompilationResult Compile(CompilationContext context)
     {
         var result = context.CreateCompilationResult<T>();
@@ -550,4 +551,5 @@ public sealed class OneOf<T> : Parser<T>, ICompilable, ISeekable
 
         return result;
     }
+*/
 }
