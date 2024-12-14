@@ -440,7 +440,7 @@ public class CompileTests
     [Fact]
     public void CompiledWhenShouldFailParserWhenFalse()
     {
-        var evenIntegers = Literals.Integer().When(x => x % 2 == 0).Compile();
+        var evenIntegers = Literals.Integer().When((c, x) => x % 2 == 0).Compile();
 
         Assert.True(evenIntegers.TryParse("1234", out var result1));
         Assert.Equal(1234, result1);
@@ -452,10 +452,25 @@ public class CompileTests
     [Fact]
     public void CompiledWhenShouldResetPositionWhenFalse()
     {
-        var evenIntegers = ZeroOrOne(Literals.Integer().When(x => x % 2 == 0)).And(Literals.Integer()).Compile();
+        var evenIntegers = ZeroOrOne(Literals.Integer().When((c, x) => x % 2 == 0)).And(Literals.Integer()).Compile();
 
         Assert.True(evenIntegers.TryParse("1235", out var result1));
         Assert.Equal(1235, result1.Item2);
+    }
+
+    [Fact]
+    public void CompiledIfShouldNotInvokeParserWhenFalse()
+    {
+        bool invoked = false;
+
+        var evenState = If(predicate: (context, x) => x % 2 == 0, state: 0, parser: Literals.Integer().Then(x => invoked = true)).Compile();
+        var oddState = If(predicate: (context, x) => x % 2 == 0, state: 1, parser: Literals.Integer().Then(x => invoked = true)).Compile();
+
+        Assert.False(oddState.TryParse("1234", out var result1));
+        Assert.False(invoked);
+
+        Assert.True(evenState.TryParse("1234", out var result2));
+        Assert.True(invoked);
     }
 
     [Fact]

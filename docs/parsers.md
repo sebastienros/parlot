@@ -780,11 +780,23 @@ failure: "Unexpected char c"
 
 ### When
 
-Adds some additional logic for a parser to succeed.
+Adds some additional logic for a parser to succeed. The condition is executed when the previous parser succeeds. If the predicate returns `false`, the parser fails.
 
 ```c#
-Parser<T> When(Func<T, bool> predicate)
+Parser<T> When(Func<ParseContext, T, bool> predicate)
 ```
+
+To evaluate a condition before a parser is executed use the `If` parser instead.
+
+### If
+
+Executes a parser only if a condition is true.
+
+```c#
+Parser<T> If<TContext, TState, T>(Func<ParseContext, TState, bool> predicate, TState state, Parser<T> parser)
+```
+
+To evaluate a condition before a parser is executed use the `If` parser instead.
 
 ### Switch
 
@@ -805,7 +817,7 @@ var parser = Terms.Integer().And(Switch((context, x) =>
 });
 ```
 
-For performance reasons it is recommended to return a static Parser instance. Otherwise each `Parse` execution will allocate and it will usually be the same objects.
+For performance reasons it is recommended to return a singleton (or static) Parser instance. Otherwise each `Parse` execution will allocate a new Parser instance.
 
 ### Eof
 

@@ -1,6 +1,8 @@
 using Parlot.Compilation;
 using System;
+#if NET
 using System.Linq;
+#endif
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -11,10 +13,19 @@ namespace Parlot.Fluent;
 /// <typeparam name="T">The output parser type.</typeparam>
 public sealed class When<T> : Parser<T>, ICompilable
 {
-    private readonly Func<T, bool> _action;
+    private readonly Func<ParseContext, T, bool> _action;
     private readonly Parser<T> _parser;
 
+    [Obsolete("Use When(Parser<T> parser, Func<ParseContext, T, bool> action) instead.")]
     public When(Parser<T> parser, Func<T, bool> action)
+    {
+        _action = action != null ? (c, t) => action(t) : throw new ArgumentNullException(nameof(action));
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+
+        Name = $"{parser.Name} (When)";
+    }
+
+    public When(Parser<T> parser, Func<ParseContext, T, bool> action)
     {
         _action = action ?? throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -28,7 +39,7 @@ public sealed class When<T> : Parser<T>, ICompilable
 
         var start = context.Scanner.Cursor.Position;
 
-        var valid = _parser.Parse(context, ref result) && _action(result.Value);
+        var valid = _parser.Parse(context, ref result) && _action(context, result.Value);
 
         if (!valid)
         {
@@ -70,7 +81,7 @@ public sealed class When<T> : Parser<T>, ICompilable
                     Expression.IfThenElse(
                         Expression.AndAlso(
                             parserCompileResult.Success,
-                            Expression.Invoke(Expression.Constant(_action), new[] { parserCompileResult.Value })
+                            Expression.Invoke(Expression.Constant(_action), [context.ParseContext, parserCompileResult.Value])
                             ),
                         Expression.Block(
                             Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),

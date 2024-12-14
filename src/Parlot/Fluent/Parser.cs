@@ -65,7 +65,13 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that verifies the previous parser result matches a predicate.
     /// </summary>
+    [Obsolete("Use When(Func<ParseContext, T, bool> predicate) instead.")]
     public Parser<T> When(Func<T, bool> predicate) => new When<T>(this, predicate);
+
+    /// <summary>
+    /// Builds a parser that verifies the previous parser result matches a predicate.
+    /// </summary>
+    public Parser<T> When(Func<ParseContext, T, bool> predicate) => new When<T>(this, predicate);
 
     /// <summary>
     /// Builds a parser what returns another one based on the previous result.
