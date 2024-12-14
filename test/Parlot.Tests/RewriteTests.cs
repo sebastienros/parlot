@@ -202,4 +202,48 @@ public partial class RewriteTests
 
         Assert.Null(p1.Parse("c"));
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OneOfShouldHandleWhiteSpace(bool compiled)
+    {
+        var pa = Literals.Text("a");
+        var pb = Literals.Text("b");
+        var pc = Terms.Text("b").Then("c");
+
+        var p = OneOf(pa, pb, pc);
+
+        if (compiled) p = p.Compile();
+
+        Assert.Equal("a", p.Parse("a"));
+        Assert.Equal("b", p.Parse("b"));
+
+        Assert.Null(p.Parse(" a"));
+        Assert.Equal("c", p.Parse(" b"));
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void OneOfShouldFindNonSeekableWithSpace(bool compiled, bool skipWhiteSpace)
+    {
+        var pa = Literals.Text("a");
+        var pb = Literals.Text("b");
+        var pc = new FakeParser<string> { CanSeek = false, Success = true, SkipWhitespace = skipWhiteSpace, Result = "c" };
+
+        var p = OneOf(pa, pb, pc);
+
+        if (compiled) p = p.Compile();
+
+        Assert.Equal("a", p.Parse("a"));
+        Assert.Equal("b", p.Parse("b"));
+        Assert.Equal("c", p.Parse("c"));
+
+        Assert.Equal("c", p.Parse(" a"));
+        Assert.Equal("c", p.Parse(" b"));
+        Assert.Equal("c", p.Parse(" c"));
+    }
 }

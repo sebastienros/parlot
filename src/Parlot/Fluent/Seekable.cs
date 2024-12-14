@@ -11,11 +11,11 @@ namespace Parlot.Fluent;
 /// </summary>
 internal sealed class Seekable<T> : Parser<T>, ISeekable
 {
-    public bool CanSeek { get; }
+    public bool CanSeek { get; set; }
 
     public char[] ExpectedChars { get; set; }
 
-    public bool SkipWhitespace { get; }
+    public bool SkipWhitespace { get; set; }
 
     public Parser<T> Parser { get; }
 
@@ -24,6 +24,7 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable
         Parser = parser ?? throw new ArgumentNullException(nameof(parser));
         ExpectedChars = expectedChars.ToArray().Distinct().ToArray();
         SkipWhitespace = skipWhiteSpace;
+        CanSeek = true;
 
         Name = $"{parser.Name} (Seekable)";
     }
