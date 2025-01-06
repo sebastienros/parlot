@@ -1,5 +1,6 @@
 using Parlot.Fluent;
 using Parlot.Rewriting;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Xunit;
@@ -279,5 +280,20 @@ public partial class RewriteTests
         Assert.Equal("c", p.Parse(" a"));
         Assert.Equal("c", p.Parse(" b"));
         Assert.Equal("c", p.Parse(" c"));
+    }
+
+    [Theory]
+    [InlineData(" a ")]
+    [InlineData(" b ")]
+    [InlineData(" c ")]
+    public void MergingOneOfShouldRestoreSkipWhiteSpace(string input)
+    {
+        // The first two parsers are evaluated in a OneOf with SkipWhiteSpace stripped off. The second creation should
+        // restore these SkipWhiteSpace parsers for the lookup table to be re-created correctly.
+
+        var p = Terms.Char('a').Or(Terms.Char('b')).Or(Terms.Char('c'));
+
+        var result1 = p.TryParse(input, out _);
+        Assert.True(result1);
     }
 }

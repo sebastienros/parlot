@@ -26,6 +26,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
     public OneOf(Parser<T>[] parsers)
     {
         Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+        OriginalParsers = parsers;
 
         // We can't build a lookup table if there is only one parser
         if (Parsers.Count <= 1)
@@ -150,6 +151,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    /// <summary>
+    /// Gets the parsers before they get SkipWhitespace removed.
+    /// </summary>
+    public IReadOnlyList<Parser<T>> OriginalParsers { get; }
 
     public IReadOnlyList<Parser<T>> Parsers { get; }
 
