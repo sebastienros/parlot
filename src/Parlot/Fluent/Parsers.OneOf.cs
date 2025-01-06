@@ -1,4 +1,4 @@
-﻿namespace Parlot.Fluent;
+namespace Parlot.Fluent;
 
 // We don't care about the performance of these helpers since they are called only once 
 // during the parser tree creation
@@ -16,7 +16,7 @@ public static partial class Parsers
         if (parser is OneOf<T> oneOf)
         {
             // Return a single OneOf instance with this new one
-            return new OneOf<T>([.. oneOf.Parsers, or]);
+            return new OneOf<T>([.. oneOf.OriginalParsers, or]);
         }
         else
         {
