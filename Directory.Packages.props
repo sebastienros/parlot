@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.Memory" Version="4.6.0" />
-    <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.0.0" />
+    <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.0.1" />
 
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
@@ -20,8 +20,8 @@
     <!-- Testing -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageVersion Include="xunit" Version="2.9.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
-    <PackageVersion Include="xunit.analyzers" Version="1.17.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.0" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.3" />
+    <PackageVersion Include="xunit.analyzers" Version="1.18.0" />
   </ItemGroup>
 </Project>
