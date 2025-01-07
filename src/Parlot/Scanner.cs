@@ -556,6 +556,8 @@ public class Scanner
             // We can read Eof if there is an escaped quote sequence and no actual end quote, e.g. "'abc\'def"
             if (Cursor.Eof)
             {
+                Cursor.ResetPosition(start);
+
                 result = [];
                 return false;
             }
@@ -585,11 +587,13 @@ public class Scanner
                         // https://stackoverflow.com/a/32175520/142772
                         // exactly 4 digits
 #if NET8_0_OR_GREATER
-                        var lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(Character._hexDigits);
-                        var isValidUnicode = lastHexIndex == 3;
+                        var allHexDigits = Cursor.Span.Length > 4 && Cursor.Span.Slice(1, 4).IndexOfAnyExcept(Character._hexDigits) == -1;
+                        var isValidUnicode = allHexDigits;
 
                         if (!isValidUnicode)
                         {
+                            Cursor.ResetPosition(start);
+
                             result = [];
                             return false;
                         }
@@ -629,19 +633,21 @@ public class Scanner
                         break;
                     case 'x':
 
-                        // At least two digits
+                        // At least one digits
 #if NET8_0_OR_GREATER
-                        lastHexIndex = Cursor.Span.Slice(0, 4).LastIndexOfAny(Character._hexDigits);
-                        var isValidHex = lastHexIndex > 0;
+                        var firstNonHexDigit = Cursor.Span.Length > 1 ? Cursor.Span.Slice(1).IndexOfAnyExcept(Character._hexDigits) : -1;
+                        var isValidHex = firstNonHexDigit > 0;
 
                         if (!isValidHex)
                         {
+                            Cursor.ResetPosition(start);
+
                             result = [];
                             return false;
                         }
 
                         // Advance the cursor for the read digits
-                        Cursor.Advance(lastHexIndex + 1);
+                        Cursor.Advance(firstNonHexDigit);
 #else
                         var isValidHex = false;
 

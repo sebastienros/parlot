@@ -277,10 +277,41 @@ public class ScannerTests
     [InlineData("' \\xa0 ' ", "' \\xa0 '")]
     [InlineData("' \\xfh ' ", "' \\xfh '")]
     [InlineData("' \\u1234 ' ", "' \\u1234 '")]
-
     public void ShouldReadUnicodeSequence(string text, string expected)
     {
         new Scanner(text).ReadQuotedString(out var result);
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("'\\u'")]
+    [InlineData("'\\u1'")]
+    [InlineData("'\\u12'")]
+    [InlineData("'\\u123'")]
+    [InlineData("'\\ug'")]
+    [InlineData("'\\u1g'")]
+    [InlineData("'\\u12g'")]
+    [InlineData("'\\u123g'")]
+    [InlineData("'\\x'")]
+    [InlineData("'\\xg'")]
+    public void ShouldNotParseInvalidEscapedNumbers(string input)
+    {
+        var s = new Scanner(input);
+        Assert.False(s.ReadQuotedString());
+        Assert.Equal(0, s.Cursor.Position.Offset);
+    }
+
+    [Theory]
+    [InlineData("'\\u1234'")]
+    [InlineData("'\\u12345'")]
+    [InlineData("'\\x1'")]
+    [InlineData("'\\x12'")]
+    [InlineData("'\\x123'")]
+    [InlineData("'\\x1234'")]
+    [InlineData("'\\x1234g'")]
+    public void ShouldParseValidEscapedNumbers(string input)
+    {
+        var s = new Scanner(input);
+        Assert.True(s.ReadQuotedString());
     }
 }
