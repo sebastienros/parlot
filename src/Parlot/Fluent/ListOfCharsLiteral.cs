@@ -32,8 +32,6 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
         ExpectedChars = values.ToCharArray();
         _minSize = minSize;
         _maxSize = maxSize;
-
-        Name = $"AnyOf({values})";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -77,5 +75,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
         context.ExitParser(this);
         return true;
     }
+
+    public override string ToString() => $"AnyOf([{string.Join(", ", ExpectedChars)}])";
 }
 #endif

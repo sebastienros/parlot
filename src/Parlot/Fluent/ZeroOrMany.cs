@@ -23,8 +23,6 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeek
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"ZeroOrMany({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -143,4 +141,6 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeek
 
         return result;
     }
+
+    public override string ToString() => $"{_parser}*";
 }

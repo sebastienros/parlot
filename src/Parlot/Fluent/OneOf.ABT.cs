@@ -15,8 +15,6 @@ public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
     {
         _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
         _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
-
-        Name = $"OneOf ({parserA.Name}, {parserB.Name})";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -105,4 +103,6 @@ public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_parserA} | {_parserB}";
 }

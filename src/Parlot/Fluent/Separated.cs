@@ -25,7 +25,6 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-        Name = $"Separated({separator.Name}, {parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -188,4 +187,6 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
 
         return result;
     }
+
+    public override string ToString() => $"Separated({_separator}, {_parser})";
 }

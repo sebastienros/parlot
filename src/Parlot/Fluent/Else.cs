@@ -29,8 +29,6 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"{parser.Name} (Else)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -81,4 +79,6 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (Else)";
 }

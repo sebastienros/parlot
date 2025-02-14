@@ -24,8 +24,6 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable where C : ParseContext
         _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
         _state = state;
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-
-        Name = $"{parser.Name} (If)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -107,4 +105,6 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable where C : ParseContext
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (If)";
 }

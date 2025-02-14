@@ -20,8 +20,6 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
     {
         _previousParser = previousParser ?? throw new ArgumentNullException(nameof(previousParser));
         _action = action ?? throw new ArgumentNullException(nameof(action));
-
-        Name = $"{previousParser.Name} (Switch)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
@@ -116,4 +114,6 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_previousParser} (Switch)";
 }

@@ -13,8 +13,6 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
     {
         Parser = parser ?? throw new ArgumentNullException(nameof(parser));
 
-        Name = $"{Name} (SkipWhiteSpace)";
-
         if (parser is ISeekable seekable)
         {
             CanSeek = seekable.CanSeek;
@@ -88,4 +86,6 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"{Parser} (Skip WS)";
 }

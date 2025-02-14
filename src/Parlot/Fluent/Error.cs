@@ -30,8 +30,6 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"{parser.Name} (ElseError)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -90,6 +88,8 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (ElseError)";
 }
 
 public sealed class Error<T> : Parser<T>, ICompilable
@@ -101,8 +101,6 @@ public sealed class Error<T> : Parser<T>, ICompilable
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
-
-        Name = $"{parser.Name} (Error)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -149,6 +147,8 @@ public sealed class Error<T> : Parser<T>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (Error)";
 }
 
 public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
@@ -173,8 +173,6 @@ public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"{parser.Name} (Error)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
@@ -222,4 +220,6 @@ public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (Error)";
 }

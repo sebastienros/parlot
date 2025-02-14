@@ -14,8 +14,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
 
     public TextLiteral(string text, StringComparison comparisonType)
     {
-        Name = $"TextLiteral(\"{text}\")";
-
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
         _hasNewLines = text.Any(Character.IsNewLine);
@@ -114,4 +112,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"Text(\"{Text}\")";
 }

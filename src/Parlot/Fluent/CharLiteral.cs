@@ -9,8 +9,7 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     public CharLiteral(char c)
     {
         Char = c;
-        ExpectedChars = [c];
-        Name = $"Char('{c}')";
+        ExpectedChars = new[] { c };
     }
 
     public char Char { get; }
@@ -45,12 +44,6 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     {
         var result = context.CreateCompilationResult<char>();
 
-        // if (context.Scanner.ReadChar(Char))
-        // {
-        //     success = true;
-        //     value = Char;
-        // }
-
         result.Body.Add(
             Expression.IfThen(
                 context.ReadChar(Char),
@@ -65,4 +58,6 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"Char('{Char}')";
 }

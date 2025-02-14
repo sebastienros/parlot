@@ -22,8 +22,6 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser1.Name}, {parser2.Name})";
     }
 
     public bool CanSeek { get; }
@@ -129,6 +127,8 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
 
         return result;
     }
+
+    public override string ToString() => $"{_parser1} & (skip) {_parser2}";
 }
 
 public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -150,8 +150,6 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IC
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -206,6 +204,9 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IC
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public override string ToString() => $"{_parser} & (skip) {_lastParser}";
+
 }
 
 public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -224,8 +225,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -281,6 +280,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 }
 
 public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -299,8 +300,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -357,6 +356,9 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public override string ToString() => $"{_parser} & (skip) {_lastParser}";
+
 }
 
 public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -375,8 +377,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -436,6 +436,8 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 }
 
 public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -454,8 +456,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -463,7 +463,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
-
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
     {
@@ -516,6 +515,9 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public override string ToString() => $"{_parser} & (skip) {_lastParser}";
+
 }
 
 public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable
@@ -534,8 +536,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"AndSkip({parser.Name}, {lastParser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -543,7 +543,6 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
-
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
     {
@@ -597,4 +596,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public override string ToString() => $"{_parser} & (skip) {_lastParser}";
+
 }
