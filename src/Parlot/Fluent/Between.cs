@@ -23,8 +23,6 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"Between({before.Name},{parser.Name},{after.Name})";
     }
 
     public bool CanSeek { get; }
@@ -144,4 +142,7 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => Name ?? $"Between({_before},{_parser},{_after})";
+
 }

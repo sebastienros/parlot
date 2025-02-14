@@ -25,8 +25,6 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable
         ExpectedChars = expectedChars.ToArray().Distinct().ToArray();
         SkipWhitespace = skipWhiteSpace;
         CanSeek = true;
-
-        Name = $"{parser.Name} (Seekable)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -54,5 +52,7 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"{Parser} (Seekable)";
 }
 

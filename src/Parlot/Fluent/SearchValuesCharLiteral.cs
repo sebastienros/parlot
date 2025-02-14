@@ -22,7 +22,6 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         _searchValues = searchValues ?? throw new ArgumentNullException(nameof(searchValues));
         _minSize = minSize;
         _maxSize = maxSize;
-        Name = $"AnyOf({searchValues})";
     }
 
     public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0)
@@ -33,7 +32,6 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
 
         CanSeek = true;
         ExpectedChars = searchValues.ToArray();
-        Name = $"AnyOf('{searchValues}')";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -82,5 +80,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         context.ExitParser(this);
         return true;
     }
+
+    public override string ToString() => $"AnyOf({_searchValues})";
 }
 #endif

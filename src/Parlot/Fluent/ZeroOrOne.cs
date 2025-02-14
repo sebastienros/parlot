@@ -20,8 +20,6 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"ZeroOrOne({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -76,4 +74,6 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser}?";
 }

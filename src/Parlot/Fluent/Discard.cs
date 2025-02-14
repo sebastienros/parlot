@@ -15,8 +15,6 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable
     {
         _parser = parser;
         _value = value;
-
-        Name = $"{parser.Name} (Discard)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
@@ -60,4 +58,6 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (Discard)";
 }

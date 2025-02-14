@@ -22,8 +22,6 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"OneOrMany({parser.Name})";
     }
 
     public bool CanSeek { get; }
@@ -127,4 +125,6 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
 
         return result;
     }
+
+    public override string ToString() => $"{_parser}+";
 }

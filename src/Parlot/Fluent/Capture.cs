@@ -10,7 +10,6 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable
     public Capture(Parser<T> parser)
     {
         _parser = parser;
-        Name = $"{parser.Name} (Capture)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -87,4 +86,6 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (Capture)";
 }

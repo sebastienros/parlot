@@ -2,6 +2,7 @@ using FastExpressionCompiler;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
+
 #if NET
 using System.Linq;
 #endif
@@ -19,7 +20,6 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
         set
         {
             _parser = value ?? throw new ArgumentNullException(nameof(value));
-            Name = $"{_parser.Name} (Deferred)";
         }
     }
 
@@ -31,7 +31,6 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 
     public Deferred()
     {
-        Name = "Deferred";
     }
 
     public Deferred(Func<Deferred<T>, Parser<T>> parser) : this()
@@ -148,5 +147,29 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
         );
 
         return result;
+    }
+
+    private bool _toString;
+
+    public override string ToString()
+    {
+        // Handle recursion
+
+        lock (this)
+        {
+            if (!_toString)
+            {
+                _toString = true;
+                var result = Name == null
+                    ? $"{Parser} (Deferred)"
+                    : $"{Name} (Deferred)";
+                _toString = false;
+                return result;
+            }
+            else
+            {
+                return "(Deferred)";
+            }
+        }
     }
 }

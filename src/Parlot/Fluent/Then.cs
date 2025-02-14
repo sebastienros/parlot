@@ -29,8 +29,6 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
-
-        Name = $"{parser.Name} (Then)";
     }
 
     public Then(Parser<T> parser, Func<T, U> action) : this(parser)
@@ -137,4 +135,6 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
 
         return result;
     }
+
+    override public string ToString() => $"{_parser} (Then)";
 }

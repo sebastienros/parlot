@@ -21,16 +21,12 @@ public sealed class When<T> : Parser<T>, ICompilable
     {
         _action = action != null ? (c, t) => action(t) : throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-
-        Name = $"{parser.Name} (When)";
     }
 
     public When(Parser<T> parser, Func<ParseContext, T, bool> action)
     {
         _action = action ?? throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-
-        Name = $"{parser.Name} (When)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -99,4 +95,6 @@ public sealed class When<T> : Parser<T>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (When)";
 }

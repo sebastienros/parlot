@@ -43,8 +43,6 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 #endif
             _canJumpToNextExpectedChar = true;
         }
-
-        Name = $"TextBefore({delimiter.Name})";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -272,4 +270,6 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"TextBefore({_delimiter})";
 }

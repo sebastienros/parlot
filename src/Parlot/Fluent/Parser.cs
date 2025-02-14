@@ -58,7 +58,7 @@ public abstract partial class Parser<T>
     /// </summary>
     public Parser<T> Named(string name)
     {
-        this.Name = name;
+        Name = name;
         return this;
     }
 

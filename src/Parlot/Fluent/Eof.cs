@@ -13,7 +13,6 @@ public sealed class Eof<T> : Parser<T>, ICompilable
     public Eof(Parser<T> parser)
     {
         _parser = parser;
-        Name = $"{parser.Name} (Eof)";
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -62,4 +61,6 @@ public sealed class Eof<T> : Parser<T>, ICompilable
 
         return result;
     }
+
+    public override string ToString() => $"{_parser} (Eof)";
 }

@@ -7,6 +7,9 @@ public abstract partial class Parser<T>
     private int _invocations;
     private volatile Parser<T>? _compiledParser;
 
+    /// <summary>
+    /// Gets or sets the text which is to render the textual representation of the parser.
+    /// </summary>
     public string? Name { get; set; }
 
     public T? Parse(string text)
