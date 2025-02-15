@@ -461,6 +461,9 @@ public class CompileTests
     [Fact]
     public void CompiledIfShouldNotInvokeParserWhenFalse()
     {
+        // Add a test to ensure state can be a custom object (Expression.Constant might not work with that)
+        Assert.False(true);
+
         bool invoked = false;
 
         var evenState = If(predicate: (context, x) => x % 2 == 0, state: 0, parser: Literals.Integer().Then(x => invoked = true)).Compile();
