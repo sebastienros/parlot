@@ -1,8 +1,6 @@
 using System;
 using Parlot.Fluent;
-using static FastExpressionCompiler.ExpressionCompiler;
 using System.Linq;
-
 
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -531,7 +529,7 @@ public class Scanner
     public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(['\'', '\"'],out result);
 
     /// <summary>
-    /// Reads a string token enclosed in single or double quotes.
+    /// Reads a string token enclosed in quotes or custom characters.
     /// </summary>
     /// <remarks>
     /// This method doesn't escape the string, but only validates its content is syntactically correct.
