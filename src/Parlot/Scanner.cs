@@ -1,5 +1,9 @@
 using System;
 using Parlot.Fluent;
+using static FastExpressionCompiler.ExpressionCompiler;
+using System.Linq;
+
+
 #if NET8_0_OR_GREATER
 using System.Buffers;
 #endif
@@ -496,13 +500,25 @@ public class Scanner
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadBacktickString() => ReadBacktickString(out _);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadBacktickString(out ReadOnlySpan<char> result)
+    {
+        return ReadQuotedString('`', out result);
+    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadQuotedString() => ReadQuotedString(out _);
 
-    public bool ReadQuotedString(out ReadOnlySpan<char> result)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadQuotedString(char[] quoteChar) => ReadQuotedString(quoteChar, out _);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadQuotedString(char[] quoteChar, out ReadOnlySpan<char> result)
     {
         var startChar = Cursor.Current;
 
-        if (startChar is not '\'' and not '\"')
+        if (!quoteChar.Contains( startChar ))
         {
             result = [];
             return false;
@@ -511,6 +527,8 @@ public class Scanner
         return ReadQuotedString(startChar, out result);
     }
 
+    public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(['\'', '\"'],out result);
+
     /// <summary>
     /// Reads a string token enclosed in single or double quotes.
     /// </summary>
@@ -518,7 +536,7 @@ public class Scanner
     /// This method doesn't escape the string, but only validates its content is syntactically correct.
     /// The resulting Span contains the original quotes.
     /// </remarks>
-    private bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
+    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
     {
         var startChar = Cursor.Current;
         var start = Cursor.Position;

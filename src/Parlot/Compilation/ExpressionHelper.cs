@@ -31,6 +31,7 @@ public static class ExpressionHelper
     internal static readonly MethodInfo Scanner_ReadSingleQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadSingleQuotedString), [])!;
     internal static readonly MethodInfo Scanner_ReadDoubleQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDoubleQuotedString), [])!;
     internal static readonly MethodInfo Scanner_ReadQuotedString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadQuotedString), [])!;
+    internal static readonly MethodInfo Scanner_ReadBacktickString = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadBacktickString), [])!;
 
     internal static readonly MethodInfo Cursor_Advance = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.Advance), [])!;
     internal static readonly MethodInfo Cursor_AdvanceNoNewLines = typeof(Cursor).GetMethod(nameof(Parlot.Cursor.AdvanceNoNewLines), [typeof(int)])!;
@@ -64,6 +65,7 @@ public static class ExpressionHelper
 
     public static MethodCallExpression ReadSingleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadSingleQuotedString);
     public static MethodCallExpression ReadDoubleQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDoubleQuotedString);
+    public static MethodCallExpression ReadBacktickString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadBacktickString);
     public static MethodCallExpression ReadQuotedString(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadQuotedString);
     public static MethodCallExpression ReadChar(this CompilationContext context, char c) => Expression.Call(context.Scanner(), Scanner_ReadChar, Expression.Constant(c));
 
