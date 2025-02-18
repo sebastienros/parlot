@@ -71,6 +71,26 @@ public class CompileTests
     }
 
     [Fact]
+    public void ShouldCompileCustomStringLiterals()
+    {
+        var parser = new StringLiteral('|').Compile();
+
+        var result = parser.Parse("|hello world|");
+
+        Assert.Equal("hello world", result);
+    }
+
+    [Fact]
+    public void ShouldCompileCustomBacktickStringLiterals()
+    {
+        var parser = new StringLiteral(StringLiteralQuotes.Backtick).Compile();
+
+        var result = parser.Parse("`hello world`");
+
+        Assert.Equal("hello world", result);
+    }
+
+    [Fact]
     public void ShouldCompileOrs()
     {
         var parser = Terms.Text("hello").Or(Terms.Text("world")).Compile();

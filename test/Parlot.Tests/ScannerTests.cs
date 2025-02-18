@@ -32,6 +32,19 @@ public class ScannerTests
     }
 
     [Theory]
+    [InlineData('`', "`Lorem ipsum`", "`Lorem ipsum`")]
+    [InlineData('|', "|Lorem ipsum|", "|Lorem ipsum|")]
+    [InlineData('\'', "'Lorem ipsum'", "'Lorem ipsum'")]
+    [InlineData('"', "\"Lorem ipsum\"", "\"Lorem ipsum\"")]
+    public void ShouldReadEscapedStringWithCustomMatchingQuotes(char quote, string text, string expected)
+    {
+        Scanner s = new(text);
+        var success = s.ReadQuotedString([quote], out var result);
+        Assert.True(success);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("'Lorem \\n ipsum'", "'Lorem \\n ipsum'")]
     [InlineData("\"Lorem \\n ipsum\"", "\"Lorem \\n ipsum\"")]
     [InlineData("\"Lo\\trem \\n ipsum\"", "\"Lo\\trem \\n ipsum\"")]
@@ -43,6 +56,21 @@ public class ScannerTests
     {
         Scanner s = new(text);
         var success = s.ReadQuotedString(out var result);
+        Assert.True(success);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData('`', "`Lorem \\n ipsum`", "`Lorem \\n ipsum`")]
+    [InlineData('`', "`Lo\\trem \\n ipsum`", "`Lo\\trem \\n ipsum`")]
+    [InlineData('`', "`Lorem \\u1234 ipsum`", "`Lorem \\u1234 ipsum`")]
+    [InlineData('`', "`Lorem \\xabcd ipsum`", "`Lorem \\xabcd ipsum`")]
+    [InlineData('`', "`\\a ding`", "`\\a ding`")]
+    [InlineData('`', "`Lorem ipsum` \\xabcd", "`Lorem ipsum`")]
+    public void ShouldReadCustomStringWithEscapes(char quote, string text, string expected)
+    {
+        Scanner s = new(text);
+        var success = s.ReadQuotedString([quote], out var result);
         Assert.True(success);
         Assert.Equal(expected, result);
     }
@@ -216,6 +244,20 @@ public class ScannerTests
         Assert.False(new Scanner("\"abcd").ReadDoubleQuotedString());
         Assert.False(new Scanner("abcd\"").ReadDoubleQuotedString());
         Assert.False(new Scanner("\"ab\\\"cd").ReadDoubleQuotedString());
+    }
+
+    [Fact]
+    public void ReadBacktickStringShouldBacktickQuotedStrings()
+    {
+        new Scanner("`abcd`").ReadBacktickString(out var result);
+        Assert.Equal("`abcd`", result);
+
+        new Scanner("`a\\nb`").ReadBacktickString(out result);
+        Assert.Equal("`a\\nb`", result);
+
+        Assert.False(new Scanner("`abcd").ReadBacktickString());
+        Assert.False(new Scanner("abcd`").ReadBacktickString());
+        Assert.False(new Scanner("`ab\\`cd").ReadBacktickString());
     }
 
     [Theory]

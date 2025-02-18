@@ -10,7 +10,9 @@ public enum StringLiteralQuotes
 {
     Single,
     Double,
-    SingleOrDouble
+    Backtick,
+    SingleOrDouble,
+    Custom
 }
 
 public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
@@ -19,6 +21,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
 
     static readonly char[] SingleQuotes = ['\''];
     static readonly char[] DoubleQuotes = ['\"'];
+    static readonly char[] Backtick = ['`'];
     static readonly char[] SingleOrDoubleQuotes = ['\'', '\"'];
 
     private readonly StringLiteralQuotes _quotes;
@@ -31,9 +34,25 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
         {
             StringLiteralQuotes.Single => SingleQuotes,
             StringLiteralQuotes.Double => DoubleQuotes,
+            StringLiteralQuotes.Backtick => Backtick,
             StringLiteralQuotes.SingleOrDouble => SingleOrDoubleQuotes,
-            _ => []
+            _ => throw new InvalidOperationException()
         };
+
+        Name = "StringLiteral";
+    }
+
+    public StringLiteral(char quote)
+    {
+        _quotes = quote switch
+        {
+            '\'' => StringLiteralQuotes.Single,
+            '\"' => StringLiteralQuotes.Double,
+            '`' => StringLiteralQuotes.Backtick,
+            _ => StringLiteralQuotes.Custom,
+        };
+
+        ExpectedChars = [quote];
 
         Name = "StringLiteral";
     }
@@ -55,6 +74,8 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
             StringLiteralQuotes.Single => context.Scanner.ReadSingleQuotedString(),
             StringLiteralQuotes.Double => context.Scanner.ReadDoubleQuotedString(),
             StringLiteralQuotes.SingleOrDouble => context.Scanner.ReadQuotedString(),
+            StringLiteralQuotes.Backtick => context.Scanner.ReadBacktickString(),
+            StringLiteralQuotes.Custom => context.Scanner.ReadQuotedString(ExpectedChars),
             _ => false
         };
 
@@ -93,6 +114,8 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
             StringLiteralQuotes.Single => context.ReadSingleQuotedString(),
             StringLiteralQuotes.Double => context.ReadDoubleQuotedString(),
             StringLiteralQuotes.SingleOrDouble => context.ReadQuotedString(),
+            StringLiteralQuotes.Backtick => context.ReadBacktickString(),
+            StringLiteralQuotes.Custom => context.ReadCustomString(Expression.Constant(ExpectedChars)),
             _ => throw new InvalidOperationException()
         };
 
