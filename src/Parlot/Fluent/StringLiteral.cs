@@ -115,6 +115,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
             StringLiteralQuotes.Double => context.ReadDoubleQuotedString(),
             StringLiteralQuotes.SingleOrDouble => context.ReadQuotedString(),
             StringLiteralQuotes.Backtick => context.ReadBacktickString(),
+            StringLiteralQuotes.Custom => context.ReadCustomString(Expression.Constant(ExpectedChars)),
             _ => throw new InvalidOperationException()
         };
 

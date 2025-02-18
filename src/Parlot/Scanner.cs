@@ -507,6 +507,7 @@ public class Scanner
     {
         return ReadQuotedString('`', out result);
     }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadQuotedString() => ReadQuotedString(out _);
 
