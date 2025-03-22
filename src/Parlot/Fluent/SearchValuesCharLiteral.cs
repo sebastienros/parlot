@@ -53,7 +53,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         if (index != -1)
         {
             // Too small?
-            if (index == 0 || index < _minSize)
+            if (index < _minSize)
             {
                 context.ExitParser(this);
                 return false;

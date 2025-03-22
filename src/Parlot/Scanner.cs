@@ -53,7 +53,7 @@ public class Scanner
             }
         }
 
-        Cursor.AdvanceNoNewLines(span.Length);
+        Cursor.Advance(span.Length);
         return true;
     }
 
