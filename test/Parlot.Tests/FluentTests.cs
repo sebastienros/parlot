@@ -1105,9 +1105,12 @@ public class FluentTests
     {
         Assert.False(Literals.AnyOf(chars).TryParse(source, out var _));
     }
+
     [Fact]
     public void AnyOfShouldRespectSizeConstraints()
     {
+        Assert.True(Literals.AnyOf("a", minSize: 0).TryParse("aaa", out var r) && r.ToString() == "aaa");
+        Assert.True(Literals.AnyOf("a", minSize: 0).TryParse("bbb", out _));
         Assert.False(Literals.AnyOf("a", minSize: 4).TryParse("aaa", out _));
         Assert.False(Literals.AnyOf("a", minSize: 2).TryParse("ab", out _));
         Assert.False(Literals.AnyOf("a", minSize: 3).TryParse("ab", out _));

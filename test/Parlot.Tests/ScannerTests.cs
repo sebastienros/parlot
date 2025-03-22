@@ -132,22 +132,29 @@ public class ScannerTests
         // New lines are not considered white spaces
         Scanner s = new("Lorem ipsum   \r\n   ");
 
+        Assert.Equal(1, s.Cursor.Position.Line);
+
         Assert.False(s.SkipWhiteSpace());
+        Assert.Equal(1, s.Cursor.Position.Line);
 
         s.ReadNonWhiteSpace();
 
         Assert.True(s.SkipWhiteSpace());
         Assert.Equal(6, s.Cursor.Position.Offset);
+        Assert.Equal(1, s.Cursor.Position.Line);
 
         s.ReadNonWhiteSpace();
 
         Assert.True(s.SkipWhiteSpace());
         Assert.Equal(14, s.Cursor.Position.Offset);
+        Assert.Equal(1, s.Cursor.Position.Line);
 
         Assert.True(s.SkipWhiteSpaceOrNewLine());
         Assert.Equal(19, s.Cursor.Position.Offset);
+        Assert.Equal(2, s.Cursor.Position.Line);
 
         Assert.True(s.Cursor.Eof);
+        Assert.Equal(2, s.Cursor.Position.Line);
 
         Assert.False(new Scanner("a").SkipWhiteSpaceOrNewLine());
         Assert.False(new Scanner("a").SkipWhiteSpace());
