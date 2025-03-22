@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -1119,6 +1120,13 @@ public class FluentTests
         Assert.Equal("a", Literals.AnyOf("a", maxSize: 1).Parse("aa"));
         Assert.Equal("aaaa", Literals.AnyOf("a", minSize: 2, maxSize: 4).Parse("aaaaaa"));
         Assert.False(Literals.AnyOf("a", minSize: 2, maxSize: 2).TryParse("a", out _));
+    }
+
+    [Fact]
+    public void AnyOfShouldNotBeSeekableIfOptional()
+    {
+        var parser = Literals.AnyOf("a", minSize: 0) as ISeekable;
+        Assert.False(parser.CanSeek);
     }
 
     [Fact]

@@ -30,8 +30,11 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         _minSize = minSize;
         _maxSize = maxSize;
 
-        CanSeek = true;
-        ExpectedChars = searchValues.ToArray();
+        if (minSize > 0)
+        {
+            CanSeek = true;
+            ExpectedChars = searchValues.ToArray();
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
