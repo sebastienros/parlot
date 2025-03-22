@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -85,6 +86,7 @@ public class ParseContext
     /// <summary>
     /// Called whenever a parser is invoked.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void EnterParser<T>(Parser<T> parser)
     {
         OnEnterParser?.Invoke(parser, this);
@@ -93,6 +95,7 @@ public class ParseContext
     /// <summary>
     /// Called whenever a parser exits.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ExitParser<T>(Parser<T> parser)
     {
         OnExitParser?.Invoke(parser, this);

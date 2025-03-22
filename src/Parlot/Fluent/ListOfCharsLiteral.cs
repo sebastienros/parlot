@@ -11,9 +11,9 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
     private readonly int _maxSize;
     private readonly bool _hasNewLine;
 
-    public bool CanSeek { get; } = true;
+    public bool CanSeek { get; }
 
-    public char[] ExpectedChars { get; }
+    public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
 
@@ -29,7 +29,12 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
             }
         }
 
-        ExpectedChars = values.ToCharArray();
+        if (_minSize > 0)
+        {
+            ExpectedChars = values.ToCharArray();
+            CanSeek = true;
+        }
+
         _minSize = minSize;
         _maxSize = maxSize;
     }
