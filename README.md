@@ -187,22 +187,22 @@ Regular expressions can also be replaced by more formal parser definitions. The 
 an email with the pattern `[\w\.+-]+@[\w-]+\.[\w\.-]+`. Note that in the case of pattern matching Parlot can use the pattern matching mode and do fewer allocations.
 
 ```
-BenchmarkDotNet v0.14.0, Windows 11 (10.0.26100.2314)
+BenchmarkDotNet v0.14.0, Windows 11 (10.0.26100.3476)
 12th Gen Intel Core i7-1260P, 1 CPU, 16 logical and 12 physical cores
-.NET SDK 9.0.100
-  [Host]   : .NET 9.0.0 (9.0.24.52809), X64 RyuJIT AVX2
-  ShortRun : .NET 9.0.0 (9.0.24.52809), X64 RyuJIT AVX2
+.NET SDK 10.0.100-preview.2.25164.34
+  [Host]   : .NET 9.0.3 (9.0.325.11113), X64 RyuJIT AVX2
+  ShortRun : .NET 9.0.3 (9.0.325.11113), X64 RyuJIT AVX2
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-| Method              | Mean      | Error     | StdDev   | Ratio | Allocated | Alloc Ratio |
-|-------------------- |----------:|----------:|---------:|------:|----------:|------------:|
-| RegexEmailCompiled  |  75.70 ns | 22.363 ns | 1.226 ns |  1.00 |     208 B |        1.00 |
-| RegexEmail          | 136.64 ns | 88.083 ns | 4.828 ns |  1.81 |     208 B |        1.00 |
-| RegexEmailGenerated |  60.20 ns |  8.496 ns | 0.466 ns |  0.80 |     208 B |        1.00 |
-| ParlotEmailCompiled | 124.27 ns | 25.065 ns | 1.374 ns |  1.64 |     128 B |        0.62 |
-| ParlotEmail         | 188.65 ns | 53.202 ns | 2.916 ns |  2.49 |     320 B |        1.54 |
+| Method              | Mean      | Error     | StdDev   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|-------------------- |----------:|----------:|---------:|------:|--------:|-------:|----------:|------------:|
+| RegexEmailCompiled  |  67.15 ns |  12.98 ns | 0.711 ns |  1.00 |    0.01 | 0.0221 |     208 B |        1.00 |
+| RegexEmail          | 135.23 ns |  99.35 ns | 5.446 ns |  2.01 |    0.07 | 0.0219 |     208 B |        1.00 |
+| RegexEmailGenerated |  55.02 ns |  17.55 ns | 0.962 ns |  0.82 |    0.01 | 0.0221 |     208 B |        1.00 |
+| ParlotEmailCompiled | 133.83 ns |  24.35 ns | 1.335 ns |  1.99 |    0.03 | 0.0160 |     152 B |        0.73 |
+| ParlotEmail         | 190.46 ns | 116.02 ns | 6.360 ns |  2.84 |    0.09 | 0.0365 |     344 B |        1.65 |
 ```
 
 ### Versions
