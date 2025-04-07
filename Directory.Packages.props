@@ -3,8 +3,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="System.Memory" Version="4.6.2" />
-    <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.0.2" />
+    <PackageVersion Include="System.Memory" Version="4.6.3" />
+    <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.1.1" />
 
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
@@ -22,6 +22,6 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.2" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="xunit.analyzers" Version="1.20.0" />
+    <PackageVersion Include="xunit.analyzers" Version="1.21.0" />
   </ItemGroup>
 </Project>
