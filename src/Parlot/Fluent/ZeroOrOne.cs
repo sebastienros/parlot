@@ -1,10 +1,11 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
+public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
     private readonly T _defaultValue;
@@ -13,7 +14,19 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _defaultValue = defaultValue;
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
