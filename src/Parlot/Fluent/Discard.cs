@@ -1,5 +1,4 @@
 using Parlot.Compilation;
-using Parlot.Rewriting;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -7,7 +6,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Doesn't parse anything and return the default value.
 /// </summary>
-public sealed class Discard<T, U> : Parser<U>, ICompilable, ISeekable
+public sealed class Discard<T, U> : Parser<U>, ICompilable
 {
     private readonly Parser<T> _parser;
     private readonly U _value;
@@ -16,20 +15,7 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable, ISeekable
     {
         _parser = parser;
         _value = value;
-
-        if (parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
-
-    public bool CanSeek { get; }
-
-    public char[] ExpectedChars { get; } = [];
-
-    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
