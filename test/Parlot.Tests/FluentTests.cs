@@ -989,6 +989,19 @@ public class FluentTests
         Assert.True(oneOf.TryParse("c", out _));
     }
 
+   [Fact]
+    public void ZeroOrManyShouldNotBeSeekable()
+    {
+        var a = Literals.Char('a');
+        var b = Literals.Char('b');
+        var c = Literals.Char('c');
+
+        var oneOf = OneOf(ZeroOrMany(a).Then('a'), b);
+
+        // This should succeed, the ZeroOrMany(a) should always return true 
+        Assert.True(oneOf.TryParse("c", out _));
+    }
+
     [Fact]
     public void ShouldZeroOrOneWithDefault()
     {
