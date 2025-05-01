@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -6,6 +7,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Doesn't parse anything and return the default value.
 /// </summary>
+[Obsolete("Use the Then parser instead.")]
 public sealed class Discard<T, U> : Parser<U>, ICompilable
 {
     private readonly Parser<T> _parser;

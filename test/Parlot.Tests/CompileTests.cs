@@ -403,9 +403,15 @@ public class CompileTests
     [Fact]
     public void ShouldCompileDiscard()
     {
+#pragma warning disable CS0618 // Type or member is obsolete
         Assert.True(Terms.Decimal().Discard<bool>().Compile().TryParse("123", out var r1) && r1 == false);
         Assert.True(Terms.Decimal().Discard<bool>(true).Compile().TryParse("123", out var r2) && r2 == true);
         Assert.False(Terms.Decimal().Discard<bool>(true).Compile().TryParse("abc", out _));
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.True(Terms.Decimal().Then<bool>().Compile().TryParse("123", out var t1) && t1 == false);
+        Assert.True(Terms.Decimal().Then(true).Compile().TryParse("123", out var t2) && t2 == true);
+        Assert.False(Terms.Decimal().Then(true).Compile().TryParse("abc", out _));
     }
 
     [Fact]

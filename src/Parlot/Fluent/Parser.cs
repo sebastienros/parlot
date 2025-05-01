@@ -24,6 +24,11 @@ public abstract partial class Parser<T>
     public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
 
     /// <summary>
+    /// Builds a parser that converts the previous result.
+    /// </summary>
+    public Parser<U?> Then<U>() => new Then<T, U?>(this, default(U));
+
+    /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
     /// </summary>
     public Parser<U> ThenElse<U>(Func<T, U> conversion, U elseValue) => new Then<T, U>(this, conversion).Else(elseValue);
@@ -86,11 +91,13 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that discards the previous result and replaces it by the specified type or value.
     /// </summary>
+    [Obsolete("Use Then<U>() instead.")]
     public Parser<U?> Discard<U>() => new Discard<T, U?>(this, default);
 
     /// <summary>
     /// Builds a parser that discards the previous result and replaces it by the specified type or value.
     /// </summary>
+    [Obsolete("Use Then<U>() instead.")]
     public Parser<U> Discard<U>(U value) => new Discard<T, U>(this, value);
 
     /// <summary>

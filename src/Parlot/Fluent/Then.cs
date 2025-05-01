@@ -41,7 +41,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         _action2 = action ?? throw new ArgumentNullException(nameof(action));
     }
 
-    public Then(Parser<T> parser, U value) : this(parser)
+    public Then(Parser<T> parser, U? value) : this(parser)
     {
         _value = value;
     }
@@ -54,12 +54,12 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
+        context.EnterParser(this);
+
         var parsed = new ParseResult<T>();
 
         if (_parser.Parse(context, ref parsed))
         {
-            context.EnterParser(this);
-
             if (_action1 != null)
             {
                 result.Set(parsed.Start, parsed.End, _action1.Invoke(parsed.Value));

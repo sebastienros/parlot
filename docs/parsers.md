@@ -641,6 +641,7 @@ Convert the result of a parser. This is usually used to create custom data struc
 Parser<U> Then<U>(Func<T, U> conversion)
 Parser<U> Then<U>(Func<ParseContext, T, U> conversion)
 Parser<U> Then<U>(U value)
+Parser<U?> Then<U>() // returns default(U)
 ```
 
 Usage:
@@ -828,6 +829,9 @@ Parser<T> Eof()
 ```
 
 ### Discard
+
+> This parser has been obsoleted. Use `Then` instead as it provides the same behavior
+and more options.
 
 Discards the previous result and replaces it with the default value or a custom one.
 
