@@ -516,9 +516,9 @@ public class FluentTests
         Parser<char> Minus = Literals.Char('-');
         Parser<char> At = Literals.Char('@');
         Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-        Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Plus, Minus));
-        Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Dot, Minus));
-        Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Discard<char>(), Minus));
+        Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then<char>(), Dot, Plus, Minus));
+        Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then<char>(), Dot, Minus));
+        Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then<char>(), Minus));
         Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
         string _email = "sebastien.ros@gmail.com";
@@ -573,9 +573,15 @@ public class FluentTests
     [Fact]
     public void DiscardShouldReplaceValue()
     {
+#pragma warning disable CS0618 // Type or member is obsolete
         Assert.True(Terms.Decimal().Discard<bool>().TryParse("123", out var r1) && r1 == false);
         Assert.True(Terms.Decimal().Discard<bool>(true).TryParse("123", out var r2) && r2 == true);
         Assert.False(Terms.Decimal().Discard<bool>(true).TryParse("abc", out _));
+#pragma warning restore CS0618 // Type or member is obsolete
+    
+        Assert.True(Terms.Decimal().Then<bool>().TryParse("123", out var t1) && t1 == false);
+        Assert.True(Terms.Decimal().Then(true).TryParse("123", out var t2) && t2 == true);
+        Assert.False(Terms.Decimal().Then(true).TryParse("abc", out _));
     }
 
     [Fact]
@@ -968,6 +974,19 @@ public class FluentTests
 
         Assert.Equal("hello", parser.Parse(" hello world hello"));
         Assert.Null(parser.Parse(" foo"));
+    }
+
+    [Fact]
+    public void ZeroOrOneShouldNotBeSeekable()
+    {
+        var a = Literals.Char('a');
+        var b = Literals.Char('b');
+        var c = Literals.Char('c');
+
+        var oneOf = OneOf(ZeroOrOne(a), b);
+
+        // This should succeed, the ZeroOrOne(a) should always return true 
+        Assert.True(oneOf.TryParse("c", out _));
     }
 
     [Fact]
