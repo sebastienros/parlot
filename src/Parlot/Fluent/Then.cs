@@ -41,7 +41,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         _action2 = action ?? throw new ArgumentNullException(nameof(action));
     }
 
-    public Then(Parser<T> parser, U? value) : this(parser)
+    public Then(Parser<T> parser, U value) : this(parser)
     {
         _value = value;
     }
