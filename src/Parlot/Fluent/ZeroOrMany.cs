@@ -1,5 +1,4 @@
 using Parlot.Compilation;
-using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -7,7 +6,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
 {
     private static readonly MethodInfo _listAdd = typeof(List<T>).GetMethod("Add")!;
 
@@ -16,20 +15,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeek
     public ZeroOrMany(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
-
-    public bool CanSeek { get; }
-
-    public char[] ExpectedChars { get; } = [];
-
-    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {
