@@ -8,28 +8,15 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class ElseError<T> : Parser<T>, ICompilable, ISeekable
+public sealed class ElseError<T> : Parser<T>, ICompilable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
-
-    public bool CanSeek { get; }
-
-    public char[] ExpectedChars { get; } = [];
-
-    public bool SkipWhitespace { get; }
 
     public ElseError(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
-
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
