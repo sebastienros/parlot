@@ -1172,4 +1172,18 @@ public class FluentTests
              .And(Literals.AnyOf("Z"))
              .TryParse("aaaZZ", out _));
     }
+
+    [Fact]
+    public void ElseErrorShouldNotBeSeekable()
+    {
+        Parser<char> a = Terms.Char('a');
+        Parser<char> b = Terms.Char('b');
+        Parser<object> c = a.Then<object>();
+
+        // Use two parsers to ensure OneOf tries to build a lookup table
+        var parser = OneOf(a.ElseError("Error"), b);
+
+        Assert.True(parser.TryParse("a", out _));
+        Assert.Throws<ParseException>(() => parser.Parse("b"));
+    }
 }
