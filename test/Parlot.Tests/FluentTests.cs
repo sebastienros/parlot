@@ -1179,7 +1179,6 @@ public class FluentTests
         Parser<char> a = Terms.Char('a');
         Parser<char> b = Terms.Char('b');
         Parser<object> c = a.Then<object>();
-        Parser<object> d = a;
 
         // Use two parsers to ensure OneOf tries to build a lookup table
         var parser = OneOf(a.ElseError("Error"), b);
