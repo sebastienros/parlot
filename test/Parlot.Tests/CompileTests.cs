@@ -287,10 +287,10 @@ public class CompileTests
         Parser<char> Plus = Literals.Char('+');
         Parser<char> Minus = Literals.Char('-');
         Parser<char> At = Literals.Char('@');
-        Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-        Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Plus, Minus));
-        Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Dot, Minus));
-        Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(x => 'w'), Minus));
+        Parser<char> WordChar = Literals.Pattern(char.IsLetterOrDigit).Then<char>(x => x.Span[0]);
+        Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar, Dot, Plus, Minus));
+        Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar, Dot, Minus));
+        Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar, Minus));
         Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
         string _email = "sebastien.ros@gmail.com";

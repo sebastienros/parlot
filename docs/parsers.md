@@ -413,7 +413,7 @@ null
 Executes a parser as long as it's successful. The result is a list of all individual results.
 
 ```c#
-Parser<List<T>> ZeroOrMany<T>(Parser<T> parser)
+Parser<IReadOnlyList<T> ZeroOrMany<T>(Parser<T> parser)
 ```
 
 Usage:
@@ -436,7 +436,7 @@ Result:
 Executes a parser as long as it's successful, and is successful if at least one occurrence is found. The result is a list of all individual results.
 
 ```c#
-Parser<List<T>> OneOrMany<T>(Parser<T> parser)
+Parser<IReadOnlyList<T> OneOrMany<T>(Parser<T> parser)
 ```
 
 Usage:
@@ -484,7 +484,7 @@ null // success
 Matches all occurrences of a parser that are separated by another one. If a separator is not followed by a value, it is not consumed.
 
 ```
-Parser<List<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser)
+Parser<IReadOnlyList<T> Separated<U, T>(Parser<U> separator, Parser<T> parser)
 ```
 
 Usage:

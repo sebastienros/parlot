@@ -49,15 +49,24 @@ public class FluentTests
     }
 
     [Fact]
+    public void ShouldCast()
+    {
+        var parser = Literals.Integer().Then<decimal>();
+
+        Assert.True(parser.TryParse("123", out var result1));
+        Assert.Equal(123, result1);
+    }
+
+    [Fact]
     public void ShouldReturnElse()
     {
-        var parser = Literals.Integer().Then<long?>(x => x).Else(null);
+        var parser = Literals.Integer().Then<decimal>().Else(0);
 
         Assert.True(parser.TryParse("123", out var result1));
         Assert.Equal(123, result1);
 
         Assert.True(parser.TryParse(" 123", out var result2));
-        Assert.Null(result2);
+        Assert.Equal(0, result2);
     }
 
     [Fact]
@@ -515,10 +524,10 @@ public class FluentTests
         Parser<char> Plus = Literals.Char('+');
         Parser<char> Minus = Literals.Char('-');
         Parser<char> At = Literals.Char('@');
-        Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-        Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then<char>(), Dot, Plus, Minus));
-        Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then<char>(), Dot, Minus));
-        Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then<char>(), Minus));
+        Parser<char> WordChar = Literals.Pattern(char.IsLetterOrDigit).Then<char>(x => x.Span[0]);
+        Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar, Dot, Plus, Minus));
+        Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar, Dot, Minus));
+        Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar, Minus));
         Parser<TextSpan> Email = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
 
         string _email = "sebastien.ros@gmail.com";
@@ -579,7 +588,7 @@ public class FluentTests
         Assert.False(Terms.Decimal().Discard<bool>(true).TryParse("abc", out _));
 #pragma warning restore CS0618 // Type or member is obsolete
     
-        Assert.True(Terms.Decimal().Then<bool>().TryParse("123", out var t1) && t1 == false);
+        Assert.True(Terms.Decimal().Then<int>().TryParse("123", out var t1) && t1 == 123);
         Assert.True(Terms.Decimal().Then(true).TryParse("123", out var t2) && t2 == true);
         Assert.False(Terms.Decimal().Then(true).TryParse("abc", out _));
     }
@@ -971,6 +980,15 @@ public class FluentTests
     public void ShouldZeroOrOne()
     {
         var parser = ZeroOrOne(Terms.Text("hello"));
+
+        Assert.Equal("hello", parser.Parse(" hello world hello"));
+        Assert.Null(parser.Parse(" foo"));
+    }
+
+    [Fact]
+    public void OptionalShouldSucceed()
+    {
+        var parser = Terms.Text("hello").Optional();
 
         Assert.Equal("hello", parser.Parse(" hello world hello"));
         Assert.Null(parser.Parse(" foo"));
