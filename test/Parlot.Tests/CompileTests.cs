@@ -1,6 +1,7 @@
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -223,6 +224,15 @@ public class CompileTests
     }
 
     [Fact]
+    public void OptionalShouldSucceed()
+    {
+        var parser = Terms.Text("hello").Optional().Compile();
+
+        Assert.Equal("hello", parser.Parse(" hello world hello").FirstOrDefault());
+        Assert.Null(parser.Parse(" foo").FirstOrDefault());
+    }
+
+    [Fact]
     public void ShouldZeroOrOneWithDefault()
     {
         var parser = ZeroOrOne(Terms.Text("hello"), "world").Compile();
@@ -409,7 +419,7 @@ public class CompileTests
         Assert.False(Terms.Decimal().Discard<bool>(true).Compile().TryParse("abc", out _));
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        Assert.True(Terms.Decimal().Then<bool>().Compile().TryParse("123", out var t1) && t1 == false);
+        Assert.True(Terms.Decimal().Then<int>().Compile().TryParse("123", out var t1) && t1 == 123);
         Assert.True(Terms.Decimal().Then(true).Compile().TryParse("123", out var t2) && t2 == true);
         Assert.False(Terms.Decimal().Then(true).Compile().TryParse("abc", out _));
     }

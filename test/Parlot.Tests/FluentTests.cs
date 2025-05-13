@@ -3,6 +3,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using Xunit;
 
@@ -990,8 +991,8 @@ public class FluentTests
     {
         var parser = Terms.Text("hello").Optional();
 
-        Assert.Equal("hello", parser.Parse(" hello world hello"));
-        Assert.Null(parser.Parse(" foo"));
+        Assert.Equal("hello", parser.Parse(" hello world hello").FirstOrDefault());
+        Assert.Null(parser.Parse(" foo").FirstOrDefault());
     }
 
     [Fact]

@@ -115,11 +115,4 @@ public abstract partial class Parser<T>
     /// Builds a parser that lists all possible matches to improve performance.
     /// </summary>
     public Parser<T> Lookup(params ISeekable[] parsers) => new Seekable<T>(this, parsers.All(x => x.SkipWhitespace), parsers.SelectMany(x => x.ExpectedChars).ToArray());
-
-    public Parser<T> Optional(T defaultValue)
-        => new ZeroOrOne<T>(this, defaultValue);
-
-    public Parser<T?> Optional()
-        => new ZeroOrOne<T?>(this, default);
-
 }

@@ -387,7 +387,7 @@ Assert.Equal(12, result.Item2);
 
 ### ZeroOrOne
 
-Makes an existing parser optional.
+Makes an existing parser optional. The method can also be be post-fixed.
 
 ```c#
 Parser<T> ZeroOrOne<T>(Parser<T> parser)
@@ -397,6 +397,7 @@ Usage:
 
 ```c#
 var parser = ZeroOrOne(Terms.Text("hello"));
+// or Terms.Text("hello").ZeroOrOne()
 parser.Parse("hello");
 parser.Parse(""); // returns null but with a successful state
 ```
@@ -408,9 +409,38 @@ Result:
 null
 ```
 
+### Optional
+
+Makes an existing parser optional. Contrary to `ZeroOrOne` the result is always a list, with
+either zero or one element. It is then easy to know if the parser was successful or not by 
+using the Linq operators `Any()` and `FirstOrDefault()`.
+
+```c#
+static Parser<IReadOnlyList<T>> Optional<T>(this Parser<T> parser)
+```
+
+Usage:
+
+```c#
+var parser = Terms.Text("hello").Optional();
+parser.Parse("hello");
+parser.Parse(""); // returns an empty list
+parser.Parse("hello").FirstOrDefault();
+parser.Parse("").FirstOrDefault(); // returns null
+```
+
+Result:
+
+```
+["hello"]
+[]
+"hello"
+null
+```
+
 ### ZeroOrMany
 
-Executes a parser as long as it's successful. The result is a list of all individual results.
+Executes a parser as long as it's successful. The result is a list of all individual results. The method can also be post-fixed.
 
 ```c#
 Parser<IReadOnlyList<T> ZeroOrMany<T>(Parser<T> parser)
@@ -420,6 +450,7 @@ Usage:
 
 ```c#
 var parser = ZeroOrMany(Terms.Text("hello"));
+// or Terms.Text("hello").ZeroOrMany()
 parser.Parse("hello hello");
 parser.Parse("");
 ```
@@ -433,7 +464,7 @@ Result:
 
 ### OneOrMany
 
-Executes a parser as long as it's successful, and is successful if at least one occurrence is found. The result is a list of all individual results.
+Executes a parser as long as it's successful, and is successful if at least one occurrence is found. The result is a list of all individual results. The method can also be post-fixed.
 
 ```c#
 Parser<IReadOnlyList<T> OneOrMany<T>(Parser<T> parser)
@@ -443,6 +474,7 @@ Usage:
 
 ```c#
 var parser = OneOrMany(Terms.Text("hello"));
+// or Terms.Text("hello").OneOrMany()
 parser.Parse("hello hello");
 parser.Parse("");
 ```
@@ -641,7 +673,7 @@ Convert the result of a parser. This is usually used to create custom data struc
 Parser<U> Then<U>(Func<T, U> conversion)
 Parser<U> Then<U>(Func<ParseContext, T, U> conversion)
 Parser<U> Then<U>(U value)
-Parser<U?> Then<U>() // returns default(U)
+Parser<U?> Then<U>() // Converts the result to `U`
 ```
 
 Usage:
