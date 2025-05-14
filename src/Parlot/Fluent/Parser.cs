@@ -1,5 +1,6 @@
 using Parlot.Rewriting;
 using System;
+using System.Globalization;
 using System.Linq;
 
 namespace Parlot.Fluent;
@@ -26,7 +27,7 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that converts the previous result.
     /// </summary>
-    public Parser<U?> Then<U>() => new Then<T, U?>(this, default(U));
+    public Parser<U?> Then<U>() => new Then<T, U?>(this, x => (U?)Convert.ChangeType(x, typeof(U?), CultureInfo.CurrentCulture));
 
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
@@ -97,7 +98,7 @@ public abstract partial class Parser<T>
     /// <summary>
     /// Builds a parser that discards the previous result and replaces it by the specified type or value.
     /// </summary>
-    [Obsolete("Use Then<U>() instead.")]
+    [Obsolete("Use Then<U>(value) instead.")]
     public Parser<U> Discard<U>(U value) => new Discard<T, U>(this, value);
 
     /// <summary>
