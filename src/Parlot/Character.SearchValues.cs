@@ -7,6 +7,7 @@ namespace Parlot;
 public static partial class Character
 {
     internal static readonly SearchValues<char> _decimalDigits = SearchValues.Create(DecimalDigits);
+    internal static readonly SearchValues<char> _decimalDigitsAndUnderscore = SearchValues.Create(DecimalDigits + "_");
     internal static readonly SearchValues<char> _hexDigits = SearchValues.Create(HexDigits);
     internal static readonly SearchValues<char> _identifierStart = SearchValues.Create(DefaultIdentifierStart);
     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);

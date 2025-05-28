@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Parlot.Fluent;
 
@@ -8,7 +8,7 @@ public enum NumberOptions
     /// <summary>
     /// Indicates that no style elements, such as leading sign, thousands
     /// separators, decimal separator or exponent, can be present in the parsed string.
-    /// The string to be parsed must consist of integral decimal digits only.        
+    /// The string to be parsed must consist of integral decimal digits only.
     /// </summary>
     None = 0,
 
@@ -36,6 +36,11 @@ public enum NumberOptions
     /// and an integer.
     /// </summary>
     AllowExponent = 8,
+
+    /// <summary>
+    /// Indicates that the numeric string can include a "whitespace" in the form of an underscore ("_") character.
+    /// </summary>
+    AllowUnderscore = 16,
 
     /// <summary>
     /// Indicates that the <see cref="AllowLeadingSign"/>

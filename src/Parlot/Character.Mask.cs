@@ -21,6 +21,8 @@ public static partial class Character
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsDecimalDigit(char ch) => IsInRange(ch, '0', '9');
 
+    public static bool IsDecimalDigitOrUnderscore(char ch) => IsInRange(ch, '0', '9') || ch == '_';
+
     public static bool IsIdentifierStart(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.IdentifierStart) != 0;
