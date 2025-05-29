@@ -1,11 +1,12 @@
 #if NET8_0_OR_GREATER
-using Parlot.Compilation;
-using Parlot.Rewriting;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
 using System.Reflection;
+
+using Parlot.Compilation;
+using Parlot.Rewriting;
 
 namespace Parlot.Fluent;
 
@@ -141,6 +142,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
                     Expression.Constant(_allowDecimalSeparator),
                     Expression.Constant(_allowGroupSeparator),
                     Expression.Constant(_allowExponent),
+                    Expression.Constant(_allowUnderscore),
                     numberSpan, Expression.Constant(_decimalSeparator), Expression.Constant(_groupSeparator)),
                 Expression.Block(
                     Expression.Assign(end, context.Offset()),

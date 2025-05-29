@@ -1,9 +1,11 @@
-using Parlot.Fluent;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Linq;
+
 using FastExpressionCompiler;
+
+using Parlot.Fluent;
 
 namespace Parlot.Compilation;
 
@@ -22,7 +24,7 @@ public static class ExpressionHelper
     internal static readonly MethodInfo Scanner_ReadText_NoResult = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadText), [typeof(ReadOnlySpan<char>), typeof(StringComparison)])!;
     internal static readonly MethodInfo Scanner_ReadChar = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadChar), [typeof(char)])!;
     internal static readonly MethodInfo Scanner_ReadDecimal = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), [])!;
-    internal static readonly MethodInfo Scanner_ReadDecimalAllArguments = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), [typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(ReadOnlySpan<char>).MakeByRefType(), typeof(char), typeof(char)])!;
+    internal static readonly MethodInfo Scanner_ReadDecimalAllArguments = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadDecimal), [typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(bool), typeof(ReadOnlySpan<char>).MakeByRefType(), typeof(char), typeof(char)])!;
     internal static readonly MethodInfo Scanner_ReadInteger = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadInteger), [])!;
     internal static readonly MethodInfo Scanner_ReadNonWhiteSpace = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpace), [])!;
     internal static readonly MethodInfo Scanner_ReadNonWhiteSpaceOrNewLine = typeof(Scanner).GetMethod(nameof(Parlot.Scanner.ReadNonWhiteSpaceOrNewLine), [])!;
@@ -87,7 +89,7 @@ public static class ExpressionHelper
             );
     }
     public static MethodCallExpression ReadDecimal(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadDecimal);
-    public static MethodCallExpression ReadDecimal(this CompilationContext context, Expression allowLeadingSign, Expression allowDecimalSeparator, Expression allowGroupSeparator, Expression allowExponent, Expression number, Expression decimalSeparator, Expression groupSeparator) => Expression.Call(context.Scanner(), Scanner_ReadDecimalAllArguments, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, number, decimalSeparator, groupSeparator);
+    public static MethodCallExpression ReadDecimal(this CompilationContext context, Expression allowLeadingSign, Expression allowDecimalSeparator, Expression allowGroupSeparator, Expression allowExponent, Expression allowUnderscore, Expression number, Expression decimalSeparator, Expression groupSeparator) => Expression.Call(context.Scanner(), Scanner_ReadDecimalAllArguments, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, allowUnderscore, number, decimalSeparator, groupSeparator);
     public static MethodCallExpression ReadInteger(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadInteger);
     public static MethodCallExpression ReadNonWhiteSpace(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpace);
     public static MethodCallExpression ReadNonWhiteSpaceOrNewLine(this CompilationContext context) => Expression.Call(context.Scanner(), Scanner_ReadNonWhiteSpaceOrNewLine);
