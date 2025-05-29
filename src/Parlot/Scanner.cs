@@ -1,7 +1,8 @@
 using System;
-using Parlot.Fluent;
-using System.Linq;
 
+using Parlot.Fluent;
+
+using System.Linq;
 #if NET8_0_OR_GREATER
 using System.Buffers;
 #endif
@@ -130,7 +131,7 @@ public class Scanner
     public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(true, true, false, true, false, out number);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, bool allowUnderscore = false, char decimalSeparator = '.', char groupSeparator = ',')
+    public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
     {
         return ReadDecimal(
             (numberOptions & NumberOptions.AllowLeadingSign) != 0,
