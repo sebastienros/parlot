@@ -1,5 +1,7 @@
 using System;
+
 using Parlot.Fluent;
+
 using System.Linq;
 
 #if NET8_0_OR_GREATER
@@ -168,6 +170,7 @@ public class Scanner
         // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
         if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
         {
+            var savedCursor = Cursor.Position;
             // Group separators can be repeated as many times
             while (true)
             {
@@ -175,8 +178,11 @@ public class Scanner
                 {
                     Cursor.AdvanceNoNewLines(1);
                 }
-                else if (!ReadInteger())
+                else
+                if (!ReadInteger())
                 {
+                    // it was not a group separator, really, so go back where the symbol was and stop
+                    Cursor.ResetPosition(savedCursor);
                     break;
                 }
             }
@@ -435,7 +441,7 @@ public class Scanner
     /// Reads the specific expected chars.
     /// </summary>
     /// <remarks>
-    /// This overload uses <see cref="SearchValues"/> as this shouldn't be created on every call. The actual implementation of 
+    /// This overload uses <see cref="SearchValues"/> as this shouldn't be created on every call. The actual implementation of
     /// <see cref="SearchValues"/> is chosen based on the constituents of the list. The caller should thus reuse the instance.
     /// </remarks>
     public bool ReadAnyOf(SearchValues<char> values, out ReadOnlySpan<char> result)
