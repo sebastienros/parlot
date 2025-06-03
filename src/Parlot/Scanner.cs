@@ -1,7 +1,5 @@
 using System;
-
 using Parlot.Fluent;
-
 using System.Linq;
 
 #if NET8_0_OR_GREATER
@@ -170,23 +168,20 @@ public class Scanner
         // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
         if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
         {
-            var savedCursor = Cursor.Position;
             // Group separators can be repeated as many times
             while (true)
             {
+                var beforeGroup = Cursor.Position;
+                
                 if (Cursor.Current == groupSeparator)
                 {
                     Cursor.AdvanceNoNewLines(1);
                 }
                 else if (!ReadInteger())
                 {
-                    // it was not a group separator, really, so go back where the symbol was and stop
-                    Cursor.ResetPosition(savedCursor);
+                    // it was not a group separator so go back where the symbol was and stop
+                    Cursor.ResetPosition(beforeGroup);
                     break;
-                }
-                else
-                {
-                    savedCursor = Cursor.Position;
                 }
             }
         }
