@@ -374,4 +374,41 @@ public class ScannerTests
         var s = new Scanner(input);
         Assert.True(s.ReadQuotedString());
     }
+
+    [Theory]
+    [InlineData("123,", "123", ",")]
+    [InlineData("123,a", "123", ",a")]
+    public void ShouldReadNumberWithTrailingDecimalSeparators(string input, string expected, string expected2)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result));
+        Assert.Equal(expected, result);
+        Assert.True(s.ReadNonWhiteSpace(out var result2));
+        Assert.Equal(expected2, result2);
+    }
+
+    [Theory]
+    [InlineData("1, 2, 3", "1", "2", "3")]
+    public void ShouldReadNumberListWithDecimalSeparators(string input, string expected1, string expected2, string expected3)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result));
+        Assert.Equal(expected1, result);
+        Assert.True(s.ReadNonWhiteSpace(out var resultSep));
+        Assert.Equal(",", resultSep);
+        Assert.True(s.SkipWhiteSpace());
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out result));
+        Assert.Equal(expected2, result);
+        Assert.True(s.ReadNonWhiteSpace(out resultSep));
+        Assert.Equal(",", resultSep);
+        Assert.True(s.SkipWhiteSpace());
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out result));
+        Assert.Equal(expected3, result);
+    }
+
+
 }

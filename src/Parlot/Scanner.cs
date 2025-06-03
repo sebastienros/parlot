@@ -3,6 +3,7 @@ using System;
 using Parlot.Fluent;
 
 using System.Linq;
+
 #if NET8_0_OR_GREATER
 using System.Buffers;
 #endif
@@ -178,12 +179,15 @@ public class Scanner
                 {
                     Cursor.AdvanceNoNewLines(1);
                 }
-                else
-                if (!ReadInteger(allowUnderscore))
+                else if (!ReadInteger(allowUnderscore))
                 {
                     // it was not a group separator, really, so go back where the symbol was and stop
                     Cursor.ResetPosition(savedCursor);
                     break;
+                }
+                else
+                {
+                    savedCursor = Cursor.Position;
                 }
             }
         }
