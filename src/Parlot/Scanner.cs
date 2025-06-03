@@ -170,6 +170,7 @@ public class Scanner
         // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
         if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
         {
+            var savedCursor = Cursor.Position;
             // Group separators can be repeated as many times
             while (true)
             {
@@ -180,6 +181,8 @@ public class Scanner
                 else
                 if (!ReadInteger(allowUnderscore))
                 {
+                    // it was not a group separator, really, so go back where the symbol was and stop
+                    Cursor.ResetPosition(savedCursor);
                     break;
                 }
             }
