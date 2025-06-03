@@ -178,12 +178,15 @@ public class Scanner
                 {
                     Cursor.AdvanceNoNewLines(1);
                 }
-                else
-                if (!ReadInteger())
+                else if (!ReadInteger())
                 {
                     // it was not a group separator, really, so go back where the symbol was and stop
                     Cursor.ResetPosition(savedCursor);
                     break;
+                }
+                else
+                {
+                    savedCursor = Cursor.Position;
                 }
             }
         }
