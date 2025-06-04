@@ -366,6 +366,17 @@ public class ScannerTests
     }
 
     [Theory]
+    [InlineData("123,456", "123,456")]
+    [InlineData("123,456,789", "123,456,789")]
+    public void ShouldReadNumberWithMultipleGroupSeparators(string input, string expected)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out var result));
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("123,", "123", ",")]
     [InlineData("123,a", "123", ",a")]
     public void ShouldReadNumberWithTrailingDecimalSeparators(string input, string expected, string expected2)
