@@ -433,8 +433,8 @@ public class CompileTests
     [Fact]
     public void ShouldCompileWhiteSpace()
     {
-        Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Compile().Parse("\n\r\v a"));
-        Assert.Equal("  ", Literals.WhiteSpace(false).Compile().Parse("  \n\r\v a"));
+        Assert.Equal("\n\r\v\f ", Literals.WhiteSpace(true).Compile().Parse("\n\r\v\f a"));
+        Assert.Equal("  ", Literals.WhiteSpace(false).Compile().Parse("  \n\r\v\f a"));
     }
 
     [Theory]
