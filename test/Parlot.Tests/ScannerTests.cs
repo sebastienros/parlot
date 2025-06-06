@@ -1,3 +1,4 @@
+using Parlot.Tests.Calc;
 using System;
 using System.Buffers;
 
@@ -282,16 +283,7 @@ public class ScannerTests
     }
 
     [Theory]
-    [InlineData("12_3.01", "123.01")]
-    [InlineData("12_3.0_1", "123.01")]
-    [InlineData("12_3", "123")]
-    public void ShouldReadValidDecimalWithUnderscores(string text, string expected)
-    {
-        Assert.True(new Scanner(text).ReadDecimal(Fluent.NumberOptions.AllowUnderscore | Fluent.NumberOptions.Number , out var result));
-        Assert.Equal(expected, result);
-    }
 
-    [Theory]
     [InlineData(" 1")]
     public void ShouldNotReadInvalidInteger(string text)
     {
@@ -304,6 +296,7 @@ public class ScannerTests
     [InlineData("123a", "123")]
     [InlineData("123.0", "123")]
     [InlineData("123.0a", "123")]
+    [InlineData("123.", "123")]
     [InlineData("123 ", "123")]
     public void ShouldReadValidInteger(string text, string expected)
     {
@@ -313,10 +306,12 @@ public class ScannerTests
 
     [Theory]
     [InlineData(" 1")]
-    [InlineData("123.e")]
+    [InlineData("abc")]
+    [InlineData(".")]
+    [InlineData(",")]
     public void ShouldNotReadInvalidDecimal(string text)
     {
-        Assert.False(new Scanner(text).ReadDecimal());
+        Assert.False(new Scanner(text).ReadDecimal(Fluent.NumberOptions.Any, groupSeparator: ',', decimalSeparator: '.', number: out _));
     }
 
     [Theory]
@@ -387,38 +382,35 @@ public class ScannerTests
     }
 
     [Theory]
-    [InlineData("123,", "123", ",")]
-    [InlineData("123,a", "123", ",a")]
-    public void ShouldReadNumberWithTrailingGroupSeparators(string input, string expected, string expected2)
+    [InlineData("123", "123")]
+    [InlineData("123,123", "123,123")]
+    [InlineData("123,a", "123")]
+    [InlineData("123,123,a", "123,123")]
+    [InlineData("123,123,123", "123,123,123")]
+    [InlineData("123,.1", "123")]
+    [InlineData("123,.e", "123")]
+    [InlineData("123,e", "123")]
+    [InlineData("123,", "123")]
+    public void ShouldReadDecimalWithGroupSeparator(string input, string expected)
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out var result));
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators | Fluent.NumberOptions.AllowDecimalSeparator, out var result, groupSeparator: ',', decimalSeparator: '.'));
         Assert.Equal(expected, result);
-        Assert.True(s.ReadNonWhiteSpace(out var result2));
-        Assert.Equal(expected2, result2);
     }
 
     [Theory]
-    [InlineData("1, 2, 3", "1", "2", "3")]
-    public void ShouldReadNumberListWithGroupSeparators(string input, string expected1, string expected2, string expected3)
+    [InlineData("123.456", "123.456")]
+    [InlineData("123.456a", "123.456")]
+    [InlineData("123.a", "123")]
+    [InlineData("123.456.789", "123.456")]
+    [InlineData("123.", "123")]
+    public void ShouldReadDecimalWithDecimalSeparator(string input, string expected)
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out var result));
-        Assert.Equal(expected1, result);
-        Assert.True(s.ReadNonWhiteSpace(out var resultSep));
-        Assert.Equal(",", resultSep);
-        Assert.True(s.SkipWhiteSpace());
-
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out result));
-        Assert.Equal(expected2, result);
-        Assert.True(s.ReadNonWhiteSpace(out resultSep));
-        Assert.Equal(",", resultSep);
-        Assert.True(s.SkipWhiteSpace());
-
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out result));
-        Assert.Equal(expected3, result);
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
+        Assert.Equal(expected, result);
     }
 
 
