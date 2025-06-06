@@ -1,7 +1,5 @@
 using System;
-
 using Parlot.Fluent;
-
 using System.Linq;
 
 #if NET8_0_OR_GREATER
@@ -146,6 +144,8 @@ public class Scanner
 
     public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
     {
+        // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
+
         var start = Cursor.Position;
 
         if (allowLeadingSign)
@@ -159,7 +159,6 @@ public class Scanner
         if (!ReadInteger(out number))
         {
             // If there is no number, check if the decimal separator is allowed and present, otherwise fail
-
             if (!allowDecimalSeparator || Cursor.Current != decimalSeparator)
             {
                 Cursor.ResetPosition(start);
@@ -170,7 +169,8 @@ public class Scanner
         // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
         if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
         {
-            var savedCursor = Cursor.Position;
+            var beforeGroupPosition = Cursor.Position;
+
             // Group separators can be repeated as many times
             while (true)
             {
@@ -180,26 +180,41 @@ public class Scanner
                 }
                 else if (!ReadInteger())
                 {
-                    // it was not a group separator, really, so go back where the symbol was and stop
-                    Cursor.ResetPosition(savedCursor);
+                    // it was not a group separator so go back where the symbol was and stop
+                    Cursor.ResetPosition(beforeGroupPosition);
                     break;
                 }
                 else
                 {
-                    savedCursor = Cursor.Position;
+                    beforeGroupPosition = Cursor.Position;
                 }
             }
         }
 
-        if (allowDecimalSeparator)
-        {
-            if (Cursor.Current == decimalSeparator)
-            {
-                Cursor.AdvanceNoNewLines(1);
+        var beforeDecimalSeparator = Cursor.Position;
 
-                ReadInteger(out number);
+        if (allowDecimalSeparator && Cursor.Current == decimalSeparator)
+        {
+            Cursor.AdvanceNoNewLines(1);
+
+            var numberIsEmpty = number.IsEmpty;
+
+            if (!ReadInteger(out number))
+            {
+                Cursor.ResetPosition(beforeDecimalSeparator);
+
+                // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
+                if (numberIsEmpty)
+                {
+                    return false;
+                }
+
+                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                return true;
             }
         }
+
+        var beforeExponent = Cursor.Position;
 
         if (allowExponent && (Cursor.Current is 'e' or 'E'))
         {
@@ -210,11 +225,12 @@ public class Scanner
                 Cursor.AdvanceNoNewLines(1);
             }
 
-            // The exponent must be followed by a number, without a group separator
+            // The exponent must be followed by a number, without a group separator, otherwise backtrack to before the exponent
             if (!ReadInteger(out _))
             {
-                Cursor.ResetPosition(start);
-                return false;
+                Cursor.ResetPosition(beforeExponent);
+                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                return true;
             }
         }
 
