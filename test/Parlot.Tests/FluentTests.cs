@@ -501,8 +501,8 @@ public class FluentTests
     [Fact]
     public void ShouldParseWhiteSpace()
     {
-        Assert.Equal("\n\r\v ", Literals.WhiteSpace(true).Parse("\n\r\v a"));
-        Assert.Equal("  ", Literals.WhiteSpace(false).Parse("  \n\r\v a"));
+        Assert.Equal("\n\r\v\f ", Literals.WhiteSpace(true).Parse("\n\r\v\f a"));
+        Assert.Equal("  \f", Literals.WhiteSpace(false).Parse("  \f\n\r\v a"));
     }
 
     [Fact]

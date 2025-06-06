@@ -105,6 +105,7 @@ public class CharMaskGeneratorTest
         return (ch <= 32 &&
                 ((ch == 32) || // space
                  (ch == '\n') ||
+                 (ch == '\f') ||
                  (ch == '\r') ||
                  (ch == '\t') || // horizontal tab
                  (ch == '\v')))
