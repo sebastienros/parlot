@@ -147,6 +147,8 @@ public class Scanner
 
     public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
     {
+        // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
+
         var start = Cursor.Position;
 
         if (allowLeadingSign)
@@ -171,7 +173,8 @@ public class Scanner
         // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
         if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
         {
-            var savedCursor = Cursor.Position;
+            var beforeGroupPosition = Cursor.Position;
+
             // Group separators can be repeated as many times
             while (true)
             {
@@ -182,25 +185,42 @@ public class Scanner
                 else if (!ReadInteger(allowUnderscore))
                 {
                     // it was not a group separator, really, so go back where the symbol was and stop
-                    Cursor.ResetPosition(savedCursor);
+                    Cursor.ResetPosition(beforeGroupPosition);
                     break;
                 }
                 else
                 {
-                    savedCursor = Cursor.Position;
+                    beforeGroupPosition = Cursor.Position;
                 }
             }
         }
 
-        if (allowDecimalSeparator)
-        {
-            if (Cursor.Current == decimalSeparator)
-            {
-                Cursor.AdvanceNoNewLines(1);
+        var beforeDecimalSeparator = Cursor.Position;
 
-                ReadInteger(out number, allowUnderscore);
+        if (allowDecimalSeparator && Cursor.Current == decimalSeparator)
+        {
+            Cursor.AdvanceNoNewLines(1);
+
+            var numberIsEmpty = number.IsEmpty;
+
+            if (!ReadInteger(out number, allowUnderscore))
+            {
+                Cursor.ResetPosition(beforeDecimalSeparator);
+
+                // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
+                if (numberIsEmpty)
+                {
+                    return false;
+                }
+
+                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                if (allowUnderscore)
+                    number = StripUnderscores(number);
+                return true;
             }
         }
+
+        var beforeExponent = Cursor.Position;
 
         if (allowExponent && (Cursor.Current is 'e' or 'E'))
         {
@@ -212,38 +232,44 @@ public class Scanner
             }
 
             // The exponent must be followed by a number, without a group separator or underscores
-            if (!ReadInteger(out _))
+            if (!ReadInteger(out _, allowUnderscore))
             {
-                Cursor.ResetPosition(start);
-                return false;
+                Cursor.ResetPosition(beforeExponent);
+                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                if (allowUnderscore)
+                    number = StripUnderscores(number);
+                return true;
             }
         }
 
         number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
         if (allowUnderscore)
-        {
-            int idx = 0;
-            int cnt = 0;
-            for (idx =0; idx < number.Length; idx++)
-            {
-                if (number[idx] == '_')
-                    cnt++;
-            }
-            if (cnt == 0)
-                return true;
-            char[] buf = new char[number.Length - cnt];
-            int idxInBuf = 0;
-            for (idx = 0; idx < number.Length; idx++)
-            {
-                if (number[idx] != '_')
-                {
-                    buf[idxInBuf] = number[idx];
-                    idxInBuf++;
-                }
-            }
-            number = buf.AsSpan();
-        }
+            number = StripUnderscores(number);
         return true;
+    }
+
+    private static ReadOnlySpan<char> StripUnderscores(ReadOnlySpan<char> number)
+    {
+        int idx = 0;
+        int cnt = 0;
+        for (idx =0; idx < number.Length; idx++)
+        {
+            if (number[idx] == '_')
+                cnt++;
+        }
+        if (cnt == 0)
+            return number;
+        char[] buf = new char[number.Length - cnt];
+        int idxInBuf = 0;
+        for (idx = 0; idx < number.Length; idx++)
+        {
+            if (number[idx] != '_')
+            {
+                buf[idxInBuf] = number[idx];
+                idxInBuf++;
+            }
+        }
+        return buf.AsSpan();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
