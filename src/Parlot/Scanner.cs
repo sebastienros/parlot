@@ -127,7 +127,7 @@ public class Scanner
     public bool ReadDecimal() => ReadDecimal(out _);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(true, true, false, true, out number);
+    public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(true, true, false, true, false, out number);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
@@ -137,12 +137,13 @@ public class Scanner
             (numberOptions & NumberOptions.AllowDecimalSeparator) != 0,
             (numberOptions & NumberOptions.AllowGroupSeparators) != 0,
             (numberOptions & NumberOptions.AllowExponent) != 0,
+            (numberOptions & NumberOptions.AllowUnderscore) != 0,
             out number,
             decimalSeparator,
             groupSeparator);
     }
 
-    public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
+    public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
     {
         // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
 
@@ -156,7 +157,7 @@ public class Scanner
             }
         }
 
-        if (!ReadInteger(out number))
+        if (!ReadInteger(out number, allowUnderscore))
         {
             // If there is no number, check if the decimal separator is allowed and present, otherwise fail
             if (!allowDecimalSeparator || Cursor.Current != decimalSeparator)
@@ -178,7 +179,7 @@ public class Scanner
                 {
                     Cursor.AdvanceNoNewLines(1);
                 }
-                else if (!ReadInteger())
+                else if (!ReadInteger(allowUnderscore))
                 {
                     // it was not a group separator so go back where the symbol was and stop
                     Cursor.ResetPosition(beforeGroupPosition);
@@ -199,7 +200,7 @@ public class Scanner
 
             var numberIsEmpty = number.IsEmpty;
 
-            if (!ReadInteger(out number))
+            if (!ReadInteger(out number, allowUnderscore))
             {
                 Cursor.ResetPosition(beforeDecimalSeparator);
 
@@ -210,6 +211,8 @@ public class Scanner
                 }
 
                 number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                if (allowUnderscore)
+                    number = StripUnderscores(number);
                 return true;
             }
         }
@@ -226,27 +229,54 @@ public class Scanner
             }
 
             // The exponent must be followed by a number, without a group separator, otherwise backtrack to before the exponent
-            if (!ReadInteger(out _))
+            if (!ReadInteger(out _, allowUnderscore))
             {
                 Cursor.ResetPosition(beforeExponent);
                 number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                if (allowUnderscore)
+                    number = StripUnderscores(number);
                 return true;
             }
         }
 
         number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+        if (allowUnderscore)
+            number = StripUnderscores(number);
         return true;
     }
 
+    private static ReadOnlySpan<char> StripUnderscores(ReadOnlySpan<char> number)
+    {
+        int idx = 0;
+        int cnt = 0;
+        for (idx =0; idx < number.Length; idx++)
+        {
+            if (number[idx] == '_')
+                cnt++;
+        }
+        if (cnt == 0)
+            return number;
+        char[] buf = new char[number.Length - cnt];
+        int idxInBuf = 0;
+        for (idx = 0; idx < number.Length; idx++)
+        {
+            if (number[idx] != '_')
+            {
+                buf[idxInBuf] = number[idx];
+                idxInBuf++;
+            }
+        }
+        return buf.AsSpan();
+    }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ReadInteger() => ReadInteger(out _);
+    public bool ReadInteger(bool allowUnderscore = false) => ReadInteger(out _, allowUnderscore);
 
 #if NET8_0_OR_GREATER
-    public bool ReadInteger(out ReadOnlySpan<char> result)
+    public bool ReadInteger(out ReadOnlySpan<char> result, bool allowUnderscore = false)
     {
         var span = Cursor.Span;
 
-        var noDigitIndex = span.IndexOfAnyExcept(Character._decimalDigits);
+        var noDigitIndex = span.IndexOfAnyExcept(allowUnderscore ? Character._decimalDigitsAndUnderscore : Character._decimalDigits);
 
         // If first char is not a digit, fail
         if (noDigitIndex == 0 || span.IsEmpty)
@@ -270,10 +300,10 @@ public class Scanner
         return true;
     }
 #else
-    public bool ReadInteger(out ReadOnlySpan<char> result)
+    public bool ReadInteger(out ReadOnlySpan<char> result, bool allowUnderscore = false)
     {
         var next = 0;
-        while (Character.IsDecimalDigit(Cursor.PeekNext(next)))
+        while (allowUnderscore && Character.IsDecimalDigitOrUnderscore(Cursor.PeekNext(next)) || (!allowUnderscore && Character.IsDecimalDigit(Cursor.PeekNext(next))))
         {
             next += 1;
         }
