@@ -1,4 +1,4 @@
-﻿using Xunit;
+using Xunit;
 
 namespace Parlot.Tests;
 
@@ -32,6 +32,7 @@ public class CharacterTests
     [InlineData('\x09', true)]
     [InlineData('\x20', true)]
     [InlineData('\xa0', true)]
+    [InlineData('\f', true)]
     [InlineData('\v', false)]
     [InlineData('\n', false)]
     [InlineData('\r', false)]
@@ -42,9 +43,10 @@ public class CharacterTests
     }
 
     [Theory]
-    [InlineData('\x09', true)]
+    [InlineData('\t', true)]
     [InlineData('\x20', true)]
     [InlineData('\xa0', true)]
+    [InlineData('\f', true)]
     [InlineData('\v', true)]
     [InlineData('\n', true)]
     [InlineData('\r', true)]
