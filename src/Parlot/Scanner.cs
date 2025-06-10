@@ -201,11 +201,11 @@ public class Scanner
 
             if (!ReadInteger(out number))
             {
-                Cursor.ResetPosition(beforeDecimalSeparator);
-
                 // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
                 if (numberIsEmpty)
                 {
+                    Cursor.ResetPosition(beforeDecimalSeparator);
+
                     return false;
                 }
 

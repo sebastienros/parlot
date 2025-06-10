@@ -1,7 +1,7 @@
 using Parlot.Tests.Calc;
 using System;
 using System.Buffers;
-
+using System.Globalization;
 using Xunit;
 
 namespace Parlot.Tests;
@@ -401,14 +401,34 @@ public class ScannerTests
     [Theory]
     [InlineData("123.456", "123.456")]
     [InlineData("123.456a", "123.456")]
-    [InlineData("123.a", "123")]
+    [InlineData("123.a", "123.")]
     [InlineData("123.456.789", "123.456")]
-    [InlineData("123.", "123")]
+    [InlineData("123.", "123.")]
     public void ShouldReadDecimalWithDecimalSeparator(string input, string expected)
     {
         Scanner s = new(input);
 
         Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
+        Assert.True(decimal.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("123.456", "123")]
+    [InlineData("123.456a", "123")]
+    [InlineData("123.a", "123")]
+    [InlineData("123.456.789", "123")]
+    [InlineData("123.", "123")]
+    [InlineData("123.e", "123")]
+    [InlineData("123.e1", "123")]
+    [InlineData("123e", "123")]
+    [InlineData("123e1", "123e1")]
+    public void ShouldReadIntegerWithExponent(string input, string expected)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.Integer | Fluent.NumberOptions.AllowExponent, out var result, decimalSeparator: '.'));
+        Assert.True(decimal.TryParse(expected, NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }
 }
