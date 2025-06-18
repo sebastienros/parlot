@@ -122,6 +122,8 @@ Matches a numeric value with optional digits and leading sign. The exponent is s
 Parser<decimal> Decimal()
 ```
 
+NB: This is equivalent to `Number<decimal>()` and only exists for backward compatibility purposes.
+
 Usage:
 
 ```c#
