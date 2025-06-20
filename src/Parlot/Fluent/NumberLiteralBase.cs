@@ -25,7 +25,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
-
+    private readonly bool _allowUnderscore;
     public bool CanSeek => true;
 
     public char[] ExpectedChars { get; set; } = [];
@@ -53,6 +53,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
         _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
+        _allowUnderscore = (numberOptions & NumberOptions.AllowUnderscore) != 0;
 
         var expectedChars = "0123456789";
 
@@ -71,6 +72,10 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
             expectedChars += "eE";
         }
 
+        if (_allowUnderscore)
+        {
+            expectedChars += "_";
+        }
         ExpectedChars = expectedChars.ToCharArray();
 
         Name = "NumberLiteral";
@@ -83,7 +88,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
         var reset = context.Scanner.Cursor.Position;
         var start = reset.Offset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
+        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
 
@@ -134,6 +139,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
                     Expression.Constant(_allowDecimalSeparator),
                     Expression.Constant(_allowGroupSeparator),
                     Expression.Constant(_allowExponent),
+                    Expression.Constant(_allowUnderscore),
                     numberSpan, Expression.Constant(_decimalSeparator), Expression.Constant(_groupSeparator)),
                 Expression.Block(
                     Expression.Assign(end, context.Offset()),
