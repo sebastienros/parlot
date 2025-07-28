@@ -11,6 +11,7 @@ public class ExprBench
 {
     private readonly Parser<Expression> _parser = FluentParser.Expression;
     private readonly Parser<Expression> _compiled = FluentParser.Expression.Compile();
+    private readonly Parser _rawParser = new();
 
     private const string _expression1 = "3 - 1 / 2 + 1";
     private const string _expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";
@@ -18,7 +19,7 @@ public class ExprBench
     [Benchmark, BenchmarkCategory("Expression1")]
     public Expression ParlotRawSmall()
     {
-        return _parser.Parse(_expression1);
+        return _rawParser.Parse(_expression1);
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Expression1")]
@@ -30,7 +31,7 @@ public class ExprBench
     [Benchmark, BenchmarkCategory("Expression1")]
     public Expression ParlotFluentSmall()
     {
-        _ = FluentParser.Expression.TryParse(_expression1, out var result);
+        _ = _parser.TryParse(_expression1, out var result);
         return result;
     }
 
@@ -43,7 +44,7 @@ public class ExprBench
     [Benchmark, BenchmarkCategory("Expression2")]
     public Expression ParlotRawBig()
     {
-        return _parser.Parse(_expression2);
+        return _rawParser.Parse(_expression2);
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Expression2")]

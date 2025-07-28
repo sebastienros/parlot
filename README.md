@@ -110,26 +110,26 @@ In this benchmark, Parlot Fluent is more than 10 times faster than Pidgin, and P
 When compiled, the Parlot grammar shows even better results, without losing its simplicity.
 
 ```
-BenchmarkDotNet v0.14.0, Windows 11 (10.0.26100.2314)
-12th Gen Intel Core i7-1260P, 1 CPU, 16 logical and 12 physical cores
-.NET SDK 9.0.100
-  [Host]   : .NET 9.0.0 (9.0.24.52809), X64 RyuJIT AVX2
-  ShortRun : .NET 9.0.0 (9.0.24.52809), X64 RyuJIT AVX2
+BenchmarkDotNet v0.15.0, Windows 11 (10.0.26100.4770/24H2/2024Update/HudsonValley)
+12th Gen Intel Core i7-1260P 2.10GHz, 1 CPU, 16 logical and 12 physical cores
+.NET SDK 10.0.100-preview.6.25358.103
+  [Host]   : .NET 9.0.7 (9.0.725.31616), X64 RyuJIT AVX2
+  ShortRun : .NET 9.0.7 (9.0.725.31616), X64 RyuJIT AVX2
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-| Method              | Mean        | Error       | StdDev    | Ratio | Allocated | Alloc Ratio |
-|-------------------- |------------:|------------:|----------:|------:|----------:|------------:|
-| ParlotRawSmall      |    201.4 ns |    53.24 ns |   2.92 ns |  0.49 |     304 B |        0.44 |
-| ParlotCompiledSmall |    407.4 ns |   297.60 ns |  16.31 ns |  1.00 |     688 B |        1.00 |
-| ParlotFluentSmall   |    460.2 ns |   206.97 ns |  11.34 ns |  1.13 |     688 B |        1.00 |
-| PidginSmall         |  4,890.6 ns | 1,535.62 ns |  84.17 ns | 12.02 |     832 B |        1.21 |
-|                     |             |             |           |       |           |             |
-| ParlotRawBig        |    967.4 ns |   378.73 ns |  20.76 ns |  0.41 |    1200 B |        0.39 |
-| ParlotCompiledBig   |  2,347.6 ns |   455.92 ns |  24.99 ns |  1.00 |    3080 B |        1.00 |
-| ParlotFluentBig     |  2,405.9 ns |   207.45 ns |  11.37 ns |  1.02 |    3080 B |        1.00 |
-| PidginBig           | 25,741.2 ns | 6,880.56 ns | 377.15 ns | 10.97 |    4152 B |        1.35 |
+| Method              | Mean        | Error       | StdDev    | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|-------------------- |------------:|------------:|----------:|------:|--------:|-------:|----------:|------------:|
+| ParlotRawSmall      |    234.0 ns |   133.27 ns |   7.31 ns |  0.49 |    0.01 | 0.0322 |     304 B |        0.43 |
+| ParlotCompiledSmall |    481.6 ns |    89.48 ns |   4.90 ns |  1.00 |    0.01 | 0.0753 |     712 B |        1.00 |
+| ParlotFluentSmall   |    486.7 ns |   219.33 ns |  12.02 ns |  1.01 |    0.02 | 0.0753 |     712 B |        1.00 |
+| PidginSmall         |  5,301.9 ns | 1,864.01 ns | 102.17 ns | 11.01 |    0.21 | 0.0839 |     832 B |        1.17 |
+|                     |             |             |           |       |         |        |           |             |
+| ParlotRawBig        |  1,074.4 ns |   115.56 ns |   6.33 ns |  0.45 |    0.01 | 0.1259 |    1200 B |        0.39 |
+| ParlotCompiledBig   |  2,403.9 ns |   777.57 ns |  42.62 ns |  1.00 |    0.02 | 0.3281 |    3104 B |        1.00 |
+| ParlotFluentBig     |  2,443.7 ns |   204.37 ns |  11.20 ns |  1.02 |    0.02 | 0.3281 |    3104 B |        1.00 |
+| PidginBig           | 26,210.1 ns | 3,920.26 ns | 214.88 ns | 10.91 |    0.19 | 0.4272 |    4152 B |        1.34 |
 ```
 
 ### JSON Benchmarks
