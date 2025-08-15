@@ -85,7 +85,7 @@ Usage:
 
 ```c#
 var input = "hello world";
-var parser = Terms.Char("h");
+var parser = Terms.Char('h');
 ```
 
 Result:
@@ -161,7 +161,7 @@ Result:
 
 ### String
 
-Matches a quoted string literal, optionally use single or double enclosing quotes.
+Matches a quoted string literal with escape sequences. Use this parser to parse strings from a programming language.
 
 ```c#
 Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble)
@@ -228,6 +228,12 @@ abab
 Matches any chars from a list of chars.
 
 ```c#
+Parser<TextSpan> AnyOf(string values, int minSize = 1, int maxSize = 0)
+```
+
+The following overloads are available when targeting .NET 8 or later and use vectorized parsing for better performance.
+
+```c#
 Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0)
 Parser<TextSpan> AnyOf(SearchValue<char> searchValues, int minSize = 1, int maxSize = 0)
 ```
@@ -237,6 +243,34 @@ Usage:
 ```c#
 var input = "ababcad";
 var parser = Terms.AnyOf("ab");
+```
+
+Result:
+
+```
+abab
+```
+
+### NoneOf
+
+Matches any other chars than the ones specified.
+
+```c#
+Parser<TextSpan> NoneOf(string values, int minSize = 1, int maxSize = 0)
+```
+
+The following overloads are available when targeting .NET 8 or later and use vectorized parsing for better performance.
+
+```c#
+Parser<TextSpan> NoneOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0)
+Parser<TextSpan> NoneOf(SearchValue<char> searchValues, int minSize = 1, int maxSize = 0)
+```
+
+Usage:
+
+```c#
+var input = "ababcad";
+var parser = Terms.NoneOf("cd");
 ```
 
 Result:

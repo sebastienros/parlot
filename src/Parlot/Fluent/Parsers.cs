@@ -224,25 +224,49 @@ public class LiteralBuilder
     /// Builds a parser that matches a list of chars.
     /// </summary>
     /// <param name="searchValues">The <see cref="SearchValues{T}"/> instance to match against each char.</param>
-    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="minSize">The minimum number of chars required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> AnyOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => new SearchValuesCharLiteral(searchValues, minSize, maxSize);
 
     /// <summary>
     /// Builds a parser that matches a list of chars.
     /// </summary>
-    /// <param name="values">The set of char to match.</param>
-    /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
+    /// <param name="values">The set of chars to match.</param>
+    /// <param name="minSize">The minimum number of chars required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> AnyOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => new SearchValuesCharLiteral(values, minSize, maxSize);
+
+    /// <summary>
+    /// Builds a parser that matches anything but a list of chars.
+    /// </summary>
+    /// <param name="searchValues">The <see cref="SearchValues{T}"/> instance to ignore against each char.</param>
+    /// <param name="minSize">The minimum number of chars required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of chars it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> NoneOf(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0) => new SearchValuesCharLiteral(searchValues, minSize, maxSize, negate: true);
+
+    /// <summary>
+    /// Builds a parser that matches anything but a list of chars.
+    /// </summary>
+    /// <param name="values">The set of chars not to match.</param>
+    /// <param name="minSize">The minimum number of chars required. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of chars it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> NoneOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => new SearchValuesCharLiteral(values, minSize, maxSize, negate: true);
 #else
     /// <summary>
     /// Builds a parser that matches a list of chars.
     /// </summary>
-    /// <param name="values">The set of char to match.</param>
+    /// <param name="values">The set of chars to match.</param>
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> AnyOf(string values, int minSize = 1, int maxSize = 0) => new ListOfChars(values, minSize, maxSize);
+
+    /// <summary>
+    /// Builds a parser that matches anything but a list of chars.
+    /// </summary>
+    /// <param name="values">The set of chars not to match.</param>
+    /// <param name="minSize">The minimum number of required chars. Defaults to 1.</param>
+    /// <param name="maxSize">When the parser reaches the maximum number of chars it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
+    public Parser<TextSpan> NoneOf(string values, int minSize = 1, int maxSize = 0) => new ListOfChars(values, minSize, maxSize, negate: true);
 #endif
 }
 
