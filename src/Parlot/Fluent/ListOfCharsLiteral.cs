@@ -30,7 +30,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
             }
         }
 
-        if (_minSize > 0)
+        if (_minSize > 0 && !_negate)
         {
             ExpectedChars = values.ToCharArray();
             CanSeek = true;

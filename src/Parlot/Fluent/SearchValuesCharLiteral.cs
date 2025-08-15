@@ -33,7 +33,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         _maxSize = maxSize;
         _negate = negate;
 
-        if (minSize > 0)
+        if (minSize > 0 && !_negate)
         {
             CanSeek = true;
             ExpectedChars = searchValues.ToArray();

@@ -1250,6 +1250,15 @@ public class FluentTests
     }
 
     [Fact]
+    public void NoneOfShouldNotBeSeekable()
+    {
+        var parser = Literals.NoneOf("Z", minSize: 3);
+
+        Assert.True(parser is ISeekable);
+        Assert.False(((ISeekable)parser).CanSeek);
+    }
+
+    [Fact]
     public void ElseErrorShouldNotBeSeekable()
     {
         Parser<char> a = Terms.Char('a');
