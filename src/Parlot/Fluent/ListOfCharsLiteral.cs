@@ -9,6 +9,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
     private readonly CharMap<object> _map = new();
     private readonly int _minSize;
     private readonly int _maxSize;
+    private readonly bool _negate;
     private readonly bool _hasNewLine;
 
     public bool CanSeek { get; }
@@ -17,7 +18,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
 
     public bool SkipWhitespace { get; }
 
-    public ListOfChars(string values, int minSize = 1, int maxSize = 0)
+    public ListOfChars(string values, int minSize = 1, int maxSize = 0, bool negate = false)
     {
         foreach (var c in values)
         {
@@ -37,6 +38,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
 
         _minSize = minSize;
         _maxSize = maxSize;
+        _negate = negate;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
@@ -52,7 +54,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
 
         for (var i = 0; i < maxLength; i++)
         {
-            if (_map[span[i]] == null)
+            if (_map[span[i]] == null != _negate)
             {
                 break;
             }

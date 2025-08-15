@@ -10,6 +10,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
     private readonly SearchValues<char> _searchValues;
     private readonly int _minSize;
     private readonly int _maxSize;
+    private readonly bool _negate;
 
     public bool CanSeek { get; }
 
@@ -17,18 +18,20 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
 
     public bool SkipWhitespace { get; }
 
-    public SearchValuesCharLiteral(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0)
+    public SearchValuesCharLiteral(SearchValues<char> searchValues, int minSize = 1, int maxSize = 0, bool negate = false)
     {
         _searchValues = searchValues ?? throw new ArgumentNullException(nameof(searchValues));
         _minSize = minSize;
         _maxSize = maxSize;
+        _negate = negate;
     }
 
-    public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0)
+    public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0, bool negate = false)
     {
         _searchValues = SearchValues.Create(searchValues);
         _minSize = minSize;
         _maxSize = maxSize;
+        _negate = negate;
 
         if (minSize > 0)
         {
@@ -49,7 +52,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         }
 
         // First char not matching the searched values
-        var index = span.IndexOfAnyExcept(_searchValues);
+        var index = _negate ? span.IndexOfAny(_searchValues) : span.IndexOfAnyExcept(_searchValues);
 
         var size = 0;
 

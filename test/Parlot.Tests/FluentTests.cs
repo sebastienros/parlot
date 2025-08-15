@@ -1143,7 +1143,7 @@ public class FluentTests
     [InlineData("ba", "ab", "ab")]
     [InlineData("abc", "aaabbbccc", "aaabbbccc")]
     [InlineData("a", "aaab", "aaa")]
-    [InlineData("aa", "aaaab", "aaaa")]
+    [InlineData("aa", "aaaaab", "aaaaa")]
     public void AnyOfShouldMatch(string chars, string source,  string expected)
     {
         Assert.Equal(expected, Literals.AnyOf(chars).Parse(source).ToString());
@@ -1153,7 +1153,7 @@ public class FluentTests
     [InlineData("a", "b")]
     [InlineData("a", "bbb")]
     [InlineData("abc", "dabc")]
-    public void AnyOfShouldNotMAtch(string chars, string source)
+    public void AnyOfShouldNotMatch(string chars, string source)
     {
         Assert.False(Literals.AnyOf(chars).TryParse(source, out var _));
     }
@@ -1189,6 +1189,63 @@ public class FluentTests
 
         Assert.True(Literals.AnyOf("a", minSize: 3)
              .And(Literals.AnyOf("Z"))
+             .TryParse("aaaZZ", out _));
+    }
+
+    [Theory]
+    [InlineData("a", "b", "b")]
+    [InlineData("a", "bb", "bb")]
+    [InlineData("a", "bbbb", "bbbb")]
+    [InlineData("ab", "cd", "cd")]
+    [InlineData("ba", "cd", "cd")]
+    [InlineData("abc", "dddeeefff", "dddeeefff")]
+    [InlineData("a", "bbba", "bbb")]
+    [InlineData("aa", "bbbbba", "bbbbb")]
+    public void NoneOfShouldMatch(string chars, string source, string expected)
+    {
+        Assert.Equal(expected, Literals.NoneOf(chars).Parse(source).ToString());
+    }
+
+    [Theory]
+    [InlineData("a", "a")]
+    [InlineData("a", "aaa")]
+    [InlineData("abc", "beee")]
+    public void NoneOfShouldNotMatch(string chars, string source)
+    {
+        Assert.False(Literals.NoneOf(chars).TryParse(source, out var _));
+    }
+
+    [Fact]
+    public void NoneOfShouldRespectSizeConstraints()
+    {
+        Assert.True(Literals.NoneOf("a", minSize: 0).TryParse("bbb", out var r) && r.ToString() == "bbb");
+        Assert.True(Literals.NoneOf("a", minSize: 0).TryParse("aaa", out _));
+        Assert.False(Literals.NoneOf("a", minSize: 4).TryParse("bbb", out _));
+        Assert.False(Literals.NoneOf("a", minSize: 2).TryParse("ba", out _));
+        Assert.False(Literals.NoneOf("a", minSize: 3).TryParse("ba", out _));
+        Assert.Equal("bb", Literals.NoneOf("a", minSize: 2, maxSize: 2).Parse("bb"));
+        Assert.Equal("bb", Literals.NoneOf("a", minSize: 2, maxSize: 3).Parse("bb"));
+        Assert.Equal("b", Literals.NoneOf("a", maxSize: 1).Parse("bb"));
+        Assert.Equal("bbbb", Literals.NoneOf("a", minSize: 2, maxSize: 4).Parse("bbbbb"));
+        Assert.False(Literals.NoneOf("a", minSize: 2, maxSize: 2).TryParse("b", out _));
+    }
+
+    [Fact]
+    public void NoneOfShouldNotBeSeekableIfOptional()
+    {
+        var parser = Literals.NoneOf("a", minSize: 0) as ISeekable;
+        Assert.False(parser.CanSeek);
+    }
+
+    [Fact]
+    public void NoneOfShouldResetPositionWhenFalse()
+    {
+        Assert.False(Literals.NoneOf("Z", minSize: 3)
+            .And(Literals.NoneOf("a"))
+            .TryParse("aaZZ", out _));
+
+        Assert.True(Literals.NoneOf("Z", minSize: 3)
+             .And(Literals.NoneOf("a"))
              .TryParse("aaaZZ", out _));
     }
 
