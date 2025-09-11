@@ -296,4 +296,71 @@ public partial class RewriteTests
         var result1 = p.TryParse(input, out _);
         Assert.True(result1);
     }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void LookupParserShouldEnhanceUnseekableParsersWithCustomSet(bool useInnerParsers, bool compile)
+    {
+        // Lookup() is wrapping the parser in a Seekable<T>. This test ensures the inner parser is invoked correctly.
+
+        var aCalled = false;
+        var bCalled = false;
+
+        Deferred<string> result = new Deferred<string>();
+
+        var innera = new FakeParser<string> { CanSeek = true, Success = false, ExpectedChars = ['a'], Result = "a", OnParse = c => aCalled = true };
+        var innerb = new FakeParser<string> { CanSeek = true, Success = false, ExpectedChars = ['b'], Result = "b", OnParse = c => bCalled = true };
+
+        // Hide the seekability of OneOf by wrapping it in a Deferred<T>
+        result.Parser = OneOf(innera, innerb);
+
+        var p = useInnerParsers
+            ? result.Lookup(innera, innerb)
+            : result.Lookup(expectedChars: "ab");
+
+        if (compile) p = p.Compile();
+
+        Assert.Null(p.Parse("a"));
+        Assert.True(aCalled);
+        Assert.False(bCalled);
+
+        aCalled = bCalled = false;
+
+        Assert.Null(p.Parse("b"));
+        Assert.False(aCalled);
+        Assert.True(bCalled);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void LookupParserShouldOverrideExpectedChars(bool canSeek, bool compile)
+    {
+        // By setting expectedChars, the inner parsers are not invoked if the next char is not in the list.
+
+        var aCalled = false;
+        var bCalled = false;
+
+        var innera = new FakeParser<string> { CanSeek = canSeek, Success = false, ExpectedChars = ['a'], Result = "a", OnParse = c => aCalled = true };
+        var innerb = new FakeParser<string> { CanSeek = canSeek, Success = false, ExpectedChars = ['b'], Result = "b", OnParse = c => bCalled = true };
+
+        var p = OneOf(innera.Lookup(expectedChars: "cde"), innerb.Lookup(expectedChars: "cde"));
+
+        if (compile) p = p.Compile();
+
+        Assert.Null(p.Parse("a"));
+        Assert.False(aCalled);
+        Assert.False(bCalled);
+
+        aCalled = bCalled = false;
+
+        Assert.Null(p.Parse("b"));
+        Assert.False(aCalled);
+        Assert.False(bCalled);
+    }
 }

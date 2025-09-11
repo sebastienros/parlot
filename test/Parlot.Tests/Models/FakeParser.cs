@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Parlot.Fluent;
 using Parlot.Rewriting;
 
@@ -14,7 +14,7 @@ public partial class RewriteTests
 
         public T Result { get; set; }
         public bool CanSeek { get; set; }
-        public char[] ExpectedChars { get; set; }
+        public char[] ExpectedChars { get; set; } = [];
         public bool SkipWhitespace { get; set; }
         public bool Success { get; set; }
         public bool ThrowOnParse {get; set;}
