@@ -57,9 +57,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
             {
                 if (parser is ISeekable seekable && seekable.CanSeek)
                 {
-                    // If the parser is a Seekable<T> skip it and add directly the concrete parser
-                    var decoratedParser = (parser as Seekable<T>)?.Parser ?? parser;
-
                     foreach (var c in seekable.ExpectedChars)
                     {
                         IReadOnlyList<Parser<T>> subParsers = parser is OneOf<T> oneof ? oneof._map?[c] ?? [parser] : [parser!];

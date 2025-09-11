@@ -9,7 +9,7 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     public CharLiteral(char c)
     {
         Char = c;
-        ExpectedChars = new[] { c };
+        ExpectedChars = [c];
     }
 
     public char Char { get; }

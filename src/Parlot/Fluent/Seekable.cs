@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Wraps an existing parser as an <see cref="ISeekable"/> implementation by provide the seekable properties.
 /// </summary>
-internal sealed class Seekable<T> : Parser<T>, ISeekable
+internal sealed class Seekable<T> : Parser<T>, ISeekable, ICompilable
 {
     public bool CanSeek { get; set; }
 
@@ -39,6 +39,8 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable
 
     public CompilationResult Compile(CompilationContext context)
     {
+        // Passthrough implementation.
+
         var result = context.CreateCompilationResult<T>(true);
 
         var parserCompileResult = Parser.Build(context, requireResult: true);
