@@ -35,6 +35,17 @@ public abstract partial class Parser<T>
 
     private Parser<T> CheckCompiled(ParseContext context)
     {
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_0_OR_GREATER
+        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+        {
+            // NativeAOT supports System.Linq.Expressions via an interpreter, but the parser compilation code path is
+            // fundamentally incompatible with trimming & AOT.
+            // Unless .Compile is explicitly called elsewhere, trim it (and the interpreter) from the build.
+            // See https://github.com/dotnet/runtime/blob/main/docs/design/tools/illink/feature-checks.md
+            return this;
+        }
+#endif
+
         if (_compiledParser != null || context.CompilationThreshold == 0)
         {
             return _compiledParser ?? this;
