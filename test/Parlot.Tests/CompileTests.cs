@@ -81,6 +81,23 @@ public class CompileTests
         Assert.Equal("hello world", result);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShouldParseStringLiterals(bool compile)
+    {
+        var parser = Literals.String();
+
+        if (compile)
+        {
+            parser = parser.Compile();
+        }
+
+        var result = parser.Parse("\"ab\\nc\"");
+
+        Assert.Equal("ab\nc", result);
+    }
+
     [Fact]
     public void ShouldCompileCustomBacktickStringLiterals()
     {
