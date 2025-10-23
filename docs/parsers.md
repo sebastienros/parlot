@@ -859,13 +859,13 @@ To evaluate a condition before a parser is executed use the `If` parser instead.
 
 ### If
 
-Executes a parser only if a condition is true.
+Executes a parser and evaluates a predicate to validate the result before returning success.
 
 ```c#
 Parser<T> If<TContext, TState, T>(Func<ParseContext, TState, bool> predicate, TState state, Parser<T> parser)
 ```
 
-To evaluate a condition before a parser is executed use the `If` parser instead.
+To evaluate a condition before a parser to decide which parser to execute, use the `Switch` parser.
 
 ### Switch
 
