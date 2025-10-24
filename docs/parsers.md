@@ -1,5 +1,14 @@
 # List of parser combinators
 
+> **Important:** To use the parsers documented below, you must add the following import statements to your file:
+> ```c#
+> using Parlot.Fluent;
+> using static Parlot.Fluent.Parsers;
+> ```
+> The `using static` statement makes `Terms`, `Literals`, and other parser combinators (like `ZeroOrOne`, `Between`, `Deferred`, etc.) directly accessible.
+>
+> If your project has `ImplicitUsings` (Global Usings) enabled, the static import is included automatically.
+
 > Note: when samples use a local `input` variable representing the input text to parse, and a `parser` variable, the result is usually the outcome of calling `var result = parser.Parse(input)` or `var success = parser.TryParse(input, out var result)`.
 
 ## Terms and Literals
@@ -8,7 +17,7 @@ These are lowest level elements of a grammar, like a `'.'` (dot), predefined str
 In Parlot they usually are accessed from the `Literals` or `Terms` classes, with the difference that `Terms` will return a parser that
 accepts blank spaces before the element.
 
-Terms and Literals are accessed using the `Parsers.Terms` and `Parsers.Literals` static classes.
+Terms and Literals are accessed using the `Terms` and `Literals` properties from the `Parsers` static class (imported via `using static Parlot.Fluent.Parsers;`).
 
 ### WhiteSpace
 

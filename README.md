@@ -12,10 +12,26 @@ Parlot provides a fluent API based on parser combinators that provide a more rea
 The Fluent API provides simple parser combinators that are assembled to express more complex expressions.
 The main goal of this API is to provide an easy-to-read grammar. Another advantage is that grammars are built at runtime, and they can be extended dynamically.
 
+### Getting Started
+
+To use the Fluent API, you need to import the static `Parsers` class which provides access to `Terms`, `Literals`, and other parser combinators:
+
+```c#
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+```
+
+> **Important:** The `using static Parlot.Fluent.Parsers;` statement is required to access `Terms`, `Literals`, `ZeroOrOne`, `Between`, and other parser combinators used in the examples below. 
+>
+> Alternatively, if your project has `ImplicitUsings` (also known as Global Usings) enabled, this import is included automatically.
+
 The following example is a complete parser that creates a mathematical expression tree (AST).
 The source is available [here](./src/Samples/Calc/FluentParser.cs).
 
 ```c#
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
 public static readonly Parser<Expression> Expression;
 
 static FluentParser()

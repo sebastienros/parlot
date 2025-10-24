@@ -20,4 +20,9 @@
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Include build props file in the NuGet package for automatic using static import when ImplicitUsings is enabled -->
+  <ItemGroup>
+    <None Include="buildTransitive\Parlot.props" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+
 </Project>

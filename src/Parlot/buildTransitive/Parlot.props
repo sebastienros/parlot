@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <!-- 
+      When ImplicitUsings is enabled in the consuming project, 
+      this will automatically add the Parlot.Fluent.Parsers static import.
+      This makes Terms, Literals, and other parser combinators directly accessible.
+    -->
+  </PropertyGroup>
+  
+  <ItemGroup Condition="'$(ImplicitUsings)' == 'true' or '$(ImplicitUsings)' == 'enable'">
+    <Using Include="Parlot.Fluent.Parsers" Static="true" />
+  </ItemGroup>
+</Project>
