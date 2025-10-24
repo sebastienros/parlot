@@ -60,22 +60,36 @@ public static partial class Parsers
     /// <summary>
     /// Builds a parser that invoked the next one if a condition is true.
     /// </summary>
+    [Obsolete("Use the Select parser instead.")]
     public static Parser<T> If<C, S, T>(Func<C, S?, bool> predicate, S? state, Parser<T> parser) where C : ParseContext => new If<C, S, T>(parser, predicate, state);
 
     /// <summary>
     /// Builds a parser that invoked the next one if a condition is true.
     /// </summary>
+    [Obsolete("Use the Select parser instead.")]
     public static Parser<T> If<S, T>(Func<ParseContext, S?, bool> predicate, S? state, Parser<T> parser) => new If<ParseContext, S, T>(parser, predicate, state);
 
     /// <summary>
     /// Builds a parser that invoked the next one if a condition is true.
     /// </summary>
+    [Obsolete("Use the Select parser instead.")]
     public static Parser<T> If<C, T>(Func<C, bool> predicate, Parser<T> parser) where C : ParseContext => new If<C, object?, T>(parser, (c, s) => predicate(c), null);
 
     /// <summary>
     /// Builds a parser that invoked the next one if a condition is true.
     /// </summary>
+    [Obsolete("Use the Select parser instead.")]
     public static Parser<T> If<T>(Func<ParseContext, bool> predicate, Parser<T> parser) => new If<ParseContext, object?, T>(parser, (c, s) => predicate(c), null);
+
+    /// <summary>
+    /// Builds a parser that selects another parser using custom logic.
+    /// </summary>
+    public static Parser<T> Select<C, T>(Func<C, Parser<T>> selector) where C : ParseContext => new Select<C, T>(selector);
+
+    /// <summary>
+    /// Builds a parser that selects another parser using custom logic.
+    /// </summary>
+    public static Parser<T> Select<T>(Func<ParseContext, Parser<T>> selector) => new Select<ParseContext, T>(selector);
 
     /// <summary>
     /// Builds a parser that can be defined later one. Use it when a parser need to be declared before its rule can be set.
@@ -118,6 +132,15 @@ public static partial class Parsers
     /// </summary>
     public static Parser<T> Always<T>(T value) => new Always<T>(value);
 
+    /// <summary>
+    /// Builds a parser that always fails.
+    /// </summary>
+    public static Parser<T> Fail<T>() => new Fail<T>();
+
+    /// <summary>
+    /// Builds a parser that always fails.
+    /// </summary>
+    public static Parser<object> Fail() => new Fail<object>();
 }
 
 public class LiteralBuilder
