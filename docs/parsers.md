@@ -881,7 +881,9 @@ Parser<T> When(Func<ParseContext, T, bool> predicate)
 
 To evaluate a condition before a parser is executed use the `If` parser instead.
 
-### If
+### If (Deprecated)
+
+NB: This parser can be rewritten using `Select` (and `Fail`) which is more flexible and simpler to understand.
 
 Executes a parser only if a condition is true.
 
@@ -893,8 +895,7 @@ To evaluate a condition before a parser is executed use the `If` parser instead.
 
 ### Switch
 
-Returns the next parser based on some custom logic that can't be defined statically. It is typically used in conjunction with a `ParseContext` instance
-which has custom options.
+Returns a parser using custom logic based on previous results.
 
 ```c#
 Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action)
@@ -903,11 +904,15 @@ Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action)
 Usage:
 
 ```c#
-var parser = Terms.Integer().And(Switch((context, x) =>
-{
-    var customContext = context as CustomParseContext;
-    return Literals.Char(customContext.IntegerSeparator);
-});
+var parser = Terms.Integer().Switch((context, i) =>
+        {
+            // Valid entries: "1 is odd", "2 is even"
+            // Invalid: "7 is even"
+
+            return i % 2 == 0
+            ? Terms.Text("is odd")
+            : Terms.Text("is even");
+        });
 ```
 
 For performance reasons it is recommended to return a singleton (or static) Parser instance. Otherwise each `Parse` execution will allocate a new Parser instance.
@@ -959,6 +964,15 @@ Always returns successfully, with an optional return type or value.
 Parser<T> Always<T>()
 Parser<object> Always()
 Parser<T> Always<T>(T value)
+```
+
+### Fail
+
+A parser that returns a failed attempt. Used when a Parser needs to be returned but one that should depict a failure.
+
+```c#
+Parser<T> Fail<T>()
+Parser<object> Fail()
 ```
 
 ### OneOf

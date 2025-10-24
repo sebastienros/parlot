@@ -30,8 +30,10 @@ public class FluentTests
     {
         bool invoked = false;
 
+#pragma warning disable CS0618 // Type or member is obsolete
         var evenState = If(predicate: (context, x) => x % 2 == 0, state: 0, parser: Literals.Integer().Then(x => invoked = true));
         var oddState = If(predicate: (context, x) => x % 2 == 0, state: 1, parser: Literals.Integer().Then(x => invoked = true));
+#pragma warning restore CS0618 // Type or member is obsolete
 
         Assert.False(oddState.TryParse("1234", out var result1));
         Assert.False(invoked);
@@ -619,6 +621,13 @@ public class FluentTests
     {
         Assert.True(Always<object>().TryParse("123", out var result) && result == null);
         Assert.True(Always(1).TryParse("123", out var r2) && r2 == 1);
+    }
+
+
+    [Fact]
+    public void FailShouldFail()
+    {
+        Assert.False(Fail<object>().TryParse("123", out var result));
     }
 
     [Fact]

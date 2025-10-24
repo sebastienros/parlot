@@ -508,8 +508,10 @@ public class CompileTests
     {
         bool invoked = false;
 
+#pragma warning disable CS0618 // Type or member is obsolete
         var evenState = If(predicate: (context, x) => x % 2 == 0, state: 0, parser: Literals.Integer().Then(x => invoked = true)).Compile();
         var oddState = If(predicate: (context, x) => x % 2 == 0, state: 1, parser: Literals.Integer().Then(x => invoked = true)).Compile();
+#pragma warning restore CS0618 // Type or member is obsolete
 
         Assert.False(oddState.TryParse("1234", out var result1));
         Assert.False(invoked);
