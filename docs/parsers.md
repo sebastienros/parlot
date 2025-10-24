@@ -35,6 +35,30 @@ Result:
 
 Matches any non-blank spaces, optionally including new lines. Returns a `TextSpan` with the matched characters.  
 
+### Select
+
+Selects the parser to execute at runtime. Use it when the next parser depends on mutable state or a custom `ParseContext` implementation.
+
+```c#
+Parser<T> Select<T>(Func<ParseContext, Parser<T>> selector)
+Parser<T> Select<C, T>(Func<C, Parser<T>> selector) where C : ParseContext
+```
+
+Usage:
+
+```c#
+var parser = Select<CustomContext, string>(context =>
+{
+    return context.PreferYes ? Literals.Text("yes") : Literals.Text("no");
+});
+
+var result = parser.Parse(new CustomContext(new Scanner("yes")) { PreferYes = true });
+```
+`CustomContext` is an application-defined type that derives from `ParseContext` and exposes additional configuration.
+
+
+If the selector returns `null`, the `Select` parser fails without consuming any input. Capture additional state through closures or custom `ParseContext` properties when needed.
+
 ```c#
 Parser<TextSpan> NonWhiteSpace(bool includeNewLines = false)
 ```

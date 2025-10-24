@@ -402,6 +402,54 @@ public class FluentTests
         Assert.Equal("123", resultS);
     }
 
+    [Fact]
+    public void SelectShouldPickParserUsingRuntimeLogic()
+    {
+        var allowWhiteSpace = true;
+        var parser = Select<long>(_ => allowWhiteSpace ? Terms.Integer() : Literals.Integer());
+
+        Assert.True(parser.TryParse(" 42", out var result1));
+        Assert.Equal(42, result1);
+
+        allowWhiteSpace = false;
+
+        Assert.True(parser.TryParse("42", out var result2));
+        Assert.Equal(42, result2);
+
+        Assert.False(parser.TryParse(" 42", out _));
+    }
+
+    [Fact]
+    public void SelectShouldFailWhenSelectorReturnsNull()
+    {
+        var parser = Select<long>(_ => null!);
+
+        Assert.False(parser.TryParse("123", out _));
+    }
+
+    [Fact]
+    public void SelectShouldHonorConcreteParseContext()
+    {
+        var parser = Select<CustomParseContext, string>(context => context.PreferYes ? Literals.Text("yes") : Literals.Text("no"));
+
+        var yesContext = new CustomParseContext(new Scanner("yes")) { PreferYes = true };
+        Assert.True(parser.TryParse(yesContext, out var yes, out _));
+        Assert.Equal("yes", yes);
+
+        var noContext = new CustomParseContext(new Scanner("no")) { PreferYes = false };
+        Assert.True(parser.TryParse(noContext, out var no, out _));
+        Assert.Equal("no", no);
+    }
+
+    private sealed class CustomParseContext : ParseContext
+    {
+        public CustomParseContext(Scanner scanner) : base(scanner)
+        {
+        }
+
+        public bool PreferYes { get; set; }
+    }
+
     [Theory]
     [InlineData("a", "a")]
     [InlineData("foo", "foo")]

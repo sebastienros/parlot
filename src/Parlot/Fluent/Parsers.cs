@@ -78,6 +78,16 @@ public static partial class Parsers
     public static Parser<T> If<T>(Func<ParseContext, bool> predicate, Parser<T> parser) => new If<ParseContext, object?, T>(parser, (c, s) => predicate(c), null);
 
     /// <summary>
+    /// Builds a parser that selects another parser using custom logic.
+    /// </summary>
+    public static Parser<T> Select<C, T>(Func<C, Parser<T>> selector) where C : ParseContext => new Select<C, T>(selector);
+
+    /// <summary>
+    /// Builds a parser that selects another parser using custom logic.
+    /// </summary>
+    public static Parser<T> Select<T>(Func<ParseContext, Parser<T>> selector) => new Select<ParseContext, T>(selector);
+
+    /// <summary>
     /// Builds a parser that can be defined later one. Use it when a parser need to be declared before its rule can be set.
     /// </summary>
     public static Deferred<T> Deferred<T>() => new();
