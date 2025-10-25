@@ -919,7 +919,44 @@ public class CompileTests
     [Fact]
     public void ShouldReturnElse()
     {
-        var parser = Literals.Integer().Then<long?>(x => x).Else(null).Compile();
+        var parser = Literals.Integer().Then<long?>(x => x).Else((long?)null).Compile();
+
+        Assert.True(parser.TryParse("123", out var result1));
+        Assert.Equal(123, result1);
+
+        Assert.True(parser.TryParse(" 123", out var result2));
+        Assert.Null(result2);
+    }
+
+    [Fact]
+    public void ShouldReturnElseFromFunction()
+    {
+        var parser = Literals.Integer().Then<decimal>().Else(context => -1m).Compile();
+
+        Assert.True(parser.TryParse("123", out var result1));
+        Assert.Equal(123, result1);
+
+        Assert.True(parser.TryParse(" 123", out var result2));
+        Assert.Equal(-1m, result2);
+    }
+
+    [Fact]
+    public void ElseFunctionShouldReceiveContext()
+    {
+        var parser = Literals.Integer().Then<int>().Else(context => context.Scanner.Cursor.Position.Offset).Compile();
+
+        Assert.True(parser.TryParse("123", out var result1));
+        Assert.Equal(123, result1);
+
+        // When parser fails, it should return the current position (which is 0 before whitespace is skipped)
+        Assert.True(parser.TryParse(" 123", out var result2));
+        Assert.Equal(0, result2);
+    }
+
+    [Fact]
+    public void ElseFunctionWithNullableValue()
+    {
+        var parser = Literals.Integer().Then<long?>(x => x).Else(context => (long?)null).Compile();
 
         Assert.True(parser.TryParse("123", out var result1));
         Assert.Equal(123, result1);
