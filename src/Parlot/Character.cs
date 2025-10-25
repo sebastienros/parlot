@@ -113,7 +113,7 @@ public static partial class Character
             return s;
         }
 
-        return DecodeString(s);
+        return DecodeStringInternal(s.AsSpan());
     }
 
     public static TextSpan DecodeString(TextSpan textSpan)
