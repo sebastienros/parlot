@@ -38,13 +38,16 @@ public static partial class Character
         return (char)code;
     }
 
+    [Obsolete("Use DecodeString(TextSpan) or DecodeString(string) instead for performance reasons.")]
     public static ReadOnlySpan<char> DecodeString(ReadOnlySpan<char> span)
     {
-        // Nothing to do if the string doesn't have any escape char
-        if (span.IsEmpty || span.IndexOf('\\') == -1)
-        {
-            return span;
-        }
+        // Use other overloads for better performance as they can return the original string/span when no escape char is present.
+        return DecodeStringInternal(span).AsSpan();
+    }
+
+    public static string DecodeStringInternal(ReadOnlySpan<char> span)
+    {
+        // This method always allocates a new string. It is invoked when we know for sure that the string contains escape sequences.
 
         // The assumption is that the new string will be shorter since escapes results are smaller than their source
         char[]? rentedBuffer = null;
@@ -92,9 +95,7 @@ public static partial class Character
                 buffer[dataIndex++] = c;
             }
 
-            var result = buffer[..dataIndex].ToString().AsSpan();
-
-            return result;
+            return buffer[..dataIndex].ToString();
         }
         finally
         {
@@ -105,18 +106,36 @@ public static partial class Character
         }
     }
 
-    public static TextSpan DecodeString(string s) => DecodeString(new TextSpan(s));
-
-    public static TextSpan DecodeString(TextSpan span)
+    public static string DecodeString(string s)
     {
-        // Nothing to do if the string doesn't have any escape char
-        if (string.IsNullOrEmpty(span.Buffer) || span.Buffer.AsSpan(span.Offset, span.Length).IndexOf('\\') == -1)
+        if (string.IsNullOrEmpty(s) || s.AsSpan().IndexOf('\\') == -1)
         {
-            return span;
+            return s;
         }
 
-        return new TextSpan(DecodeString(span.Span).ToString());
+        return DecodeStringInternal(s.AsSpan());
+    }
 
+    public static TextSpan DecodeString(TextSpan textSpan)
+    {
+        if (textSpan.Span.IsEmpty || textSpan.Span.IndexOf('\\') == -1)
+        {
+            return textSpan;
+        }
+
+        return new TextSpan(DecodeStringInternal(textSpan.Span));
+    }
+
+    public static TextSpan DecodeString(string s, int offset, int length)
+    {
+        var span = s.AsSpan().Slice(offset, length);
+
+        if (span.IsEmpty || span.IndexOf('\\') == -1)
+        {
+            return new TextSpan(s, offset, length);
+        }
+
+        return new TextSpan(DecodeStringInternal(span));
     }
 
     private static int HexValue(char ch) => HexConverter.FromChar(ch);

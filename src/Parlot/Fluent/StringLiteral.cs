@@ -17,7 +17,7 @@ public enum StringLiteralQuotes
 
 public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
 {
-    private static readonly MethodInfo _decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(TextSpan)])!;
+    private static readonly MethodInfo _decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(string), typeof(int), typeof(int)])!;
 
     static readonly char[] SingleQuotes = ['\''];
     static readonly char[] DoubleQuotes = ['\"'];
@@ -84,7 +84,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
         if (success)
         {
             // Remove quotes
-            var decoded = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
+            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1, end - start - 2);
 
             result.Set(start, end, decoded);
 
@@ -123,7 +123,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
         // {
         //     var end = context.Scanner.Cursor.Offset;
         //     success = true;
-        //     value = Character.DecodeString(new TextSpan(context.Scanner.Buffer, start + 1, end - start - 2));
+        //     value = Character.DecodeString(context.Scanner.Buffer, start + 1, end - start - 2);
         // }
 
         var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
@@ -139,11 +139,10 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
                     ? Expression.Empty()
                     : Expression.Assign(result.Value,
                         Expression.Call(_decodeStringMethodInfo,
-                            context.NewTextSpan(
-                                context.Buffer(),
-                                Expression.Add(start, Expression.Constant(1)),
-                                Expression.Subtract(Expression.Subtract(end, start), Expression.Constant(2))
-                                )))
+                            context.Buffer(),
+                            Expression.Add(start, Expression.Constant(1)),
+                            Expression.Subtract(Expression.Subtract(end, start), Expression.Constant(2))
+                            ))
                 )
             ));
 

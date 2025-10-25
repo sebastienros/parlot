@@ -19,6 +19,16 @@ public class CharacterTests
     public void ShouldDecodeString(string text, string expected)
     {
         Assert.Equal(expected, Character.DecodeString(new TextSpan(text)).ToString());
+        Assert.Equal(expected, Character.DecodeString(text).ToString());
+    }
+
+    [Fact]
+    public void ShouldDecodeStringWithOffset()
+    {
+        Assert.Equal(" \0hello ", Character.DecodeString("AAAA \\0hello BBBB", 4, 9).ToString());
+        Assert.Equal("AAAA \0hello ", Character.DecodeString("AAAA \\0hello BBBB", 0, 13).ToString());
+        Assert.Equal(" \0hello BBBB", Character.DecodeString("AAAA \\0hello BBBB", 4, 13).ToString());
+        Assert.Equal("AAAA \0hello BBBB", Character.DecodeString("AAAA \\0hello BBBB", 0, 17).ToString());
     }
 
     [Fact]
