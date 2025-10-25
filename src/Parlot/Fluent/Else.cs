@@ -37,6 +37,7 @@ public sealed class Else<T> : Parser<T>, ICompilable
             }
             else
             {
+                // _value can't be null if _func is null
                 result.Set(result.Start, result.End, _value!);
             }
         }
@@ -67,9 +68,10 @@ public sealed class Else<T> : Parser<T>, ICompilable
         Expression elseExpression;
         if (_func != null)
         {
+            var invokeFuncExpression = Expression.Invoke(Expression.Constant(_func), [context.ParseContext]);
             elseExpression = context.DiscardResult
-                ? Expression.Invoke(Expression.Constant(_func), [context.ParseContext])
-                : Expression.Assign(result.Value, Expression.Invoke(Expression.Constant(_func), [context.ParseContext]));
+                ? invokeFuncExpression
+                : Expression.Assign(result.Value, invokeFuncExpression);
         }
         else
         {
