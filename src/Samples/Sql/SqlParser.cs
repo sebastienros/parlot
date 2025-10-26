@@ -77,7 +77,6 @@ public class SqlParser
         // Deferred parsers
         var expression = Deferred<Expression>();
         var selectStatement = Deferred<SelectStatement>();
-        var columnItem = Deferred<ColumnItem>();
         var orderByItem = Deferred<OrderByItem>();
 
         // Expression list
@@ -220,17 +219,40 @@ public class SqlParser
 
         expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
 
-        // Column source
-        var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id));
+        // Selector - either '*' or comma-separated list of expressions/identifiers (with optional aliases)
+        // For now, we'll parse the expression and convert it to a string representation
+        var selectorItem = expression.And((AS.Optional().And(identifier)).Optional())
+            .Then(result =>
+            {
+                // expression, (AS.Optional(), identifier)?.Optional() -> 2 items
+                var expr = result.Item1;
+                var aliasOpt = result.Item2;
+                
+                // Convert expression to string representation
+                string exprStr = ExpressionToString(expr);
+                
+                if (aliasOpt.Count > 0)
+                {
+                    // Has alias: "expression AS alias" -> return "expression AS alias"
+                    var aliasId = aliasOpt[0].Item2;
+                    return $"{exprStr} AS {aliasId}";
+                }
+                return exprStr;
+            });
 
-        // Deferred for OVER clause components
-        var columnItemList = Separated(COMMA, columnItem);
+        var selectorList = STAR.Then(_ => new string[] { "*" })
+            .Or(Separated(COMMA, selectorItem).Then(items => items.ToArray()));
+
+        // Column names for GROUP BY and PARTITION BY
+        var columnNameList = Separated(COMMA, identifier).Then(ids => ids.Select(i => i.ToString()).ToArray());
+
+        // Deferred for ORDER BY
         var orderByList = Separated(COMMA, orderByItem);
 
         var orderByClause = ORDER.AndSkip(BY).And(orderByList)
             .Then(x => new OrderByClause(x.Item2));
 
-        var partitionBy = PARTITION.AndSkip(BY).And(columnItemList)
+        var partitionBy = PARTITION.AndSkip(BY).And(columnNameList)
             .Then(x => new PartitionByClause(x.Item2));
 
         var overClause = OVER.AndSkip(LPAREN).And(partitionBy.Optional()).And(orderByClause.Optional()).AndSkip(RPAREN)
@@ -245,34 +267,6 @@ public class SqlParser
                     orderBy.Count > 0 ? (OrderByClause?)orderBy[0] : null
                 );
             });
-
-        var columnSourceFunc = functionCall.And(overClause.Optional())
-            .Then<ColumnSource>(result =>
-            {
-                // functionCall, overClause.Optional() -> 2 items
-                var func = (FunctionCall)result.Item1;
-                var over = result.Item2.Count > 0 ? result.Item2[0] : (OverClause?)null;
-                return new ColumnSourceFunction(func, over);
-            });
-
-        var columnSource = columnSourceFunc.Or(columnSourceId);
-
-        // Column item with optional alias
-        var columnAlias = AS.Optional().And(identifier).Then(x => x.Item2);
-
-        columnItem.Parser = columnSource.And(columnAlias.Optional())
-            .Then(result =>
-            {
-                // columnSource, columnAlias.Optional() -> 2 items
-                var source = result.Item1;
-                var alias = result.Item2.Count > 0 ? result.Item2[0] : null;
-                return new ColumnItem(source, alias);
-            });
-
-        // Selector list
-        var starSelector = STAR.Then<SelectorList>(_ => new StarSelector());
-        var columnListSelector = columnItemList.Then<SelectorList>(items => new ColumnItemList(items));
-        var selectorList = starSelector.Or(columnListSelector);
 
         // Table source
         var tableAlias = AS.Optional().And(identifier).Then(x => x.Item2);
@@ -339,8 +333,7 @@ public class SqlParser
         var whereClause = WHERE.And(expression).Then(x => new WhereClause(x.Item2));
 
         // GROUP BY clause
-        var columnSourceList = Separated(COMMA, columnSource);
-        var groupByClause = GROUP.AndSkip(BY).And(columnSourceList)
+        var groupByClause = GROUP.AndSkip(BY).And(columnNameList)
             .Then(x => new GroupByClause(x.Item2));
 
         // HAVING clause
@@ -451,6 +444,65 @@ public class SqlParser
 
         Statements = statementList;
     }
+
+    // Helper method to convert Expression AST nodes to string representation
+    private static string ExpressionToString(Expression expr)
+    {
+        return expr switch
+        {
+            IdentifierExpression id => id.Identifier.ToString(),
+            LiteralExpression lit => lit.Value?.ToString() ?? "NULL",
+            BinaryExpression bin => $"{ExpressionToString(bin.Left)} {BinaryOpToString(bin.Operator)} {ExpressionToString(bin.Right)}",
+            UnaryExpression unary => $"{UnaryOpToString(unary.Operator)} {ExpressionToString(unary.Expression)}",
+            FunctionCall func => $"{func.Name}({ArgumentsToString(func.Arguments)})",
+            BetweenExpression between => $"{ExpressionToString(between.Expression)}{(between.IsNot ? " NOT" : "")} BETWEEN {ExpressionToString(between.Lower)} AND {ExpressionToString(between.Upper)}",
+            InExpression inExpr => $"{ExpressionToString(inExpr.Expression)}{(inExpr.IsNot ? " NOT" : "")} IN ({string.Join(", ", inExpr.Values.Select(ExpressionToString))})",
+            ParenthesizedSelectStatement parenSelect => "(SELECT ...)",
+            TupleExpression tuple => $"({string.Join(", ", tuple.Expressions.Select(ExpressionToString))})",
+            ParameterExpression param => param.Name.ToString(),
+            _ => expr.ToString() ?? ""
+        };
+    }
+
+    private static string BinaryOpToString(BinaryOperator op) => op switch
+    {
+        BinaryOperator.Add => "+",
+        BinaryOperator.Subtract => "-",
+        BinaryOperator.Multiply => "*",
+        BinaryOperator.Divide => "/",
+        BinaryOperator.Modulo => "%",
+        BinaryOperator.Equal => "=",
+        BinaryOperator.NotEqual => "<>",
+        BinaryOperator.NotEqualAlt => "!=",
+        BinaryOperator.LessThan => "<",
+        BinaryOperator.LessThanOrEqual => "<=",
+        BinaryOperator.GreaterThan => ">",
+        BinaryOperator.GreaterThanOrEqual => ">=",
+        BinaryOperator.And => "AND",
+        BinaryOperator.Or => "OR",
+        BinaryOperator.Like => "LIKE",
+        BinaryOperator.NotLike => "NOT LIKE",
+        BinaryOperator.BitwiseAnd => "&",
+        BinaryOperator.BitwiseOr => "|",
+        BinaryOperator.BitwiseXor => "^",
+        _ => op.ToString()
+    };
+
+    private static string UnaryOpToString(UnaryOperator op) => op switch
+    {
+        UnaryOperator.Not => "NOT",
+        UnaryOperator.Minus => "-",
+        UnaryOperator.Plus => "+",
+        UnaryOperator.BitwiseNot => "~",
+        _ => op.ToString()
+    };
+
+    private static string ArgumentsToString(FunctionArguments args) => args switch
+    {
+        StarArgument => "*",
+        ExpressionListArguments exprList => string.Join(", ", exprList.Expressions.Select(ExpressionToString)),
+        _ => ""
+    };
 
     public static StatementList? Parse(string input)
     {
