@@ -18,7 +18,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
 
     public bool SkipWhitespace { get; }
 
-    public ListOfChars(string values, int minSize = 1, int maxSize = 0, bool negate = false)
+    public ListOfChars(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0, bool negate = false)
     {
         foreach (var c in values)
         {
@@ -32,7 +32,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable
 
         if (_minSize > 0 && !_negate)
         {
-            ExpectedChars = values.ToCharArray();
+            ExpectedChars = values.ToString().ToCharArray();
             CanSeek = true;
         }
 
