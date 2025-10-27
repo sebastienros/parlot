@@ -58,13 +58,13 @@ public class SqlParser
         var PARTITION = Terms.Text("PARTITION", caseInsensitive: true);
 
         // Literals
-        var numberLiteral = Terms.Decimal().Then<Expression>(d => new LiteralExpression(d));
+        var numberLiteral = Terms.Decimal().Then<Expression>(d => new LiteralExpression<decimal>(d));
 
         var stringLiteral = Terms.String(StringLiteralQuotes.Single)
-            .Then<Expression>(s => new LiteralExpression(s.Span.ToString()));
+            .Then<Expression>(s => new LiteralExpression<string>(s.Span.ToString()));
 
-        var booleanLiteral = TRUE.Then<Expression>(new BooleanLiteral(true))
-            .Or(FALSE.Then<Expression>(new BooleanLiteral(false)));
+        var booleanLiteral = TRUE.Then<Expression>(new LiteralExpression<bool>(true))
+            .Or(FALSE.Then<Expression>(new LiteralExpression<bool>(false)));
 
         // Identifiers
         var simpleIdentifier = Terms.Identifier()
@@ -224,7 +224,7 @@ public class SqlParser
         var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id));
 
         // Deferred for OVER clause components
-        var columnItemList = Separated(COMMA, columnItem);
+        var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(new ColumnItem(new ColumnSourceIdentifier(new Identifier("*")), null))));
         var orderByList = Separated(COMMA, orderByItem);
 
         var orderByClause = ORDER.AndSkip(BY).And(orderByList)
@@ -257,8 +257,8 @@ public class SqlParser
 
         var columnSource = columnSourceFunc.Or(columnSourceId);
 
-        // Column item with optional alias
-        var columnAlias = AS.Optional().And(identifier).Then(x => x.Item2);
+        // Column item with alias
+        var columnAlias = AS.SkipAnd(identifier);
 
         columnItem.Parser = columnSource.And(columnAlias.Optional())
             .Then(result =>
@@ -269,13 +269,8 @@ public class SqlParser
                 return new ColumnItem(source, alias);
             });
 
-        // Selector list
-        var starSelector = STAR.Then<SelectorList>(_ => new StarSelector());
-        var columnListSelector = columnItemList.Then<SelectorList>(items => new ColumnItemList(items));
-        var selectorList = starSelector.Or(columnListSelector);
-
         // Table source
-        var tableAlias = AS.Optional().And(identifier).Then(x => x.Item2);
+        var tableAlias = AS.SkipAnd(identifier);
 
         var tableSourceItem = identifier.And(tableAlias.Optional())
             .Then(result =>
@@ -317,7 +312,7 @@ public class SqlParser
             .Then(result =>
             {
                 // joinKind.Optional(), tableSourceItemList, joinConditions -> 3 items (JOIN and ON skipped)
-                var kind = result.Item1.Count > 0 ? result.Item1[0] : (JoinKind?)null;
+                var kind = result.Item1.Count > 0 ? result.Item1[0] : JoinKind.None;
                 var tables = result.Item2;
                 var conditions = result.Item3;
                 return new JoinStatement(tables, conditions, kind);
@@ -326,12 +321,12 @@ public class SqlParser
         var joins = ZeroOrMany(joinStatement);
 
         // FROM clause
-        var fromClause = FROM.And(tableSourceList).And(joins)
+        var fromClause = FROM.SkipAnd(tableSourceList).And(joins)
             .Then(result =>
             {
                 // FROM, tableSourceList, joins -> 3 items
-                var tables = result.Item2;
-                var joinList = result.Item3;
+                var tables = result.Item1;
+                var joinList = result.Item2;
                 return new FromClause(tables, joinList.Any() ? joinList : null);
             });
 
@@ -366,8 +361,8 @@ public class SqlParser
         var selectRestriction = ALL.Then(SelectRestriction.All).Or(DISTINCT.Then(SelectRestriction.Distinct));
 
         selectStatement.Parser = SELECT
-            .And(selectRestriction.Optional())
-            .And(selectorList)
+            .SkipAnd(selectRestriction.Optional())
+            .And(columnItemList)
             .And(fromClause.Optional())
             .And(whereClause.Optional())
             .And(groupByClause.Optional())
@@ -377,19 +372,19 @@ public class SqlParser
             .And(offsetClause.Optional())
             .Then(result =>
             {
-                // SELECT, restriction?, selector, from?, where?, groupBy?, having?, orderBy?, limit?, offset? -> 10 items
-                // Tuples nest after 7 items: ((Item1, Item2, Item3, Item4, Item5, Item6, Item7), Item2, Item3, Item4)
-                var restriction = result.Item1.Item2.Count > 0 ? (SelectRestriction?)result.Item1.Item2[0] : null;
-                var selector = result.Item1.Item3;
-                var from = result.Item1.Item4.Count > 0 ? result.Item1.Item4[0] : null;
-                var where = result.Item1.Item5.Count > 0 ? result.Item1.Item5[0] : null;
-                var groupBy = result.Item1.Item6.Count > 0 ? result.Item1.Item6[0] : null;
-                var having = result.Item1.Item7.Count > 0 ? result.Item1.Item7[0] : null;
-                var orderBy = result.Item2.Count > 0 ? (OrderByClause?)result.Item2[0] : null;
-                var limit = result.Item3.Count > 0 ? result.Item3[0] : null;
-                var offset = result.Item4.Count > 0 ? result.Item4[0] : null;
+                var ((restriction, columns, from, where, groupBy, having, orderBy), limit, offset) = result;
 
-                return new SelectStatement(selector, restriction, from, where, groupBy, having, orderBy, limit, offset);
+                return new SelectStatement(
+                    columns,
+                    restriction.Count > 0 ? restriction[0] : null,
+                    from.Count > 0 ? from[0] : null,
+                    where.Count > 0 ? where[0] : null,
+                    groupBy.Count > 0 ? groupBy[0] : null,
+                    having.Count > 0 ? having[0] : null,
+                    orderBy.Count > 0 ? orderBy[0] : null,
+                    limit.Count > 0 ? limit[0] : null,
+                    offset.Count > 0 ? offset[0] : null
+                );
             });
 
         // WITH clause (CTEs)
@@ -454,10 +449,11 @@ public class SqlParser
 
     public static StatementList? Parse(string input)
     {
-        if (Statements.TryParse(input, out var result))
+        if (Statements.TryParse(input, out var result, out var error))
         {
             return result;
         }
+
         return null;
     }
 }

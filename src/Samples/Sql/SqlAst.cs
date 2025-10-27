@@ -92,7 +92,7 @@ public class CommonTableExpression : ISqlNode
 public class SelectStatement : ISqlNode
 {
     public SelectRestriction? Restriction { get; }
-    public SelectorList SelectorList { get; }
+    public IReadOnlyList<ColumnItem> ColumnItemList { get; }
     public FromClause? FromClause { get; }
     public WhereClause? WhereClause { get; }
     public GroupByClause? GroupByClause { get; }
@@ -102,7 +102,7 @@ public class SelectStatement : ISqlNode
     public OffsetClause? OffsetClause { get; }
 
     public SelectStatement(
-        SelectorList selectorList,
+        IReadOnlyList<ColumnItem> columnItemList,
         SelectRestriction? restriction = null,
         FromClause? fromClause = null,
         WhereClause? whereClause = null,
@@ -112,7 +112,7 @@ public class SelectStatement : ISqlNode
         LimitClause? limitClause = null,
         OffsetClause? offsetClause = null)
     {
-        SelectorList = selectorList;
+        ColumnItemList = columnItemList;
         Restriction = restriction;
         FromClause = fromClause;
         WhereClause = whereClause;
@@ -128,25 +128,6 @@ public enum SelectRestriction
 {
     All,
     Distinct
-}
-
-// Selectors
-public abstract class SelectorList : ISqlNode
-{
-}
-
-public class StarSelector : SelectorList
-{
-}
-
-public class ColumnItemList : SelectorList
-{
-    public IReadOnlyList<ColumnItem> Columns { get; }
-
-    public ColumnItemList(IReadOnlyList<ColumnItem> columns)
-    {
-        Columns = columns;
-    }
 }
 
 public class ColumnItem : ISqlNode
@@ -244,6 +225,7 @@ public class JoinStatement : ISqlNode
 
 public enum JoinKind
 {
+    None,
     Inner,
     Left,
     Right
@@ -469,21 +451,11 @@ public class IdentifierExpression : Expression
     }
 }
 
-public class LiteralExpression : Expression
+public class LiteralExpression<T> : Expression
 {
-    public object Value { get; }
+    public T Value { get; }
 
-    public LiteralExpression(object value)
-    {
-        Value = value;
-    }
-}
-
-public class BooleanLiteral : Expression
-{
-    public bool Value { get; }
-
-    public BooleanLiteral(bool value)
+    public LiteralExpression(T value)
     {
         Value = value;
     }

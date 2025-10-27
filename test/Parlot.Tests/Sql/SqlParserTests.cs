@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 
 namespace Parlot.Tests.Sql;
@@ -41,10 +42,10 @@ public class SqlParserTests
     }
 
     [Theory]
-    [InlineData("SELECT u.id, u.name FROM users u")]
-    [InlineData("SELECT u.id, o.amount FROM users u JOIN orders o ON u.id = o.user_id")]
-    [InlineData("SELECT * FROM users u LEFT JOIN orders o ON u.id = o.user_id")]
-    [InlineData("SELECT * FROM users u INNER JOIN orders o ON u.id = o.user_id")]
+    [InlineData("SELECT u.id, u.name FROM users AS u")]
+    [InlineData("SELECT u.id, o.amount FROM users AS u JOIN orders AS o ON u.id = o.user_id")]
+    [InlineData("SELECT * FROM users AS u LEFT JOIN orders AS o ON u.id = o.user_id")]
+    [InlineData("SELECT * FROM users AS u INNER JOIN orders AS o ON u.id = o.user_id")]
     public void ShouldParseJoins(string sql)
     {
         var result = SqlParser.Parse(sql);
@@ -96,7 +97,9 @@ public class SqlParserTests
         Assert.Single(result.Statements);
         
         var statement = GetSelectStatement(result);
-        Assert.IsType<StarSelector>(statement.SelectorList);
+        Assert.Single(statement.ColumnItemList);
+        Assert.Equal("*", ((ColumnSourceIdentifier)statement.ColumnItemList[0].Source).Identifier.ToString());
+
         Assert.NotNull(statement.FromClause);
         Assert.Single(statement.FromClause.TableSources);
         
@@ -112,15 +115,18 @@ public class SqlParserTests
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
-        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
-        Assert.Equal(2, columnList.Columns.Count);
-        
-        var col1 = Assert.IsType<ColumnSourceIdentifier>(columnList.Columns[0].Source);
+
+        Assert.Equal(2, statement.ColumnItemList.Count);
+
+        var col1 = Assert.IsType<ColumnSourceIdentifier>(statement.ColumnItemList[0].Source);
         Assert.Equal("id", col1.Identifier.ToString());
-        
-        var col2 = Assert.IsType<ColumnSourceIdentifier>(columnList.Columns[1].Source);
+
+        var col2 = Assert.IsType<ColumnSourceIdentifier>(statement.ColumnItemList[1].Source);
         Assert.Equal("name", col2.Identifier.ToString());
+
+        var table = Assert.IsType<TableSourceItem>(statement.FromClause.TableSources[0]);
+        Assert.Equal("users", table.Identifier.ToString());
+        Assert.Null(statement.WhereClause);
     }
 
     [Fact]
@@ -138,7 +144,7 @@ public class SqlParserTests
         var left = Assert.IsType<IdentifierExpression>(whereExpr.Left);
         Assert.Equal("id", left.Identifier.ToString());
         
-        var right = Assert.IsType<LiteralExpression>(whereExpr.Right);
+        var right = Assert.IsType<LiteralExpression<decimal>>(whereExpr.Right);
         Assert.Equal(1m, right.Value);
     }
 
@@ -152,8 +158,8 @@ public class SqlParserTests
         
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
-        
-        var right = Assert.IsType<LiteralExpression>(whereExpr.Right);
+
+        var right = Assert.IsType<LiteralExpression<string>>(whereExpr.Right);
         Assert.Equal("John", right.Value);
     }
 
@@ -182,7 +188,7 @@ public class SqlParserTests
         var statement = GetSelectStatement(result);
         
         Assert.NotNull(statement.LimitClause);
-        var limitExpr = Assert.IsType<LiteralExpression>(statement.LimitClause.Expression);
+        var limitExpr = Assert.IsType<LiteralExpression<decimal>>(statement.LimitClause.Expression);
         Assert.Equal(10m, limitExpr.Value);
     }
 
@@ -195,7 +201,7 @@ public class SqlParserTests
         var statement = GetSelectStatement(result);
         
         Assert.NotNull(statement.OffsetClause);
-        var offsetExpr = Assert.IsType<LiteralExpression>(statement.OffsetClause.Expression);
+        var offsetExpr = Assert.IsType<LiteralExpression<decimal>>(statement.OffsetClause.Expression);
         Assert.Equal(5m, offsetExpr.Value);
     }
 
@@ -206,11 +212,10 @@ public class SqlParserTests
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
-        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
-        Assert.Single(columnList.Columns);
-        
-        var funcSource = Assert.IsType<ColumnSourceFunction>(columnList.Columns[0].Source);
+
+        Assert.Single(statement.ColumnItemList);
+
+        var funcSource = Assert.IsType<ColumnSourceFunction>(statement.ColumnItemList[0].Source);
         Assert.Equal("COUNT", funcSource.FunctionCall.Name.ToString());
         Assert.IsType<StarArgument>(funcSource.FunctionCall.Arguments);
     }
@@ -222,10 +227,10 @@ public class SqlParserTests
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
-        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
-        var funcSource = Assert.IsType<ColumnSourceFunction>(columnList.Columns[0].Source);
-        
+
+        Assert.Single(statement.ColumnItemList);
+        var funcSource = Assert.IsType<ColumnSourceFunction>(statement.ColumnItemList[0].Source);
+
         Assert.Equal("COUNT", funcSource.FunctionCall.Name.ToString());
         var exprArgs = Assert.IsType<ExpressionListArguments>(funcSource.FunctionCall.Arguments);
         Assert.Single(exprArgs.Expressions);
@@ -241,14 +246,13 @@ public class SqlParserTests
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
-        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
-        Assert.Equal(2, columnList.Columns.Count);
-        
-        var func1 = Assert.IsType<ColumnSourceFunction>(columnList.Columns[0].Source);
+
+        Assert.Equal(2, statement.ColumnItemList.Count);
+
+        var func1 = Assert.IsType<ColumnSourceFunction>(statement.ColumnItemList[0].Source);
         Assert.Equal("SUM", func1.FunctionCall.Name.ToString());
-        
-        var func2 = Assert.IsType<ColumnSourceFunction>(columnList.Columns[1].Source);
+
+        var func2 = Assert.IsType<ColumnSourceFunction>(statement.ColumnItemList[1].Source);
         Assert.Equal("AVG", func2.FunctionCall.Name.ToString());
     }
 
@@ -286,11 +290,11 @@ public class SqlParserTests
         
         var exprId = Assert.IsType<IdentifierExpression>(betweenExpr.Expression);
         Assert.Equal("id", exprId.Identifier.ToString());
-        
-        var lower = Assert.IsType<LiteralExpression>(betweenExpr.Lower);
+
+        var lower = Assert.IsType<LiteralExpression<decimal>>(betweenExpr.Lower);
         Assert.Equal(1m, lower.Value);
-        
-        var upper = Assert.IsType<LiteralExpression>(betweenExpr.Upper);
+
+        var upper = Assert.IsType<LiteralExpression<decimal>>(betweenExpr.Upper);
         Assert.Equal(100m, upper.Value);
     }
 
@@ -308,13 +312,13 @@ public class SqlParserTests
         Assert.False(inExpr.IsNot);
         Assert.Equal(3, inExpr.Values.Count);
         
-        var val1 = Assert.IsType<LiteralExpression>(inExpr.Values[0]);
+        var val1 = Assert.IsType<LiteralExpression<decimal>>(inExpr.Values[0]);
         Assert.Equal(1m, val1.Value);
         
-        var val2 = Assert.IsType<LiteralExpression>(inExpr.Values[1]);
+        var val2 = Assert.IsType<LiteralExpression<decimal>>(inExpr.Values[1]);
         Assert.Equal(2m, val2.Value);
         
-        var val3 = Assert.IsType<LiteralExpression>(inExpr.Values[2]);
+        var val3 = Assert.IsType<LiteralExpression<decimal>>(inExpr.Values[2]);
         Assert.Equal(3m, val3.Value);
     }
 
@@ -337,7 +341,7 @@ public class SqlParserTests
     [Fact]
     public void ParsedTableAliasShouldBeCorrect()
     {
-        var result = SqlParser.Parse("SELECT u.id, u.name FROM users u");
+        var result = SqlParser.Parse("SELECT u.id, u.name FROM users AS u");
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
@@ -347,16 +351,16 @@ public class SqlParserTests
         Assert.Equal("users", table.Identifier.ToString());
         Assert.NotNull(table.Alias);
         Assert.Equal("u", table.Alias.ToString());
-        
-        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
-        var col1 = Assert.IsType<ColumnSourceIdentifier>(columnList.Columns[0].Source);
+
+        Assert.IsType<ColumnSourceIdentifier>(statement.ColumnItemList[0].Source);
+        var col1 = (ColumnSourceIdentifier)statement.ColumnItemList[0].Source;
         Assert.Equal("u.id", col1.Identifier.ToString());
     }
 
     [Fact]
     public void ParsedJoinShouldHaveCorrectStructure()
     {
-        var result = SqlParser.Parse("SELECT u.id, o.amount FROM users u JOIN orders o ON u.id = o.user_id");
+        var result = SqlParser.Parse("SELECT u.id, o.amount FROM users AS u JOIN orders AS o ON u.id = o.user_id");
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
@@ -383,7 +387,7 @@ public class SqlParserTests
     [Fact]
     public void ParsedLeftJoinShouldHaveCorrectJoinKind()
     {
-        var result = SqlParser.Parse("SELECT * FROM users u LEFT JOIN orders o ON u.id = o.user_id");
+        var result = SqlParser.Parse("SELECT * FROM users AS u LEFT JOIN orders AS o ON u.id = o.user_id");
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
@@ -396,7 +400,7 @@ public class SqlParserTests
     [Fact]
     public void ParsedInnerJoinShouldHaveCorrectJoinKind()
     {
-        var result = SqlParser.Parse("SELECT * FROM users u INNER JOIN orders o ON u.id = o.user_id");
+        var result = SqlParser.Parse("SELECT * FROM users AS u INNER JOIN orders AS o ON u.id = o.user_id");
         
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
@@ -437,8 +441,8 @@ public class SqlParserTests
         
         var left = Assert.IsType<FunctionCall>(havingExpr.Left);
         Assert.Equal("COUNT", left.Name.ToString());
-        
-        var right = Assert.IsType<LiteralExpression>(havingExpr.Right);
+
+        var right = Assert.IsType<LiteralExpression<decimal>>(havingExpr.Right);
         Assert.Equal(10m, right.Value);
     }
 
@@ -497,7 +501,6 @@ public class SqlParserTests
         
         // Verify the CTE query itself
         var cteQuery = cte.Query[0].Statement.SelectStatement;
-        Assert.IsType<StarSelector>(cteQuery.SelectorList);
         Assert.NotNull(cteQuery.FromClause);
         var cteTable = Assert.IsType<TableSourceItem>(cteQuery.FromClause.TableSources[0]);
         Assert.Equal("users", cteTable.Identifier.ToString());
