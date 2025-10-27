@@ -295,12 +295,12 @@ public class SqlParser
             .Or(LEFT.Then(JoinKind.Left))
             .Or(RIGHT.Then(JoinKind.Right));
 
-        var joinCondition = ON.SkipAnd(bitwise);
+        var joinCondition = ON.SkipAnd(andExpr);
 
         var joinConditions = Separated(AND, joinCondition);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
-        var joinStatement = joinKind.Optional().AndSkip(JOIN).And(tableSourceItemList).And(andExpr)
+        var joinStatement = joinKind.Optional().AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)
             .Then(result =>
             {
                 // joinKind.Optional(), tableSourceItemList, joinConditions -> 3 items (JOIN and ON skipped)
@@ -441,11 +441,16 @@ public class SqlParser
 
     public static StatementList? Parse(string input)
     {
-        if (Statements.TryParse(input, out var result, out var error))
+        if (TryParse(input, out var result, out var error))
         {
             return result;
         }
-        throw new InvalidOperationException($"Could not parse SQL: {error}");
-        // return null;
+
+        return null;
+    }
+
+    public static bool TryParse(string input, out StatementList? result, out ParseError? error)
+    {
+        return Statements.TryParse(input, out result, out error);
     }
 }

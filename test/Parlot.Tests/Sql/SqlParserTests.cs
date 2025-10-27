@@ -376,7 +376,19 @@ public class SqlParserTests
         Assert.Equal("o", join.Tables[0].Alias?.ToString());
         
         Assert.IsType<BinaryExpression>(join.Conditions);
+        
+        // Verify the join condition structure: u.id = o.user_id
+        var joinCondition = Assert.IsType<BinaryExpression>(join.Conditions);
+        Assert.Equal(BinaryOperator.Equal, joinCondition.Operator);
+        
+        var leftExpr = Assert.IsType<IdentifierExpression>(joinCondition.Left);
+        Assert.Equal("u.id", leftExpr.Identifier.ToString());
+        
+        var rightExpr = Assert.IsType<IdentifierExpression>(joinCondition.Right);
+        Assert.Equal("o.user_id", rightExpr.Identifier.ToString());
     }
+
+
 
     [Fact]
     public void ParsedLeftJoinShouldHaveCorrectJoinKind()
