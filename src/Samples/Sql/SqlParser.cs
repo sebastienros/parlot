@@ -197,24 +197,17 @@ public class SqlParser
         );
 
         // BETWEEN and IN expressions
-        var betweenExpr = andExpr.And(NOT.Optional()).AndSkip(BETWEEN).And(andExpr).AndSkip(AND).And(andExpr)
+        var betweenExpr = andExpr.And(NOT.Optional()).AndSkip(BETWEEN).And(bitwise).AndSkip(AND).And(bitwise)
             .Then<Expression>(result =>
             {
-                // andExpr, NOT.Optional(), andExpr, andExpr -> 4 items
-                var expr = result.Item1;
-                var notKeyword = result.Item2;
-                var lower = result.Item3;
-                var upper = result.Item4;
+                var (expr, notKeyword, lower, upper) = result;
                 return new BetweenExpression(expr, lower, upper, notKeyword.Any());
             });
 
         var inExpr = andExpr.And(NOT.Optional()).AndSkip(IN).AndSkip(LPAREN).And(expressionList).AndSkip(RPAREN)
             .Then<Expression>(result =>
             {
-                // andExpr, NOT.Optional(), expressionList -> 3 items
-                var expr = result.Item1;
-                var notKeyword = result.Item2;
-                var values = result.Item3;
+                var (expr, notKeyword, values) = result;
                 return new InExpression(expr, values, notKeyword.Any());
             });
 
@@ -302,13 +295,12 @@ public class SqlParser
             .Or(LEFT.Then(JoinKind.Left))
             .Or(RIGHT.Then(JoinKind.Right));
 
-        var joinCondition = expression.AndSkip(EQ).And(expression)
-            .Then(x => new JoinCondition(x.Item1, x.Item2));
+        var joinCondition = ON.SkipAnd(bitwise);
 
         var joinConditions = Separated(AND, joinCondition);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
-        var joinStatement = joinKind.Optional().AndSkip(JOIN).And(tableSourceItemList).AndSkip(ON).And(joinConditions)
+        var joinStatement = joinKind.Optional().AndSkip(JOIN).And(tableSourceItemList).And(andExpr)
             .Then(result =>
             {
                 // joinKind.Optional(), tableSourceItemList, joinConditions -> 3 items (JOIN and ON skipped)
@@ -453,7 +445,7 @@ public class SqlParser
         {
             return result;
         }
-
-        return null;
+        throw new InvalidOperationException($"Could not parse SQL: {error}");
+        // return null;
     }
 }

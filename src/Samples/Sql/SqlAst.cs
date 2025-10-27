@@ -213,9 +213,9 @@ public class JoinStatement : ISqlNode
 {
     public JoinKind? JoinKind { get; }
     public IReadOnlyList<TableSourceItem> Tables { get; }
-    public IReadOnlyList<JoinCondition> Conditions { get; }
+    public Expression Conditions { get; }
 
-    public JoinStatement(IReadOnlyList<TableSourceItem> tables, IReadOnlyList<JoinCondition> conditions, JoinKind? joinKind = null)
+    public JoinStatement(IReadOnlyList<TableSourceItem> tables, Expression conditions, JoinKind? joinKind = null)
     {
         Tables = tables;
         Conditions = conditions;
@@ -229,18 +229,6 @@ public enum JoinKind
     Inner,
     Left,
     Right
-}
-
-public class JoinCondition : ISqlNode
-{
-    public Expression Left { get; }
-    public Expression Right { get; }
-
-    public JoinCondition(Expression left, Expression right)
-    {
-        Left = left;
-        Right = right;
-    }
 }
 
 public class WhereClause : ISqlNode
