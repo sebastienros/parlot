@@ -1,7 +1,7 @@
 using Parlot.Compilation;
 using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent;
 
@@ -11,15 +11,17 @@ namespace Parlot.Fluent;
 /// <remarks>
 /// This parser will always succeed. If the previous parser fails, it will return an empty list.
 /// </remarks>
-public sealed class Optional<T> : Parser<IReadOnlyList<T>>, ICompilable
+public sealed class Optional<T> : Parser<Option<T>>, ICompilable
 {
+    private static readonly ConstructorInfo _optionConstructor = typeof(Option<T>).GetConstructor([typeof(T)])!;
+    
     private readonly Parser<T> _parser;
     public Optional(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     }
 
-    public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    public override bool Parse(ParseContext context, ref ParseResult<Option<T>> result)
     {
         context.EnterParser(this);
 
@@ -27,7 +29,7 @@ public sealed class Optional<T> : Parser<IReadOnlyList<T>>, ICompilable
 
         var success = _parser.Parse(context, ref parsed);
 
-        result.Set(parsed.Start, parsed.End, success ? [parsed.Value] : []);
+        result.Set(parsed.Start, parsed.End, success ? new Option<T>(parsed.Value) : new Option<T>());
 
         // Optional always succeeds
         context.ExitParser(this);
@@ -36,7 +38,7 @@ public sealed class Optional<T> : Parser<IReadOnlyList<T>>, ICompilable
 
     public CompilationResult Compile(CompilationContext context)
     {
-        var result = context.CreateCompilationResult<IReadOnlyList<T>>(true, ExpressionHelper.ArrayEmpty<T>());
+        var result = context.CreateCompilationResult<Option<T>>(true);
 
         // T value = _defaultValue;
         //
@@ -55,8 +57,8 @@ public sealed class Optional<T> : Parser<IReadOnlyList<T>>, ICompilable
                         ? Expression.Empty()
                         : Expression.IfThenElse(
                             parserCompileResult.Success,
-                            Expression.Assign(result.Value, Expression.NewArrayInit(typeof(T), parserCompileResult.Value)),
-                            Expression.Assign(result.Value, Expression.Constant(Array.Empty<T>(), typeof(T[])))
+                            Expression.Assign(result.Value, Expression.New(_optionConstructor, parserCompileResult.Value)),
+                            Expression.Assign(result.Value, Expression.Constant(new Option<T>(), typeof(Option<T>)))
                         )
                     )
                 );

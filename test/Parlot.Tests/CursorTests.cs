@@ -295,13 +295,13 @@ public class CursorTests
     {
         var t = new TextSpanHolder();
 
-        Assert.Null(t.T.ToString());
+        Assert.Equal("", t.T.ToString());
         Assert.Equal(0, t.T.Length);
         Assert.Equal(0, t.T.Offset);
 
         var t2 = new TextSpan(null);
 
-        Assert.Null(t2.ToString());
+        Assert.Equal("", t2.ToString());
         Assert.Equal(0, t2.Length);
         Assert.Equal(0, t2.Offset);
 

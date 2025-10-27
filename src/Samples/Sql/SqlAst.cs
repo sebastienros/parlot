@@ -91,7 +91,7 @@ public class CommonTableExpression : ISqlNode
 
 public class SelectStatement : ISqlNode
 {
-    public SelectRestriction? Restriction { get; }
+    public SelectRestriction Restriction { get; }
     public IReadOnlyList<ColumnItem> ColumnItemList { get; }
     public FromClause? FromClause { get; }
     public WhereClause? WhereClause { get; }
@@ -113,7 +113,7 @@ public class SelectStatement : ISqlNode
         OffsetClause? offsetClause = null)
     {
         ColumnItemList = columnItemList;
-        Restriction = restriction;
+        Restriction = restriction ?? SelectRestriction.NotSpecified;
         FromClause = fromClause;
         WhereClause = whereClause;
         GroupByClause = groupByClause;
@@ -126,6 +126,7 @@ public class SelectStatement : ISqlNode
 
 public enum SelectRestriction
 {
+    NotSpecified,
     All,
     Distinct
 }
@@ -274,9 +275,9 @@ public class OrderByClause : ISqlNode
 public class OrderByItem : ISqlNode
 {
     public Identifier Identifier { get; }
-    public OrderDirection? Direction { get; }
+    public OrderDirection Direction { get; }
 
-    public OrderByItem(Identifier identifier, OrderDirection? direction = null)
+    public OrderByItem(Identifier identifier, OrderDirection direction)
     {
         Identifier = identifier;
         Direction = direction;
@@ -285,6 +286,7 @@ public class OrderByItem : ISqlNode
 
 public enum OrderDirection
 {
+    NotSpecified,
     Asc,
     Desc
 }

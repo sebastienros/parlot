@@ -131,11 +131,11 @@ It is not necessary to wrap `Terms` parsers with `SkipWhitespace()` as they alre
 
 ### `Optional()` usage
 
-Use the `Optional()` combinator to make a parser optional. If the parser doesn't match it will still succeed, the result will be an empty list.
+Use the `Optional()` combinator to make a parser optional. If will always return an instance of `Option<T>` regardless of whether the parser matches or not. Use `HasValue` to check if the parser was successful. Or use `OrSome()` to provide a default value when the parser does not match.
 
 ```c#
 // Parse an integer or return -1 if not present
-var optionalParser = Terms.Integer().Optional().Then(x => x.Count > 0 ? x[0] : -1);
+var optionalParser = Terms.Integer().Optional().Then(x => x.HasValue ? x.Value : -1);
 ```
 
 ## File Organization

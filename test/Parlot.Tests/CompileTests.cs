@@ -245,8 +245,8 @@ public class CompileTests
     {
         var parser = Terms.Text("hello").Optional().Compile();
 
-        Assert.Equal("hello", parser.Parse(" hello world hello").FirstOrDefault());
-        Assert.Null(parser.Parse(" foo").FirstOrDefault());
+        Assert.Equal("hello", parser.Parse(" hello world hello").Value);
+        Assert.Null(parser.Parse(" foo").Value);
     }
 
     [Fact]
