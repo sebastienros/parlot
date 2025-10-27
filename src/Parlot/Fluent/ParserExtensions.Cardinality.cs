@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 
+using Parlot;
+
 namespace Parlot.Fluent;
 
 public static partial class ParserExtensions
@@ -16,6 +18,6 @@ public static partial class ParserExtensions
     public static Parser<T> ZeroOrOne<T>(this Parser<T> parser)
         => new ZeroOrOne<T>(parser, default!);
 
-    public static Parser<IReadOnlyList<T>> Optional<T>(this Parser<T> parser)
+    public static Parser<Option<T>> Optional<T>(this Parser<T> parser)
         => new Optional<T>(parser);
 }

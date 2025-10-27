@@ -480,32 +480,21 @@ null
 
 ### Optional
 
-Makes an existing parser optional. Contrary to `ZeroOrOne` the result is always a list, with
-either zero or one element. It is then easy to know if the parser was successful or not by 
-using the Linq operators `Any()` and `FirstOrDefault()`.
+Makes an existing parser optional by always returning an `Option<T>` result. It is then easy to know if the parser was successful or not by using the `HasValue` property.
 
 ```c#
-static Parser<IReadOnlyList<T>> Optional<T>(this Parser<T> parser)
+static Parser<Option<T>> Optional<T>(this Parser<T> parser)
 ```
 
 Usage:
 
 ```c#
 var parser = Terms.Text("hello").Optional();
-parser.Parse("hello");
-parser.Parse(""); // returns an empty list
-parser.Parse("hello").FirstOrDefault();
-parser.Parse("").FirstOrDefault(); // returns null
+parser.Parse("hello"); // HasValue -> true
+parser.Parse(""); // HasValue -> false
 ```
 
-Result:
-
-```
-["hello"]
-[]
-"hello"
-null
-```
+Use the `OrSome<T>()` method to provide a default value if the `Option<T>` instance has no value.
 
 ### ZeroOrMany
 
@@ -791,6 +780,8 @@ Result:
 (0, "years")
 (123, "years")
 ```
+
+NB: This is similar to using `Optional()` since the result is always successful, but `Else()` returns a value. Use `Optional()` if you need to know if the parser was successful or not, and `Else()` if you only care about having a value as a result.
 
 ### ThenElse
 

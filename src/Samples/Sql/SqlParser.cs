@@ -180,14 +180,14 @@ public class SqlParser
             .Then<Expression>(result =>
             {
                 var (expr, notKeyword, lower, upper) = result;
-                return new BetweenExpression(expr, lower, upper, notKeyword.Any());
+                return new BetweenExpression(expr, lower, upper, notKeyword.HasValue);
             });
 
         var inExpr = andExpr.And(NOT.Optional()).AndSkip(IN).AndSkip(LPAREN).And(expressionList).AndSkip(RPAREN)
             .Then<Expression>(result =>
             {
                 var (expr, notKeyword, values) = result;
-                return new InExpression(expr, values, notKeyword.Any());
+                return new InExpression(expr, values, notKeyword.HasValue);
             });
 
         expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
@@ -208,23 +208,18 @@ public class SqlParser
         var overClause = OVER.AndSkip(LPAREN).And(partitionBy.Optional()).And(orderByClause.Optional()).AndSkip(RPAREN)
             .Then(result =>
             {
-                // OVER.AndSkip(lparen).And(partitionBy.Optional()).And(orderByClause.Optional()).AndSkip(rparen)
-                // Result is (TextSpan (OVER), IReadOnlyList<PartitionByClause>, IReadOnlyList<OrderByClause>)
-                var partition = result.Item2;
-                var orderBy = result.Item3;
+                var (_, partition, orderBy) = result;
                 return new OverClause(
-                    partition.Count > 0 ? (PartitionByClause?)partition[0] : null,
-                    orderBy.Count > 0 ? (OrderByClause?)orderBy[0] : null
+                    partition.OrSome(null),
+                    orderBy.OrSome(null)
                 );
             });
 
         var columnSourceFunc = functionCall.And(overClause.Optional())
             .Then<ColumnSource>(result =>
             {
-                // functionCall, overClause.Optional() -> 2 items
-                var func = (FunctionCall)result.Item1;
-                var over = result.Item2.Count > 0 ? result.Item2[0] : (OverClause?)null;
-                return new ColumnSourceFunction(func, over);
+                var (func, over) = result;
+                return new ColumnSourceFunction((FunctionCall)func, over.OrSome(null));
             });
 
         var columnSource = columnSourceFunc.Or(columnSourceId);
@@ -235,10 +230,8 @@ public class SqlParser
         columnItem.Parser = columnSource.And(columnAlias.Optional())
             .Then(result =>
             {
-                // columnSource, columnAlias.Optional() -> 2 items
-                var source = result.Item1;
-                var alias = result.Item2.Count > 0 ? result.Item2[0] : null;
-                return new ColumnItem(source, alias);
+                var (source, alias) = result;
+                return new ColumnItem(source, alias.OrSome(null));
             });
 
         // Table source
@@ -247,22 +240,18 @@ public class SqlParser
         var tableSourceItem = identifier.And(tableAlias.Optional())
             .Then(result =>
             {
-                // identifier, tableAlias.Optional() -> 2 items
-                var id = result.Item1;
-                var alias = result.Item2.Count > 0 ? result.Item2[0] : null;
-                return new TableSourceItem(id, alias);
+                var (id, alias) = result;
+                return new TableSourceItem(id, alias.OrSome(null));
             });
 
         // Deferred union statement list for subqueries
         var unionStatementList = Deferred<IReadOnlyList<UnionStatement>>();
 
-        var tableSourceSubQuery = LPAREN.And(unionStatementList).AndSkip(RPAREN).AndSkip(AS).And(simpleIdentifier)
+        var tableSourceSubQuery = LPAREN.SkipAnd(unionStatementList).AndSkip(RPAREN).AndSkip(AS).And(simpleIdentifier)
             .Then<TableSource>(result =>
             {
-                // lparen, unionStatementList, simpleIdentifier -> 3 items (rparen and AS skipped)
-                var query = result.Item2;
-                var alias = result.Item3.Span.ToString();
-                return new TableSourceSubQuery(query, alias);
+                var (query, alias) = result;
+                return new TableSourceSubQuery(query, alias.ToString());
             });
 
         var tableSourceItemAsTableSource = tableSourceItem.Then<TableSource>(t => t);
@@ -277,11 +266,10 @@ public class SqlParser
         var joinCondition = ON.SkipAnd(andExpr);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
-        var joinStatement = joinKind.Optional().AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)
+        var joinStatement = joinKind.Else(JoinKind.None).AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)
             .Then(result =>
             {
-                // joinKind.Optional(), tableSourceItemList, joinCondition -> 3 items (JOIN and ON skipped)
-                var kind = result.Item1.Count > 0 ? result.Item1[0] : JoinKind.None;
+                var kind = result.Item1;
                 var tables = result.Item2;
                 var conditions = result.Item3;
                 return new JoinStatement(tables, conditions, kind);
@@ -316,10 +304,8 @@ public class SqlParser
         orderByItem.Parser = identifier.And(orderDirection.Optional())
             .Then(result =>
             {
-                // identifier, orderDirection.Optional() -> 2 items
-                var id = result.Item1;
-                var dir = result.Item2.Count > 0 ? result.Item2[0] : (OrderDirection?)null;
-                return new OrderByItem(id, dir);
+                var (id, dir) = result;
+                return new OrderByItem(id, dir.OrSome(OrderDirection.NotSpecified));
             });
 
         // LIMIT and OFFSET clauses
@@ -330,7 +316,7 @@ public class SqlParser
         var selectRestriction = ALL.Then(SelectRestriction.All).Or(DISTINCT.Then(SelectRestriction.Distinct));
 
         selectStatement.Parser = SELECT
-            .SkipAnd(selectRestriction.Optional())
+            .SkipAnd(selectRestriction.Else(SelectRestriction.NotSpecified))
             .And(columnItemList)
             .And(fromClause.Optional())
             .And(whereClause.Optional())
@@ -345,14 +331,14 @@ public class SqlParser
 
                 return new SelectStatement(
                     columns,
-                    restriction.Count > 0 ? restriction[0] : null,
-                    from.Count > 0 ? from[0] : null,
-                    where.Count > 0 ? where[0] : null,
-                    groupBy.Count > 0 ? groupBy[0] : null,
-                    having.Count > 0 ? having[0] : null,
-                    orderBy.Count > 0 ? orderBy[0] : null,
-                    limit.Count > 0 ? limit[0] : null,
-                    offset.Count > 0 ? offset[0] : null
+                    restriction,
+                    from.OrSome(null),
+                    where.OrSome(null),
+                    groupBy.OrSome(null),
+                    having.OrSome(null),
+                    orderBy.OrSome(null),
+                    limit.OrSome(null),
+                    offset.OrSome(null)
                 );
             });
 
@@ -368,11 +354,8 @@ public class SqlParser
             .And(Between(LPAREN, unionStatementList, RPAREN))
             .Then(result =>
             {
-                // simpleIdentifier, cteColumnList.Optional(), unionStatementList -> 3 items (AS skipped)
-                var name = result.Item1.Span.ToString();
-                var columns = result.Item2.Count > 0 ? result.Item2[0] : null;
-                var query = result.Item3;
-                return new CommonTableExpression(name, query, columns);
+                var (name, columns, query) = result;
+                return new CommonTableExpression(name.ToString(), query, columns.OrSome(null));
             });
 
         var cteList = Separated(COMMA, cte);
@@ -381,33 +364,28 @@ public class SqlParser
 
         // UNION
         var unionClause = UNION.And(ALL.Optional())
-            .Then(x => new UnionClause(x.Item2.Any()));
+            .Then(x => new UnionClause(x.Item2.HasValue));
 
         // Statement
         var statement = withClause.Optional().And(selectStatement)
             .Then(result =>
             {
-                // withClause.Optional(), selectStatement -> 2 items
-                var with = result.Item1.Count > 0 ? (WithClause?)result.Item1[0] : null;
-                var select = result.Item2;
-                return new Statement(select, with);
+                var (with, select) = result;
+                return new Statement(select, with.OrSome(null));
             });
 
         var unionStatement = statement.And(unionClause.Optional())
             .Then(result =>
             {
-                // statement, unionClause.Optional() -> 2 items
-                var stmt = result.Item1;
-                var union = result.Item2.Count > 0 ? (UnionClause?)result.Item2[0] : null;
-                return new UnionStatement(stmt, union);
+                var (stmt, union) = result;
+                return new UnionStatement(stmt, union.OrSome(null));
             });
 
-        unionStatementList.Parser = OneOrMany(unionStatement)
-            .Then<IReadOnlyList<UnionStatement>>(statements => statements);
+        unionStatementList.Parser = OneOrMany(unionStatement);
 
         // Statement line
-        var statementLine = unionStatementList.And(SEMICOLON.Optional())
-            .Then(x => new StatementLine(x.Item1));
+        var statementLine = unionStatementList.AndSkip(SEMICOLON.Optional())
+            .Then(x => new StatementLine(x));
 
         // Statement list
         var statementList = OneOrMany(statementLine)

@@ -25,9 +25,9 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
 
     public ReadOnlySpan<char> Span => Buffer == null ? [] : Buffer.AsSpan(Offset, Length);
 
-    public override string? ToString()
+    public override string ToString()
     {
-        return Buffer?.Substring(Offset, Length);
+        return Buffer?.Substring(Offset, Length) ?? "";
     }
 
     public bool Equals(string? other)

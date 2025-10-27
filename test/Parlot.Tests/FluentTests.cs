@@ -1085,8 +1085,8 @@ public class FluentTests
     {
         var parser = Terms.Text("hello").Optional();
 
-        Assert.Equal("hello", parser.Parse(" hello world hello").FirstOrDefault());
-        Assert.Null(parser.Parse(" foo").FirstOrDefault());
+        Assert.Equal("hello", parser.Parse(" hello world hello").Value);
+        Assert.Null(parser.Parse(" foo").Value);
     }
 
     [Fact]
