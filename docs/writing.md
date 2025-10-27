@@ -67,3 +67,43 @@ public override bool Parse(ParseContext context, ref ParseResult<T> result)
 In this case it is never necessary to invoke `ResetPosition` since as soon as a parser is successful we exit the method.
 
 > ✔️ DO: Create a unit test to ensure that the parser resets the position when it's failing.
+
+## Lookup tables
+
+The `OneOf` parser, which can also be created using `a.Or(b)`, is able to create a lookup table to optimize parsing.
+
+Example:
+
+```c#
+var integer = Terms.Integer();
+var hello = Terms.Text("Hello", caseInsensitive: true);
+var intOrHello = integer.Or(Hello);
+```
+
+Both **integer** and **hello** have well-known characters that can be at the start of their potential values: 
+- **integers** can start with `[0-9\.\-]`.
+- **hello** can only start with an `h` or `H`.
+
+This information allows us to make quick decisions when the **intOrHello** parser is invoked. If the next char is an `h` then the only possible 
+match is **hello** so only this parser will be invoked. If the char is `z` then none of these can match so it will return a failure without testing either parser. Also because these two parsers also accept white spaces the outer parser will be able to do it once.
+
+To be able to take advantage of this optimization, a parser type can implement `ISeekable`. Even when the parser may or may not be able to provide a list of "expected chars", the interface can be implemented and its `CanSeek` property can be set accordingly.
+
+## Parser factories
+
+Parsers should not allow other parsers to be created dynamically as parser constructors can be expensive (`OneOf` creates lookup tables).
+
+For instance `public Select(Func<C, Parser<T>> selector)` is a bad pattern as the lambda may allow brand new parsers to be created whenever the parser is invoked:
+
+```c#
+var p = Select(c => c.OptionA ? Terms.Text("a") : Terms.Text("b"));
+```
+
+The previous example shows how eveytime **p** is invoke a new parser instance is returned.
+A better usage would be the following:
+
+```c#
+var a = Terms.Text("a");
+var b = Terms.Text("b");
+var p = Select(c => c.OptionA ? a : b);
+```
