@@ -547,8 +547,20 @@ public class SqlParserTests
 
     // Comprehensive function call tests
 
-    // Note: Empty argument functions may not be fully supported in current parser implementation
-    // The parser seems to require non-empty parentheses to recognize function calls
+    [Fact]
+    public void ParsedFunctionWithNoArgumentsShouldHaveEmptyArguments()
+    {
+        var result = SqlParser.Parse("SELECT GETDATE() FROM users");
+        
+        Assert.NotNull(result);
+        var statement = GetSelectStatement(result);
+
+        Assert.Single(statement.ColumnItemList);
+
+        var funcSource = Assert.IsType<ColumnSourceFunction>(statement.ColumnItemList[0].Source);
+        Assert.Equal("GETDATE", funcSource.FunctionCall.Name.ToString());
+        Assert.IsType<EmptyArguments>(funcSource.FunctionCall.Arguments);
+    }
 
     [Fact]
     public void ParsedFunctionWithMultipleExpressionsShouldHaveExpressionListArguments()

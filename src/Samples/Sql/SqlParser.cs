@@ -86,7 +86,8 @@ public class SqlParser
         var starArg = STAR.Then<FunctionArguments>(_ => new StarArgument());
         var selectArg = selectStatement.Then<FunctionArguments>(s => new SelectStatementArgument(s));
         var exprListArg = expressionList.Then<FunctionArguments>(exprs => new ExpressionListArguments(exprs));
-        var functionArgs = starArg.Or(selectArg).Or(exprListArg);
+        var emptyArg = Always<FunctionArguments>(new EmptyArguments());
+        var functionArgs = starArg.Or(selectArg).Or(exprListArg).Or(emptyArg);
 
         // Function call
         var functionCall = identifier.And(Between(LPAREN, functionArgs, RPAREN))
