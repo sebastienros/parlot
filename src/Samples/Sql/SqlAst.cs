@@ -92,7 +92,7 @@ public class CommonTableExpression : ISqlNode
 public class SelectStatement : ISqlNode
 {
     public SelectRestriction? Restriction { get; }
-    public IReadOnlyList<string> Selectors { get; }
+    public SelectorList SelectorList { get; }
     public FromClause? FromClause { get; }
     public WhereClause? WhereClause { get; }
     public GroupByClause? GroupByClause { get; }
@@ -102,7 +102,7 @@ public class SelectStatement : ISqlNode
     public OffsetClause? OffsetClause { get; }
 
     public SelectStatement(
-        IReadOnlyList<string> selectors,
+        SelectorList selectorList,
         SelectRestriction? restriction = null,
         FromClause? fromClause = null,
         WhereClause? whereClause = null,
@@ -112,7 +112,7 @@ public class SelectStatement : ISqlNode
         LimitClause? limitClause = null,
         OffsetClause? offsetClause = null)
     {
-        Selectors = selectors;
+        SelectorList = selectorList;
         Restriction = restriction;
         FromClause = fromClause;
         WhereClause = whereClause;
@@ -128,6 +128,63 @@ public enum SelectRestriction
 {
     All,
     Distinct
+}
+
+// Selectors
+public abstract class SelectorList : ISqlNode
+{
+}
+
+public class StarSelector : SelectorList
+{
+}
+
+public class ColumnItemList : SelectorList
+{
+    public IReadOnlyList<ColumnItem> Columns { get; }
+
+    public ColumnItemList(IReadOnlyList<ColumnItem> columns)
+    {
+        Columns = columns;
+    }
+}
+
+public class ColumnItem : ISqlNode
+{
+    public ColumnSource Source { get; }
+    public Identifier? Alias { get; }
+
+    public ColumnItem(ColumnSource source, Identifier? alias = null)
+    {
+        Source = source;
+        Alias = alias;
+    }
+}
+
+public abstract class ColumnSource : ISqlNode
+{
+}
+
+public class ColumnSourceIdentifier : ColumnSource
+{
+    public Identifier Identifier { get; }
+
+    public ColumnSourceIdentifier(Identifier identifier)
+    {
+        Identifier = identifier;
+    }
+}
+
+public class ColumnSourceFunction : ColumnSource
+{
+    public FunctionCall FunctionCall { get; }
+    public OverClause? OverClause { get; }
+
+    public ColumnSourceFunction(FunctionCall functionCall, OverClause? overClause = null)
+    {
+        FunctionCall = functionCall;
+        OverClause = overClause;
+    }
 }
 
 // Clauses
@@ -216,9 +273,9 @@ public class WhereClause : ISqlNode
 
 public class GroupByClause : ISqlNode
 {
-    public IReadOnlyList<string> Columns { get; }
+    public IReadOnlyList<ColumnSource> Columns { get; }
 
-    public GroupByClause(IReadOnlyList<string> columns)
+    public GroupByClause(IReadOnlyList<ColumnSource> columns)
     {
         Columns = columns;
     }
@@ -296,9 +353,9 @@ public class OverClause : ISqlNode
 
 public class PartitionByClause : ISqlNode
 {
-    public IReadOnlyList<string> Columns { get; }
+    public IReadOnlyList<ColumnItem> Columns { get; }
 
-    public PartitionByClause(IReadOnlyList<string> columns)
+    public PartitionByClause(IReadOnlyList<ColumnItem> columns)
     {
         Columns = columns;
     }

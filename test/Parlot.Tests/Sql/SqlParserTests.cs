@@ -96,8 +96,7 @@ public class SqlParserTests
         Assert.Single(result.Statements);
         
         var statement = GetSelectStatement(result);
-        Assert.Single(statement.Selectors);
-        Assert.Equal("*", statement.Selectors[0]);
+        Assert.IsType<StarSelector>(statement.SelectorList);
         Assert.NotNull(statement.FromClause);
         Assert.Single(statement.FromClause.TableSources);
         
@@ -114,9 +113,14 @@ public class SqlParserTests
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
         
-        Assert.Equal(2, statement.Selectors.Count);
-        Assert.Equal("id", statement.Selectors[0]);
-        Assert.Equal("name", statement.Selectors[1]);
+        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
+        Assert.Equal(2, columnList.Columns.Count);
+        
+        var col1 = Assert.IsType<ColumnSourceIdentifier>(columnList.Columns[0].Source);
+        Assert.Equal("id", col1.Identifier.ToString());
+        
+        var col2 = Assert.IsType<ColumnSourceIdentifier>(columnList.Columns[1].Source);
+        Assert.Equal("name", col2.Identifier.ToString());
     }
 
     [Fact]
@@ -203,8 +207,12 @@ public class SqlParserTests
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
         
-        Assert.Single(statement.Selectors);
-        Assert.Contains("COUNT", statement.Selectors[0]);
+        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
+        Assert.Single(columnList.Columns);
+        
+        var funcSource = Assert.IsType<ColumnSourceFunction>(columnList.Columns[0].Source);
+        Assert.Equal("COUNT", funcSource.FunctionCall.Name.ToString());
+        Assert.IsType<StarArgument>(funcSource.FunctionCall.Arguments);
     }
 
     [Fact]
@@ -215,9 +223,15 @@ public class SqlParserTests
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
         
-        Assert.Single(statement.Selectors);
-        Assert.Contains("COUNT", statement.Selectors[0]);
-        Assert.Contains("id", statement.Selectors[0]);
+        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
+        var funcSource = Assert.IsType<ColumnSourceFunction>(columnList.Columns[0].Source);
+        
+        Assert.Equal("COUNT", funcSource.FunctionCall.Name.ToString());
+        var exprArgs = Assert.IsType<ExpressionListArguments>(funcSource.FunctionCall.Arguments);
+        Assert.Single(exprArgs.Expressions);
+        
+        var arg = Assert.IsType<IdentifierExpression>(exprArgs.Expressions[0]);
+        Assert.Equal("id", arg.Identifier.ToString());
     }
 
     [Fact]
@@ -228,9 +242,14 @@ public class SqlParserTests
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
         
-        Assert.Equal(2, statement.Selectors.Count);
-        Assert.Contains("SUM", statement.Selectors[0]);
-        Assert.Contains("AVG", statement.Selectors[1]);
+        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
+        Assert.Equal(2, columnList.Columns.Count);
+        
+        var func1 = Assert.IsType<ColumnSourceFunction>(columnList.Columns[0].Source);
+        Assert.Equal("SUM", func1.FunctionCall.Name.ToString());
+        
+        var func2 = Assert.IsType<ColumnSourceFunction>(columnList.Columns[1].Source);
+        Assert.Equal("AVG", func2.FunctionCall.Name.ToString());
     }
 
     [Fact]
@@ -329,9 +348,9 @@ public class SqlParserTests
         Assert.NotNull(table.Alias);
         Assert.Equal("u", table.Alias.ToString());
         
-        Assert.Equal(2, statement.Selectors.Count);
-        Assert.Equal("u.id", statement.Selectors[0]);
-        Assert.Equal("u.name", statement.Selectors[1]);
+        var columnList = Assert.IsType<ColumnItemList>(statement.SelectorList);
+        var col1 = Assert.IsType<ColumnSourceIdentifier>(columnList.Columns[0].Source);
+        Assert.Equal("u.id", col1.Identifier.ToString());
     }
 
     [Fact]
@@ -397,7 +416,9 @@ public class SqlParserTests
         
         Assert.NotNull(statement.GroupByClause);
         Assert.Single(statement.GroupByClause.Columns);
-        Assert.Equal("category", statement.GroupByClause.Columns[0]);
+        
+        var groupCol = Assert.IsType<ColumnSourceIdentifier>(statement.GroupByClause.Columns[0]);
+        Assert.Equal("category", groupCol.Identifier.ToString());
     }
 
     [Fact]
@@ -476,8 +497,7 @@ public class SqlParserTests
         
         // Verify the CTE query itself
         var cteQuery = cte.Query[0].Statement.SelectStatement;
-        Assert.Single(cteQuery.Selectors);
-        Assert.Equal("*", cteQuery.Selectors[0]);
+        Assert.IsType<StarSelector>(cteQuery.SelectorList);
         Assert.NotNull(cteQuery.FromClause);
         var cteTable = Assert.IsType<TableSourceItem>(cteQuery.FromClause.TableSources[0]);
         Assert.Equal("users", cteTable.Identifier.ToString());
