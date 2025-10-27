@@ -1,7 +1,6 @@
 #nullable enable
 
 using Parlot.Fluent;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using static Parlot.Fluent.Parsers;
@@ -126,27 +125,6 @@ public class SqlParser
         var primary = unaryExpr.Or(term);
 
         // Binary operators
-        var mulOp = Terms.Char('*').Then(BinaryOperator.Multiply)
-            .Or(Terms.Char('/').Then(BinaryOperator.Divide))
-            .Or(Terms.Char('%').Then(BinaryOperator.Modulo));
-
-        var addOp = Terms.Char('+').Then(BinaryOperator.Add)
-            .Or(Terms.Char('-').Then(BinaryOperator.Subtract));
-
-        var cmpOp = Terms.Text(">=").Then(BinaryOperator.GreaterThanOrEqual)
-            .Or(Terms.Text("<=").Then(BinaryOperator.LessThanOrEqual))
-            .Or(Terms.Text("<>").Then(BinaryOperator.NotEqual))
-            .Or(Terms.Text("!=").Then(BinaryOperator.NotEqualAlt))
-            .Or(Terms.Text("!<").Then(BinaryOperator.NotLessThan))
-            .Or(Terms.Text("!>").Then(BinaryOperator.NotGreaterThan))
-            .Or(Terms.Char('>').Then(BinaryOperator.GreaterThan))
-            .Or(Terms.Char('<').Then(BinaryOperator.LessThan))
-            .Or(EQ.Then(BinaryOperator.Equal));
-
-        var bitOp = Terms.Char('^').Then(BinaryOperator.BitwiseXor)
-            .Or(Terms.Char('&').Then(BinaryOperator.BitwiseAnd))
-            .Or(Terms.Char('|').Then(BinaryOperator.BitwiseOr));
-
         var notLike = NOT.AndSkip(LIKE);
         var likeOp = notLike.Or(LIKE);
 
@@ -296,14 +274,12 @@ public class SqlParser
             .Or(RIGHT.Then(JoinKind.Right));
 
         var joinCondition = ON.SkipAnd(andExpr);
-
-        var joinConditions = Separated(AND, joinCondition);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
         var joinStatement = joinKind.Optional().AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)
             .Then(result =>
             {
-                // joinKind.Optional(), tableSourceItemList, joinConditions -> 3 items (JOIN and ON skipped)
+                // joinKind.Optional(), tableSourceItemList, joinCondition -> 3 items (JOIN and ON skipped)
                 var kind = result.Item1.Count > 0 ? result.Item1[0] : JoinKind.None;
                 var tables = result.Item2;
                 var conditions = result.Item3;
