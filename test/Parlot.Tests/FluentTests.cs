@@ -1365,4 +1365,149 @@ public class FluentTests
         Assert.True(parser.TryParse("a", out _));
         Assert.Throws<ParseException>(() => parser.Parse("b"));
     }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldUseCustomWhiteSpace()
+    {
+        // Example from the issue: using dots as whitespace
+        var hello = Terms.Text("hello");
+        var world = Terms.Text("world");
+        var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+        // Should succeed with dots as whitespace
+        Assert.True(parser.TryParse("..hello.world", out var result));
+        Assert.Equal("hello", result.Item1.ToString());
+        Assert.Equal("world", result.Item2.ToString());
+
+        // Should succeed with multiple dots
+        Assert.True(parser.TryParse("...hello...world", out var result2));
+        Assert.Equal("hello", result2.Item1.ToString());
+        Assert.Equal("world", result2.Item2.ToString());
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldNotSkipRegularWhiteSpace()
+    {
+        // When using custom whitespace parser, regular spaces should NOT be skipped
+        var hello = Terms.Text("hello");
+        var world = Terms.Text("world");
+        var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+        // Should fail with regular whitespace
+        Assert.False(parser.TryParse("hello world", out _));
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldRestoreOriginalParser()
+    {
+        // After the WithWhiteSpaceParser parser completes, the original whitespace parser should be restored
+        var hello = Terms.Text("hello");
+        var world = Terms.Text("world");
+        var inner = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+        var outer = Terms.Text("outer");
+        var parser = inner.And(outer);
+
+        // Inside WithWhiteSpaceParser, dots are whitespace
+        // Outside, regular whitespace should work
+        Assert.True(parser.TryParse("..hello.world outer", out var result));
+        Assert.Equal("hello", result.Item1.Item1.ToString());
+        Assert.Equal("world", result.Item1.Item2.ToString());
+        Assert.Equal("outer", result.Item2.ToString());
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldWorkWithNestedParsers()
+    {
+        // Test nested WithWhiteSpaceParser calls
+        var a = Terms.Text("a");
+        var b = Terms.Text("b");
+        var c = Terms.Text("c");
+
+        var innerParser = a.And(b).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+        var outerParser = innerParser.And(c).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('-'))));
+
+        // First test a simpler case
+        Assert.True(innerParser.TryParse("a.b", out var inner1));
+        Assert.Equal("a", inner1.Item1.ToString());
+        Assert.Equal("b", inner1.Item2.ToString());
+
+        // Test outer without nesting first
+        var simpleOuter = Terms.Text("ab").And(c).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('-'))));
+        Assert.True(simpleOuter.TryParse("-ab-c", out var simple1));
+        Assert.Equal("ab", simple1.Item1.ToString());
+        Assert.Equal("c", simple1.Item2.ToString());
+
+        // For the nested case:
+        // - innerParser uses "." as whitespace for parsing "a.b"
+        // - outerParser uses "-" as whitespace for parsing innerParser and c
+        // - But innerParser itself doesn't skip whitespace (it's not a Terms parser)
+        // - So the input should be "a.b-c" (no leading "-")
+        //   The innerParser will parse "a.b", then c will skip "-" and parse "c"
+        Assert.True(outerParser.TryParse("a.b-c", out var result));
+        Assert.Equal("a", result.Item1.Item1.ToString());
+        Assert.Equal("b", result.Item1.Item2.ToString());
+        Assert.Equal("c", result.Item2.ToString());
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldWorkWithZeroOrMany()
+    {
+        // Test that custom whitespace works with ZeroOrMany combinator
+        var word = Terms.Identifier();
+        var parser = ZeroOrMany(word).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char(','))));
+
+        Assert.True(parser.TryParse(",hello,world,foo", out var result));
+        Assert.Equal(3, result.Count);
+        Assert.Equal("hello", result[0].ToString());
+        Assert.Equal("world", result[1].ToString());
+        Assert.Equal("foo", result[2].ToString());
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldAllowEmptyWhiteSpace()
+    {
+        // Test that we can parse without any whitespace when custom parser doesn't match
+        var hello = Terms.Text("hello");
+        var world = Terms.Text("world");
+        var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+        // Should succeed with no whitespace between tokens
+        Assert.True(parser.TryParse("helloworld", out var result));
+        Assert.Equal("hello", result.Item1.ToString());
+        Assert.Equal("world", result.Item2.ToString());
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldWorkWithCompilation()
+    {
+        // Test that compilation works correctly with WithWhiteSpaceParser
+        var hello = Terms.Text("hello");
+        var world = Terms.Text("world");
+        var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+        // Compile the parser
+        var compiled = parser.Compile();
+
+        // Should work the same as non-compiled version
+        Assert.True(compiled.TryParse("..hello.world", out var result));
+        Assert.Equal("hello", result.Item1.ToString());
+        Assert.Equal("world", result.Item2.ToString());
+
+        // Should not skip regular whitespace
+        Assert.False(compiled.TryParse("hello world", out _));
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserShouldWorkWithMultipleCharWhiteSpace()
+    {
+        // Test using a multi-character whitespace parser
+        var hello = Terms.Text("hello");
+        var world = Terms.Text("world");
+        var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+        // Should succeed with multiple dots
+        Assert.True(parser.TryParse("...hello....world", out var result));
+        Assert.Equal("hello", result.Item1.ToString());
+        Assert.Equal("world", result.Item2.ToString());
+    }
 }
