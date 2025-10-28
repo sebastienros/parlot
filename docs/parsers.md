@@ -641,6 +641,49 @@ Result:
 
 > Note: This parser is used by all Terms (e.g., Terms.Text) to skip blank spaces before a Literal.
 
+### WithWhiteSpaceParser
+
+Temporarily sets a custom whitespace parser for the inner parser. The custom whitespace parser is used to skip whitespace within the scope of the wrapped parser, then the previous whitespace parser is restored.
+
+This allows grammars to define custom whitespace handling for specific parts of the grammar.
+
+```c#
+Parser<T> WithWhiteSpaceParser<T>(this Parser<T> parser, Parser<TextSpan> whiteSpaceParser)
+```
+
+Usage:
+
+```c#
+var hello = Terms.Text("hello");
+var world = Terms.Text("world");
+var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+parser.Parse("..hello.world");  // Succeeds - dots are treated as whitespace
+parser.Parse("hello world");     // Fails - regular spaces are not whitespace
+```
+
+Result:
+
+```
+("hello", "world")
+null
+```
+
+This parser can be nested, with each level managing its own whitespace context:
+
+```c#
+var a = Terms.Text("a");
+var b = Terms.Text("b");
+var c = Terms.Text("c");
+
+var inner = a.And(b).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+var outer = inner.And(c).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('-'))));
+
+outer.Parse("a.b-c");  // Inner uses '.', outer uses '-' as whitespace
+```
+
+> Note: The custom whitespace parser must return a `TextSpan`. Use `Capture()` to wrap parsers that don't return `TextSpan`.
+
 ### Deferred
 
 Creates a parser that can be referenced before it is actually defined. This is used when there is a cyclic dependency between parsers.
