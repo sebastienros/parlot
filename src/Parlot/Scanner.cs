@@ -1,6 +1,10 @@
 using System;
 using Parlot.Fluent;
 using System.Linq;
+using System.IO;
+using System.IO.Pipelines;
+using System.Text;
+using System.Threading.Tasks;
 
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -25,6 +29,108 @@ public class Scanner
     {
         Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         Cursor = new Cursor(Buffer, TextPosition.Start);
+    }
+
+    /// <summary>
+    /// Scans UTF-8 bytes from a stream.
+    /// </summary>
+    /// <param name="stream">The stream containing UTF-8 encoded text to scan.</param>
+    public Scanner(Stream stream) : this(stream, Encoding.UTF8)
+    {
+    }
+
+    /// <summary>
+    /// Scans bytes from a stream using the specified encoding.
+    /// </summary>
+    /// <param name="stream">The stream containing the text to scan.</param>
+    /// <param name="encoding">The encoding to use for decoding the stream.</param>
+    public Scanner(Stream stream, Encoding encoding)
+    {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(encoding);
+#else
+        if (stream == null) throw new ArgumentNullException(nameof(stream));
+        if (encoding == null) throw new ArgumentNullException(nameof(encoding));
+#endif
+
+        // Read the entire stream and decode it to a string
+        Buffer = ReadStreamToString(stream, encoding);
+        Cursor = new Cursor(Buffer, TextPosition.Start);
+    }
+
+    private static string ReadStreamToString(Stream stream, Encoding encoding)
+    {
+        var pipeReader = PipeReader.Create(stream);
+        
+        try
+        {
+            return ReadPipeToStringAsync(pipeReader, encoding).GetAwaiter().GetResult();
+        }
+        finally
+        {
+            pipeReader.Complete();
+        }
+    }
+
+    private static async Task<string> ReadPipeToStringAsync(PipeReader reader, Encoding encoding)
+    {
+        var stringBuilder = new StringBuilder();
+        var decoder = encoding.GetDecoder();
+
+        while (true)
+        {
+            var result = await reader.ReadAsync().ConfigureAwait(false);
+            var buffer = result.Buffer;
+
+            foreach (var segment in buffer)
+            {
+#if NET6_0_OR_GREATER
+                // Decode the segment using Span-based APIs
+                var charCount = decoder.GetCharCount(segment.Span, flush: false);
+                var chars = new char[charCount];
+                decoder.GetChars(segment.Span, chars, flush: false);
+                stringBuilder.Append(chars);
+#else
+                // Decode the segment using array-based APIs
+                var bytes = segment.ToArray();
+                var charCount = decoder.GetCharCount(bytes, 0, bytes.Length, flush: false);
+                var chars = new char[charCount];
+                decoder.GetChars(bytes, 0, bytes.Length, chars, 0, flush: false);
+                stringBuilder.Append(chars);
+#endif
+            }
+
+            reader.AdvanceTo(buffer.End);
+
+            if (result.IsCompleted)
+            {
+                break;
+            }
+        }
+
+#if NET6_0_OR_GREATER
+        // Flush the decoder
+        var finalCharCount = decoder.GetCharCount(ReadOnlySpan<byte>.Empty, flush: true);
+        if (finalCharCount > 0)
+        {
+            var finalChars = new char[finalCharCount];
+            decoder.GetChars(ReadOnlySpan<byte>.Empty, finalChars, flush: true);
+            stringBuilder.Append(finalChars);
+        }
+#else
+        // Flush the decoder using array-based APIs
+        var emptyBytes = Array.Empty<byte>();
+        var finalCharCount = decoder.GetCharCount(emptyBytes, 0, 0, flush: true);
+        if (finalCharCount > 0)
+        {
+            var finalChars = new char[finalCharCount];
+            decoder.GetChars(emptyBytes, 0, 0, finalChars, 0, flush: true);
+            stringBuilder.Append(finalChars);
+        }
+#endif
+
+        return stringBuilder.ToString();
     }
 
     /// <summary>

@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.Memory" Version="4.6.3" />
+    <PackageVersion Include="System.IO.Pipelines" Version="9.0.0" />
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.2.0" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.2" />

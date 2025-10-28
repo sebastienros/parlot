@@ -431,4 +431,59 @@ public class ScannerTests
         Assert.True(decimal.TryParse(expected, NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }
+
+    [Theory]
+    [InlineData("Lorem ipsum")]
+    [InlineData("Hello, World!")]
+    [InlineData("UTF-8 text: 你好世界")]
+    [InlineData("123456789")]
+    public void ShouldReadFromStreamWithUTF8(string text)
+    {
+        using var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(text));
+        var scanner = new Scanner(stream);
+        
+        Assert.Equal(text, scanner.Buffer);
+    }
+
+    [Theory]
+    [InlineData("Lorem ipsum", "Lorem")]
+    [InlineData("123 456", "123")]
+    public void ShouldScanFromStreamSameAsString(string text, string expected)
+    {
+        // Test with string constructor
+        var scannerFromString = new Scanner(text);
+        var successFromString = scannerFromString.ReadNonWhiteSpace(out var resultFromString);
+
+        // Test with stream constructor
+        using var stream = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(text));
+        var scannerFromStream = new Scanner(stream);
+        var successFromStream = scannerFromStream.ReadNonWhiteSpace(out var resultFromStream);
+
+        Assert.Equal(successFromString, successFromStream);
+        Assert.Equal(expected, resultFromString);
+        Assert.Equal(expected, resultFromStream);
+    }
+
+    [Fact]
+    public void ShouldReadFromStreamWithCustomEncoding()
+    {
+        var text = "Hello, World!";
+        using var stream = new System.IO.MemoryStream(System.Text.Encoding.Unicode.GetBytes(text));
+        var scanner = new Scanner(stream, System.Text.Encoding.Unicode);
+        
+        Assert.Equal(text, scanner.Buffer);
+    }
+
+    [Fact]
+    public void StreamConstructorShouldThrowOnNullStream()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Scanner((System.IO.Stream)null!));
+    }
+
+    [Fact]
+    public void StreamConstructorShouldThrowOnNullEncoding()
+    {
+        using var stream = new System.IO.MemoryStream();
+        Assert.Throws<ArgumentNullException>(() => new Scanner(stream, null!));
+    }
 }
