@@ -5,6 +5,13 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
+/// <summary>
+/// This parser parses a value between two other parsers. It returns the value parsed by the middle parser
+/// making it easier to skip delimiters than writing <code>a.SkipAnd(b).AndSkip(c)</code>.
+/// </summary>
+/// <typeparam name="A">The type of the parser before the main parser.</typeparam>
+/// <typeparam name="T">The type of the value parsed by the main parser.</typeparam>
+/// <typeparam name="B">The type of the parser after the main parser.</typeparam>
 public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
