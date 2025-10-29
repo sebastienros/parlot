@@ -39,22 +39,20 @@ public class Scanner
             return false;
         }
 
+        SkipRemainingWhiteSpaceOrNewLine();
+        return true;
+    }
+
+    private void SkipRemainingWhiteSpaceOrNewLine()
+    {
         var span = Cursor.Span;
         var length = span.Length;
 
-        for (var i = 1; i < length; i++)
-        {
-            var c = span[i];
+        var i = 0;
 
-            if (!Character.IsWhiteSpaceOrNewLine(c))
-            {
-                Cursor.Advance(i);
-                return true;
-            }
-        }
+        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i])) ;
 
-        Cursor.Advance(span.Length);
-        return true;
+        Cursor.Advance(i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -64,34 +62,30 @@ public class Scanner
         {
             return false;
         }
-
+        
+        // Splitting such that not all code is inlined
+        SkipRemainingWhiteSpace();
+        return true;
+    }
+    
+    private void SkipRemainingWhiteSpace()
+    {
         var span = Cursor.Span;
         var length = span.Length;
 
-        for (var i = 1; i < length; i++)
-        {
-            var c = span[i];
+        var i = 0;
 
-            if (!Character.IsWhiteSpace(c))
-            {
-                if (i > 0)
-                {
-                    Cursor.AdvanceNoNewLines(i);
-                    return true;
-                }
+        while (++i < length && Character.IsWhiteSpace(span[i])) ;
 
-                return false;
-            }
-        }
-
-        Cursor.AdvanceNoNewLines(span.Length);
-        return true;
+        Cursor.AdvanceNoNewLines(i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [Obsolete("Not optimized")]
     public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
         => ReadFirstThenOthers(first, other, out _);
 
+    [Obsolete("Not optimized")]
     public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other, out ReadOnlySpan<char> result)
     {
         if (!first(Cursor.Current))
@@ -114,8 +108,10 @@ public class Scanner
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [Obsolete("Should not be part of the Scanner")]
     public bool ReadIdentifier() => ReadIdentifier(out _);
 
+    [Obsolete("Should not be part of the Scanner")]
     public bool ReadIdentifier(out ReadOnlySpan<char> result)
     {
         // perf: using Character.IsIdentifierStart instead of x => Character.IsIdentifierStart(x) induces some allocations
@@ -357,11 +353,12 @@ public class Scanner
     /// <summary>
     /// Reads the specified text.
     /// </summary>
+    [Obsolete("Prefer bool ReadChar(char)")]
     public bool ReadChar(char c, out ReadOnlySpan<char> result)
     {
         if (!Cursor.Match(c))
         {
-            result = [];
+            result = default;
             return false;
         }
 

@@ -162,9 +162,32 @@ public class ScannerTests
         Assert.False(new Scanner("a").SkipWhiteSpace());
     }
 
+    [Theory]
+    [InlineData("Loremipsum")]
+    [InlineData("a")]
+    [InlineData("")]
+    [InlineData("\r\n\t")]
+    [InlineData("\n\t")]
+    public void SkipWhiteSpaceWithNoSpacesReturnsFalse(string text)
+    {
+        Scanner s = new(text);
+        Assert.False(s.SkipWhiteSpace());
+    }
+
+    [Theory]
+    [InlineData(" Loremipsum")]
+    [InlineData("  a")]
+    [InlineData("\t")]
+    public void SkipWhiteSpaceWithSpacesReturnsTrue(string text)
+    {
+        Scanner s = new(text);
+        Assert.True(s.SkipWhiteSpace(), text);
+    }
+
     [Fact]
     public void ReadIdentifierShouldReadIdentifier()
     {
+        #pragma warning disable CS0618 // Type or member is obsolete
         Scanner s = new("a $abc 123");
 
         Assert.True(s.ReadIdentifier(out var result));
@@ -178,6 +201,7 @@ public class ScannerTests
         s.SkipWhiteSpace();
 
         Assert.False(s.ReadIdentifier());
+        #pragma warning restore CS0618 // Type or member is obsolete
     }
 
     [Fact]
@@ -185,14 +209,9 @@ public class ScannerTests
     {
         Scanner s = new("aaa");
 
-        Assert.True(s.ReadChar('a', out var result));
-        Assert.Equal("a", result);
-
-        Assert.True(s.ReadChar('a', out result));
-        Assert.Equal("a", result);
-
-        Assert.True(s.ReadChar('a', out result));
-        Assert.Equal("a", result);
+        Assert.True(s.ReadChar('a'));
+        Assert.True(s.ReadChar('a'));
+        Assert.True(s.ReadChar('a'));
 
         Assert.False(s.ReadChar('a'));
     }

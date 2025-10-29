@@ -45,6 +45,7 @@ namespace Parlot.Benchmarks;
 public class SkipWhiteSpaceBenchmarks
 {
     private string _source;
+    private Scanner _scanner;
 
     [Params(0, 1, 2, 10)]
     public int Length { get; set; }
@@ -53,32 +54,26 @@ public class SkipWhiteSpaceBenchmarks
     public void Setup()
     {
         _source = new string(' ', Length) + "a";
+        _scanner = new Scanner(_source);
     }
 
-    [Benchmark, BenchmarkCategory("DefaultImplementation")]
+    [Benchmark, BenchmarkCategory("SkipWhiteSpace")]
     public bool SkipWhiteSpace_Default()
     {
-        return new Scanner(_source).SkipWhiteSpace();
+        return _scanner.SkipWhiteSpace();
     }
 
-    [Benchmark, BenchmarkCategory("DefaultImplementation")]
+    [Benchmark, BenchmarkCategory("SkipWhiteSpaceNewLines")]
     public bool SkipWhiteSpaceOrNewLine_Default()
     {
-        return new Scanner(_source).SkipWhiteSpaceOrNewLine();
+        return _scanner.SkipWhiteSpaceOrNewLine();
     }
 
 #if NET8_0_OR_GREATER
-    [Benchmark, BenchmarkCategory("Vectorized")]
+    [Benchmark, BenchmarkCategory("SkipWhiteSpace")]
     public bool SkipWhiteSpace_Vectorized()
     {
-        var scanner = new Scanner(_source);
-        var cursor = scanner.Cursor;
-
-        if (cursor.Eof)
-        {
-            return false;
-        }
-
+        var cursor = _scanner.Cursor;
         var span = cursor.Span;
 
         var index = span.IndexOfAnyExcept(SearchValuesHelper._whiteSpaces);
@@ -98,17 +93,10 @@ public class SkipWhiteSpaceBenchmarks
         }
     }
 
-    [Benchmark, BenchmarkCategory("Vectorized")]
+    [Benchmark, BenchmarkCategory("SkipWhiteSpaceNewLines")]
     public bool SkipWhiteSpaceOrNewLines_Vectorized()
     {
-        var scanner = new Scanner(_source);
-        var cursor = scanner.Cursor;
-
-        if (cursor.Eof)
-        {
-            return false;
-        }
-
+        var cursor = _scanner.Cursor;
         var span = cursor.Span;
 
         var index = span.IndexOfAnyExcept(SearchValuesHelper._whiteSpaceOrNewLines);
@@ -127,120 +115,34 @@ public class SkipWhiteSpaceBenchmarks
         }
     }
 
-    [Benchmark, BenchmarkCategory("PeekSearchValue")]
-    public bool SkipWhiteSpace_PeekSearchValue()
+    [Benchmark, BenchmarkCategory("SkipWhiteSpace")]
+    public bool SkipWhiteSpace_Vectorized_Optimized()
     {
-        var scanner = new Scanner(_source);
-        var cursor = scanner.Cursor;
-
+        var cursor = _scanner.Cursor;
         var span = cursor.Span;
-        var length = span.Length;
 
-        for (var i = 0; i < length; i++)
+        // Check ASCII first
+        var index = span.IndexOfAnyExcept(SearchValuesHelper._whiteSpacesAscii);
+
+        // If we found a non-ASCII character, we need to check the full set
+        if (index > 0 && index < span.Length && span[index] > 127)
         {
-            var c = span[i];
-
-            if (!SearchValuesHelper._whiteSpaces.Contains(c))
-            {
-                if (i > 0)
-                {
-                    cursor.AdvanceNoNewLines(i);
-                    return true;
-                }
-
-                return false;
-            }
+            index = span.Slice(index).IndexOfAnyExcept(SearchValuesHelper._whiteSpaces);
         }
-
-        cursor.AdvanceNoNewLines(span.Length);
-        return true;
-    }
-
-    [Benchmark, BenchmarkCategory("PeekSearchValue")]
-    public bool SkipWhiteSpaceOrNewLines_PeekSearchValue()
-    {
-        var scanner = new Scanner(_source);
-        var cursor = scanner.Cursor;
-
-        var span = cursor.Span;
-        var length = span.Length;
-
-        for (var i = 0; i < length; i++)
+        
+        // Only spaces ?
+        // Not tracking new lines since we know these are only spaces
+        switch (index)
         {
-            var c = span[i];
-
-            if (!SearchValuesHelper._whiteSpaceOrNewLines.Contains(c))
-            {
-                if (i > 0)
-                {
-                    cursor.Advance(i);
-                    return true;
-                }
-
+            case 0:
                 return false;
-            }
+            case -1:
+                cursor.AdvanceNoNewLines(span.Length);
+                return true;
+            default:
+                cursor.AdvanceNoNewLines(index);
+                return true;
         }
-
-        cursor.AdvanceNoNewLines(span.Length);
-        return true;
-    }
-
-    [Benchmark, BenchmarkCategory("PeekCharacter")]
-    public bool SkipWhiteSpace_PeekCharacter()
-    {
-        var scanner = new Scanner(_source);
-        var cursor = scanner.Cursor;
-
-        var span = cursor.Span;
-        var length = span.Length;
-
-        for (var i = 0; i < length; i++)
-        {
-            var c = span[i];
-
-            if (!Character.IsWhiteSpace(c))
-            {
-                if (i > 0)
-                {
-                    cursor.AdvanceNoNewLines(i);
-                    return true;
-                }
-
-                return false;
-            }
-        }
-
-        cursor.AdvanceNoNewLines(span.Length);
-        return true;
-    }
-
-    [Benchmark, BenchmarkCategory("PeekCharacter")]
-    public bool SkipWhiteSpaceOrNewLines_PeekCharacter()
-    {
-        var scanner = new Scanner(_source);
-        var cursor = scanner.Cursor;
-
-        var span = cursor.Span;
-        var length = span.Length;
-
-        for (var i = 0; i < length; i++)
-        {
-            var c = span[i];
-
-            if (!Character.IsWhiteSpaceOrNewLine(c))
-            {
-                if (i > 0)
-                {
-                    cursor.Advance(i);
-                    return true;
-                }
-
-                return false;
-            }
-        }
-
-        cursor.AdvanceNoNewLines(span.Length);
-        return true;
     }
 #endif
 }
