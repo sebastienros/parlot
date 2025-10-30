@@ -53,17 +53,17 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 
         var parsed = new ParseResult<T>();
 
-        if (_canJumpToNextExpectedChar)
-        {
-#if NET8_0_OR_GREATER
-            JumpToNextExpectedChar(context, _expectedSearchValues!);
-#else
-            JumpToNextExpectedChar(context, _expectedChars!);
-#endif
-        }
-
         while (true)
         {
+            if (_canJumpToNextExpectedChar)
+            {
+#if NET8_0_OR_GREATER
+                JumpToNextExpectedChar(context, _expectedSearchValues!);
+#else
+                JumpToNextExpectedChar(context, _expectedChars!);
+#endif
+            }
+        
             var previous = context.Scanner.Cursor.Position;
 
             if (context.Scanner.Cursor.Eof)
@@ -126,6 +126,12 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
         {
             context.Scanner.Cursor.Advance(index);
         }
+
+        if (index == -1)
+        {
+            // No expected char found, move to the end
+            context.Scanner.Cursor.Advance(context.Scanner.Cursor.Span.Length);
+        }
     }
 #else
     private static void JumpToNextExpectedChar(ParseContext context, char[] expectedChars)
@@ -134,9 +140,16 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
         foreach (var c in expectedChars)
         {
             var index = context.Scanner.Cursor.Span.IndexOf(c);
+
             if (index >= 0)
             {
                 indexOfAny = Math.Min(indexOfAny, index);
+            }
+
+            if (index == -1)
+            {
+                // No expected char found, move to the end
+                context.Scanner.Cursor.Advance(context.Scanner.Cursor.Span.Length);
             }
         }
 

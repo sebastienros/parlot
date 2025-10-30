@@ -291,6 +291,21 @@ public class LiteralBuilder
     /// <param name="maxSize">When the parser reaches the maximum number of chars it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> NoneOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => new ListOfChars(values, minSize, maxSize, negate: true);
 #endif
+
+    /// <summary>
+    /// Builds a parser that matches single line comments.
+    /// </summary>
+    /// <param name="singleLineStart">The text that starts the single line comment, e.g., <code>"//"</code>, <code>"--"</code>, <code>"#"</code></param>
+    /// <returns></returns>
+    public Parser<TextSpan> Comments(string singleLineStart) => Capture(Text(singleLineStart).And(AnyCharBefore(Char('\n'), canBeEmpty: true, failOnEof: false, consumeDelimiter: false)));
+
+    /// <summary>
+    /// Builds a parser that matches multi line comments.
+    /// </summary>
+    /// <param name="multiLineStart">The text that starts the multi line comment, e.g., <code>"/*"</code></param>
+    /// <param name="multiLineEnd">The text that ends the multi line comment, e.g., <code>"*/"</code></param>
+    /// <returns></returns>
+    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Capture(Text(multiLineStart).And(AnyCharBefore(Text(multiLineEnd), canBeEmpty: true, failOnEof: true, consumeDelimiter: true).Else($"End-of-file found, '{multiLineEnd}' expected")));
 }
 
 public class TermBuilder
@@ -434,6 +449,21 @@ public class TermBuilder
     /// <param name="values">The set of chars not to match.</param>
     /// <param name="minSize">The minimum number of required chars. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of chars it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
-    public Parser<TextSpan> NoneOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => new ListOfChars(values, minSize, maxSize, negate: true);
+    public Parser<TextSpan> NoneOf(ReadOnlySpan<char> values, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new ListOfChars(values, minSize, maxSize, negate: true));
 #endif
+
+    /// <summary>
+    /// Builds a parser that matches single line comments.
+    /// </summary>
+    /// <param name="singleLineStart">The text that starts the single line comment, e.g., <code>"//"</code>, <code>"--"</code>, <code>"#"</code></param>
+    /// <returns></returns>
+    public Parser<TextSpan> Comments(string singleLineStart) => Parsers.SkipWhiteSpace(Literals.Comments(singleLineStart));
+
+    /// <summary>
+    /// Builds a parser that matches multi line comments.
+    /// </summary>
+    /// <param name="multiLineStart">The text that starts the multi line comment, e.g., <code>"/*"</code></param>
+    /// <param name="multiLineEnd">The text that ends the multi line comment, e.g., <code>"*/"</code></param>
+    /// <returns></returns>
+    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Parsers.SkipWhiteSpace(Capture(Text(multiLineStart).And(AnyCharBefore(Text(multiLineEnd)))));
 }
