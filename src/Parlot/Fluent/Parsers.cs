@@ -297,7 +297,7 @@ public class LiteralBuilder
     /// </summary>
     /// <param name="singleLineStart">The text that starts the single line comment, e.g., <code>"//"</code>, <code>"--"</code>, <code>"#"</code></param>
     /// <returns></returns>
-    public Parser<TextSpan> Comments(string singleLineStart) => Capture(Text(singleLineStart).And(AnyCharBefore(Char('\n'), canBeEmpty: true, failOnEof: false, consumeDelimiter: false)));
+    public Parser<TextSpan> Comments(string singleLineStart) => Capture(Text(singleLineStart).And(AnyCharBefore(Text("\r\n").Or(Text("\n")), canBeEmpty: true, failOnEof: false, consumeDelimiter: false)));
 
     /// <summary>
     /// Builds a parser that matches multi line comments.
@@ -305,7 +305,7 @@ public class LiteralBuilder
     /// <param name="multiLineStart">The text that starts the multi line comment, e.g., <code>"/*"</code></param>
     /// <param name="multiLineEnd">The text that ends the multi line comment, e.g., <code>"*/"</code></param>
     /// <returns></returns>
-    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Capture(Text(multiLineStart).And(AnyCharBefore(Text(multiLineEnd), canBeEmpty: true, failOnEof: true, consumeDelimiter: true).Else($"End-of-file found, '{multiLineEnd}' expected")));
+    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Capture(Text(multiLineStart).And(AnyCharBefore(Text(multiLineEnd), canBeEmpty: true, failOnEof: true, consumeDelimiter: true).ElseError($"End-of-file found, '{multiLineEnd}' expected")));
 }
 
 public class TermBuilder
@@ -457,7 +457,7 @@ public class TermBuilder
     /// </summary>
     /// <param name="singleLineStart">The text that starts the single line comment, e.g., <code>"//"</code>, <code>"--"</code>, <code>"#"</code></param>
     /// <returns></returns>
-    public Parser<TextSpan> Comments(string singleLineStart) => Parsers.SkipWhiteSpace(Literals.Comments(singleLineStart));
+    public Parser<TextSpan> Comments(string singleLineStart) => Literals.WhiteSpace(includeNewLines: true).Optional().SkipAnd(Literals.Comments(singleLineStart));
 
     /// <summary>
     /// Builds a parser that matches multi line comments.
@@ -465,5 +465,5 @@ public class TermBuilder
     /// <param name="multiLineStart">The text that starts the multi line comment, e.g., <code>"/*"</code></param>
     /// <param name="multiLineEnd">The text that ends the multi line comment, e.g., <code>"*/"</code></param>
     /// <returns></returns>
-    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Parsers.SkipWhiteSpace(Capture(Text(multiLineStart).And(AnyCharBefore(Text(multiLineEnd)))));
+    public Parser<TextSpan> Comments(string multiLineStart, string multiLineEnd) => Literals.WhiteSpace(includeNewLines: true).Optional().SkipAnd(Literals.Comments(multiLineStart, multiLineEnd));
 }

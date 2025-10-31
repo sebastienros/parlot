@@ -391,7 +391,11 @@ public class SqlParser
         var statementList = OneOrMany(statementLine)
             .Then(statements => new StatementList(statements));
 
-        Statements = statementList;
+        Statements = statementList.WithComments(comments => 
+        {
+            comments.WithSingleLine("--");
+            comments.WithMultiLine("/*", "*/");
+        });
     }
 
     public static StatementList? Parse(string input)
