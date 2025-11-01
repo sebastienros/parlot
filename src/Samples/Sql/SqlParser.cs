@@ -388,8 +388,8 @@ public class SqlParser
             .Then(x => new StatementLine(x));
 
         // Statement list
-        var statementList = OneOrMany(statementLine)
-            .Then(statements => new StatementList(statements));
+        var statementList = SkipWhiteSpace(ZeroOrMany(statementLine)
+            .Then(statements => new StatementList(statements)).Eof());
 
         Statements = statementList.WithComments(comments => 
         {
