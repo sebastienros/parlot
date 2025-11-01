@@ -6,6 +6,27 @@ namespace Parlot.Tests.Sql;
 public class SqlParserTests
 {
     [Theory]
+    [InlineData("SELECT * -- comment \n FROM users")]
+    [InlineData("SELECT id, name /* multiline\n comment\n */ FROM users")]
+    [InlineData("/* some documentation */ SELECT id, name FROM users WHERE id = 1")]
+    public void ShouldParseComments(string sql)
+    {
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+    }
+    
+    [Theory]
+    [InlineData("-- comment SELECT * FROM users")]
+    [InlineData("/* some documentation SELECT id, name FROM users WHERE id = 1 */")]
+    public void ShouldParseCommentsWithNoResults(string sql)
+    {
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Empty(result.Statements);   
+    }
+
+    [Theory]
     [InlineData("SELECT * FROM users")]
     [InlineData("SELECT id, name FROM users")]
     [InlineData("SELECT id, name FROM users WHERE id = 1")]

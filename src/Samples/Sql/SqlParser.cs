@@ -388,10 +388,14 @@ public class SqlParser
             .Then(x => new StatementLine(x));
 
         // Statement list
-        var statementList = OneOrMany(statementLine)
-            .Then(statements => new StatementList(statements));
+        var statementList = SkipWhiteSpace(ZeroOrMany(statementLine)
+            .Then(statements => new StatementList(statements)).Eof());
 
-        Statements = statementList;
+        Statements = statementList.WithComments(comments => 
+        {
+            comments.WithSingleLine("--");
+            comments.WithMultiLine("/*", "*/");
+        });
     }
 
     public static StatementList? Parse(string input)

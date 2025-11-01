@@ -1,15 +1,30 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Capture<T> : Parser<TextSpan>, ICompilable
+public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
+
 
     public Capture(Parser<T> parser)
     {
         _parser = parser;
+
+        if (parser is ISeekable seekable && seekable.CanSeek)
+        {
+            CanSeek = true;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
