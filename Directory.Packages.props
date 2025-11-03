@@ -6,19 +6,19 @@
     <PackageVersion Include="System.Memory" Version="4.6.3" />
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.3.3" />
     <!-- Benchmarks -->
-    <PackageVersion Include="BenchmarkDotNet" Version="0.15.2" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.5" />
     <PackageVersion Include="Pidgin" Version="3.4.0" />
     <PackageVersion Include="Sprache" Version="3.0.0-develop-00049" />
     <PackageVersion Include="Superpower" Version="3.1.0" />
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <!-- Global Package References -->
     <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <GlobalPackageReference Include="PolySharp" Version="1.15.0" />
     <!-- Testing -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.2" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="xunit.analyzers" Version="1.22.0" />
+    <PackageVersion Include="xunit.analyzers" Version="1.25.0" />
   </ItemGroup>
 </Project>
