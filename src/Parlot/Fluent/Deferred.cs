@@ -52,11 +52,28 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
+        // Check for infinite recursion at the same position
+        if (context.IsParserActiveAtPosition(this))
+        {
+            // Cycle detected at this position - fail gracefully instead of stack overflow
+            return false;
+        }
+
+        // Remember the position where we entered this parser
+        var entryPosition = context.Scanner.Cursor.Position.Offset;
+
+        // Mark this parser as active at the current position
+        context.PushParserAtPosition(this);
+
         context.EnterParser(this);
 
         var outcome = Parser.Parse(context, ref result);
 
         context.ExitParser(this);
+
+        // Mark this parser as inactive at the entry position
+        context.PopParserAtPosition(this, entryPosition);
+
         return outcome;
     }
 

@@ -1511,4 +1511,48 @@ public class FluentTests
         Assert.Equal("hello", result.Item1.ToString());
         Assert.Equal("world", result.Item2.ToString());
     }
+
+    [Fact]
+    public void DeferredShouldDetectInfiniteRecursion()
+    {
+        // Test case 1: Direct self-reference
+        var loop = Deferred<string>();
+        loop.Parser = loop;
+
+        // Should fail gracefully instead of causing stack overflow
+        Assert.False(loop.TryParse("hello parlot", out var result1));
+        Assert.Null(result1);
+    }
+
+    [Fact]
+    public void RecursiveShouldDetectInfiniteRecursion()
+    {
+        // Test case 2: Recursive self-reference
+        var loop = Recursive<string>(c => c);
+
+        // Should fail gracefully instead of causing stack overflow
+        Assert.False(loop.TryParse("hello parlot", out var result2));
+        Assert.Null(result2);
+    }
+
+    [Fact]
+    public void DeferredShouldAllowValidRecursion()
+    {
+        // Valid recursive parser - should still work
+        // This represents a simple recursive grammar like: list ::= '[' (item (',' item)*)? ']'
+        var list = Deferred<string>();
+        var item = Literals.Text("item");
+        var comma = Literals.Char(',');
+        var openBracket = Literals.Char('[');
+        var closeBracket = Literals.Char(']');
+        
+        // A list can contain items or nested lists
+        var element = item.Or(list);
+        var elements = ZeroOrMany(element.And(ZeroOrOne(comma)));
+        list.Parser = Between(openBracket, elements, closeBracket).Then(x => "list");
+
+        // This should work fine - it's recursive but makes progress
+        Assert.True(list.TryParse("[]", out var result));
+        Assert.Equal("list", result);
+    }
 }
