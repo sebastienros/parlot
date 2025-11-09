@@ -19,7 +19,7 @@ public class ParseContext
     /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
     /// </summary>
     /// <remarks>
-    /// When <c>false</c>, new lines will be skipped like any other while space.
+    /// When <c>false</c>, new lines will be skipped like any other white space.
     /// Otherwise new lines need to be read explicitly by a rule.
     /// </remarks>
     public bool UseNewLines { get; private set; }
