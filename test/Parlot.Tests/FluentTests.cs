@@ -170,6 +170,25 @@ public class FluentTests
     }
 
     [Fact]
+    public void ThenShouldProvideStartAndEndOffsets()
+    {
+        // Use Literals.Identifier() to get consistent start/end positions
+        // Terms parsers skip whitespace which affects position reporting differently in compiled vs non-compiled mode
+        var parser = Literals.Identifier().Then((context, start, end, value) =>
+        {
+            return $"{value}:{start}-{end}";
+        });
+
+        Assert.True(parser.TryParse("hello", out var result));
+        Assert.Equal("hello:0-5", result);
+
+        // Test with compiled parser - should have the same behavior
+        var compiled = parser.Compile();
+        Assert.True(compiled.TryParse("world", out var result2));
+        Assert.Equal("world:0-5", result2);
+    }
+
+    [Fact]
     public void BetweenShouldParseBetweenTwoString()
     {
         var code = Between(Terms.Text("[["), Terms.Integer(), Terms.Text("]]"));

@@ -16,6 +16,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
 {
     private readonly Func<T, U>? _action1;
     private readonly Func<ParseContext, T, U>? _action2;
+    private readonly Func<ParseContext, int, int, T, U>? _action3;
     private readonly U? _value;
     private readonly Parser<T> _parser;
 
@@ -39,6 +40,11 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
     public Then(Parser<T> parser, Func<ParseContext, T, U> action) : this(parser)
     {
         _action2 = action ?? throw new ArgumentNullException(nameof(action));
+    }
+
+    public Then(Parser<T> parser, Func<ParseContext, int, int, T, U> action) : this(parser)
+    {
+        _action3 = action ?? throw new ArgumentNullException(nameof(action));
     }
 
     public Then(Parser<T> parser, U value) : this(parser)
@@ -68,9 +74,13 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
             {
                 result.Set(parsed.Start, parsed.End, _action2.Invoke(context, parsed.Value));
             }
+            else if (_action3 != null)
+            {
+                result.Set(parsed.Start, parsed.End, _action3.Invoke(context, parsed.Start, parsed.End, parsed.Value));
+            }
             else
             {
-                // _value can't be null if action1 and action2 are null
+                // _value can't be null if action1, action2, and action3 are null
                 result.Set(parsed.Start, parsed.End, _value!);
             }
 
@@ -88,11 +98,23 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
 
         // parse1 instructions
         // 
+        // var startOffset = context.Scanner.Cursor.Offset; // Only for _action3
         // if (parser1.Success)
         // {
+        //    var endOffset = context.Scanner.Cursor.Offset;  // Only for _action3
         //    success = true;
-        //    value = action(parse1.Value);
+        //    value = action(parse1.Value) // or action(context, start, end, parse1.Value) for _action3
         // }
+
+        ParameterExpression? startOffset = null;
+        ParameterExpression? endOffset = null;
+
+        if (_action3 != null)
+        {
+            // Capture the start offset before the parser runs
+            startOffset = result.DeclareVariable<int>($"startOffset{context.NextNumber}", context.Offset());
+            endOffset = result.DeclareVariable<int>($"endOffset{context.NextNumber}");
+        }
 
         var parserCompileResult = _parser.Build(context, requireResult: true);
 
@@ -109,6 +131,16 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
             assignValue = context.DiscardResult
                 ? Expression.Invoke(Expression.Constant(_action2), [context.ParseContext, parserCompileResult.Value])
                 : Expression.Assign(result.Value, Expression.Invoke(Expression.Constant(_action2), [context.ParseContext, parserCompileResult.Value]));
+        }
+        else if (_action3 != null)
+        {
+            // Capture end offset when parser succeeds, then invoke the action
+            assignValue = Expression.Block(
+                Expression.Assign(endOffset!, context.Offset()),
+                context.DiscardResult
+                    ? Expression.Invoke(Expression.Constant(_action3), [context.ParseContext, startOffset!, endOffset!, parserCompileResult.Value])
+                    : Expression.Assign(result.Value, Expression.Invoke(Expression.Constant(_action3), [context.ParseContext, startOffset!, endOffset!, parserCompileResult.Value]))
+            );
         }
         else
         {
