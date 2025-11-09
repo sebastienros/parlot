@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Parlot.Fluent;
 
@@ -28,10 +29,23 @@ public class ParseContext
     /// </summary>
     public readonly Scanner Scanner;
 
+    /// <summary>
+    /// The cancellation token used to stop the parsing operation.
+    /// </summary>
+    public readonly CancellationToken CancellationToken;
+
     public ParseContext(Scanner scanner, bool useNewLines = false)
     {
         Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         UseNewLines = useNewLines;
+        CancellationToken = CancellationToken.None;
+    }
+
+    public ParseContext(Scanner scanner, CancellationToken cancellationToken, bool useNewLines = false)
+    {
+        Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
+        UseNewLines = useNewLines;
+        CancellationToken = cancellationToken;
     }
 
     /// <summary>
@@ -89,6 +103,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void EnterParser<T>(Parser<T> parser)
     {
+        CancellationToken.ThrowIfCancellationRequested();
         OnEnterParser?.Invoke(parser, this);
     }
 
