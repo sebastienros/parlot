@@ -99,6 +99,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         // parse1 instructions
         // 
         // var startOffset = context.Scanner.Cursor.Offset; // Only for _action3
+        // parser1 body (which may include whitespace skipping for Terms)
         // if (parser1.Success)
         // {
         //    var endOffset = context.Scanner.Cursor.Offset;  // Only for _action3
@@ -112,6 +113,8 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         if (_action3 != null)
         {
             // Capture the start offset before the parser runs
+            // Note: For Terms parsers (which skip whitespace), this will be before whitespace is skipped
+            // This differs from non-compiled mode where parsed.Start is after whitespace skipping
             startOffset = result.DeclareVariable<int>($"startOffset{context.NextNumber}", context.Offset());
             endOffset = result.DeclareVariable<int>($"endOffset{context.NextNumber}");
         }

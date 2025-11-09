@@ -172,8 +172,7 @@ public class FluentTests
     [Fact]
     public void ThenShouldProvideStartAndEndOffsets()
     {
-        // Use Literals.Identifier() to get consistent start/end positions
-        // Terms parsers skip whitespace which affects position reporting differently in compiled vs non-compiled mode
+        // Use Literals for consistent behavior between compiled and non-compiled modes
         var parser = Literals.Identifier().Then((context, start, end, value) =>
         {
             return $"{value}:{start}-{end}";
