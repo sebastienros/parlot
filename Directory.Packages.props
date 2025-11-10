@@ -6,7 +6,7 @@
     <PackageVersion Include="System.Memory" Version="4.6.3" />
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.3.3" />
     <!-- Benchmarks -->
-    <PackageVersion Include="BenchmarkDotNet" Version="0.15.5" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.6" />
     <PackageVersion Include="Pidgin" Version="3.4.0" />
     <PackageVersion Include="Sprache" Version="3.0.0-develop-00049" />
     <PackageVersion Include="Superpower" Version="3.1.0" />
