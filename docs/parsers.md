@@ -796,6 +796,7 @@ Convert the result of a parser. This is usually used to create custom data struc
 ```c#
 Parser<U> Then<U>(Func<T, U> conversion)
 Parser<U> Then<U>(Func<ParseContext, T, U> conversion)
+Parser<U> Then<U>(Func<ParseContext, int, int, T, U> conversion)
 Parser<U> Then<U>(U value)
 Parser<U?> Then<U>() // Converts the result to `U`
 ```
@@ -826,6 +827,28 @@ var parser = OneOf(
     Terms.Text("-").Then(UnaryOperator.Negate)
 );
 ```
+
+#### Accessing Start and End Positions
+
+The `Func<ParseContext, int, int, T, U>` overload provides access to the start and end offsets of the parsed result:
+
+```c#
+var parser = Literals.Identifier().Then((context, start, end, value) =>
+{
+    var length = end - start;
+    return $"Parsed '{value}' at offset {start}, length {length}";
+});
+
+parser.Parse("hello");
+```
+
+Result:
+
+```
+"Parsed 'hello' at offset 0, length 5"
+```
+
+> **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects. For `Literals` parsers, these offsets correspond exactly to where the parser matched. For `Terms` parsers (which skip whitespace), the behavior differs slightly between compiled and non-compiled modes due to how whitespace skipping is handled in the compilation process.
 
 ### Else
 

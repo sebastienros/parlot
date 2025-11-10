@@ -60,7 +60,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
     {
         var result = context.CreateCompilationResult<T>();
 
-        var start = context.DeclarePositionVariable(result);
+        var startBeforeWhitespace = context.DeclarePositionVariable(result);
 
         var parserCompileResult = Parser.Build(context);
 
@@ -78,7 +78,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
                                 Expression.Assign(result.Value, parserCompileResult.Value),
                             Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
                             ),
-                        context.ResetPosition(start)
+                        context.ResetPosition(startBeforeWhitespace)
                         )
                     )
                 )

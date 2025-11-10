@@ -20,6 +20,11 @@ public abstract partial class Parser<T>
     public Parser<U> Then<U>(Func<ParseContext, T, U> conversion) => new Then<T, U>(this, conversion);
 
     /// <summary>
+    /// Builds a parser that converts the previous result, and can use the <see cref="ParseContext"/> and the start and end offsets.
+    /// </summary>
+    public Parser<U> Then<U>(Func<ParseContext, int, int, T, U> conversion) => new Then<T, U>(this, conversion);
+
+    /// <summary>
     /// Builds a parser that converts the previous result.
     /// </summary>
     public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);

@@ -170,6 +170,24 @@ public class FluentTests
     }
 
     [Fact]
+    public void ThenShouldProvideStartAndEndOffsets()
+    {
+        // Use Literals for consistent behavior between compiled and non-compiled modes
+        var parser = Literals.Identifier().Then((context, start, end, value) =>
+        {
+            return $"{value}:{start}-{end}";
+        });
+
+        Assert.True(parser.TryParse("hello", out var result));
+        Assert.Equal("hello:0-5", result);
+
+        // Test with compiled parser - should have the same behavior
+        var compiled = parser.Compile();
+        Assert.True(compiled.TryParse("world", out var result2));
+        Assert.Equal("world:0-5", result2);
+    }
+
+    [Fact]
     public void BetweenShouldParseBetweenTwoString()
     {
         var code = Between(Terms.Text("[["), Terms.Integer(), Terms.Text("]]"));
