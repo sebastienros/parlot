@@ -17,6 +17,16 @@ public class ParseContext
     public int CompilationThreshold { get; set; } = DefaultCompilationThreshold;
 
     /// <summary>
+    /// Whether to disable loop detection for recursive parsers. Default is <c>false</c>.
+    /// </summary>
+    /// <remarks>
+    /// When <c>false</c>, loop detection is enabled and will prevent infinite recursion at the same position.
+    /// When <c>true</c>, loop detection is disabled. This may be needed when the ParseContext itself is mutated
+    /// during loops and can change the end result of parsing at the same location.
+    /// </remarks>
+    public bool DisableLoopDetection { get; set; }
+
+    /// <summary>
     /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
     /// </summary>
     /// <remarks>
@@ -36,6 +46,7 @@ public class ParseContext
     /// </summary>
     private readonly HashSet<(object, int)> _activeParserPositions = new();
 
+    /// <summary>
     /// The cancellation token used to stop the parsing operation.
     /// </summary>
     public readonly CancellationToken CancellationToken;
