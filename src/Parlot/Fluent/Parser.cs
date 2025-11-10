@@ -25,9 +25,42 @@ public abstract partial class Parser<T>
     public Parser<U> Then<U>(U value) => new Then<T, U>(this, value);
 
     /// <summary>
-    /// Builds a parser that converts the previous result.
+    /// Builds a parser that discards the previous result and returns the default value of type U.
+    /// For types that implement IConvertible, attempts type conversion.
     /// </summary>
-    public Parser<U?> Then<U>() => new Then<T, U?>(this, x => (U?)Convert.ChangeType(x, typeof(U?), CultureInfo.CurrentCulture));
+    public Parser<U?> Then<U>()
+    {
+        // Check if U implements IConvertible at construction time for performance
+        var targetImplementsIConvertible = typeof(IConvertible).IsAssignableFrom(typeof(U));
+        
+        if (targetImplementsIConvertible)
+        {
+            return new Then<T, U?>(this, x =>
+            {
+                // If both T and U are IConvertible, try to convert
+                if (x is IConvertible)
+                {
+                    try
+                    {
+                        return (U?)Convert.ChangeType(x, typeof(U), CultureInfo.CurrentCulture);
+                    }
+                    catch
+                    {
+                        // Fall back to default if conversion fails
+                        return default(U);
+                    }
+                }
+                
+                // For non-convertible types, return default
+                return default(U);
+            });
+        }
+        else
+        {
+            // For types that don't implement IConvertible, just return default
+            return new Then<T, U?>(this, default(U));
+        }
+    }
 
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
