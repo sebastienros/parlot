@@ -38,6 +38,11 @@ public enum NumberOptions
     AllowExponent = 8,
 
     /// <summary>
+    /// Indicates that the numeric string can include a "whitespace" in the form of an underscore ("_") character.
+    /// </summary>
+    AllowUnderscore = 16,
+
+    /// <summary>
     /// Indicates that the <see cref="AllowLeadingSign"/>
     /// style is used. This is a composite number style.
     /// </summary>
@@ -59,5 +64,5 @@ public enum NumberOptions
     /// Indicates that all options are used.
     /// This is a composite number style.
     /// </summary>
-    Any = AllowLeadingSign | AllowDecimalSeparator | AllowGroupSeparators | AllowExponent,
+    Any = AllowLeadingSign | AllowDecimalSeparator | AllowGroupSeparators | AllowExponent | AllowUnderscore,
 }

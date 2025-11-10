@@ -302,6 +302,16 @@ public class ScannerTests
     }
 
     [Theory]
+    [InlineData("12_3.01", "123.01")]
+    [InlineData("12_3.0_1", "123.01")]
+    [InlineData("12_3", "123")]
+    public void ShouldReadValidDecimalWithUnderscores(string text, string expected)
+    {
+        Assert.True(new Scanner(text).ReadDecimal(Fluent.NumberOptions.AllowUnderscore | Fluent.NumberOptions.Number , out var result));
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData(" 1")]
     public void ShouldNotReadInvalidInteger(string text)
     {
