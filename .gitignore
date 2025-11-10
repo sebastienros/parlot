@@ -38,6 +38,7 @@ bld/
 
 # Code coverage results
 .complog*
+coverage/
 
 # Visual Studio 2017 auto generated files
 Generated\ Files/
