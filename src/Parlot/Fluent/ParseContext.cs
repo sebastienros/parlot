@@ -42,9 +42,8 @@ public class ParseContext
 
     /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.
-    /// Key is (parser instance, position offset).
     /// </summary>
-    private readonly HashSet<(object, int)> _activeParserPositions = new();
+    private readonly HashSet<ParserPosition> _activeParserPositions = new();
 
     /// <summary>
     /// The cancellation token used to stop the parsing operation.
@@ -141,7 +140,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsParserActiveAtPosition(object parser)
     {
-        return _activeParserPositions.Contains((parser, Scanner.Cursor.Position.Offset));
+        return _activeParserPositions.Contains(new ParserPosition(parser, Scanner.Cursor.Position.Offset));
     }
 
     /// <summary>
@@ -152,7 +151,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool PushParserAtPosition(object parser)
     {
-        return _activeParserPositions.Add((parser, Scanner.Cursor.Position.Offset));
+        return _activeParserPositions.Add(new ParserPosition(parser, Scanner.Cursor.Position.Offset));
     }
 
     /// <summary>
@@ -163,6 +162,11 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PopParserAtPosition(object parser, int position)
     {
-        _activeParserPositions.Remove((parser, position));
+        _activeParserPositions.Remove(new ParserPosition(parser, position));
     }
+
+    /// <summary>
+    /// Represents a parser instance at a specific position for cycle detection.
+    /// </summary>
+    private readonly record struct ParserPosition(object Parser, int Position);
 }
