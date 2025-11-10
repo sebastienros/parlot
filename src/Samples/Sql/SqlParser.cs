@@ -57,13 +57,13 @@ public class SqlParser
         var PARTITION = Terms.Text("PARTITION", caseInsensitive: true);
 
         // Literals
-        var numberLiteral = Terms.Decimal().Then<Expression>(d => new LiteralExpression<decimal>(d));
+        var numberLiteral = Terms.Decimal().Then(d => new LiteralExpression<decimal>(d));
 
         var stringLiteral = Terms.String(StringLiteralQuotes.Single)
-            .Then<Expression>(s => new LiteralExpression<string>(s.Span.ToString()));
+            .Then(s => new LiteralExpression<string>(s.Span.ToString()));
 
-        var booleanLiteral = TRUE.Then<Expression>(new LiteralExpression<bool>(true))
-            .Or(FALSE.Then<Expression>(new LiteralExpression<bool>(false)));
+        var booleanLiteral = TRUE.Then(new LiteralExpression<bool>(true))
+            .Or(FALSE.Then(new LiteralExpression<bool>(false)));
 
         // Identifiers
         var simpleIdentifier = Terms.Identifier()
@@ -83,47 +83,49 @@ public class SqlParser
         var expressionList = Separated(COMMA, expression);
 
         // Function arguments
-        var starArg = STAR.Then<FunctionArguments>(_ => new StarArgument());
-        var selectArg = selectStatement.Then<FunctionArguments>(s => new SelectStatementArgument(s));
-        var exprListArg = expressionList.Then<FunctionArguments>(exprs => new ExpressionListArguments(exprs));
-        var emptyArg = Always<FunctionArguments>(new EmptyArguments());
-        var functionArgs = starArg.Or(selectArg).Or(exprListArg).Or(emptyArg);
+        var starArg = STAR.Then(_ => new StarArgument());
+        var selectArg = selectStatement.Then(s => new SelectStatementArgument(s));
+        var exprListArg = expressionList.Then(exprs => new ExpressionListArguments(exprs));
+        var emptyArg = Always(new EmptyArguments());
+        var functionArgs = OneOf<FunctionArguments>(starArg, selectArg, exprListArg, emptyArg);
 
         // Function call
         var functionCall = identifier.And(Between(LPAREN, functionArgs, RPAREN))
-            .Then<Expression>(x => new FunctionCall(x.Item1, x.Item2));
+            .Then(x => new FunctionCall(x.Item1, x.Item2));
 
         // Parameter
-        var parameter = AT.And(identifier).Then<Expression>(x => new ParameterExpression(x.Item2));
+        var parameter = AT.And(identifier).Then(x => new ParameterExpression(x.Item2));
 
         // Tuple
         var tuple = Between(LPAREN, expressionList, RPAREN)
-            .Then<Expression>(exprs => new TupleExpression(exprs));
+            .Then(exprs => new TupleExpression(exprs));
 
         // Parenthesized select
         var parSelectStatement = Between(LPAREN, selectStatement, RPAREN)
-            .Then<Expression>(s => new ParenthesizedSelectStatement(s));
+            .Then(s => new ParenthesizedSelectStatement(s));
 
         // Basic term
-        var identifierExpr = identifier.Then<Expression>(id => new IdentifierExpression(id));
+        var identifierExpr = identifier.Then(id => new IdentifierExpression(id));
 
-        var term = functionCall
-            .Or(parSelectStatement)
-            .Or(tuple)
-            .Or(booleanLiteral)
-            .Or(stringLiteral)
-            .Or(numberLiteral)
-            .Or(identifierExpr)
-            .Or(parameter);
+        var term = OneOf<Expression>(
+            functionCall,
+            parSelectStatement,
+            tuple,
+            booleanLiteral,
+            stringLiteral,
+            numberLiteral,
+            identifierExpr,
+            parameter
+        );
 
         // Unary expressions
-        var unaryMinus = Terms.Char('-').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Minus, x.Item2));
-        var unaryPlus = Terms.Char('+').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Plus, x.Item2));
-        var unaryNot = NOT.And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Not, x.Item2));
-        var unaryBitwiseNot = Terms.Char('~').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.BitwiseNot, x.Item2));
+        var unaryMinus = Terms.Char('-').And(term).Then(x => new UnaryExpression(UnaryOperator.Minus, x.Item2));
+        var unaryPlus = Terms.Char('+').And(term).Then(x => new UnaryExpression(UnaryOperator.Plus, x.Item2));
+        var unaryNot = NOT.And(term).Then(x => new UnaryExpression(UnaryOperator.Not, x.Item2));
+        var unaryBitwiseNot = Terms.Char('~').And(term).Then(x => new UnaryExpression(UnaryOperator.BitwiseNot, x.Item2));
 
-        var unaryExpr = unaryMinus.Or(unaryPlus).Or(unaryNot).Or(unaryBitwiseNot);
-        var primary = unaryExpr.Or(term);
+        var unaryExpr = OneOf<Expression>(unaryMinus, unaryPlus, unaryNot, unaryBitwiseNot);
+        var primary = OneOf<Expression>(unaryExpr, term);
 
         // Binary operators
         var notLike = NOT.AndSkip(LIKE);
@@ -177,23 +179,23 @@ public class SqlParser
 
         // BETWEEN and IN expressions
         var betweenExpr = andExpr.And(NOT.Optional()).AndSkip(BETWEEN).And(bitwise).AndSkip(AND).And(bitwise)
-            .Then<Expression>(result =>
+            .Then(result =>
             {
                 var (expr, notKeyword, lower, upper) = result;
                 return new BetweenExpression(expr, lower, upper, notKeyword.HasValue);
             });
 
         var inExpr = andExpr.And(NOT.Optional()).AndSkip(IN).AndSkip(LPAREN).And(expressionList).AndSkip(RPAREN)
-            .Then<Expression>(result =>
+            .Then(result =>
             {
                 var (expr, notKeyword, values) = result;
                 return new InExpression(expr, values, notKeyword.HasValue);
             });
 
-        expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
+        expression.Parser = OneOf<Expression>(betweenExpr, inExpr, orExpr);
 
         // Column source
-        var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id));
+        var columnSourceId = identifier.Then(id => new ColumnSourceIdentifier(id));
 
         // Deferred for OVER clause components
         var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(new ColumnItem(new ColumnSourceIdentifier(new Identifier("*")), null))));
@@ -216,13 +218,13 @@ public class SqlParser
             });
 
         var columnSourceFunc = functionCall.And(overClause.Optional())
-            .Then<ColumnSource>(result =>
+            .Then(result =>
             {
                 var (func, over) = result;
                 return new ColumnSourceFunction((FunctionCall)func, over.OrSome(null));
             });
 
-        var columnSource = columnSourceFunc.Or(columnSourceId);
+        var columnSource = OneOf<ColumnSource>(columnSourceFunc, columnSourceId);
 
         // Column item with alias
         var columnAlias = AS.SkipAnd(identifier);
@@ -248,14 +250,13 @@ public class SqlParser
         var unionStatementList = Deferred<IReadOnlyList<UnionStatement>>();
 
         var tableSourceSubQuery = LPAREN.SkipAnd(unionStatementList).AndSkip(RPAREN).AndSkip(AS).And(simpleIdentifier)
-            .Then<TableSource>(result =>
+            .Then(result =>
             {
                 var (query, alias) = result;
                 return new TableSourceSubQuery(query, alias.ToString());
             });
 
-        var tableSourceItemAsTableSource = tableSourceItem.Then<TableSource>(t => t);
-        var tableSource = tableSourceSubQuery.Or(tableSourceItemAsTableSource);
+        var tableSource = OneOf<TableSource>(tableSourceSubQuery, tableSourceItem);
         var tableSourceList = Separated(COMMA, tableSource);
 
         // Join

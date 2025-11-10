@@ -5,9 +5,23 @@ using System.Linq;
 
 namespace Parlot.Fluent;
 
-public abstract partial class Parser<T>
+public abstract partial class Parser<T> : IParser<T>
 {
     public abstract bool Parse(ParseContext context, ref ParseResult<T> result);
+
+    /// <summary>
+    /// Attempts to parse the input and returns whether the parse was successful.
+    /// This is the covariant version of Parse for use with the IParser&lt;out T&gt; interface.
+    /// </summary>
+    bool IParser<T>.Parse(ParseContext context, out int start, out int end, out object? value)
+    {
+        var result = new ParseResult<T>();
+        var success = Parse(context, ref result);
+        start = result.Start;
+        end = result.End;
+        value = result.Value;
+        return success;
+    }
 
     /// <summary>
     /// Builds a parser that converts the previous result when it succeeds.

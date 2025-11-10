@@ -21,13 +21,13 @@ public class JsonParser
 
         var jsonString =
             String
-                .Then<IJson>(static s => new JsonString(s.ToString()));
+                .Then(static s => new JsonString(s.ToString()));
 
         var json = Deferred<IJson>();
 
         var jsonArray =
             Between(LBracket, Separated(Comma, json), RBracket)
-                .Then<IJson>(static els => new JsonArray(els));
+                .Then(static els => new JsonArray(els));
 
         var jsonMember =
             String.And(Colon).And(json)
@@ -35,9 +35,9 @@ public class JsonParser
 
         var jsonObject =
             Between(LBrace, Separated(Comma, jsonMember), RBrace)
-                .Then<IJson>(static kvps => new JsonObject(new Dictionary<string, IJson>(kvps)));
+                .Then(static kvps => new JsonObject(new Dictionary<string, IJson>(kvps)));
 
-        Json = json.Parser = jsonString.Or(jsonArray).Or(jsonObject);
+        Json = json.Parser = OneOf<IJson>(jsonString, jsonArray, jsonObject);
     }
 
     public static IJson Parse(string input)
