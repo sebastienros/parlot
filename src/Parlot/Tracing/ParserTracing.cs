@@ -42,9 +42,19 @@ public sealed class TracingScope : IDisposable
     }
 
     /// <summary>
+    /// Gets the Speedscope JSON export of the collected trace data.
+    /// </summary>
+    /// <returns>JSON string compatible with Speedscope (https://www.speedscope.app/).</returns>
+    public string GetSpeedscopeJson()
+    {
+        return _tracer.ExportSpeedscope();
+    }
+
+    /// <summary>
     /// Gets the Firefox Profiler JSON export of the collected trace data.
     /// </summary>
     /// <returns>JSON string compatible with Firefox Profiler.</returns>
+    [Obsolete("Firefox Profiler format has compatibility issues. Use GetSpeedscopeJson() instead.")]
     public string GetFirefoxProfilerJson()
     {
         return _tracer.ExportFirefoxProfiler();

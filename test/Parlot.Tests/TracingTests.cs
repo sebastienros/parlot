@@ -23,12 +23,47 @@ public class TracingTests
 
         // Assert
         Assert.True(success);
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         Assert.NotEmpty(json);
         
         // Verify it's valid JSON
         using var doc = JsonDocument.Parse(json);
         Assert.True(doc.RootElement.ValueKind == JsonValueKind.Object);
+    }
+
+    [Fact]
+    public void SpeedscopeShouldHaveCorrectStructure()
+    {
+        // Arrange
+        var parser = Terms.Integer();
+        var context = new ParseContext(new Scanner("123"));
+
+        // Act
+        using var tracing = ParserTracing.Start(context);
+        var success = parser.TryParse(context, out var result, out _);
+
+        // Assert
+        Assert.True(success);
+        var json = tracing.GetSpeedscopeJson();
+        
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        
+        // Verify Speedscope schema
+        Assert.True(root.TryGetProperty("$schema", out var schema));
+        Assert.Equal("https://www.speedscope.app/file-format-schema.json", schema.GetString());
+        
+        Assert.True(root.TryGetProperty("shared", out var shared));
+        Assert.True(shared.TryGetProperty("frames", out var frames));
+        Assert.True(frames.GetArrayLength() > 0);
+        
+        Assert.True(root.TryGetProperty("profiles", out var profiles));
+        Assert.True(profiles.GetArrayLength() > 0);
+        
+        var profile = profiles[0];
+        Assert.Equal("evented", profile.GetProperty("type").GetString());
+        Assert.True(profile.TryGetProperty("events", out var events));
+        Assert.True(events.GetArrayLength() > 0);
     }
 
     [Fact]
@@ -44,7 +79,7 @@ public class TracingTests
 
         // Assert
         Assert.True(success);
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         
         // Verify parser name is in the string table
         Assert.Contains("MyInteger", json);
@@ -63,16 +98,16 @@ public class TracingTests
         {
             var success = parser.TryParse(successContext, out var result, out _);
             Assert.True(success);
-            var json = tracing.GetFirefoxProfilerJson();
+            var json = tracing.GetSpeedscopeJson();
             
-            // Parse JSON and check string table for success marker
+            // Parse and check frame names for success marker
             using var doc = JsonDocument.Parse(json);
-            var stringTable = doc.RootElement.GetProperty("threads")[0].GetProperty("stringTable");
+            var frames = doc.RootElement.GetProperty("shared").GetProperty("frames");
             var hasSuccessMarker = false;
-            for (int i = 0; i < stringTable.GetArrayLength(); i++)
+            for (int i = 0; i < frames.GetArrayLength(); i++)
             {
-                var entry = stringTable[i].GetString();
-                if (entry != null && entry.Contains("✓"))
+                var frameName = frames[i].GetProperty("name").GetString();
+                if (frameName != null && frameName.Contains("✓"))
                 {
                     hasSuccessMarker = true;
                     break;
@@ -86,16 +121,16 @@ public class TracingTests
         {
             var success = parser.TryParse(failContext, out var result, out _);
             Assert.False(success);
-            var json = tracing.GetFirefoxProfilerJson();
+            var json = tracing.GetSpeedscopeJson();
             
-            // Parse JSON and check string table for failure marker
+            // Parse and check frame names for failure marker
             using var doc = JsonDocument.Parse(json);
-            var stringTable = doc.RootElement.GetProperty("threads")[0].GetProperty("stringTable");
+            var frames = doc.RootElement.GetProperty("shared").GetProperty("frames");
             var hasFailureMarker = false;
-            for (int i = 0; i < stringTable.GetArrayLength(); i++)
+            for (int i = 0; i < frames.GetArrayLength(); i++)
             {
-                var entry = stringTable[i].GetString();
-                if (entry != null && entry.Contains("✗"))
+                var frameName = frames[i].GetProperty("name").GetString();
+                if (frameName != null && frameName.Contains("✗"))
                 {
                     hasFailureMarker = true;
                     break;
@@ -118,7 +153,7 @@ public class TracingTests
 
         // Assert
         Assert.True(success);
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         
         // Verify input preview is present (should contain "789ab" or similar)
         Assert.Contains("789", json);
@@ -138,7 +173,7 @@ public class TracingTests
 
         // Assert
         Assert.True(success);
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         
         // Both parser names should be in the trace
         Assert.Contains("Inner", json);
@@ -146,7 +181,7 @@ public class TracingTests
     }
 
     [Fact]
-    public void TracingShouldProduceValidFirefoxProfilerSchema()
+    public void TracingShouldProduceValidSpeedscopeSchema()
     {
         // Arrange
         var parser = Terms.Integer();
@@ -158,22 +193,23 @@ public class TracingTests
 
         // Assert
         Assert.True(success);
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         
-        // Verify required Firefox Profiler schema elements
-        Assert.True(root.TryGetProperty("meta", out _));
-        Assert.True(root.TryGetProperty("threads", out var threads));
-        Assert.True(threads.GetArrayLength() > 0);
+        // Verify required Speedscope schema elements
+        Assert.True(root.TryGetProperty("$schema", out _));
+        Assert.True(root.TryGetProperty("shared", out var shared));
+        Assert.True(shared.TryGetProperty("frames", out _));
+        Assert.True(root.TryGetProperty("profiles", out var profiles));
+        Assert.True(profiles.GetArrayLength() > 0);
         
-        var thread = threads[0];
-        Assert.True(thread.TryGetProperty("stringTable", out _));
-        Assert.True(thread.TryGetProperty("frameTable", out _));
-        Assert.True(thread.TryGetProperty("stackTable", out _));
-        Assert.True(thread.TryGetProperty("samples", out _));
-        Assert.True(thread.TryGetProperty("markers", out _));
+        var profile = profiles[0];
+        Assert.True(profile.TryGetProperty("type", out _));
+        Assert.True(profile.TryGetProperty("name", out _));
+        Assert.True(profile.TryGetProperty("unit", out _));
+        Assert.True(profile.TryGetProperty("events", out _));
     }
 
     [Fact]
@@ -214,7 +250,7 @@ public class TracingTests
 
         // Assert
         Assert.False(success);
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         
         // Should still produce valid JSON even with failed parse
         using var doc = JsonDocument.Parse(json);
@@ -233,7 +269,7 @@ public class TracingTests
         using (var tracing = ParserTracing.Start(shortContext, new TracingOptions { PreviewLength = 3 }))
         {
             parser.TryParse(shortContext, out var result1, out _);
-            var json = tracing.GetFirefoxProfilerJson();
+            var json = tracing.GetSpeedscopeJson();
             // With preview length 3, we should see "123" but not much more
             Assert.Contains("123", json);
         }
@@ -242,7 +278,7 @@ public class TracingTests
         using (var tracing = ParserTracing.Start(longContext, new TracingOptions { PreviewLength = 20 }))
         {
             parser.TryParse(longContext, out var result2, out _);
-            var json = tracing.GetFirefoxProfilerJson();
+            var json = tracing.GetSpeedscopeJson();
             // With longer preview, we should see more digits
             Assert.Contains("123456789", json);
         }

@@ -1,6 +1,6 @@
-# Parser Tracing with Firefox Profiler Export
+# Parser Tracing with Speedscope Export
 
-Parlot provides built-in tracing capabilities that allow you to record parser execution and export the data to Firefox Profiler format for visualization.
+Parlot provides built-in tracing capabilities that allow you to record parser execution and export the data to Speedscope format for visualization.
 
 ## Overview
 
@@ -11,7 +11,7 @@ The tracing facility hooks into the parser execution pipeline through the `Parse
 - Success/failure status for each parser invocation
 - Input text previews at each parse point
 
-The collected trace data can be exported to JSON format compatible with [Firefox Profiler](https://profiler.firefox.com/), enabling flame graph visualization and detailed performance analysis.
+The collected trace data can be exported to JSON format compatible with [Speedscope](https://www.speedscope.app/), enabling flame graph visualization and detailed performance analysis.
 
 ## Quick Start
 
@@ -32,8 +32,8 @@ using (var tracing = ParserTracing.Start(context))
     // Parse as normal
     var success = parser.TryParse(context, out var result, out var error);
     
-    // Export trace data to Firefox Profiler JSON format
-    var json = tracing.GetFirefoxProfilerJson();
+    // Export trace data to Speedscope JSON format
+    var json = tracing.GetSpeedscopeJson();
     
     // Save to file or analyze programmatically
     File.WriteAllText("trace.json", json);
@@ -43,9 +43,19 @@ using (var tracing = ParserTracing.Start(context))
 ## Viewing Traces
 
 1. Save the exported JSON to a file (e.g., `trace.json`)
-2. Navigate to https://profiler.firefox.com/
-3. Click "Load a profile from file" and select your trace file
+2. Navigate to https://www.speedscope.app/
+3. Drag and drop your trace file onto the page, or click to browse
 4. Explore the flame graph visualization showing parser execution hierarchy and timing
+
+### Alternative: Firefox Profiler
+
+The library also supports Firefox Profiler format (marked as obsolete due to compatibility issues):
+
+```csharp
+var json = tracing.GetFirefoxProfilerJson(); // Note: Marked as obsolete
+File.WriteAllText("trace.json", json);
+// Load at https://profiler.firefox.com/
+```
 
 ## Configuration Options
 
@@ -139,7 +149,7 @@ Represents an active tracing session. Implements `IDisposable`.
 
 #### Methods
 
-- `GetFirefoxProfilerJson()`: Exports collected trace data as Firefox Profiler JSON.
+- `GetSpeedscopeJson()`: Exports collected trace data as Speedscope JSON.
 - `Dispose()`: Stops tracing and removes the tracer from the context.
 
 ### TracingOptions Class
@@ -195,12 +205,12 @@ context.Tracer = new MyCustomTracer();
 
 ### Analyzing Traces Programmatically
 
-The exported JSON follows the Firefox Profiler schema. You can parse it to extract information:
+The exported JSON follows the Speedscope schema. You can parse it to extract information:
 
 ```csharp
 using System.Text.Json;
 
-var json = tracing.GetFirefoxProfilerJson();
+var json = tracing.GetSpeedscopeJson();
 using var doc = JsonDocument.Parse(json);
 
 var thread = doc.RootElement.GetProperty("threads")[0];
@@ -225,7 +235,7 @@ using (var tracing = ParserTracing.Start(context))
     if (!success)
     {
         // Export trace to see where parsing failed
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         File.WriteAllText($"failed-parse-{DateTime.Now:yyyyMMdd-HHmmss}.json", json);
         
         Console.WriteLine($"Parse failed. Trace saved. Error: {error}");
@@ -247,7 +257,7 @@ foreach (var input in inputs)
     {
         parser.TryParse(context, out _, out _);
         
-        var json = tracing.GetFirefoxProfilerJson();
+        var json = tracing.GetSpeedscopeJson();
         File.WriteAllText($"trace-{input.Name}.json", json);
     }
 }
@@ -262,9 +272,9 @@ foreach (var input in inputs)
 - No changes needed to existing parser code
 - Backward compatible with existing `OnEnterParser`/`OnExitParser` callbacks
 
-## Firefox Profiler Schema
+## Speedscope Schema
 
-The exported JSON conforms to the Firefox Profiler format with the following structure:
+The exported JSON conforms to the Speedscope format with the following structure:
 
 - **meta**: Version and product information
 - **threads**: Array containing a single thread with parser execution data

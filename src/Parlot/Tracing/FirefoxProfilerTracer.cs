@@ -194,6 +194,15 @@ public sealed class FirefoxProfilerTracer : IParserTracer
     }
 
     /// <summary>
+    /// Exports the trace data in Speedscope JSON format.
+    /// </summary>
+    /// <returns>JSON string compatible with Speedscope (https://www.speedscope.app/).</returns>
+    public string ExportSpeedscope()
+    {
+        return SpeedscopeExporter.Export(this, _startTimestamp, _timestampFrequency);
+    }
+
+    /// <summary>
     /// Exports the trace data in Firefox Profiler JSON format.
     /// </summary>
     /// <returns>JSON string compatible with Firefox Profiler.</returns>
