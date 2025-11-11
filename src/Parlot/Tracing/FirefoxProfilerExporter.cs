@@ -118,10 +118,30 @@ internal static class FirefoxProfilerExporter
         {
             writer.WriteStartObject();
             
+            // Meta section with all required fields
             writer.WritePropertyName("meta");
             writer.WriteStartObject();
             writer.WriteNumber("version", 28);
             writer.WriteString("product", "Parlot Parser Tracer");
+            
+            // Categories array
+            writer.WritePropertyName("categories");
+            writer.WriteStartArray();
+            writer.WriteStartObject();
+            writer.WriteString("name", "Other");
+            writer.WriteString("color", "grey");
+            writer.WritePropertyName("subcategories");
+            writer.WriteStartArray();
+            writer.WriteStringValue("Other");
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+            
+            writer.WriteNumber("startTime", 0);
+            writer.WriteNull("shutdownTime");
+            writer.WriteNumber("interval", 1);
+            writer.WriteNumber("processType", 0);
+            writer.WriteNumber("stackwalk", 0);
             writer.WriteEndObject();
             
             writer.WritePropertyName("libs");
@@ -151,9 +171,13 @@ internal static class FirefoxProfilerExporter
             }
             writer.WriteEndArray();
             
+            // Function table (required)
+            writer.WritePropertyName("funcTable");
+            stackTable.WriteFuncTableJson(writer);
+            
             // Frame table
             writer.WritePropertyName("frameTable");
-            stackTable.WriteJson(writer);
+            stackTable.WriteFrameTableJson(writer);
             
             // Stack table
             writer.WritePropertyName("stackTable");
@@ -162,6 +186,7 @@ internal static class FirefoxProfilerExporter
             // Markers
             writer.WritePropertyName("markers");
             writer.WriteStartObject();
+            writer.WriteNumber("length", markers.Count);
             writer.WritePropertyName("data");
             writer.WriteStartArray();
             foreach (var marker in markers)
@@ -191,9 +216,6 @@ internal static class FirefoxProfilerExporter
             writer.WritePropertyName("category");
             writer.WriteStartArray();
             writer.WriteEndArray();
-            writer.WritePropertyName("data");
-            writer.WriteStartArray();
-            writer.WriteEndArray();
             writer.WriteEndObject();
             
             // Samples
@@ -211,40 +233,109 @@ internal static class FirefoxProfilerExporter
 
     private sealed class StackTableBuilder
     {
-        private readonly List<(int? prefix, int frame, int category)> _stacks = new();
-        private readonly List<(int? prefix, int func, int category)> _frames = new();
+        private readonly List<(int? prefix, int frame, int category, int subcategory)> _stacks = new();
+        private readonly List<(int address, int inlineDepth, int category, int subcategory, int func, object? nativeSymbol, object? innerWindowID, object? implementation, object? line, object? column)> _frames = new();
+        private readonly List<(int name, bool isJS, bool relevantForJS, int resource, object? fileName, object? lineNumber, object? columnNumber)> _funcs = new();
 
         public int AddFrame(int? parentStack, int funcIndex, int categoryIndex)
         {
+            // Add to func table if not already there
+            if (_funcs.Count <= funcIndex)
+            {
+                _funcs.Add((funcIndex, false, false, -1, null, null, null));
+            }
+            
             var frameIndex = _frames.Count;
-            _frames.Add((null, funcIndex, categoryIndex));
+            _frames.Add((-1, 0, categoryIndex, 0, funcIndex, null, null, null, null, null));
             
             var stackIndex = _stacks.Count;
-            _stacks.Add((parentStack, frameIndex, categoryIndex));
+            _stacks.Add((parentStack, frameIndex, categoryIndex, 0));
             
             return stackIndex;
         }
 
-        public void WriteJson(Utf8JsonWriter writer)
+        public void WriteFuncTableJson(Utf8JsonWriter writer)
         {
             writer.WriteStartObject();
+            writer.WriteNumber("length", _funcs.Count);
             
-            writer.WritePropertyName("prefix");
+            writer.WritePropertyName("name");
             writer.WriteStartArray();
-            foreach (var frame in _frames)
+            foreach (var func in _funcs)
             {
-                if (frame.prefix.HasValue)
-                    writer.WriteNumberValue(frame.prefix.Value);
-                else
-                    writer.WriteNullValue();
+                writer.WriteNumberValue(func.name);
             }
             writer.WriteEndArray();
             
-            writer.WritePropertyName("func");
+            writer.WritePropertyName("isJS");
+            writer.WriteStartArray();
+            foreach (var func in _funcs)
+            {
+                writer.WriteBooleanValue(func.isJS);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("relevantForJS");
+            writer.WriteStartArray();
+            foreach (var func in _funcs)
+            {
+                writer.WriteBooleanValue(func.relevantForJS);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("resource");
+            writer.WriteStartArray();
+            foreach (var func in _funcs)
+            {
+                writer.WriteNumberValue(func.resource);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("fileName");
+            writer.WriteStartArray();
+            foreach (var func in _funcs)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("lineNumber");
+            writer.WriteStartArray();
+            foreach (var func in _funcs)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("columnNumber");
+            writer.WriteStartArray();
+            foreach (var func in _funcs)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WriteEndObject();
+        }
+
+        public void WriteFrameTableJson(Utf8JsonWriter writer)
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("length", _frames.Count);
+            
+            writer.WritePropertyName("address");
             writer.WriteStartArray();
             foreach (var frame in _frames)
             {
-                writer.WriteNumberValue(frame.func);
+                writer.WriteNumberValue(frame.address);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("inlineDepth");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNumberValue(frame.inlineDepth);
             }
             writer.WriteEndArray();
             
@@ -256,12 +347,69 @@ internal static class FirefoxProfilerExporter
             }
             writer.WriteEndArray();
             
+            writer.WritePropertyName("subcategory");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNumberValue(frame.subcategory);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("func");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNumberValue(frame.func);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("nativeSymbol");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("innerWindowID");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("implementation");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("line");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("column");
+            writer.WriteStartArray();
+            foreach (var frame in _frames)
+            {
+                writer.WriteNullValue();
+            }
+            writer.WriteEndArray();
+            
             writer.WriteEndObject();
         }
 
         public void WriteStackTableJson(Utf8JsonWriter writer)
         {
             writer.WriteStartObject();
+            writer.WriteNumber("length", _stacks.Count);
             
             writer.WritePropertyName("prefix");
             writer.WriteStartArray();
@@ -290,6 +438,14 @@ internal static class FirefoxProfilerExporter
             }
             writer.WriteEndArray();
             
+            writer.WritePropertyName("subcategory");
+            writer.WriteStartArray();
+            foreach (var stack in _stacks)
+            {
+                writer.WriteNumberValue(stack.subcategory);
+            }
+            writer.WriteEndArray();
+            
             writer.WriteEndObject();
         }
     }
@@ -308,6 +464,7 @@ internal static class FirefoxProfilerExporter
         public void WriteJson(Utf8JsonWriter writer)
         {
             writer.WriteStartObject();
+            writer.WriteNumber("length", _stacks.Count);
             
             writer.WritePropertyName("stack");
             writer.WriteStartArray();
@@ -322,6 +479,14 @@ internal static class FirefoxProfilerExporter
             foreach (var time in _times)
             {
                 writer.WriteNumberValue(time);
+            }
+            writer.WriteEndArray();
+            
+            writer.WritePropertyName("eventDelay");
+            writer.WriteStartArray();
+            foreach (var _ in _times)
+            {
+                writer.WriteNumberValue(0);
             }
             writer.WriteEndArray();
             
