@@ -118,7 +118,6 @@ internal static class FirefoxProfilerExporter
         {
             writer.WriteStartObject();
             
-            writer.WriteString("meta", "");
             writer.WritePropertyName("meta");
             writer.WriteStartObject();
             writer.WriteNumber("version", 28);
@@ -129,14 +128,18 @@ internal static class FirefoxProfilerExporter
             writer.WriteStartArray();
             writer.WriteEndArray();
             
+            writer.WritePropertyName("processes");
+            writer.WriteStartArray();
+            writer.WriteEndArray();
+            
             writer.WritePropertyName("threads");
             writer.WriteStartArray();
             
             // Single thread
             writer.WriteStartObject();
             writer.WriteString("name", "Parser Thread");
-            writer.WriteNumber("processType", 0);
-            writer.WriteNumber("pid", 0);
+            writer.WriteString("processType", "default");
+            writer.WriteString("pid", "0");
             writer.WriteNumber("tid", 0);
             
             // String table
