@@ -197,30 +197,19 @@ internal static class FirefoxProfilerExporter
             writer.WriteStartArray();
             foreach (var marker in markers)
             {
-                writer.WriteStartArray();
-                writer.WriteNumberValue(marker.Name);
-                writer.WriteNumberValue(marker.StartTime);
-                writer.WriteNumberValue(marker.EndTime);
-                writer.WriteNumberValue(marker.Phase);
-                writer.WriteNumberValue(marker.Category);
-                writer.WriteNullValue(); // data
-                writer.WriteEndArray();
+                writer.WriteStartObject();
+                writer.WriteNumber("name", marker.Name);
+                writer.WriteNumber("startTime", marker.StartTime);
+                writer.WriteNumber("endTime", marker.EndTime);
+                writer.WriteNumber("phase", marker.Phase);
+                writer.WriteNumber("category", marker.Category);
+                if (marker.Data != null)
+                {
+                    writer.WritePropertyName("data");
+                    JsonSerializer.Serialize(writer, marker.Data);
+                }
+                writer.WriteEndObject();
             }
-            writer.WriteEndArray();
-            writer.WritePropertyName("name");
-            writer.WriteStartArray();
-            writer.WriteEndArray();
-            writer.WritePropertyName("startTime");
-            writer.WriteStartArray();
-            writer.WriteEndArray();
-            writer.WritePropertyName("endTime");
-            writer.WriteStartArray();
-            writer.WriteEndArray();
-            writer.WritePropertyName("phase");
-            writer.WriteStartArray();
-            writer.WriteEndArray();
-            writer.WritePropertyName("category");
-            writer.WriteStartArray();
             writer.WriteEndArray();
             writer.WriteEndObject();
             
