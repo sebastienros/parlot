@@ -6,3 +6,4 @@
 using System.Diagnostics.CodeAnalysis;
 
 [assembly: SuppressMessage("Style", "IDE0290:Use primary constructor", Justification = "I don't like how it looks", Scope = "module")]
+[assembly: SuppressMessage("Performance", "CA1510:Use ArgumentNullException throw helper", Justification = "Not available in all target frameworks", Scope = "module")]

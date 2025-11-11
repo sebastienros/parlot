@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Memory" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net6.0'))" />
+    <PackageReference Include="System.Text.Json" />
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
   </ItemGroup>
 
