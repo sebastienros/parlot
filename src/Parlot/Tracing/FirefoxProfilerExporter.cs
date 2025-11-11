@@ -142,6 +142,12 @@ internal static class FirefoxProfilerExporter
             writer.WriteNumber("interval", 1);
             writer.WriteNumber("processType", 0);
             writer.WriteNumber("stackwalk", 0);
+            
+            // Marker schema (empty for now, as we use basic markers)
+            writer.WritePropertyName("markerSchema");
+            writer.WriteStartArray();
+            writer.WriteEndArray();
+            
             writer.WriteEndObject();
             
             writer.WritePropertyName("libs");
