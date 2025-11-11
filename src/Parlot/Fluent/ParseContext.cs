@@ -79,6 +79,12 @@ public class ParseContext
     /// </summary>
     public Parser<TextSpan>? WhiteSpaceParser { get; set; }
 
+    /// <summary>
+    /// Optional tracer for recording parser execution. When set, the tracer's methods
+    /// are invoked on parser entry and exit.
+    /// </summary>
+    public Tracing.IParserTracer? Tracer { get; set; }
+
     private int _cacheOffset = -1;
     private TextPosition _cachePosition;
 
@@ -121,6 +127,7 @@ public class ParseContext
     {
         CancellationToken.ThrowIfCancellationRequested();
         OnEnterParser?.Invoke(parser, this);
+        Tracer?.EnterParser(parser, this);
     }
 
     /// <summary>
@@ -130,6 +137,17 @@ public class ParseContext
     public void ExitParser<T>(Parser<T> parser)
     {
         OnExitParser?.Invoke(parser, this);
+        Tracer?.ExitParserLegacy(parser, this);
+    }
+
+    /// <summary>
+    /// Called whenever a parser exits with a success result.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ExitParser<T>(Parser<T> parser, bool success)
+    {
+        OnExitParser?.Invoke(parser, this);
+        Tracer?.ExitParser(parser, this, success);
     }
 
     /// <summary>
