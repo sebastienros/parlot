@@ -1,4 +1,4 @@
-#if NET9_0_OR_GREATER
+#if NET10_0_OR_GREATER
 using Parlot.Benchmarks;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
