@@ -23,9 +23,9 @@ Parlot is a fast, lightweight and simple to use .NET parser combinator library. 
 The library supports multiple target frameworks:
 - `net472` - .NET Framework 4.7.2
 - `netstandard2.0` - .NET Standard 2.0 
-- `net6.0` - .NET 6.0
 - `net8.0` - .NET 8.0
-- `net9.0` - .NET 9.0 (primary development target)
+- `net9.0` - .NET 9.0
+- `net10.0` - .NET 10.0 (primary development target)
 
 **Important**: Only build and test other target frameworks once functionality is proven to work correctly on `net9.0`. This approach improves development velocity and performance.
 
