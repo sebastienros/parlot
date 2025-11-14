@@ -123,14 +123,15 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
                         type: typeof(ValueTuple<bool, T>),
                         variables: parserCompileResult.Variables.Append(resultExpression),
                         Expression.Block(parserCompileResult.Body),
-                        Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                            parserCompileResult.Success,
-                            context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
+                        Expression.Assign(Expression.Field(resultExpression, nameof(ValueTuple<bool, T>.Item1)), parserCompileResult.Success),
+                        context.DiscardResult
+                            ? Expression.Empty()
+                            : Expression.Assign(Expression.Field(resultExpression, nameof(ValueTuple<bool, T>.Item2)), parserCompileResult.Value),
                         returnExpression,
                         returnLabel),
+                    name: $"Deferred_{context.NextNumber}",
                     true,
-                    context.ParseContext
+                    [context.ParseContext]
                     );
 
             // Store the source lambda for debugging
