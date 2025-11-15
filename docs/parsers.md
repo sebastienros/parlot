@@ -21,7 +21,9 @@ Terms and Literals are accessed using the `Terms` and `Literals` properties from
 
 ### WhiteSpace
 
-Matches blank spaces, optionally including new lines. Returns a `TextSpan` with the matched spaces. This parser is not available in the `Terms` static class.
+#### Literals.WhiteSpace()
+
+Matches blank spaces, optionally including new lines. Returns a `TextSpan` with the matched spaces. 
 
 ```c#
 Parser<TextSpan> WhiteSpace(bool includeNewLines = false)
@@ -38,6 +40,26 @@ Result:
 
 ```
 "   \t"
+```
+
+#### Terms.WhiteSpace()
+
+Matches the `WhiteSpaceParser` configured in the current context.
+
+```c#
+Parser<TextSpan> WhiteSpace()
+```
+
+When used from `Terms` it parses whitespace (or comments) as defined in the `ParseContext` or from `WithWhiteSpaceParser(parser)`.
+
+When used from `Literals` it parses standard white spaces.
+
+Usage:
+
+```c#
+var parser = Literals.Text("hello").And(Terms.WhiteSpace()).And(Literals.Text("world"));
+parser.Parse("hello   world"); // success
+parser.Parse("helloworld"); // failure
 ```
 
 ### NonWhiteSpace
@@ -617,7 +639,7 @@ Result:
 
 ### SkipWhiteSpace
 
-Matches a parser after any blank spaces. This parser respects the `Scanner` options related to multi-line grammars.
+Matches a parser after any blank spaces. This parser respects the `Scanner.WhiteSpaceParser` option.
 
 
 ```c#

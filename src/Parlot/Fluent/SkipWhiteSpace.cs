@@ -1,11 +1,9 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
+public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable
 {
     public Parser<T> Parser { get; }
 
@@ -54,37 +52,6 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ICompilable, ISeekable
 
         context.ExitParser(this);
         return false;
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        var startBeforeWhitespace = context.DeclarePositionVariable(result);
-
-        var parserCompileResult = Parser.Build(context);
-
-        result.Body.Add(
-            Expression.Block(
-                parserCompileResult.Variables,
-                context.ParserSkipWhiteSpace(),
-                Expression.Block(
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        Expression.Block(
-                            context.DiscardResult ?
-                                Expression.Empty() :
-                                Expression.Assign(result.Value, parserCompileResult.Value),
-                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                            ),
-                        context.ResetPosition(startBeforeWhitespace)
-                        )
-                    )
-                )
-            );
-
-        return result;
     }
 
     public override string ToString() => $"{Parser} (Skip WS)";
