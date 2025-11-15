@@ -146,12 +146,12 @@ public static partial class Parsers
 public class LiteralBuilder
 {
     /// <summary>
-    /// Builds a parser that matches whitespaces.
+    /// Builds a parser that matches whitespaces. This doesn't use the <see cref="ParseContext.WhiteSpaceParser"/>.
     /// </summary>
     public Parser<TextSpan> WhiteSpace(bool includeNewLines = false) => new WhiteSpaceLiteral(includeNewLines);
 
     /// <summary>
-    /// Builds a parser that matches anything until whitespaces.
+    /// Builds a parser that matches anything until whitespaces. This doesn't use the <see cref="ParseContext.WhiteSpaceParser"/>.
     /// </summary>
     public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = true) => new NonWhiteSpaceLiteral(includeNewLines: includeNewLines);
 
@@ -311,7 +311,12 @@ public class LiteralBuilder
 public class TermBuilder
 {
     /// <summary>
-    /// Builds a parser that matches anything until whitespaces.
+    /// Builds a parser that matches whitespaces as defined in <see cref="ParseContext.WhiteSpaceParser"/>.
+    /// </summary>
+    public Parser<TextSpan> WhiteSpace() => new WhiteSpaceParser();
+
+    /// <summary>
+    /// Builds a parser that matches anything until whitespaces. This doesn't use the <see cref="ParseContext.WhiteSpaceParser"/>.
     /// </summary>
     public Parser<TextSpan> NonWhiteSpace(bool includeNewLines = true) => Parsers.SkipWhiteSpace(new NonWhiteSpaceLiteral(includeNewLines: includeNewLines));
 

@@ -1588,4 +1588,51 @@ public class FluentTests
         // We can't safely test the DisableLoopDetection = true case to completion without stack overflow,
         // but the implementation is verified by the fact that the flag is properly checked in the code
     }
+
+    [Fact]
+    public void WhiteSpaceParserShouldUseParseContextParser()
+    {
+        // Test that the whitespace parser respects the ParseContext settings
+        var hello = Literals.Text("hello");
+        var world = Literals.Text("world");
+        var parser = Terms.WhiteSpace().And(hello).And(Terms.WhiteSpace()).And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
+
+        // Should use the custom whitespace parser from the context
+        Assert.True(parser.TryParse("..hello....world", out var result, out var _));
+        Assert.Equal("..", result.Item1.ToString());
+        Assert.Equal("hello", result.Item2.ToString());
+        Assert.Equal("....", result.Item3.ToString());
+        Assert.Equal("world", result.Item4.ToString()); 
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserDoesntRepeat()
+    {
+        // Test that the whitespace parser can fail and propagate the failure
+        var hello = Literals.Text("hello");
+        var world = Terms.Text("world");
+        var ws = Capture(Literals.Text("!!!")); // This whitespace parser only matches "!!!"
+        var parser = hello.And(world).WithWhiteSpaceParser(ws);
+
+        Assert.True(parser.TryParse("hello!!!world", out var _, out var _));
+        Assert.False(parser.TryParse("hello world", out var _, out var _));
+        Assert.False(parser.TryParse("hello!!! world", out var _, out var _));
+        Assert.False(parser.TryParse("hello!!!!!!world", out var _, out var _));
+    }
+
+    [Fact]
+    public void WithWhiteSpaceParserRepeatingPattern()
+    {
+        // Test that the whitespace parser can fail and propagate the failure
+        var hello = Literals.Text("hello");
+        var world = Terms.Text("world");
+        var ws = Capture(Literals.Text("!!!").OneOrMany());
+        var parser = hello.And(world).WithWhiteSpaceParser(ws);
+
+        Assert.True(parser.TryParse("hello!!!world", out var _, out var _));
+        Assert.False(parser.TryParse("hello world", out var _, out var _));
+        Assert.False(parser.TryParse("hello!!! world", out var _, out var _));
+        Assert.True(parser.TryParse("hello!!!!!!world", out var _, out var _));
+        Assert.False(parser.TryParse("hello!!!!!world", out var _, out var _));
+    }
 }
