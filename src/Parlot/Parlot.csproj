@@ -24,5 +24,21 @@
   <ItemGroup>
     <None Include="buildTransitive\Parlot.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="ParserOperatorExtensions.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ParserOperatorExtensions.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="ParserOperatorExtensions.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>ParserOperatorExtensions.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
 
 </Project>

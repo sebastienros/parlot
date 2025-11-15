@@ -1,0 +1,82 @@
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+
+using Parlot.Fluent;
+using System.Runtime.CompilerServices;
+
+namespace Parlot;
+
+// Other operators that could be overloaded but are not:
+// & (bitwise and) could be used for AndAlso (logical and)
+// ^ (bitwise xor) could be used for exclusive Or
+// ~ (bitwise not) could be used for Not
+// + (unary plus) could be used for something like "at least one"
+// - (unary minus) could be used for something like "optional"
+// ++ (increment) could be used for "one or more"
+// -- (decrement) could be used for "zero or more"
+// == (equality) could be used for "equals"
+// != (inequality) could be used for "not equals"
+// - (subtraction) could be used for "except"
+// * (multiplication) could be used for "repeat n times"
+// / (division) could be used for "divide into n parts"
+// % (modulus) could be used for "repeat until condition met"
+// << (left shift) could be used for "lookahead"
+// >> (right shift) could be used for "lookbehind"
+// >>> (unsigned right shift) could be used for "skip n characters"
+// ! (logical not) could be used for "not"
+// ? (ternary conditional) could be used for "if-then-else"
+// >= (greater than or equal to) could be used for "at least n times"
+// <= (less than or equal to) could be used for "at most n times"
+// < (less than) could be used for "less than n times"
+// > (greater than) could be used for "more than n times"
+
+public static partial class ParserOperatorExtensions
+{
+    // | operator to replace And method
+
+    extension<T1, T2>(Parser<T1>)
+    {
+        [OverloadResolutionPriority(-1)]
+        public static Sequence<T1, T2> operator +(Parser<T1> p1, Parser<T2> p2)
+        {
+            return p1.And(p2);
+        }
+    }
+<#
+    for(var i = 3; i < 8; i++)
+    {
+#>
+
+    extension<<#= string.Join(", ", Enumerable.Range(1, i).Select(x => "T" + x))#>>(Sequence<<#= string.Join(", ", Enumerable.Range(1, i - 1).Select(x => "T" + x))#>>)
+    {
+        public static Sequence<<#= string.Join(", ", Enumerable.Range(1, i).Select(x => "T" + x))#>> operator +(Sequence<<#= string.Join(", ", Enumerable.Range(1, i - 1).Select(x => "T" + x))#>> p1, IParser<T<#= i #>> p2)
+        {
+            return p2 is Parser<T<#= i #>> parser?
+              p1.And(parser) :
+              p1.And(new IParserAdapter<T<#= i #>>(p2));
+        }
+    }
+<#
+    }
+#>
+
+    // + operator to replace Or method
+
+    extension<T>(IParser<T>)
+    {
+        public static OneOf<T> operator |(IParser<T> p1, IParser<T> p2)
+        {
+            return new([new IParserAdapter<T>(p1), new IParserAdapter<T>(p2)]);
+        }
+    }
+
+    extension<T>(OneOf<T>)
+    {
+        public static OneOf<T> operator |(OneOf<T> p1, IParser<T> p2)
+        {
+            return p2 is Parser<T> parser ?
+              new OneOf<T>([.. p1.OriginalParsers, parser]) :
+              new([.. p1.OriginalParsers, new IParserAdapter<T>(p2)]);
+        }
+    }
+}

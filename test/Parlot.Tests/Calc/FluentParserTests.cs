@@ -4,7 +4,7 @@ public class FluentParserTests : CalcTests
 {
     protected override decimal Evaluate(string text)
     {
-        FluentParser.Expression.TryParse(text, out var expression);
+        _ = FluentParser.Expression.TryParse(text, out var expression);
         return expression.Evaluate();
     }
 }

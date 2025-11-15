@@ -231,6 +231,23 @@ The benchmarks were executed with the following versions:
 - Superpower 3.0.0
 - Newtonsoft.Json 13.0.3
 
+### Operator Syntax
+
+Parlot supports intuitive operators for parser composition:
+
+- **`+` operator**: Combines parsers in sequence (alternative to `.And()`)
+- **`|` operator**: Creates choice between parsers (alternative to `.Or()`)
+
+```c#
+// Using operators
+var parser = Literals.Char('a') + Literals.Char('b') + Literals.Char('c');
+var choice = Literals.Char('x') | Literals.Char('y') | Literals.Char('z');
+
+// Equivalent to
+var parser = Literals.Char('a').And(Literals.Char('b')).And(Literals.Char('c'));
+var choice = Literals.Char('x').Or(Literals.Char('y')).Or(Literals.Char('z'));
+```
+
 ### Usages
 
 Parlot is already used in these projects:
