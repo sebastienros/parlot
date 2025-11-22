@@ -331,15 +331,16 @@ public class SqlParserTests
         var inExpr = Assert.IsType<InExpression>(statement.WhereClause.Expression);
         
         Assert.False(inExpr.IsNot);
-        Assert.Equal(3, inExpr.Values.Count);
-        
-        var val1 = Assert.IsType<LiteralExpression<decimal>>(inExpr.Values[0]);
+        var values = Assert.IsType<ExpressionListArguments>(inExpr.Values);
+        Assert.Equal(3, values.Expressions.Count);
+
+        var val1 = Assert.IsType<LiteralExpression<decimal>>(values.Expressions[0]);
         Assert.Equal(1m, val1.Value);
-        
-        var val2 = Assert.IsType<LiteralExpression<decimal>>(inExpr.Values[1]);
+
+        var val2 = Assert.IsType<LiteralExpression<decimal>>(values.Expressions[1]);
         Assert.Equal(2m, val2.Value);
-        
-        var val3 = Assert.IsType<LiteralExpression<decimal>>(inExpr.Values[2]);
+
+        var val3 = Assert.IsType<LiteralExpression<decimal>>(values.Expressions[2]);
         Assert.Equal(3m, val3.Value);
     }
 
@@ -833,4 +834,112 @@ public class SqlParserTests
         var rightLiteral = Assert.IsType<LiteralExpression<decimal>>(whereExpr.Right);
         Assert.Equal(100m, rightLiteral.Value);
     }
+
+    // New tests for diverse inline and multi-line comments inside statements
+    [Theory]
+    [InlineData("SELECT /*c*/ * FROM users")]
+    [InlineData("SELECT * /*c*/ FROM users")]
+    [InlineData("SELECT * FROM /*c*/ users")]
+    [InlineData("SELECT * FROM users /* trailing comment */")]
+    [InlineData("SELECT /* multi\n line */ id, name FROM users")]
+    [InlineData("SELECT id /* c */, name FROM users")]
+    [InlineData("SELECT id, name FROM users WHERE /*c*/ id = 1")]
+    [InlineData("SELECT id, /* multi\n line */ name FROM users")]
+    [InlineData("SELECT /*a*/ * /*b*/ FROM /*c*/ users /*d*/ WHERE /*e*/ id /*f*/ = /*g*/ 1 /*h*/")]
+    [InlineData("SELECT /* leading */ * FROM users WHERE id = 1 /* trailing */")]
+    [InlineData("/* before */ SELECT * FROM users /* after */")]
+    public void ShouldParseInlineComments(string sql)
+    {
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+    }
+
+    [Fact]
+    public void ShouldParseMultiLineCommentInsideColumns()
+    {
+        var sql = "SELECT id, /* multi\n line\n comment */ name FROM users";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        var statement = GetSelectStatement(result);
+        Assert.Equal(2, statement.ColumnItemList.Count);
+        var col1 = Assert.IsType<ColumnSourceIdentifier>(statement.ColumnItemList[0].Source);
+        var col2 = Assert.IsType<ColumnSourceIdentifier>(statement.ColumnItemList[1].Source);
+        Assert.Equal("id", col1.Identifier.ToString());
+        Assert.Equal("name", col2.Identifier.ToString());
+    }
+
+    [Fact]
+    public void ShouldParseCommentsInsideFunctionCall()
+    {
+        var sql = "SELECT COUNT(/* inside */ * /* after */) FROM users";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        var statement = GetSelectStatement(result);
+        Assert.Single(statement.ColumnItemList);
+        var funcSource = Assert.IsType<ColumnSourceFunction>(statement.ColumnItemList[0].Source);
+        Assert.Equal("COUNT", funcSource.FunctionCall.Name.ToString());
+        Assert.IsType<StarArgument>(funcSource.FunctionCall.Arguments);
+    }
+
+    [Fact]
+    public void ShouldParseCommentsInterleavedInWhereClause()
+    {
+        var sql = "SELECT id FROM users WHERE /*c1*/ id /*c2*/ = /*c3*/ 1 /*c4*/";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        var statement = GetSelectStatement(result);
+        Assert.NotNull(statement.WhereClause);
+        var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
+        Assert.Equal(BinaryOperator.Equal, whereExpr.Operator);
+    }
+
+    [Fact]
+    public void ShouldParseCommentsAroundJoins()
+    {
+        var sql = "SELECT /*c*/ u.id /*c*/ FROM /*c*/ users AS u /*c*/ JOIN /*c*/ orders AS o /*c*/ ON /*c*/ u.id /*c*/ = /*c*/ o.user_id";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        var statement = GetSelectStatement(result);
+        Assert.NotNull(statement.FromClause?.Joins);
+        Assert.Single(statement.FromClause.Joins);
+    }
+
+    [Fact]
+    public void ShouldParseCommentsInsideGroupByAndHaving()
+    {
+        var sql = "SELECT category, /*c*/ COUNT(*) /*c*/ FROM products /*c*/ GROUP /*c*/ BY /*c*/ category /*c*/ HAVING /*c*/ COUNT(*) /*c*/ > /*c*/ 10";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        var statement = GetSelectStatement(result);
+        Assert.NotNull(statement.GroupByClause);
+        Assert.NotNull(statement.HavingClause);
+    }
+
+    [Fact]
+    public void ShouldParseCommentsInsideUnion()
+    {
+        var sql = "SELECT /*a*/ * FROM /*b*/ users /*c*/ UNION /*d*/ SELECT /*e*/ * FROM /*f*/ customers";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+        var statementLine = result.Statements[0];
+        Assert.Equal(2, statementLine.UnionStatements.Count);
+    }
+
+    [Fact]
+    public void ShouldParseCommentsInsideCTE()
+    {
+        var sql = "WITH /*c*/ cte /*c*/ AS /*c*/ ( /*c*/ SELECT /*c*/ * /*c*/ FROM /*c*/ users /*c*/ ) SELECT /*c*/ * FROM /*c*/ cte";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+        var statementLine = result.Statements[0];
+        var unionStatement = statementLine.UnionStatements[0];
+        var statement = unionStatement.Statement;
+        Assert.NotNull(statement.WithClause);
+        Assert.Single(statement.WithClause.CTEs);
+    }
+
+    
 }
