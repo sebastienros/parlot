@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace Parlot.Tests.Sql;
-
 // Base interface
 public interface ISqlNode
 {
@@ -128,7 +127,7 @@ public enum SelectRestriction
 {
     NotSpecified,
     All,
-    Distinct
+    Distinct,
 }
 
 public class ColumnItem : ISqlNode
@@ -229,7 +228,7 @@ public enum JoinKind
     None,
     Inner,
     Left,
-    Right
+    Right,
 }
 
 public class WhereClause : ISqlNode
@@ -275,11 +274,13 @@ public class OrderByClause : ISqlNode
 public class OrderByItem : ISqlNode
 {
     public Identifier Identifier { get; }
+    public FunctionArguments? Arguments { get; }
     public OrderDirection Direction { get; }
 
-    public OrderByItem(Identifier identifier, OrderDirection direction)
+    public OrderByItem(Identifier identifier, FunctionArguments? arguments, OrderDirection direction)
     {
         Identifier = identifier;
+        Arguments = arguments;
         Direction = direction;
     }
 }
@@ -288,7 +289,7 @@ public enum OrderDirection
 {
     NotSpecified,
     Asc,
-    Desc
+    Desc,
 }
 
 public class LimitClause : ISqlNode
@@ -378,7 +379,7 @@ public enum BinaryOperator
     And,
     Or,
     Like,
-    NotLike
+    NotLike,
 }
 
 public class UnaryExpression : Expression
@@ -398,7 +399,7 @@ public enum UnaryOperator
     Not,
     Plus,
     Minus,
-    BitwiseNot
+    BitwiseNot,
 }
 
 public class BetweenExpression : Expression
@@ -421,9 +422,9 @@ public class InExpression : Expression
 {
     public Expression Expression { get; }
     public bool IsNot { get; }
-    public IReadOnlyList<Expression> Values { get; }
+    public FunctionArguments Values { get; }
 
-    public InExpression(Expression expression, IReadOnlyList<Expression> values, bool isNot = false)
+    public InExpression(Expression expression, FunctionArguments values, bool isNot = false)
     {
         Expression = expression;
         Values = values;
