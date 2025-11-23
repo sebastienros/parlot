@@ -149,6 +149,40 @@ Result:
 'h'
 ```
 
+### Keyword
+
+Matches a keyword string, ensuring the following character is not a letter. This prevents partial matches of identifiers that start with the keyword text.
+
+```c#
+Parser<string> Keyword(string text, bool caseInsensitive = false)
+```
+
+This is useful when parsing programming language constructs like `if`, `while`, `return`, etc., where you want to match the exact keyword but not as part of a longer identifier.
+
+Usage:
+
+```c#
+var input = "if(x > 5)";
+var parser = Terms.Keyword("if");
+var result = parser.Parse(input);
+```
+
+Result:
+
+```
+"if"
+```
+
+However, parsing `"ifoo"` would fail:
+
+```c#
+var input = "ifoo";
+var parser = Terms.Keyword("if");
+var result = parser.Parse(input); // Returns null - failure
+```
+
+Any non-letter is considered valid after a keyword (non-letters): `(`, `)`, `;`, `,`, whitespace, digits, `_`, `$`, etc.
+
 ### Integer
 
 Matches an integral numeric value and an optional leading sign.

@@ -60,7 +60,9 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
 
         var cursor = context.Scanner.Cursor;
 
-        if (cursor.Match(Text.AsSpan(), _comparisonType))
+        var span = Text.AsSpan();
+
+        if (cursor.Match(span, _comparisonType))
         {
             var start = cursor.Offset;
 
@@ -73,7 +75,13 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
                 cursor.AdvanceNoNewLines(Text.Length);
             }
 
-            result.Set(start, cursor.Offset, Text);
+            var end = cursor.Offset;
+            var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
+
+            // Prevent an allocation if the text matches exactly
+            result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal) 
+                ? Text 
+                : parsedText.ToString());
 
             context.ExitParser(this);
             return true;
@@ -87,26 +95,28 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
         var result = context.CreateCompilationResult<string>();
 
-        // if (context.Scanner.ReadText(Text, _comparer, null))
-        // {
-        //      success = true;
-        //      value = Text;
-        // }
+        var start = context.DeclareOffsetVariable(result);
+        var resultSpan = Expression.Variable(typeof(ReadOnlySpan<char>), $"result{context.NextNumber}");
+        result.Variables.Add(resultSpan);
+
+        var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText), 
+            [typeof(ReadOnlySpan<char>), typeof(StringComparison), typeof(ReadOnlySpan<char>).MakeByRefType()])!;
 
         var ifReadText = Expression.IfThen(
             Expression.Call(
                 Expression.Field(context.ParseContext, "Scanner"),
-                ExpressionHelper.Scanner_ReadText_NoResult,
+                readTextMethod,
                 Expression.Call(ExpressionHelper.MemoryExtensions_AsSpan, Expression.Constant(Text)),
-                Expression.Constant(_comparisonType, typeof(StringComparison))
-                ),
+                Expression.Constant(_comparisonType, typeof(StringComparison)),
+                resultSpan
+            ),
             Expression.Block(
                 Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                 context.DiscardResult
                 ? Expression.Empty()
-                : Expression.Assign(result.Value, Expression.Constant(Text, typeof(string)))
-                )
-            );
+                : Expression.Assign(result.Value, Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
+            )
+        );
 
         result.Body.Add(ifReadText);
 

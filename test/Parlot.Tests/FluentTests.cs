@@ -1016,14 +1016,14 @@ public class FluentTests
         var parser1 = Literals.Text("not", caseInsensitive: true);
 
         Assert.Equal("not", parser1.Parse("not"));
-        Assert.Equal("not", parser1.Parse("nOt"));
-        Assert.Equal("not", parser1.Parse("NOT"));
+        Assert.Equal("nOt", parser1.Parse("nOt"));
+        Assert.Equal("NOT", parser1.Parse("NOT"));
 
         var parser2 = Terms.Text("not", caseInsensitive: true);
 
         Assert.Equal("not", parser2.Parse("not"));
-        Assert.Equal("not", parser2.Parse("nOt"));
-        Assert.Equal("not", parser2.Parse("NOT"));
+        Assert.Equal("nOt", parser2.Parse("nOt"));
+        Assert.Equal("NOT", parser2.Parse("NOT"));
     }
 
     [Fact]
@@ -1036,7 +1036,7 @@ public class FluentTests
             );
 
         Assert.Equal("not", parser.Parse("not"));
-        Assert.Equal("not", parser.Parse("nOt"));
+        Assert.Equal("nOt", parser.Parse("nOt"));
         Assert.Equal("abc", parser.Parse("abc"));
         Assert.Equal("aBC", parser.Parse("aBC"));
         Assert.Null(parser.Parse("ABC"));
@@ -1634,5 +1634,99 @@ public class FluentTests
         Assert.False(parser.TryParse("hello!!! world", out var _, out var _));
         Assert.True(parser.TryParse("hello!!!!!!world", out var _, out var _));
         Assert.False(parser.TryParse("hello!!!!!world", out var _, out var _));
+    }
+
+    [Fact]
+    public void LiteralsKeywordShouldNotMatchIfFollowedByLetter()
+    {
+        var parser = Literals.Keyword("if");
+
+        Assert.True(parser.TryParse("if", out var result));
+        Assert.Equal("if", result);
+
+        Assert.True(parser.TryParse("if ", out result));
+        Assert.Equal("if", result);
+
+        Assert.True(parser.TryParse("if(", out result));
+        Assert.Equal("if", result);
+
+        Assert.False(parser.TryParse("ifoo", out result));
+        Assert.False(parser.TryParse("ifA", out result));
+        Assert.False(parser.TryParse("ifZ", out result));
+    }
+
+    [Fact]
+    public void TermsKeywordShouldNotMatchIfFollowedByLetter()
+    {
+        var parser = Terms.Keyword("if");
+
+        Assert.True(parser.TryParse("if", out var result));
+        Assert.Equal("if", result);
+
+        Assert.True(parser.TryParse(" if", out result));
+        Assert.Equal("if", result);
+
+        Assert.True(parser.TryParse(" if ", out result));
+        Assert.Equal("if", result);
+
+        Assert.True(parser.TryParse(" if(", out result));
+        Assert.Equal("if", result);
+
+        Assert.False(parser.TryParse("ifoo", out result));
+        Assert.False(parser.TryParse(" ifA", out result));
+        Assert.False(parser.TryParse(" ifZ", out result));
+    }
+
+    [Fact]
+    public void KeywordShouldWorkInIfElseSequence()
+    {
+        var parser = Terms.Keyword("if")
+            .SkipAnd(Terms.Char('('))
+            .And(Terms.Identifier())
+            .AndSkip(Terms.Char(')'));
+
+        Assert.True(parser.TryParse("if(foo)", out var result));
+        Assert.Equal("foo", result.Item2.ToString());
+
+        Assert.False(parser.TryParse("ifoo(bar)", out result));
+        Assert.False(parser.TryParse("iff(bar)", out result));
+    }
+
+    [Fact]
+    public void KeywordShouldBeCaseInsensitiveWhenRequested()
+    {
+        var parser = Literals.Keyword("if", caseInsensitive: true);
+
+        Assert.True(parser.TryParse("if", out var result));
+        Assert.Equal("if", result);
+
+        Assert.True(parser.TryParse("IF", out result));
+        Assert.Equal("IF", result);
+
+        Assert.True(parser.TryParse("If", out result));
+        Assert.Equal("If", result);
+
+        Assert.False(parser.TryParse("ifoo", out result));
+        Assert.False(parser.TryParse("IFoo", out result));
+    }
+
+    [Fact]
+    public void KeywordShouldMatchNonLetterCharactersAfter()
+    {
+        var parser = Terms.Keyword("return");
+
+        Assert.True(parser.TryParse("return;", out var result));
+        Assert.Equal("return", result);
+
+        Assert.True(parser.TryParse("return\n", out result));
+        Assert.Equal("return", result);
+
+        Assert.True(parser.TryParse("return123", out result));
+        Assert.Equal("return", result);
+
+        Assert.True(parser.TryParse("return_", out result));
+        Assert.Equal("return", result);
+
+        Assert.False(parser.TryParse("returns", out result));
     }
 }
