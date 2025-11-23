@@ -992,6 +992,44 @@ Parser<T> When(Func<ParseContext, T, bool> predicate)
 
 To evaluate a condition before a parser is executed use the `If` parser instead.
 
+### WhenFollowedBy
+
+Ensures that the result of the current parser is followed by another parser without consuming its input. This implements positive lookahead.
+
+```c#
+Parser<T> WhenFollowedBy<U>(Parser<U> lookahead)
+```
+
+Usage:
+
+```c#
+// Parse a number only if it's followed by a colon
+var parser = Literals.Integer().WhenFollowedBy(Literals.Char(':'));
+parser.Parse("42:"); // success, returns 42
+parser.Parse("42");  // failure, lookahead doesn't match
+```
+
+The lookahead parser is checked at the current position but doesn't consume input. If the lookahead fails, the entire parser fails and the cursor is reset to the beginning.
+
+### WhenNotFollowedBy
+
+Ensures that the result of the current parser is NOT followed by another parser without consuming its input. This implements negative lookahead.
+
+```c#
+Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead)
+```
+
+Usage:
+
+```c#
+// Parse a number only if it's NOT followed by a colon
+var parser = Literals.Integer().WhenNotFollowedBy(Literals.Char(':'));
+parser.Parse("42");  // success, returns 42
+parser.Parse("42:"); // failure, lookahead matches
+```
+
+The lookahead parser is checked at the current position but doesn't consume input. If the lookahead succeeds, the entire parser fails and the cursor is reset to the beginning.
+
 ### If (Deprecated)
 
 NB: This parser can be rewritten using `Select` (and `Fail`) which is more flexible and simpler to understand.
