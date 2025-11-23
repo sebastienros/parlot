@@ -941,5 +941,61 @@ public class SqlParserTests
         Assert.Single(statement.WithClause.CTEs);
     }
 
-    
+    // Tests for WHERE and ORDER BY combination
+    [Fact]
+    public void ShouldParseWhereAndOrderBy()
+    {
+        var sql = "SELECT a WHERE b='foo' ORDER BY c";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+        var statement = GetSelectStatement(result);
+        
+        Assert.NotNull(statement.WhereClause);
+        Assert.NotNull(statement.OrderByClause);
+        Assert.Single(statement.OrderByClause.Items);
+    }
+
+    [Fact]
+    public void ShouldParseWhereAndOrderByWithLimit()
+    {
+        var sql = "SELECT a WHERE b='foo' ORDER BY c LIMIT 5";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+        var statement = GetSelectStatement(result);
+        
+        Assert.NotNull(statement.WhereClause);
+        Assert.NotNull(statement.OrderByClause);
+        Assert.NotNull(statement.LimitClause);
+    }
+
+    [Fact]
+    public void ShouldParseWhereWithStringLiteralAndOrderBy()
+    {
+        var sql = "SELECT a WHERE b='foo' OR der='by c'";
+        var result = SqlParser.Parse(sql);
+        Assert.NotNull(result);
+        Assert.Single(result.Statements);
+        var statement = GetSelectStatement(result);
+        
+        Assert.NotNull(statement.WhereClause);
+        var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
+        Assert.Equal(BinaryOperator.Or, whereExpr.Operator);
+        
+        // Verify both sides of OR are equality comparisons
+        var leftExpr = Assert.IsType<BinaryExpression>(whereExpr.Left);
+        Assert.Equal(BinaryOperator.Equal, leftExpr.Operator);
+        
+        var rightExpr = Assert.IsType<BinaryExpression>(whereExpr.Right);
+        Assert.Equal(BinaryOperator.Equal, rightExpr.Operator);
+        
+        // Verify string literals
+        var leftStr = Assert.IsType<LiteralExpression<string>>(leftExpr.Right);
+        Assert.Equal("foo", leftStr.Value);
+        
+        var rightStr = Assert.IsType<LiteralExpression<string>>(rightExpr.Right);
+        Assert.Equal("by c", rightStr.Value);
+    }
+
 }

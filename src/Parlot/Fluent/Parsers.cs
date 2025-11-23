@@ -161,6 +161,11 @@ public class LiteralBuilder
     public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
+    /// </summary>
+    public Parser<string> Keyword(string text, bool caseInsensitive = false) => Text(text, caseInsensitive).When((context, value) => context.Scanner.Cursor.Eof || !Character.IsInRange(context.Scanner.Cursor.Current, 'a', 'z') && !Character.IsInRange(context.Scanner.Cursor.Current, 'A', 'Z'));
+
+    /// <summary>
     /// Builds a parser that matches the specified char.
     /// </summary>
     public Parser<char> Char(char c) => new CharLiteral(c);
@@ -324,6 +329,11 @@ public class TermBuilder
     /// Builds a parser that matches the specified text.
     /// </summary>
     public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+
+    /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
+    /// </summary>
+    public Parser<string> Keyword(string text, bool caseInsensitive = false) => Text(text, caseInsensitive).When((context, value) => context.Scanner.Cursor.Eof || !Character.IsInRange(context.Scanner.Cursor.Current, 'a', 'z') && !Character.IsInRange(context.Scanner.Cursor.Current, 'A', 'Z'));
 
     /// <summary>
     /// Builds a parser that matches the specified char.
