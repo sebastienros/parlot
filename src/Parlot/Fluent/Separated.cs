@@ -37,7 +37,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
     {
         context.EnterParser(this);
 
-        List<T>? results = null;
+        HybridList<T>? results = null;
 
         var start = 0;
         var end = context.Scanner.Cursor.Position;
@@ -84,7 +84,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
             results!.Add(parsed.Value);
         }
 
-        result.Set(start, end.Offset, results ?? []);
+        result.Set(start, end.Offset, results ?? (IReadOnlyList<T>)[]);
 
         context.ExitParser(this);
         return true;

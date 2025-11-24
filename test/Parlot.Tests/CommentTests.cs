@@ -101,6 +101,7 @@ public class CommentTests
         var comments = Terms.Text("hello").And(Terms.Text("world"))
             .WithComments(builder =>
             {
+                builder.WithWhiteSpaceOrNewLine();
                 builder.WithSingleLine("--");
                 builder.WithSingleLine("#");
                 builder.WithMultiLine("/*", "*/");
