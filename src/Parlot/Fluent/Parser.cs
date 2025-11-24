@@ -132,6 +132,16 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<T> When(Func<ParseContext, T, bool> predicate) => new When<T>(this, predicate);
 
     /// <summary>
+    /// Builds a parser that ensures the specified parser matches at the current position without consuming input (positive lookahead).
+    /// </summary>
+    public Parser<T> WhenFollowedBy<U>(Parser<U> lookahead) => new WhenFollowedBy<T>(this, lookahead.Then<object>(_ => new object()));
+
+    /// <summary>
+    /// Builds a parser that ensures the specified parser does NOT match at the current position without consuming input (negative lookahead).
+    /// </summary>
+    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(_ => new object()));
+
+    /// <summary>
     /// Builds a parser what returns another one based on the previous result.
     /// </summary>
     public Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action) => new Switch<T, U>(this, action);

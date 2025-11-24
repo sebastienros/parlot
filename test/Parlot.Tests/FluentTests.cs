@@ -53,6 +53,60 @@ public class FluentTests
     }
 
     [Fact]
+    public void WhenFollowedByShouldSucceedWhenLookaheadMatches()
+    {
+        var parser = Literals.Integer().WhenFollowedBy(Terms.Text("abc"));
+
+        Assert.True(parser.TryParse("123abc", out var result1));
+        Assert.Equal(123, result1);
+    }
+
+    [Fact]
+    public void WhenFollowedByShouldFailWhenLookaheadDoesNotMatch()
+    {
+        var parser = Literals.Integer().WhenFollowedBy(Terms.Text("abc"));
+
+        Assert.False(parser.TryParse("123xyz", out var result1));
+        Assert.Equal(default, result1);
+    }
+
+    [Fact]
+    public void WhenFollowedByShouldNotConsumeInput()
+    {
+        var parser = Literals.Integer().WhenFollowedBy(Literals.Char('x')).And(Literals.Char('x'));
+
+        Assert.True(parser.TryParse("123x", out var result1));
+        Assert.Equal((123, 'x'), result1);
+    }
+
+    [Fact]
+    public void WhenNotFollowedByShouldSucceedWhenLookaheadDoesNotMatch()
+    {
+        var parser = Literals.Integer().WhenNotFollowedBy(Terms.Text("abc"));
+
+        Assert.True(parser.TryParse("123xyz", out var result1));
+        Assert.Equal(123, result1);
+    }
+
+    [Fact]
+    public void WhenNotFollowedByShouldFailWhenLookaheadMatches()
+    {
+        var parser = Literals.Integer().WhenNotFollowedBy(Terms.Text("abc"));
+
+        Assert.False(parser.TryParse("123abc", out var result1));
+        Assert.Equal(default, result1);
+    }
+
+    [Fact]
+    public void WhenNotFollowedByShouldNotConsumeInput()
+    {
+        var parser = Literals.Integer().WhenNotFollowedBy(Literals.Char('x')).And(Literals.Char('y'));
+
+        Assert.True(parser.TryParse("123y", out var result1));
+        Assert.Equal((123, 'y'), result1);
+    }
+
+    [Fact]
     public void ShouldCast()
     {
         var parser = Literals.Integer().Then<decimal>();
