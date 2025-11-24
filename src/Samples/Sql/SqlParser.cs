@@ -70,23 +70,23 @@ public class SqlParser
         var numberLiteral = Terms.Decimal().Then<Expression>(d => new LiteralExpression<decimal>(d));
 
         var stringLiteral = Terms.String(StringLiteralQuotes.Single)
-            .Then<Expression>(s => new LiteralExpression<string>(s.Span.ToString()));
+            .Then<Expression>(s => new LiteralExpression<string>(s.ToString()));
 
         var booleanLiteral = TRUE.Then<Expression>(new LiteralExpression<bool>(true))
             .Or(FALSE.Then<Expression>(new LiteralExpression<bool>(false)));
 
         // Identifiers
-        var simpleIdentifier = Terms.Identifier()
-            .Or(Between(Terms.Char('['), Literals.NoneOf("]"), Terms.Char(']')))
-            .Or(Between(Terms.Char('"'), Literals.NoneOf("\""), Terms.Char('"')));
+        var simpleIdentifier = Terms.Identifier().Then(x => x.ToString())
+            .Or(Between(Terms.Char('['), Literals.NoneOf("]"), Terms.Char(']')).Then(x => x.ToString()))
+            .Or(Between(Terms.Char('"'), Literals.NoneOf("\""), Terms.Char('"')).Then(x => x.ToString()));
 
         var identifier = Separated(DOT, simpleIdentifier)
-            .Then(parts => new Identifier(parts.Select(p => p.Span.ToString()).ToArray()));
+            .Then(parts => new Identifier(parts));
 
         // Without the keywords check "FROM a WHERE" would interpret "WHERE" as an alias since "AS" is optional
-        var identifierNoKeywords = Separated(DOT, simpleIdentifier).When((ctx, parts) => parts.Count > 0 && !keywords.Contains(parts[0].ToString()))
-            .Then(parts => new Identifier(parts.Select(p => p.Span.ToString()).ToArray()));
-
+        var identifierNoKeywords = Separated(DOT, simpleIdentifier).When((ctx, parts) => parts.Count > 0 && !keywords.Contains(parts[0]))
+            .Then(parts => new Identifier(parts));
+            
         // Deferred parsers
         var expression = Deferred<Expression>();
         var selectStatement = Deferred<SelectStatement>();
@@ -212,7 +212,7 @@ public class SqlParser
         var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id));
 
         // Deferred for OVER clause components
-        var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(new ColumnItem(new ColumnSourceIdentifier(new Identifier("*")), null))));
+        var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(new ColumnItem(new ColumnSourceIdentifier(Identifier.STAR), null))));
         var orderByList = Separated(COMMA, orderByItem);
 
         var orderByClause = ORDER.AndSkip(BY).And(orderByList)
@@ -365,9 +365,9 @@ public class SqlParser
                 );
             });
 
+
         // WITH clause (CTEs)
-        var columnNames = Separated(COMMA, simpleIdentifier)
-            .Then(names => names.Select(n => n.Span.ToString()).ToArray());
+        var columnNames = Separated(COMMA, simpleIdentifier);
 
         var cteColumnList = Between(LPAREN, columnNames, RPAREN);
 
@@ -378,7 +378,7 @@ public class SqlParser
             .Then(result =>
             {
                 var (name, columns, query) = result;
-                return new CommonTableExpression(name.ToString(), query, columns.OrSome(null));
+                return new CommonTableExpression(name, query, columns.OrSome(null));
             });
 
         var cteList = Separated(COMMA, cte);
@@ -418,8 +418,11 @@ public class SqlParser
 
         Statements = statementList.WithComments(comments =>
         {
-            comments.WithSingleLine("--");
-            comments.WithMultiLine("/*", "*/");
+            comments
+                .WithWhiteSpaceOrNewLine()
+                .WithSingleLine("--")
+                .WithMultiLine("/*", "*/")
+                ;
         });
     }
 

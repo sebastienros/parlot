@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 #if NET
 using System.Linq;
@@ -11,7 +12,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser is valid based on a condition, and backtracks if not.
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class When<T> : Parser<T>, ICompilable
+public sealed class When<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Func<ParseContext, T, bool> _action;
     private readonly Parser<T> _parser;
@@ -21,13 +22,31 @@ public sealed class When<T> : Parser<T>, ICompilable
     {
         _action = action != null ? (c, t) => action(t) : throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        InitializeSeekable();
     }
 
     public When(Parser<T> parser, Func<ParseContext, T, bool> action)
     {
         _action = action ?? throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        InitializeSeekable();
     }
+
+    private void InitializeSeekable()
+    {
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
+    }
+
+    public bool CanSeek { get; private set; }
+
+    public char[] ExpectedChars { get; private set; } = [];
+
+    public bool SkipWhitespace { get; private set; }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

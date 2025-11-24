@@ -42,7 +42,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         }
 
         var start = parsed.Start;
-        var results = new List<T>();
+        var results = new HybridList<T>();
 
         int end;
 

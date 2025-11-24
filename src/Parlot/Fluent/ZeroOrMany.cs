@@ -21,7 +21,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
     {
         context.EnterParser(this);
 
-        List<T>? results = null;
+        HybridList<T>? results = null;
 
         var start = 0;
         var end = 0;
@@ -36,14 +36,14 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
         {
             if (first)
             {
+                results = [];
                 first = false;
                 start = parsed.Start;
             }
 
             end = parsed.End;
-
-            results ??= [];
-            results.Add(parsed.Value);
+            
+            results!.Add(parsed.Value);
         }
 
         result.Set(start, end, results ?? (IReadOnlyList<T>)[]);

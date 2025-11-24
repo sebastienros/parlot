@@ -1,6 +1,8 @@
 #nullable enable
 
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel.Design;
 using System.Linq;
 
 namespace Parlot.Tests.Sql;
@@ -529,8 +531,12 @@ public class ParameterExpression : Expression
 }
 
 // Identifiers
-public class Identifier : ISqlNode
+public sealed class Identifier : ISqlNode
 {
+    public static readonly Identifier STAR = new (["*"]);
+
+    private string _cachedToString = null!;
+
     public IReadOnlyList<string> Parts { get; }
 
     public Identifier(IReadOnlyList<string> parts)
@@ -538,17 +544,8 @@ public class Identifier : ISqlNode
         Parts = parts;
     }
 
-    public Identifier(string name) : this(new[] { name })
-    {
-    }
-
-    public Identifier(params string[] parts)
-    {
-        Parts = parts.Where(p => !string.IsNullOrWhiteSpace(p)).ToArray();
-    }
-
     public override string ToString()
     {
-        return string.Join(".", Parts);
+        return _cachedToString ??= (Parts.Count == 1 ? Parts[0] : string.Join(".", Parts));
     }
 }
