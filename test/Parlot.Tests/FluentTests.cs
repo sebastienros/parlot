@@ -1636,7 +1636,7 @@ public class FluentTests
         loop.Parser = loop;
 
         // Test with loop detection enabled (default)
-        var contextWithDetection = new ParseContext(new Scanner("test")) { DisableLoopDetection = false };
+        var contextWithDetection = new ParseContext(new Scanner("test"), disableLoopDetection: false);
         Assert.False(loop.TryParse(contextWithDetection, out var _, out var _));
         
         // We can't safely test the DisableLoopDetection = true case to completion without stack overflow,

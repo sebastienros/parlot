@@ -24,7 +24,7 @@ public class ParseContext
     /// When <c>true</c>, loop detection is disabled. This may be needed when the ParseContext itself is mutated
     /// during loops and can change the end result of parsing at the same location.
     /// </remarks>
-    public bool DisableLoopDetection { get; set; }
+    public bool DisableLoopDetection { get; }
 
     /// <summary>
     /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
@@ -33,7 +33,7 @@ public class ParseContext
     /// When <c>false</c>, new lines will be skipped like any other white space.
     /// Otherwise new lines need to be read explicitly by a rule.
     /// </remarks>
-    public bool UseNewLines { get; private set; }
+    public bool UseNewLines { get; }
 
     /// <summary>
     /// The scanner used for the parsing session.
@@ -43,25 +43,33 @@ public class ParseContext
     /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.
     /// </summary>
-    private readonly HashSet<ParserPosition> _activeParserPositions = new();
+    private readonly HashSet<ParserPosition> _activeParserPositions;
 
     /// <summary>
     /// The cancellation token used to stop the parsing operation.
     /// </summary>
     public readonly CancellationToken CancellationToken;
 
-    public ParseContext(Scanner scanner, bool useNewLines = false)
+    // TODO: For backward compatibility only, remove in future versions
+    public ParseContext(Scanner scanner, bool useNewLines)
+        : this(scanner, useNewLines, false, CancellationToken.None)
     {
-        Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
-        UseNewLines = useNewLines;
-        CancellationToken = CancellationToken.None;
     }
 
-    public ParseContext(Scanner scanner, CancellationToken cancellationToken, bool useNewLines = false)
+    // TODO: For backward compatibility only, remove in future versions
+    public ParseContext(Scanner scanner, CancellationToken cancellationToken)
+        : this(scanner, false, false, cancellationToken)
+    {
+    }
+
+    public ParseContext(Scanner scanner, bool useNewLines = false, bool disableLoopDetection = false, CancellationToken cancellationToken = default)
     {
         Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         UseNewLines = useNewLines;
         CancellationToken = cancellationToken;
+        DisableLoopDetection = disableLoopDetection;
+        
+        _activeParserPositions = !disableLoopDetection ? new HashSet<ParserPosition>(ParserPositionComparer.Instance) : null!;
     }
 
     /// <summary>
@@ -169,4 +177,24 @@ public class ParseContext
     /// Represents a parser instance at a specific position for cycle detection.
     /// </summary>
     private readonly record struct ParserPosition(object Parser, int Position);
+
+    /// <summary>
+    /// Uses reference equality for parsers to avoid calling user GetHashCode overrides.
+    /// </summary>
+    private sealed class ParserPositionComparer : IEqualityComparer<ParserPosition>
+    {
+        public static readonly ParserPositionComparer Instance = new();
+
+        public bool Equals(ParserPosition x, ParserPosition y) => ReferenceEquals(x.Parser, y.Parser) && x.Position == y.Position;
+
+        public int GetHashCode(ParserPosition obj)
+        {
+            unchecked
+            {
+                var hash = RuntimeHelpers.GetHashCode(obj.Parser);
+                hash = (hash * 397) ^ obj.Position;
+                return hash;
+            }
+        }
+    }
 }
