@@ -97,15 +97,15 @@ public class SqlParser
         var expressionList = Separated(COMMA, expression);
 
         // Function arguments
-        var starArg = STAR.Then<FunctionArguments>(_ => new StarArgument());
+        var starArg = STAR.Then<FunctionArguments>(_ => StarArgument.Instance);
         var selectArg = selectStatement.Then<FunctionArguments>(s => new SelectStatementArgument(s));
         var exprListArg = expressionList.Then<FunctionArguments>(exprs => new ExpressionListArguments(exprs));
-        var emptyArg = Always<FunctionArguments>(new EmptyArguments());
+        var emptyArg = Always<FunctionArguments>(EmptyArguments.Instance);
         var functionArgs = starArg.Or(selectArg).Or(exprListArg).Or(emptyArg);
 
         // Function call
         var functionCall = identifier.And(Between(LPAREN, functionArgs, RPAREN))
-            .Then<Expression>(x => new FunctionCall(x.Item1, x.Item2));
+            .Then(x => new FunctionCall(x.Item1, x.Item2));
 
         // Tuple
         var tuple = Between(LPAREN, expressionList, RPAREN)
@@ -115,10 +115,14 @@ public class SqlParser
         var parSelectStatement = Between(LPAREN, selectStatement, RPAREN)
             .Then<Expression>(s => new ParenthesizedSelectStatement(s));
 
-        // Basic term
-        var identifierExpr = identifier.Then<Expression>(id => new IdentifierExpression(id));
+        // Basic term - use identifierNoKeywords to prevent keywords from being parsed as identifiers in expressions
+        var identifierExpr = identifierNoKeywords.Then<Expression>(id => new IdentifierExpression(id));
 
-        var termNoParameter = functionCall
+        // Function calls in expressions must use identifierNoKeywords to prevent keywords from being parsed as function names
+        var functionCallExpr = identifierNoKeywords.And(Between(LPAREN, functionArgs, RPAREN))
+            .Then<Expression>(x => new FunctionCall(x.Item1, x.Item2));
+
+        var termNoParameter = functionCallExpr
             .Or(parSelectStatement)
             .Or(tuple)
             .Or(booleanLiteral)
@@ -127,7 +131,7 @@ public class SqlParser
             .Or(identifierExpr)
             ;
 
-        // Parameter
+        // Parameter - keywords are allowed as parameter names
         var parameter = AT.SkipAnd(identifier).And(Literals.Char(':').SkipAnd(termNoParameter).Optional()).Then<Expression>(x => new ParameterExpression(x.Item1, x.Item2.HasValue ? x.Item2.Value : null));
 
         var term = termNoParameter.Or(parameter);
@@ -285,9 +289,7 @@ public class SqlParser
         var joinStatement = joinKind.Else(JoinKind.None).AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)
             .Then(result =>
             {
-                var kind = result.Item1;
-                var tables = result.Item2;
-                var conditions = result.Item3;
+                var (kind, tables, conditions) = result;
                 return new JoinStatement(tables, conditions, kind);
             });
 
@@ -297,9 +299,7 @@ public class SqlParser
         var fromClause = FROM.SkipAnd(tableSourceList).And(joins)
             .Then(result =>
             {
-                // FROM, tableSourceList, joins -> 3 items
-                var tables = result.Item1;
-                var joinList = result.Item2;
+                var (tables, joinList) = result;
                 return new FromClause(tables, joinList.Any() ? joinList : null);
             });
 
@@ -364,7 +364,6 @@ public class SqlParser
                     offset.OrSome(null)
                 );
             });
-
 
         // WITH clause (CTEs)
         var columnNames = Separated(COMMA, simpleIdentifier);
@@ -438,6 +437,7 @@ public class SqlParser
 
     public static bool TryParse(string input, out StatementList? result, out ParseError? error)
     {
-        return Statements.TryParse(input, out result, out error);
+        var context = new ParseContext(new Scanner(input), disableLoopDetection: true);
+        return Statements.TryParse(context, out result, out error);
     }
 }
