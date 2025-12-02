@@ -6,7 +6,7 @@
     <PackageVersion Include="System.Memory" Version="4.6.3" />
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.3.3" />
     <!-- Benchmarks -->
-    <PackageVersion Include="BenchmarkDotNet" Version="0.15.6" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Pidgin" Version="3.5.1" />
     <PackageVersion Include="Sprache" Version="3.0.0-develop-00049" />
     <PackageVersion Include="Superpower" Version="3.1.0" />
@@ -15,6 +15,6 @@
     <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <GlobalPackageReference Include="PolySharp" Version="1.15.0" />
     <!-- Testing -->
-    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.0" />
+    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.1" />
   </ItemGroup>
 </Project>
