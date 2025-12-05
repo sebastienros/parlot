@@ -1,8 +1,10 @@
+using Parlot;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
@@ -12,7 +14,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The input parser type.</typeparam>
 /// <typeparam name="U">The output parser type.</typeparam>
-public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
+public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 {
     private readonly Func<T, U>? _action1;
     private readonly Func<ParseContext, T, U>? _action2;
@@ -171,5 +173,47 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         return result;
     }
 
-    override public string ToString() => $"{_parser} (Then)";
+    
+    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(U));
+        var ctx = context.ParseContextName;
+        var parsedName = $"parsed{context.NextNumber()}";
+
+        result.Locals.Add($"global::Parlot.ParseResult<T> {parsedName} = default;");
+        result.Body.Add($"if (_parser.Parse({ctx}, ref {parsedName}))");
+        result.Body.Add("{");
+        result.Body.Add("    U tempValue;");
+
+        if (_action1 != null)
+        {
+            result.Body.Add($"    tempValue = _action1.Invoke({parsedName}.Value);");
+        }
+        else if (_action2 != null)
+        {
+            result.Body.Add($"    tempValue = _action2.Invoke({ctx}, {parsedName}.Value);");
+        }
+        else if (_action3 != null)
+        {
+            result.Body.Add($"    tempValue = _action3.Invoke({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+        }
+        else
+        {
+            result.Body.Add("    tempValue = _value;");
+        }
+
+        result.Body.Add($"    {result.ValueVariable} = tempValue;");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+override public string ToString() => $"{_parser} (Then)";
 }

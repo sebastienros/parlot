@@ -1,9 +1,11 @@
+using Parlot;
 using Parlot.Rewriting;
 using System;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable
+public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
 {
     public Parser<T> Parser { get; }
 
@@ -54,5 +56,56 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable
         return false;
     }
 
-    public override string ToString() => $"{Parser} (Skip WS)";
+    
+    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        // This initial implementation delegates to the existing Parse method, so that
+        // callers can already exercise the source-generation pipeline without having
+        // to special-case this combinator.
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+
+        if (Parser is not Parlot.SourceGeneration.ISourceable sourceable)
+        {
+            result.Body.Add($"{result.SuccessVariable} = false;");
+            return result;
+        }
+
+        var inner = sourceable.GenerateSource(context);
+
+        var cursorName = $"cursor{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+
+        result.Locals.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
+        result.Locals.Add($"var {startName} = {cursorName}.Position;");
+
+        foreach (var local in inner.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        result.Body.Add($"{ctx}.SkipWhiteSpace();");
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+public override string ToString() => $"{Parser} (Skip WS)";
 }
