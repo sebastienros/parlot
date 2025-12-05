@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -34,6 +34,28 @@ public static partial class MyGrammar
     public static global::Parlot.Fluent.Parser<string> HelloDescriptor()
     {
         return Terms.Text(""hello"");
+    }
+
+    [GenerateParser(""ParseExpression"")]
+    public static global::Parlot.Fluent.Parser<double> ExpressionDescriptor()
+    {
+        var value = OneOf(
+            Terms.Text(""one"").Then(_ => 1.0),
+            Terms.Text(""two"").Then(_ => 2.0),
+            Terms.Text(""three"").Then(_ => 3.0)
+        );
+
+        var tail = ZeroOrMany(Terms.Char('+').SkipAnd(value));
+
+        return value.And(tail).Then(tuple =>
+        {
+            var total = tuple.Item1;
+            foreach (var v in tuple.Item2)
+            {
+                total += v;
+            }
+            return total;
+        });
     }
 }
 
@@ -142,5 +164,11 @@ public static partial class MyGrammar
 
         Assert.True(success);
         Assert.Equal("hello", result.Value);
+
+        var exprFactory = grammarType.GetMethod("ParseExpression", BindingFlags.Public | BindingFlags.Static);
+        Assert.NotNull(exprFactory);
+
+        var exprResult = exprFactory!.Invoke(null, new object?[] { "one + two + three" });
+        Assert.Equal(6d, exprResult);
     }
 }

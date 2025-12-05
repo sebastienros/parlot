@@ -56,7 +56,7 @@ public sealed class SourceGenerationContext
 
         var successName = $"success{NextNumber()}";
         var valueName = $"value{NextNumber()}";
-        var valueTypeName = valueType.FullName ?? valueType.Name;
+        var valueTypeName = GetTypeName(valueType);
 
         var result = new SourceResult(successName, valueName, valueTypeName);
 
@@ -67,5 +67,13 @@ public sealed class SourceGenerationContext
         result.Locals.Add($"{valueTypeName} {valueName} = {defaultValueExpr};");
 
         return result;
+    }
+
+    public static string GetTypeName(Type type) => TypeNameHelper.GetTypeName(type);
+
+    public string RegisterLambda(Delegate lambda)
+    {
+        var id = Lambdas.Register(lambda);
+        return LambdaRegistry.GetFieldName(id);
     }
 }

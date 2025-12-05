@@ -1,12 +1,13 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -124,6 +125,66 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
                         )
                     )
         );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser1 is not ISourceable parser1 || _parser2 is not ISourceable parser2)
+        {
+            throw new NotSupportedException("SequenceSkipAnd requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(T2));
+        var ctx = context.ParseContextName;
+        var startName = $"start{context.NextNumber()}";
+
+        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
+
+        var r1 = parser1.GenerateSource(context);
+        foreach (var local in r1.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        foreach (var stmt in r1.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if ({r1.SuccessVariable})");
+        result.Body.Add("{");
+
+        var r2 = parser2.GenerateSource(context);
+        foreach (var local in r2.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        foreach (var stmt in r2.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    if ({r2.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = {r2.ValueVariable};");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }

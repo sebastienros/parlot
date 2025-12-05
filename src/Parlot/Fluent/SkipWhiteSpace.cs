@@ -79,7 +79,9 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         var startName = $"start{context.NextNumber()}";
 
         result.Locals.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
-        result.Locals.Add($"var {startName} = {cursorName}.Position;");
+        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+
+        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
 
         foreach (var local in inner.Locals)
         {

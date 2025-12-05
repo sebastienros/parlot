@@ -178,38 +178,61 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Then requires a source-generatable parser.");
+        }
+
+        if (_action1 is null && _action2 is null && _action3 is null)
+        {
+            throw new NotSupportedException("Then value-based combinator is not supported for source generation.");
+        }
+
         var result = context.CreateResult(typeof(U));
         var ctx = context.ParseContextName;
         var parsedName = $"parsed{context.NextNumber()}";
+        var tempValueName = $"temp{context.NextNumber()}";
+        var parsedTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
-        result.Locals.Add($"global::Parlot.ParseResult<T> {parsedName} = default;");
-        result.Body.Add($"if (_parser.Parse({ctx}, ref {parsedName}))");
+        var inner = sourceable.GenerateSource(context);
+
+        foreach (var local in inner.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        result.Locals.Add($"{valueTypeName} {tempValueName} = default;");
+        result.Locals.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if ({inner.SuccessVariable})");
         result.Body.Add("{");
-        result.Body.Add("    U tempValue;");
+        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {inner.ValueVariable});");
 
         if (_action1 != null)
         {
-            result.Body.Add($"    tempValue = _action1.Invoke({parsedName}.Value);");
+            var lambdaName = context.RegisterLambda(_action1);
+            result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({parsedName}.Value);");
         }
         else if (_action2 != null)
         {
-            result.Body.Add($"    tempValue = _action2.Invoke({ctx}, {parsedName}.Value);");
+            var lambdaName = context.RegisterLambda(_action2);
+            result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({ctx}, {parsedName}.Value);");
         }
         else if (_action3 != null)
         {
-            result.Body.Add($"    tempValue = _action3.Invoke({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+            var lambdaName = context.RegisterLambda(_action3);
+            result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
         }
-        else
-        {
-            result.Body.Add("    tempValue = _value;");
-        }
-
-        result.Body.Add($"    {result.ValueVariable} = tempValue;");
+        result.Body.Add($"    {result.ValueVariable} = {tempValueName};");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = false;");
         result.Body.Add("}");
 
         return result;

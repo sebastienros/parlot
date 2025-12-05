@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -213,9 +214,15 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         var sourceResult = sourceable.GenerateSource(sgContext);
 
         // Generate C# code for this particular method
-        var sourceText = GenerateParserWrapperAndCore(methodSymbol, valueType, factoryMethodName, sourceResult);
+        var sourceText = GenerateParserWrapperAndCore(methodSymbol, valueType, factoryMethodName, sourceResult, sgContext);
 
         var hintName = $"{methodSymbol.ContainingType.Name}_{methodSymbol.Name}.Parlot.g.cs";
+        var dumpDirectory = Environment.GetEnvironmentVariable("PARLOT_DUMP_GEN_DIR");
+        if (!string.IsNullOrEmpty(dumpDirectory))
+        {
+            Directory.CreateDirectory(dumpDirectory);
+            File.WriteAllText(Path.Combine(dumpDirectory, hintName), sourceText);
+        }
         context.AddSource(hintName, SourceText.From(sourceText, Encoding.UTF8));
     }
 
@@ -223,7 +230,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         IMethodSymbol methodSymbol,
         Type valueType,
         string? factoryMethodName,
-        SourceResult result)
+        SourceResult result,
+        SourceGenerationContext sgContext)
     {
         var ns = methodSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
@@ -231,7 +239,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
         var typeName = methodSymbol.ContainingType.Name;
         var methodName = methodSymbol.Name;
-        var valueTypeName = valueType.FullName ?? valueType.Name;
+        var valueTypeName = TypeNameHelper.GetTypeName(valueType);
         var coreName = methodName + "Core";
         var wrapperName = "GeneratedParser_" + methodName;
 
@@ -251,6 +259,42 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
         sb.AppendLine($"    partial class {typeName}");
         sb.AppendLine("    {");
+
+        foreach (var (id, del) in sgContext.Lambdas.Enumerate())
+        {
+            var fieldName = LambdaRegistry.GetFieldName(id);
+            var delegateTypeName = TypeNameHelper.GetTypeName(del.GetType());
+            var factoryName = $"CreateLambda{id}";
+
+            sb.AppendLine($"        private static readonly {delegateTypeName} {fieldName} = {factoryName}();");
+
+            var method = del.Method;
+            var declaringType = method.DeclaringType ?? throw new InvalidOperationException("Delegate has no declaring type.");
+            var methodNameLiteral = SymbolDisplay.FormatPrimitive(method.Name, quoteStrings: true, useHexadecimalNumbers: false);
+            var bindingFlags = method.IsStatic
+                ? "(global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic)"
+                : "(global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic)";
+            var typeLiteral = SymbolDisplay.FormatPrimitive(declaringType.FullName ?? declaringType.Name, quoteStrings: true, useHexadecimalNumbers: false);
+
+            sb.AppendLine();
+            sb.AppendLine($"        private static {delegateTypeName} {factoryName}()");
+            sb.AppendLine("        {");
+            if (del.Target != null)
+            {
+                sb.AppendLine($"            var type = global::System.Reflection.Assembly.GetExecutingAssembly().GetType({typeLiteral}, throwOnError: true)!;");
+                sb.AppendLine($"            var method = type.GetMethod({methodNameLiteral}, {bindingFlags});");
+                sb.AppendLine("            var ctor = type.GetConstructor(global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic, binder: null, types: global::System.Type.EmptyTypes, modifiers: null);");
+                sb.AppendLine("            var target = ctor != null ? ctor.Invoke(null) : global::System.Runtime.Serialization.FormatterServices.GetUninitializedObject(type);");
+                sb.AppendLine($"            return ({delegateTypeName})global::System.Delegate.CreateDelegate(typeof({delegateTypeName}), target!, method!);");
+            }
+            else
+            {
+                sb.AppendLine($"            var type = global::System.Reflection.Assembly.GetExecutingAssembly().GetType({typeLiteral}, throwOnError: true)!;");
+                sb.AppendLine($"            var method = type.GetMethod({methodNameLiteral}, {bindingFlags});");
+                sb.AppendLine($"            return ({delegateTypeName})global::System.Delegate.CreateDelegate(typeof({delegateTypeName}), method!);");
+            }
+            sb.AppendLine("        }");
+        }
         sb.AppendLine($"        private sealed class {wrapperName} : Parser<{valueTypeName}>");
         sb.AppendLine("        {");
         sb.AppendLine($"            public override bool Parse(ParseContext context, ref ParseResult<{valueTypeName}> result)");
@@ -297,14 +341,35 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         // Optional public factory, if the attribute specified one.
         if (!string.IsNullOrEmpty(factoryMethodName))
         {
-            sb.AppendLine();
-            sb.AppendLine("        /// <summary>");
-            sb.AppendLine("        /// Public factory method generated from the descriptor's GenerateParser attribute.");
-            sb.AppendLine("        /// </summary>");
-            sb.AppendLine($"        public static Parlot.Fluent.Parser<{valueTypeName}> {factoryMethodName}()");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            return new {wrapperName}();");
-            sb.AppendLine("        }");
+            if (factoryMethodName!.StartsWith("Parse", StringComparison.Ordinal))
+            {
+                sb.AppendLine();
+                sb.AppendLine("        /// <summary>");
+                sb.AppendLine("        /// Convenience parser entry point generated from the descriptor's GenerateParser attribute.");
+                sb.AppendLine("        /// </summary>");
+                sb.AppendLine($"        public static {valueTypeName} {factoryMethodName}(string text)");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            var parser = new {wrapperName}();");
+                sb.AppendLine("            var context = new ParseContext(new Scanner(text), disableLoopDetection: true);");
+                sb.AppendLine($"            var parseResult = new ParseResult<{valueTypeName}>();");
+                sb.AppendLine("            if (parser.Parse(context, ref parseResult))");
+                sb.AppendLine("            {");
+                sb.AppendLine("                return parseResult.Value;");
+                sb.AppendLine("            }");
+                sb.AppendLine("            throw new InvalidOperationException(\"Parsing failed.\");");
+                sb.AppendLine("        }");
+            }
+            else
+            {
+                sb.AppendLine();
+                sb.AppendLine("        /// <summary>");
+                sb.AppendLine("        /// Public factory method generated from the descriptor's GenerateParser attribute.");
+                sb.AppendLine("        /// </summary>");
+                sb.AppendLine($"        public static Parlot.Fluent.Parser<{valueTypeName}> {factoryMethodName}()");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            return new {wrapperName}();");
+                sb.AppendLine("        }");
+            }
         }
 
         sb.AppendLine("    }");

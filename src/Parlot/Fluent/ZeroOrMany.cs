@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -6,7 +7,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISourceable
 {
     private static readonly MethodInfo _listAdd = typeof(List<T>).GetMethod("Add")!;
 
@@ -129,4 +130,59 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
     }
 
     public override string ToString() => $"{_parser}*";
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("ZeroOrMany requires a source-generatable parser.");
+        }
+
+        var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var result = context.CreateResult(typeof(IReadOnlyList<T>), defaultSuccess: true, defaultValueExpression: $"global::System.Array.Empty<{elementTypeName}>()");
+        var ctx = context.ParseContextName;
+
+        var listName = $"list{context.NextNumber()}";
+        var firstName = $"first{context.NextNumber()}";
+
+        result.Locals.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        result.Locals.Add($"bool {firstName} = true;");
+
+        var inner = sourceable.GenerateSource(context);
+
+        foreach (var local in inner.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        result.Body.Add("while (true)");
+        result.Body.Add("{");
+        result.Body.Add($"    {inner.SuccessVariable} = false;");
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    if (!{inner.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add("        break;");
+        result.Body.Add("    }");
+        result.Body.Add($"    if ({firstName})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+        result.Body.Add($"        {result.ValueVariable} = {listName};");
+        result.Body.Add($"        {firstName} = false;");
+        result.Body.Add("    }");
+        result.Body.Add($"    {listName}!.Add({inner.ValueVariable});");
+        result.Body.Add("}");
+        result.Body.Add($"if ({listName} is null)");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+        result.Body.Add("}");
+
+        return result;
+    }
 }
