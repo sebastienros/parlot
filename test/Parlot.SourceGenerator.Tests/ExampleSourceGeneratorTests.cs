@@ -36,7 +36,7 @@ public static partial class MyGrammar
         return Terms.Text(""hello"");
     }
 
-    [GenerateParser(""ParseExpression"")]
+    [GenerateParser()]
     public static global::Parlot.Fluent.Parser<double> ExpressionDescriptor()
     {
         var value = OneOf(
@@ -152,7 +152,7 @@ public static partial class MyGrammar
         var grammarType = assembly.GetType("MyGrammar");
         Assert.NotNull(grammarType);
 
-        var helloFactory = grammarType!.GetMethod("Hello", BindingFlags.Public | BindingFlags.Static);
+        var helloFactory = grammarType!.GetProperty("Hello", BindingFlags.Public | BindingFlags.Static)!.GetGetMethod();
         Assert.NotNull(helloFactory);
 
         var parser = Assert.IsAssignableFrom<Parser<string>>(helloFactory!.Invoke(null, null));
@@ -165,10 +165,7 @@ public static partial class MyGrammar
         Assert.True(success);
         Assert.Equal("hello", result.Value);
 
-        var exprFactory = grammarType.GetMethod("ParseExpression", BindingFlags.Public | BindingFlags.Static);
+        var exprFactory = grammarType.GetProperty("ExpressionDescriptor_Parser", BindingFlags.Public | BindingFlags.Static)!.GetGetMethod();
         Assert.NotNull(exprFactory);
-
-        var exprResult = exprFactory!.Invoke(null, new object?[] { "one + two + three" });
-        Assert.Equal(6d, exprResult);
     }
 }

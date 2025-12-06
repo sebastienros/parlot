@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>False</SignAssembly>
@@ -11,11 +11,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
     <!-- Reference the source generator as an analyzer so it runs during compilation -->
     <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="true" />
+
+    <!-- Make Parlot.dll available to the source generator at compile time -->
+    <!-- This should not be necessary but keeping for some time to test -->
+    <!-- <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" /> -->
+    <!-- <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" /> -->
   </ItemGroup>
 
   <ItemGroup>
