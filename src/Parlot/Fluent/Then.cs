@@ -194,11 +194,11 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 
         foreach (var local in inner.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add(local);
         }
 
-        result.Locals.Add($"{valueTypeName} {tempValueName} = default;");
-        result.Locals.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
+        result.Body.Add($"{valueTypeName} {tempValueName} = default;");
+        result.Body.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
 
         result.Body.Add($"{result.SuccessVariable} = false;");
 

@@ -176,11 +176,11 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         var endName = $"end{context.NextNumber()}";
         var parsedValueName = $"parsedValue{context.NextNumber()}";
 
-        result.Locals.Add($"var {resetName} = default(global::Parlot.TextPosition);");
-        result.Locals.Add($"var {startName} = 0;");
-        result.Locals.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        result.Locals.Add($"var {endName} = 0;");
-        result.Locals.Add($"{valueTypeName} {parsedValueName} = default;");
+        result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = 0;");
+        result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
+        result.Body.Add($"var {endName} = 0;");
+        result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
 
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{resetName} = {ctx}.Scanner.Cursor.Position;");

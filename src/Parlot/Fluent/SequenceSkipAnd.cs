@@ -142,14 +142,14 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
         var ctx = context.ParseContextName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
 
         var r1 = parser1.GenerateSource(context);
         foreach (var local in r1.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add(local);
         }
 
         foreach (var stmt in r1.Body)
@@ -163,7 +163,7 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
         var r2 = parser2.GenerateSource(context);
         foreach (var local in r2.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add($"    {local}");
         }
 
         foreach (var stmt in r2.Body)

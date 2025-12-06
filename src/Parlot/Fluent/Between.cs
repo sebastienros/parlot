@@ -164,7 +164,7 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         var ctx = context.ParseContextName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
 
@@ -172,7 +172,7 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         var beforeResult = beforeSourceable.GenerateSource(context);
         foreach (var local in beforeResult.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add(local);
         }
 
         foreach (var stmt in beforeResult.Body)
@@ -187,7 +187,7 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         var parserResult = parserSourceable.GenerateSource(context);
         foreach (var local in parserResult.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add($"    {local}");
         }
 
         foreach (var stmt in parserResult.Body)
@@ -202,7 +202,7 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         var afterResult = afterSourceable.GenerateSource(context);
         foreach (var local in afterResult.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add($"        {local}");
         }
 
         foreach (var stmt in afterResult.Body)

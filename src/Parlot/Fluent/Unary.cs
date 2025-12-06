@@ -261,7 +261,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
         // Register this unary parser as a deferred method for recursive calls
         var helperMethodName = context.Deferred.GetOrCreateMethodName(this, "Unary");
 
-        result.Locals.Add($"bool {operatorMatchedName} = false;");
+        result.Body.Add($"bool {operatorMatchedName} = false;");
 
         // Generate operator matching for each operator
         for (int i = 0; i < _operators.Length; i++)
@@ -277,14 +277,15 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             var factoryFieldName = context.RegisterLambda(factory);
 
             var opResult = opSourceable.GenerateSource(context);
-            foreach (var local in opResult.Locals)
-            {
-                result.Locals.Add(local);
-            }
 
             var indent = "";
             if (i == 0)
             {
+                foreach (var local in opResult.Locals)
+                {
+                    result.Body.Add($"{indent}{local}");
+                }
+
                 foreach (var stmt in opResult.Body)
                 {
                     result.Body.Add($"{indent}{stmt}");
@@ -295,6 +296,11 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
+                foreach (var local in opResult.Locals)
+                {
+                    result.Body.Add($"{indent}    {local}");
+                }
+
                 foreach (var stmt in opResult.Body)
                 {
                     result.Body.Add($"{indent}    {stmt}");
@@ -308,7 +314,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             
             // Recursive call via helper method (returns ValueTuple<bool, T>)
             var recursiveResultName = $"recursiveResult{context.NextNumber()}";
-            result.Locals.Add($"global::System.ValueTuple<bool, {valueTypeName}> {recursiveResultName} = default;");
+            result.Body.Add($"{innerIndent}    global::System.ValueTuple<bool, {valueTypeName}> {recursiveResultName} = default;");
             result.Body.Add($"{innerIndent}    {recursiveResultName} = {helperMethodName}({ctx});");
             result.Body.Add($"{innerIndent}    if ({recursiveResultName}.Item1)");
             result.Body.Add($"{innerIndent}    {{");
@@ -330,7 +336,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
         var baseResult = parserSourceable.GenerateSource(context);
         foreach (var local in baseResult.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add($"    {local}");
         }
         foreach (var stmt in baseResult.Body)
         {

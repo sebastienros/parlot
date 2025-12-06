@@ -84,14 +84,14 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>));
 
-        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
 
         var r1 = parser1.GenerateSource(context);
         foreach (var local in r1.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add(local);
         }
 
         foreach (var stmt in r1.Body)
@@ -105,7 +105,7 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         var r2 = parser2.GenerateSource(context);
         foreach (var local in r2.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add($"    {local}");
         }
 
         foreach (var stmt in r2.Body)

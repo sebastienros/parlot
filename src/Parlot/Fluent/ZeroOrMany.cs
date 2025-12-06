@@ -147,14 +147,14 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         var listName = $"list{context.NextNumber()}";
         var firstName = $"first{context.NextNumber()}";
 
-        result.Locals.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
-        result.Locals.Add($"bool {firstName} = true;");
+        result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        result.Body.Add($"bool {firstName} = true;");
 
         var inner = sourceable.GenerateSource(context);
 
         foreach (var local in inner.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add(local);
         }
 
         result.Body.Add("while (true)");

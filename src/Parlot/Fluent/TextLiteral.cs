@@ -143,9 +143,9 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var newLines = CountNewLines(Text);
         var trailingSegmentLength = TrailingSegmentLength(Text);
 
-        result.Locals.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
-        result.Locals.Add($"var {startName} = 0;");
-        result.Locals.Add($"var {endName} = 0;");
+        result.Body.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
+        result.Body.Add($"var {startName} = 0;");
+        result.Body.Add($"var {endName} = 0;");
 
         result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
         result.Body.Add("{");

@@ -228,14 +228,14 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         var currentValueName = $"leftAssocValue{context.NextNumber()}";
         var operatorMatchedName = $"opMatched{context.NextNumber()}";
 
-        result.Locals.Add($"{valueTypeName} {currentValueName} = default;");
-        result.Locals.Add($"bool {operatorMatchedName} = false;");
+        result.Body.Add($"{valueTypeName} {currentValueName} = default;");
+        result.Body.Add($"bool {operatorMatchedName} = false;");
 
         // Generate first operand parsing
         var firstResult = parserSourceable.GenerateSource(context);
         foreach (var local in firstResult.Locals)
         {
-            result.Locals.Add(local);
+            result.Body.Add(local);
         }
 
         foreach (var stmt in firstResult.Body)
@@ -264,20 +264,17 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             var factoryFieldName = context.RegisterLambda(factory);
 
             var opResult = opSourceable.GenerateSource(context);
-            foreach (var local in opResult.Locals)
-            {
-                result.Locals.Add(local);
-            }
 
             var rightResult = parserSourceable.GenerateSource(context);
-            foreach (var local in rightResult.Locals)
-            {
-                result.Locals.Add(local);
-            }
 
             var indent = "        ";
             if (i == 0)
             {
+                foreach (var local in opResult.Locals)
+                {
+                    result.Body.Add($"{indent}{local}");
+                }
+
                 foreach (var stmt in opResult.Body)
                 {
                     result.Body.Add($"{indent}{stmt}");
@@ -288,6 +285,11 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
+                foreach (var local in opResult.Locals)
+                {
+                    result.Body.Add($"{indent}    {local}");
+                }
+
                 foreach (var stmt in opResult.Body)
                 {
                     result.Body.Add($"{indent}    {stmt}");
@@ -299,7 +301,12 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
 
-            // Parse right operand
+            // Parse right operand - add locals before statements
+            foreach (var local in rightResult.Locals)
+            {
+                result.Body.Add($"{innerIndent}    {local}");
+            }
+
             foreach (var stmt in rightResult.Body)
             {
                 result.Body.Add($"{innerIndent}    {stmt}");

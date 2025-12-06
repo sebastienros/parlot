@@ -190,7 +190,7 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 
         // Generate a call to the helper method
         var callResultName = $"deferredResult{context.NextNumber()}";
-        result.Locals.Add($"global::System.ValueTuple<bool, {valueTypeName}> {callResultName} = default;");
+        result.Body.Add($"global::System.ValueTuple<bool, {valueTypeName}> {callResultName} = default;");
         result.Body.Add($"{callResultName} = {methodName}({ctx});");
         result.Body.Add($"{result.SuccessVariable} = {callResultName}.Item1;");
         result.Body.Add($"{result.ValueVariable} = {callResultName}.Item2;");

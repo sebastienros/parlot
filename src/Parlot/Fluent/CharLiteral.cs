@@ -73,9 +73,8 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourcea
         var cursorName = $"cursor{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
 
-        result.Locals.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
-        result.Locals.Add($"int {startName} = 0;");
-
+        result.Body.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
+        result.Body.Add($"int {startName} = 0;");
         result.Body.Add($"{successVar} = false;");
         result.Body.Add($"if ({cursorName}.Match('{Char}'))");
         result.Body.Add("{");

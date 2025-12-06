@@ -225,7 +225,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
         var startName = $"start{context.NextNumber()}";
 
-        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
 
@@ -245,13 +245,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
             var inner = sourceable.GenerateSource(context);
 
-            foreach (var local in inner.Locals)
-            {
-                result.Locals.Add(local);
-            }
-
             result.Body.Add($"if (!{result.SuccessVariable})");
             result.Body.Add("{");
+
+            foreach (var local in inner.Locals)
+            {
+                result.Body.Add($"    {local}");
+            }
 
             foreach (var stmt in inner.Body)
             {
