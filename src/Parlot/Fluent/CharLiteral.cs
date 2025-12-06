@@ -1,10 +1,11 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
+public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourceable
 {
     public CharLiteral(char c)
     {
@@ -60,4 +61,30 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     }
 
     public override string ToString() => $"Char('{Char}')";
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(char));
+        var ctx = context.ParseContextName;
+        var successVar = result.SuccessVariable;
+        var valueVar = result.ValueVariable;
+        var cursorName = $"cursor{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+
+        result.Locals.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
+        result.Locals.Add($"int {startName} = 0;");
+
+        result.Body.Add($"{successVar} = false;");
+        result.Body.Add($"if ({cursorName}.Match('{Char}'))");
+        result.Body.Add("{");
+        result.Body.Add($"    {startName} = {cursorName}.Offset;");
+        result.Body.Add("    " + cursorName + ".Advance();");
+        result.Body.Add($"    {valueVar} = '{Char}';");
+        result.Body.Add($"    {successVar} = true;");
+        result.Body.Add("}");
+
+        return result;
+    }
 }

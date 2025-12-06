@@ -1,13 +1,15 @@
+using Parlot;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Globalization;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
+public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourceable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
@@ -123,5 +125,73 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         return result;
     }
 
-    public override string ToString() => $"Text(\"{Text}\")";
+    
+    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(string));
+
+        var ctx = context.ParseContextName;
+        var cursorName = $"cursor{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+
+        var textLiteral = ToLiteral(Text);
+        var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
+        var comparison = $"global::System.StringComparison.{_comparisonType}";
+        var newLines = CountNewLines(Text);
+        var trailingSegmentLength = TrailingSegmentLength(Text);
+
+        result.Locals.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
+        result.Locals.Add($"var {startName} = 0;");
+        result.Locals.Add($"var {endName} = 0;");
+
+        result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
+        result.Body.Add("{");
+        result.Body.Add($"    {startName} = {cursorName}.Offset;");
+        result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
+
+        result.Body.Add($"    {endName} = {cursorName}.Offset;");
+        result.Body.Add($"    {result.ValueVariable} = new string({ctx}.Scanner.Buffer.AsSpan({startName}, {endName} - {startName}));");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+public override string ToString() => $"Text(\"{Text}\")";
+
+    private static string ToLiteral(string value) => $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+
+    private static int CountNewLines(string value)
+    {
+        var count = 0;
+
+        foreach (var c in value)
+        {
+            if (Character.IsNewLine(c))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int TrailingSegmentLength(string value)
+    {
+        var lastNewLine = value.LastIndexOf('\n');
+
+        if (lastNewLine < 0)
+        {
+            return value.Length;
+        }
+
+        return value.Length - lastNewLine - 1;
+    }
 }

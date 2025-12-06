@@ -2,6 +2,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
@@ -10,7 +11,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
+public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable*/
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -214,6 +215,64 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
     }
 
     public override string ToString() => $"{string.Join(" | ", Parsers)}) on [{string.Join(" ", ExpectedChars)}]";
+
+    public Parlot.SourceGeneration.SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+
+        var startName = $"start{context.NextNumber()}";
+
+        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
+
+        if (SkipWhitespace)
+        {
+            result.Body.Add($"{ctx}.SkipWhiteSpace();");
+        }
+
+        for (var i = 0; i < Parsers.Count; i++)
+        {
+            var parser = Parsers[i];
+
+            if (parser is not ISourceable sourceable)
+            {
+                throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
+            }
+
+            var inner = sourceable.GenerateSource(context);
+
+            foreach (var local in inner.Locals)
+            {
+                result.Locals.Add(local);
+            }
+
+            result.Body.Add($"if (!{result.SuccessVariable})");
+            result.Body.Add("{");
+
+            foreach (var stmt in inner.Body)
+            {
+                result.Body.Add($"    {stmt}");
+            }
+
+            result.Body.Add($"    if ({inner.SuccessVariable})");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+        }
+
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add("}");
+
+        return result;
+    }
 
     /* We don't use the ICompilable interface anymore since the generated code is still slower than the original one.
      * Furthermore the current implementation is creating too many lambdas (there might be a bug in the code).

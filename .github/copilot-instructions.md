@@ -15,32 +15,31 @@ Parlot is a fast, lightweight and simple to use .NET parser combinator library. 
 ## Target Frameworks and Build Strategy
 
 ### Primary Development Framework
-- **Use .NET 9.0 (`net9.0`) as the primary target for development, testing, and validation**
-- All new features should be developed and tested against `net9.0` first
-- Performance optimizations and benchmarks should target `net9.0`
+- **Use .NET 10.0 (`net10.0`) as the primary target for development, testing, and validation**
+- All new features should be developed and tested against `net10.0` first
+- Performance optimizations and benchmarks should target `net10.0`
 
 ### Multi-Target Framework Support
 The library supports multiple target frameworks:
 - `net472` - .NET Framework 4.7.2
 - `netstandard2.0` - .NET Standard 2.0 
 - `net8.0` - .NET 8.0
-- `net9.0` - .NET 9.0
 - `net10.0` - .NET 10.0 (primary development target)
 
-**Important**: Only build and test other target frameworks once functionality is proven to work correctly on `net9.0`. This approach improves development velocity and performance.
+**Important**: Only build and test other target frameworks once functionality is proven to work correctly on `net10.0`. This approach improves development velocity and performance.
 
 ## Build and Test Commands
 
 ### Preferred Commands (Performance Optimized)
 ```bash
-# Build targeting net9.0 only
-dotnet build -f net9.0
+# Build targeting net10.0 only
+dotnet build -f net10.0
 
-# Run tests targeting net9.0 only  
-dotnet test -f net9.0
+# Run tests targeting net10.0 only  
+dotnet test -f net10.0
 
-# Run benchmarks (net9.0 only)
-dotnet run -p test/Parlot.Benchmarks -f net9.0
+# Run benchmarks (net10.0 only)
+dotnet run -p test/Parlot.Benchmarks -f net10.0
 ```
 
 ### Full Multi-Target Build (Use Only When Required)
@@ -76,7 +75,7 @@ dotnet test
 
 ### Creating New Parsers
 1. Define the grammar using fluent API
-2. Write unit tests targeting `net9.0`
+2. Write unit tests targeting `net10.0`
 3. Add benchmarks if performance is critical
 4. Add documentation with examples
 
@@ -179,7 +178,7 @@ var optionalParser = Terms.Integer().Optional().Then(x => x.HasValue ? x.Value :
 - Separate logical changes into separate commits
 
 ### Pull Request Requirements
-- Ensure all tests pass on `net9.0`
+- Ensure all tests pass on `net10.0`
 - Include benchmarks for performance-sensitive changes
 - Update documentation for new features
 - Validate multi-target compilation before merging

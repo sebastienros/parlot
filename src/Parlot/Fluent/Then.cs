@@ -1,8 +1,10 @@
+using Parlot;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
@@ -12,7 +14,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The input parser type.</typeparam>
 /// <typeparam name="U">The output parser type.</typeparam>
-public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
+public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 {
     private readonly Func<T, U>? _action1;
     private readonly Func<ParseContext, T, U>? _action2;
@@ -171,5 +173,70 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         return result;
     }
 
-    override public string ToString() => $"{_parser} (Then)";
+    
+    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Then requires a source-generatable parser.");
+        }
+
+        if (_action1 is null && _action2 is null && _action3 is null)
+        {
+            throw new NotSupportedException("Then value-based combinator is not supported for source generation.");
+        }
+
+        var result = context.CreateResult(typeof(U));
+        var ctx = context.ParseContextName;
+        var parsedName = $"parsed{context.NextNumber()}";
+        var tempValueName = $"temp{context.NextNumber()}";
+        var parsedTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
+
+        var inner = sourceable.GenerateSource(context);
+
+        foreach (var local in inner.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        result.Locals.Add($"{valueTypeName} {tempValueName} = default;");
+        result.Locals.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {inner.ValueVariable});");
+
+        if (_action1 != null)
+        {
+            var lambdaName = context.RegisterLambda(_action1);
+            result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({parsedName}.Value);");
+        }
+        else if (_action2 != null)
+        {
+            var lambdaName = context.RegisterLambda(_action2);
+            result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({ctx}, {parsedName}.Value);");
+        }
+        else if (_action3 != null)
+        {
+            var lambdaName = context.RegisterLambda(_action3);
+            result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+        }
+        result.Body.Add($"    {result.ValueVariable} = {tempValueName};");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+override public string ToString() => $"{_parser} (Then)";
 }
