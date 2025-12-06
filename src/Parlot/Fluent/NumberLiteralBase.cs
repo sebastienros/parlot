@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -12,7 +13,7 @@ namespace Parlot.Fluent;
 /// This class is used as a base class for custom number parsers which don't implement INumber<typeparamref name="T"/> after .NET 7.0.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
+public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
 
@@ -157,6 +158,70 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
                 context.ResetPosition(reset)
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        var resetName = $"reset{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+        var numberSpanName = $"numberSpan{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+        var parsedValueName = $"parsedValue{context.NextNumber()}";
+
+        result.Locals.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Locals.Add($"var {startName} = 0;");
+        result.Locals.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
+        result.Locals.Add($"var {endName} = 0;");
+        result.Locals.Add($"{valueTypeName} {parsedValueName} = default;");
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{resetName} = {ctx}.Scanner.Cursor.Position;");
+        result.Body.Add($"{startName} = {resetName}.Offset;");
+
+        var allowLeadingSign = _allowLeadingSign ? "true" : "false";
+        var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
+        var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
+        var allowExponent = _allowExponent ? "true" : "false";
+
+        // Emit NumberStyles as a literal cast
+        var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
+        
+        // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a clone
+        string cultureExpr;
+        if (_culture == CultureInfo.InvariantCulture)
+        {
+            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+        }
+        else
+        {
+            // For custom cultures, we need to emit code that creates the same culture
+            // This is a simplified approach - for complex cases, we might need to register a factory
+            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+        }
+
+        result.Body.Add($"if ({ctx}.Scanner.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
+        result.Body.Add("{");
+        result.Body.Add($"    {endName} = {ctx}.Scanner.Cursor.Offset;");
+        // Use ToString() since NumberLiteralBase is for pre-.NET 7 types that don't have ReadOnlySpan<char> overload
+        result.Body.Add($"    if ({valueTypeName}.TryParse({numberSpanName}.ToString(), {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({resetName});");
+        result.Body.Add("}");
 
         return result;
     }

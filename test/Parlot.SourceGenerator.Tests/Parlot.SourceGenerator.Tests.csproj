@@ -8,11 +8,16 @@
     <OutputType>Exe</OutputType>
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Reference Parlot for the library types -->
     <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
+    
+    <!-- Reference Samples for the FluentParser -->
+    <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
     
     <!-- Reference the source generator as an analyzer (for local development) -->
     <!-- When consuming via NuGet package, the generator is embedded in the Parlot package -->

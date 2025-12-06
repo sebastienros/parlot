@@ -6,6 +6,8 @@
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>False</SignAssembly>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +21,17 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
     <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
+    
+    <!-- Reference the source generator as an analyzer -->
+    <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
+                      OutputItemType="Analyzer" 
+                      ReferenceOutputAssembly="false" />
+    
+    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
+    
+    <!-- Make Samples.dll available to the source generator at compile time -->
+    <Analyzer Include="..\..\src\Samples\bin\$(Configuration)\net10.0\Samples.dll" />
   </ItemGroup>
 
 </Project>

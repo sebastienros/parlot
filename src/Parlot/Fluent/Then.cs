@@ -183,11 +183,6 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             throw new NotSupportedException("Then requires a source-generatable parser.");
         }
 
-        if (_action1 is null && _action2 is null && _action3 is null)
-        {
-            throw new NotSupportedException("Then value-based combinator is not supported for source generation.");
-        }
-
         var result = context.CreateResult(typeof(U));
         var ctx = context.ParseContextName;
         var parsedName = $"parsed{context.NextNumber()}";
@@ -230,6 +225,12 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         {
             var lambdaName = context.RegisterLambda(_action3);
             result.Body.Add($"    {tempValueName} = {lambdaName}.Invoke({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+        }
+        else
+        {
+            // Value-based: register the value as a lambda that returns it
+            var valueLambda = context.RegisterLambda(new Func<U>(() => _value!));
+            result.Body.Add($"    {tempValueName} = {valueLambda}.Invoke();");
         }
         result.Body.Add($"    {result.ValueVariable} = {tempValueName};");
         result.Body.Add($"    {result.SuccessVariable} = true;");

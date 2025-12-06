@@ -1,6 +1,7 @@
 #if NET8_0_OR_GREATER
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -9,7 +10,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
+public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourceable
     where T : INumber<T>
 {
     private const char DefaultDecimalSeparator = '.';
@@ -156,6 +157,69 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
                 context.ResetPosition(reset)
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        var resetName = $"reset{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+        var numberSpanName = $"numberSpan{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+        var parsedValueName = $"parsedValue{context.NextNumber()}";
+
+        result.Locals.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Locals.Add($"var {startName} = 0;");
+        result.Locals.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
+        result.Locals.Add($"var {endName} = 0;");
+        result.Locals.Add($"{valueTypeName} {parsedValueName} = default;");
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{resetName} = {ctx}.Scanner.Cursor.Position;");
+        result.Body.Add($"{startName} = {resetName}.Offset;");
+
+        var allowLeadingSign = _allowLeadingSign ? "true" : "false";
+        var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
+        var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
+        var allowExponent = _allowExponent ? "true" : "false";
+
+        // Emit NumberStyles as a literal cast
+        var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
+        
+        // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a clone
+        string cultureExpr;
+        if (_culture == CultureInfo.InvariantCulture)
+        {
+            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+        }
+        else
+        {
+            // For custom cultures, we need to emit code that creates the same culture
+            // This is a simplified approach - for complex cases, we might need to register a factory
+            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+        }
+
+        result.Body.Add($"if ({ctx}.Scanner.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
+        result.Body.Add("{");
+        result.Body.Add($"    {endName} = {ctx}.Scanner.Cursor.Offset;");
+        result.Body.Add($"    if ({valueTypeName}.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({resetName});");
+        result.Body.Add("}");
 
         return result;
     }

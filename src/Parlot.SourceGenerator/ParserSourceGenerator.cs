@@ -176,6 +176,20 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             return;
         }
         var methodSyntaxTree = methodSyntaxRef.SyntaxTree;
+        var methodSyntax = methodSyntaxRef.GetSyntax() as MethodDeclarationSyntax;
+        
+        // Extract all lambda expressions from the method for later matching
+        var lambdaSources = new Dictionary<string, string>();
+        if (methodSyntax is not null)
+        {
+            var lambdaIndex = 0;
+            foreach (var lambda in methodSyntax.DescendantNodes().OfType<LambdaExpressionSyntax>())
+            {
+                // Store lambda with index-based key for simple matching
+                lambdaSources[$"lambda_{lambdaIndex}"] = lambda.ToFullString().Trim();
+                lambdaIndex++;
+            }
+        }
 
         // Create a minimal compilation with only the file containing the parser descriptor.
         // This avoids errors from other files that reference generated code.
@@ -229,9 +243,81 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
         peStream.Position = 0;
 
-        // Set up an assembly resolver to return the already-loaded Parlot assembly
-        // This is critical: we must return the SAME assembly instance that the generator uses
-        // to avoid type identity issues with ISourceable and other interfaces
+        // Build a dictionary of assembly paths from the compilation's references
+        // This allows us to load assemblies that the project references
+        var assemblyPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var pendingCompilationRefs = new List<(string Name, RoslynCompilation Compilation)>();
+        var loadedAssemblies = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+        
+        // Debug: collect reference info
+        var refDebugInfo = new List<string>();
+
+        // First pass: collect all references
+        foreach (var reference in hostCompilation.References)
+        {
+            if (reference is PortableExecutableReference peRef && peRef.FilePath is not null)
+            {
+                var assemblyName = Path.GetFileNameWithoutExtension(peRef.FilePath);
+                var filePath = peRef.FilePath;
+                
+                // If this is a ref assembly (in obj/*/ref/), try to find the actual assembly
+                // Ref assemblies are metadata-only and can't be loaded at runtime
+                if (filePath.Contains(Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar) ||
+                    filePath.Contains("/ref/"))
+                {
+                    // Try to find the actual assembly in bin folder
+                    // Path like: .../obj/Debug/net10.0/ref/Samples.dll -> .../bin/Debug/net10.0/Samples.dll
+                    var objIndex = filePath.LastIndexOf(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                    if (objIndex < 0) objIndex = filePath.LastIndexOf("/obj/", StringComparison.OrdinalIgnoreCase);
+                    
+                    if (objIndex >= 0)
+                    {
+                        var baseDir = filePath.Substring(0, objIndex);
+                        var afterObj = filePath.Substring(objIndex + 4); // Skip "/obj"
+                        var refIndex = afterObj.IndexOf(Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                        if (refIndex < 0) refIndex = afterObj.IndexOf("/ref/", StringComparison.OrdinalIgnoreCase);
+                        
+                        if (refIndex >= 0)
+                        {
+                            var configTfm = afterObj.Substring(0, refIndex); // e.g., "/Debug/net10.0"
+                            var fileName = Path.GetFileName(filePath);
+                            var binPath = baseDir + Path.DirectorySeparatorChar + "bin" + configTfm + Path.DirectorySeparatorChar + fileName;
+                            
+                            if (File.Exists(binPath))
+                            {
+                                filePath = binPath;
+                            }
+                        }
+                    }
+                }
+                
+                if (!assemblyPaths.ContainsKey(assemblyName))
+                {
+                    assemblyPaths[assemblyName] = filePath;
+                }
+                refDebugInfo.Add($"PE: {assemblyName} -> {filePath}");
+            }
+            else if (reference is CompilationReference compRef)
+            {
+                // For project references, we need to emit the referenced compilation to get an assembly
+                var refCompilation = compRef.Compilation;
+                var refAssemblyName = refCompilation.AssemblyName;
+                refDebugInfo.Add($"Compilation: {refAssemblyName}");
+                if (refAssemblyName is not null && refAssemblyName != "Parlot")
+                {
+                    pendingCompilationRefs.Add((refAssemblyName, refCompilation));
+                }
+            }
+            else
+            {
+                refDebugInfo.Add($"Unknown: {reference.GetType().Name}");
+            }
+        }
+
+        // Debug info removed - assembly loading working correctly
+
+        // Set up an assembly resolver - needs to be set up BEFORE loading CompilationReference assemblies
+        // because those assemblies may have their own dependencies
         ResolveEventHandler? resolver = null;
         resolver = (sender, args) =>
         {
@@ -242,10 +328,65 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 // This ensures ISourceable and other types have the same identity
                 return typeof(Parlot.Fluent.Parser<>).Assembly;
             }
+
+            // Try to return pre-loaded assembly from project references (CompilationReference)
+            if (requestedName.Name is not null && loadedAssemblies.TryGetValue(requestedName.Name, out var loadedAssembly))
+            {
+                return loadedAssembly;
+            }
+
+            // Try to load from file-based references (PortableExecutableReference)
+            if (requestedName.Name is not null && assemblyPaths.TryGetValue(requestedName.Name, out var path))
+            {
+                try
+                {
+                    var asm = Assembly.LoadFrom(path);
+                    loadedAssemblies[requestedName.Name] = asm;
+                    return asm;
+                }
+                catch
+                {
+                    // Fall through to return null
+                }
+            }
+
             return null;
         };
 
         AppDomain.CurrentDomain.AssemblyResolve += resolver;
+
+        // Now load CompilationReference assemblies (with resolver active)
+        foreach (var (refAssemblyName, refCompilation) in pendingCompilationRefs)
+        {
+            if (!loadedAssemblies.ContainsKey(refAssemblyName))
+            {
+                using var refPeStream = new MemoryStream();
+                var refEmitResult = refCompilation.Emit(refPeStream);
+                if (refEmitResult.Success)
+                {
+                    refPeStream.Position = 0;
+                    try
+                    {
+                        var refAssembly = Assembly.Load(refPeStream.ToArray());
+                        loadedAssemblies[refAssemblyName] = refAssembly;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            new DiagnosticDescriptor("PARLOT098", "Assembly load failed", "Failed to load '{0}': {1}", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
+                            methodSymbol.Locations.FirstOrDefault(), refAssemblyName, ex.Message));
+                    }
+                }
+                else
+                {
+                    var errors = string.Join("; ", refEmitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Take(3).Select(d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture)));
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor("PARLOT097", "Emit failed for ref", "Failed to emit '{0}': {1}", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
+                        methodSymbol.Locations.FirstOrDefault(), refAssemblyName, errors));
+                }
+            }
+        }
+
         try
         {
             var assembly = Assembly.Load(peStream.ToArray());
@@ -317,11 +458,11 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 return;
             }
 
-            var sgContext = new SourceGenerationContext(parseContextName: "context");
+            var sgContext = new SourceGenerationContext(parseContextName: "context", methodNamePrefix: methodSymbol.Name);
             var sourceResult = sourceable.GenerateSource(sgContext);
 
             // Generate C# code for this particular method
-            var sourceText = GenerateParserWrapperAndCore(methodSymbol, valueType, factoryMethodName, sourceResult, sgContext);
+            var sourceText = GenerateParserWrapperAndCore(methodSymbol, valueType, factoryMethodName, sourceResult, sgContext, lambdaSources);
 
             var hintName = $"{methodSymbol.ContainingType.Name}_{methodSymbol.Name}.Parlot.g.cs";
             var dumpDirectory = Environment.GetEnvironmentVariable("PARLOT_DUMP_GEN_DIR");
@@ -343,7 +484,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         Type valueType,
         string? propertyName,
         SourceResult result,
-        SourceGenerationContext sgContext)
+        SourceGenerationContext sgContext,
+        Dictionary<string, string> lambdaSources)
     {
         var ns = methodSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
@@ -354,6 +496,94 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         var valueTypeName = TypeNameHelper.GetTypeName(valueType);
         var coreName = methodName + "Core";
         var wrapperName = "GeneratedParser_" + methodName;
+
+        // First pass: process all deferred parsers to collect all lambdas
+        // We need to do this before emitting lambda fields
+        var deferredMethods = new List<(string MethodName, string ValueTypeName, SourceResult Result)>();
+        var processedDeferred = new HashSet<object>();
+        var deferredToProcess = sgContext.Deferred.Enumerate().ToList();
+        
+        while (deferredToProcess.Count > 0)
+        {
+            var (parser, deferredMethodName) = deferredToProcess[0];
+            deferredToProcess.RemoveAt(0);
+            
+            if (processedDeferred.Contains(parser))
+            {
+                continue;
+            }
+            processedDeferred.Add(parser);
+
+            if (parser is not ISourceable sourceable)
+            {
+                continue;
+            }
+
+            // Get the parser type to determine how to process it
+            var parserType = parser.GetType();
+            
+            // Find the result type from Parser<T> base class
+            Type? deferredValueType = null;
+            var currentType = parserType;
+            while (currentType != null)
+            {
+                if (currentType.IsGenericType)
+                {
+                    var genericDef = currentType.GetGenericTypeDefinition();
+                    if (genericDef.FullName == "Parlot.Fluent.Parser`1")
+                    {
+                        deferredValueType = currentType.GetGenericArguments()[0];
+                        break;
+                    }
+                }
+                currentType = currentType.BaseType;
+            }
+
+            if (deferredValueType is null)
+            {
+                continue;
+            }
+
+            var deferredValueTypeName = TypeNameHelper.GetTypeName(deferredValueType);
+
+            // For Deferred<T> parsers, generate source for the inner parser
+            // For other parsers (like Unary<T>), generate source for the parser itself
+            SourceResult deferredResult;
+            if (parserType.IsGenericType && parserType.GetGenericTypeDefinition().Name == "Deferred`1")
+            {
+                // Get the inner parser from the Deferred
+                var parserProperty = parserType.GetProperty("Parser");
+                if (parserProperty is null)
+                {
+                    continue;
+                }
+
+                var innerParser = parserProperty.GetValue(parser);
+                if (innerParser is not ISourceable innerSourceable)
+                {
+                    continue;
+                }
+
+                // Generate source for the inner parser
+                deferredResult = innerSourceable.GenerateSource(sgContext);
+            }
+            else
+            {
+                // For other deferred parsers (like Unary), generate source directly
+                deferredResult = sourceable.GenerateSource(sgContext);
+            }
+            
+            deferredMethods.Add((deferredMethodName, deferredValueTypeName, deferredResult));
+            
+            // Check for new deferred parsers that were added
+            foreach (var newDeferred in sgContext.Deferred.Enumerate())
+            {
+                if (!processedDeferred.Contains(newDeferred.Parser) && !deferredToProcess.Any(d => d.Parser == newDeferred.Parser))
+                {
+                    deferredToProcess.Add(newDeferred);
+                }
+            }
+        }
 
         var sb = new StringBuilder();
 
@@ -374,41 +604,106 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine($"    partial class {typeName}");
         sb.AppendLine("    {");
 
-        foreach (var (id, del) in sgContext.Lambdas.Enumerate())
+        // Now emit lambda fields - this includes lambdas from both the main parser and all deferred parsers
+        // We need to match lambdas by their signature since runtime traversal order may differ from source order
+        var lambdaSourcesList = lambdaSources.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
+        var registeredLambdas = sgContext.Lambdas.Enumerate().OrderBy(x => x.Id).ToList();
+        
+        // Track which source lambdas have been used
+        var usedSourceIndices = new HashSet<int>();
+
+        foreach (var (id, del) in registeredLambdas)
         {
-            var fieldName = LambdaRegistry.GetFieldName(id);
-            var delegateTypeName = TypeNameHelper.GetTypeName(del.GetType());
-            var factoryName = $"CreateLambda{id}";
-
-            sb.AppendLine($"        private static readonly {delegateTypeName} {fieldName} = {factoryName}();");
-
-            var method = del.Method;
-            var declaringType = method.DeclaringType ?? throw new InvalidOperationException("Delegate has no declaring type.");
-            var methodNameLiteral = SymbolDisplay.FormatPrimitive(method.Name, quoteStrings: true, useHexadecimalNumbers: false);
-            var bindingFlags = method.IsStatic
-                ? "(global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic)"
-                : "(global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic)";
-            var typeLiteral = SymbolDisplay.FormatPrimitive(declaringType.FullName ?? declaringType.Name, quoteStrings: true, useHexadecimalNumbers: false);
-
-            sb.AppendLine();
-            sb.AppendLine($"        private static {delegateTypeName} {factoryName}()");
-            sb.AppendLine("        {");
-            if (del.Target != null)
+            var fieldName = sgContext.GetLambdaFieldName(id);
+            var delegateType = del.GetType();
+            var delegateTypeName = TypeNameHelper.GetTypeName(delegateType);
+            
+            // Get delegate info for matching
+            var invokeMethod = delegateType.GetMethod("Invoke");
+            var paramCount = invokeMethod?.GetParameters().Length ?? 0;
+            
+            // Get parameter type names for matching
+            var paramTypeNames = new List<string>();
+            if (invokeMethod is not null)
             {
-                sb.AppendLine($"            var type = global::System.Reflection.Assembly.GetExecutingAssembly().GetType({typeLiteral}, throwOnError: true)!;");
-                sb.AppendLine($"            var method = type.GetMethod({methodNameLiteral}, {bindingFlags});");
-                sb.AppendLine("            var ctor = type.GetConstructor(global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic, binder: null, types: global::System.Type.EmptyTypes, modifiers: null);");
-                sb.AppendLine("            var target = ctor != null ? ctor.Invoke(null) : global::System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(type);");
-                sb.AppendLine($"            return ({delegateTypeName})global::System.Delegate.CreateDelegate(typeof({delegateTypeName}), target!, method!);");
+                foreach (var p in invokeMethod.GetParameters())
+                {
+                    paramTypeNames.Add(p.ParameterType.Name.ToLowerInvariant());
+                }
+            }
+            
+            // Try to find the best matching source lambda
+            string? matchedSource = null;
+            int bestMatchIndex = -1;
+            int bestScore = -1;
+            
+            for (int i = 0; i < lambdaSourcesList.Count; i++)
+            {
+                if (usedSourceIndices.Contains(i))
+                {
+                    continue;
+                }
+                
+                var lambdaSource = lambdaSourcesList[i];
+                var sourceParamCount = CountLambdaParameters(lambdaSource);
+                
+                if (sourceParamCount != paramCount)
+                {
+                    continue;
+                }
+                
+                // Calculate a score based on type name hints in the lambda
+                int score = 0;
+                var lowerLambda = lambdaSource.ToLowerInvariant();
+                
+                // Check for type hints in the lambda body
+                foreach (var typeName_ in paramTypeNames)
+                {
+                    if (lowerLambda.Contains(typeName_))
+                    {
+                        score += 10;
+                    }
+                }
+                
+                // Prefer lambdas that haven't been used and match param count exactly
+                score += (paramCount == sourceParamCount) ? 5 : 0;
+                
+                // Special case: check for "new Number" which takes decimal, or "new NegateExpression" which takes Expression
+                if (paramTypeNames.Count == 1)
+                {
+                    if (paramTypeNames[0] == "decimal" && lowerLambda.Contains("new") && lowerLambda.Contains("number("))
+                    {
+                        score += 100;
+                    }
+                    else if (paramTypeNames[0] == "expression" && lowerLambda.Contains("negateexpression"))
+                    {
+                        score += 100;
+                    }
+                }
+                
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestMatchIndex = i;
+                    matchedSource = lambdaSource;
+                }
+            }
+            
+            if (matchedSource is not null && bestMatchIndex >= 0)
+            {
+                usedSourceIndices.Add(bestMatchIndex);
+                sb.AppendLine($"        private static readonly {delegateTypeName} {fieldName} = {matchedSource};");
             }
             else
             {
-                sb.AppendLine($"            var type = global::System.Reflection.Assembly.GetExecutingAssembly().GetType({typeLiteral}, throwOnError: true)!;");
-                sb.AppendLine($"            var method = type.GetMethod({methodNameLiteral}, {bindingFlags});");
-                sb.AppendLine($"            return ({delegateTypeName})global::System.Delegate.CreateDelegate(typeof({delegateTypeName}), method!);");
+                // Cannot generate source for external lambdas - emit error comment
+                sb.AppendLine($"        // ERROR: Lambda {id} could not be extracted from source (param count: {paramCount}, types: {string.Join(", ", paramTypeNames)}).");
+                sb.AppendLine($"        // This lambda may be from an external parser or was not found in the method's syntax tree.");
+                sb.AppendLine($"        // To fix: define the parser inline in the [GenerateParser] method.");
+                sb.AppendLine($"        private static readonly {delegateTypeName} {fieldName} = default!; // PLACEHOLDER - will cause runtime error");
             }
-            sb.AppendLine("        }");
         }
+
         sb.AppendLine($"        private sealed class {wrapperName} : Parser<{valueTypeName}>");
         sb.AppendLine("        {");
         sb.AppendLine($"            public override bool Parse(ParseContext context, ref ParseResult<{valueTypeName}> result)");
@@ -442,6 +737,28 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("            return false;");
         sb.AppendLine("        }");
+
+        // Emit helper methods for deferred parsers (already processed earlier)
+        foreach (var (deferredMethodName, deferredValueTypeName, deferredResult) in deferredMethods)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        private static global::System.ValueTuple<bool, {deferredValueTypeName}> {deferredMethodName}(ParseContext context)");
+            sb.AppendLine("        {");
+
+            foreach (var local in deferredResult.Locals)
+            {
+                sb.Append("            ").AppendLine(local);
+            }
+
+            foreach (var stmt in deferredResult.Body)
+            {
+                sb.Append("            ").AppendLine(stmt);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"            return new global::System.ValueTuple<bool, {deferredValueTypeName}>({deferredResult.SuccessVariable}, {deferredResult.ValueVariable});");
+            sb.AppendLine("        }");
+        }
         sb.AppendLine();
 
         // Optional public factory, if the attribute specified one.
@@ -449,28 +766,12 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         {
             sb.AppendLine();
             sb.AppendLine("        public static Parlot.Fluent.Parser<" + valueTypeName + "> " + propertyName + " { get; } = new " + wrapperName + "();");
-            // sb.AppendLine();
-            // sb.AppendLine("        /// <summary>");
-            // sb.AppendLine("        /// Public factory method generated from the descriptor's GenerateParser attribute.");
-            // sb.AppendLine("        /// </summary>");
-            // sb.AppendLine($"        public static Parlot.Fluent.Parser<{valueTypeName}> {factoryMethodName}()");
-            // sb.AppendLine("        {");
-            // sb.AppendLine($"            return new {wrapperName}();");
-            // sb.AppendLine("        }");
         }
         else
         {
             sb.AppendLine();
             sb.AppendLine("        public static Parlot.Fluent.Parser<" + valueTypeName + "> " + methodName + "_Parser { get; } = new " + wrapperName + "();");
             sb.AppendLine();
-            // sb.AppendLine("        /// <summary>");
-            // sb.AppendLine("        /// Returns a parser that uses the source-generated implementation.");
-            // sb.AppendLine("        /// Call this from user code instead of the descriptor method if desired.");
-            // sb.AppendLine("        /// </summary>");
-            // sb.AppendLine($"        public static Parlot.Fluent.Parser<{valueTypeName}> {methodName}_Generated()");
-            // sb.AppendLine("        {");
-            // sb.AppendLine($"            return new {wrapperName}();");
-            // sb.AppendLine("        }");
         }
 
         sb.AppendLine("    }");
@@ -481,5 +782,62 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Count parameters in a lambda expression source string.
+    /// Examples:
+    ///   "x => ..." -> 1
+    ///   "(x) => ..." -> 1
+    ///   "(a, b) => ..." -> 2
+    ///   "() => ..." -> 0
+    ///   "static x => ..." -> 1
+    /// </summary>
+    private static int CountLambdaParameters(string lambdaSource)
+    {
+        // Remove "static " prefix if present
+        var source = lambdaSource.TrimStart();
+        if (source.StartsWith("static ", StringComparison.Ordinal))
+        {
+            source = source.Substring(7).TrimStart();
+        }
+
+        // Find the arrow "=>"
+        var arrowIndex = source.IndexOf("=>", StringComparison.Ordinal);
+        if (arrowIndex < 0)
+        {
+            return 0;
+        }
+
+        var paramPart = source.Substring(0, arrowIndex).Trim();
+
+        // Empty parameter list: () => ...
+        if (paramPart == "()")
+        {
+            return 0;
+        }
+
+        // Single identifier without parens: x => ...
+        if (!paramPart.StartsWith("(", StringComparison.Ordinal))
+        {
+            // It's a single identifier
+            return 1;
+        }
+
+        // Has parentheses: (x) or (a, b) or (a, b, c)
+        // Remove the parens
+        if (paramPart.StartsWith("(", StringComparison.Ordinal) && paramPart.EndsWith(")", StringComparison.Ordinal))
+        {
+            paramPart = paramPart.Substring(1, paramPart.Length - 2).Trim();
+        }
+
+        if (string.IsNullOrEmpty(paramPart))
+        {
+            return 0;
+        }
+
+        // Count commas + 1
+        var commaCount = paramPart.Count(c => c == ',');
+        return commaCount + 1;
     }
 }

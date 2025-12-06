@@ -1,6 +1,7 @@
 using FastExpressionCompiler;
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 
 #if NET
@@ -10,7 +11,7 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
+public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private Parser<T>? _parser;
 
@@ -170,6 +171,32 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
     }
 
     private bool _toString;
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (Parser is null)
+        {
+            throw new InvalidOperationException("Can't generate source for a Deferred parser until it is fully initialized");
+        }
+
+        // Check if this deferred parser is already being generated (recursion)
+        var methodName = context.Deferred.GetOrCreateMethodName(this, Name ?? "Deferred");
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Generate a call to the helper method
+        var callResultName = $"deferredResult{context.NextNumber()}";
+        result.Locals.Add($"global::System.ValueTuple<bool, {valueTypeName}> {callResultName} = default;");
+        result.Body.Add($"{callResultName} = {methodName}({ctx});");
+        result.Body.Add($"{result.SuccessVariable} = {callResultName}.Item1;");
+        result.Body.Add($"{result.ValueVariable} = {callResultName}.Item2;");
+
+        return result;
+    }
 
     public override string ToString()
     {

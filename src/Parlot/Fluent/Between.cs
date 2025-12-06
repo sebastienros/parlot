@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
@@ -12,7 +13,7 @@ namespace Parlot.Fluent;
 /// <typeparam name="A">The type of the parser before the main parser.</typeparam>
 /// <typeparam name="T">The type of the value parsed by the main parser.</typeparam>
 /// <typeparam name="B">The type of the parser after the main parser.</typeparam>
-public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
+public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<A> _before;
@@ -146,6 +147,82 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable
                 );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_before is not ISourceable beforeSourceable || _parser is not ISourceable parserSourceable || _after is not ISourceable afterSourceable)
+        {
+            throw new NotSupportedException("Between requires all parsers to be source-generatable.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var startName = $"start{context.NextNumber()}";
+
+        result.Locals.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
+
+        // Generate before parser
+        var beforeResult = beforeSourceable.GenerateSource(context);
+        foreach (var local in beforeResult.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        foreach (var stmt in beforeResult.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if ({beforeResult.SuccessVariable})");
+        result.Body.Add("{");
+
+        // Generate main parser
+        var parserResult = parserSourceable.GenerateSource(context);
+        foreach (var local in parserResult.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        foreach (var stmt in parserResult.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    if ({parserResult.SuccessVariable})");
+        result.Body.Add("    {");
+
+        // Generate after parser
+        var afterResult = afterSourceable.GenerateSource(context);
+        foreach (var local in afterResult.Locals)
+        {
+            result.Locals.Add(local);
+        }
+
+        foreach (var stmt in afterResult.Body)
+        {
+            result.Body.Add($"        {stmt}");
+        }
+
+        result.Body.Add($"        if ({afterResult.SuccessVariable})");
+        result.Body.Add("        {");
+        result.Body.Add($"            {result.SuccessVariable} = true;");
+        result.Body.Add($"            {result.ValueVariable} = {parserResult.ValueVariable};");
+        result.Body.Add("        }");
+        result.Body.Add("    }");
+
+        result.Body.Add($"    if (!{result.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add("    }");
+
+        result.Body.Add("}");
 
         return result;
     }

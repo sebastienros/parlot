@@ -12,15 +12,21 @@ public sealed class SourceGenerationContext
 {
     private int _number;
 
-    public SourceGenerationContext(string parseContextName = "context")
+    public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null)
     {
         ParseContextName = parseContextName ?? throw new ArgumentNullException(nameof(parseContextName));
+        MethodNamePrefix = methodNamePrefix ?? "";
     }
 
     /// <summary>
     /// Name of the <c>ParseContext</c> parameter in the generated methods.
     /// </summary>
     public string ParseContextName { get; }
+
+    /// <summary>
+    /// Prefix for generated lambda field names to ensure uniqueness across multiple parsers in the same class.
+    /// </summary>
+    public string MethodNamePrefix { get; }
 
     /// <summary>
     /// Global locals (as code lines) for the generated root method.
@@ -74,6 +80,11 @@ public sealed class SourceGenerationContext
     public string RegisterLambda(Delegate lambda)
     {
         var id = Lambdas.Register(lambda);
-        return LambdaRegistry.GetFieldName(id);
+        return GetLambdaFieldName(id);
     }
+
+    /// <summary>
+    /// Returns a field name for a lambda that is unique to this method context.
+    /// </summary>
+    public string GetLambdaFieldName(int id) => $"_{MethodNamePrefix}_lambda{id}";
 }

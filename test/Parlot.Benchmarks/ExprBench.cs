@@ -11,6 +11,7 @@ public class ExprBench
 {
     private readonly Parser<Expression> _parser = FluentParser.Expression;
     private readonly Parser<Expression> _compiled = FluentParser.Expression.Compile();
+    private readonly Parser<Expression> _generated = GeneratedParsers.Expression;
     private readonly Parser _rawParser = new();
 
     private const string _expression1 = "3 - 1 / 2 + 1";
@@ -36,6 +37,13 @@ public class ExprBench
     }
 
     [Benchmark, BenchmarkCategory("Expression1")]
+    public Expression ParlotGeneratedSmall()
+    {
+        _ = _generated.TryParse(_expression1, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Expression1")]
     public Expression PidginSmall()
     {
         return ExprParser.ParseOrThrow(_expression1);
@@ -57,6 +65,13 @@ public class ExprBench
     public Expression ParlotFluentBig()
     {
         _ = FluentParser.Expression.TryParse(_expression2, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Expression2")]
+    public Expression ParlotGeneratedBig()
+    {
+        _ = _generated.TryParse(_expression2, out var result);
         return result;
     }
 
