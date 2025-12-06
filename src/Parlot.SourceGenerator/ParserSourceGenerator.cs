@@ -64,7 +64,25 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                     continue;
                 }
 
-                GenerateForMethod(spc, compilation, m.Value);
+                try
+                {
+                    GenerateForMethod(spc, compilation, m.Value);
+                }
+                catch (Exception ex)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "PARLOT005",
+                            "Error generating parser source",
+                            "An error occurred while generating parser source for method '{0}': {1}",
+                            "Parlot.SourceGenerator",
+                            DiagnosticSeverity.Error,
+                            isEnabledByDefault: true),
+                        m.Value.Method.Locations.FirstOrDefault(),
+                        m.Value.Method.Name,
+                        ex.Message));
+                    continue;
+                }
             }
         });
     }
@@ -163,8 +181,23 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         // This avoids errors from other files that reference generated code.
         var minimalSyntaxTrees = new List<SyntaxTree> { methodSyntaxTree };
         
-        // We also need to include any syntax trees that define types used by the method
-        // For simplicity, we'll try to compile just the method's file and see if it works
+        // Add a synthetic file with global usings that Parlot and typical projects provide.
+        // This ensures the dynamic compilation works even when the user relies on implicit usings.
+        var parseOptions = (CSharpParseOptions)methodSyntaxTree.Options;
+        var globalUsings = CSharpSyntaxTree.ParseText(
+            """
+            // Parlot global usings for source generator dynamic compilation
+            global using System;
+            global using System.Collections.Generic;
+            global using System.Linq;
+            global using System.Threading.Tasks;
+            global using Parlot;
+            global using Parlot.Fluent;
+            global using static Parlot.Fluent.Parsers;
+            """,
+            parseOptions,
+            path: "ParlotGlobalUsings.g.cs");
+        minimalSyntaxTrees.Add(globalUsings);
         
         var tempCompilation = hostCompilation
             .RemoveAllSyntaxTrees()

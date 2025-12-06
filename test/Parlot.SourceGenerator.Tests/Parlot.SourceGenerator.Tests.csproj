@@ -11,15 +11,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Reference the source generator as an analyzer so it runs during compilation -->
-    <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="true" />
-
-    <!-- Make Parlot.dll available to the source generator at compile time -->
-    <!-- This should not be necessary but keeping for some time to test -->
-    <!-- <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" /> -->
-    <!-- <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" /> -->
+    <!-- Reference Parlot for the library types -->
+    <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
+    
+    <!-- Reference the source generator as an analyzer (for local development) -->
+    <!-- When consuming via NuGet package, the generator is embedded in the Parlot package -->
+    <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
+                      OutputItemType="Analyzer" 
+                      ReferenceOutputAssembly="false" />
+    
+    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
   </ItemGroup>
 
   <ItemGroup>
