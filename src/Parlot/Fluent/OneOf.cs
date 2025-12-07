@@ -225,6 +225,24 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
         var ctx = context.ParseContextName;
         var cursorName = context.CursorName;
 
+        var valueTypeName = result.ValueTypeName ?? SourceGenerationContext.GetTypeName(typeof(T));
+
+        string GetHelper(Parser<T> parser)
+        {
+            if (parser is not ISourceable sourceable)
+            {
+                throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
+            }
+
+            var (methodName, _, _) = context.Helpers.GetOrCreate(
+                parser,
+                $"{context.MethodNamePrefix}_OneOf",
+                valueTypeName,
+                () => sourceable.GenerateSource(context));
+
+            return methodName;
+        }
+
         var startName = $"start{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
@@ -293,7 +311,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
                     }
 
                     result.Body.Add("        {");
-                    EmitParsers(group.Parsers, result, context, indent: "            ");
+                    EmitParsers(group.Parsers, result, ctx, indent: "            ", getHelper: GetHelper, context);
                     result.Body.Add("            break;");
                     result.Body.Add("        }");
                 }
@@ -303,7 +321,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
             {
                 result.Body.Add("        default:");
                 result.Body.Add("        {");
-                EmitParsers(defaultGroup.Parsers, result, context, indent: "            ");
+                EmitParsers(defaultGroup.Parsers, result, ctx, indent: "            ", getHelper: GetHelper, context);
                 result.Body.Add("            break;");
                 result.Body.Add("        }");
             }
@@ -313,7 +331,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
         }
         else
         {
-            EmitParsers(Parsers, result, context, indent: string.Empty);
+            EmitParsers(Parsers, result, ctx, indent: string.Empty, getHelper: GetHelper, context);
         }
 
         result.Body.Add($"if (!{result.SuccessVariable})");
@@ -327,8 +345,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
     private static void EmitParsers(
         IReadOnlyList<Parser<T>> parsers,
         SourceResult outerResult,
-        SourceGenerationContext contextResultContext,
-        string indent)
+        string contextVariableName,
+        string indent,
+        Func<Parser<T>, string> getHelper,
+        SourceGenerationContext context)
     {
         var successVar = outerResult.SuccessVariable;
         var valueVar = outerResult.ValueVariable;
@@ -337,30 +357,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
         {
             var parser = parsers[i];
 
-            if (parser is not ISourceable sourceable)
-            {
-                throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
-            }
-
-            var inner = sourceable.GenerateSource(contextResultContext);
+            var helperName = getHelper(parser);
+            var helperResultName = $"helperResult{context.NextNumber()}";
 
             outerResult.Body.Add($"{indent}if (!{successVar})");
             outerResult.Body.Add($"{indent}{{");
-
-            foreach (var local in inner.Locals)
-            {
-                outerResult.Body.Add($"{indent}    {local}");
-            }
-
-            foreach (var stmt in inner.Body)
-            {
-                outerResult.Body.Add($"{indent}    {stmt}");
-            }
-
-            outerResult.Body.Add($"{indent}    if ({inner.SuccessVariable})");
+            outerResult.Body.Add($"{indent}    var {helperResultName} = {helperName}({contextVariableName});");
+            outerResult.Body.Add($"{indent}    if ({helperResultName}.Item1)");
             outerResult.Body.Add($"{indent}    {{");
             outerResult.Body.Add($"{indent}        {successVar} = true;");
-            outerResult.Body.Add($"{indent}        {valueVar} = {inner.ValueVariable};");
+            outerResult.Body.Add($"{indent}        {valueVar} = {helperResultName}.Item2;");
             outerResult.Body.Add($"{indent}    }}");
             outerResult.Body.Add($"{indent}}}");
         }
@@ -387,6 +393,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
     }
 
     private readonly record struct ParserListKey(IReadOnlyList<Parser<T>> Parsers);
+
+    private sealed class ParserReferenceComparer : IEqualityComparer<Parser<T>>
+    {
+        public static readonly ParserReferenceComparer Instance = new();
+
+        public bool Equals(Parser<T>? x, Parser<T>? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(Parser<T> obj) => RuntimeHelpers.GetHashCode(obj);
+    }
 
     private sealed class ParserListKeyComparer : IEqualityComparer<ParserListKey>
     {

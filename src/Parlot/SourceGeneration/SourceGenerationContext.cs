@@ -16,6 +16,8 @@ public sealed class SourceGenerationContext
     {
         ParseContextName = parseContextName ?? throw new ArgumentNullException(nameof(parseContextName));
         MethodNamePrefix = methodNamePrefix ?? "";
+
+        Helpers = new ParserHelperRegistry();
     }
 
     /// <summary>
@@ -62,6 +64,11 @@ public sealed class SourceGenerationContext
     /// Registry of deferred parsers that should become separate helper methods.
     /// </summary>
     public DeferredRegistry Deferred { get; } = new();
+
+    /// <summary>
+    /// Registry of helper parser methods (e.g., OneOf buckets) to emit once per descriptor.
+    /// </summary>
+    public ParserHelperRegistry Helpers { get; }
 
     /// <summary>
     /// Returns a new unique number for the current compilation.
