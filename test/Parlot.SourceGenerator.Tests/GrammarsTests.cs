@@ -177,4 +177,30 @@ public class GrammarsTests
         Assert.IsType<NegateExpression>(add.Left);
         Assert.IsType<Number>(add.Right);
     }
+
+    [Fact]
+    public void CountingOneOf_OnlyMatchingParserInvoked()
+    {
+        CountingParser.Reset();
+        var parser = Grammars.ParseCountingOneOf;
+
+        var result = parser.Parse("b");
+        Assert.Equal('b', result);
+
+        Assert.Equal(0, CountingParser.GetCount("a"));
+        Assert.Equal(1, CountingParser.GetCount("b"));
+    }
+
+    [Fact]
+    public void CountingOneOf_SkipsWhitespaceOnce()
+    {
+        CountingParser.Reset();
+        var parser = Grammars.ParseCountingOneOf;
+
+        var result = parser.Parse("   b");
+        Assert.Equal('b', result);
+
+        Assert.Equal(0, CountingParser.GetCount("a"));
+        Assert.Equal(1, CountingParser.GetCount("b"));
+    }
 }

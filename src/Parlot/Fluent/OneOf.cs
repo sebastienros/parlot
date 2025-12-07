@@ -2,6 +2,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
@@ -235,36 +236,84 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
             result.Body.Add($"{ctx}.SkipWhiteSpace();");
         }
 
-        for (var i = 0; i < Parsers.Count; i++)
+        // If a lookup map was built, emit a switch-based dispatch that only tries
+        // the relevant sub-parsers for the current char (mirroring the runtime path).
+        if (_map != null && _map.ExpectedChars.Length > 0)
         {
-            var parser = Parsers[i];
+            var currentName = $"current{context.NextNumber()}";
+            result.Body.Add($"var {currentName} = {cursorName}.Current;");
 
-            if (parser is not ISourceable sourceable)
+            // Group characters that share the same parser list (by contents) to avoid duplicating code.
+            var groups = new Dictionary<ParserListKey, ParserGroup>(ParserListKeyComparer.Instance);
+
+            foreach (var ch in _map.ExpectedChars)
             {
-                throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
+                var parsersForChar = _map[ch];
+                if (parsersForChar is null)
+                {
+                    continue;
+                }
+
+                var key = new ParserListKey(parsersForChar);
+                if (!groups.TryGetValue(key, out var group))
+                {
+                    group = new ParserGroup(parsersForChar);
+                    groups.Add(key, group);
+                }
+
+                group.Chars.Add(ch);
             }
 
-            var inner = sourceable.GenerateSource(context);
+            ParserGroup? defaultGroup = null;
+            if (_otherParsers != null)
+            {
+                var key = new ParserListKey(_otherParsers);
+                if (!groups.TryGetValue(key, out var group))
+                {
+                    group = new ParserGroup(_otherParsers);
+                    groups.Add(key, group);
+                }
+
+                group.IsDefault = true;
+                defaultGroup = group;
+            }
 
             result.Body.Add($"if (!{result.SuccessVariable})");
             result.Body.Add("{");
-
-            foreach (var local in inner.Locals)
-            {
-                result.Body.Add($"    {local}");
-            }
-
-            foreach (var stmt in inner.Body)
-            {
-                result.Body.Add($"    {stmt}");
-            }
-
-            result.Body.Add($"    if ({inner.SuccessVariable})");
+            result.Body.Add($"    switch ({currentName})");
             result.Body.Add("    {");
-            result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
+
+            foreach (var group in groups.Values)
+            {
+                if (group.Chars.Count > 0)
+                {
+                    foreach (var ch in group.Chars)
+                    {
+                        result.Body.Add($"        case {ToCharLiteral(ch)}:");
+                    }
+
+                    result.Body.Add("        {");
+                    EmitParsers(group.Parsers, result, context, indent: "            ");
+                    result.Body.Add("            break;");
+                    result.Body.Add("        }");
+                }
+            }
+
+            if (defaultGroup is not null)
+            {
+                result.Body.Add("        default:");
+                result.Body.Add("        {");
+                EmitParsers(defaultGroup.Parsers, result, context, indent: "            ");
+                result.Body.Add("            break;");
+                result.Body.Add("        }");
+            }
+
             result.Body.Add("    }");
             result.Body.Add("}");
+        }
+        else
+        {
+            EmitParsers(Parsers, result, context, indent: string.Empty);
         }
 
         result.Body.Add($"if (!{result.SuccessVariable})");
@@ -273,6 +322,127 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
         result.Body.Add("}");
 
         return result;
+    }
+
+    private static void EmitParsers(
+        IReadOnlyList<Parser<T>> parsers,
+        SourceResult outerResult,
+        SourceGenerationContext contextResultContext,
+        string indent)
+    {
+        var successVar = outerResult.SuccessVariable;
+        var valueVar = outerResult.ValueVariable;
+
+        for (var i = 0; i < parsers.Count; i++)
+        {
+            var parser = parsers[i];
+
+            if (parser is not ISourceable sourceable)
+            {
+                throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
+            }
+
+            var inner = sourceable.GenerateSource(contextResultContext);
+
+            outerResult.Body.Add($"{indent}if (!{successVar})");
+            outerResult.Body.Add($"{indent}{{");
+
+            foreach (var local in inner.Locals)
+            {
+                outerResult.Body.Add($"{indent}    {local}");
+            }
+
+            foreach (var stmt in inner.Body)
+            {
+                outerResult.Body.Add($"{indent}    {stmt}");
+            }
+
+            outerResult.Body.Add($"{indent}    if ({inner.SuccessVariable})");
+            outerResult.Body.Add($"{indent}    {{");
+            outerResult.Body.Add($"{indent}        {successVar} = true;");
+            outerResult.Body.Add($"{indent}        {valueVar} = {inner.ValueVariable};");
+            outerResult.Body.Add($"{indent}    }}");
+            outerResult.Body.Add($"{indent}}}");
+        }
+    }
+
+    private static string ToCharLiteral(char c)
+    {
+        return "'" + (c switch
+        {
+            '\\' => "\\\\",
+            '\'' => "\\'",
+            '\"' => "\\\"",
+            '\0' => "\\0",
+            '\a' => "\\a",
+            '\b' => "\\b",
+            '\f' => "\\f",
+            '\n' => "\\n",
+            '\r' => "\\r",
+            '\t' => "\\t",
+            '\v' => "\\v",
+            _ when char.IsControl(c) || c > 0x7e => $"\\u{(int)c:X4}",
+            _ => c.ToString()
+        }) + "'";
+    }
+
+    private readonly record struct ParserListKey(IReadOnlyList<Parser<T>> Parsers);
+
+    private sealed class ParserListKeyComparer : IEqualityComparer<ParserListKey>
+    {
+        public static readonly ParserListKeyComparer Instance = new();
+
+        public bool Equals(ParserListKey x, ParserListKey y)
+        {
+            if (ReferenceEquals(x.Parsers, y.Parsers))
+            {
+                return true;
+            }
+
+            var xCount = x.Parsers.Count;
+            var yCount = y.Parsers.Count;
+            if (xCount != yCount)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < xCount; i++)
+            {
+                if (!ReferenceEquals(x.Parsers[i], y.Parsers[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public int GetHashCode(ParserListKey key)
+        {
+            unchecked
+            {
+                var hash = key.Parsers.Count;
+                for (var i = 0; i < key.Parsers.Count; i++)
+                {
+                    hash = (hash * 31) + RuntimeHelpers.GetHashCode(key.Parsers[i]!);
+                }
+
+                return hash;
+            }
+        }
+    }
+
+    private sealed class ParserGroup
+    {
+        public ParserGroup(IReadOnlyList<Parser<T>> parsers)
+        {
+            Parsers = parsers;
+            Chars = [];
+        }
+
+        public IReadOnlyList<Parser<T>> Parsers { get; }
+        public List<char> Chars { get; }
+        public bool IsDefault { get; set; }
     }
 
     /* We don't use the ICompilable interface anymore since the generated code is still slower than the original one.
