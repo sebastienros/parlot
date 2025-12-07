@@ -1,10 +1,11 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
+public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly T _defaultValue;
@@ -58,6 +59,59 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
                 );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("ZeroOrOne requires a source-generatable parser.");
+        }
+
+        var defaultValueExpr = _defaultValue == null ? "default" : SourceGenerationContext.GetTypeName(typeof(T)) + ".Parse(\"" + _defaultValue?.ToString() + "\")";
+        if (_defaultValue == null || _defaultValue.Equals(default(T)))
+        {
+            defaultValueExpr = "default";
+        }
+        else if (typeof(T) == typeof(string))
+        {
+            defaultValueExpr = "\"" + _defaultValue?.ToString()?.Replace("\"", "\\\"") + "\"";
+        }
+        else if (typeof(T).IsPrimitive || typeof(T) == typeof(decimal))
+        {
+            defaultValueExpr = _defaultValue?.ToString() ?? "default";
+        }
+
+        var result = context.CreateResult(typeof(T), defaultSuccess: true, defaultValueExpression: defaultValueExpr);
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrOne_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        result.Body.Add($"var h = {helperName}({context.ParseContextName});");
+        result.Body.Add($"if (h.Item1)");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.ValueVariable} = h.Item2;");
+        result.Body.Add("}");
 
         return result;
     }
