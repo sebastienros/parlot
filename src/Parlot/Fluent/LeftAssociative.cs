@@ -225,6 +225,9 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var inputTypeName = SourceGenerationContext.GetTypeName(typeof(TInput));
 
+        // Generate a unique ID for this LeftAssociative instance to avoid collisions
+        var uniqueId = context.NextNumber();
+        
         var currentValueName = $"leftAssocValue{context.NextNumber()}";
         var operatorMatchedName = $"opMatched{context.NextNumber()}";
 
@@ -246,10 +249,9 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             throw new InvalidOperationException("Unable to determine parser value type.");
         }
 
-        // Register helper for the base parser - use the parser instance itself as part of the key
-        // to avoid collisions when multiple LeftAssociative parsers exist
+        // Register helper for the base parser with unique prefix
         var baseHelperName = context.Helpers
-            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Parser", valueTypeName, () => parserSourceable.GenerateSource(context))
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_LeftAssoc{uniqueId}", valueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
         // Generate first operand parsing using helper
@@ -275,10 +277,10 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             // Register the factory lambda
             var factoryFieldName = context.RegisterLambda(factory);
 
-            // Register helper for the operator parser
+            // Register helper for the operator parser with unique prefix
             var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
             var opHelperName = context.Helpers
-                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Parser", opValueTypeName, () => opSourceable.GenerateSource(context))
+                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_LeftAssoc{uniqueId}", opValueTypeName, () => opSourceable.GenerateSource(context))
                 .MethodName;
 
             var opResultName = $"opResult{context.NextNumber()}";

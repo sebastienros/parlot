@@ -294,7 +294,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             // Register helper for the operator parser
             var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
             var opHelperName = context.Helpers
-                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Parser", opValueTypeName, () => opSourceable.GenerateSource(context))
+                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Unary", opValueTypeName, () => opSourceable.GenerateSource(context))
                 .MethodName;
 
             var opResultName = $"opResult{context.NextNumber()}";
@@ -339,7 +339,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
         result.Body.Add("{");
 
         var baseHelperName = context.Helpers
-            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Parser", valueTypeName, () => parserSourceable.GenerateSource(context))
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Unary", valueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
         var baseResultName = $"baseResult{context.NextNumber()}";

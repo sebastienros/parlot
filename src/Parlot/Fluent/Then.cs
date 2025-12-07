@@ -207,7 +207,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 
         var innerValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
         var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Parser", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Then", innerValueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
         result.Body.Add($"{valueTypeName} {tempValueName} = default;");

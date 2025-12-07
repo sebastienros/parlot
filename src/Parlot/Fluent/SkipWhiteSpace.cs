@@ -87,7 +87,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
 
         var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
         var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_SkipWS", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
         var cursorName = context.CursorName;
