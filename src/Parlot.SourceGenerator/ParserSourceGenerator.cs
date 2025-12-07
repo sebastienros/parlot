@@ -714,6 +714,9 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"        internal static bool {coreName}(ParseContext context, ref ParseResult<{valueTypeName}> result)");
         sb.AppendLine("        {");
+        sb.AppendLine("            var scanner = context.Scanner;");
+        sb.AppendLine("            var cursor = scanner.Cursor;");
+        sb.AppendLine();
 
         foreach (var local in result.Locals)
         {
@@ -729,7 +732,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine($"            if ({result.SuccessVariable})");
         sb.AppendLine("            {");
         sb.AppendLine("                // TODO: wire correct span tracking into ISourceable implementation.");
-        sb.AppendLine("                var start = context.Scanner.Cursor.Offset;");
+        sb.AppendLine("                var start = cursor.Offset;");
         sb.AppendLine("                var end   = start;");
         sb.AppendLine("                result = new ParseResult<" + valueTypeName + ">(start, end, " + result.ValueVariable + ");");
         sb.AppendLine("                return true;");
@@ -744,6 +747,9 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             sb.AppendLine();
             sb.AppendLine($"        private static global::System.ValueTuple<bool, {deferredValueTypeName}> {deferredMethodName}(ParseContext context)");
             sb.AppendLine("        {");
+            sb.AppendLine("            var scanner = context.Scanner;");
+            sb.AppendLine("            var cursor = scanner.Cursor;");
+            sb.AppendLine();
 
             foreach (var local in deferredResult.Locals)
             {

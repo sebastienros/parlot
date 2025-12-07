@@ -24,6 +24,21 @@ public sealed class SourceGenerationContext
     public string ParseContextName { get; }
 
     /// <summary>
+    /// Name of the cached cursor variable in the generated method.
+    /// This is initialized once at the start of the method and reused throughout.
+    /// </summary>
+#pragma warning disable CA1822 // Mark members as static - keep as instance for API consistency
+    public string CursorName => "cursor";
+#pragma warning restore CA1822
+
+    /// <summary>
+    /// Name of the cached scanner variable in the generated method.
+    /// </summary>
+#pragma warning disable CA1822 // Mark members as static - keep as instance for API consistency
+    public string ScannerName => "scanner";
+#pragma warning restore CA1822
+
+    /// <summary>
     /// Prefix for generated lambda field names to ensure uniqueness across multiple parsers in the same class.
     /// </summary>
     public string MethodNamePrefix { get; }

@@ -80,13 +80,13 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         }
 
         var result = context.CreateResult(typeof(ValueTuple<T1, T2>));
-        var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>));
 
         result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
+        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         var r1 = parser1.GenerateSource(context);
         foreach (var local in r1.Locals)
@@ -120,12 +120,12 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
-        result.Body.Add($"        {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add("}");
 
         return result;

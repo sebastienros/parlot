@@ -161,12 +161,12 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         }
 
         var result = context.CreateResult(typeof(T));
-        var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
+        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         // Generate before parser
         var beforeResult = beforeSourceable.GenerateSource(context);
@@ -219,7 +219,7 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
 
         result.Body.Add($"    if (!{result.SuccessVariable})");
         result.Body.Add("    {");
-        result.Body.Add($"        {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
 
         result.Body.Add("}");

@@ -132,8 +132,8 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
 
         var result = context.CreateResult(typeof(string));
 
-        var ctx = context.ParseContextName;
-        var cursorName = $"cursor{context.NextNumber()}";
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
         var startName = $"start{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
 
@@ -143,7 +143,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var newLines = CountNewLines(Text);
         var trailingSegmentLength = TrailingSegmentLength(Text);
 
-        result.Body.Add($"var {cursorName} = {ctx}.Scanner.Cursor;");
         result.Body.Add($"var {startName} = 0;");
         result.Body.Add($"var {endName} = 0;");
 
@@ -153,7 +152,18 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
 
         result.Body.Add($"    {endName} = {cursorName}.Offset;");
-        result.Body.Add($"    {result.ValueVariable} = new string({ctx}.Scanner.Buffer.AsSpan({startName}, {endName} - {startName}));");
+        
+        // Reuse the literal string for Ordinal comparison to avoid allocation (matches Fluent Parse behavior)
+        if (_comparisonType == StringComparison.Ordinal)
+        {
+            result.Body.Add($"    {result.ValueVariable} = {textLiteral};");
+        }
+        else
+        {
+            // For case-insensitive comparisons, we need to extract the actual matched text
+            result.Body.Add($"    {result.ValueVariable} = new string({scannerName}.Buffer.AsSpan({startName}, {endName} - {startName}));");
+        }
+        
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
         result.Body.Add("else");

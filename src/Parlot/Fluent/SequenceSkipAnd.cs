@@ -139,12 +139,12 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
         }
 
         var result = context.CreateResult(typeof(T2));
-        var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {ctx}.Scanner.Cursor.Position;");
+        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         var r1 = parser1.GenerateSource(context);
         foreach (var local in r1.Locals)
@@ -178,12 +178,12 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
-        result.Body.Add($"        {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({startName});");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add("}");
 
         return result;

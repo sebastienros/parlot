@@ -167,7 +167,8 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         var result = context.CreateResult(typeof(T));
-        var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var resetName = $"reset{context.NextNumber()}";
@@ -183,7 +184,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
 
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{resetName} = {ctx}.Scanner.Cursor.Position;");
+        result.Body.Add($"{resetName} = {cursorName}.Position;");
         result.Body.Add($"{startName} = {resetName}.Offset;");
 
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
@@ -207,11 +208,11 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
             cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
         }
 
-        result.Body.Add($"if ({ctx}.Scanner.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
         result.Body.Add("{");
-        result.Body.Add($"    {endName} = {ctx}.Scanner.Cursor.Offset;");
-        // Use ToString() since NumberLiteralBase is for pre-.NET 7 types that don't have ReadOnlySpan<char> overload
-        result.Body.Add($"    if ({valueTypeName}.TryParse({numberSpanName}.ToString(), {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+        result.Body.Add($"    {endName} = {cursorName}.Offset;");
+        // Use ReadOnlySpan<char> overload directly - .NET 7+ types all support TryParse(ReadOnlySpan<char>, ...)
+        result.Body.Add($"    if ({valueTypeName}.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
@@ -220,7 +221,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
 
         result.Body.Add($"if (!{result.SuccessVariable})");
         result.Body.Add("{");
-        result.Body.Add($"    {ctx}.Scanner.Cursor.ResetPosition({resetName});");
+        result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
         result.Body.Add("}");
 
         return result;
