@@ -16,7 +16,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourc
     private const char DefaultDecimalSeparator = '.';
     private const char DefaultGroupSeparator = ',';
 
-    private static readonly MethodInfo _tryParseMethodInfo = typeof(T).GetMethod(nameof(INumber<T>.TryParse), [typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
+    private static readonly MethodInfo _tryParseMethodInfo = Numbers.GetTryParseMethod<T>();
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -85,7 +85,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourc
         {
             var end = context.Scanner.Cursor.Offset;
 
-            if (T.TryParse(number, _numberStyles, _culture, out var value))
+            if (Numbers.TryParse<T>(number, _numberStyles, _culture, out var value))
             {
                 result.Set(start, end, value);
 
@@ -179,7 +179,6 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourc
         result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"var {startName} = 0;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        result.Body.Add($"var {endName} = 0;");
         result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
 
         result.Body.Add($"{result.SuccessVariable} = false;");
@@ -209,8 +208,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourc
 
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
         result.Body.Add("{");
-        result.Body.Add($"    {endName} = {cursorName}.Offset;");
-        result.Body.Add($"    if ({valueTypeName}.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+        result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");

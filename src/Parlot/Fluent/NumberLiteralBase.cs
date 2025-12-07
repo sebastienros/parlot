@@ -15,8 +15,6 @@ namespace Parlot.Fluent;
 /// <typeparam name="T"></typeparam>
 public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
-    private static readonly MethodInfo _defaultTryParseMethodInfo = typeof(T).GetMethod("TryParse", [typeof(string), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
-
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
     private readonly MethodInfo _tryParseMethodInfo;
@@ -39,7 +37,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
     {
         _decimalSeparator = decimalSeparator;
         _groupSeparator = groupSeparator;
-        _tryParseMethodInfo = tryParseMethodInfo ?? _defaultTryParseMethodInfo;
+        _tryParseMethodInfo = tryParseMethodInfo ?? Numbers.GetTryParseMethod<T>();
         _numberStyles = numberOptions.ToNumberStyles();
 
         if (decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
@@ -141,8 +139,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
                     Expression.Assign(result.Success,
                         Expression.Call(
                             _tryParseMethodInfo,
-                            // This class is only used before NET7.0, when there is no overload for TryParse that takes a ReadOnlySpan<char>
-                            Expression.Call(numberSpan, ExpressionHelper.ReadOnlySpan_ToString),
+                            numberSpan,
                             numberStyles,
                             culture,
                             result.Value)
@@ -180,7 +177,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"var {startName} = 0;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        result.Body.Add($"var {endName} = 0;");
         result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
 
         result.Body.Add($"{result.SuccessVariable} = false;");
@@ -210,9 +206,8 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
 
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
         result.Body.Add("{");
-        result.Body.Add($"    {endName} = {cursorName}.Offset;");
         // Use ReadOnlySpan<char> overload directly - .NET 7+ types all support TryParse(ReadOnlySpan<char>, ...)
-        result.Body.Add($"    if ({valueTypeName}.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+        result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
@@ -238,11 +233,7 @@ internal sealed class ByteNumberLiteral : NumberLiteralBase<byte>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out byte value)
     {
-#if NET6_0_OR_GREATER
-        return byte.TryParse(s, style, provider, out value);
-#else
-        return byte.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -256,11 +247,7 @@ internal sealed class SByteNumberLiteral : NumberLiteralBase<sbyte>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out sbyte value)
     {
-#if NET6_0_OR_GREATER
-        return sbyte.TryParse(s, style, provider, out value);
-#else
-        return sbyte.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -274,11 +261,7 @@ internal sealed class IntNumberLiteral : NumberLiteralBase<int>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out int value)
     {
-#if NET6_0_OR_GREATER
-        return int.TryParse(s, style, provider, out value);
-#else
-        return int.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -292,11 +275,7 @@ internal sealed class UIntNumberLiteral : NumberLiteralBase<uint>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out uint value)
     {
-#if NET6_0_OR_GREATER
-        return uint.TryParse(s, style, provider, out value);
-#else
-        return uint.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -310,11 +289,7 @@ internal sealed class LongNumberLiteral : NumberLiteralBase<long>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out long value)
     {
-#if NET6_0_OR_GREATER
-        return long.TryParse(s, style, provider, out value);
-#else
-        return long.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -328,11 +303,7 @@ internal sealed class ULongNumberLiteral : NumberLiteralBase<ulong>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out ulong value)
     {
-#if NET6_0_OR_GREATER
-        return ulong.TryParse(s, style, provider, out value);
-#else
-        return ulong.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -346,11 +317,7 @@ internal sealed class ShortNumberLiteral : NumberLiteralBase<short>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out short value)
     {
-#if NET6_0_OR_GREATER
-        return short.TryParse(s, style, provider, out value);
-#else
-        return short.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -364,11 +331,7 @@ internal sealed class UShortNumberLiteral : NumberLiteralBase<ushort>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out ushort value)
     {
-#if NET6_0_OR_GREATER
-        return ushort.TryParse(s, style, provider, out value);
-#else
-        return ushort.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -382,11 +345,7 @@ internal sealed class DecimalNumberLiteral : NumberLiteralBase<decimal>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out decimal value)
     {
-#if NET6_0_OR_GREATER
-        return decimal.TryParse(s, style, provider, out value);
-#else
-        return decimal.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -400,11 +359,7 @@ internal sealed class DoubleNumberLiteral : NumberLiteralBase<double>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out double value)
     {
-#if NET6_0_OR_GREATER
-        return double.TryParse(s, style, provider, out value);
-#else
-        return double.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -418,11 +373,7 @@ internal sealed class FloatNumberLiteral : NumberLiteralBase<float>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out float value)
     {
-#if NET6_0_OR_GREATER
-        return float.TryParse(s, style, provider, out value);
-#else
-        return float.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 
@@ -437,7 +388,7 @@ internal sealed class HalfNumberLiteral : NumberLiteralBase<Half>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out Half value)
     {
-        return Half.TryParse(s, style, provider, out value);
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
 #endif
@@ -452,10 +403,6 @@ internal sealed class BigIntegerNumberLiteral : NumberLiteralBase<BigInteger>
 
     public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out BigInteger value)
     {
-#if NET6_0_OR_GREATER
-        return BigInteger.TryParse(s, style, provider, out value);
-#else
-        return BigInteger.TryParse(s.ToString(), style, provider, out value);
-#endif
+        return Numbers.TryParse(s, style, provider, out value);
     }
 }
