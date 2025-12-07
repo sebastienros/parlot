@@ -61,9 +61,6 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        // This initial implementation delegates to the existing Parse method, so that
-        // callers can already exercise the source-generation pipeline without having
-        // to special-case this combinator.
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
 
@@ -78,31 +75,52 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
-
-        result.Body.Add($"{startName} = {cursorName}.Position;");
-
+        // Declare inner parser locals first (they're needed in both branches)
         foreach (var local in inner.Locals)
         {
-            result.Body.Add(local);
+            result.Locals.Add(local);
         }
 
-        result.Body.Add($"{ctx}.SkipWhiteSpace();");
+        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
 
+        // Shortcut: if no custom whitespace parser and current char is not whitespace,
+        // skip directly to parsing without saving position
+        result.Body.Add($"if ({ctx}.WhiteSpaceParser is null && !global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current))");
+        result.Body.Add("{");
+        
+        // Emit inner parser body for the shortcut path
         foreach (var stmt in inner.Body)
         {
-            result.Body.Add(stmt);
+            result.Body.Add($"    {stmt}");
         }
-
-        result.Body.Add($"if ({inner.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add($"    {result.SuccessVariable} = {inner.SuccessVariable};");
+        result.Body.Add($"    if ({inner.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add($"    {result.SuccessVariable} = false;");
+        
+        // Full path: save position, skip whitespace, parse, restore on failure
+        result.Body.Add($"    {startName} = {cursorName}.Position;");
+        result.Body.Add($"    {ctx}.SkipWhiteSpace();");
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    if ({inner.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"        {result.SuccessVariable} = false;");
+        result.Body.Add("    }");
         result.Body.Add("}");
 
         return result;
