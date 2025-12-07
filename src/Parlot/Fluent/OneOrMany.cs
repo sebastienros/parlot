@@ -163,23 +163,10 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        var inner = sourceable.GenerateSource(context);
-
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
         result.Body.Add("while (true)");
         result.Body.Add("{");
-        result.Body.Add($"    {inner.SuccessVariable} = false;");
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    if (!{inner.SuccessVariable})");
+        result.Body.Add($"    var h = {helperName}({context.ParseContextName});");
+        result.Body.Add("    if (!h.Item1)");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -187,7 +174,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         result.Body.Add("    {");
         result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
         result.Body.Add("    }");
-        result.Body.Add($"    {listName}!.Add({inner.ValueVariable});");
+        result.Body.Add($"    {listName}!.Add(h.Item2);");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
         result.Body.Add($"if ({listName} != null)");

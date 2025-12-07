@@ -150,23 +150,29 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
         result.Body.Add($"bool {firstName} = true;");
 
-        var inner = sourceable.GenerateSource(context);
-
-        foreach (var local in inner.Locals)
+        static Type GetParserValueType(object parser)
         {
-            result.Body.Add(local);
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
         }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
-        result.Body.Add($"    {inner.SuccessVariable} = false;");
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    if (!{inner.SuccessVariable})");
+        result.Body.Add($"    var h = {helperName}({ctx});");
+        result.Body.Add("    if (!h.Item1)");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -176,7 +182,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         result.Body.Add($"        {result.ValueVariable} = {listName};");
         result.Body.Add($"        {firstName} = false;");
         result.Body.Add("    }");
-        result.Body.Add($"    {listName}!.Add({inner.ValueVariable});");
+        result.Body.Add($"    {listName}!.Add(h.Item2);");
         result.Body.Add("}");
         result.Body.Add($"if ({listName} is null)");
         result.Body.Add("{");
