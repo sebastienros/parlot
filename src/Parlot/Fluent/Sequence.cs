@@ -88,35 +88,39 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{startName} = {cursorName}.Position;");
 
-        var r1 = parser1.GenerateSource(context);
-        foreach (var local in r1.Locals)
+        static Type GetParserValueType(object parser)
         {
-            result.Body.Add(local);
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
         }
 
-        foreach (var stmt in r1.Body)
+        string Helper(ISourceable p, string suffix)
         {
-            result.Body.Add(stmt);
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
         }
 
-        result.Body.Add($"if ({r1.SuccessVariable})");
+        var helper1 = Helper(parser1, "P1");
+        var helper2 = Helper(parser2, "P2");
+
+        result.Body.Add($"var h1 = {helper1}({context.ParseContextName});");
+        result.Body.Add($"if (h1.Item1)");
         result.Body.Add("{");
-
-        var r2 = parser2.GenerateSource(context);
-        foreach (var local in r2.Locals)
-        {
-            result.Body.Add($"    {local}");
-        }
-
-        foreach (var stmt in r2.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    if ({r2.SuccessVariable})");
+        result.Body.Add($"    var h2 = {helper2}({context.ParseContextName});");
+        result.Body.Add($"    if (h2.Item1)");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}({r1.ValueVariable}, {r2.ValueVariable});");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(h1.Item2, h2.Item2);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
