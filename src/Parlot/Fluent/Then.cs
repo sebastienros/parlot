@@ -190,26 +190,35 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         var parsedTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
-        var inner = sourceable.GenerateSource(context);
-
-        foreach (var local in inner.Locals)
+        // Register helper for the inner parser
+        static Type GetParserValueType(object parser)
         {
-            result.Body.Add(local);
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
         }
+
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Parser", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         result.Body.Add($"{valueTypeName} {tempValueName} = default;");
         result.Body.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
-
         result.Body.Add($"{result.SuccessVariable} = false;");
 
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        var innerResultName = $"innerResult{context.NextNumber()}";
+        result.Body.Add($"var {innerResultName} = {helperName}({ctx});");
+        result.Body.Add($"if ({innerResultName}.Item1)");
         result.Body.Add("{");
-        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {inner.ValueVariable});");
+        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {innerResultName}.Item2);");
 
         if (_action1 != null)
         {

@@ -231,21 +231,33 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         result.Body.Add($"{valueTypeName} {currentValueName} = default;");
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
-        // Generate first operand parsing
-        var firstResult = parserSourceable.GenerateSource(context);
-        foreach (var local in firstResult.Locals)
+        // Helper function to get parser value type
+        static Type GetParserValueType(object parser)
         {
-            result.Body.Add(local);
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
         }
 
-        foreach (var stmt in firstResult.Body)
-        {
-            result.Body.Add(stmt);
-        }
+        // Register helper for the base parser - use the parser instance itself as part of the key
+        // to avoid collisions when multiple LeftAssociative parsers exist
+        var baseHelperName = context.Helpers
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Parser", valueTypeName, () => parserSourceable.GenerateSource(context))
+            .MethodName;
 
-        result.Body.Add($"if ({firstResult.SuccessVariable})");
+        // Generate first operand parsing using helper
+        var firstResultName = $"firstResult{context.NextNumber()}";
+        result.Body.Add($"var {firstResultName} = {baseHelperName}({ctx});");
+        result.Body.Add($"if ({firstResultName}.Item1)");
         result.Body.Add("{");
-        result.Body.Add($"    {currentValueName} = {firstResult.ValueVariable};");
+        result.Body.Add($"    {currentValueName} = {firstResultName}.Item2;");
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        {operatorMatchedName} = false;");
@@ -263,58 +275,38 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             // Register the factory lambda
             var factoryFieldName = context.RegisterLambda(factory);
 
-            var opResult = opSourceable.GenerateSource(context);
+            // Register helper for the operator parser
+            var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
+            var opHelperName = context.Helpers
+                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Parser", opValueTypeName, () => opSourceable.GenerateSource(context))
+                .MethodName;
 
-            var rightResult = parserSourceable.GenerateSource(context);
+            var opResultName = $"opResult{context.NextNumber()}";
+            var rightResultName = $"rightResult{context.NextNumber()}";
 
             var indent = "        ";
             if (i == 0)
             {
-                foreach (var local in opResult.Locals)
-                {
-                    result.Body.Add($"{indent}{local}");
-                }
-
-                foreach (var stmt in opResult.Body)
-                {
-                    result.Body.Add($"{indent}{stmt}");
-                }
-                result.Body.Add($"{indent}if ({opResult.SuccessVariable})");
+                result.Body.Add($"{indent}var {opResultName} = {opHelperName}({ctx});");
+                result.Body.Add($"{indent}if ({opResultName}.Item1)");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                foreach (var local in opResult.Locals)
-                {
-                    result.Body.Add($"{indent}    {local}");
-                }
-
-                foreach (var stmt in opResult.Body)
-                {
-                    result.Body.Add($"{indent}    {stmt}");
-                }
-                result.Body.Add($"{indent}    if ({opResult.SuccessVariable})");
+                result.Body.Add($"{indent}    var {opResultName} = {opHelperName}({ctx});");
+                result.Body.Add($"{indent}    if ({opResultName}.Item1)");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
 
-            // Parse right operand - add locals before statements
-            foreach (var local in rightResult.Locals)
-            {
-                result.Body.Add($"{innerIndent}    {local}");
-            }
-
-            foreach (var stmt in rightResult.Body)
-            {
-                result.Body.Add($"{innerIndent}    {stmt}");
-            }
-
-            result.Body.Add($"{innerIndent}    if ({rightResult.SuccessVariable})");
+            // Parse right operand using helper
+            result.Body.Add($"{innerIndent}    var {rightResultName} = {baseHelperName}({ctx});");
+            result.Body.Add($"{innerIndent}    if ({rightResultName}.Item1)");
             result.Body.Add($"{innerIndent}    {{");
-            result.Body.Add($"{innerIndent}        {currentValueName} = {factoryFieldName}.Invoke({currentValueName}, {rightResult.ValueVariable});");
+            result.Body.Add($"{innerIndent}        {currentValueName} = {factoryFieldName}.Invoke({currentValueName}, {rightResultName}.Item2);");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 

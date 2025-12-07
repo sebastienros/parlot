@@ -263,6 +263,21 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
 
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
+        // Helper function to get parser value type
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
         // Generate operator matching for each operator
         for (int i = 0; i < _operators.Length; i++)
         {
@@ -276,36 +291,26 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             // Register the factory lambda
             var factoryFieldName = context.RegisterLambda(factory);
 
-            var opResult = opSourceable.GenerateSource(context);
+            // Register helper for the operator parser
+            var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
+            var opHelperName = context.Helpers
+                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Parser", opValueTypeName, () => opSourceable.GenerateSource(context))
+                .MethodName;
+
+            var opResultName = $"opResult{context.NextNumber()}";
 
             var indent = "";
             if (i == 0)
             {
-                foreach (var local in opResult.Locals)
-                {
-                    result.Body.Add($"{indent}{local}");
-                }
-
-                foreach (var stmt in opResult.Body)
-                {
-                    result.Body.Add($"{indent}{stmt}");
-                }
-                result.Body.Add($"{indent}if ({opResult.SuccessVariable})");
+                result.Body.Add($"{indent}var {opResultName} = {opHelperName}({ctx});");
+                result.Body.Add($"{indent}if ({opResultName}.Item1)");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                foreach (var local in opResult.Locals)
-                {
-                    result.Body.Add($"{indent}    {local}");
-                }
-
-                foreach (var stmt in opResult.Body)
-                {
-                    result.Body.Add($"{indent}    {stmt}");
-                }
-                result.Body.Add($"{indent}    if ({opResult.SuccessVariable})");
+                result.Body.Add($"{indent}    var {opResultName} = {opHelperName}({ctx});");
+                result.Body.Add($"{indent}    if ({opResultName}.Item1)");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
@@ -329,23 +334,20 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             }
         }
 
-        // If no operator matched, try base parser
+        // If no operator matched, try base parser using helper
         result.Body.Add($"if (!{operatorMatchedName})");
         result.Body.Add("{");
 
-        var baseResult = parserSourceable.GenerateSource(context);
-        foreach (var local in baseResult.Locals)
-        {
-            result.Body.Add($"    {local}");
-        }
-        foreach (var stmt in baseResult.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-        result.Body.Add($"    if ({baseResult.SuccessVariable})");
+        var baseHelperName = context.Helpers
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Parser", valueTypeName, () => parserSourceable.GenerateSource(context))
+            .MethodName;
+
+        var baseResultName = $"baseResult{context.NextNumber()}";
+        result.Body.Add($"    var {baseResultName} = {baseHelperName}({ctx});");
+        result.Body.Add($"    if ({baseResultName}.Item1)");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = {baseResult.ValueVariable};");
+        result.Body.Add($"        {result.ValueVariable} = {baseResultName}.Item2;");
         result.Body.Add("    }");
         result.Body.Add("}");
 

@@ -70,17 +70,29 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
             return result;
         }
 
-        var inner = sourceable.GenerateSource(context);
+        // Register helper for the inner parser
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
         var shortcutName = $"shortcut{context.NextNumber()}";
-
-        // Declare inner parser locals first (they're needed in both branches)
-        foreach (var local in inner.Locals)
-        {
-            result.Locals.Add(local);
-        }
 
         result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"var {shortcutName} = {ctx}.WhiteSpaceParser is null && !global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current);");
@@ -91,16 +103,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add($"    {ctx}.SkipWhiteSpace();");
         result.Body.Add("}");
 
-        // Emit inner parser body once
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
+        // Call the inner parser using helper
+        var innerResultName = $"innerResult{context.NextNumber()}";
+        result.Body.Add($"var {innerResultName} = {helperName}({ctx});");
 
-        result.Body.Add($"{result.SuccessVariable} = {inner.SuccessVariable};");
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add($"{result.SuccessVariable} = {innerResultName}.Item1;");
+        result.Body.Add($"if ({innerResultName}.Item1)");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add($"    {result.ValueVariable} = {innerResultName}.Item2;");
         result.Body.Add("}");
         result.Body.Add($"else if (!{shortcutName})");
         result.Body.Add("{");
