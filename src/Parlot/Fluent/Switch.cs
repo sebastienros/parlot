@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -10,7 +11,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Routes the parsing based on a custom delegate.
 /// </summary>
-public sealed class Switch<T, U> : Parser<U>, ICompilable
+public sealed class Switch<T, U> : Parser<U>, ICompilable, ISourceable
 {
     private static readonly MethodInfo _uParse = typeof(Parser<U>).GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<U>).MakeByRefType()])!;
 
@@ -111,6 +112,54 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
                 );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_previousParser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Switch requires a source-generatable previous parser.");
+        }
+
+        var result = context.CreateResult(typeof(U));
+        var ctx = context.ParseContextName;
+
+        var previousInner = sourceable.GenerateSource(context);
+
+        // Emit previous parser locals and body
+        foreach (var local in previousInner.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        foreach (var stmt in previousInner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        // Register the action lambda
+        var actionLambda = context.RegisterLambda(_action);
+
+        var nextParserName = $"nextParser{context.NextNumber()}";
+        var parseResultName = $"result{context.NextNumber()}";
+
+        result.Body.Add($"if ({previousInner.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    var {nextParserName} = {actionLambda}({ctx}, {previousInner.ValueVariable});");
+        result.Body.Add($"    if ({nextParserName} != null)");
+        result.Body.Add("    {");
+        result.Body.Add($"        var {parseResultName} = new global::Parlot.ParseResult<{SourceGenerationContext.GetTypeName(typeof(U))}>();");
+        result.Body.Add($"        if ({nextParserName}.Parse({ctx}, ref {parseResultName}))");
+        result.Body.Add("        {");
+        result.Body.Add($"            {result.SuccessVariable} = true;");
+        result.Body.Add($"            {result.ValueVariable} = {parseResultName}.Value;");
+        result.Body.Add("        }");
+        result.Body.Add("    }");
+        result.Body.Add("}");
 
         return result;
     }

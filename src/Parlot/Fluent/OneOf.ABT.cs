@@ -1,10 +1,11 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
+public sealed class OneOf<A, B, T> : Parser<T>, ICompilable, ISourceable
     where A : T
     where B : T
 {
@@ -100,6 +101,60 @@ public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
                     )
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parserA is not ISourceable sourceableA || _parserB is not ISourceable sourceableB)
+        {
+            throw new NotSupportedException("OneOf requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+
+        var innerA = sourceableA.GenerateSource(context);
+        var innerB = sourceableB.GenerateSource(context);
+
+        // Emit first parser locals and body
+        foreach (var local in innerA.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        foreach (var stmt in innerA.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if ({innerA.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"    {result.ValueVariable} = ({SourceGenerationContext.GetTypeName(typeof(T))}){innerA.ValueVariable};");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        
+        // Emit second parser locals and body
+        foreach (var local in innerB.Locals)
+        {
+            result.Body.Add($"    {local}");
+        }
+
+        foreach (var stmt in innerB.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    if ({innerB.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = ({SourceGenerationContext.GetTypeName(typeof(T))}){innerB.ValueVariable};");
+        result.Body.Add("    }");
+        result.Body.Add("}");
 
         return result;
     }

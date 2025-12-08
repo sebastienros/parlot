@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -10,7 +11,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class Select<C, T> : Parser<T>, ICompilable where C : ParseContext
+public sealed class Select<C, T> : Parser<T>, ICompilable, ISourceable where C : ParseContext
 {
     private static readonly MethodInfo _parse = typeof(Parser<T>).GetMethod(nameof(Parse), [typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType()])!;
 
@@ -74,6 +75,33 @@ public sealed class Select<C, T> : Parser<T>, ICompilable where C : ParseContext
                 )));
 
         result.Body.Add(body);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+
+        // Register the selector lambda
+        var selectorLambda = context.RegisterLambda(_selector);
+
+        var parserName = $"parser{context.NextNumber()}";
+        var parseResultName = $"result{context.NextNumber()}";
+
+        result.Body.Add($"var {parserName} = {selectorLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx});");
+        result.Body.Add($"if ({parserName} != null)");
+        result.Body.Add("{");
+        result.Body.Add($"    var {parseResultName} = new global::Parlot.ParseResult<{SourceGenerationContext.GetTypeName(typeof(T))}>();");
+        result.Body.Add($"    if ({parserName}.Parse({ctx}, ref {parseResultName}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = {parseResultName}.Value;");
+        result.Body.Add("    }");
+        result.Body.Add("}");
 
         return result;
     }

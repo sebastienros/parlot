@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 #if NET
@@ -13,7 +14,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser does NOT match at the current position without consuming input (negative lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable
+public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<object> _lookahead;
@@ -96,6 +97,77 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable
         parserResult.Body.AddRange(mainParserCompileResult.Body);
 
         return parserResult;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parserSourceable)
+        {
+            throw new NotSupportedException("WhenNotFollowedBy requires a source-generatable parser.");
+        }
+
+        if (_lookahead is not ISourceable lookaheadSourceable)
+        {
+            throw new NotSupportedException("WhenNotFollowedBy requires a source-generatable lookahead parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+
+        var startName = $"start{context.NextNumber()}";
+        var beforeLookaheadName = $"beforeLookahead{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        var mainInner = parserSourceable.GenerateSource(context);
+        var lookaheadInner = lookaheadSourceable.GenerateSource(context);
+
+        // Emit main parser locals and body
+        foreach (var local in mainInner.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        foreach (var stmt in mainInner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        result.Body.Add($"if (!{mainInner.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Position;");
+
+        // Emit lookahead parser locals and body
+        foreach (var local in lookaheadInner.Locals)
+        {
+            result.Body.Add($"    {local}");
+        }
+
+        foreach (var stmt in lookaheadInner.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    {cursorName}.ResetPosition({beforeLookaheadName});");
+        result.Body.Add($"    if ({lookaheadInner.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"        {result.SuccessVariable} = false;");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add($"        {result.ValueVariable} = {mainInner.ValueVariable};");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+
+        return result;
     }
 
     public override string ToString() => $"{_parser} (WhenNotFollowedBy {_lookahead})";
