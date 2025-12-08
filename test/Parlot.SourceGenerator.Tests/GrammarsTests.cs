@@ -203,4 +203,16 @@ public class GrammarsTests
         Assert.Equal(0, CountingParser.GetCount("a"));
         Assert.Equal(1, CountingParser.GetCount("b"));
     }
+
+    [Fact]
+    public void KeywordParser_Generates_Multiple_Factories_With_Arguments()
+    {
+        var lower = Grammars.ParseFooLower;
+        Assert.Equal("foo", lower.Parse("foo"));
+        Assert.Null(lower.Parse("FOO"));
+
+        var upper = Grammars.ParseFooUpper;
+        Assert.Equal("FOO", upper.Parse("FOO"));
+        Assert.Null(upper.Parse("foo"));
+    }
 }

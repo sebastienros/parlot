@@ -22,8 +22,8 @@
     <!-- Reference the source generator as an analyzer (for local development) -->
     <!-- When consuming via NuGet package, the generator is embedded in the Parlot package -->
     <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
-                      OutputItemType="Analyzer" 
-                      ReferenceOutputAssembly="false" />
+              OutputItemType="Analyzer" 
+              ReferenceOutputAssembly="false" />
     
     <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
     <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />

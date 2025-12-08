@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.IO;
@@ -107,17 +108,48 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        AttributeData? attrData = null;
+        var attrInfos = ImmutableArray.CreateBuilder<GenerateParserAttributeInfo>();
+
         foreach (var attr in methodSymbol.GetAttributes())
         {
-            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, generateParserAttrSymbol))
+            if (!SymbolEqualityComparer.Default.Equals(attr.AttributeClass, generateParserAttrSymbol))
             {
-                attrData = attr;
-                break;
+                continue;
             }
+
+            string? factoryMethodName = null;
+            ImmutableArray<TypedConstant> args = ImmutableArray<TypedConstant>.Empty;
+
+            if (attr.ConstructorArguments.Length >= 1)
+            {
+                var first = attr.ConstructorArguments[0];
+                if (first.Value is string s && !string.IsNullOrEmpty(s))
+                {
+                    factoryMethodName = s;
+                }
+            }
+
+            if (attr.ConstructorArguments.Length >= 2)
+            {
+                var argArray = attr.ConstructorArguments[1];
+                if (argArray.Kind == TypedConstantKind.Array)
+                {
+                    args = argArray.Values;
+                }
+            }
+            else
+            {
+                // Some overloads may store arguments via params object[] as a single array arg when invoked via object[] literal
+                // e.g., [GenerateParser("Name", new object?[] { 1, 2 })]
+                // In that case, ConstructorArguments.Length == 1 but the attribute overload selected is the string+params or parameterless one.
+                // We only treat the first argument as factory name when it is a string; otherwise, for parameterless overload the args remain empty.
+            }
+
+            var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation();
+            attrInfos.Add(new GenerateParserAttributeInfo(factoryMethodName, args, location));
         }
 
-        if (attrData is null)
+        if (attrInfos.Count == 0)
         {
             return null;
         }
@@ -132,20 +164,11 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             return null;
         }
 
-        string? factoryMethodName = null;
-        if (attrData.ConstructorArguments.Length == 1)
-        {
-            var arg = attrData.ConstructorArguments[0];
-            if (arg.Value is string s && !string.IsNullOrEmpty(s))
-            {
-                factoryMethodName = s;
-            }
-        }
-
-        return new MethodToGenerate(methodSymbol, factoryMethodName);
+        return new MethodToGenerate(methodSymbol, attrInfos.ToImmutable());
     }
 
-    private readonly record struct MethodToGenerate(IMethodSymbol Method, string? FactoryMethodName);
+    private readonly record struct MethodToGenerate(IMethodSymbol Method, ImmutableArray<GenerateParserAttributeInfo> Attributes);
+    private readonly record struct GenerateParserAttributeInfo(string? FactoryMethodName, ImmutableArray<TypedConstant> Arguments, Location? Location);
 
     private static bool IsParserReturnType(ITypeSymbol returnType)
     {
@@ -167,7 +190,12 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         MethodToGenerate methodInfo)
     {
         var methodSymbol = methodInfo.Method;
-        var factoryMethodName = methodInfo.FactoryMethodName;
+
+        // Validate attribute names are unique for this method
+        if (!ValidateUniqueAttributeNames(methodInfo, context))
+        {
+            return;
+        }
 
         // Get the syntax tree containing this method
         var methodSyntaxRef = methodSymbol.DeclaringSyntaxReferences.FirstOrDefault();
@@ -420,58 +448,111 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 return;
             }
 
-            // Invoke the method to get the Parser<T> instance
-            var parserInstance = method.Invoke(null, Array.Empty<object?>());
-            if (parserInstance is null)
+            var methodParameters = method.GetParameters();
+
+            var attributes = methodInfo.Attributes;
+            for (int idx = 0; idx < attributes.Length; idx++)
             {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor("PARLOT004", "Null parser", "Method '{0}' returned null", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
-                    methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name));
-                return;
+                var attrInfo = attributes[idx];
+                var propertyName = attrInfo.FactoryMethodName;
+                var variantSuffix = GetVariantSuffix(idx, propertyName);
+
+                if (!TryBuildInvocationArguments(methodParameters, attrInfo.Arguments, methodSymbol, attrInfo.Location ?? methodSymbol.Locations.FirstOrDefault(), out var invocationArgs, out var diag))
+                {
+                    if (diag is not null)
+                    {
+                        context.ReportDiagnostic(diag);
+                    }
+                    continue;
+                }
+
+                object? parserInstance;
+                try
+                {
+                    parserInstance = method.Invoke(null, invocationArgs);
+                }
+                catch (TargetInvocationException ex)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "PARLOT004",
+                            "Parser factory threw",
+                            "Method '{0}' threw an exception while invoked with GenerateParser arguments: {1}",
+                            "Parlot.SourceGenerator",
+                            DiagnosticSeverity.Error,
+                            isEnabledByDefault: true),
+                        attrInfo.Location ?? methodSymbol.Locations.FirstOrDefault(),
+                        methodSymbol.Name,
+                        ex.InnerException?.Message ?? ex.Message));
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "PARLOT004",
+                            "Parser factory failed",
+                            "Method '{0}' could not be invoked: {1}",
+                            "Parlot.SourceGenerator",
+                            DiagnosticSeverity.Error,
+                            isEnabledByDefault: true),
+                        attrInfo.Location ?? methodSymbol.Locations.FirstOrDefault(),
+                        methodSymbol.Name,
+                        ex.Message));
+                    continue;
+                }
+
+                if (parserInstance is null)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor("PARLOT004", "Null parser", "Method '{0}' returned null", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
+                        attrInfo.Location ?? methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name));
+                    continue;
+                }
+
+                // The runtime type will be something like Parlot.Fluent.Then`2 or similar,
+                // whose base type is Parser<T>.
+                var parserType = parserInstance.GetType();
+                var baseType = parserType.BaseType;
+                if (baseType is null || !baseType.IsGenericType)
+                {
+                    continue;
+                }
+
+                var valueType = baseType.GetGenericArguments()[0];
+
+                // Ensure the parser supports source generation
+                if (parserInstance is not ISourceable sourceable)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "PARLOT001",
+                            "Parser does not implement ISourceable",
+                            "Parser type '{0}' does not implement ISourceable. Implemented interfaces: {1}",
+                            "Parlot.SourceGenerator",
+                            DiagnosticSeverity.Warning,
+                            isEnabledByDefault: true),
+                        attrInfo.Location ?? methodSymbol.Locations.FirstOrDefault(),
+                        parserInstance.GetType().FullName,
+                        string.Join(", ", parserInstance.GetType().GetInterfaces().Select(i => i.FullName))));
+                    continue;
+                }
+
+                var sgContext = new SourceGenerationContext(parseContextName: "context", methodNamePrefix: methodSymbol.Name + "_" + variantSuffix);
+                var sourceResult = sourceable.GenerateSource(sgContext);
+
+                // Generate C# code for this particular attribute variant
+                var sourceText = GenerateParserWrapperAndCore(methodSymbol, valueType, propertyName, variantSuffix, sourceResult, sgContext, lambdaSources);
+
+                var hintName = $"{methodSymbol.ContainingType.Name}_{methodSymbol.Name}_{variantSuffix}.Parlot.g.cs";
+                var dumpDirectory = Environment.GetEnvironmentVariable("PARLOT_DUMP_GEN_DIR");
+                if (!string.IsNullOrEmpty(dumpDirectory))
+                {
+                    Directory.CreateDirectory(dumpDirectory);
+                    File.WriteAllText(Path.Combine(dumpDirectory, hintName), sourceText);
+                }
+                context.AddSource(hintName, SourceText.From(sourceText, Encoding.UTF8));
             }
-
-            // The runtime type will be something like Parlot.Fluent.Then`2 or similar,
-            // whose base type is Parser<T>.
-            var parserType = parserInstance.GetType();
-            var baseType = parserType.BaseType;
-            if (baseType is null || !baseType.IsGenericType)
-            {
-                return;
-            }
-
-            var valueType = baseType.GetGenericArguments()[0];
-
-            // Ensure the parser supports source generation
-            if (parserInstance is not ISourceable sourceable)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT001",
-                        "Parser does not implement ISourceable",
-                        "Parser type '{0}' does not implement ISourceable. Implemented interfaces: {1}",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Warning,
-                        isEnabledByDefault: true),
-                    methodSymbol.Locations.FirstOrDefault(),
-                    parserInstance.GetType().FullName,
-                    string.Join(", ", parserInstance.GetType().GetInterfaces().Select(i => i.FullName))));
-                return;
-            }
-
-            var sgContext = new SourceGenerationContext(parseContextName: "context", methodNamePrefix: methodSymbol.Name);
-            var sourceResult = sourceable.GenerateSource(sgContext);
-
-            // Generate C# code for this particular method
-            var sourceText = GenerateParserWrapperAndCore(methodSymbol, valueType, factoryMethodName, sourceResult, sgContext, lambdaSources);
-
-            var hintName = $"{methodSymbol.ContainingType.Name}_{methodSymbol.Name}.Parlot.g.cs";
-            var dumpDirectory = Environment.GetEnvironmentVariable("PARLOT_DUMP_GEN_DIR");
-            if (!string.IsNullOrEmpty(dumpDirectory))
-            {
-                Directory.CreateDirectory(dumpDirectory);
-                File.WriteAllText(Path.Combine(dumpDirectory, hintName), sourceText);
-            }
-            context.AddSource(hintName, SourceText.From(sourceText, Encoding.UTF8));
         }
         finally
         {
@@ -483,6 +564,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         IMethodSymbol methodSymbol,
         Type valueType,
         string? propertyName,
+        string variantSuffix,
         SourceResult result,
         SourceGenerationContext sgContext,
         Dictionary<string, string> lambdaSources)
@@ -494,8 +576,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         var typeName = methodSymbol.ContainingType.Name;
         var methodName = methodSymbol.Name;
         var valueTypeName = TypeNameHelper.GetTypeName(valueType);
-        var coreName = methodName + "Core";
-        var wrapperName = "GeneratedParser_" + methodName;
+        var coreName = methodName + "_" + variantSuffix + "_Core";
+        var wrapperName = "GeneratedParser_" + methodName + "_" + variantSuffix;
 
         // First pass: process all deferred parsers to collect all lambdas
         // We need to do this before emitting lambda fields
@@ -813,6 +895,197 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         if (!string.IsNullOrEmpty(ns))
         {
             sb.AppendLine("}");
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool ValidateUniqueAttributeNames(MethodToGenerate methodInfo, SourceProductionContext context)
+    {
+        var methodSymbol = methodInfo.Method;
+        var attributes = methodInfo.Attributes;
+        var nameMap = new Dictionary<string, GenerateParserAttributeInfo>(StringComparer.Ordinal);
+
+        for (int i = 0; i < attributes.Length; i++)
+        {
+            var attr = attributes[i];
+            var propName = attr.FactoryMethodName ?? (methodSymbol.Name + "_Parser");
+
+            if (nameMap.TryGetValue(propName, out var existing))
+            {
+                var descriptor = new DiagnosticDescriptor(
+                    "PARLOT010",
+                    "Duplicate GenerateParser name",
+                    "GenerateParser attributes on method '{0}' must have unique names. Duplicate name: '{1}'.",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true);
+
+                context.ReportDiagnostic(Diagnostic.Create(descriptor, attr.Location ?? methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name, propName));
+                context.ReportDiagnostic(Diagnostic.Create(descriptor, existing.Location ?? methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name, propName));
+                return false;
+            }
+
+            nameMap[propName] = attr;
+        }
+
+        return true;
+    }
+
+    private static bool TryBuildInvocationArguments(
+        ParameterInfo[] parameters,
+        ImmutableArray<TypedConstant> arguments,
+        IMethodSymbol methodSymbol,
+        Location? location,
+        out object?[] invocationArgs,
+        out Diagnostic? diagnostic)
+    {
+        diagnostic = null;
+        invocationArgs = Array.Empty<object?>();
+
+        if (parameters.Length != arguments.Length)
+        {
+            diagnostic = Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT006",
+                    "Argument count mismatch",
+                    "GenerateParser arguments for method '{0}' did not match parameter count. Expected {1}, got {2}.",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                location ?? methodSymbol.Locations.FirstOrDefault(),
+                methodSymbol.Name,
+                parameters.Length,
+                arguments.Length);
+            return false;
+        }
+
+        var args = new object?[arguments.Length];
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            var param = parameters[i];
+            var paramType = param.ParameterType;
+            var constant = arguments[i];
+            var value = constant.Value;
+
+            if (value is null)
+            {
+                if (paramType.IsValueType && Nullable.GetUnderlyingType(paramType) is null)
+                {
+                    diagnostic = Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "PARLOT007",
+                            "Null argument",
+                            "GenerateParser argument for parameter '{0}' cannot be null.",
+                            "Parlot.SourceGenerator",
+                            DiagnosticSeverity.Error,
+                            isEnabledByDefault: true),
+                        location ?? methodSymbol.Locations.FirstOrDefault(),
+                        param.Name ?? $"arg{i}");
+                    return false;
+                }
+
+                args[i] = null;
+                continue;
+            }
+
+            if (paramType.IsInstanceOfType(value))
+            {
+                args[i] = value;
+                continue;
+            }
+
+            if (paramType == typeof(Type) && value is ITypeSymbol ts)
+            {
+                var typeDisplay = ts.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var runtimeType = Type.GetType(typeDisplay);
+                if (runtimeType is null)
+                {
+                    diagnostic = Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "PARLOT008",
+                            "Type argument resolution failed",
+                            "Could not resolve type '{0}' for parameter '{1}'.",
+                            "Parlot.SourceGenerator",
+                            DiagnosticSeverity.Error,
+                            isEnabledByDefault: true),
+                        location ?? methodSymbol.Locations.FirstOrDefault(),
+                        typeDisplay,
+                        param.Name ?? $"arg{i}");
+                    return false;
+                }
+
+                args[i] = runtimeType;
+                continue;
+            }
+
+            try
+            {
+                // Attempt simple numeric/string conversions when possible
+                args[i] = Convert.ChangeType(value, paramType, System.Globalization.CultureInfo.InvariantCulture);
+                continue;
+            }
+            catch
+            {
+                diagnostic = Diagnostic.Create(
+                    new DiagnosticDescriptor(
+                        "PARLOT009",
+                        "Unsupported argument type",
+                        "GenerateParser argument at position {0} (type '{1}') cannot be converted to parameter '{2}' of type '{3}'.",
+                        "Parlot.SourceGenerator",
+                        DiagnosticSeverity.Error,
+                        isEnabledByDefault: true),
+                    location ?? methodSymbol.Locations.FirstOrDefault(),
+                    i,
+                    value.GetType().FullName,
+                    param.Name ?? $"arg{i}",
+                    paramType.FullName);
+                return false;
+            }
+        }
+
+        invocationArgs = args;
+        return true;
+    }
+
+    private static string GetVariantSuffix(int index, string? propertyName)
+    {
+        var baseName = string.IsNullOrWhiteSpace(propertyName) ? "Parser" : propertyName!;
+        return $"v{index}_{SanitizeIdentifier(baseName)}";
+    }
+
+    private static string SanitizeIdentifier(string raw)
+    {
+        if (string.IsNullOrEmpty(raw))
+        {
+            return "_";
+        }
+
+        var sb = new StringBuilder(raw.Length);
+        for (int i = 0; i < raw.Length; i++)
+        {
+            var ch = raw[i];
+            if ((ch >= 'a' && ch <= 'z') ||
+                (ch >= 'A' && ch <= 'Z') ||
+                (ch >= '0' && ch <= '9') ||
+                ch == '_')
+            {
+                sb.Append(ch);
+            }
+            else
+            {
+                sb.Append('_');
+            }
+        }
+
+        if (sb.Length == 0)
+        {
+            return "_";
+        }
+
+        if (sb[0] >= '0' && sb[0] <= '9')
+        {
+            sb.Insert(0, '_');
         }
 
         return sb.ToString();

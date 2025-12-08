@@ -29,6 +29,50 @@ The following example is a complete parser that creates a mathematical expressio
 The source is available [here](./src/Samples/Calc/FluentParser.cs).
 
 ```c#
+
+## Source-generated parsers
+
+Parlot can generate parsers at **compile time** from descriptor methods, avoiding runtime graph construction and yielding **~20% faster parsing** with **faster startup**.
+
+### Constraints
+
+- Descriptor methods **must be `static`** and return `Parlot.Fluent.Parser<T>`.
+- Annotate with `[GenerateParser]` (from `Parlot.SourceGenerator`).
+- Multiple attributes on the same method are allowed; **names must be unique**.
+
+### Named generators
+
+- `[GenerateParser("ParseFoo")]` exposes a static property `ParseFoo`.
+- Without a name, the property defaults to `MethodName_Parser`.
+
+### Valued generators (arguments)
+
+- Attribute arguments map to the descriptor method parameters.
+- Example: `GenerateParser("ParseFoo", "foo")` invokes the descriptor with `"foo"`.
+
+```csharp
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class MyGrammar
+{
+  // Named factory: exposes MyGrammar.ParseHello
+  [GenerateParser("ParseHello")]
+  public static Parser<string> Hello() => Terms.Text("hello");
+
+  // Valued factories: two variants using different arguments
+  [GenerateParser("ParseFoo", "foo")]
+  [GenerateParser("ParseBar", "bar")]
+  public static Parser<string> Keyword(string kw) => Terms.Text(kw);
+}
+```
+
+> **Why use source generation?**
+> - ~20% faster parsing vs. runtime-compiled graphs (see benchmarks)
+> - Faster startup (no runtime graph building/compilation)
+> - Repeatable, AOT-friendly parser code
+
 using Parlot.Fluent;
 using static Parlot.Fluent.Parsers;
 

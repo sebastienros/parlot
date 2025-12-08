@@ -387,4 +387,10 @@ public static partial class Grammars
 
         return OneOf(a, b);
     }
+
+    // Multiple GenerateParser attributes with arguments mapping to descriptor parameters
+    [GenerateParser("ParseFooLower", "foo")]
+    [GenerateParser("ParseFooUpper", "FOO")]
+    public static Parser<string> KeywordParser(string keyword)
+        => Terms.Text(keyword);
 }
