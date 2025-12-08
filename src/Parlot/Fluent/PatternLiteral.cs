@@ -1,10 +1,11 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
+public sealed class PatternLiteral : Parser<TextSpan>, ICompilable, ISourceable
 {
     private readonly Func<char, bool> _predicate;
     private readonly int _minSize;
@@ -153,6 +154,49 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
                     )
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(TextSpan));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+
+        var startName = $"start{context.NextNumber()}";
+        var sizeName = $"size{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {sizeName} = 0;");
+
+        // Register the predicate lambda
+        var predicateLambda = context.RegisterLambda(_predicate);
+
+        result.Body.Add("while (true)");
+        result.Body.Add("{");
+        result.Body.Add($"    if ({cursorName}.Eof) break;");
+        result.Body.Add($"    if (!{predicateLambda}({cursorName}.Current)) break;");
+        result.Body.Add($"    {cursorName}.Advance();");
+        result.Body.Add($"    {sizeName}++;");
+        if (_maxSize > 0)
+        {
+            result.Body.Add($"    if ({sizeName} == {_maxSize}) break;");
+        }
+        result.Body.Add("}");
+
+        result.Body.Add($"if ({sizeName} < {_minSize})");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    var end{context.NextNumber()} = {cursorName}.Offset;");
+        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
 
         return result;
     }
