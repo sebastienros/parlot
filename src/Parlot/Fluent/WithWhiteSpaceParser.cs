@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
@@ -8,7 +9,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// A parser that temporarily sets a custom whitespace parser for its inner parser.
 /// </summary>
-public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable
+public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<TextSpan> _whiteSpaceParser;
@@ -101,6 +102,54 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable
         };
 
         result.Body.AddRange(blockExpressions);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("WithWhiteSpaceParser requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+
+        var previousWhiteSpaceParserName = $"previousWhiteSpaceParser{context.NextNumber()}";
+        
+        // Register the whitespace parser lambda
+        var whiteSpaceParserLambda = context.RegisterLambda(new Func<Parser<TextSpan>>(() => _whiteSpaceParser));
+
+        result.Body.Add($"var {previousWhiteSpaceParserName} = {ctx}.WhiteSpaceParser;");
+        result.Body.Add($"{ctx}.WhiteSpaceParser = {whiteSpaceParserLambda}();");
+
+        var inner = sourceable.GenerateSource(context);
+
+        // Emit inner parser locals
+        foreach (var local in inner.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        result.Body.Add("try");
+        result.Body.Add("{");
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+        result.Body.Add($"    {result.SuccessVariable} = {inner.SuccessVariable};");
+        result.Body.Add($"    if ({inner.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("finally");
+        result.Body.Add("{");
+        result.Body.Add($"    {ctx}.WhiteSpaceParser = {previousWhiteSpaceParserName};");
+        result.Body.Add("}");
 
         return result;
     }

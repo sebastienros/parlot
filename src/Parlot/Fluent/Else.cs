@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
@@ -7,7 +8,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a default value if the previous parser failed.
 /// </summary>
-public sealed class Else<T> : Parser<T>, ICompilable
+public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly T? _value;
@@ -93,6 +94,64 @@ public sealed class Else<T> : Parser<T>, ICompilable
                 )
             )
         );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Else requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T), defaultSuccess: true);
+
+        var inner = sourceable.GenerateSource(context);
+
+        // Emit inner parser locals and body
+        foreach (var local in inner.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        // if (inner.success)
+        // {
+        //     value = inner.value;
+        // }
+        // else
+        // {
+        //     value = _func != null ? _func(context) : _value;
+        // }
+        // success = true; (always succeeds)
+        
+        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        
+        if (_func != null)
+        {
+            var lambdaId = context.RegisterLambda(_func);
+            result.Body.Add($"    {result.ValueVariable} = {lambdaId}({context.ParseContextName});");
+        }
+        else
+        {
+            var lambdaId = context.RegisterLambda(new Func<T>(() => _value!));
+            result.Body.Add($"    {result.ValueVariable} = {lambdaId}();");
+        }
+        
+        result.Body.Add("}");
+        result.Body.Add($"{result.SuccessVariable} = true;");
 
         return result;
     }

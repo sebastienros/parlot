@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -7,7 +8,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
+public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable, ISourceable
 {
     private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
 
@@ -184,6 +185,105 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
             );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parserSourceable || _separator is not ISourceable separatorSourceable)
+        {
+            throw new NotSupportedException("Separated requires source-generatable parsers.");
+        }
+
+        var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var result = context.CreateResult(typeof(IReadOnlyList<T>), defaultSuccess: false, defaultValueExpression: $"global::System.Array.Empty<{elementTypeName}>()");
+        var cursorName = context.CursorName;
+
+        var listName = $"list{context.NextNumber()}";
+        var firstName = $"first{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+
+        result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        result.Body.Add($"bool {firstName} = true;");
+        result.Body.Add($"var {endName} = {cursorName}.Position;");
+        result.Body.Add($"int {startName} = 0;");
+
+        var parserInner = parserSourceable.GenerateSource(context);
+        var separatorInner = separatorSourceable.GenerateSource(context);
+
+        // Add locals for both parsers
+        foreach (var local in parserInner.Locals)
+        {
+            result.Body.Add(local);
+        }
+        foreach (var local in separatorInner.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        result.Body.Add("while (true)");
+        result.Body.Add("{");
+        
+        // If not first, try to parse separator
+        result.Body.Add($"    if (!{firstName})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {separatorInner.SuccessVariable} = false;");
+        foreach (var stmt in separatorInner.Body)
+        {
+            result.Body.Add($"        {stmt}");
+        }
+        result.Body.Add($"        if (!{separatorInner.SuccessVariable})");
+        result.Body.Add("        {");
+        result.Body.Add("            break;");
+        result.Body.Add("        }");
+        result.Body.Add("    }");
+
+        // Try to parse element
+        result.Body.Add($"    {parserInner.SuccessVariable} = false;");
+        foreach (var stmt in parserInner.Body)
+        {
+            result.Body.Add($"    {stmt}");
+        }
+
+        result.Body.Add($"    if (!{parserInner.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        if (!{firstName})");
+        result.Body.Add("        {");
+        result.Body.Add($"            {cursorName}.ResetPosition({endName});");
+        result.Body.Add("            break;");
+        result.Body.Add("        }");
+        result.Body.Add($"        {result.SuccessVariable} = false;");
+        result.Body.Add("        break;");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {endName} = {cursorName}.Position;");
+        result.Body.Add("    }");
+
+        result.Body.Add($"    if ({firstName})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+        result.Body.Add($"        {startName} = {endName}.Offset;");
+        result.Body.Add($"        {firstName} = false;");
+        result.Body.Add("    }");
+
+        result.Body.Add($"    {listName}!.Add({parserInner.ValueVariable});");
+        result.Body.Add("}");
+
+        result.Body.Add($"if ({listName} != null)");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.ValueVariable} = {listName};");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
 
         return result;
     }
