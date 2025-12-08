@@ -1,4 +1,6 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -6,7 +8,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Successful when the cursor is at the end of the string.
 /// </summary>
-public sealed class Eof<T> : Parser<T>, ICompilable
+public sealed class Eof<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
 
@@ -58,6 +60,43 @@ public sealed class Eof<T> : Parser<T>, ICompilable
                     )
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Eof requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var inner = sourceable.GenerateSource(context);
+
+        // Emit inner parser locals and body
+        foreach (var local in inner.Locals)
+        {
+            result.Body.Add(local);
+        }
+
+        foreach (var stmt in inner.Body)
+        {
+            result.Body.Add(stmt);
+        }
+
+        // if (inner.success && cursor.Eof)
+        // {
+        //     success = true;
+        //     value = inner.value;
+        // }
+        result.Body.Add($"if ({inner.SuccessVariable} && {context.CursorName}.Eof)");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add("}");
 
         return result;
     }
