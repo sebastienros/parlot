@@ -5,7 +5,12 @@ namespace Parlot.SourceGenerator;
 /// The annotated method must be static and return Parlot.Fluent.Parser&lt;T&gt;.
 /// </summary>
 [System.AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
-public sealed class GenerateParserAttribute : System.Attribute
+#if SOURCE_GENERATOR
+internal
+#else
+public
+#endif
+sealed class GenerateParserAttribute : System.Attribute
 {
     /// <summary>
     /// Generates a parser using the default generated name (<c>MethodName_Parser</c>).

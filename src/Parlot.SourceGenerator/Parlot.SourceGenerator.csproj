@@ -12,6 +12,7 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+    <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

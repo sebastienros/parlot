@@ -135,40 +135,40 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
         var startName = $"start{context.NextNumber()}";
-        var endName = $"end{context.NextNumber()}";
 
         var textLiteral = ToLiteral(Text);
         var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
         var comparison = $"global::System.StringComparison.{_comparisonType}";
         var newLines = CountNewLines(Text);
         var trailingSegmentLength = TrailingSegmentLength(Text);
+        var isNotOrdinal = _comparisonType != StringComparison.Ordinal;
 
-        result.Body.Add($"var {startName} = 0;");
-        result.Body.Add($"var {endName} = 0;");
+        if (isNotOrdinal) 
+        {
+            result.Body.Add($"int {startName};");
+        }
 
-        result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
+        result.Body.Add($"{result.SuccessVariable} = {cursorName}.Match({textLiteral}, {comparison});");
+        
+        result.Body.Add($"if ({result.SuccessVariable})");
         result.Body.Add("{");
-        result.Body.Add($"    {startName} = {cursorName}.Offset;");
+        if (isNotOrdinal)
+        {
+            result.Body.Add($"    {startName} = {cursorName}.Offset;");
+        }
         result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
-
-        result.Body.Add($"    {endName} = {cursorName}.Offset;");
         
         // Reuse the literal string for Ordinal comparison to avoid allocation (matches Fluent Parse behavior)
-        if (_comparisonType == StringComparison.Ordinal)
+        if (isNotOrdinal)
         {
-            result.Body.Add($"    {result.ValueVariable} = {textLiteral};");
+            // For case-insensitive comparisons, we need to extract the actual matched text
+            result.Body.Add($"    {result.ValueVariable} = new string({scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}));");
         }
         else
         {
-            // For case-insensitive comparisons, we need to extract the actual matched text
-            result.Body.Add($"    {result.ValueVariable} = new string({scannerName}.Buffer.AsSpan({startName}, {endName} - {startName}));");
+            result.Body.Add($"    {result.ValueVariable} = {textLiteral};");
         }
         
-        result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = false;");
         result.Body.Add("}");
 
         return result;
