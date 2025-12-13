@@ -305,13 +305,12 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
 
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
-        var delimiterInner = sourceable.GenerateSource(context);
+        var delimiterValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        // Emit delimiter parser locals
-        foreach (var local in delimiterInner.Locals)
-        {
-            result.Body.Add(local);
-        }
+        // Use helper instead of inlining
+        var delimiterHelperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_TextBefore_Delimiter", delimiterValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
@@ -344,13 +343,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
         result.Body.Add("    }");
 
         // Try to parse delimiter
-        result.Body.Add($"    {delimiterInner.SuccessVariable} = false;");
-        foreach (var stmt in delimiterInner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    if ({delimiterInner.SuccessVariable})");
+        result.Body.Add($"    if ({delimiterHelperName}({context.ParseContextName}, out _))");
         result.Body.Add("    {");
         result.Body.Add($"        var {lengthName} = {previousName}.Offset - {startName}.Offset;");
         

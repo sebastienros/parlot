@@ -126,22 +126,18 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable, ISourceable where C : 
         // Register the predicate lambda
         var predicateLambda = context.RegisterLambda(_predicate);
         var stateLambda = context.RegisterLambda(new Func<S?>(() => _state));
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
-
-        // Emit inner parser locals
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_If", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         // if (_predicate((C)context, _state))
         // {
-        //     // inner parser body
-        //     if (inner.success)
+        //     if (Helper(context, out value))
         //     {
         //         success = true;
-        //         value = inner.value;
         //     }
         // }
         // if (!success)
@@ -151,14 +147,9 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable, ISourceable where C : 
 
         result.Body.Add($"if ({predicateLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx}, {stateLambda}()))");
         result.Body.Add("{");
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-        result.Body.Add($"    if ({inner.SuccessVariable})");
+        result.Body.Add($"    if ({helperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
         result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add($"if (!{result.SuccessVariable})");

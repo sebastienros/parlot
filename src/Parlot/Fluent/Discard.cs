@@ -75,23 +75,16 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable, ISourceable
         
         // Store _value as a lambda field since U can be any type
         var lambdaId = context.RegisterLambda(new Func<U>(() => _value));
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Discard", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // success = inner.success;
+        // success = Helper(context, out _);
         // value = _value;
-        result.Body.Add($"{result.SuccessVariable} = {inner.SuccessVariable};");
+        result.Body.Add($"{result.SuccessVariable} = {helperName}({context.ParseContextName}, out _);");
         result.Body.Add($"{result.ValueVariable} = {lambdaId}();");
 
         return result;

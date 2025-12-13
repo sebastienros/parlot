@@ -212,18 +212,17 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         result.Body.Add($"var {endName} = {cursorName}.Position;");
         result.Body.Add($"int {startName} = 0;");
 
-        var parserInner = parserSourceable.GenerateSource(context);
-        var separatorInner = separatorSourceable.GenerateSource(context);
+        var parserValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var separatorValueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
-        // Add locals for both parsers
-        foreach (var local in parserInner.Locals)
-        {
-            result.Body.Add(local);
-        }
-        foreach (var local in separatorInner.Locals)
-        {
-            result.Body.Add(local);
-        }
+        // Use helpers instead of inlining
+        var parserHelperName = context.Helpers
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", parserValueTypeName, () => parserSourceable.GenerateSource(context))
+            .MethodName;
+
+        var separatorHelperName = context.Helpers
+            .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
+            .MethodName;
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
@@ -231,25 +230,14 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         // If not first, try to parse separator
         result.Body.Add($"    if (!{firstName})");
         result.Body.Add("    {");
-        result.Body.Add($"        {separatorInner.SuccessVariable} = false;");
-        foreach (var stmt in separatorInner.Body)
-        {
-            result.Body.Add($"        {stmt}");
-        }
-        result.Body.Add($"        if (!{separatorInner.SuccessVariable})");
+        result.Body.Add($"        if (!{separatorHelperName}({context.ParseContextName}, out _))");
         result.Body.Add("        {");
         result.Body.Add("            break;");
         result.Body.Add("        }");
         result.Body.Add("    }");
 
         // Try to parse element
-        result.Body.Add($"    {parserInner.SuccessVariable} = false;");
-        foreach (var stmt in parserInner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    if (!{parserInner.SuccessVariable})");
+        result.Body.Add($"    if (!{parserHelperName}({context.ParseContextName}, out var item{context.NextNumber()}))");
         result.Body.Add("    {");
         result.Body.Add($"        if (!{firstName})");
         result.Body.Add("        {");
@@ -271,7 +259,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         result.Body.Add($"        {firstName} = false;");
         result.Body.Add("    }");
 
-        result.Body.Add($"    {listName}!.Add({parserInner.ValueVariable});");
+        result.Body.Add($"    {listName}!.Add(item{context.NextNumber() - 1});");
         result.Body.Add("}");
 
         result.Body.Add($"if ({listName} != null)");

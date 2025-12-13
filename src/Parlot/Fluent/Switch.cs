@@ -127,29 +127,23 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(U));
         var ctx = context.ParseContextName;
+        var previousValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var previousInner = sourceable.GenerateSource(context);
-
-        // Emit previous parser locals and body
-        foreach (var local in previousInner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in previousInner.Body)
-        {
-            result.Body.Add(stmt);
-        }
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Switch", previousValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         // Register the action lambda
         var actionLambda = context.RegisterLambda(_action);
 
         var nextParserName = $"nextParser{context.NextNumber()}";
         var parseResultName = $"result{context.NextNumber()}";
+        var previousValueName = $"previousValue{context.NextNumber()}";
 
-        result.Body.Add($"if ({previousInner.SuccessVariable})");
+        result.Body.Add($"if ({helperName}({ctx}, out var {previousValueName}))");
         result.Body.Add("{");
-        result.Body.Add($"    var {nextParserName} = {actionLambda}({ctx}, {previousInner.ValueVariable});");
+        result.Body.Add($"    var {nextParserName} = {actionLambda}({ctx}, {previousValueName});");
         result.Body.Add($"    if ({nextParserName} != null)");
         result.Body.Add("    {");
         result.Body.Add($"        var {parseResultName} = new global::Parlot.ParseResult<{SourceGenerationContext.GetTypeName(typeof(U))}>();");

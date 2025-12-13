@@ -74,28 +74,21 @@ public sealed class Eof<T> : Parser<T>, ICompilable, ISourceable
         }
 
         var result = context.CreateResult(typeof(T));
-        var inner = sourceable.GenerateSource(context);
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Eof", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success && cursor.Eof)
+        // if (Helper(context, out var innerValue) && cursor.Eof)
         // {
         //     success = true;
-        //     value = inner.value;
+        //     value = innerValue;
         // }
-        result.Body.Add($"if ({inner.SuccessVariable} && {context.CursorName}.Eof)");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}) && {context.CursorName}.Eof)");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
         result.Body.Add("}");
 
         return result;

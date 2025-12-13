@@ -121,49 +121,34 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ICompilable, ISeekable, ISour
 
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
-        var mainInner = parserSourceable.GenerateSource(context);
-        var lookaheadInner = lookaheadSourceable.GenerateSource(context);
+        var mainValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(typeof(object));
 
-        // Emit main parser locals and body
-        foreach (var local in mainInner.Locals)
-        {
-            result.Body.Add(local);
-        }
+        // Use helpers instead of inlining
+        var mainHelperName = context.Helpers
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_WhenFollowedBy_Main", mainValueTypeName, () => parserSourceable.GenerateSource(context))
+            .MethodName;
 
-        foreach (var stmt in mainInner.Body)
-        {
-            result.Body.Add(stmt);
-        }
+        var lookaheadHelperName = context.Helpers
+            .GetOrCreate(lookaheadSourceable, $"{context.MethodNamePrefix}_WhenFollowedBy_Lookahead", lookaheadValueTypeName, () => lookaheadSourceable.GenerateSource(context))
+            .MethodName;
 
-        result.Body.Add($"if (!{mainInner.SuccessVariable})");
+        result.Body.Add($"if (!{mainHelperName}({context.ParseContextName}, out {result.ValueVariable}))");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = false;");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
         result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Position;");
-
-        // Emit lookahead parser locals and body
-        foreach (var local in lookaheadInner.Locals)
-        {
-            result.Body.Add($"    {local}");
-        }
-
-        foreach (var stmt in lookaheadInner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    {cursorName}.ResetPosition({beforeLookaheadName});");
-        result.Body.Add($"    if (!{lookaheadInner.SuccessVariable})");
+        result.Body.Add($"    if (!{lookaheadHelperName}({context.ParseContextName}, out _))");
         result.Body.Add("    {");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add($"        {result.SuccessVariable} = false;");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({beforeLookaheadName});");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = {mainInner.ValueVariable};");
         result.Body.Add("    }");
         result.Body.Add("}");
 

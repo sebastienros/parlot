@@ -67,19 +67,13 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourcea
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         var result = context.CreateResult(typeof(char));
-        var successVar = result.SuccessVariable;
-        var valueVar = result.ValueVariable;
         var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"int {startName} = 0;");
-        result.Body.Add($"{successVar} = false;");
         result.Body.Add($"if ({cursorName}.Match('{Char}'))");
         result.Body.Add("{");
-        result.Body.Add($"    {startName} = {cursorName}.Offset;");
-        result.Body.Add("    " + cursorName + ".Advance();");
-        result.Body.Add($"    {valueVar} = '{Char}';");
-        result.Body.Add($"    {successVar} = true;");
+        result.Body.Add($"    {cursorName}.Advance();");
+        result.Body.Add($"    {result.ValueVariable} = '{Char}';");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 
         return result;

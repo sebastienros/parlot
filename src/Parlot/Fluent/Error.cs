@@ -88,23 +88,15 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(T), defaultSuccess: true);
         var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ElseError", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out value))
         // {
-        //     value = inner.value;
         //     success = true;
         // }
         // else
@@ -112,9 +104,8 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
         //     throw new ParseException(_message, cursor.Position);
         // }
         
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}))");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
         result.Body.Add("else");
@@ -195,27 +186,20 @@ public sealed class Error<T> : Parser<T>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Error", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out _))
         // {
         //     throw new ParseException(_message, cursor.Position);
         // }
         // success = false;
         
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
         result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
         result.Body.Add("}");
@@ -307,27 +291,20 @@ public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 
         var result = context.CreateResult(typeof(U));
         var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Error", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out _))
         // {
         //     throw new ParseException(_message, cursor.Position);
         // }
         // success = false;
         
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
         result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
         result.Body.Add("}");

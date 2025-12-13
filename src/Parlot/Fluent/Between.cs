@@ -173,12 +173,8 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         result.Body.Add($"            {result.SuccessVariable} = true;");
         result.Body.Add("        }");
         result.Body.Add("    }");
-        result.Body.Add($"    if (!{result.SuccessVariable})");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-        result.Body.Add("    }");
         result.Body.Add("}");
-        result.Body.Add("else");
+        result.Body.Add($"if (!{result.SuccessVariable})");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add("}");

@@ -117,6 +117,7 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable,
 
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var previousWhiteSpaceParserName = $"previousWhiteSpaceParser{context.NextNumber()}";
         
@@ -126,25 +127,14 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable,
         result.Body.Add($"var {previousWhiteSpaceParserName} = {ctx}.WhiteSpaceParser;");
         result.Body.Add($"{ctx}.WhiteSpaceParser = {whiteSpaceParserLambda}();");
 
-        var inner = sourceable.GenerateSource(context);
-
-        // Emit inner parser locals
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_WithWhiteSpace", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         result.Body.Add("try");
         result.Body.Add("{");
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-        result.Body.Add($"    {result.SuccessVariable} = {inner.SuccessVariable};");
-        result.Body.Add($"    if ({inner.SuccessVariable})");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.ValueVariable} = {inner.ValueVariable};");
-        result.Body.Add("    }");
+        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
         result.Body.Add("}");
         result.Body.Add("finally");
         result.Body.Add("{");

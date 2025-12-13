@@ -115,44 +115,33 @@ public sealed class OneOf<A, B, T> : Parser<T>, ICompilable, ISourceable
         }
 
         var result = context.CreateResult(typeof(T));
+        var valueTypeNameA = SourceGenerationContext.GetTypeName(typeof(A));
+        var valueTypeNameB = SourceGenerationContext.GetTypeName(typeof(B));
+        var valueTypeNameT = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var innerA = sourceableA.GenerateSource(context);
-        var innerB = sourceableB.GenerateSource(context);
+        // Use helpers instead of inlining
+        var helperNameA = context.Helpers
+            .GetOrCreate(sourceableA, $"{context.MethodNamePrefix}_OneOf_A", valueTypeNameA, () => sourceableA.GenerateSource(context))
+            .MethodName;
 
-        // Emit first parser locals and body
-        foreach (var local in innerA.Locals)
-        {
-            result.Body.Add(local);
-        }
+        var helperNameB = context.Helpers
+            .GetOrCreate(sourceableB, $"{context.MethodNamePrefix}_OneOf_B", valueTypeNameB, () => sourceableB.GenerateSource(context))
+            .MethodName;
 
-        foreach (var stmt in innerA.Body)
-        {
-            result.Body.Add(stmt);
-        }
+        var valueAName = $"valueA{context.NextNumber()}";
+        var valueBName = $"valueB{context.NextNumber()}";
 
-        result.Body.Add($"if ({innerA.SuccessVariable})");
+        result.Body.Add($"if ({helperNameA}({context.ParseContextName}, out var {valueAName}))");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = ({SourceGenerationContext.GetTypeName(typeof(T))}){innerA.ValueVariable};");
+        result.Body.Add($"    {result.ValueVariable} = ({valueTypeNameT}){valueAName};");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        
-        // Emit second parser locals and body
-        foreach (var local in innerB.Locals)
-        {
-            result.Body.Add($"    {local}");
-        }
-
-        foreach (var stmt in innerB.Body)
-        {
-            result.Body.Add($"    {stmt}");
-        }
-
-        result.Body.Add($"    if ({innerB.SuccessVariable})");
+        result.Body.Add($"    if ({helperNameB}({context.ParseContextName}, out var {valueBName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = ({SourceGenerationContext.GetTypeName(typeof(T))}){innerB.ValueVariable};");
+        result.Body.Add($"        {result.ValueVariable} = ({valueTypeNameT}){valueBName};");
         result.Body.Add("    }");
         result.Body.Add("}");
 

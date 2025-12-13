@@ -108,23 +108,16 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
         }
 
         var result = context.CreateResult(typeof(T), defaultSuccess: true);
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Else", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out value))
         // {
-        //     value = inner.value;
+        //     // value already assigned
         // }
         // else
         // {
@@ -132,11 +125,7 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
         // }
         // success = true; (always succeeds)
         
-        result.Body.Add($"if ({inner.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
-        result.Body.Add("}");
-        result.Body.Add("else");
+        result.Body.Add($"if (!{helperName}({context.ParseContextName}, out {result.ValueVariable}))");
         result.Body.Add("{");
         
         if (_func != null)

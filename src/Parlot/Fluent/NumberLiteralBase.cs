@@ -169,19 +169,12 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var resetName = $"reset{context.NextNumber()}";
-        var startName = $"start{context.NextNumber()}";
         var numberSpanName = $"numberSpan{context.NextNumber()}";
-        var endName = $"end{context.NextNumber()}";
         var parsedValueName = $"parsedValue{context.NextNumber()}";
 
-        result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
-        result.Body.Add($"var {startName} = 0;");
+        result.Body.Add($"var {resetName} = {cursorName}.Position;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
         result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
-
-        result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{resetName} = {cursorName}.Position;");
-        result.Body.Add($"{startName} = {resetName}.Offset;");
 
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
         var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
