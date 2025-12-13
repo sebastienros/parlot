@@ -302,29 +302,24 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             var indent = "";
             if (i == 0)
             {
-                result.Body.Add($"{indent}var {opResultName} = {opHelperName}({ctx});");
-                result.Body.Add($"{indent}if ({opResultName}.Item1)");
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _))");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                result.Body.Add($"{indent}    var {opResultName} = {opHelperName}({ctx});");
-                result.Body.Add($"{indent}    if ({opResultName}.Item1)");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _))");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
             
-            // Recursive call via helper method (returns ValueTuple<bool, T>)
-            var recursiveResultName = $"recursiveResult{context.NextNumber()}";
-            result.Body.Add($"{innerIndent}    global::System.ValueTuple<bool, {valueTypeName}> {recursiveResultName} = default;");
-            result.Body.Add($"{innerIndent}    {recursiveResultName} = {helperMethodName}({ctx});");
-            result.Body.Add($"{innerIndent}    if ({recursiveResultName}.Item1)");
+            // Recursive call via helper method
+            result.Body.Add($"{innerIndent}    if ({helperMethodName}({ctx}, out var {opResultName}RecursiveValue))");
             result.Body.Add($"{innerIndent}    {{");
             result.Body.Add($"{innerIndent}        {result.SuccessVariable} = true;");
-            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}.Invoke({recursiveResultName}.Item2);");
+            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}.Invoke({opResultName}RecursiveValue);");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 
@@ -342,12 +337,9 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Unary", valueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var baseResultName = $"baseResult{context.NextNumber()}";
-        result.Body.Add($"    var {baseResultName} = {baseHelperName}({ctx});");
-        result.Body.Add($"    if ({baseResultName}.Item1)");
+        result.Body.Add($"    if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = {baseResultName}.Item2;");
         result.Body.Add("    }");
         result.Body.Add("}");
 

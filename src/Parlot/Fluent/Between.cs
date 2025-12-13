@@ -164,17 +164,13 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         var helperParser = Helper(parserSourceable, "Parser");
         var helperAfter = Helper(afterSourceable, "After");
 
-        result.Body.Add($"var hb = {helperBefore}({context.ParseContextName});");
-        result.Body.Add($"if (hb.Item1)");
+        result.Body.Add($"if ({helperBefore}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    var hp = {helperParser}({context.ParseContextName});");
-        result.Body.Add($"    if (hp.Item1)");
+        result.Body.Add($"    if ({helperParser}({context.ParseContextName}, out {result.ValueVariable}))");
         result.Body.Add("    {");
-        result.Body.Add($"        var ha = {helperAfter}({context.ParseContextName});");
-        result.Body.Add($"        if (ha.Item1)");
+        result.Body.Add($"        if ({helperAfter}({context.ParseContextName}, out _))");
         result.Body.Add("        {");
         result.Body.Add($"            {result.SuccessVariable} = true;");
-        result.Body.Add($"            {result.ValueVariable} = hp.Item2;");
         result.Body.Add("        }");
         result.Body.Add("    }");
         result.Body.Add($"    if (!{result.SuccessVariable})");

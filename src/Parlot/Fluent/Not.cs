@@ -82,24 +82,17 @@ public sealed class Not<T> : Parser<T>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         
         var startName = $"start{context.NextNumber()}";
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Not", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out _))
         // {
         //     cursor.ResetPosition(start);
         //     success = false;
@@ -108,7 +101,7 @@ public sealed class Not<T> : Parser<T>, ICompilable, ISourceable
         // {
         //     success = true;
         // }
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add($"    {result.SuccessVariable} = false;");

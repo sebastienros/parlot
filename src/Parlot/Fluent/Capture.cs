@@ -116,6 +116,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable, ISour
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         
         var startName = $"start{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
@@ -123,27 +124,19 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable, ISour
         
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Capture", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out _))
         // {
         //     var end = cursor.Offset;
         //     var length = end - start.Offset;
         //     value = new TextSpan(scanner.Buffer, start.Offset, length);
         //     success = true;
         // }
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
         result.Body.Add($"    var {endName} = {cursorName}.Offset;");
         result.Body.Add($"    var {lengthName} = {endName} - {startName}.Offset;");

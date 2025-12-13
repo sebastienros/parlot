@@ -165,8 +165,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
-        result.Body.Add($"    var h = {helperName}({context.ParseContextName});");
-        result.Body.Add("    if (!h.Item1)");
+        result.Body.Add($"    if (!{helperName}({context.ParseContextName}, out var itemValue{context.NextNumber()}))");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -174,7 +173,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         result.Body.Add("    {");
         result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
         result.Body.Add("    }");
-        result.Body.Add($"    {listName}!.Add(h.Item2);");
+        result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
         result.Body.Add($"if ({listName} != null)");

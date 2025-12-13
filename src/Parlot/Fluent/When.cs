@@ -127,30 +127,23 @@ public sealed class When<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         
         var startName = $"start{context.NextNumber()}";
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
-        var inner = sourceable.GenerateSource(context);
-
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_When", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
         // Register the action lambda
         var lambdaId = context.RegisterLambda(_action);
 
-        // if (inner.success && _action(context, inner.value))
+        // if (Helper(context, out var innerValue) && _action(context, innerValue))
         // {
         //     success = true;
-        //     value = inner.value;
+        //     value = innerValue;
         // }
         // else
         // {
@@ -158,10 +151,11 @@ public sealed class When<T> : Parser<T>, ICompilable, ISeekable, ISourceable
         //     success = false;
         // }
         
-        result.Body.Add($"if ({inner.SuccessVariable} && {lambdaId}({context.ParseContextName}, {inner.ValueVariable}))");
+        var innerValueName = $"innerValue{context.NextNumber()}";
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}) && {lambdaId}({context.ParseContextName}, {innerValueName}))");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = {inner.ValueVariable};");
+        result.Body.Add($"    {result.ValueVariable} = {innerValueName};");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");

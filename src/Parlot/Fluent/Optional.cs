@@ -80,32 +80,26 @@ public sealed class Optional<T> : Parser<Option<T>>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(Option<T>), defaultSuccess: true);
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        var inner = sourceable.GenerateSource(context);
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Optional", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
 
-        // Emit inner parser locals and body
-        foreach (var local in inner.Locals)
-        {
-            result.Body.Add(local);
-        }
-
-        foreach (var stmt in inner.Body)
-        {
-            result.Body.Add(stmt);
-        }
-
-        // if (inner.success)
+        // if (Helper(context, out var innerValue))
         // {
-        //     value = new Option<T>(inner.value);
+        //     value = new Option<T>(innerValue);
         // }
         // else
         // {
         //     value = new Option<T>();
         // }
         // success = true; (always succeeds)
-        result.Body.Add($"if ({inner.SuccessVariable})");
+        var innerValueName = $"innerValue{context.NextNumber()}";
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>({inner.ValueVariable});");
+        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>({innerValueName});");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");

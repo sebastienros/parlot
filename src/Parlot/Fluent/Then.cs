@@ -215,11 +215,9 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         result.Body.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
-        var innerResultName = $"innerResult{context.NextNumber()}";
-        result.Body.Add($"var {innerResultName} = {helperName}({ctx});");
-        result.Body.Add($"if ({innerResultName}.Item1)");
+        result.Body.Add($"if ({helperName}({ctx}, out var {parsedName}Value))");
         result.Body.Add("{");
-        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {innerResultName}.Item2);");
+        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {parsedName}Value);");
 
         if (_action1 != null)
         {

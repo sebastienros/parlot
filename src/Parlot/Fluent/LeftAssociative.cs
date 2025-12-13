@@ -255,11 +255,8 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             .MethodName;
 
         // Generate first operand parsing using helper
-        var firstResultName = $"firstResult{context.NextNumber()}";
-        result.Body.Add($"var {firstResultName} = {baseHelperName}({ctx});");
-        result.Body.Add($"if ({firstResultName}.Item1)");
+        result.Body.Add($"if ({baseHelperName}({ctx}, out {currentValueName}))");
         result.Body.Add("{");
-        result.Body.Add($"    {currentValueName} = {firstResultName}.Item2;");
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        {operatorMatchedName} = false;");
@@ -284,20 +281,17 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
                 .MethodName;
 
             var opResultName = $"opResult{context.NextNumber()}";
-            var rightResultName = $"rightResult{context.NextNumber()}";
 
             var indent = "        ";
             if (i == 0)
             {
-                result.Body.Add($"{indent}var {opResultName} = {opHelperName}({ctx});");
-                result.Body.Add($"{indent}if ({opResultName}.Item1)");
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _))");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                result.Body.Add($"{indent}    var {opResultName} = {opHelperName}({ctx});");
-                result.Body.Add($"{indent}    if ({opResultName}.Item1)");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _))");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
@@ -305,10 +299,9 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
 
             // Parse right operand using helper
-            result.Body.Add($"{innerIndent}    var {rightResultName} = {baseHelperName}({ctx});");
-            result.Body.Add($"{innerIndent}    if ({rightResultName}.Item1)");
+            result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
-            result.Body.Add($"{innerIndent}        {currentValueName} = {factoryFieldName}.Invoke({currentValueName}, {rightResultName}.Item2);");
+            result.Body.Add($"{innerIndent}        {currentValueName} = {factoryFieldName}.Invoke({currentValueName}, {opResultName}RightValue);");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 

@@ -171,8 +171,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
-        result.Body.Add($"    var h = {helperName}({ctx});");
-        result.Body.Add("    if (!h.Item1)");
+        result.Body.Add($"    if (!{helperName}({ctx}, out var itemValue{context.NextNumber()}))");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -182,7 +181,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         result.Body.Add($"        {result.ValueVariable} = {listName};");
         result.Body.Add($"        {firstName} = false;");
         result.Body.Add("    }");
-        result.Body.Add($"    {listName}!.Add(h.Item2);");
+        result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
         result.Body.Add("}");
         result.Body.Add($"if ({listName} is null)");
         result.Body.Add("{");

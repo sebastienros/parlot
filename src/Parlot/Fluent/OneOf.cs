@@ -361,11 +361,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
             outerResult.Body.Add($"{indent}if (!{successVar})");
             outerResult.Body.Add($"{indent}{{");
-            outerResult.Body.Add($"{indent}    var {helperResultName} = {helperName}({contextVariableName});");
-            outerResult.Body.Add($"{indent}    if ({helperResultName}.Item1)");
+            outerResult.Body.Add($"{indent}    if ({helperName}({contextVariableName}, out var {helperResultName}Value))");
             outerResult.Body.Add($"{indent}    {{");
             outerResult.Body.Add($"{indent}        {successVar} = true;");
-            outerResult.Body.Add($"{indent}        {valueVar} = {helperResultName}.Item2;");
+            outerResult.Body.Add($"{indent}        {valueVar} = {helperResultName}Value;");
             outerResult.Body.Add($"{indent}    }}");
             outerResult.Body.Add($"{indent}}}");
         }

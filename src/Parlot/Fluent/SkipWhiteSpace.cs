@@ -110,15 +110,8 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         result.ContentStartOffsetVariable = contentStartOffsetName;
 
         // Call the inner parser using helper
-        var innerResultName = $"innerResult{context.NextNumber()}";
-        result.Body.Add($"var {innerResultName} = {helperName}({ctx});");
-
-        result.Body.Add($"{result.SuccessVariable} = {innerResultName}.Item1;");
-        result.Body.Add($"if ({innerResultName}.Item1)");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = {innerResultName}.Item2;");
-        result.Body.Add("}");
-        result.Body.Add($"else if (!{shortcutName})");
+        result.Body.Add($"{result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        result.Body.Add($"if (!{result.SuccessVariable} && !{shortcutName})");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add("}");

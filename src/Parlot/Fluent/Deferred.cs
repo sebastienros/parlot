@@ -189,11 +189,7 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         // Generate a call to the helper method
-        var callResultName = $"deferredResult{context.NextNumber()}";
-        result.Body.Add($"global::System.ValueTuple<bool, {valueTypeName}> {callResultName} = default;");
-        result.Body.Add($"{callResultName} = {methodName}({ctx});");
-        result.Body.Add($"{result.SuccessVariable} = {callResultName}.Item1;");
-        result.Body.Add($"{result.ValueVariable} = {callResultName}.Item2;");
+        result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out {result.ValueVariable});");
 
         return result;
     }

@@ -826,7 +826,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         foreach (var (deferredMethodName, deferredValueTypeName, deferredResult) in deferredMethods)
         {
             sb.AppendLine();
-            sb.AppendLine($"        private static global::System.ValueTuple<bool, {deferredValueTypeName}> {deferredMethodName}(ParseContext context)");
+            sb.AppendLine($"        private static bool {deferredMethodName}(ParseContext context, out {deferredValueTypeName} value)");
             sb.AppendLine("        {");
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
@@ -843,7 +843,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
 
             sb.AppendLine();
-            sb.AppendLine($"            return new global::System.ValueTuple<bool, {deferredValueTypeName}>({deferredResult.SuccessVariable}, {deferredResult.ValueVariable});");
+            sb.AppendLine($"            value = {deferredResult.ValueVariable};");
+            sb.AppendLine($"            return {deferredResult.SuccessVariable};");
             sb.AppendLine("        }");
         }
 
@@ -851,7 +852,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         foreach (var (helperMethodName, helperValueTypeName, helperResult) in helperMethods)
         {
             sb.AppendLine();
-            sb.AppendLine($"        private static global::System.ValueTuple<bool, {helperValueTypeName}> {helperMethodName}(ParseContext context)");
+            sb.AppendLine($"        private static bool {helperMethodName}(ParseContext context, out {helperValueTypeName} value)");
             sb.AppendLine("        {");
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
@@ -868,7 +869,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
 
             sb.AppendLine();
-            sb.AppendLine($"            return new global::System.ValueTuple<bool, {helperValueTypeName}>({helperResult.SuccessVariable}, {helperResult.ValueVariable});");
+            sb.AppendLine($"            value = {helperResult.ValueVariable};");
+            sb.AppendLine($"            return {helperResult.SuccessVariable};");
             sb.AppendLine("        }");
         }
         sb.AppendLine();

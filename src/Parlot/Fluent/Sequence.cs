@@ -112,14 +112,12 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         var helper1 = Helper(parser1, "P1");
         var helper2 = Helper(parser2, "P2");
 
-        result.Body.Add($"var h1 = {helper1}({context.ParseContextName});");
-        result.Body.Add($"if (h1.Item1)");
+        result.Body.Add($"if ({helper1}({context.ParseContextName}, out var h1Value))");
         result.Body.Add("{");
-        result.Body.Add($"    var h2 = {helper2}({context.ParseContextName});");
-        result.Body.Add($"    if (h2.Item1)");
+        result.Body.Add($"    if ({helper2}({context.ParseContextName}, out var h2Value))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(h1.Item2, h2.Item2);");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(h1Value, h2Value);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
@@ -256,14 +254,12 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, IComp
         var helperParser = Helper(parser, "Parser");
         var helperLast = Helper(lastParser, "Last");
 
-        result.Body.Add($"var hp = {helperParser}({context.ParseContextName});");
-        result.Body.Add($"if (hp.Item1)");
+        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
-        result.Body.Add($"    var hl = {helperLast}({context.ParseContextName});");
-        result.Body.Add($"    if (hl.Item1)");
+        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hp.Item2.Item1, hp.Item2.Item2, hl.Item2);");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hlValue);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
@@ -394,14 +390,12 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
         var helperParser = Helper(parser, "Parser");
         var helperLast = Helper(lastParser, "Last");
 
-        result.Body.Add($"var hp = {helperParser}({context.ParseContextName});");
-        result.Body.Add($"if (hp.Item1)");
+        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
-        result.Body.Add($"    var hl = {helperLast}({context.ParseContextName});");
-        result.Body.Add($"    if (hl.Item1)");
+        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hp.Item2.Item1, hp.Item2.Item2, hp.Item2.Item3, hl.Item2);");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hlValue);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
@@ -535,14 +529,12 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
         var helperParser = Helper(parser, "Parser");
         var helperLast = Helper(lastParser, "Last");
 
-        result.Body.Add($"var hp = {helperParser}({context.ParseContextName});");
-        result.Body.Add($"if (hp.Item1)");
+        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
-        result.Body.Add($"    var hl = {helperLast}({context.ParseContextName});");
-        result.Body.Add($"    if (hl.Item1)");
+        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hp.Item2.Item1, hp.Item2.Item2, hp.Item2.Item3, hp.Item2.Item4, hl.Item2);");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hlValue);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
@@ -678,14 +670,12 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
         var helperParser = Helper(parser, "Parser");
         var helperLast = Helper(lastParser, "Last");
 
-        result.Body.Add($"var hp = {helperParser}({context.ParseContextName});");
-        result.Body.Add($"if (hp.Item1)");
+        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
-        result.Body.Add($"    var hl = {helperLast}({context.ParseContextName});");
-        result.Body.Add($"    if (hl.Item1)");
+        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hp.Item2.Item1, hp.Item2.Item2, hp.Item2.Item3, hp.Item2.Item4, hp.Item2.Item5, hl.Item2);");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hlValue);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
@@ -822,14 +812,12 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
         var helperParser = Helper(parser, "Parser");
         var helperLast = Helper(lastParser, "Last");
 
-        result.Body.Add($"var hp = {helperParser}({context.ParseContextName});");
-        result.Body.Add($"if (hp.Item1)");
+        result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
-        result.Body.Add($"    var hl = {helperLast}({context.ParseContextName});");
-        result.Body.Add($"    if (hl.Item1)");
+        result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hp.Item2.Item1, hp.Item2.Item2, hp.Item2.Item3, hp.Item2.Item4, hp.Item2.Item5, hp.Item2.Item6, hl.Item2);");
+        result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hpValue.Item6, hlValue);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");

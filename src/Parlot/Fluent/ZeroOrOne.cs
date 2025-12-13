@@ -107,10 +107,9 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISourceable
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrOne_Parser", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        result.Body.Add($"var h = {helperName}({context.ParseContextName});");
-        result.Body.Add($"if (h.Item1)");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}))");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = h.Item2;");
+        result.Body.Add($"    // Value already assigned via out parameter");
         result.Body.Add("}");
 
         return result;
