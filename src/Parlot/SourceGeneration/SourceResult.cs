@@ -39,4 +39,10 @@ public sealed class SourceResult
     /// Statements forming the body of the parser.
     /// </summary>
     public IList<string> Body { get; } = new List<string>();
+
+    /// <summary>
+    /// Optional variable name for tracking the content start offset (after whitespace skipping).
+    /// Used by wrappers to correctly track parse spans.
+    /// </summary>
+    public string? ContentStartOffsetVariable { get; set; }
 }

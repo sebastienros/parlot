@@ -1,5 +1,8 @@
 using Parlot.Tests.Calc;
+using Parlot;
+using Parlot.Fluent;
 using Xunit;
+using static Parlot.Fluent.Parsers;
 
 namespace Parlot.SourceGenerator.Tests;
 
@@ -214,5 +217,64 @@ public class GrammarsTests
         var upper = Grammars.ParseFooUpper;
         Assert.Equal("FOO", upper.Parse("FOO"));
         Assert.Null(upper.Parse("foo"));
+    }
+
+    [Fact]
+    public void GeneratedParser_TracksSpanCorrectly()
+    {
+        // Test that the generated parser correctly tracks start and end positions
+        var parser = Grammars.ParseTermsText;
+        var context = new ParseContext(new Scanner("hello world"));
+        var result = new ParseResult<string>();
+
+        var success = parser.Parse(context, ref result);
+
+        Assert.True(success);
+        Assert.Equal("hello", result.Value);
+        Assert.Equal(0, result.Start);  // Should start at position 0
+        Assert.Equal(5, result.End);    // Should end at position 5 (length of "hello")
+    }
+
+    [Fact]
+    public void GeneratedParser_SpanMatchesRuntimeParser()
+    {
+        // Test that generated parser span tracking matches runtime parser behavior
+        var input = "    hello world";
+        
+        // Test with generated parser
+        var generatedParser = Grammars.ParseTermsText;
+        var generatedContext = new ParseContext(new Scanner(input));
+        var generatedResult = new ParseResult<string>();
+        var generatedSuccess = generatedParser.Parse(generatedContext, ref generatedResult);
+
+        // Test with runtime parser
+        var runtimeParser = Terms.Text("hello");
+        var runtimeContext = new ParseContext(new Scanner(input));
+        var runtimeResult = new ParseResult<string>();
+        var runtimeSuccess = runtimeParser.Parse(runtimeContext, ref runtimeResult);
+
+        Assert.True(generatedSuccess);
+        Assert.True(runtimeSuccess);
+        Assert.Equal(runtimeResult.Value, generatedResult.Value);
+        Assert.Equal(runtimeResult.Start, generatedResult.Start);
+        Assert.Equal(runtimeResult.End, generatedResult.End);
+    }
+
+    [Fact]
+    public void GeneratedParser_SpanMatchesInputLength()
+    {
+        // Test that span length matches parsed content
+        var parser = Grammars.ParseTermsIdentifier;
+        var context = new ParseContext(new Scanner("identifier123"));
+        var result = new ParseResult<TextSpan>();
+
+        var success = parser.Parse(context, ref result);
+
+        Assert.True(success);
+        var span = result.Value;
+        Assert.Equal("identifier123", span.ToString());
+        Assert.Equal(0, result.Start);
+        Assert.Equal(13, result.End);
+        Assert.Equal(13, result.End - result.Start); // Span should be 13 characters
     }
 }

@@ -801,6 +801,13 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        {");
         sb.AppendLine("            var scanner = context.Scanner;");
         sb.AppendLine("            var cursor = scanner.Cursor;");
+        
+        // Always capture initial offset for parsers that don't skip whitespace
+        if (result.ContentStartOffsetVariable == null)
+        {
+            sb.AppendLine("            var startOffset = cursor.Offset;");
+        }
+        
         sb.AppendLine();
 
         foreach (var local in result.Locals)
@@ -816,10 +823,12 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"            if ({result.SuccessVariable})");
         sb.AppendLine("            {");
-        sb.AppendLine("                // TODO: wire correct span tracking into ISourceable implementation.");
-        sb.AppendLine("                var start = cursor.Offset;");
-        sb.AppendLine("                var end   = start;");
-        sb.AppendLine("                result = new ParseResult<" + valueTypeName + ">(start, end, " + result.ValueVariable + ");");
+        
+        // Use ContentStartOffsetVariable if available (for parsers that skip whitespace),
+        // otherwise use the captured startOffset
+        var startOffsetExpr = result.ContentStartOffsetVariable ?? "startOffset";
+        
+        sb.AppendLine($"                result = new ParseResult<{valueTypeName}>({startOffsetExpr}, cursor.Offset, {result.ValueVariable});");
         sb.AppendLine("                return true;");
         sb.AppendLine("            }");
         sb.AppendLine();
