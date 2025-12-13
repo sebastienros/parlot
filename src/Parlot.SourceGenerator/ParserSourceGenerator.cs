@@ -753,19 +753,6 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 // Prefer lambdas that haven't been used and match param count exactly
                 score += (paramCount == sourceParamCount) ? 5 : 0;
                 
-                // Special case: check for "new Number" which takes decimal, or "new NegateExpression" which takes Expression
-                if (paramTypeNames.Count == 1)
-                {
-                    if (paramTypeNames[0] == "decimal" && lowerLambda.Contains("new") && lowerLambda.Contains("number("))
-                    {
-                        score += 100;
-                    }
-                    else if (paramTypeNames[0] == "expression" && lowerLambda.Contains("negateexpression"))
-                    {
-                        score += 100;
-                    }
-                }
-                
                 if (score > bestScore)
                 {
                     bestScore = score;
