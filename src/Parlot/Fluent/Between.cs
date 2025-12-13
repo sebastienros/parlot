@@ -135,9 +135,8 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {

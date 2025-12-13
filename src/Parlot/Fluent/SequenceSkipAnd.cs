@@ -142,9 +142,8 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ICompilable, ISkippabl
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {
@@ -287,9 +286,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3> : Parser<ValueTuple<T1, T3>>, IC
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T3>));
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {
@@ -430,9 +428,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T4>));
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {
@@ -575,9 +572,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T5>));
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {
@@ -722,9 +718,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T6>));
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {
@@ -870,9 +865,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T7>));
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {
@@ -1019,9 +1013,8 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T8>));
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         static Type GetParserValueType(object parser)
         {

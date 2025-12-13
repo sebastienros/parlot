@@ -245,9 +245,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{startName} = {cursorName}.Position;");
 
         if (SkipWhitespace)
         {
