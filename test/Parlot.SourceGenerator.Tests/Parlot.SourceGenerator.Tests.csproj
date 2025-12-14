@@ -10,6 +10,8 @@
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    <!-- Enable C# interceptors for Parlot source generator -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Parlot.SourceGenerator.Tests</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>

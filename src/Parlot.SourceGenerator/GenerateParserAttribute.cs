@@ -1,10 +1,37 @@
 namespace Parlot.SourceGenerator;
 
 /// <summary>
-/// Marks a parser descriptor method for Parlot source generation.
-/// The annotated method must be static and return Parlot.Fluent.Parser&lt;T&gt;.
+/// Marks a parser descriptor method for Parlot source generation using interceptors.
+/// The annotated method must be static, parameterless, and return Parlot.Fluent.Parser&lt;T&gt;.
+/// 
+/// When applied, the source generator will:
+/// 1. Execute the method at compile time to build the parser graph
+/// 2. Generate optimized source code from the parser using ISourceable
+/// 3. Use C# interceptors to replace calls to this method with the source-generated version
 /// </summary>
-[System.AttributeUsage(System.AttributeTargets.Method, AllowMultiple = true)]
+/// <remarks>
+/// Example usage:
+/// <code>
+/// [GenerateParser]
+/// public static Parser&lt;string&gt; HelloParser()
+/// {
+///     return Terms.Text("hello");
+/// }
+/// 
+/// // Later usage - this call will be intercepted and replaced with the generated parser
+/// var parser = HelloParser();
+/// </code>
+/// 
+/// If you need different parser variants with different configurations, create separate methods:
+/// <code>
+/// [GenerateParser]
+/// public static Parser&lt;string&gt; FooLowerParser() =&gt; Terms.Text("foo");
+/// 
+/// [GenerateParser]
+/// public static Parser&lt;string&gt; FooUpperParser() =&gt; Terms.Text("FOO");
+/// </code>
+/// </remarks>
+[System.AttributeUsage(System.AttributeTargets.Method)]
 #if SOURCE_GENERATOR
 internal
 #else
@@ -13,35 +40,8 @@ public
 sealed class GenerateParserAttribute : System.Attribute
 {
     /// <summary>
-    /// Generates a parser using the default generated name (<c>MethodName_Parser</c>).
+    /// Marks the method for source generation. Calls to this method will be intercepted
+    /// and replaced with a source-generated parser implementation.
     /// </summary>
     public GenerateParserAttribute() { }
-
-    /// <summary>
-    /// Generates a parser and exposes it as a static property with the given name.
-    /// </summary>
-    public GenerateParserAttribute(string factoryMethodName)
-    {
-        FactoryMethodName = factoryMethodName;
-    }
-
-    /// <summary>
-    /// Generates a parser and exposes it as a static property with the given name, invoking the descriptor method with the provided arguments.
-    /// </summary>
-    public GenerateParserAttribute(string factoryMethodName, params object?[] arguments)
-    {
-        FactoryMethodName = factoryMethodName;
-        Arguments = arguments ?? System.Array.Empty<object?>();
-    }
-
-    /// <summary>
-    /// Optional factory (static property) name to expose the generated parser.
-    /// When not specified, a default property name is used (<c>MethodName_Parser</c>).
-    /// </summary>
-    public string? FactoryMethodName { get; }
-
-    /// <summary>
-    /// Arguments to pass to the annotated descriptor method when generating the parser.
-    /// </summary>
-    public object?[] Arguments { get; } = System.Array.Empty<object?>();
 }

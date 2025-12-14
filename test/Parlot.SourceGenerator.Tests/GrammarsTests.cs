@@ -9,9 +9,10 @@ namespace Parlot.SourceGenerator.Tests;
 public class GrammarsTests
 {
     [Fact]
-    public void ParserWithNoName_GeneratesProperty()
+    public void ParserWithNoName_InterceptsMethodCall()
     {
-        var parser = Grammars.ParserWithNoName_Parser;
+        // This call will be intercepted and return the source-generated parser
+        var parser = Grammars.ParserWithNoName();
 
         var result = parser.Parse("hello");
         Assert.Equal("hello", result);
@@ -21,9 +22,10 @@ public class GrammarsTests
     }
 
     [Fact]
-    public void HelloParser_GeneratesProperty()
+    public void HelloParser_InterceptsMethodCall()
     {
-        var parser = Grammars.Hello;
+        // This call will be intercepted and return the source-generated parser
+        var parser = Grammars.HelloParser();
 
         var result = parser.Parse("hello");
         Assert.Equal("hello", result);
@@ -33,9 +35,9 @@ public class GrammarsTests
     }
 
     [Fact]
-    public void ExpressionParser_GeneratesProperty()
+    public void ExpressionParser_InterceptsMethodCall()
     {
-        var parser = Grammars.ParseExpression;
+        var parser = Grammars.ExpressionParser();
 
         // Test basic values
         var result = parser.Parse("one");
@@ -60,9 +62,9 @@ public class GrammarsTests
     }
 
     [Fact]
-    public void LeftAssociativeParser_GeneratesProperty()
+    public void LeftAssociativeParser_InterceptsMethodCall()
     {
-        var parser = Grammars.ParseLeftAssociative;
+        var parser = Grammars.LeftAssociativeParser();
 
         // Test basic number
         var result = parser.Parse("5");
@@ -89,9 +91,9 @@ public class GrammarsTests
     }
 
     [Fact]
-    public void NestedLeftAssociativeParser_GeneratesProperty()
+    public void NestedLeftAssociativeParser_InterceptsMethodCall()
     {
-        var parser = Grammars.ParseNestedLeftAssociative;
+        var parser = Grammars.NestedLeftAssociativeParser();
 
         // Test basic number
         var result = parser.Parse("5");
@@ -126,9 +128,9 @@ public class GrammarsTests
     }
 
     [Fact]
-    public void CalculatorParser_GeneratesProperty()
+    public void CalculatorParser_InterceptsMethodCall()
     {
-        var parser = Grammars.ParseCalculator;
+        var parser = Grammars.CalculatorParser();
 
         // Test basic number
         var result = parser.Parse("5");
@@ -185,7 +187,7 @@ public class GrammarsTests
     public void CountingOneOf_OnlyMatchingParserInvoked()
     {
         CountingParser.Reset();
-        var parser = Grammars.ParseCountingOneOf;
+        var parser = Grammars.CountingOneOfParser();
 
         var result = parser.Parse("b");
         Assert.Equal('b', result);
@@ -198,7 +200,7 @@ public class GrammarsTests
     public void CountingOneOf_SkipsWhitespaceOnce()
     {
         CountingParser.Reset();
-        var parser = Grammars.ParseCountingOneOf;
+        var parser = Grammars.CountingOneOfParser();
 
         var result = parser.Parse("   b");
         Assert.Equal('b', result);
@@ -210,11 +212,11 @@ public class GrammarsTests
     [Fact]
     public void KeywordParser_Generates_Multiple_Factories_With_Arguments()
     {
-        var lower = Grammars.ParseFooLower;
+        var lower = Grammars.FooLowerParser();
         Assert.Equal("foo", lower.Parse("foo"));
         Assert.Null(lower.Parse("FOO"));
 
-        var upper = Grammars.ParseFooUpper;
+        var upper = Grammars.FooUpperParser();
         Assert.Equal("FOO", upper.Parse("FOO"));
         Assert.Null(upper.Parse("foo"));
     }
@@ -223,7 +225,7 @@ public class GrammarsTests
     public void GeneratedParser_TracksSpanCorrectly()
     {
         // Test that the generated parser correctly tracks start and end positions
-        var parser = Grammars.ParseTermsText;
+        var parser = Grammars.TermsTextParser();
         var context = new ParseContext(new Scanner("hello world"));
         var result = new ParseResult<string>();
 
@@ -242,7 +244,7 @@ public class GrammarsTests
         var input = "    hello world";
         
         // Test with generated parser
-        var generatedParser = Grammars.ParseTermsText;
+        var generatedParser = Grammars.TermsTextParser();
         var generatedContext = new ParseContext(new Scanner(input));
         var generatedResult = new ParseResult<string>();
         var generatedSuccess = generatedParser.Parse(generatedContext, ref generatedResult);
@@ -264,7 +266,7 @@ public class GrammarsTests
     public void GeneratedParser_SpanMatchesInputLength()
     {
         // Test that span length matches parsed content
-        var parser = Grammars.ParseTermsIdentifier;
+        var parser = Grammars.TermsIdentifierParser();
         var context = new ParseContext(new Scanner("identifier123"));
         var result = new ParseResult<TextSpan>();
 

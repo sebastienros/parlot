@@ -1,7 +1,7 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
-using Parlot.Samples.Email;
+using Parlot.SourceGenerator;
 using System;
 using System.Text.RegularExpressions;
 
@@ -29,7 +29,7 @@ public partial class RegexBenchmarks
         if (RegexEmailCompiled() != Email) throw new Exception(nameof(RegexEmailCompiled));
         if (ParlotEmail() != Email) throw new Exception(nameof(ParlotEmail));
         if (ParlotEmailCompiled() != Email) throw new Exception(nameof(ParlotEmailCompiled));
-        if (ParlotEmailSourceGenerated().ToString() != Email) throw new Exception(nameof(ParlotEmailSourceGenerated));
+        if (EmailParser.GeneratedParser().Parse(Email).ToString() != Email) throw new Exception(nameof(ParlotEmailSourceGenerated));
     }
 
     [Benchmark(Baseline = true)]
@@ -67,6 +67,7 @@ public partial class RegexBenchmarks
     [Benchmark]
     public TextSpan ParlotEmailSourceGenerated()
     {
-        return EmailParser.GeneratedParser.Parse(Email);
+        return EmailParser.GeneratedParser().Parse(Email);
     }
 }
+

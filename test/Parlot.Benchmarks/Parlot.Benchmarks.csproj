@@ -8,6 +8,7 @@
     <SignAssembly>False</SignAssembly>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Parlot.Benchmarks;</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>

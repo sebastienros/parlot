@@ -122,19 +122,19 @@ internal sealed class CountingParser : Parser<char>, ISeekable, ISourceable
 
 public static partial class Grammars
 {
-    [GenerateParser()]
+    [GenerateParser]
     public static Parser<string> ParserWithNoName()
     {
         return Terms.Text("hello");
     }
 
-    [GenerateParser("Hello")]
+    [GenerateParser]
     public static Parser<string> HelloParser()
     {
         return Terms.Text("hello");
     }
 
-    [GenerateParser("ParseExpression")]
+    [GenerateParser]
     public static Parser<double> ExpressionParser()
     {
         var value = OneOf(
@@ -157,7 +157,7 @@ public static partial class Grammars
         });
     }
 
-    [GenerateParser("ParseLeftAssociative")]
+    [GenerateParser]
     public static Parser<double> LeftAssociativeParser()
     {
         var number = Terms.Decimal().Then(d => (double)d);
@@ -170,7 +170,7 @@ public static partial class Grammars
         );
     }
 
-    [GenerateParser("ParseNestedLeftAssociative")]
+    [GenerateParser]
     public static Parser<double> NestedLeftAssociativeParser()
     {
         // Simulates multiplicative/additive precedence like a calculator
@@ -196,7 +196,7 @@ public static partial class Grammars
         return additive;
     }
 
-    [GenerateParser("ParseCalculator")]
+    [GenerateParser]
     public static Parser<Expression> CalculatorParser()
     {
         /*
@@ -250,31 +250,31 @@ public static partial class Grammars
 
     // Sourceable parser smoke tests (added incrementally)
 
-    [GenerateParser("ParseTermsText")]
+    [GenerateParser]
     public static Parser<string> TermsTextParser() => Terms.Text("hello");
 
-    [GenerateParser("ParseTermsChar")]
+    [GenerateParser]
     public static Parser<char> TermsCharParser() => Terms.Char('h');
 
-    [GenerateParser("ParseTermsString")]
+    [GenerateParser]
     public static Parser<TextSpan> TermsStringParser() => Terms.String();
 
-    [GenerateParser("ParseTermsPattern")]
+    [GenerateParser]
     public static Parser<TextSpan> TermsPatternParser() => Terms.Pattern(static c => Character.IsInRange(c, 'a', 'z'));
 
-    [GenerateParser("ParseTermsIdentifier")]
+    [GenerateParser]
     public static Parser<TextSpan> TermsIdentifierParser() => Terms.Identifier();
 
-    [GenerateParser("ParseTermsWhiteSpace")]
+    [GenerateParser]
     public static Parser<TextSpan> TermsWhiteSpaceParser() => Terms.WhiteSpace();
 
-    [GenerateParser("ParseTermsNonWhiteSpace")]
+    [GenerateParser]
     public static Parser<TextSpan> TermsNonWhiteSpaceParser() => Terms.NonWhiteSpace();
 
-    [GenerateParser("ParseTermsDecimal")]
+    [GenerateParser]
     public static Parser<decimal> TermsDecimalParser() => Terms.Decimal();
 
-    [GenerateParser("ParseTermsKeyword")]
+    [GenerateParser]
     public static Parser<string> TermsKeywordParser()
     {
         // Inline keyword logic so the source generator can extract the When() predicate
@@ -288,22 +288,22 @@ public static partial class Grammars
 
     // Literal parsers
 
-    [GenerateParser("ParseLiteralsText")]
+    [GenerateParser]
     public static Parser<string> LiteralsTextParser() => Literals.Text("hello");
 
-    [GenerateParser("ParseLiteralsChar")]
+    [GenerateParser]
     public static Parser<char> LiteralsCharParser() => Literals.Char('h');
 
-    [GenerateParser("ParseLiteralsWhiteSpace")]
+    [GenerateParser]
     public static Parser<TextSpan> LiteralsWhiteSpaceParser() => Literals.WhiteSpace();
 
-    [GenerateParser("ParseLiteralsNonWhiteSpace")]
+    [GenerateParser]
     public static Parser<TextSpan> LiteralsNonWhiteSpaceParser() => Literals.NonWhiteSpace();
 
-    [GenerateParser("ParseLiteralsDecimal")]
+    [GenerateParser]
     public static Parser<decimal> LiteralsDecimalParser() => Literals.Decimal();
 
-    [GenerateParser("ParseLiteralsKeyword")]
+    [GenerateParser]
     public static Parser<string> LiteralsKeywordParser()
     {
         // Inline keyword logic so the source generator can extract the predicate
@@ -317,51 +317,51 @@ public static partial class Grammars
 
     // Combinator parsers
 
-    [GenerateParser("ParseSequenceTextChar")]
+    [GenerateParser]
     public static Parser<(string, char)> SequenceTextCharParser() => Terms.Text("hi").And(Terms.Char('!'));
 
-    [GenerateParser("ParseSkipAnd")]
+    [GenerateParser]
     public static Parser<char> SkipAndParser() => Terms.Text("hi").SkipAnd(Terms.Char('!'));
 
-    [GenerateParser("ParseAndSkip")]
+    [GenerateParser]
     public static Parser<char> AndSkipParser() => Terms.Char('!').AndSkip(Terms.Text("hi"));
 
-    [GenerateParser("ParseOptionalText")]
+    [GenerateParser]
     public static Parser<Option<string>> OptionalTextParser() => Terms.Text("hi").Optional();
 
-    [GenerateParser("ParseZeroOrManyChar")]
+    [GenerateParser]
     public static Parser<IReadOnlyList<char>> ZeroOrManyCharParser() => ZeroOrMany(Terms.Char('a'));
 
-    [GenerateParser("ParseZeroOrOneChar")]
+    [GenerateParser]
     public static Parser<char> ZeroOrOneCharParser() => Terms.Char('a').Optional().Then(static opt => opt.HasValue ? opt.Value : 'x');
 
-    [GenerateParser("ParseEofText")]
+    [GenerateParser]
     public static Parser<string> EofTextParser() => new Eof<string>(Terms.Text("end"));
 
-    [GenerateParser("ParseCaptureChar")]
+    [GenerateParser]
     public static Parser<TextSpan> CaptureCharParser() => Capture(Terms.Char('z'));
 
-    [GenerateParser("ParseOneOfChar")]
+    [GenerateParser]
     public static Parser<char> OneOfCharParser() => OneOf(Terms.Char('a'), Terms.Char('b'));
 
     // Advanced combinators
 
-    [GenerateParser("ParseBetweenParensIdentifier")]
+    [GenerateParser]
     public static Parser<TextSpan> BetweenParensIdentifierParser() => Between(Terms.Char('('), Terms.Identifier(), Terms.Char(')'));
 
-    [GenerateParser("ParseSeparatedDecimals")]
+    [GenerateParser]
     public static Parser<IReadOnlyList<decimal>> SeparatedDecimalsParser() => Separated(Terms.Char(','), Terms.Decimal());
 
-    [GenerateParser("ParseUnaryNegateDecimal")]
+    [GenerateParser]
     public static Parser<decimal> UnaryNegateDecimalParser() => Terms.Decimal().Unary((Terms.Char('-'), static d => -d));
 
-    [GenerateParser("ParseLeftAssociativeAddition")]
+    [GenerateParser]
     public static Parser<decimal> LeftAssociativeAdditionParser() => Terms.Decimal().LeftAssociative((Terms.Char('+'), static (a, b) => a + b));
 
-    [GenerateParser("ParseNotXChar")]
+    [GenerateParser]
     public static Parser<char> NotXCharParser() => Not(Terms.Char('x'));
 
-    [GenerateParser("ParseWhenNotFollowedByHelloBang")]
+    [GenerateParser]
     public static Parser<string> WhenNotFollowedByHelloBangParser()
     {
         // Implement look-ahead without WhenNotFollowedBy to avoid lambda extraction issues
@@ -370,7 +370,7 @@ public static partial class Grammars
             .Then(static tuple => tuple.Item1);
     }
 
-    [GenerateParser("ParseWhenFollowedByHelloBang")]
+    [GenerateParser]
     public static Parser<string> WhenFollowedByHelloBangParser()
     {
         // Implement as sequence consuming '!' to keep generation simple
@@ -379,7 +379,7 @@ public static partial class Grammars
             .Then(static tuple => tuple.Item1);
     }
 
-    [GenerateParser("ParseCountingOneOf")]
+    [GenerateParser]
     public static Parser<char> CountingOneOfParser()
     {
         var a = new CountingParser('a', "a", skipWhitespace: true);
@@ -388,9 +388,10 @@ public static partial class Grammars
         return OneOf(a, b);
     }
 
-    // Multiple GenerateParser attributes with arguments mapping to descriptor parameters
-    [GenerateParser("ParseFooLower", "foo")]
-    [GenerateParser("ParseFooUpper", "FOO")]
-    public static Parser<string> KeywordParser(string keyword)
-        => Terms.Text(keyword);
+    // Separate methods for different keyword variants (instead of parameterized method)
+    [GenerateParser]
+    public static Parser<string> FooLowerParser() => Terms.Text("foo");
+
+    [GenerateParser]
+    public static Parser<string> FooUpperParser() => Terms.Text("FOO");
 }

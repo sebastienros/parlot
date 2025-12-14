@@ -9,16 +9,34 @@ To debug the generated code, add this to a project:
 
 ## GenerateParser attribute
 
-- Apply to static methods returning `Parlot.Fluent.Parser<T>`.
-- Optional `factoryMethodName` exposes the generated parser as a static property with that name; when omitted, `MethodName_Parser` is used.
-- You can pass arguments that map to the method parameters: `GenerateParser("ParseFoo", arg1, arg2, ...)`.
-- Multiple attributes are allowed on the same method; **names must be unique**.
+- Apply `[GenerateParser]` to static, **parameterless** methods returning `Parlot.Fluent.Parser<T>`.
+- Uses C# interceptors to replace calls to the annotated method with generated, optimized code at compile time.
+- Each method can only have one `[GenerateParser]` attribute.
+- If you need multiple parser variants (e.g., different keywords), create separate methods.
 
 Example:
 
 ```csharp
-[GenerateParser("ParseFoo", "foo")]
-[GenerateParser("ParseBar", "bar")]
-public static Parser<string> Keyword(string kw) => Terms.Text(kw);
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class MyGrammar
+{
+    // Simple parser
+    [GenerateParser]
+    public static Parser<string> HelloParser() => Terms.Text("hello");
+
+    // For variants, create separate methods instead of parameterized ones
+    [GenerateParser]
+    public static Parser<string> FooParser() => Terms.Text("foo");
+
+    [GenerateParser]
+    public static Parser<string> BarParser() => Terms.Text("bar");
+}
+
+// Usage - calls are intercepted and replaced with generated code
+var hello = MyGrammar.HelloParser();
+var foo = MyGrammar.FooParser();
 ```
 

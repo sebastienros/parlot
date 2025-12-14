@@ -29,7 +29,7 @@ public class SimpleParsersBenchmarks
     [Benchmark, BenchmarkCategory("Text")]
     public string Text_Generated()
     {
-        GeneratedParsers.TextParser.TryParse(TextInput, out var result);
+        GeneratedParsers.TextParser().TryParse(TextInput, out var result);
         return result;
     }
 
@@ -49,7 +49,7 @@ public class SimpleParsersBenchmarks
     [Benchmark, BenchmarkCategory("Decimal")]
     public decimal Decimal_Generated()
     {
-        GeneratedParsers.DecimalParser.TryParse(DecimalInput, out var result);
+        GeneratedParsers.DecimalParser().TryParse(DecimalInput, out var result);
         return result;
     }
 
@@ -69,7 +69,7 @@ public class SimpleParsersBenchmarks
     [Benchmark, BenchmarkCategory("OneOf")]
     public string OneOf_Generated()
     {
-        GeneratedParsers.OneOfParser.TryParse(OneOfInput, out var result);
+        GeneratedParsers.OneOfParser().TryParse(OneOfInput, out var result);
         return result;
     }
 
@@ -89,7 +89,7 @@ public class SimpleParsersBenchmarks
     [Benchmark, BenchmarkCategory("And")]
     public (string, decimal) And_Generated()
     {
-        GeneratedParsers.AndParser.TryParse(AndInput, out var result);
+        GeneratedParsers.AndParser().TryParse(AndInput, out var result);
         return result;
     }
 
@@ -109,7 +109,7 @@ public class SimpleParsersBenchmarks
     [Benchmark, BenchmarkCategory("ZeroOrMany")]
     public IReadOnlyList<decimal> ZeroOrMany_Generated()
     {
-        GeneratedParsers.ZeroOrManyParser.TryParse(ZeroOrManyInput, out var result);
+        GeneratedParsers.ZeroOrManyParser().TryParse(ZeroOrManyInput, out var result);
         return result;
     }
 
@@ -129,7 +129,7 @@ public class SimpleParsersBenchmarks
     [Benchmark, BenchmarkCategory("SkipWhiteSpace")]
     public decimal SkipWhiteSpace_Generated()
     {
-        GeneratedParsers.SkipWhiteSpaceParser.TryParse(SkipWhiteSpaceInput, out var result);
+        GeneratedParsers.SkipWhiteSpaceParser().TryParse(SkipWhiteSpaceInput, out var result);
         return result;
     }
 }

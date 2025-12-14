@@ -32,23 +32,14 @@ The source is available [here](./src/Samples/Calc/FluentParser.cs).
 
 ## Source-generated parsers
 
-Parlot can generate parsers at **compile time** from descriptor methods, avoiding runtime graph construction and yielding **~20% faster parsing** with **faster startup**.
+Parlot can generate parsers at **compile time** using C# interceptors, avoiding runtime graph construction and yielding **~20% faster parsing** with **faster startup**.
 
-### Constraints
+### How it works
 
-- Descriptor methods **must be `static`** and return `Parlot.Fluent.Parser<T>`.
-- Annotate with `[GenerateParser]` (from `Parlot.SourceGenerator`).
-- Multiple attributes on the same method are allowed; **names must be unique**.
-
-### Named generators
-
-- `[GenerateParser("ParseFoo")]` exposes a static property `ParseFoo`.
-- Without a name, the property defaults to `MethodName_Parser`.
-
-### Valued generators (arguments)
-
-- Attribute arguments map to the descriptor method parameters.
-- Example: `GenerateParser("ParseFoo", "foo")` invokes the descriptor with `"foo"`.
+- Annotate static, **parameterless** methods returning `Parlot.Fluent.Parser<T>` with `[GenerateParser]`.
+- The source generator executes the method at compile time to build the parser graph.
+- Uses C# interceptors to replace calls to the method with the generated, optimized code.
+- For parser variants (e.g., different keywords), create separate methods instead of using parameters.
 
 ```csharp
 using Parlot.SourceGenerator;
@@ -57,21 +48,34 @@ using static Parlot.Fluent.Parsers;
 
 public static partial class MyGrammar
 {
-  // Named factory: exposes MyGrammar.ParseHello
-  [GenerateParser("ParseHello")]
-  public static Parser<string> Hello() => Terms.Text("hello");
+    // Simple parser
+    [GenerateParser]
+    public static Parser<string> HelloParser() => Terms.Text("hello");
 
-  // Valued factories: two variants using different arguments
-  [GenerateParser("ParseFoo", "foo")]
-  [GenerateParser("ParseBar", "bar")]
-  public static Parser<string> Keyword(string kw) => Terms.Text(kw);
+    // For variants, create separate methods
+    [GenerateParser]
+    public static Parser<string> FooParser() => Terms.Text("foo");
+
+    [GenerateParser]
+    public static Parser<string> BarParser() => Terms.Text("bar");
 }
+
+// Usage - calls are automatically intercepted
+var hello = MyGrammar.HelloParser();  // Uses generated code
+var foo = MyGrammar.FooParser();      // Uses generated code
 ```
+
+### Requirements
+
+- Add `<InterceptorsNamespaces>$(InterceptorsNamespaces);YourNamespace</InterceptorsNamespaces>` to your project file.
+- Methods must be static and parameterless.
+- The containing class should be `partial` (optional but recommended).
 
 > **Why use source generation?**
 > - ~20% faster parsing vs. runtime-compiled graphs (see benchmarks)
 > - Faster startup (no runtime graph building/compilation)
-> - Repeatable, AOT-friendly parser code
+> - AOT-friendly, deterministic parser code
+> - Zero runtime overhead from method interception
 
 using Parlot.Fluent;
 using static Parlot.Fluent.Parsers;

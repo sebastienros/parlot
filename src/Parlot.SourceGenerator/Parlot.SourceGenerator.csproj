@@ -3,7 +3,10 @@
   <PropertyGroup>
     <!-- Source generators typically target netstandard2.0 to work with multiple compiler hosts -->
     <TargetFramework>netstandard2.0</TargetFramework>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <AssemblyOriginatorKeyFile>../Parlot/Parlot.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
     <LangVersion>Latest</LangVersion>
     <AnalyzerLanguage>cs</AnalyzerLanguage>
@@ -13,6 +16,8 @@
     <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
     <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
+    <!-- Suppress experimental warning for interceptor APIs -->
+    <NoWarn>$(NoWarn);RSEXPERIMENTAL002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

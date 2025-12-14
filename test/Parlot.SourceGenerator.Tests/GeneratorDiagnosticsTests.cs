@@ -12,18 +12,18 @@ namespace Parlot.SourceGenerator.Tests;
 public class GeneratorDiagnosticsTests
 {
     [Fact]
-    public void Duplicate_GenerateParser_Names_Report_Diagnostic()
+    public void Method_With_Parameters_Is_Not_Generated()
     {
+        // [GenerateParser] should only work on parameterless methods
         const string source = @"
 using Parlot.SourceGenerator;
 using Parlot.Fluent;
 using static Parlot.Fluent.Parsers;
 
-public static partial class DuplicateGrammar
+public static partial class ParameterizedGrammar
 {
-    [GenerateParser(""Same"")]
-    [GenerateParser(""Same"")]
-    public static Parser<string> Foo() => Terms.Text(""x"");
+    [GenerateParser]
+    public static Parser<string> Foo(string arg) => Terms.Text(arg);
 }
 ";
 
@@ -52,7 +52,7 @@ public static partial class DuplicateGrammar
         AddReference(typeof(global::Parlot.SourceGenerator.GenerateParserAttribute).Assembly.Location);
 
         var compilation = CSharpCompilation.Create(
-            assemblyName: "Parlot.SourceGenerator.Tests.DuplicateNames",
+            assemblyName: "Parlot.SourceGenerator.Tests.ParameterizedMethod",
             syntaxTrees: new[] { syntaxTree },
             references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
@@ -71,9 +71,13 @@ public static partial class DuplicateGrammar
         var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
 
         var sourceGenerator = generator.AsSourceGenerator();
-        CSharpGeneratorDriver.Create(new[] { sourceGenerator }, parseOptions: parseOptions)
-            .RunGeneratorsAndUpdateCompilation(compilation, out var updatedCompilation, out var diagnostics);
-
-        Assert.Contains(diagnostics, d => d.Id == "PARLOT010");
+        var driver = CSharpGeneratorDriver.Create(new[] { sourceGenerator }, parseOptions: parseOptions)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var updatedCompilation, out var generatorDiagnostics);
+        
+        // The method should be skipped (not cause errors), since parameterized methods aren't supported.
+        // No PARLOT diagnostics should be generated for it - it's simply not eligible for generation.
+        // We just verify that the generator runs without throwing.
+        var result = driver.GetRunResult();
+        Assert.Empty(result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 }

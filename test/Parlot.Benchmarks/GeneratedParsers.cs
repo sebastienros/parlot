@@ -16,16 +16,14 @@ public static partial class GeneratedParsers
     /// A source-generated calculator expression parser.
     /// This is equivalent to FluentParser.Expression but uses compile-time generated code.
     /// </summary>
-    [GenerateParser("Expression")]
-    public static Parser<Expression> CalculatorParser()
+    [GenerateParser]
+    public static Parser<Expression> ExpressionParser()
     {
-        /*
-         * Grammar:
-         * additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
-         * multiplicative => unary ( ( "/" | "*" ) unary )* ;
-         * unary          => ( "-" ) unary | primary ;
-         * primary        => NUMBER | "(" expression ")" ;
-        */
+        // Grammar:
+        // additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
+        // multiplicative => unary ( ( "/" | "*" ) unary )* ;
+        // unary          => ( "-" ) unary | primary ;
+        // primary        => NUMBER | "(" expression ")" ;
 
         // The Deferred helper creates a parser that can be referenced by others before it is defined
         var expression = Deferred<Expression>();
@@ -70,21 +68,21 @@ public static partial class GeneratedParsers
 
     // Simple parser definitions for benchmarking individual combinators
     
-    [GenerateParser("TextParser")]
-    public static Parser<string> TextParserDefinition() => Terms.Text("hello");
+    [GenerateParser]
+    public static Parser<string> TextParser() => Terms.Text("hello");
 
-    [GenerateParser("DecimalParser")]
-    public static Parser<decimal> DecimalParserDefinition() => Terms.Decimal();
+    [GenerateParser]
+    public static Parser<decimal> DecimalParser() => Terms.Decimal();
 
-    [GenerateParser("OneOfParser")]
-    public static Parser<string> OneOfParserDefinition() => OneOf(Terms.Text("apple"), Terms.Text("banana"), Terms.Text("cherry"));
+    [GenerateParser]
+    public static Parser<string> OneOfParser() => OneOf(Terms.Text("apple"), Terms.Text("banana"), Terms.Text("cherry"));
 
-    [GenerateParser("AndParser")]
-    public static Parser<(string, decimal)> AndParserDefinition() => Terms.Text("price").And(Terms.Decimal());
+    [GenerateParser]
+    public static Parser<(string, decimal)> AndParser() => Terms.Text("price").And(Terms.Decimal());
 
-    [GenerateParser("ZeroOrManyParser")]
-    public static Parser<IReadOnlyList<decimal>> ZeroOrManyParserDefinition() => ZeroOrMany(Terms.Decimal());
+    [GenerateParser]
+    public static Parser<IReadOnlyList<decimal>> ZeroOrManyParser() => ZeroOrMany(Terms.Decimal());
 
-    [GenerateParser("SkipWhiteSpaceParser")]
-    public static Parser<decimal> SkipWhiteSpaceParserDefinition() => SkipWhiteSpace(Literals.Decimal());
+    [GenerateParser]
+    public static Parser<decimal> SkipWhiteSpaceParser() => SkipWhiteSpace(Literals.Decimal());
 }

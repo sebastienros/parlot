@@ -11,7 +11,7 @@ public class ExprBench
 {
     private readonly Parser<Expression> _parser = FluentParser.Expression;
     private readonly Parser<Expression> _compiled = FluentParser.Expression.Compile();
-    private readonly Parser<Expression> _generated = GeneratedParsers.Expression;
+    private readonly Parser<Expression> _generated = GeneratedParsers.ExpressionParser();
     private readonly Parser _rawParser = new();
 
     private const string _expression1 = "3 - 1 / 2 + 1";
