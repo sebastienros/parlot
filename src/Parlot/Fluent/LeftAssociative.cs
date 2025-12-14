@@ -228,10 +228,8 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         // Generate a unique ID for this LeftAssociative instance to avoid collisions
         var uniqueId = context.NextNumber();
         
-        var currentValueName = $"leftAssocValue{context.NextNumber()}";
         var operatorMatchedName = $"opMatched{context.NextNumber()}";
 
-        result.Body.Add($"{valueTypeName} {currentValueName} = default;");
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
         // Helper function to get parser value type
@@ -254,8 +252,8 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_LeftAssoc{uniqueId}", valueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        // Generate first operand parsing using helper
-        result.Body.Add($"if ({baseHelperName}({ctx}, out {currentValueName}))");
+        // Generate first operand parsing using helper - use output parameter directly
+        result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("{");
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
@@ -301,7 +299,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             // Parse right operand using helper
             result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
-            result.Body.Add($"{innerIndent}        {currentValueName} = {factoryFieldName}.Invoke({currentValueName}, {opResultName}RightValue);");
+            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}.Invoke({result.ValueVariable}, {opResultName}RightValue);");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 
@@ -314,7 +312,6 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         result.Body.Add($"        if (!{operatorMatchedName}) break;");
         result.Body.Add("    }");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = {currentValueName};");
         result.Body.Add("}");
 
         return result;

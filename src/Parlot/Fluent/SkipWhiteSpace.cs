@@ -91,29 +91,23 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
             .MethodName;
 
         var cursorName = context.CursorName;
-        var startName = $"start{context.NextNumber()}";
         var shortcutName = $"shortcut{context.NextNumber()}";
-        var contentStartOffsetName = $"contentStartOffset{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"var {shortcutName} = {ctx}.WhiteSpaceParser is null && !global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current);");
-        result.Body.Add($"var {contentStartOffsetName} = {cursorName}.Offset;");
 
         result.Body.Add($"if (!{shortcutName})");
         result.Body.Add("{");
-        result.Body.Add($"    {startName} = {cursorName}.Position;");
+        result.Body.Add($"    var start = {cursorName}.Position;");
         result.Body.Add($"    {ctx}.SkipWhiteSpace();");
-        result.Body.Add($"    {contentStartOffsetName} = {cursorName}.Offset;");
+        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        result.Body.Add($"    if (!{result.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition(start);");
+        result.Body.Add("    }");
         result.Body.Add("}");
-
-        // Track the content start offset variable so wrappers can use it for span tracking
-        result.ContentStartOffsetVariable = contentStartOffsetName;
-
-        // Call the inner parser using helper
-        result.Body.Add($"{result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
-        result.Body.Add($"if (!{result.SuccessVariable} && !{shortcutName})");
+        result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
         result.Body.Add("}");
 
         return result;
