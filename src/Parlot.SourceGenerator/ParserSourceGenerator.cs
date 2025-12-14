@@ -802,35 +802,36 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         
         if (coreBodyContainsReturn)
         {
-            // Parsers with early returns need to be called as helpers
-            // Create a helper and call it from Core
-            var helperName = $"{coreName}_Helper";
+            // Parsers with early returns need special handling in Core:
+            // 1. Declare the value variable they reference
+            // 2. Convert "return true" to set result and return
+            // 3. Convert "return false" to just return false
             
-            // Use a synthetic key that combines the method name to ensure uniqueness
-            var helperKey = (coreName, "InlineHelper");
+            sb.AppendLine($"            {valueTypeName} {result.ValueVariable} = default;");
             
-            var (helperMethodName, _, _) = sgContext.Helpers.GetOrCreate(
-                helperKey,
-                helperName,
-                valueTypeName,
-                () => result);
-            
-            // Call the helper from Core
-            sb.AppendLine($"            {valueTypeName} value = default;");
-            sb.AppendLine($"            var success = {helperMethodName}(context, out value);");
-            sb.AppendLine();
-            sb.AppendLine("            if (success)");
-            sb.AppendLine("            {");
             var startOffsetExpr = result.ContentStartOffsetVariable ?? "startOffset";
-            sb.AppendLine($"                result = new ParseResult<{valueTypeName}>({startOffsetExpr}, cursor.Offset, value);");
-            sb.AppendLine("                return true;");
-            sb.AppendLine("            }");
-            sb.AppendLine();
-            sb.AppendLine("            return false;");
+            
+            foreach (var stmt in result.Body)
+            {
+                var trimmed = stmt.TrimStart();
+                if (trimmed == "return true;")
+                {
+                    // Convert early success return to set result and return
+                    sb.AppendLine($"            result = new ParseResult<{valueTypeName}>({startOffsetExpr}, cursor.Offset, {result.ValueVariable});");
+                    sb.AppendLine("            return true;");
+                }
+                else if (trimmed == "return false;")
+                {
+                    sb.AppendLine("            return false;");
+                }
+                else
+                {
+                    sb.Append("            ").AppendLine(stmt);
+                }
+            }
         }
         else
         {
-            // Normal inline code
             foreach (var local in result.Locals)
             {
                 sb.Append("            ").AppendLine(local);

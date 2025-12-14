@@ -92,13 +92,16 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
 
         var cursorName = context.CursorName;
         var shortcutName = $"shortcut{context.NextNumber()}";
+        var contentStartOffsetName = $"contentStart{context.NextNumber()}";
 
         result.Body.Add($"var {shortcutName} = {ctx}.WhiteSpaceParser is null && !global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current);");
+        result.Body.Add($"var {contentStartOffsetName} = {cursorName}.Offset;");
 
         result.Body.Add($"if (!{shortcutName})");
         result.Body.Add("{");
         result.Body.Add($"    var start = {cursorName}.Position;");
         result.Body.Add($"    {ctx}.SkipWhiteSpace();");
+        result.Body.Add($"    {contentStartOffsetName} = {cursorName}.Offset;");
         result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
         result.Body.Add($"    if (!{result.SuccessVariable})");
         result.Body.Add("    {");
@@ -109,6 +112,9 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
         result.Body.Add("}");
+
+        // Track the content start offset for Core method to use
+        result.ContentStartOffsetVariable = contentStartOffsetName;
 
         return result;
     }
