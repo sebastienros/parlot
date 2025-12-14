@@ -319,7 +319,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             result.Body.Add($"{innerIndent}    if ({helperMethodName}({ctx}, out var {opResultName}RecursiveValue))");
             result.Body.Add($"{innerIndent}    {{");
             result.Body.Add($"{innerIndent}        {result.SuccessVariable} = true;");
-            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}.Invoke({opResultName}RecursiveValue);");
+            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({opResultName}RecursiveValue);");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 

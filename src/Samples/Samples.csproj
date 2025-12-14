@@ -3,10 +3,16 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>obj/GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Parlot\Parlot.csproj" />
+    <ProjectReference Include="..\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    
+    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <Analyzer Include="..\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
   </ItemGroup>
 
 </Project>

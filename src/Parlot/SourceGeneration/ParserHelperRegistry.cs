@@ -10,6 +10,7 @@ namespace Parlot.SourceGeneration;
 public sealed class ParserHelperRegistry
 {
     private readonly Dictionary<object, HelperEntry> _helpers = new();
+    private int _nextId;
 
     public (string MethodName, string ValueTypeName, SourceResult Result) GetOrCreate(
         object parser,
@@ -19,7 +20,7 @@ public sealed class ParserHelperRegistry
     {
         if (!_helpers.TryGetValue(parser, out var entry))
         {
-            var methodName = suggestedName + "_" + _helpers.Count;
+            var methodName = suggestedName + "_" + _nextId++;
             var result = resultFactory();
             entry = new HelperEntry(methodName, valueTypeName, result);
             _helpers[parser] = entry;

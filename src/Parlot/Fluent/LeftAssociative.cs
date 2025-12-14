@@ -299,7 +299,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             // Parse right operand using helper
             result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
-            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}.Invoke({result.ValueVariable}, {opResultName}RightValue);");
+            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({result.ValueVariable}, {opResultName}RightValue);");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 
