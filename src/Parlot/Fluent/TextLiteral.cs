@@ -130,11 +130,9 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        var result = context.CreateResult(typeof(string));
-
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
-        var startName = $"start{context.NextNumber()}";
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
 
         var textLiteral = ToLiteral(Text);
         var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
@@ -143,18 +141,19 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var trailingSegmentLength = TrailingSegmentLength(Text);
         var isNotOrdinal = _comparisonType != StringComparison.Ordinal;
 
-        if (isNotOrdinal) 
-        {
-            result.Body.Add($"int {startName};");
-        }
+        var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"{result.SuccessVariable} = {cursorName}.Match({textLiteral}, {comparison});");
-        
-        result.Body.Add($"if ({result.SuccessVariable})");
+        // Use direct SourceResult construction for early return optimization
+        var result = new SourceResult(
+            successVariable: "success",  // Not used with early returns
+            valueVariable: "value",
+            valueTypeName: valueTypeName);
+
+        result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
         result.Body.Add("{");
         if (isNotOrdinal)
         {
-            result.Body.Add($"    {startName} = {cursorName}.Offset;");
+            result.Body.Add($"    var {startName} = {cursorName}.Offset;");
         }
         result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
         
@@ -168,8 +167,10 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         {
             result.Body.Add($"    {result.ValueVariable} = {textLiteral};");
         }
-        
+        result.Body.Add("    return true;");
         result.Body.Add("}");
+        result.Body.Add($"{result.ValueVariable} = default;");
+        result.Body.Add("return false;");
 
         return result;
     }

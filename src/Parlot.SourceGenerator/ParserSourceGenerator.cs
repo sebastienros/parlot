@@ -797,29 +797,64 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         
         sb.AppendLine();
 
-        foreach (var local in result.Locals)
-        {
-            sb.Append("            ").AppendLine(local);
-        }
-
-        foreach (var stmt in result.Body)
-        {
-            sb.Append("            ").AppendLine(stmt);
-        }
-
-        sb.AppendLine();
-        sb.AppendLine($"            if ({result.SuccessVariable})");
-        sb.AppendLine("            {");
+        // Check if the parser body uses early returns (optimized literals)
+        var coreBodyContainsReturn = result.Body.Any(stmt => stmt.TrimStart().StartsWith("return ", StringComparison.Ordinal));
         
-        // Use ContentStartOffsetVariable if available (for parsers that skip whitespace),
-        // otherwise use the captured startOffset
-        var startOffsetExpr = result.ContentStartOffsetVariable ?? "startOffset";
-        
-        sb.AppendLine($"                result = new ParseResult<{valueTypeName}>({startOffsetExpr}, cursor.Offset, {result.ValueVariable});");
-        sb.AppendLine("                return true;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            return false;");
+        if (coreBodyContainsReturn)
+        {
+            // Parsers with early returns need to be called as helpers
+            // Create a helper and call it from Core
+            var helperName = $"{coreName}_Helper";
+            
+            // Use a synthetic key that combines the method name to ensure uniqueness
+            var helperKey = (coreName, "InlineHelper");
+            
+            var (helperMethodName, _, _) = sgContext.Helpers.GetOrCreate(
+                helperKey,
+                helperName,
+                valueTypeName,
+                () => result);
+            
+            // Call the helper from Core
+            sb.AppendLine($"            {valueTypeName} value = default;");
+            sb.AppendLine($"            var success = {helperMethodName}(context, out value);");
+            sb.AppendLine();
+            sb.AppendLine("            if (success)");
+            sb.AppendLine("            {");
+            var startOffsetExpr = result.ContentStartOffsetVariable ?? "startOffset";
+            sb.AppendLine($"                result = new ParseResult<{valueTypeName}>({startOffsetExpr}, cursor.Offset, value);");
+            sb.AppendLine("                return true;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            return false;");
+        }
+        else
+        {
+            // Normal inline code
+            foreach (var local in result.Locals)
+            {
+                sb.Append("            ").AppendLine(local);
+            }
+
+            foreach (var stmt in result.Body)
+            {
+                sb.Append("            ").AppendLine(stmt);
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"            if ({result.SuccessVariable})");
+            sb.AppendLine("            {");
+            
+            // Use ContentStartOffsetVariable if available (for parsers that skip whitespace),
+            // otherwise use the captured startOffset
+            var startOffsetExpr = result.ContentStartOffsetVariable ?? "startOffset";
+            
+            sb.AppendLine($"                result = new ParseResult<{valueTypeName}>({startOffsetExpr}, cursor.Offset, {result.ValueVariable});");
+            sb.AppendLine("                return true;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            return false;");
+        }
         sb.AppendLine("        }");
 
         // Emit helper methods for deferred parsers (already processed earlier)
@@ -842,9 +877,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 sb.Append("            ").AppendLine(stmt);
             }
 
-            sb.AppendLine();
-            sb.AppendLine($"            value = {deferredResult.ValueVariable};");
-            sb.AppendLine($"            return {deferredResult.SuccessVariable};");
+            // Only add final return if the body doesn't already contain returns (e.g., optimized literal parsers use early returns)
+            var bodyContainsReturn = deferredResult.Body.Any(stmt => stmt.TrimStart().StartsWith("return ", StringComparison.Ordinal));
+            if (!bodyContainsReturn)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"            value = {deferredResult.ValueVariable};");
+                sb.AppendLine($"            return {deferredResult.SuccessVariable};");
+            }
             sb.AppendLine("        }");
         }
 
@@ -868,9 +908,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 sb.Append("            ").AppendLine(stmt);
             }
 
-            sb.AppendLine();
-            sb.AppendLine($"            value = {helperResult.ValueVariable};");
-            sb.AppendLine($"            return {helperResult.SuccessVariable};");
+            // Only add final return if the body doesn't already contain returns (e.g., optimized literal parsers use early returns)
+            var bodyContainsReturn = helperResult.Body.Any(stmt => stmt.TrimStart().StartsWith("return ", StringComparison.Ordinal));
+            if (!bodyContainsReturn)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"            value = {helperResult.ValueVariable};");
+                sb.AppendLine($"            return {helperResult.SuccessVariable};");
+            }
             sb.AppendLine("        }");
         }
         sb.AppendLine();

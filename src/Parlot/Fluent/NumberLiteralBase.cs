@@ -163,7 +163,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
@@ -171,6 +170,12 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         var resetName = $"reset{context.NextNumber()}";
         var numberSpanName = $"numberSpan{context.NextNumber()}";
         var parsedValueName = $"parsedValue{context.NextNumber()}";
+
+        // Use direct SourceResult construction for early return optimization
+        var result = new SourceResult(
+            successVariable: "success",  // Not used with early returns
+            valueVariable: "value",
+            valueTypeName: valueTypeName);
 
         result.Body.Add($"var {resetName} = {cursorName}.Position;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
@@ -202,15 +207,13 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         // Use ReadOnlySpan<char> overload directly - .NET 7+ types all support TryParse(ReadOnlySpan<char>, ...)
         result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
         result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+        result.Body.Add("        return true;");
         result.Body.Add("    }");
         result.Body.Add("}");
-
-        result.Body.Add($"if (!{result.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
-        result.Body.Add("}");
+        result.Body.Add($"{cursorName}.ResetPosition({resetName});");
+        result.Body.Add($"{result.ValueVariable} = default;");
+        result.Body.Add("return false;");
 
         return result;
     }
