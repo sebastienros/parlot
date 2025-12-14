@@ -166,7 +166,14 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
 
         result.Body.Add($"if ({helperBefore}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    if ({helperParser}({context.ParseContextName}, out {result.ValueVariable}))");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    if ({helperParser}({context.ParseContextName}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"    if ({helperParser}({context.ParseContextName}, out {result.ValueVariable}))");
+        }
         result.Body.Add("    {");
         result.Body.Add($"        if ({helperAfter}({context.ParseContextName}, out _))");
         result.Body.Add("        {");

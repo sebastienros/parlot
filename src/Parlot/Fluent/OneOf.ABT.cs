@@ -134,14 +134,20 @@ public sealed class OneOf<A, B, T> : Parser<T>, ICompilable, ISourceable
         result.Body.Add($"if ({helperNameA}({context.ParseContextName}, out var {valueAName}))");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = ({valueTypeNameT}){valueAName};");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = ({valueTypeNameT}){valueAName};");
+        }
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
         result.Body.Add($"    if ({helperNameB}({context.ParseContextName}, out var {valueBName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = ({valueTypeNameT}){valueBName};");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"        {result.ValueVariable} = ({valueTypeNameT}){valueBName};");
+        }
         result.Body.Add("    }");
         result.Body.Add("}");
 

@@ -364,7 +364,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
             outerResult.Body.Add($"{indent}    if ({helperName}({contextVariableName}, out var {helperResultName}Value))");
             outerResult.Body.Add($"{indent}    {{");
             outerResult.Body.Add($"{indent}        {successVar} = true;");
-            outerResult.Body.Add($"{indent}        {valueVar} = {helperResultName}Value;");
+            if (!context.DiscardResult)
+            {
+                outerResult.Body.Add($"{indent}        {valueVar} = {helperResultName}Value;");
+            }
             outerResult.Body.Add($"{indent}    }}");
             outerResult.Body.Add($"{indent}}}");
         }

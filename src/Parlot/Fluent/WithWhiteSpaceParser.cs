@@ -134,7 +134,14 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable,
 
         result.Body.Add("try");
         result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out _);");
+        }
+        else
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        }
         result.Body.Add("}");
         result.Body.Add("finally");
         result.Body.Add("{");

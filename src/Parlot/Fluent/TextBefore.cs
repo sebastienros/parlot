@@ -335,7 +335,10 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
                 result.Body.Add("            break;");
                 result.Body.Add("        }");
             }
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+            }
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add("        break;");
         }
@@ -361,7 +364,10 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
             result.Body.Add("        }");
         }
 
-        result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+        }
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("        break;");
         result.Body.Add("    }");

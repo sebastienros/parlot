@@ -189,7 +189,14 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         // Generate a call to the helper method
-        result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out {result.ValueVariable});");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out _);");
+        }
+        else
+        {
+            result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out {result.ValueVariable});");
+        }
 
         return result;
     }

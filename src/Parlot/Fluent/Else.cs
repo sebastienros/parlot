@@ -131,12 +131,22 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
         if (_func != null)
         {
             var lambdaId = context.RegisterLambda(_func);
-            result.Body.Add($"    {result.ValueVariable} = {lambdaId}({context.ParseContextName});");
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaId}({context.ParseContextName});");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {lambdaId}({context.ParseContextName});");
+            }
         }
         else
         {
-            var lambdaId = context.RegisterLambda(new Func<T>(() => _value!));
-            result.Body.Add($"    {result.ValueVariable} = {lambdaId}();");
+            if (!context.DiscardResult)
+            {
+                var lambdaId = context.RegisterLambda(new Func<T>(() => _value!));
+                result.Body.Add($"    {result.ValueVariable} = {lambdaId}();");
+            }
         }
         
         result.Body.Add("}");

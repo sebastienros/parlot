@@ -104,7 +104,14 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
         //     throw new ParseException(_message, cursor.Position);
         // }
         
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        }
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");

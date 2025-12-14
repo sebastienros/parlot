@@ -155,7 +155,10 @@ public sealed class When<T> : Parser<T>, ICompilable, ISeekable, ISourceable
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}) && {lambdaId}({context.ParseContextName}, {innerValueName}))");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = {innerValueName};");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = {innerValueName};");
+        }
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");

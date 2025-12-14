@@ -86,7 +86,14 @@ public sealed class Eof<T> : Parser<T>, ICompilable, ISourceable
         //     success = true;
         //     value = innerValue;
         // }
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}) && {context.CursorName}.Eof)");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out _) && {context.CursorName}.Eof)");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}) && {context.CursorName}.Eof)");
+        }
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");

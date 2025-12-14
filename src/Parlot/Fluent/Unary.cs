@@ -319,7 +319,14 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             result.Body.Add($"{innerIndent}    if ({helperMethodName}({ctx}, out var {opResultName}RecursiveValue))");
             result.Body.Add($"{innerIndent}    {{");
             result.Body.Add($"{innerIndent}        {result.SuccessVariable} = true;");
-            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({opResultName}RecursiveValue);");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({opResultName}RecursiveValue);");
+            }
+            else
+            {
+                result.Body.Add($"{innerIndent}        {factoryFieldName}({opResultName}RecursiveValue);");
+            }
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 
@@ -337,7 +344,14 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Unary", valueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        result.Body.Add($"    if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    if ({baseHelperName}({ctx}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"    if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
+        }
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");

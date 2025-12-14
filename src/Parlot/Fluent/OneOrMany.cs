@@ -141,7 +141,10 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
 
         var listName = $"list{context.NextNumber()}";
 
-        result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        }
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         static Type GetParserValueType(object parser)
@@ -169,17 +172,23 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
-        result.Body.Add($"    if ({listName} == null)");
-        result.Body.Add("    {");
-        result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
-        result.Body.Add("    }");
-        result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    if ({listName} == null)");
+            result.Body.Add("    {");
+            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add("    }");
+            result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+        }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
-        result.Body.Add($"if ({listName} != null)");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = {listName};");
-        result.Body.Add("}");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"if ({listName} != null)");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.ValueVariable} = {listName};");
+            result.Body.Add("}");
+        }
 
         return result;
     }

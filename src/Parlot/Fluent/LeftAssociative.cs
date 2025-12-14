@@ -253,7 +253,14 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             .MethodName;
 
         // Generate first operand parsing using helper - use output parameter directly
-        result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({baseHelperName}({ctx}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
+        }
         result.Body.Add("{");
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
@@ -299,7 +306,14 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             // Parse right operand using helper
             result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
-            result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({result.ValueVariable}, {opResultName}RightValue);");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({result.ValueVariable}, {opResultName}RightValue);");
+            }
+            else
+            {
+                result.Body.Add($"{innerIndent}        {factoryFieldName}({result.ValueVariable}, {opResultName}RightValue);");
+            }
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 

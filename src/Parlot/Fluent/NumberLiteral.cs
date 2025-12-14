@@ -208,11 +208,18 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourc
 
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
         result.Body.Add("{");
-        result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
-        result.Body.Add("    }");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+        }
+        else
+        {
+            result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+            result.Body.Add("    }");
+        }
         result.Body.Add("}");
 
         result.Body.Add($"if (!{result.SuccessVariable})");

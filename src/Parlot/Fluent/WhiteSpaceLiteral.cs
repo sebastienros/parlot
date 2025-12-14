@@ -116,7 +116,10 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISeekable
         result.Body.Add($"var {endName} = {cursorName}.Offset;");
         result.Body.Add($"if ({startName} != {endName})");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {endName} - {startName});");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {endName} - {startName});");
+        }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

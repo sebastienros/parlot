@@ -99,11 +99,17 @@ public sealed class Optional<T> : Parser<Option<T>>, ICompilable, ISourceable
         var innerValueName = $"innerValue{context.NextNumber()}";
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>({innerValueName});");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>({innerValueName});");
+        }
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>();");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.Option<{elementTypeName}>();");
+        }
         result.Body.Add("}");
         result.Body.Add($"{result.SuccessVariable} = true;");
 

@@ -102,7 +102,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add($"    var start = {cursorName}.Position;");
         result.Body.Add($"    {ctx}.SkipWhiteSpace();");
         result.Body.Add($"    {contentStartOffsetName} = {cursorName}.Offset;");
-        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out _);");
+        }
+        else
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        }
         result.Body.Add($"    if (!{result.SuccessVariable})");
         result.Body.Add("    {");
         result.Body.Add($"        {cursorName}.ResetPosition(start);");
@@ -110,7 +117,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out _);");
+        }
+        else
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        }
         result.Body.Add("}");
 
         // Track the content start offset for Core method to use

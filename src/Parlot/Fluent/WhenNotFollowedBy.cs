@@ -133,7 +133,14 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable, IS
             .GetOrCreate(lookaheadSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Lookahead", lookaheadValueTypeName, () => lookaheadSourceable.GenerateSource(context))
             .MethodName;
 
-        result.Body.Add($"if (!{mainHelperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if (!{mainHelperName}({context.ParseContextName}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if (!{mainHelperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        }
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = false;");
         result.Body.Add("}");

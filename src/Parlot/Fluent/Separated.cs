@@ -207,10 +207,16 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         var endName = $"end{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        }
         result.Body.Add($"bool {firstName} = true;");
         result.Body.Add($"var {endName} = {cursorName}.Position;");
-        result.Body.Add($"int {startName} = 0;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"int {startName} = 0;");
+        }
 
         var parserValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var separatorValueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
@@ -254,24 +260,45 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
 
         result.Body.Add($"    if ({firstName})");
         result.Body.Add("    {");
-        result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
-        result.Body.Add($"        {startName} = {endName}.Offset;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add($"        {startName} = {endName}.Offset;");
+        }
         result.Body.Add($"        {firstName} = false;");
         result.Body.Add("    }");
 
-        result.Body.Add($"    {listName}!.Add(item{context.NextNumber() - 1});");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {listName}!.Add(item{context.NextNumber() - 1});");
+        }
         result.Body.Add("}");
 
-        result.Body.Add($"if ({listName} != null)");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = {listName};");
-        result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
-        result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add("}");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"if ({listName} != null)");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.ValueVariable} = {listName};");
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add("}");
+        }
+        else
+        {
+            // When discarding result, just set success based on whether we parsed anything
+            result.Body.Add($"if (!{firstName})");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add("}");
+        }
 
         return result;
     }

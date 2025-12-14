@@ -194,7 +194,10 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable, ISourceable
         result.Body.Add("else");
         result.Body.Add("{");
         result.Body.Add($"    var end{context.NextNumber()} = {cursorName}.Offset;");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
+        }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

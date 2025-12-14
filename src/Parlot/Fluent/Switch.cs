@@ -150,7 +150,10 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable, ISourceable
         result.Body.Add($"        if ({nextParserName}.Parse({ctx}, ref {parseResultName}))");
         result.Body.Add("        {");
         result.Body.Add($"            {result.SuccessVariable} = true;");
-        result.Body.Add($"            {result.ValueVariable} = {parseResultName}.Value;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"            {result.ValueVariable} = {parseResultName}.Value;");
+        }
         result.Body.Add("        }");
         result.Body.Add("    }");
         result.Body.Add("}");

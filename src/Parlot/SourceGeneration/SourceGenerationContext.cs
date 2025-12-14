@@ -71,6 +71,15 @@ public sealed class SourceGenerationContext
     public ParserHelperRegistry Helpers { get; }
 
     /// <summary>
+    /// Gets or sets whether the current source-generation phase should ignore the results of the parsers.
+    /// </summary>
+    /// <remarks>
+    /// When set to true, the generated statements don't need to record and define the result value.
+    /// This is done to optimize generated parsers that are usually used for pattern matching only (e.g., Capture).
+    /// </remarks>
+    public bool DiscardResult { get; set; }
+
+    /// <summary>
     /// Returns a new unique number for the current compilation.
     /// </summary>
     public int NextNumber() => _number++;

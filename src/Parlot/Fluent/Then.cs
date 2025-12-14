@@ -211,7 +211,10 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        result.Body.Add($"{valueTypeName} {tempValueName} = default;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"{valueTypeName} {tempValueName} = default;");
+        }
         result.Body.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
@@ -222,25 +225,52 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         if (_action1 != null)
         {
             var lambdaName = context.RegisterLambda(_action1);
-            result.Body.Add($"    {tempValueName} = {lambdaName}({parsedName}.Value);");
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaName}({parsedName}.Value);");
+            }
+            else
+            {
+                result.Body.Add($"    {tempValueName} = {lambdaName}({parsedName}.Value);");
+            }
         }
         else if (_action2 != null)
         {
             var lambdaName = context.RegisterLambda(_action2);
-            result.Body.Add($"    {tempValueName} = {lambdaName}({ctx}, {parsedName}.Value);");
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaName}({ctx}, {parsedName}.Value);");
+            }
+            else
+            {
+                result.Body.Add($"    {tempValueName} = {lambdaName}({ctx}, {parsedName}.Value);");
+            }
         }
         else if (_action3 != null)
         {
             var lambdaName = context.RegisterLambda(_action3);
-            result.Body.Add($"    {tempValueName} = {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+            }
+            else
+            {
+                result.Body.Add($"    {tempValueName} = {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+            }
         }
         else
         {
-            // Value-based: register the value as a lambda that returns it
-            var valueLambda = context.RegisterLambda(new Func<U>(() => _value!));
-            result.Body.Add($"    {tempValueName} = {valueLambda}();");
+            // Value-based: only call lambda if we need the result
+            if (!context.DiscardResult)
+            {
+                var valueLambda = context.RegisterLambda(new Func<U>(() => _value!));
+                result.Body.Add($"    {tempValueName} = {valueLambda}();");
+            }
         }
-        result.Body.Add($"    {result.ValueVariable} = {tempValueName};");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = {tempValueName};");
+        }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

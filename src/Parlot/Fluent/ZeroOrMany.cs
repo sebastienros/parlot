@@ -147,8 +147,11 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         var listName = $"list{context.NextNumber()}";
         var firstName = $"first{context.NextNumber()}";
 
-        result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
-        result.Body.Add($"bool {firstName} = true;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+            result.Body.Add($"bool {firstName} = true;");
+        }
 
         static Type GetParserValueType(object parser)
         {
@@ -175,18 +178,24 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
-        result.Body.Add($"    if ({firstName})");
-        result.Body.Add("    {");
-        result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
-        result.Body.Add($"        {result.ValueVariable} = {listName};");
-        result.Body.Add($"        {firstName} = false;");
-        result.Body.Add("    }");
-        result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    if ({firstName})");
+            result.Body.Add("    {");
+            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add($"        {result.ValueVariable} = {listName};");
+            result.Body.Add($"        {firstName} = false;");
+            result.Body.Add("    }");
+            result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+        }
         result.Body.Add("}");
-        result.Body.Add($"if ({listName} is null)");
-        result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
-        result.Body.Add("}");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"if ({listName} is null)");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+            result.Body.Add("}");
+        }
 
         return result;
     }

@@ -99,7 +99,10 @@ public sealed class Select<C, T> : Parser<T>, ICompilable, ISourceable where C :
         result.Body.Add($"    if ({parserName}.Parse({ctx}, ref {parseResultName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = {parseResultName}.Value;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"        {result.ValueVariable} = {parseResultName}.Value;");
+        }
         result.Body.Add("    }");
         result.Body.Add("}");
 

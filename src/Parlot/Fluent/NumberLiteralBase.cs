@@ -204,12 +204,19 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
 
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
         result.Body.Add("{");
-        // Use ReadOnlySpan<char> overload directly - .NET 7+ types all support TryParse(ReadOnlySpan<char>, ...)
-        result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
-        result.Body.Add("        return true;");
-        result.Body.Add("    }");
+        if (context.DiscardResult)
+        {
+            result.Body.Add("    return true;");
+        }
+        else
+        {
+            // Use ReadOnlySpan<char> overload directly - .NET 7+ types all support TryParse(ReadOnlySpan<char>, ...)
+            result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+            result.Body.Add("        return true;");
+            result.Body.Add("    }");
+        }
         result.Body.Add("}");
         result.Body.Add($"{cursorName}.ResetPosition({resetName});");
         result.Body.Add($"{result.ValueVariable} = default;");

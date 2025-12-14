@@ -85,7 +85,10 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable, ISourceable
         // success = Helper(context, out _);
         // value = _value;
         result.Body.Add($"{result.SuccessVariable} = {helperName}({context.ParseContextName}, out _);");
-        result.Body.Add($"{result.ValueVariable} = {lambdaId}();");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"{result.ValueVariable} = {lambdaId}();");
+        }
 
         return result;
     }

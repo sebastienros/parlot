@@ -147,7 +147,14 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable, ISourceable where C : 
 
         result.Body.Add($"if ({predicateLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx}, {stateLambda}()))");
         result.Body.Add("{");
-        result.Body.Add($"    if ({helperName}({ctx}, out {result.ValueVariable}))");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    if ({helperName}({ctx}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"    if ({helperName}({ctx}, out {result.ValueVariable}))");
+        }
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");
