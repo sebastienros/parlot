@@ -11,6 +11,7 @@ namespace Parlot.SourceGeneration;
 public sealed class SourceGenerationContext
 {
     private int _number;
+    private int _staticFieldNumber;
 
     public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null)
     {
@@ -18,6 +19,15 @@ public sealed class SourceGenerationContext
         MethodNamePrefix = methodNamePrefix ?? "";
 
         Helpers = new ParserHelperRegistry();
+    }
+
+    /// <summary>
+    /// Sets the source code map from lambda pointers to their original source code.
+    /// This should be called before executing the parser factory method.
+    /// </summary>
+    public void SetLambdaSourceMap(Dictionary<int, string> pointerToSource)
+    {
+        Lambdas.SetSourceCodeMap(pointerToSource);
     }
 
     /// <summary>
@@ -56,6 +66,12 @@ public sealed class SourceGenerationContext
     public IList<string> GlobalBody { get; } = new List<string>();
 
     /// <summary>
+    /// Static field declarations that should appear at class level.
+    /// Each entry is a complete field declaration (e.g., "private static readonly SearchValues&lt;char&gt; _field = ...;").
+    /// </summary>
+    public IList<string> StaticFields { get; } = new List<string>();
+
+    /// <summary>
     /// Registry of user-provided delegates used by parsers such as <c>Then</c>.
     /// </summary>
     public LambdaRegistry Lambdas { get; } = new();
@@ -83,6 +99,22 @@ public sealed class SourceGenerationContext
     /// Returns a new unique number for the current compilation.
     /// </summary>
     public int NextNumber() => _number++;
+
+    /// <summary>
+    /// Registers a static field and returns its unique name.
+    /// </summary>
+    /// <param name="declaration">The field declaration without the field name (e.g., "private static readonly SearchValues&lt;char&gt;").</param>
+    /// <param name="initializer">The initializer expression (e.g., "SearchValues.Create(\"abc\")").</param>
+    /// <returns>The unique field name that was generated.</returns>
+    public string RegisterStaticField(string declaration, string initializer)
+    {
+        ThrowHelper.ThrowIfNull(declaration, nameof(declaration));
+        ThrowHelper.ThrowIfNull(initializer, nameof(initializer));
+
+        var fieldName = $"_{MethodNamePrefix}_static{_staticFieldNumber++}";
+        StaticFields.Add($"{declaration} {fieldName} = {initializer};");
+        return fieldName;
+    }
 
     /// <summary>
     /// Creates a new <see cref="SourceResult"/> with conventional success and value names.

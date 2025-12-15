@@ -279,4 +279,92 @@ public class GrammarsTests
         Assert.Equal(13, result.End);
         Assert.Equal(13, result.End - result.Start); // Span should be 13 characters
     }
+
+    [Fact]
+    public void SimpleValueParser_UsesTypeFromIncludedFile()
+    {
+        // Test that [IncludeFiles] allows using types from separate files
+        var parser = ExternalTypeGrammars.SimpleValueParser();
+        var result = parser.Parse("hello");
+
+        Assert.NotNull(result);
+        Assert.Equal("hello", result.Text);
+    }
+
+    [Fact]
+    public void SimpleNumberParser_UsesTypeFromIncludedFile()
+    {
+        // Test that [IncludeFiles] works with decimal numbers
+        var parser = ExternalTypeGrammars.SimpleNumberParser();
+        var result = parser.Parse("123.45");
+
+        Assert.NotNull(result);
+        Assert.Equal(123.45m, result.Value);
+    }
+
+    [Fact]
+    public void AnyOfDigitsParser_MatchesDigits()
+    {
+        // Test that AnyOf parser with digits works
+        var parser = Grammars.AnyOfDigitsParser();
+        var context = new ParseContext(new Scanner("12345abc"));
+        var result = new ParseResult<TextSpan>();
+
+        var success = parser.Parse(context, ref result);
+
+        Assert.True(success);
+        Assert.Equal("12345", result.Value.ToString());
+    }
+
+    [Fact]
+    public void AnyOfDigitsParser_ReturnsFalseOnNoMatch()
+    {
+        var parser = Grammars.AnyOfDigitsParser();
+        var context = new ParseContext(new Scanner("abc123"));
+        var result = new ParseResult<TextSpan>();
+
+        var success = parser.Parse(context, ref result);
+
+        Assert.False(success);
+    }
+
+    [Fact]
+    public void AnyOfLettersParser_RespectsMinAndMaxSize()
+    {
+        var parser = Grammars.AnyOfLettersParser();
+
+        // Less than minSize (2) should fail
+        var context1 = new ParseContext(new Scanner("a"));
+        var result1 = new ParseResult<TextSpan>();
+        Assert.False(parser.Parse(context1, ref result1));
+
+        // Between min and max should work
+        var context2 = new ParseContext(new Scanner("abc123"));
+        var result2 = new ParseResult<TextSpan>();
+        Assert.True(parser.Parse(context2, ref result2));
+        Assert.Equal("abc", result2.Value.ToString());
+
+        // Should be limited to maxSize (10)
+        var context3 = new ParseContext(new Scanner("abcdefghijklmnop"));
+        var result3 = new ParseResult<TextSpan>();
+        Assert.True(parser.Parse(context3, ref result3));
+        Assert.Equal("abcdefghij", result3.Value.ToString());
+    }
+
+    [Fact]
+    public void NoneOfWhitespaceParser_MatchesNonWhitespace()
+    {
+        var parser = Grammars.NoneOfWhitespaceParser();
+
+        // Match non-whitespace
+        var context1 = new ParseContext(new Scanner("hello world"));
+        var result1 = new ParseResult<TextSpan>();
+        Assert.True(parser.Parse(context1, ref result1));
+        Assert.Equal("hello", result1.Value.ToString());
+
+        // Starts with whitespace should fail
+        var context2 = new ParseContext(new Scanner(" hello"));
+        var result2 = new ParseResult<TextSpan>();
+        Assert.False(parser.Parse(context2, ref result2));
+    }
 }

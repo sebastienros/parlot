@@ -45,6 +45,8 @@
   <ItemGroup>
     <!-- Include the GenerateParserAttribute so it's available to consumers -->
     <Compile Include="../Parlot.SourceGenerator/GenerateParserAttribute.cs" Link="SourceGeneration/GenerateParserAttribute.cs" />
+    <!-- Include the IncludeFilesAttribute so it's available to consumers -->
+    <Compile Include="../Parlot.SourceGenerator/IncludeFilesAttribute.cs" Link="SourceGeneration/IncludeFilesAttribute.cs" />
     <Compile Update="ParserOperatorExtensions.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>

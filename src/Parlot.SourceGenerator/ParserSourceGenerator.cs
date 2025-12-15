@@ -225,10 +225,30 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, generateParserAttrSymbol))
             ?.ApplicationSyntaxReference?.GetSyntax().GetLocation();
 
-        return new MethodToGenerate(methodSymbol, attrLocation);
+        // Check for [IncludeFiles] attribute
+        var includeFilesAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeFilesAttribute");
+        var additionalFiles = Array.Empty<string>();
+        if (includeFilesAttrSymbol is not null)
+        {
+            var includeFilesAttr = methodSymbol.GetAttributes()
+                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeFilesAttrSymbol));
+            if (includeFilesAttr is not null && includeFilesAttr.ConstructorArguments.Length > 0)
+            {
+                var arg = includeFilesAttr.ConstructorArguments[0];
+                if (arg.Kind == TypedConstantKind.Array)
+                {
+                    additionalFiles = arg.Values
+                        .Where(v => v.Value is string)
+                        .Select(v => (string)v.Value!)
+                        .ToArray();
+                }
+            }
+        }
+
+        return new MethodToGenerate(methodSymbol, attrLocation, additionalFiles);
     }
 
-    private readonly record struct MethodToGenerate(IMethodSymbol Method, Location? AttributeLocation);
+    private readonly record struct MethodToGenerate(IMethodSymbol Method, Location? AttributeLocation, string[] AdditionalFiles);
     private readonly record struct InvocationInfo(string TargetMethodKey, string InterceptsLocationAttribute, Location Location);
 
     private static bool IsParserReturnType(ITypeSymbol returnType)
@@ -259,101 +279,78 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         {
             return;
         }
-        var methodSyntaxTree = methodSyntaxRef.SyntaxTree;
+        var originalSyntaxTree = methodSyntaxRef.SyntaxTree;
         var methodSyntax = methodSyntaxRef.GetSyntax() as MethodDeclarationSyntax;
         
-        // Get semantic model for the syntax tree to resolve method groups
-        var semanticModel = hostCompilation.GetSemanticModel(methodSyntaxTree);
-        
-        // Extract all lambda expressions from the method AND from static fields in the containing class
-        // This allows source generation to work when parsers reference static fields with lambdas
-        // Each entry contains: Source code, IsMethodGroup flag, InferredReturnType (for method groups, from semantic model)
-        var lambdaSources = new Dictionary<string, (string Source, bool IsMethodGroup, string? ReturnType)>();
-        if (methodSyntax is not null)
+        if (methodSyntax is null)
         {
-            var lambdaIndex = 0;
-            
-            void ExtractLambdasAndMethodGroups(SyntaxNode root)
+            return;
+        }
+
+        // Get semantic model for the syntax tree
+        var semanticModel = hostCompilation.GetSemanticModel(originalSyntaxTree);
+        
+        // ==== NEW APPROACH: Use LambdaRewriter to transform lambdas into stubs ====
+        // The rewriter replaces each lambda/method group with a stub that contains a unique pointer.
+        // When the rewritten code executes, LambdaRegistry can extract the pointer and map it
+        // back to the original source code.
+        
+        var rewriter = new LambdaRewriter(semanticModel);
+        var rewrittenRoot = rewriter.Visit(originalSyntaxTree.GetRoot());
+        
+        // Create a new syntax tree with the rewritten code
+        var parseOptions = (CSharpParseOptions)originalSyntaxTree.Options;
+        var rewrittenTree = CSharpSyntaxTree.Create(
+            (CSharpSyntaxNode)rewrittenRoot,
+            parseOptions,
+            originalSyntaxTree.FilePath);
+
+        // Get the source code map from pointers to original lambda source
+        var lambdaSourceMap = rewriter.Lambdas.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value.OriginalSource);
+
+        // Create a minimal compilation with the REWRITTEN syntax tree
+        var minimalSyntaxTrees = new List<SyntaxTree> { rewrittenTree };
+        
+        // Add additional files specified by [IncludeFiles] attribute
+        if (methodInfo.AdditionalFiles.Length > 0)
+        {
+            var baseDir = Path.GetDirectoryName(originalSyntaxTree.FilePath) ?? string.Empty;
+            foreach (var relativePath in methodInfo.AdditionalFiles)
             {
-                // Extract lambda expressions
-                foreach (var lambda in root.DescendantNodes().OfType<LambdaExpressionSyntax>())
-                {
-                    var source = lambda.ToFullString().Trim();
-                    var inferredReturn = InferReturnType(source);
-                    lambdaSources[$"lambda_{lambdaIndex}"] = (source, IsMethodGroup: false, ReturnType: inferredReturn);
-                    lambdaIndex++;
-                }
+                var fullPath = Path.GetFullPath(Path.Combine(baseDir, relativePath));
                 
-                // Extract method group expressions used as delegate arguments
-                // Look for invocations where a member access is passed as an argument (e.g., Pattern(char.IsLetterOrDigit))
-                foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                // Find the syntax tree in the host compilation
+                var additionalTree = hostCompilation.SyntaxTrees
+                    .FirstOrDefault(t => string.Equals(t.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+                
+                if (additionalTree is not null)
                 {
-                    foreach (var arg in invocation.ArgumentList.Arguments)
-                    {
-                        // Method groups appear as MemberAccessExpression when used as delegates
-                        // e.g., char.IsLetterOrDigit, SomeClass.SomeMethod
-                        if (arg.Expression is MemberAccessExpressionSyntax memberAccess)
-                        {
-                            var text = memberAccess.ToFullString().Trim();
-                            
-                            // Filter out property accesses and chained member access
-                            // Method groups are typically simple: Type.Method (only one dot)
-                            // and the method name typically starts with uppercase (Is, Has, Can, etc.)
-                            var dotCount = text.Count(c => c == '.');
-                            var memberName = memberAccess.Name.ToString();
-                            
-                            // Only include if:
-                            // 1. Simple member access (one dot) like char.IsLetterOrDigit
-                            // 2. Member name looks like a method (starts with capital letter or is a common predicate pattern)
-                            if (dotCount == 1 && 
-                                (char.IsUpper(memberName[0]) || memberName.StartsWith("is", StringComparison.OrdinalIgnoreCase)))
-                            {
-                                // Try to get the return type from the semantic model
-                                string? methodReturnType = null;
-                                var symbolInfo = semanticModel.GetSymbolInfo(memberAccess);
-                                if (symbolInfo.Symbol is IMethodSymbol methodSym)
-                                {
-                                    methodReturnType = methodSym.ReturnType.Name.ToLowerInvariant();
-                                }
-                                else if (symbolInfo.CandidateSymbols.Length > 0 && 
-                                         symbolInfo.CandidateSymbols[0] is IMethodSymbol candidateMethod)
-                                {
-                                    methodReturnType = candidateMethod.ReturnType.Name.ToLowerInvariant();
-                                }
-                                
-                                lambdaSources[$"lambda_{lambdaIndex}"] = (text, IsMethodGroup: true, ReturnType: methodReturnType);
-                                lambdaIndex++;
-                            }
-                        }
-                    }
+                    minimalSyntaxTrees.Add(additionalTree);
                 }
-            }
-            
-            // Extract from the method body
-            ExtractLambdasAndMethodGroups(methodSyntax);
-            
-            // Also extract from static fields in the containing class
-            var containingClass = methodSyntax.Parent as TypeDeclarationSyntax;
-            if (containingClass is not null)
-            {
-                foreach (var member in containingClass.Members)
+                else
                 {
-                    if (member is FieldDeclarationSyntax fieldDecl && 
-                        fieldDecl.Modifiers.Any(m => m.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.StaticKeyword)))
+                    // Try to find by filename only if full path doesn't match
+                    var fileName = Path.GetFileName(relativePath);
+                    additionalTree = hostCompilation.SyntaxTrees
+                        .FirstOrDefault(t => string.Equals(Path.GetFileName(t.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (additionalTree is not null)
                     {
-                        ExtractLambdasAndMethodGroups(fieldDecl);
+                        minimalSyntaxTrees.Add(additionalTree);
+                    }
+                    else
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            new DiagnosticDescriptor("PARLOT006", "Include file not found", "Could not find included file '{0}' for method '{1}'", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
+                            methodSymbol.Locations.FirstOrDefault(), relativePath, methodSymbol.Name));
                     }
                 }
             }
         }
 
-        // Create a minimal compilation with only the file containing the parser descriptor.
-        // This avoids errors from other files that reference generated code.
-        var minimalSyntaxTrees = new List<SyntaxTree> { methodSyntaxTree };
-        
         // Add a synthetic file with global usings that Parlot and typical projects provide.
-        // This ensures the dynamic compilation works even when the user relies on implicit usings.
-        var parseOptions = (CSharpParseOptions)methodSyntaxTree.Options;
         var globalUsings = CSharpSyntaxTree.ParseText(
             """
             // Parlot global usings for source generator dynamic compilation
@@ -674,6 +671,10 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
             var sgContext = new SourceGenerationContext(parseContextName: "context", methodNamePrefix: methodSymbol.Name);
             
+            // Set the lambda source map before invoking GenerateSource
+            // This allows the LambdaRegistry to map runtime lambda pointers back to their original source
+            sgContext.SetLambdaSourceMap(lambdaSourceMap);
+            
             // Invoke GenerateSource via reflection
             object? sourceResultObj;
             try
@@ -712,8 +713,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 return;
             }
 
-            // Generate C# code
-            var (sourceText, failedLambdas) = GenerateParserWrapperAndCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSources, invocations);
+            // Generate C# code using the new pointer-based lambda system
+            var (sourceText, failedLambdas) = GenerateParserWrapperAndCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, rewriter.Lambdas, invocations);
 
             // Report errors for lambdas that couldn't be extracted
             foreach (var failedLambda in failedLambdas)
@@ -751,7 +752,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         Type valueType,
         SourceResult result,
         SourceGenerationContext sgContext,
-        Dictionary<string, (string Source, bool IsMethodGroup, string? ReturnType)> lambdaSources,
+        Dictionary<int, string> lambdaSourceMap,
+        IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> lambdaInfoMap,
         List<InvocationInfo> invocations)
     {
         var ns = methodSymbol.ContainingNamespace.IsGlobalNamespace
@@ -885,125 +887,68 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine($"    partial class {typeName}");
         sb.AppendLine("    {");
 
-        // Now emit lambda fields - this includes lambdas from both the main parser and all deferred parsers
-        // We need to match lambdas by their signature since runtime traversal order may differ from source order
-        var lambdaSourcesList = lambdaSources.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
-        var registeredLambdas = sgContext.Lambdas.Enumerate().OrderBy(x => x.Id).ToList();
+        // ==== NEW POINTER-BASED LAMBDA EMISSION ====
+        // Each lambda was rewritten to a stub that captures a unique pointer.
+        // The LambdaRegistry extracted these pointers during execution and mapped them to IDs.
+        // Now we use the pointer to look up the original source code directly.
         
-        // Track which source lambdas have been used and which failed
-        var usedSourceIndices = new HashSet<int>();
+        var registeredLambdas = sgContext.Lambdas.Enumerate().OrderBy(x => x.Id).ToList();
         var failedLambdas = new List<string>();
 
         foreach (var (id, del) in registeredLambdas)
         {
             var fieldName = sgContext.GetLambdaFieldName(id);
             var delegateType = del.GetType();
-            var delegateTypeName = TypeNameHelper.GetTypeName(delegateType);
-            
-            // Get delegate info for matching
             var invokeMethod = delegateType.GetMethod("Invoke");
-            var paramCount = invokeMethod?.GetParameters().Length ?? 0;
-            var returnType = invokeMethod?.ReturnType;
-            var returnTypeName = returnType?.Name.ToLowerInvariant() ?? "";
             
-            // Get parameter type names for matching
-            var paramTypeNames = new List<string>();
-            if (invokeMethod is not null)
+            if (invokeMethod is null)
             {
-                foreach (var p in invokeMethod.GetParameters())
-                {
-                    paramTypeNames.Add(p.ParameterType.Name.ToLowerInvariant());
-                }
+                failedLambdas.Add($"Lambda {id}: could not get Invoke method");
+                continue;
             }
+
+            // Get the pointer for this lambda
+            var pointer = sgContext.Lambdas.GetPointer(id);
             
-            // Try to find the best matching source lambda
-            string? matchedSource = null;
-            int bestMatchIndex = -1;
-            int bestScore = -1;
-            
-            for (int i = 0; i < lambdaSourcesList.Count; i++)
+            if (pointer >= 0 && lambdaSourceMap.TryGetValue(pointer, out var originalSource))
             {
-                if (usedSourceIndices.Contains(i))
-                {
-                    continue;
-                }
+                // Success! We have the original source code for this lambda.
+                // Also get the lambda info for additional metadata if available.
+                lambdaInfoMap.TryGetValue(pointer, out var lambdaInfo);
+                var isMethodGroup = lambdaInfo?.IsMethodGroup ?? !originalSource.Contains("=>");
                 
-                var (lambdaSource, isMethodGroup, storedReturnType) = lambdaSourcesList[i];
-                var sourceParamCount = CountLambdaParameters(lambdaSource);
-                
-                // For method groups, we can't determine param count from source
-                // So we allow them to potentially match any single-param delegate
-                if (!isMethodGroup && sourceParamCount != paramCount)
-                {
-                    continue;
-                }
-                
-                // For method groups, verify the return type matches (from semantic model)
-                if (isMethodGroup)
-                {
-                    // If we have return type info from semantic model, it must match
-                    if (storedReturnType is not null && 
-                        !string.Equals(storedReturnType, returnTypeName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue; // Skip - return type doesn't match
-                    }
-                }
-                
-                // Calculate a score based on type name hints in the lambda
-                int score = 0;
-                var lowerLambda = lambdaSource.ToLowerInvariant();
-                
-                // Check for type hints in the lambda body
-                foreach (var typeName_ in paramTypeNames)
-                {
-                    if (lowerLambda.Contains(typeName_))
-                    {
-                        score += 10;
-                    }
-                }
-                
-                // Use the stored return type (from semantic model for method groups, or inferred for lambdas)
-                var effectiveReturnType = storedReturnType ?? InferReturnType(lambdaSource);
-                if (effectiveReturnType is not null && 
-                    string.Equals(effectiveReturnType, returnTypeName, StringComparison.OrdinalIgnoreCase))
-                {
-                    score += 25; // Strong preference for matching return types
-                }
-                
-                // Prefer lambdas that haven't been used and match param count exactly
-                score += (paramCount == sourceParamCount) ? 5 : 0;
-                
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    bestMatchIndex = i;
-                    matchedSource = lambdaSource;
-                }
-            }
-            
-            if (matchedSource is not null && bestMatchIndex >= 0)
-            {
-                usedSourceIndices.Add(bestMatchIndex);
-                
-                // Generate a method instead of a delegate field for better performance
-                var methodSource = GenerateLambdaMethod(fieldName, invokeMethod!, matchedSource);
+                // Generate a method from the original source
+                var methodSource = GenerateLambdaMethod(fieldName, invokeMethod, originalSource, isMethodGroup);
                 sb.AppendLine(methodSource);
             }
             else
             {
-                // Cannot generate source for external lambdas - track for error reporting
-                var errorMsg = $"Lambda {id} (param count: {paramCount}, types: {string.Join(", ", paramTypeNames)})";
+                // No pointer found - this lambda couldn't be rewritten (external lambda, etc.)
+                var paramCount = invokeMethod.GetParameters().Length;
+                var paramTypeNames = invokeMethod.GetParameters().Select(p => p.ParameterType.Name).ToList();
+                var errorMsg = $"Lambda {id} (pointer: {pointer}, param count: {paramCount}, types: {string.Join(", ", paramTypeNames)})";
                 failedLambdas.Add(errorMsg);
                 
-                sb.AppendLine($"        // ERROR: Lambda {id} could not be extracted from source (param count: {paramCount}, types: {string.Join(", ", paramTypeNames)}).");
-                sb.AppendLine($"        // This lambda may be from an external parser or was not found in the method's syntax tree.");
+                sb.AppendLine($"        // ERROR: Lambda {id} could not be extracted from source.");
+                sb.AppendLine($"        // Pointer: {pointer}, which was not found in the source map.");
                 sb.AppendLine($"        // To fix: define the parser inline in the [GenerateParser] method.");
                 
                 // Generate a throwing method for error cases
-                var errorReturnTypeName = TypeNameHelper.GetTypeName(invokeMethod!.ReturnType);
+                var errorReturnTypeName = TypeNameHelper.GetTypeName(invokeMethod.ReturnType);
                 var errorParamList = GenerateParameterList(invokeMethod);
                 sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
                 sb.AppendLine($"        private static {errorReturnTypeName} {fieldName}({errorParamList}) => throw new global::System.InvalidOperationException(\"Lambda could not be extracted from source\");");
+            }
+        }
+
+        // Emit static fields registered by parsers (e.g., SearchValues<char> for AnyOf)
+        if (sgContext.StaticFields.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("        // Static fields for parser data");
+            foreach (var field in sgContext.StaticFields)
+            {
+                sb.Append("        ").AppendLine(field);
             }
         }
 
@@ -1177,6 +1122,10 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             sb.AppendLine($"        public static Parlot.Fluent.Parser<{valueTypeName}> {methodName}_Generated => {parserFieldName};");
         }
 
+        // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
+        // Note: Currently no helper methods are needed since we use HashSet<char> and SearchValues<char>
+        // which are both public types.
+
         sb.AppendLine("    }");
 
         if (!string.IsNullOrEmpty(ns))
@@ -1188,75 +1137,15 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Count parameters in a lambda expression source string.
-    /// Examples:
-    ///   "x => ..." -> 1
-    ///   "(x) => ..." -> 1
-    ///   "(a, b) => ..." -> 2
-    ///   "() => ..." -> 0
-    ///   "static x => ..." -> 1
-    /// </summary>
-    private static int CountLambdaParameters(string lambdaSource)
-    {
-        // Remove "static " prefix if present
-        var source = lambdaSource.TrimStart();
-        if (source.StartsWith("static ", StringComparison.Ordinal))
-        {
-            source = source.Substring(7).TrimStart();
-        }
-
-        // Find the arrow "=>"
-        var arrowIndex = source.IndexOf("=>", StringComparison.Ordinal);
-        if (arrowIndex < 0)
-        {
-            return 0;
-        }
-
-        var paramPart = source.Substring(0, arrowIndex).Trim();
-
-        // Empty parameter list: () => ...
-        if (paramPart == "()")
-        {
-            return 0;
-        }
-
-        // Single identifier without parens: x => ...
-        if (!paramPart.StartsWith("(", StringComparison.Ordinal))
-        {
-            // It's a single identifier
-            return 1;
-        }
-
-        // Has parentheses: (x) or (a, b) or (a, b, c)
-        // Remove the parens
-        if (paramPart.StartsWith("(", StringComparison.Ordinal) && paramPart.EndsWith(")", StringComparison.Ordinal))
-        {
-            paramPart = paramPart.Substring(1, paramPart.Length - 2).Trim();
-        }
-
-        if (string.IsNullOrEmpty(paramPart))
-        {
-            return 0;
-        }
-
-        // Count commas + 1
-        var commaCount = paramPart.Count(c => c == ',');
-        return commaCount + 1;
-    }
-
-    /// <summary>
     /// Generates a method from a lambda source or method group.
     /// Transforms "static x => 'w'" into "private static char MethodName(TextSpan x) => 'w';"
     /// Transforms "char.IsLetterOrDigit" into "private static bool MethodName(char x) => char.IsLetterOrDigit(x);"
     /// </summary>
-    private static string GenerateLambdaMethod(string methodName, System.Reflection.MethodInfo invokeMethod, string lambdaSource)
+    private static string GenerateLambdaMethod(string methodName, System.Reflection.MethodInfo invokeMethod, string lambdaSource, bool isMethodGroup)
     {
         var sb = new StringBuilder();
         var returnTypeName = TypeNameHelper.GetTypeName(invokeMethod.ReturnType);
         var parameters = invokeMethod.GetParameters();
-        
-        // Check if it's a method group (no =>) or a lambda
-        var isMethodGroup = !lambdaSource.Contains("=>");
         
         // Generate parameter list with types
         var paramList = GenerateParameterList(invokeMethod);
@@ -1431,82 +1320,5 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         }
         
         return body;
-    }
-    
-    /// <summary>
-    /// Infers the return type of a lambda expression from its body.
-    /// Returns the type name in lowercase (e.g., "char", "boolean", "int32", "string") or null if unknown.
-    /// </summary>
-    private static string? InferReturnType(string lambdaSource)
-    {
-        // For method groups (no =>), we can't easily infer the return type
-        if (!lambdaSource.Contains("=>"))
-        {
-            return null;
-        }
-        
-        // Extract the body after =>
-        var arrowIndex = lambdaSource.IndexOf("=>", StringComparison.Ordinal);
-        if (arrowIndex < 0) return null;
-        
-        var body = lambdaSource.Substring(arrowIndex + 2).Trim();
-        
-        // Remove trailing semicolon if present
-        if (body.EndsWith(";", StringComparison.Ordinal))
-        {
-            body = body.Substring(0, body.Length - 1).Trim();
-        }
-        
-        // Check for common literal patterns
-        
-        // Boolean literals
-        if (body == "true" || body == "false")
-        {
-            return "boolean";
-        }
-        
-        // Char literal: 'x'
-        if (body.Length >= 2 && body[0] == '\'' && body[body.Length - 1] == '\'')
-        {
-            return "char";
-        }
-        
-        // String literal: "xxx"
-        if (body.Length >= 2 && body[0] == '"' && body[body.Length - 1] == '"')
-        {
-            return "string";
-        }
-        
-        // Integer literal (just digits, possibly with minus)
-        if (System.Text.RegularExpressions.Regex.IsMatch(body, @"^-?\d+$"))
-        {
-            return "int32";
-        }
-        
-        // Decimal/float literal (digits with . or f/m suffix)
-        if (System.Text.RegularExpressions.Regex.IsMatch(body, @"^-?\d+\.\d+[fFdDmM]?$"))
-        {
-            if (body.EndsWith("f", StringComparison.OrdinalIgnoreCase))
-                return "single";
-            if (body.EndsWith("m", StringComparison.OrdinalIgnoreCase))
-                return "decimal";
-            return "double";
-        }
-        
-        // new ClassName(...) - try to extract the type
-        var newMatch = System.Text.RegularExpressions.Regex.Match(body, @"^new\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*[\(\{]");
-        if (newMatch.Success)
-        {
-            return newMatch.Groups[1].Value.ToLowerInvariant();
-        }
-        
-        // Cast expression: (Type)expr
-        var castMatch = System.Text.RegularExpressions.Regex.Match(body, @"^\(([A-Za-z_][A-Za-z0-9_\.]*)\)");
-        if (castMatch.Success)
-        {
-            return castMatch.Groups[1].Value.ToLowerInvariant();
-        }
-        
-        return null;
     }
 }

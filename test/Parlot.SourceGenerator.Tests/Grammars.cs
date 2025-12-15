@@ -394,4 +394,14 @@ public static partial class Grammars
 
     [GenerateParser]
     public static Parser<string> FooUpperParser() => Terms.Text("FOO");
+
+    // Test for AnyOf parser (ListOfChars / SearchValuesCharLiteral)
+    [GenerateParser]
+    public static Parser<TextSpan> AnyOfDigitsParser() => Literals.AnyOf("0123456789");
+
+    [GenerateParser]
+    public static Parser<TextSpan> AnyOfLettersParser() => Literals.AnyOf("abcdefghijklmnopqrstuvwxyz", minSize: 2, maxSize: 10);
+
+    [GenerateParser]
+    public static Parser<TextSpan> NoneOfWhitespaceParser() => Literals.NoneOf(" \t\r\n");
 }
