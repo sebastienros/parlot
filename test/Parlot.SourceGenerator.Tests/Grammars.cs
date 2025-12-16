@@ -404,4 +404,45 @@ public static partial class Grammars
 
     [GenerateParser]
     public static Parser<TextSpan> NoneOfWhitespaceParser() => Literals.NoneOf(" \t\r\n");
+
+    #region Number Literal Parsers
+
+    [GenerateParser]
+    public static Parser<long> IntegerNumberLiteralParser() => Terms.Integer();
+
+    [GenerateParser]
+    public static Parser<decimal> DecimalNumberLiteralParser() => Terms.Decimal();
+
+    [GenerateParser]
+    public static Parser<double> DoubleNumberLiteralWithExponentParser() => 
+        Terms.Number<double>(NumberOptions.Number | NumberOptions.AllowExponent);
+
+    [GenerateParser]
+    public static Parser<decimal> DecimalNumberLiteralWithCommaSeparatorParser() => 
+        Terms.Number<decimal>(NumberOptions.AllowLeadingSign | NumberOptions.AllowDecimalSeparator, decimalSeparator: ',');
+
+    [GenerateParser]
+    public static Parser<long> IntegerNumberLiteralWithUnderscoreSeparatorParser() => 
+        Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowGroupSeparators, groupSeparator: '_');
+
+    [GenerateParser]
+    public static Parser<long> IntegerNumberLiteralNoLeadingSignParser() => 
+        Terms.Number<long>(NumberOptions.None);
+
+    [GenerateParser]
+    public static Parser<decimal> DecimalNumberLiteralNoDecimalSeparatorParser() => 
+        Terms.Number<decimal>(NumberOptions.AllowLeadingSign);
+
+    [GenerateParser]
+    public static Parser<float> FloatNumberLiteralParser() => 
+        Terms.Number<float>(NumberOptions.Number | NumberOptions.AllowExponent);
+
+    [GenerateParser]
+    public static Parser<long> LongNumberLiteralParser() => Terms.Integer(NumberOptions.Integer);
+
+    [GenerateParser]
+    public static Parser<decimal> DecimalNumberLiteralCustomCultureParser() => 
+        Terms.Number<decimal>(NumberOptions.Number | NumberOptions.AllowGroupSeparators, decimalSeparator: ',', groupSeparator: '_');
+
+    #endregion
 }

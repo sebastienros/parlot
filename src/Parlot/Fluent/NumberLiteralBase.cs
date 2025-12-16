@@ -3,6 +3,7 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Numerics;
 using System.Reflection;
@@ -186,10 +187,12 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
         var allowExponent = _allowExponent ? "true" : "false";
 
-        // Emit NumberStyles as a literal cast
-        var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
+        // Emit NumberStyles as a static readonly field
+        var numberStylesFieldName = context.RegisterStaticField(
+            $"private static readonly global::System.Globalization.NumberStyles",
+            $"(global::System.Globalization.NumberStyles){(int)_numberStyles}");
         
-        // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a clone
+        // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a static field
         string cultureExpr;
         if (_culture == CultureInfo.InvariantCulture)
         {
@@ -197,9 +200,10 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         }
         else
         {
-            // For custom cultures, we need to emit code that creates the same culture
-            // This is a simplified approach - for complex cases, we might need to register a factory
-            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+            // For custom cultures, inline the culture creation using a lambda IIFE
+            cultureExpr = context.RegisterStaticField(
+                "private static readonly global::System.Globalization.CultureInfo",
+                $"new global::System.Func<global::System.Globalization.CultureInfo>(() => {{ var c = (global::System.Globalization.CultureInfo)global::System.Globalization.CultureInfo.InvariantCulture.Clone(); c.NumberFormat.NumberDecimalSeparator = \"{_decimalSeparator}\"; c.NumberFormat.NumberGroupSeparator = \"{_groupSeparator}\"; return c; }})()");
         }
 
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
@@ -211,7 +215,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         else
         {
             // Use ReadOnlySpan<char> overload directly - .NET 7+ types all support TryParse(ReadOnlySpan<char>, ...)
-            result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+            result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {parsedValueName}))");
             result.Body.Add("    {");
             result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
             result.Body.Add("        return true;");
