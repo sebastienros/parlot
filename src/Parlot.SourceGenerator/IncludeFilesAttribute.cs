@@ -23,9 +23,24 @@ namespace Parlot.SourceGenerator;
 /// public static Parser&lt;Expression&gt; CreateExpressionParser() =&gt; ...;
 /// </code>
 /// 
+/// You can apply this attribute to methods or container classes:
+/// <code>
+/// [IncludeFiles("CommonAst.cs")]
+/// public static class MyParsers
+/// {
+///     [GenerateParser]
+///     public static Parser&lt;Expression&gt; ExpressionParser() =&gt; ...;
+///     
+///     [GenerateParser]
+///     [IncludeFiles("StatementAst.cs")]
+///     public static Parser&lt;Statement&gt; StatementParser() =&gt; ...;
+/// }
+/// </code>
+/// 
 /// File paths are relative to the file containing the parser method.
+/// When applied to a class, the files will be included for all generated parsers within that class.
 /// </remarks>
-[System.AttributeUsage(System.AttributeTargets.Method, AllowMultiple = false)]
+[System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = false)]
 #if SOURCE_GENERATOR
 internal
 #else

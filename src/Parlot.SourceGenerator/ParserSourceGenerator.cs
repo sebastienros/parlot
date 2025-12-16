@@ -345,22 +345,70 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             validationArgs.Add(new object?[] { methodSymbol.Name });
         }
 
-        // Check for [IncludeFiles] attribute
+        // Check for [IncludeFiles] attribute on method and containing class
         var includeFilesAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeFilesAttribute");
-        var additionalFiles = Array.Empty<string>();
+        var additionalFiles = new List<string>();
         if (includeFilesAttrSymbol is not null)
         {
-            var includeFilesAttr = methodSymbol.GetAttributes()
+            // Check class-level attribute first
+            var classIncludeFilesAttr = containingType.GetAttributes()
                 .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeFilesAttrSymbol));
-            if (includeFilesAttr is not null && includeFilesAttr.ConstructorArguments.Length > 0)
+            if (classIncludeFilesAttr is not null && classIncludeFilesAttr.ConstructorArguments.Length > 0)
             {
-                var arg = includeFilesAttr.ConstructorArguments[0];
+                var arg = classIncludeFilesAttr.ConstructorArguments[0];
                 if (arg.Kind == TypedConstantKind.Array)
                 {
-                    additionalFiles = arg.Values
+                    additionalFiles.AddRange(arg.Values
                         .Where(v => v.Value is string)
-                        .Select(v => (string)v.Value!)
-                        .ToArray();
+                        .Select(v => (string)v.Value!));
+                }
+            }
+            
+            // Then check method-level attribute (which can add more files)
+            var methodIncludeFilesAttr = methodSymbol.GetAttributes()
+                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeFilesAttrSymbol));
+            if (methodIncludeFilesAttr is not null && methodIncludeFilesAttr.ConstructorArguments.Length > 0)
+            {
+                var arg = methodIncludeFilesAttr.ConstructorArguments[0];
+                if (arg.Kind == TypedConstantKind.Array)
+                {
+                    additionalFiles.AddRange(arg.Values
+                        .Where(v => v.Value is string)
+                        .Select(v => (string)v.Value!));
+                }
+            }
+        }
+
+        // Check for [IncludeUsings] attribute on method and containing class
+        var includeUsingsAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeUsingsAttribute");
+        var additionalUsings = new List<string>();
+        if (includeUsingsAttrSymbol is not null)
+        {
+            // Check class-level attribute first
+            var classIncludeUsingsAttr = containingType.GetAttributes()
+                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeUsingsAttrSymbol));
+            if (classIncludeUsingsAttr is not null && classIncludeUsingsAttr.ConstructorArguments.Length > 0)
+            {
+                var arg = classIncludeUsingsAttr.ConstructorArguments[0];
+                if (arg.Kind == TypedConstantKind.Array)
+                {
+                    additionalUsings.AddRange(arg.Values
+                        .Where(v => v.Value is string)
+                        .Select(v => (string)v.Value!));
+                }
+            }
+            
+            // Then check method-level attribute (which can add more usings)
+            var methodIncludeUsingsAttr = methodSymbol.GetAttributes()
+                .FirstOrDefault(attr => SymbolEqualityComparer.Default.Equals(attr.AttributeClass, includeUsingsAttrSymbol));
+            if (methodIncludeUsingsAttr is not null && methodIncludeUsingsAttr.ConstructorArguments.Length > 0)
+            {
+                var arg = methodIncludeUsingsAttr.ConstructorArguments[0];
+                if (arg.Kind == TypedConstantKind.Array)
+                {
+                    additionalUsings.AddRange(arg.Values
+                        .Where(v => v.Value is string)
+                        .Select(v => (string)v.Value!));
                 }
             }
         }
@@ -368,7 +416,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         return new MethodToGenerate(
             methodSymbol, 
             attrLocation, 
-            additionalFiles, 
+            additionalFiles.ToArray(), 
+            additionalUsings.ToArray(),
             validationErrors.Count > 0 ? validationErrors.ToArray() : null,
             validationErrors.Count > 0 ? validationArgs.ToArray() : null);
     }
@@ -377,6 +426,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         IMethodSymbol Method, 
         Location? AttributeLocation, 
         string[] AdditionalFiles,
+        string[] AdditionalUsings,
         DiagnosticDescriptor[]? ValidationErrors,
         object?[][]? ValidationArgs);
     private readonly record struct InvocationInfo(string TargetMethodKey, string InterceptsLocationAttribute, Location Location);
@@ -447,9 +497,17 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         if (methodInfo.AdditionalFiles.Length > 0)
         {
             var baseDir = Path.GetDirectoryName(originalSyntaxTree.FilePath) ?? string.Empty;
+            var addedTrees = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
             foreach (var relativePath in methodInfo.AdditionalFiles)
             {
                 var fullPath = Path.GetFullPath(Path.Combine(baseDir, relativePath));
+                
+                // Skip if already added
+                if (addedTrees.Contains(fullPath))
+                {
+                    continue;
+                }
                 
                 // Find the syntax tree in the host compilation
                 var additionalTree = hostCompilation.SyntaxTrees
@@ -458,6 +516,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 if (additionalTree is not null)
                 {
                     minimalSyntaxTrees.Add(additionalTree);
+                    addedTrees.Add(fullPath);
                 }
                 else
                 {
@@ -466,11 +525,12 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                     additionalTree = hostCompilation.SyntaxTrees
                         .FirstOrDefault(t => string.Equals(Path.GetFileName(t.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
                     
-                    if (additionalTree is not null)
+                    if (additionalTree is not null && !addedTrees.Contains(additionalTree.FilePath))
                     {
                         minimalSyntaxTrees.Add(additionalTree);
+                        addedTrees.Add(additionalTree.FilePath);
                     }
-                    else
+                    else if (additionalTree is null)
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             IncludeFileNotFoundDescriptor,
@@ -839,7 +899,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
 
             // Generate C# code using the new pointer-based lambda system
-            var (sourceText, failedLambdas) = GenerateParserWrapperAndCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, rewriter.Lambdas, invocations);
+            var (sourceText, failedLambdas) = GenerateParserWrapperAndCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, rewriter.Lambdas, invocations, methodInfo.AdditionalUsings);
 
             // Report errors for lambdas that couldn't be extracted
             foreach (var failedLambda in failedLambdas)
@@ -886,7 +946,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         SourceGenerationContext sgContext,
         Dictionary<int, string> lambdaSourceMap,
         IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> lambdaInfoMap,
-        List<InvocationInfo> invocations)
+        List<InvocationInfo> invocations,
+        string[] additionalUsings)
     {
         var ns = methodSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
@@ -1004,10 +1065,35 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("// <auto-generated />");
         sb.AppendLine("#nullable enable annotations");
         sb.AppendLine("#nullable disable warnings");
+        
+        // Default usings
+        var defaultUsings = new HashSet<string>
+        {
+            "System",
+            "System.Linq",
+            "Parlot",
+            "Parlot.Fluent"
+        };
+        
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Linq;");
         sb.AppendLine("using Parlot;");
         sb.AppendLine("using Parlot.Fluent;");
+        
+        // Add additional usings from [IncludeUsings] attribute (excluding duplicates)
+        if (additionalUsings.Length > 0)
+        {
+            var uniqueAdditionalUsings = additionalUsings
+                .Where(u => !string.IsNullOrWhiteSpace(u) && !defaultUsings.Contains(u))
+                .Distinct()
+                .OrderBy(u => u);
+                
+            foreach (var usingNamespace in uniqueAdditionalUsings)
+            {
+                sb.Append("using ").Append(usingNamespace).AppendLine(";");
+            }
+        }
+        
         sb.AppendLine();
         
         // File-local InterceptsLocationAttribute to avoid conflicts with other generators

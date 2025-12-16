@@ -303,6 +303,39 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void InheritedAttributesParser_UsesClassLevelAttributes()
+    {
+        // Test that class-level [IncludeFiles] and [IncludeUsings] work
+        var parser = ClassLevelAttributeGrammars.InheritedAttributesParser();
+        var result = parser.Parse("test");
+
+        Assert.NotNull(result);
+        Assert.Equal("test", result.Text);
+    }
+
+    [Fact]
+    public void CombinedAttributesParser_CombinesClassAndMethodLevelAttributes()
+    {
+        // Test that method-level attributes combine with class-level attributes
+        var parser = ClassLevelAttributeGrammars.CombinedAttributesParser();
+        var result = parser.Parse("42.5");
+
+        Assert.NotNull(result);
+        Assert.Equal(42.5m, result.Value);
+    }
+
+    [Fact]
+    public void AdditionalUsingsParser_UsesMultipleUsings()
+    {
+        // Test that additional usings from both class and method level are included
+        var parser = ClassLevelAttributeGrammars.AdditionalUsingsParser();
+        var result = parser.Parse("hello");
+
+        Assert.NotNull(result);
+        Assert.Equal("hello", result);
+    }
+
+    [Fact]
     public void AnyOfDigitsParser_MatchesDigits()
     {
         // Test that AnyOf parser with digits works
