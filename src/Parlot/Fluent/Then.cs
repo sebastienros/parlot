@@ -186,7 +186,6 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         var result = context.CreateResult(typeof(U));
         var ctx = context.ParseContextName;
         var parsedName = $"parsed{context.NextNumber()}";
-        var tempValueName = $"temp{context.NextNumber()}";
         var parsedTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
@@ -211,10 +210,6 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"{valueTypeName} {tempValueName} = default;");
-        }
         result.Body.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
@@ -231,7 +226,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             }
             else
             {
-                result.Body.Add($"    {tempValueName} = {lambdaName}({parsedName}.Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({parsedName}.Value);");
             }
         }
         else if (_action2 != null)
@@ -243,7 +238,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             }
             else
             {
-                result.Body.Add($"    {tempValueName} = {lambdaName}({ctx}, {parsedName}.Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {parsedName}.Value);");
             }
         }
         else if (_action3 != null)
@@ -255,7 +250,7 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             }
             else
             {
-                result.Body.Add($"    {tempValueName} = {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
             }
         }
         else
@@ -271,13 +266,10 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             
             if (!context.DiscardResult)
             {
-                result.Body.Add($"    {tempValueName} = {valueExpr};");
+                result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
             }
         }
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"    {result.ValueVariable} = {tempValueName};");
-        }
+        
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 
