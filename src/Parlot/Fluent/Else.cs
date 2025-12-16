@@ -142,10 +142,18 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
         }
         else
         {
+            // Value-based: try to use LiteralHelper for supported types
+            var valueExpr = LiteralHelper.ToLiteral(_value);
+            if (valueExpr == null)
+            {
+                throw new NotSupportedException(
+                    $"Else<{typeof(T).Name}> with a value of type '{typeof(T).Name}' cannot be source-generated. " +
+                    $"Use a lambda instead, e.g., .Else(static _ => yourValue)");
+            }
+            
             if (!context.DiscardResult)
             {
-                var lambdaId = context.RegisterLambda(new Func<T>(() => _value!));
-                result.Body.Add($"    {result.ValueVariable} = {lambdaId}();");
+                result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
             }
         }
         

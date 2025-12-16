@@ -98,7 +98,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(TextSpan));
 
         // Escape the values string for use in generated code
-        var escapedValues = EscapeStringLiteral(_values);
+        var escapedValues = LiteralHelper.EscapeStringContent(_values);
 
         // Generate a unique field name base
         var fieldNum = context.NextNumber();
@@ -196,34 +196,6 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         result.Body.Add("return true;");
 
         return result;
-    }
-
-    private static string EscapeStringLiteral(string s)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var c in s)
-        {
-            switch (c)
-            {
-                case '\\': sb.Append("\\\\"); break;
-                case '"': sb.Append("\\\""); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default:
-                    if (char.IsControl(c))
-                    {
-                        sb.Append("\\u");
-                        sb.Append(((int)c).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
-                    }
-                    else
-                    {
-                        sb.Append(c);
-                    }
-                    break;
-            }
-        }
-        return sb.ToString();
     }
 }
 #endif

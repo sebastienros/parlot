@@ -21,6 +21,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Reference Parlot to get access to ISourceable, SourceGenerationContext, etc. -->
     <ProjectReference Include="..\Parlot\Parlot.csproj">
       <PrivateAssets>all</PrivateAssets>

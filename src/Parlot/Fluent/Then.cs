@@ -260,11 +260,18 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         }
         else
         {
-            // Value-based: only call lambda if we need the result
+            // Value-based: try to use LiteralHelper for supported types
+            var valueExpr = LiteralHelper.ToLiteral(_value);
+            if (valueExpr == null)
+            {
+                throw new NotSupportedException(
+                    $"Then<{typeof(T).Name}, {typeof(U).Name}> with a value of type '{typeof(U).Name}' cannot be source-generated. " +
+                    $"Use a lambda instead, e.g., .Then(static _ => yourValue)");
+            }
+            
             if (!context.DiscardResult)
             {
-                var valueLambda = context.RegisterLambda(new Func<U>(() => _value!));
-                result.Body.Add($"    {tempValueName} = {valueLambda}();");
+                result.Body.Add($"    {tempValueName} = {valueExpr};");
             }
         }
         if (!context.DiscardResult)

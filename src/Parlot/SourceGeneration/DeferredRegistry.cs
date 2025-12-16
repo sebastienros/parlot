@@ -8,19 +8,29 @@ namespace Parlot.SourceGeneration;
 /// </summary>
 public sealed class DeferredRegistry
 {
-    private readonly Dictionary<object, string> _methods = new();
+    private readonly Dictionary<object, (string MethodName, string? ParserName)> _methods = new();
 
     public string GetOrCreateMethodName(object parser, string suggestedName)
     {
-        if (!_methods.TryGetValue(parser, out var name))
+        if (!_methods.TryGetValue(parser, out var entry))
         {
-            name = $"{suggestedName}_{_methods.Count}";
-            _methods[parser] = name;
+            var methodName = $"{suggestedName}_{_methods.Count}";
+            
+            // Try to get the parser's Name property via reflection
+            string? parserName = null;
+            var nameProp = parser.GetType().GetProperty("Name");
+            if (nameProp != null && nameProp.PropertyType == typeof(string))
+            {
+                parserName = nameProp.GetValue(parser) as string;
+            }
+            
+            entry = (methodName, parserName);
+            _methods[parser] = entry;
         }
 
-        return name;
+        return entry.MethodName;
     }
 
-    public IEnumerable<(object Parser, string MethodName)> Enumerate() =>
-        _methods.Select(static kvp => (kvp.Key, kvp.Value));
+    public IEnumerable<(object Parser, string MethodName, string? ParserName)> Enumerate() =>
+        _methods.Select(static kvp => (kvp.Key, kvp.Value.MethodName, kvp.Value.ParserName));
 }

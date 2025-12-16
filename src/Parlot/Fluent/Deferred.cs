@@ -186,7 +186,12 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Track position for backtracking on failure
+        var startName = $"start{context.NextNumber()}";
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
 
         // Generate a call to the helper method
         if (context.DiscardResult)
@@ -197,6 +202,12 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
         {
             result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out {result.ValueVariable});");
         }
+
+        // Reset position if the deferred parser failed
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }

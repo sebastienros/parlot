@@ -230,8 +230,9 @@ namespace Parlot.SourceGenerator.Tests
             var p = Grammars.SeparatedDecimalsParser();
             var list = p.Parse("1,2,3");
             Assert.Equal(new decimal[] { 1m, 2m, 3m }, list);
-            var empty = p.Parse("abc");
-            Assert.Empty(empty);
+            // Separated requires at least one element - returns null when no items match
+            Assert.Null(p.Parse("abc"));
+            Assert.Null(p.Parse(""));
         }
 
         [Fact]

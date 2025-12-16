@@ -446,6 +446,8 @@ public sealed class IdentifierExpression : Expression
 
 public sealed class LiteralExpression<T> : Expression
 {
+    public static readonly LiteralExpression<bool> TRUE = new(true);
+    public static readonly LiteralExpression<bool> FALSE = new(false);
     public T Value { get; }
 
     public LiteralExpression(T value)

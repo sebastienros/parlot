@@ -234,7 +234,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
                 throw new NotSupportedException("OneOf requires all parsers to be source-generatable.");
             }
 
-            var (methodName, _, _) = context.Helpers.GetOrCreate(
+            var (methodName, _, _, _) = context.Helpers.GetOrCreate(
                 parser,
                 $"{context.MethodNamePrefix}_OneOf",
                 valueTypeName,
@@ -265,6 +265,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
             foreach (var ch in _map.ExpectedChars)
             {
+                // Skip '\0' as it represents "no match" / default case
+                if (ch == '\0')
+                {
+                    continue;
+                }
+
                 var parsersForChar = _map[ch];
                 if (parsersForChar is null)
                 {

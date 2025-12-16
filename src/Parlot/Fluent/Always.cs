@@ -39,11 +39,18 @@ public sealed class Always<T> : Parser<T>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(T), defaultSuccess: true);
         
-        // For Always<T>, we need to store _value as a lambda field since it can be any type
-        var lambdaId = context.RegisterLambda(new Func<T>(() => _value));
+        // Try to get a string representation of the value for inlining
+        var valueExpr = LiteralHelper.ToLiteral(_value);
         
+        if (valueExpr == null)
+        {
+            throw new NotSupportedException(
+                $"Always<{typeof(T).Name}> with value '{_value}' cannot be source-generated. " +
+                $"Use a lambda that returns the value instead, e.g., SomeParser.Then(static _ => yourValue)");
+        }
+
         result.Body.Add($"{result.SuccessVariable} = true;");
-        result.Body.Add($"{result.ValueVariable} = {lambdaId}();");
+        result.Body.Add($"{result.ValueVariable} = {valueExpr};");
 
         return result;
     }

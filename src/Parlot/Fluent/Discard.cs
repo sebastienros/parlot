@@ -71,26 +71,10 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable, ISourceable
             throw new NotSupportedException("Discard requires a source-generatable parser.");
         }
 
-        var result = context.CreateResult(typeof(U));
-        
-        // Store _value as a lambda field since U can be any type
-        var lambdaId = context.RegisterLambda(new Func<U>(() => _value));
-        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-
-        // Use helper instead of inlining
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Discard", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
-
-        // success = Helper(context, out _);
-        // value = _value;
-        result.Body.Add($"{result.SuccessVariable} = {helperName}({context.ParseContextName}, out _);");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"{result.ValueVariable} = {lambdaId}();");
-        }
-
-        return result;
+        // Discard with a value cannot be source-generated
+        throw new NotSupportedException(
+            $"Discard<{typeof(T).Name}, {typeof(U).Name}> cannot be source-generated. " +
+            $"Use .Then(static _ => yourValue) instead of .Discard(value).");
     }
 
     public override string ToString() => $"{_parser} (Discard)";

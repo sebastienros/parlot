@@ -454,20 +454,30 @@ public class ComprehensiveGeneratedParserTests
     [InlineData("1,2,3", new[] { 1, 2, 3 })]
     [InlineData("1", new[] { 1 })]
     [InlineData("1, 2, 3", new[] { 1, 2, 3 })]  // Terms skip whitespace
-    [InlineData("", new int[0])]
-    [InlineData("abc", new int[0])]
     public void SeparatedDecimals_VariousInputs(string input, int[] expected)
     {
         var parser = Grammars.SeparatedDecimalsParser();
         var result = parser.TryParse(input, out var value);
         
-        Assert.True(result);  // Separated always succeeds
+        Assert.True(result);
         Assert.NotNull(value);
         Assert.Equal(expected.Length, value.Count);
         for (int i = 0; i < expected.Length; i++)
         {
             Assert.Equal(expected[i], (int)value[i]);
         }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    public void SeparatedDecimals_FailsWhenNoItemsMatch(string input)
+    {
+        var parser = Grammars.SeparatedDecimalsParser();
+        // Separated requires at least one element
+        var result = parser.TryParse(input, out var value);
+        
+        Assert.False(result);
     }
 
     #endregion

@@ -284,19 +284,21 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
             result.Body.Add("else");
             result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
-            result.Body.Add($"    {result.SuccessVariable} = true;");
+            // No items parsed - Separated requires at least one element
+            result.Body.Add($"    {result.SuccessVariable} = false;");
             result.Body.Add("}");
         }
         else
         {
-            // When discarding result, just set success based on whether we parsed anything
+            // When discarding result, success depends on whether we parsed at least one item
             result.Body.Add($"if (!{firstName})");
             result.Body.Add("{");
             result.Body.Add($"    {result.SuccessVariable} = true;");
             result.Body.Add("}");
             result.Body.Add("else");
             result.Body.Add("{");
-            result.Body.Add($"    {result.SuccessVariable} = true;");
+            // No items parsed - Separated requires at least one element
+            result.Body.Add($"    {result.SuccessVariable} = false;");
             result.Body.Add("}");
         }
 

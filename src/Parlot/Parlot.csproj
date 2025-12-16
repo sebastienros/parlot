@@ -18,6 +18,8 @@
   <ItemGroup>
     <PackageReference Include="System.Memory" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
+    <!-- Build-time only dependency for source generation literal escaping - not shipped with the package -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Pack the source generator into the analyzers folder for NuGet package -->

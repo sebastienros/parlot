@@ -177,7 +177,27 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
 
 public override string ToString() => $"Text(\"{Text}\")";
 
-    private static string ToLiteral(string value) => $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+    private static string ToLiteral(string value)
+    {
+        var sb = new System.Text.StringBuilder(value.Length + 2);
+        sb.Append('"');
+        foreach (var c in value)
+        {
+            sb.Append(c switch
+            {
+                '\\' => "\\\\",
+                '"' => "\\\"",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                '\0' => "\\0",
+                _ when char.IsControl(c) => $"\\u{(int)c:X4}",
+                _ => c.ToString()
+            });
+        }
+        sb.Append('"');
+        return sb.ToString();
+    }
 
     private static int CountNewLines(string value)
     {

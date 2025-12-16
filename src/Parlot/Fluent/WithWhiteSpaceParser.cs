@@ -115,17 +115,28 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable,
             throw new NotSupportedException("WithWhiteSpaceParser requires a source-generatable parser.");
         }
 
+        if (_whiteSpaceParser is not ISourceable whiteSpaceSourceable)
+        {
+            throw new NotSupportedException("WithWhiteSpaceParser requires a source-generatable whitespace parser.");
+        }
+
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var previousWhiteSpaceParserName = $"previousWhiteSpaceParser{context.NextNumber()}";
         
-        // Register the whitespace parser lambda
-        var whiteSpaceParserLambda = context.RegisterLambda(new Func<Parser<TextSpan>>(() => _whiteSpaceParser));
+        // Generate the whitespace parser as a helper method
+        var wsHelperName = context.Helpers
+            .GetOrCreate(whiteSpaceSourceable, $"{context.MethodNamePrefix}_WhiteSpace", "global::Parlot.TextSpan", () => whiteSpaceSourceable.GenerateSource(context))
+            .MethodName;
+
+        // Create a wrapper parser that delegates to the helper
+        var wsWrapperName = $"_{context.MethodNamePrefix}_WsWrapper{context.NextNumber()}";
+        context.StaticFields.Add($"private static readonly global::Parlot.Fluent.Parser<global::Parlot.TextSpan> {wsWrapperName} = new global::Parlot.Fluent.DelegateParser<global::Parlot.TextSpan>({wsHelperName});");
 
         result.Body.Add($"var {previousWhiteSpaceParserName} = {ctx}.WhiteSpaceParser;");
-        result.Body.Add($"{ctx}.WhiteSpaceParser = {whiteSpaceParserLambda}();");
+        result.Body.Add($"{ctx}.WhiteSpaceParser = {wsWrapperName};");
 
         // Use helper instead of inlining
         var helperName = context.Helpers
