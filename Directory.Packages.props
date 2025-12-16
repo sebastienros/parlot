@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.Memory" Version="4.6.3" />
+    <PackageVersion Include="System.Collections.Immutable" Version="10.0.1" />
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.3.3" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
