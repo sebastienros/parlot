@@ -134,7 +134,7 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var scannerName = context.ScannerName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
 
-        var textLiteral = ToLiteral(Text);
+        var textLiteral = LiteralHelper.StringToLiteral(Text);
         var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
         var comparison = $"global::System.StringComparison.{_comparisonType}";
         var newLines = CountNewLines(Text);
@@ -161,7 +161,7 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         if (isNotOrdinal)
         {
             // For case-insensitive comparisons, we need to extract the actual matched text
-            result.Body.Add($"    {result.ValueVariable} = new string({scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}));");
+            result.Body.Add($"    {result.ValueVariable} = {scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}).ToString();");
         }
         else
         {
@@ -176,28 +176,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
     }
 
 public override string ToString() => $"Text(\"{Text}\")";
-
-    private static string ToLiteral(string value)
-    {
-        var sb = new System.Text.StringBuilder(value.Length + 2);
-        sb.Append('"');
-        foreach (var c in value)
-        {
-            sb.Append(c switch
-            {
-                '\\' => "\\\\",
-                '"' => "\\\"",
-                '\n' => "\\n",
-                '\r' => "\\r",
-                '\t' => "\\t",
-                '\0' => "\\0",
-                _ when char.IsControl(c) => $"\\u{(int)c:X4}",
-                _ => c.ToString()
-            });
-        }
-        sb.Append('"');
-        return sb.ToString();
-    }
 
     private static int CountNewLines(string value)
     {
