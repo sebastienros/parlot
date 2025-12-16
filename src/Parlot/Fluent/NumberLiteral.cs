@@ -2,6 +2,7 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
+using System.Buffers;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
@@ -25,6 +26,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
+    private readonly SearchValuesSeeker _seeker;
 
     public bool CanSeek { get; } = true;
 
@@ -68,6 +70,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = [.. ExpectedChars, groupSeparator];
         }
 
+        _seeker = new SearchValuesSeeker(SearchValues.Create(ExpectedChars));
+
         // Exponent can't be a starting char
 
         Name = "NumberLiteral";
@@ -75,14 +79,22 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        var scanner = context.Scanner;
+
         context.EnterParser(this);
 
-        var reset = context.Scanner.Cursor.Position;
+        if (!_seeker.CanMatch(scanner.Cursor.Offset))
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        var reset = scanner.Cursor.Position;
         var start = reset.Offset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
+        if (scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
         {
-            var end = context.Scanner.Cursor.Offset;
+            var end = scanner.Cursor.Offset;
 
             if (T.TryParse(number, _numberStyles, _culture, out var value))
             {
@@ -94,6 +106,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         }
 
         context.Scanner.Cursor.ResetPosition(reset);
+
+        _seeker.UpdateNextMatch(scanner.Cursor.Offset, scanner.Cursor.Buffer.AsSpan());
 
         context.ExitParser(this);
         return false;
