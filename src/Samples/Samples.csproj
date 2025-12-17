@@ -4,7 +4,7 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+		<CompilerGeneratedFilesOutputPath>obj\$(Configuration)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
     <!-- Enable interceptors for source generator -->
     <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Parlot.Tests.Sql;Parlot.Tests.Calc;Parlot.Tests.Json</InterceptorsPreviewNamespaces>
   </PropertyGroup>

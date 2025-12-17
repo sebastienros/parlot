@@ -17,13 +17,8 @@
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
     <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
     <!-- Suppress experimental warning for interceptor APIs -->
-    <NoWarn>$(NoWarn);RSEXPERIMENTAL002</NoWarn>
+    <NoWarn>$(NoWarn);RSEXPERIMENTAL002;RS2007;RS2008</NoWarn>
   </PropertyGroup>
-
-  <ItemGroup>
-    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
-    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
-  </ItemGroup>
 
   <ItemGroup>
     <!-- Reference Parlot to get access to ISourceable, SourceGenerationContext, etc. -->
