@@ -118,8 +118,10 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         "Parlot.SourceGenerator",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+    private static readonly string[] first = new[] { "// Global usings for source generator dynamic compilation" };
 
     #endregion
+
 
     /// <summary>
     /// Initializes the incremental generator to find and process methods annotated with <see cref="GenerateParserAttribute"/>.
@@ -499,62 +501,135 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             var baseDir = Path.GetDirectoryName(originalSyntaxTree.FilePath) ?? string.Empty;
             var addedTrees = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             
-            foreach (var relativePath in methodInfo.AdditionalFiles)
+            // Mark the original file as already added to avoid duplicates
+            addedTrees.Add(originalSyntaxTree.FilePath);
+            
+            foreach (var pattern in methodInfo.AdditionalFiles)
             {
-                var fullPath = Path.GetFullPath(Path.Combine(baseDir, relativePath));
+                // Normalize path separators - accept both / and \
+                var normalizedPattern = pattern.Replace('\\', '/');
                 
-                // Skip if already added
-                if (addedTrees.Contains(fullPath))
+                // Check if this is a glob pattern
+                if (normalizedPattern.Contains('*'))
                 {
-                    continue;
-                }
-                
-                // Find the syntax tree in the host compilation
-                var additionalTree = hostCompilation.SyntaxTrees
-                    .FirstOrDefault(t => string.Equals(t.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-                
-                if (additionalTree is not null)
-                {
-                    minimalSyntaxTrees.Add(additionalTree);
-                    addedTrees.Add(fullPath);
-                }
-                else
-                {
-                    // Try to find by filename only if full path doesn't match
-                    var fileName = Path.GetFileName(relativePath);
-                    additionalTree = hostCompilation.SyntaxTrees
-                        .FirstOrDefault(t => string.Equals(Path.GetFileName(t.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
+                    // Match files using glob pattern
+                    var matchedTrees = MatchFilesWithGlob(hostCompilation.SyntaxTrees, baseDir, normalizedPattern);
                     
-                    if (additionalTree is not null && !addedTrees.Contains(additionalTree.FilePath))
-                    {
-                        minimalSyntaxTrees.Add(additionalTree);
-                        addedTrees.Add(additionalTree.FilePath);
-                    }
-                    else if (additionalTree is null)
+                    if (matchedTrees.Count == 0)
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             IncludeFileNotFoundDescriptor,
-                            methodSymbol.Locations.FirstOrDefault(), relativePath, methodSymbol.Name));
+                            methodSymbol.Locations.FirstOrDefault(), pattern, methodSymbol.Name));
+                    }
+                    
+                    foreach (var tree in matchedTrees)
+                    {
+                        if (!addedTrees.Contains(tree.FilePath))
+                        {
+                            minimalSyntaxTrees.Add(tree);
+                            addedTrees.Add(tree.FilePath);
+                        }
+                    }
+                }
+                else
+                {
+                    // Non-glob pattern - use exact path matching
+                    var fullPath = Path.GetFullPath(Path.Combine(baseDir, normalizedPattern));
+                    
+                    // Skip if already added
+                    if (addedTrees.Contains(fullPath))
+                    {
+                        continue;
+                    }
+                    
+                    // Find the syntax tree in the host compilation
+                    var additionalTree = hostCompilation.SyntaxTrees
+                        .FirstOrDefault(t => string.Equals(t.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (additionalTree is not null)
+                    {
+                        minimalSyntaxTrees.Add(additionalTree);
+                        addedTrees.Add(fullPath);
+                    }
+                    else
+                    {
+                        // Try to find by filename only if full path doesn't match
+                        var fileName = Path.GetFileName(normalizedPattern);
+                        additionalTree = hostCompilation.SyntaxTrees
+                            .FirstOrDefault(t => string.Equals(Path.GetFileName(t.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (additionalTree is not null && !addedTrees.Contains(additionalTree.FilePath))
+                        {
+                            minimalSyntaxTrees.Add(additionalTree);
+                            addedTrees.Add(additionalTree.FilePath);
+                        }
+                        else if (additionalTree is null)
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(
+                                IncludeFileNotFoundDescriptor,
+                                methodSymbol.Locations.FirstOrDefault(), pattern, methodSymbol.Name));
+                        }
                     }
                 }
             }
         }
 
-        // Add a synthetic file with global usings that Parlot and typical projects provide.
+        // Collect global usings from the host compilation (includes implicit usings from the project)
+        var globalUsingDirectives = new HashSet<string>(StringComparer.Ordinal);
+        
+        foreach (var tree in hostCompilation.SyntaxTrees)
+        {
+            var root = tree.GetRoot();
+            var usings = root.DescendantNodes()
+                .OfType<UsingDirectiveSyntax>()
+                .Where(u => !u.GlobalKeyword.IsKind(SyntaxKind.None));
+            
+            foreach (var usingDirective in usings)
+            {
+                var usingText = usingDirective.ToString().Trim();
+                if (!string.IsNullOrEmpty(usingText))
+                {
+                    globalUsingDirectives.Add(usingText);
+                }
+            }
+        }
+
+        // Add Parlot-specific global usings
+        globalUsingDirectives.Add("global using Parlot;");
+        globalUsingDirectives.Add("global using Parlot.Fluent;");
+        globalUsingDirectives.Add("global using static Parlot.Fluent.Parsers;");
+
+        // Create a synthetic file with all collected global usings
+        var globalUsingsText = string.Join("\n", first.Concat(globalUsingDirectives.OrderBy(u => u)));
+        
         var globalUsings = CSharpSyntaxTree.ParseText(
-            """
-            // Parlot global usings for source generator dynamic compilation
-            global using System;
-            global using System.Collections.Generic;
-            global using System.Linq;
-            global using System.Threading.Tasks;
-            global using Parlot;
-            global using Parlot.Fluent;
-            global using static Parlot.Fluent.Parsers;
-            """,
+            globalUsingsText,
             parseOptions,
             path: "ParlotGlobalUsings.g.cs");
         minimalSyntaxTrees.Add(globalUsings);
+        
+        // Include source generator outputs from the host compilation
+        // These are syntax trees with generated file paths or specific naming patterns
+        foreach (var tree in hostCompilation.SyntaxTrees)
+        {
+            if (string.IsNullOrEmpty(tree.FilePath))
+            {
+                continue;
+            }
+            
+            // Check if this is a generated file by looking at the path
+            // Generated files typically appear in obj/*/generated/ or have .g.cs/.g.i.cs extensions
+            var filePath = tree.FilePath.Replace('\\', '/');
+            var isGenerated = filePath.Contains("/generated/", StringComparison.OrdinalIgnoreCase) ||
+                              filePath.Contains("/obj/", StringComparison.OrdinalIgnoreCase) && 
+                              (filePath.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) || 
+                               filePath.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase));
+            
+            if (isGenerated && !minimalSyntaxTrees.Contains(tree))
+            {
+                minimalSyntaxTrees.Add(tree);
+            }
+        }
         
         var tempCompilation = hostCompilation
             .RemoveAllSyntaxTrees()
@@ -571,7 +646,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             var errorMessages = string.Join("; ", emitResult.Diagnostics
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .Take(5)
-                .Select(d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture)));
+                .Select(d => 
+                {
+                    var location = d.Location;
+                    var lineSpan = location.GetLineSpan();
+                    var fileName = Path.GetFileName(lineSpan.Path);
+                    var line = lineSpan.StartLinePosition.Line + 1;
+                    return $"{fileName}({line}): {d.GetMessage(System.Globalization.CultureInfo.InvariantCulture)}";
+                }));
             
             context.ReportDiagnostic(Diagnostic.Create(
                 EmitFailedDescriptor,
@@ -917,14 +999,32 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 return;
             }
 
+            // Generate diagnostics file with compilation information
+            var diagnosticsText = GenerateDiagnosticsFile(
+                methodSymbol,
+                methodInfo.AdditionalFiles,
+                methodInfo.AdditionalUsings,
+                globalUsingDirectives,
+                minimalSyntaxTrees);
+
             var hintName = $"{methodSymbol.ContainingType.Name}_{methodSymbol.Name}.Parlot.g.cs";
+            var diagnosticsHintName = $"{methodSymbol.ContainingType.Name}_{methodSymbol.Name}.Diagnostics.g.cs";
+            
+            // Add generated source to compilation output
+            context.AddSource(hintName, SourceText.From(sourceText, Encoding.UTF8));
+            
+            // Add diagnostics as a commented C# file so it appears in generated files without breaking compilation
+            var commentedDiagnostics = "/*\n" + diagnosticsText + "\n*/";
+            context.AddSource(diagnosticsHintName, SourceText.From(commentedDiagnostics, Encoding.UTF8));
+            
+            // Also write to dump directory if specified
             var dumpDirectory = Environment.GetEnvironmentVariable("PARLOT_DUMP_GEN_DIR");
             if (!string.IsNullOrEmpty(dumpDirectory))
             {
                 Directory.CreateDirectory(dumpDirectory);
                 File.WriteAllText(Path.Combine(dumpDirectory, hintName), sourceText);
+                File.WriteAllText(Path.Combine(dumpDirectory, diagnosticsHintName.Replace(".g.cs", ".txt")), diagnosticsText);
             }
-            context.AddSource(hintName, SourceText.From(sourceText, Encoding.UTF8));
             
             // Report success with the number of intercepted call sites
             context.ReportDiagnostic(Diagnostic.Create(
@@ -1559,5 +1659,224 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         }
         
         return body;
+    }
+
+    /// <summary>
+    /// Matches files from syntax trees using a glob pattern.
+    /// Supports * (any characters except /) and ** (any characters including /).
+    /// </summary>
+    private static List<SyntaxTree> MatchFilesWithGlob(
+        IEnumerable<SyntaxTree> syntaxTrees,
+        string baseDir,
+        string pattern)
+    {
+        var results = new List<SyntaxTree>();
+        
+        // Normalize the base directory
+        baseDir = baseDir.Replace('\\', '/');
+        if (!baseDir.EndsWith("/", StringComparison.Ordinal))
+        {
+            baseDir += '/';
+        }
+        
+        // Resolve the pattern to get the actual search base directory and pattern
+        // For patterns like "../../**/*.cs", we need to resolve the base directory first
+        string searchBase = baseDir;
+        string searchPattern = pattern;
+        
+        // Handle relative path navigation (../)
+        while (searchPattern.StartsWith("../", StringComparison.Ordinal))
+        {
+            searchPattern = searchPattern.Substring(3);
+            // Go up one directory
+            searchBase = searchBase.TrimEnd('/');
+            var lastSlash = searchBase.LastIndexOf('/');
+            if (lastSlash > 0)
+            {
+                searchBase = searchBase.Substring(0, lastSlash + 1);
+            }
+        }
+        
+        // Build regex pattern from glob pattern
+        var regexPattern = GlobToRegex(searchPattern);
+        var regex = new System.Text.RegularExpressions.Regex(regexPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        
+        foreach (var tree in syntaxTrees)
+        {
+            if (string.IsNullOrEmpty(tree.FilePath))
+            {
+                continue;
+            }
+            
+            // Normalize the tree path
+            var treePath = tree.FilePath.Replace('\\', '/');
+            
+            // Calculate relative path from searchBase
+            string relativePath;
+            if (treePath.StartsWith(searchBase, StringComparison.OrdinalIgnoreCase))
+            {
+                relativePath = treePath.Substring(searchBase.Length);
+            }
+            else
+            {
+                // Not under the search base, skip
+                continue;
+            }
+            
+            if (regex.IsMatch(relativePath))
+            {
+                results.Add(tree);
+            }
+        }
+        
+        return results;
+    }
+
+    /// <summary>
+    /// Converts a glob pattern to a regex pattern.
+    /// Supports * (any characters except /) and ** (any characters including /).
+    /// </summary>
+    private static string GlobToRegex(string pattern)
+    {
+        var sb = new System.Text.StringBuilder("^");
+        
+        for (int i = 0; i < pattern.Length; i++)
+        {
+            char c = pattern[i];
+            
+            if (c == '*')
+            {
+                // Check for **
+                if (i + 1 < pattern.Length && pattern[i + 1] == '*')
+                {
+                    // ** matches any character including /
+                    sb.Append(".*");
+                    i++; // Skip the second *
+                    
+                    // Skip following / if present
+                    if (i + 1 < pattern.Length && pattern[i + 1] == '/')
+                    {
+                        i++;
+                    }
+                }
+                else
+                {
+                    // * matches any character except /
+                    sb.Append("[^/]*");
+                }
+            }
+            else if (c == '?')
+            {
+                // ? matches any single character except /
+                sb.Append("[^/]");
+            }
+            else if (c == '.' || c == '+' || c == '^' || c == '$' || c == '(' || c == ')' || 
+                     c == '[' || c == ']' || c == '{' || c == '}' || c == '|' || c == '\\')
+            {
+                // Escape regex special characters
+                sb.Append('\\');
+                sb.Append(c);
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+        
+        sb.Append('$');
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generates a diagnostics file containing compilation information for debugging.
+    /// </summary>
+    private static string GenerateDiagnosticsFile(
+        IMethodSymbol methodSymbol,
+        string[] additionalFiles,
+        string[] additionalUsings,
+        HashSet<string> globalUsingDirectives,
+        List<SyntaxTree> includedSyntaxTrees)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("=================================================================");
+        sb.AppendLine($"Parlot Source Generator Diagnostics");
+        sb.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine("=================================================================");
+        sb.AppendLine();
+        
+        sb.AppendLine($"Method: {methodSymbol.ContainingType.ToDisplayString()}.{methodSymbol.Name}");
+        sb.AppendLine($"Return Type: {methodSymbol.ReturnType.ToDisplayString()}");
+        sb.AppendLine();
+        
+        sb.AppendLine("=================================================================");
+        sb.AppendLine("INCLUDED FILES (from [IncludeFiles] attribute)");
+        sb.AppendLine("=================================================================");
+        if (additionalFiles.Length > 0)
+        {
+            sb.AppendLine($"Patterns specified: {additionalFiles.Length}");
+            foreach (var pattern in additionalFiles)
+            {
+                sb.AppendLine($"  - {pattern}");
+            }
+            sb.AppendLine();
+            
+            sb.AppendLine($"Files resolved: {includedSyntaxTrees.Count - 1}"); // -1 for global usings file
+            foreach (var tree in includedSyntaxTrees)
+            {
+                if (tree.FilePath != "ParlotGlobalUsings.g.cs")
+                {
+                    sb.AppendLine($"  - {tree.FilePath}");
+                }
+            }
+        }
+        else
+        {
+            sb.AppendLine("No additional files specified");
+        }
+        sb.AppendLine();
+        
+        sb.AppendLine("=================================================================");
+        sb.AppendLine("CUSTOM USINGS (from [IncludeUsings] attribute)");
+        sb.AppendLine("=================================================================");
+        if (additionalUsings.Length > 0)
+        {
+            sb.AppendLine($"Count: {additionalUsings.Length}");
+            foreach (var usingDirective in additionalUsings.OrderBy(u => u))
+            {
+                sb.AppendLine($"  - {usingDirective}");
+            }
+        }
+        else
+        {
+            sb.AppendLine("No custom usings specified");
+        }
+        sb.AppendLine();
+        
+        sb.AppendLine("=================================================================");
+        sb.AppendLine("GLOBAL USINGS (implicit usings + Parlot usings)");
+        sb.AppendLine("=================================================================");
+        sb.AppendLine($"Count: {globalUsingDirectives.Count}");
+        foreach (var usingDirective in globalUsingDirectives.OrderBy(u => u))
+        {
+            sb.AppendLine($"  {usingDirective}");
+        }
+        sb.AppendLine();
+        
+        sb.AppendLine("=================================================================");
+        sb.AppendLine("ALL SYNTAX TREES IN TEMPORARY COMPILATION");
+        sb.AppendLine("=================================================================");
+        sb.AppendLine($"Count: {includedSyntaxTrees.Count}");
+        foreach (var tree in includedSyntaxTrees)
+        {
+            var lineCount = tree.GetRoot().GetText().Lines.Count;
+            sb.AppendLine($"  - {tree.FilePath} ({lineCount} lines)");
+        }
+        sb.AppendLine();
+        
+        sb.AppendLine("=================================================================");
+        sb.AppendLine("END OF DIAGNOSTICS");
+        sb.AppendLine("=================================================================");
+        
+        return sb.ToString();
     }
 }
