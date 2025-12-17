@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Frozen;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Parlot;
@@ -12,10 +12,8 @@ namespace Parlot;
 /// </summary>
 internal sealed class CharMap<T> where T : class
 {
-    public static MethodInfo IndexerMethodInfo = typeof(CharMap<T>).GetMethod("get_Item", BindingFlags.Public | BindingFlags.Instance)!;
-
     private readonly T[] _asciiMap = new T[128];
-    private Dictionary<uint, T>? _nonAsciiMap;
+    private FrozenDictionary<uint, T>? _nonAsciiMap;
 
     public CharMap()
     {
@@ -34,6 +32,8 @@ internal sealed class CharMap<T> where T : class
         ExpectedChars = [.. charSet];
         Array.Sort(ExpectedChars);
 
+        Dictionary<uint, T>? nonAsciiMap = null;
+
         foreach (var item in map)
         {
             var c = item.Key;
@@ -43,13 +43,18 @@ internal sealed class CharMap<T> where T : class
             }
             else
             {
-                _nonAsciiMap ??= [];
+                nonAsciiMap ??= [];
 
-                if (!_nonAsciiMap.ContainsKey(c))
+                if (!nonAsciiMap.ContainsKey(c))
                 {
-                    _nonAsciiMap[c] = item.Value;
+                    nonAsciiMap[c] = item.Value;
                 }
             }
+        }
+
+        if (nonAsciiMap != null)
+        {
+            _nonAsciiMap = nonAsciiMap.ToFrozenDictionary();
         }
     }
 
@@ -64,11 +69,12 @@ internal sealed class CharMap<T> where T : class
         }
         else
         {
-            _nonAsciiMap ??= [];
+            Dictionary<uint, T> dic = _nonAsciiMap == null ? [] : new(_nonAsciiMap);
 
-            if (!_nonAsciiMap.ContainsKey(c))
+            if (!dic.ContainsKey(c))
             {
-                _nonAsciiMap[c] = value;
+                dic[c] = value;
+                _nonAsciiMap = dic.ToFrozenDictionary();
             }
         }
     }
