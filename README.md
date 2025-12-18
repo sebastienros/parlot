@@ -95,6 +95,7 @@ static FluentParser()
 
 - [Existing parsers and usage examples](docs/parsers.md)
 - [Best practices for custom parsers](docs/writing.md)
+- [Source generation guide](docs/source-generation.md)
 
 ## Source-generated parsers
 
@@ -136,6 +137,16 @@ var foo = MyGrammar.FooParser();      // Uses generated code
 - Add `<InterceptorsNamespaces>$(InterceptorsNamespaces);YourNamespace</InterceptorsNamespaces>` to your project file.
 - Methods must be static and parameterless.
 - The containing class should be `partial` (optional but recommended).
+
+### Advanced Configuration
+
+Additional attributes can be combined with `[GenerateParser]`:
+
+- `[IncludeFiles("*.cs")]` – Include source files (supports globs) for types used by your parser.
+- `[IncludeUsings("Namespace")]` – Add extra using directives to generated code.
+- `[IncludeGenerators("AssemblyName")]` – Run other source generators before parser generation.
+
+For detailed documentation, see [Source Generation Guide](docs/source-generation.md).
 
 > **Why use source generation?**
 > - ~20% faster parsing vs. runtime-compiled graphs (see benchmarks)

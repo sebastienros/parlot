@@ -40,3 +40,84 @@ var hello = MyGrammar.HelloParser();
 var foo = MyGrammar.FooParser();
 ```
 
+## Helper Attributes
+
+### IncludeFiles
+
+Include additional source files for types your parser depends on. Paths are relative to the source file containing the `[GenerateParser]` method.
+
+```csharp
+[GenerateParser]
+[IncludeFiles("Ast.cs", "Tokens.cs")]
+public static Parser<Expression> CreateParser() => ...;
+```
+
+Glob patterns are supported:
+- `*` – matches any characters except path separator
+- `**` – matches recursively (any depth)
+- `?` – matches single character
+
+```csharp
+[IncludeFiles("Models/*.cs", "../Shared/**/*.cs")]
+```
+
+### IncludeUsings
+
+Add using directives to the generated code:
+
+```csharp
+[GenerateParser]
+[IncludeUsings("System.Collections.Generic", "MyProject.Models")]
+public static Parser<Expression> CreateParser() => ...;
+```
+
+### IncludeGenerators
+
+Run other source generators (e.g., PolySharp) before parser generation:
+
+```csharp
+[GenerateParser]
+[IncludeGenerators("PolySharp")]
+public static Parser<Expression> CreateParser() => ...;
+```
+
+### Class-level Attributes
+
+Helper attributes can be applied at class level to affect all parsers:
+
+```csharp
+[IncludeFiles("Ast.cs")]
+[IncludeUsings("MyProject.Models")]
+public static partial class MyParsers
+{
+    [GenerateParser]
+    public static Parser<Expression> ExprParser() => ...;
+
+    [GenerateParser]
+    [IncludeFiles("Extra.cs")]  // Combined with class-level
+    public static Parser<Statement> StmtParser() => ...;
+}
+```
+
+## Custom Parsers with ISourceable
+
+To make custom parsers work with source generation, implement `ISourceable`:
+
+```csharp
+public class MyCustomParser : Parser<string>, ISourceable
+{
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        var res = context.CreateResult(typeof(string));
+        
+        res.Body.Add($"// Custom parsing logic");
+        res.Body.Add($"{res.SuccessVariable} = true;");
+        res.Body.Add($"{res.ValueVariable} = \"result\";");
+        
+        return res;
+    }
+}
+```
+
+For comprehensive documentation, see [Source Generation Guide](../../docs/source-generation.md).
+
