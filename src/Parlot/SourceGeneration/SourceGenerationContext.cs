@@ -13,10 +13,11 @@ public sealed class SourceGenerationContext
     private int _number;
     private int _staticFieldNumber;
 
-    public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null)
+    public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null, TargetFrameworkInfo? targetFramework = null)
     {
         ParseContextName = parseContextName ?? throw new ArgumentNullException(nameof(parseContextName));
         MethodNamePrefix = methodNamePrefix ?? "";
+        TargetFramework = targetFramework ?? TargetFrameworkInfo.Unknown;
 
         Helpers = new ParserHelperRegistry();
     }
@@ -54,6 +55,11 @@ public sealed class SourceGenerationContext
     /// Prefix for generated lambda field names to ensure uniqueness across multiple parsers in the same class.
     /// </summary>
     public string MethodNamePrefix { get; }
+
+    /// <summary>
+    /// Target framework for the current compilation.
+    /// </summary>
+    public TargetFrameworkInfo TargetFramework { get; }
 
     /// <summary>
     /// Global locals (as code lines) for the generated root method.
