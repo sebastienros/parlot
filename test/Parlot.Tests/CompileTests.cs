@@ -534,6 +534,9 @@ public class CompileTests
     [Fact]
     public void CompiledIfShouldNotInvokeParserWhenFalse()
     {
+        // Add a test to ensure state can be a custom object (Expression.Constant might not work with that)
+        Assert.False(true);
+
         bool invoked = false;
 
 #pragma warning disable CS0618 // Type or member is obsolete
