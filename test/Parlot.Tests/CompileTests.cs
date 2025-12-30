@@ -596,16 +596,22 @@ public class CompileTests
         var i = Literals.Text("i:");
         var s = Literals.Text("s:");
 
-        var parser = d.Or(i).Or(s).Switch((context, result) =>
+        var parsers = new Parser<object>[]
         {
-            switch (result)
+            Literals.Decimal().Then<object>(x => x),
+            Literals.Integer().Then<object>(x => x),
+            Literals.String().Then<object>(x => x),
+        };
+
+        var parser = d.Or(i).Or(s)
+            .Switch((context, result) => result switch
             {
-                case "d:": return Literals.Decimal().Then<object>(x => x);
-                case "i:": return Literals.Integer().Then<object>(x => x);
-                case "s:": return Literals.String().Then<object>(x => x);
-            }
-            return null;
-        }).Compile();
+                "d:" => 0,
+                "i:" => 1,
+                "s:" => 2,
+                _ => -1
+            }, parsers)
+            .Compile();
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
         Assert.Equal((decimal)123.456, resultD);
@@ -621,7 +627,10 @@ public class CompileTests
     public void SelectShouldCompilePickParserUsingRuntimeLogic()
     {
         var allowWhiteSpace = true;
-        var parser = Select<long>(_ => allowWhiteSpace ? Terms.Integer() : Literals.Integer()).Compile();
+        var terms = Terms.Integer();
+        var literals = Literals.Integer();
+
+        var parser = Select<long>(_ => allowWhiteSpace ? 0 : 1, terms, literals).Compile();
 
         Assert.True(parser.TryParse(" 42", out var result1));
         Assert.Equal(42, result1);
@@ -637,7 +646,7 @@ public class CompileTests
     [Fact]
     public void SelectShouldCompileFailWhenSelectorReturnsNull()
     {
-        var parser = Select<long>(_ => null!).Compile();
+        var parser = Select<long>(_ => -1, Terms.Integer()).Compile();
 
         Assert.False(parser.TryParse("123", out _));
     }
@@ -645,7 +654,10 @@ public class CompileTests
     [Fact]
     public void SelectShouldCompileHonorConcreteParseContext()
     {
-        var parser = Select<CustomCompileParseContext, string>(context => context.PreferYes ? Literals.Text("yes") : Literals.Text("no")).Compile();
+        var yesParser = Literals.Text("yes");
+        var noParser = Literals.Text("no");
+
+        var parser = Select<CustomCompileParseContext, string>(context => context.PreferYes ? 0 : 1, yesParser, noParser).Compile();
 
         var yesContext = new CustomCompileParseContext(new Scanner("yes")) { PreferYes = true };
         Assert.True(parser.TryParse(yesContext, out var yes, out _));

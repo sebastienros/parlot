@@ -84,12 +84,12 @@ public static partial class Parsers
     /// <summary>
     /// Builds a parser that selects another parser using custom logic.
     /// </summary>
-    public static Parser<T> Select<C, T>(Func<C, Parser<T>> selector) where C : ParseContext => new Select<C, T>(selector);
+    public static Parser<T> Select<C, T>(Func<C, int> selector, params Parser<T>[] parsers) where C : ParseContext => new Select<C, T>(selector, parsers);
 
     /// <summary>
     /// Builds a parser that selects another parser using custom logic.
     /// </summary>
-    public static Parser<T> Select<T>(Func<ParseContext, Parser<T>> selector) => new Select<ParseContext, T>(selector);
+    public static Parser<T> Select<T>(Func<ParseContext, int> selector, params Parser<T>[] parsers) => new Select<ParseContext, T>(selector, parsers);
 
     /// <summary>
     /// Builds a parser that can be defined later on. Use it when a parser need to be declared before its rule can be set.

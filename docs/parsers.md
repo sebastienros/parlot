@@ -29,13 +29,12 @@ Matches blank spaces, optionally including new lines. Returns a `TextSpan` with 
 Parser<TextSpan> WhiteSpace(bool includeNewLines = false)
 ```
 
-Usage</summary>
+Usage:
 
 ```c#
 var input = "   \thello world  ";
 var parser = Literals.WhiteSpace();
 ```
-
 Result:
 
 ```
@@ -66,29 +65,6 @@ parser.Parse("helloworld"); // failure
 
 Matches any non-blank spaces, optionally including new lines. Returns a `TextSpan` with the matched characters.  
 
-### Select
-
-Selects the parser to execute at runtime. Use it when the next parser depends on mutable state or a custom `ParseContext` implementation.
-
-```c#
-Parser<T> Select<T>(Func<ParseContext, Parser<T>> selector)
-Parser<T> Select<C, T>(Func<C, Parser<T>> selector) where C : ParseContext
-```
-
-Usage:
-
-```c#
-var parser = Select<CustomContext, string>(context =>
-{
-    return context.PreferYes ? Literals.Text("yes") : Literals.Text("no");
-});
-
-var result = parser.Parse(new CustomContext(new Scanner("yes")) { PreferYes = true });
-```
-`CustomContext` is an application-defined type that derives from `ParseContext` and exposes additional configuration.
-
-
-If the selector returns `null`, the `Select` parser fails without consuming any input. Capture additional state through closures or custom `ParseContext` properties when needed.
 
 ```c#
 Parser<TextSpan> NonWhiteSpace(bool includeNewLines = false)
@@ -106,6 +82,29 @@ Result:
 ```
 "hello"
 ```
+
+### Select
+
+Selects the parser to execute at runtime. Use it when the next parser depends on mutable state or a custom `ParseContext` implementation.
+
+```c#
+Parser<T> Select<T>(Func<ParseContext, int> selector, params Parser<T>[] parsers)
+Parser<T> Select<C, T>(Func<C, int> selector, params Parser<T>[] parsers) where C : ParseContext
+```
+
+Usage:
+
+```c#
+var yes = Literals.Text("yes");
+var no = Literals.Text("no");
+
+var parser = Select<CustomContext, string>(context => context.PreferYes ? 0 : 1, yes, no);
+
+var result = parser.Parse(new CustomContext(new Scanner("yes")) { PreferYes = true });
+```
+`CustomContext` is an application-defined type that derives from `ParseContext` and exposes additional configuration.
+
+If the selector returns an out-of-range index, the `Select` parser fails without consuming any input. Capture additional state through closures or custom `ParseContext` properties when needed.
 
 ### Text
 
@@ -1081,24 +1080,23 @@ To evaluate a condition before a parser is executed use the `If` parser instead.
 Returns a parser using custom logic based on previous results.
 
 ```c#
-Parser<U> Switch<U>(Func<ParseContext, T, Parser<U>> action)
+Parser<U> Switch<U>(Func<ParseContext, T, int> selector, params Parser<U>[] parsers)
 ```
 
 Usage:
 
 ```c#
-var parser = Terms.Integer().Switch((context, i) =>
-        {
-            // Valid entries: "1 is odd", "2 is even"
-            // Invalid: "7 is even"
+var odd = Terms.Text("is odd");
+var even = Terms.Text("is even");
 
-            return i % 2 == 0
-            ? Terms.Text("is odd")
-            : Terms.Text("is even");
-        });
+var parser = Terms.Integer().Switch(
+    (context, i) => i % 2 == 0 ? 1 : 0,
+    odd,
+    even
+);
 ```
 
-For performance reasons it is recommended to return a singleton (or static) Parser instance. Otherwise each `Parse` execution will allocate a new Parser instance.
+This signature prevents allocating new parsers in the selector.
 
 ### Eof
 

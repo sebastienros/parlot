@@ -465,16 +465,21 @@ public class FluentTests
         var i = Literals.Text("i:");
         var s = Literals.Text("s:");
 
-        var parser = d.Or(i).Or(s).Switch((context, result) =>
+        var parsers = new Parser<object>[]
         {
-            switch (result)
+            Literals.Decimal().Then<object>(x => x),
+            Literals.Integer().Then<object>(x => x),
+            Literals.String().Then<object>(x => x),
+        };
+
+        var parser = d.Or(i).Or(s)
+            .Switch((context, result) => result switch
             {
-                case "d:": return Literals.Decimal().Then<object>(x => x);
-                case "i:": return Literals.Integer().Then<object>(x => x);
-                case "s:": return Literals.String().Then<object>(x => x);
-            }
-            return null;
-        });
+                "d:" => 0,
+                "i:" => 1,
+                "s:" => 2,
+                _ => -1
+            }, parsers);
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
         Assert.Equal((decimal)123.456, resultD);
@@ -493,16 +498,21 @@ public class FluentTests
         var i = Literals.Text("i:");
         var s = Literals.Text("s:");
 
-        var parser = d.Or(i).Or(s).Switch((context, result) =>
+        var parsers = new Parser<string>[]
         {
-            switch (result)
+            Literals.Decimal().Then(x => x.ToString(CultureInfo.InvariantCulture)),
+            Literals.Integer().Then(x => x.ToString()),
+            Literals.String().Then(x => x.ToString()),
+        };
+
+        var parser = d.Or(i).Or(s)
+            .Switch((context, result) => result switch
             {
-                case "d:": return Literals.Decimal().Then(x => x.ToString(CultureInfo.InvariantCulture));
-                case "i:": return Literals.Integer().Then(x => x.ToString());
-                case "s:": return Literals.String().Then(x => x.ToString());
-            }
-            return null;
-        });
+                "d:" => 0,
+                "i:" => 1,
+                "s:" => 2,
+                _ => -1
+            }, parsers);
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
         Assert.Equal("123.456", resultD);
@@ -518,7 +528,10 @@ public class FluentTests
     public void SelectShouldPickParserUsingRuntimeLogic()
     {
         var allowWhiteSpace = true;
-        var parser = Select<long>(_ => allowWhiteSpace ? Terms.Integer() : Literals.Integer());
+        var terms = Terms.Integer();
+        var literals = Literals.Integer();
+
+        var parser = Select<long>(_ => allowWhiteSpace ? 0 : 1, terms, literals);
 
         Assert.True(parser.TryParse(" 42", out var result1));
         Assert.Equal(42, result1);
@@ -534,7 +547,7 @@ public class FluentTests
     [Fact]
     public void SelectShouldFailWhenSelectorReturnsNull()
     {
-        var parser = Select<long>(_ => null!);
+        var parser = Select<long>(_ => -1, Terms.Integer());
 
         Assert.False(parser.TryParse("123", out _));
     }
@@ -542,7 +555,10 @@ public class FluentTests
     [Fact]
     public void SelectShouldHonorConcreteParseContext()
     {
-        var parser = Select<CustomParseContext, string>(context => context.PreferYes ? Literals.Text("yes") : Literals.Text("no"));
+        var yesParser = Literals.Text("yes");
+        var noParser = Literals.Text("no");
+
+        var parser = Select<CustomParseContext, string>(context => context.PreferYes ? 0 : 1, yesParser, noParser);
 
         var yesContext = new CustomParseContext(new Scanner("yes")) { PreferYes = true };
         Assert.True(parser.TryParse(yesContext, out var yes, out _));

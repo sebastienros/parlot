@@ -210,6 +210,50 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void GeneratedSwitch_UsesGeneratedTargetParserBody()
+    {
+        DualCountingCharParser.Reset();
+
+        var parser = Grammars.Switch_UsesGeneratedTargetParser();
+
+        Assert.Equal('x', parser.Parse("ax"));
+        Assert.Equal(1, DualCountingCharParser.GetGeneratedCount("x"));
+        Assert.Equal(0, DualCountingCharParser.GetRuntimeCount("x"));
+        Assert.Equal(0, DualCountingCharParser.GetGeneratedCount("y"));
+
+        DualCountingCharParser.Reset();
+
+        Assert.Equal('y', parser.Parse("by"));
+        Assert.Equal(1, DualCountingCharParser.GetGeneratedCount("y"));
+        Assert.Equal(0, DualCountingCharParser.GetRuntimeCount("y"));
+        Assert.Equal(0, DualCountingCharParser.GetGeneratedCount("x"));
+    }
+
+    [Fact]
+    public void GeneratedSelect_UsesGeneratedTargetParserBody()
+    {
+        DualCountingCharParser.Reset();
+
+        var parser = Grammars.Select_UsesGeneratedTargetParser();
+
+        var xContext = new Grammars.SelectTestContext(new Scanner("x")) { PreferX = true };
+        var xResult = new ParseResult<char>();
+        Assert.True(parser.Parse(xContext, ref xResult));
+        Assert.Equal('x', xResult.Value);
+        Assert.Equal(1, DualCountingCharParser.GetGeneratedCount("x"));
+        Assert.Equal(0, DualCountingCharParser.GetRuntimeCount("x"));
+
+        DualCountingCharParser.Reset();
+
+        var yContext = new Grammars.SelectTestContext(new Scanner("y")) { PreferX = false };
+        var yResult = new ParseResult<char>();
+        Assert.True(parser.Parse(yContext, ref yResult));
+        Assert.Equal('y', yResult.Value);
+        Assert.Equal(1, DualCountingCharParser.GetGeneratedCount("y"));
+        Assert.Equal(0, DualCountingCharParser.GetRuntimeCount("y"));
+    }
+
+    [Fact]
     public void KeywordParser_Generates_Multiple_Factories_With_Arguments()
     {
         var lower = Grammars.FooLowerParser();
