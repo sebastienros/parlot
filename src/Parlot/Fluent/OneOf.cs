@@ -28,6 +28,42 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
         Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         OriginalParsers = parsers;
 
+        static void AddUniqueRange(List<Parser<T>> target, IReadOnlyList<Parser<T>> items)
+        {
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+
+                var exists = false;
+                for (var j = 0; j < target.Count; j++)
+                {
+                    if (ReferenceEquals(target[j], item))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists)
+                {
+                    target.Add(item);
+                }
+            }
+        }
+
+        static void AddUniqueSingle(List<Parser<T>> target, Parser<T> item)
+        {
+            for (var j = 0; j < target.Count; j++)
+            {
+                if (ReferenceEquals(target[j], item))
+                {
+                    return;
+                }
+            }
+
+            target.Add(item);
+        }
+
         // We can't build a lookup table if there is only one parser
         if (Parsers.Count <= 1)
         {
@@ -63,16 +99,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
                         if (c != OtherSeekableChar)
                         {
-                            lookupTable[c].AddRange(subParsers);
+                            AddUniqueRange(lookupTable[c], subParsers);
                         }
                         else
                         {
                             _otherParsers ??= [];
-                            _otherParsers.AddRange(subParsers!);
+                            AddUniqueRange(_otherParsers, subParsers);
 
                             foreach (var entry in lookupTable)
                             {
-                                entry.Value.AddRange(subParsers);
+                                AddUniqueRange(entry.Value, subParsers);
                             }
                         }
                     }
@@ -80,11 +116,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
                 else
                 {
                     _otherParsers ??= [];
-                    _otherParsers.Add(parser);
+                    AddUniqueSingle(_otherParsers, parser);
 
                     foreach (var entry in lookupTable)
                     {
-                        entry.Value.Add(parser);
+                        AddUniqueSingle(entry.Value, parser);
                     }
                 }
             }
