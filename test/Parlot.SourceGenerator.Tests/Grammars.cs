@@ -565,6 +565,46 @@ public static partial class Grammars
     [GenerateParser]
     public static Parser<string> FooUpperParser() => Terms.Text("FOO");
 
+    // Sample: generic factory method building a typed node
+
+    internal abstract class NodeBase
+    {
+    }
+
+    internal sealed class BasicNode : NodeBase
+    {
+        public BasicNode(object value)
+        {
+            Value = value;
+        }
+
+        public object Value { get; }
+    }
+
+    private static readonly Parser<long> Long = Terms.Number<long>(NumberOptions.Integer);
+    private static readonly Parser<string> Equal = Terms.Text("==");
+
+    private static Parser<NodeBase> CreatePropertyParser<TComparand>(
+        string name,
+        Parser<string> @operator,
+        Parser<TComparand> comparand)
+    {
+        return comparand
+            .AndSkip(@operator)
+            .AndSkip(Terms.Text(name, caseInsensitive: true))
+            .And(comparand)
+                .Then<NodeBase>(items => new BasicNode(items.Item2!));
+    }
+
+    [GenerateParser]
+    internal static Parser<NodeBase> GenericPropertyParserSample()
+    {
+        return CreatePropertyParser(
+            "long",
+            Equal,
+            Long);
+    }
+
     // Test for AnyOf parser (ListOfChars / SearchValuesCharLiteral)
     [GenerateParser]
     public static Parser<TextSpan> AnyOfDigitsParser() => Literals.AnyOf("0123456789");

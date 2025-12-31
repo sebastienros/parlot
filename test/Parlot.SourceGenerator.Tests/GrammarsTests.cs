@@ -1,6 +1,7 @@
 using Parlot.Tests.Calc;
 using Parlot.Fluent;
 using System;
+using System.Linq;
 using System.Threading;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -185,6 +186,27 @@ public class GrammarsTests
 
         Assert.False(parser.Parse(context, ref result));
         Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void GenericPropertyParserSample_InterceptsMethodCall()
+    {
+        var parser = Grammars.GenericPropertyParserSample();
+
+        var node = parser.Parse("1 == long 2");
+        Assert.NotNull(node);
+
+        var nodeType = node!.GetType();
+        Assert.Equal("BasicNode", nodeType.Name);
+
+        var valueProperty = nodeType.GetProperty("Value");
+        Assert.NotNull(valueProperty);
+        Assert.Equal(2L, valueProperty!.GetValue(node));
+
+        // Case-insensitive property name
+        var node2 = parser.Parse("1 == LoNg 3");
+        Assert.NotNull(node2);
+        Assert.Equal(3L, valueProperty.GetValue(node2!));
     }
 
     [Fact]
