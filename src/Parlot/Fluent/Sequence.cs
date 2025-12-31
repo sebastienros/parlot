@@ -1,11 +1,12 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq;
 
 namespace Parlot.Fluent;
 
-public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -69,10 +70,93 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ICompilable, 
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser1 is not ISourceable parser1 || _parser2 is not ISourceable parser2)
+        {
+            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(ValueTuple<T1, T2>));
+        var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
+        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>));
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        string Helper(ISourceable p, string suffix)
+        {
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
+        }
+
+        var helper1 = Helper(parser1, "P1");
+        var helper2 = Helper(parser2, "P2");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helper1}({context.ParseContextName}, out _))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helper2}({context.ParseContextName}, out _))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else
+        {
+            result.Body.Add($"if ({helper1}({context.ParseContextName}, out var h1Value))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helper2}({context.ParseContextName}, out var h2Value))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(h1Value, h2Value);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+
+        return result;
+    }
+
     public override string ToString() => $"{_parser1} & {_parser2}";
 }
 
-public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
@@ -148,9 +232,92 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, IComp
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
+        {
+            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3>));
+        var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
+        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3>));
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        string Helper(ISourceable p, string suffix)
+        {
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
+        }
+
+        var helperParser = Helper(parser, "Parser");
+        var helperLast = Helper(lastParser, "Last");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out _))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hlValue);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+
+        return result;
+    }
 }
 
-public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
@@ -223,10 +390,93 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
+        {
+            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4>));
+        var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
+        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4>));
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        string Helper(ISourceable p, string suffix)
+        {
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
+        }
+
+        var helperParser = Helper(parser, "Parser");
+        var helperLast = Helper(lastParser, "Last");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out _))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hlValue);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+
+        return result;
+    }
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
@@ -300,10 +550,93 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
+        {
+            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5>));
+        var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
+        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5>));
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        string Helper(ISourceable p, string suffix)
+        {
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
+        }
+
+        var helperParser = Helper(parser, "Parser");
+        var helperLast = Helper(lastParser, "Last");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out _))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hlValue);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+
+        return result;
+    }
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
@@ -379,10 +712,93 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
     }
 
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
+        {
+            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>));
+        var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
+        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>));
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        string Helper(ISourceable p, string suffix)
+        {
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
+        }
+
+        var helperParser = Helper(parser, "Parser");
+        var helperLast = Helper(lastParser, "Last");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out _))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hlValue);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+
+        return result;
+    }
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
@@ -457,6 +873,89 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
     public CompilationResult Compile(CompilationContext context)
     {
         return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
+        {
+            throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>));
+        var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
+        var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>));
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        string Helper(ISourceable p, string suffix)
+        {
+            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            return context.Helpers
+                .GetOrCreate(p, $"{context.MethodNamePrefix}_Sequence_{suffix}", valueTypeName, () => p.GenerateSource(context))
+                .MethodName;
+        }
+
+        var helperParser = Helper(parser, "Parser");
+        var helperLast = Helper(lastParser, "Last");
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out _))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
+            result.Body.Add("{");
+            result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out var hlValue))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hpValue.Item6, hlValue);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add("    }");
+            result.Body.Add("}");
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+
+        return result;
     }
 
     public override string ToString() => $"{_parser} & {_lastParser} ";

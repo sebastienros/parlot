@@ -1,10 +1,11 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
+public sealed class OneOf<A, B, T> : Parser<T>, ICompilable, ISourceable
     where A : T
     where B : T
 {
@@ -100,6 +101,55 @@ public sealed class OneOf<A, B, T> : Parser<T>, ICompilable
                     )
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parserA is not ISourceable sourceableA || _parserB is not ISourceable sourceableB)
+        {
+            throw new NotSupportedException("OneOf requires source-generatable parsers.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var valueTypeNameA = SourceGenerationContext.GetTypeName(typeof(A));
+        var valueTypeNameB = SourceGenerationContext.GetTypeName(typeof(B));
+        var valueTypeNameT = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helpers instead of inlining
+        var helperNameA = context.Helpers
+            .GetOrCreate(sourceableA, $"{context.MethodNamePrefix}_OneOf_A", valueTypeNameA, () => sourceableA.GenerateSource(context))
+            .MethodName;
+
+        var helperNameB = context.Helpers
+            .GetOrCreate(sourceableB, $"{context.MethodNamePrefix}_OneOf_B", valueTypeNameB, () => sourceableB.GenerateSource(context))
+            .MethodName;
+
+        var valueAName = $"valueA{context.NextNumber()}";
+        var valueBName = $"valueB{context.NextNumber()}";
+
+        result.Body.Add($"if ({helperNameA}({context.ParseContextName}, out var {valueAName}))");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = ({valueTypeNameT}){valueAName};");
+        }
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    if ({helperNameB}({context.ParseContextName}, out var {valueBName}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"        {result.ValueVariable} = ({valueTypeNameT}){valueBName};");
+        }
+        result.Body.Add("    }");
+        result.Body.Add("}");
 
         return result;
     }

@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -6,7 +7,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISourceable
 {
     private static readonly MethodInfo _listAdd = typeof(List<T>).GetMethod("Add")!;
 
@@ -129,4 +130,73 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
     }
 
     public override string ToString() => $"{_parser}*";
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("ZeroOrMany requires a source-generatable parser.");
+        }
+
+        var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var result = context.CreateResult(typeof(IReadOnlyList<T>), defaultSuccess: true, defaultValueExpression: $"global::System.Array.Empty<{elementTypeName}>()");
+        var ctx = context.ParseContextName;
+
+        var listName = $"list{context.NextNumber()}";
+        var firstName = $"first{context.NextNumber()}";
+
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+            result.Body.Add($"bool {firstName} = true;");
+        }
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        result.Body.Add("while (true)");
+        result.Body.Add("{");
+        result.Body.Add($"    if (!{helperName}({ctx}, out var itemValue{context.NextNumber()}))");
+        result.Body.Add("    {");
+        result.Body.Add("        break;");
+        result.Body.Add("    }");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    if ({firstName})");
+            result.Body.Add("    {");
+            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add($"        {result.ValueVariable} = {listName};");
+            result.Body.Add($"        {firstName} = false;");
+            result.Body.Add("    }");
+            result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+        }
+        result.Body.Add("}");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"if ({listName} is null)");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+            result.Body.Add("}");
+        }
+
+        return result;
+    }
 }

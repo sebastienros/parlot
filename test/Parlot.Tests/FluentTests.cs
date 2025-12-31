@@ -3,9 +3,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Xunit;
 
 using static Parlot.Fluent.Parsers;
@@ -465,16 +463,21 @@ public class FluentTests
         var i = Literals.Text("i:");
         var s = Literals.Text("s:");
 
-        var parser = d.Or(i).Or(s).Switch((context, result) =>
+        var parsers = new Parser<object>[]
         {
-            switch (result)
+            Literals.Decimal().Then<object>(x => x),
+            Literals.Integer().Then<object>(x => x),
+            Literals.String().Then<object>(x => x),
+        };
+
+        var parser = d.Or(i).Or(s)
+            .Switch((context, result) => result switch
             {
-                case "d:": return Literals.Decimal().Then<object>(x => x);
-                case "i:": return Literals.Integer().Then<object>(x => x);
-                case "s:": return Literals.String().Then<object>(x => x);
-            }
-            return null;
-        });
+                "d:" => 0,
+                "i:" => 1,
+                "s:" => 2,
+                _ => -1
+            }, parsers);
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
         Assert.Equal((decimal)123.456, resultD);
@@ -493,16 +496,21 @@ public class FluentTests
         var i = Literals.Text("i:");
         var s = Literals.Text("s:");
 
-        var parser = d.Or(i).Or(s).Switch((context, result) =>
+        var parsers = new Parser<string>[]
         {
-            switch (result)
+            Literals.Decimal().Then(x => x.ToString(CultureInfo.InvariantCulture)),
+            Literals.Integer().Then(x => x.ToString()),
+            Literals.String().Then(x => x.ToString()),
+        };
+
+        var parser = d.Or(i).Or(s)
+            .Switch((context, result) => result switch
             {
-                case "d:": return Literals.Decimal().Then(x => x.ToString(CultureInfo.InvariantCulture));
-                case "i:": return Literals.Integer().Then(x => x.ToString());
-                case "s:": return Literals.String().Then(x => x.ToString());
-            }
-            return null;
-        });
+                "d:" => 0,
+                "i:" => 1,
+                "s:" => 2,
+                _ => -1
+            }, parsers);
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
         Assert.Equal("123.456", resultD);
@@ -518,7 +526,10 @@ public class FluentTests
     public void SelectShouldPickParserUsingRuntimeLogic()
     {
         var allowWhiteSpace = true;
-        var parser = Select<long>(_ => allowWhiteSpace ? Terms.Integer() : Literals.Integer());
+        var terms = Terms.Integer();
+        var literals = Literals.Integer();
+
+        var parser = Select<long>(_ => allowWhiteSpace ? 0 : 1, terms, literals);
 
         Assert.True(parser.TryParse(" 42", out var result1));
         Assert.Equal(42, result1);
@@ -534,7 +545,7 @@ public class FluentTests
     [Fact]
     public void SelectShouldFailWhenSelectorReturnsNull()
     {
-        var parser = Select<long>(_ => null!);
+        var parser = Select<long>(_ => -1, Terms.Integer());
 
         Assert.False(parser.TryParse("123", out _));
     }
@@ -542,7 +553,10 @@ public class FluentTests
     [Fact]
     public void SelectShouldHonorConcreteParseContext()
     {
-        var parser = Select<CustomParseContext, string>(context => context.PreferYes ? Literals.Text("yes") : Literals.Text("no"));
+        var yesParser = Literals.Text("yes");
+        var noParser = Literals.Text("no");
+
+        var parser = Select<CustomParseContext, string>(context => context.PreferYes ? 0 : 1, yesParser, noParser);
 
         var yesContext = new CustomParseContext(new Scanner("yes")) { PreferYes = true };
         Assert.True(parser.TryParse(yesContext, out var yes, out _));
@@ -1070,14 +1084,18 @@ public class FluentTests
         var parser1 = Literals.Text("not", caseInsensitive: true);
 
         Assert.Equal("not", parser1.Parse("not"));
-        Assert.Equal("nOt", parser1.Parse("nOt"));
-        Assert.Equal("NOT", parser1.Parse("NOT"));
+        Assert.Equal("not", parser1.Parse("nOt"));
+        Assert.Equal("not", parser1.Parse("NOT"));
 
         var parser2 = Terms.Text("not", caseInsensitive: true);
 
         Assert.Equal("not", parser2.Parse("not"));
-        Assert.Equal("nOt", parser2.Parse("nOt"));
-        Assert.Equal("NOT", parser2.Parse("NOT"));
+        Assert.Equal("not", parser2.Parse("nOt"));
+        Assert.Equal("not", parser2.Parse("NOT"));
+
+        // Opt-in to return the matched text
+        var parser3 = Terms.Text("not", caseInsensitive: true, returnMatchedText: true);
+        Assert.Equal("nOt", parser3.Parse("nOt"));
     }
 
     [Fact]
@@ -1090,7 +1108,7 @@ public class FluentTests
             );
 
         Assert.Equal("not", parser.Parse("not"));
-        Assert.Equal("nOt", parser.Parse("nOt"));
+        Assert.Equal("not", parser.Parse("nOt"));
         Assert.Equal("abc", parser.Parse("abc"));
         Assert.Equal("aBC", parser.Parse("aBC"));
         Assert.Null(parser.Parse("ABC"));
@@ -1145,6 +1163,22 @@ public class FluentTests
         Assert.Equal(1, context.Scanner.Cursor.Offset);
     }
 
+    [Fact]
+    public void LeftAssociativeWithContextShouldRestoreCursorWhenRightOperandMissing()
+    {
+        var parser = Terms.Decimal().LeftAssociative((Terms.Char('+'), static (ParseContext _, decimal a, decimal b) => a + b));
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
     [Theory]
     [InlineData("2", 2)]
     [InlineData("-2", -2)]
@@ -1164,6 +1198,18 @@ public class FluentTests
     public void UnaryShouldRestoreCursorWhenOperandMissing()
     {
         var parser = Terms.Decimal().Unary((Terms.Char('-'), static d => -d));
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static (ParseContext _, decimal d) => -d));
 
         var context = new ParseContext(new Scanner("-"));
         var result = new ParseResult<decimal>();
@@ -1783,13 +1829,18 @@ public class FluentTests
         Assert.Equal("if", result);
 
         Assert.True(parser.TryParse("IF", out result));
-        Assert.Equal("IF", result);
+        Assert.Equal("if", result);
 
         Assert.True(parser.TryParse("If", out result));
-        Assert.Equal("If", result);
+        Assert.Equal("if", result);
 
         Assert.False(parser.TryParse("ifoo", out result));
         Assert.False(parser.TryParse("IFoo", out result));
+
+        // Opt-in to return the matched text
+        var parser2 = Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true);
+        Assert.True(parser2.TryParse("IF", out var result2));
+        Assert.Equal("IF", result2);
     }
 
     [Fact]

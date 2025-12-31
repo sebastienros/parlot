@@ -77,8 +77,10 @@ Example:
 ```c#
 var integer = Terms.Integer();
 var hello = Terms.Text("Hello", caseInsensitive: true);
-var intOrHello = integer.Or(Hello);
+var intOrHello = integer.Or(hello);
 ```
+
+Note: when `caseInsensitive: true`, `Text("Hello")` returns the canonical requested text ("Hello") by default to avoid allocating a new string. If you need the matched input text (e.g. "HELLO"), use `returnMatchedText: true`.
 
 Both **integer** and **hello** have well-known characters that can be at the start of their potential values: 
 - **integers** can start with `[0-9\.\-]`.
@@ -93,17 +95,12 @@ To be able to take advantage of this optimization, a parser type can implement `
 
 Parsers should not allow other parsers to be created dynamically as parser constructors can be expensive (`OneOf` creates lookup tables).
 
-For instance `public Select(Func<C, Parser<T>> selector)` is a bad pattern as the lambda may allow brand new parsers to be created whenever the parser is invoked:
+For instance, selecting between parsers should not be done by returning newly created parsers from a lambda.
 
-```c#
-var p = Select(c => c.OptionA ? Terms.Text("a") : Terms.Text("b"));
-```
-
-The previous example shows how eveytime **p** is invoke a new parser instance is returned.
-A better usage would be the following:
+Use a selector that returns an index into a fixed parser list:
 
 ```c#
 var a = Terms.Text("a");
 var b = Terms.Text("b");
-var p = Select(c => c.OptionA ? a : b);
+var p = Select(c => c.OptionA ? 0 : 1, a, b);
 ```

@@ -1,6 +1,7 @@
 #if NET8_0_OR_GREATER
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -9,13 +10,13 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
+public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourceable
     where T : INumber<T>
 {
     private const char DefaultDecimalSeparator = '.';
     private const char DefaultGroupSeparator = ',';
 
-    private static readonly MethodInfo _tryParseMethodInfo = typeof(T).GetMethod(nameof(INumber<T>.TryParse), [typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
+    private static readonly MethodInfo _tryParseMethodInfo = Numbers.GetTryParseMethod<T>();
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -84,7 +85,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         {
             var end = context.Scanner.Cursor.Offset;
 
-            if (T.TryParse(number, _numberStyles, _culture, out var value))
+            if (Numbers.TryParse<T>(number, _numberStyles, _culture, out var value))
             {
                 result.Set(start, end, value);
 
@@ -156,6 +157,75 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
                 context.ResetPosition(reset)
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        var resetName = $"reset{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+        var numberSpanName = $"numberSpan{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+        var parsedValueName = $"parsedValue{context.NextNumber()}";
+
+        result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = 0;");
+        result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
+        result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{resetName} = {cursorName}.Position;");
+        result.Body.Add($"{startName} = {resetName}.Offset;");
+
+        var allowLeadingSign = _allowLeadingSign ? "true" : "false";
+        var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
+        var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
+        var allowExponent = _allowExponent ? "true" : "false";
+
+        // Emit NumberStyles as a literal cast
+        var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
+        
+        // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a clone
+        string cultureExpr;
+        if (_culture == CultureInfo.InvariantCulture)
+        {
+            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+        }
+        else
+        {
+            // For custom cultures, we need to emit code that creates the same culture
+            // This is a simplified approach - for complex cases, we might need to register a factory
+            cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture";
+        }
+
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, '{_decimalSeparator}', '{_groupSeparator}'))");
+        result.Body.Add("{");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+        }
+        else
+        {
+            result.Body.Add($"    if (global::Parlot.Numbers.TryParse({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+            result.Body.Add("    }");
+        }
+        result.Body.Add("}");
+
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
+        result.Body.Add("}");
 
         return result;
     }

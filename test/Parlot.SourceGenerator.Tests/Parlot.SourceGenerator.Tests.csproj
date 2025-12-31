@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <AnalysisLevel>latest-Default</AnalysisLevel>
+    <SignAssembly>False</SignAssembly>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    <!-- Enable C# interceptors for Parlot source generator -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Parlot.SourceGenerator.Tests</InterceptorsNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reference Parlot for the library types -->
+    <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
+    
+    <!-- Reference Samples for the FluentParser -->
+    <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
+    
+    <!-- Reference the source generator as an analyzer (for local development) -->
+    <!-- When consuming via NuGet package, the generator is embedded in the Parlot package -->
+    <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
+              OutputItemType="Analyzer" 
+              ReferenceOutputAssembly="false" />
+    
+    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+</Project>

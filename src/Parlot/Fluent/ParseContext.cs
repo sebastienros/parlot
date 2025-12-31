@@ -50,6 +50,8 @@ public class ParseContext
     /// </summary>
     public readonly CancellationToken CancellationToken;
 
+    private int _cancellationCheckCount;
+
     // TODO: For backward compatibility only, remove in future versions
     public ParseContext(Scanner scanner, bool useNewLines)
         : this(scanner, useNewLines, false, CancellationToken.None)
@@ -127,8 +129,34 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void EnterParser<T>(Parser<T> parser)
     {
-        CancellationToken.ThrowIfCancellationRequested();
+        CheckCancellation();
         OnEnterParser?.Invoke(parser, this);
+    }
+
+    /// <summary>
+    /// Checks whether cancellation was requested.
+    /// </summary>
+    /// <remarks>
+    /// This method is intentionally throttled to reduce overhead when parsing hot paths.
+    /// It still checks cancellation regularly and will throw <see cref="OperationCanceledException" />.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CheckCancellation()
+    {
+        // Fast path when no cancellation token was provided.
+        if (!CancellationToken.CanBeCanceled)
+        {
+            return;
+        }
+
+        // Throttle checks: cancellation is cooperative and doesn't need to be checked on every single parser call.
+        // This keeps cancellation responsive while reducing overhead for large inputs.
+        const int mask = 0x3F; // check ~every 64 calls
+
+        if ((_cancellationCheckCount++ & mask) == 0)
+        {
+            CancellationToken.ThrowIfCancellationRequested();
+        }
     }
 
     /// <summary>

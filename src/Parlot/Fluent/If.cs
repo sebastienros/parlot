@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 #if NET
 using System.Linq;
@@ -13,7 +14,7 @@ namespace Parlot.Fluent;
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
 /// <typeparam name="S">The type of the state to pass.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class If<C, S, T> : Parser<T>, ICompilable where C : ParseContext
+public sealed class If<C, S, T> : Parser<T>, ICompilable, ISourceable where C : ParseContext
 {
     private readonly Func<C, S?, bool> _predicate;
     private readonly S? _state;
@@ -102,6 +103,66 @@ public sealed class If<C, S, T> : Parser<T>, ICompilable where C : ParseContext
 
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("If requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+        var ctx = context.ParseContextName;
+
+        var startName = $"start{context.NextNumber()}";
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        // Register the predicate lambda
+        var predicateLambda = context.RegisterLambda(_predicate);
+        var stateLambda = context.RegisterLambda(new Func<S?>(() => _state));
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_If", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // if (_predicate((C)context, _state))
+        // {
+        //     if (Helper(context, out value))
+        //     {
+        //         success = true;
+        //     }
+        // }
+        // if (!success)
+        // {
+        //     cursor.ResetPosition(start);
+        // }
+
+        result.Body.Add($"if ({predicateLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx}, {stateLambda}()))");
+        result.Body.Add("{");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    if ({helperName}({ctx}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"    if ({helperName}({ctx}, out {result.ValueVariable}))");
+        }
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }

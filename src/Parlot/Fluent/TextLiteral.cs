@@ -1,21 +1,25 @@
+using Parlot;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Globalization;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
+public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourceable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
+    private readonly bool _returnMatchedText;
 
-    public TextLiteral(string text, StringComparison comparisonType)
+    public TextLiteral(string text, StringComparison comparisonType, bool returnMatchedText = false)
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
+        _returnMatchedText = returnMatchedText;
         _hasNewLines = text.Any(Character.IsNewLine);
 
         if (CanSeek = Text.Length > 0)
@@ -76,12 +80,25 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
             }
 
             var end = cursor.Offset;
-            var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
 
-            // Prevent an allocation if the text matches exactly
-            result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal) 
-                ? Text 
-                : parsedText.ToString());
+            var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
+                or StringComparison.CurrentCultureIgnoreCase
+                or StringComparison.InvariantCultureIgnoreCase;
+
+            if (ignoreCase && !_returnMatchedText)
+            {
+                // Default behavior: return the canonical source text (avoids allocation).
+                result.Set(start, end, Text);
+            }
+            else
+            {
+                var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
+
+                // Prevent an allocation if the text matches exactly
+                result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
+                    ? Text
+                    : parsedText.ToString());
+            }
 
             context.ExitParser(this);
             return true;
@@ -102,6 +119,10 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText), 
             [typeof(ReadOnlySpan<char>), typeof(StringComparison), typeof(ReadOnlySpan<char>).MakeByRefType()])!;
 
+        var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
+            or StringComparison.CurrentCultureIgnoreCase
+            or StringComparison.InvariantCultureIgnoreCase;
+
         var ifReadText = Expression.IfThen(
             Expression.Call(
                 Expression.Field(context.ParseContext, "Scanner"),
@@ -114,7 +135,11 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
                 Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                 context.DiscardResult
                 ? Expression.Empty()
-                : Expression.Assign(result.Value, Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
+                : Expression.Assign(
+                    result.Value,
+                    ignoreCase && !_returnMatchedText
+                        ? Expression.Constant(Text)
+                        : Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
             )
         );
 
@@ -123,5 +148,85 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         return result;
     }
 
-    public override string ToString() => $"Text(\"{Text}\")";
+    
+    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
+
+        var textLiteral = LiteralHelper.StringToLiteral(Text);
+        var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
+        var comparison = $"global::System.StringComparison.{_comparisonType}";
+        var newLines = CountNewLines(Text);
+        var trailingSegmentLength = TrailingSegmentLength(Text);
+        var isNotOrdinal = _comparisonType != StringComparison.Ordinal;
+        var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
+            or StringComparison.CurrentCultureIgnoreCase
+            or StringComparison.InvariantCultureIgnoreCase;
+
+        var startName = $"start{context.NextNumber()}";
+
+        // Use direct SourceResult construction for early return optimization
+        var result = new SourceResult(
+            successVariable: "success",  // Not used with early returns
+            valueVariable: "value",
+            valueTypeName: valueTypeName);
+
+        result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
+        result.Body.Add("{");
+        var shouldReturnMatchedText = isNotOrdinal && (!ignoreCase || _returnMatchedText);
+        if (shouldReturnMatchedText)
+        {
+            result.Body.Add($"    var {startName} = {cursorName}.Offset;");
+        }
+        result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
+        
+        // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
+        if (shouldReturnMatchedText)
+        {
+            result.Body.Add($"    {result.ValueVariable} = {scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}).ToString();");
+        }
+        else
+        {
+            result.Body.Add($"    {result.ValueVariable} = {textLiteral};");
+        }
+        result.Body.Add("    return true;");
+        result.Body.Add("}");
+        result.Body.Add($"{result.ValueVariable} = default;");
+        result.Body.Add("return false;");
+
+        return result;
+    }
+
+public override string ToString() => $"Text(\"{Text}\")";
+
+    private static int CountNewLines(string value)
+    {
+        var count = 0;
+
+        foreach (var c in value)
+        {
+            if (Character.IsNewLine(c))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int TrailingSegmentLength(string value)
+    {
+        var lastNewLine = value.LastIndexOf('\n');
+
+        if (lastNewLine < 0)
+        {
+            return value.Length;
+        }
+
+        return value.Length - lastNewLine - 1;
+    }
 }

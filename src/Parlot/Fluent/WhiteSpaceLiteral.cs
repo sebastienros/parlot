@@ -1,10 +1,12 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISeekable
+public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISeekable, ISourceable
 {
     private readonly bool _includeNewLines;
 
@@ -85,6 +87,41 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISeekable
                 context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(TextSpan));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+
+        var startName = $"start{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        
+        if (_includeNewLines)
+        {
+            result.Body.Add($"{scannerName}.SkipWhiteSpaceOrNewLine();");
+        }
+        else
+        {
+            result.Body.Add($"{scannerName}.SkipWhiteSpace();");
+        }
+
+        result.Body.Add($"var {endName} = {cursorName}.Offset;");
+        result.Body.Add($"if ({startName} != {endName})");
+        result.Body.Add("{");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {endName} - {startName});");
+        }
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
 
         return result;
     }

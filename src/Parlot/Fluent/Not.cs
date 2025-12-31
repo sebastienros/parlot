@@ -1,10 +1,11 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Not<T> : Parser<T>, ICompilable
+public sealed class Not<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
 
@@ -66,6 +67,49 @@ public sealed class Not<T> : Parser<T>, ICompilable
                     )
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Not requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        
+        var startName = $"start{context.NextNumber()}";
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Not", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // if (Helper(context, out _))
+        // {
+        //     cursor.ResetPosition(start);
+        //     success = false;
+        // }
+        // else
+        // {
+        //     success = true;
+        // }
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
 
         return result;
     }

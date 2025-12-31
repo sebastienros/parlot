@@ -1,8 +1,10 @@
+using Parlot;
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
+using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
@@ -12,7 +14,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The input parser type.</typeparam>
 /// <typeparam name="U">The output parser type.</typeparam>
-public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
+public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 {
     private readonly Func<T, U>? _action1;
     private readonly Func<ParseContext, T, U>? _action2;
@@ -171,5 +173,104 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable
         return result;
     }
 
-    override public string ToString() => $"{_parser} (Then)";
+    
+    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Then requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(U));
+        var ctx = context.ParseContextName;
+        var parsedName = $"parsed{context.NextNumber()}";
+        var parsedTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
+
+        // Register helper for the inner parser
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperKey = $"{context.MethodNamePrefix}_Then_{context.NextNumber()}";
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        result.Body.Add($"if ({helperName}({ctx}, out var {parsedName}Value))");
+        result.Body.Add("{");
+
+        if (_action1 != null)
+        {
+            var lambdaName = context.RegisterLambda(_action1);
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaName}({parsedName}Value);");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({parsedName}Value);");
+            }
+        }
+        else if (_action2 != null)
+        {
+            var lambdaName = context.RegisterLambda(_action2);
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaName}({ctx}, {parsedName}Value);");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {parsedName}Value);");
+            }
+        }
+        else if (_action3 != null)
+        {
+            var lambdaName = context.RegisterLambda(_action3);
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
+            }
+        }
+        else
+        {
+            // Value-based: try to use LiteralHelper for supported types
+            var valueExpr = LiteralHelper.ToLiteral(_value);
+            if (valueExpr == null)
+            {
+                throw new NotSupportedException(
+                    $"Then<{typeof(T).Name}, {typeof(U).Name}> with a value of type '{typeof(U).Name}' cannot be source-generated. " +
+                    $"Use a lambda instead, e.g., .Then(static _ => yourValue)");
+            }
+            
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
+            }
+        }
+        
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+override public string ToString() => $"{_parser} (Then)";
 }
