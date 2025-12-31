@@ -657,6 +657,34 @@ public class CompileTests
     }
 
     [Fact]
+    public void LeftAssociativeCompiledShouldRestoreCursorWhenRightOperandMissing()
+    {
+        var parser = Terms.Decimal().LeftAssociative((Terms.Char('+'), static (a, b) => a + b)).Compile();
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void UnaryCompiledShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static d => -d)).Compile();
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void ShouldCompileTextBefore()
     {
         Assert.True(AnyCharBefore(Literals.Char('a')).Compile().TryParse("hellao", out var result1));
