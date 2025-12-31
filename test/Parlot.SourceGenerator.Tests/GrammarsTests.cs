@@ -1,6 +1,8 @@
 using Parlot.Tests.Calc;
 using Parlot;
 using Parlot.Fluent;
+using System;
+using System.Threading;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -251,6 +253,18 @@ public class GrammarsTests
         Assert.Equal('y', yResult.Value);
         Assert.Equal(1, DualCountingCharParser.GetGeneratedCount("y"));
         Assert.Equal(0, DualCountingCharParser.GetRuntimeCount("y"));
+    }
+
+    [Fact]
+    public void GeneratedParser_ShouldCancelParsing()
+    {
+        var parser = Grammars.CancelSeparatedIntegersParser();
+
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            parser.Parse("1,2,3,4,5", cts.Token));
     }
 
     [Fact]

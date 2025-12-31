@@ -1246,6 +1246,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"        internal static bool {coreName}(ParseContext context, ref ParseResult<{valueTypeName}> result)");
         sb.AppendLine("        {");
+        sb.AppendLine("            context.CancellationToken.ThrowIfCancellationRequested();");
         sb.AppendLine("            var scanner = context.Scanner;");
         sb.AppendLine("            var cursor = scanner.Cursor;");
         
@@ -1329,6 +1330,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
             sb.AppendLine($"        private static bool {deferredMethodName}(ParseContext context, out {deferredValueTypeName} value)");
             sb.AppendLine("        {");
+            sb.AppendLine("            context.CancellationToken.ThrowIfCancellationRequested();");
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
             sb.AppendLine();
@@ -1365,6 +1367,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
             sb.AppendLine($"        private static bool {helperMethodName}(ParseContext context, out {helperValueTypeName} value)");
             sb.AppendLine("        {");
+            sb.AppendLine("            context.CancellationToken.ThrowIfCancellationRequested();");
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
             sb.AppendLine();

@@ -264,6 +264,12 @@ public static partial class Grammars
     }
 
     [GenerateParser]
+    public static Parser<IReadOnlyList<long>> CancelSeparatedIntegersParser()
+    {
+        return Separated(Terms.Char(','), Terms.Integer());
+    }
+
+    [GenerateParser]
     public static Parser<char> Switch_UsesGeneratedTargetParser()
     {
         var prefix = OneOf(Terms.Char('a'), Terms.Char('b'));
