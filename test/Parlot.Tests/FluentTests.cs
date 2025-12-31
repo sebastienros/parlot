@@ -1159,6 +1159,22 @@ public class FluentTests
         Assert.Equal(1, context.Scanner.Cursor.Offset);
     }
 
+    [Fact]
+    public void LeftAssociativeWithContextShouldRestoreCursorWhenRightOperandMissing()
+    {
+        var parser = Terms.Decimal().LeftAssociative((Terms.Char('+'), static (ParseContext _, decimal a, decimal b) => a + b));
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
     [Theory]
     [InlineData("2", 2)]
     [InlineData("-2", -2)]
@@ -1178,6 +1194,18 @@ public class FluentTests
     public void UnaryShouldRestoreCursorWhenOperandMissing()
     {
         var parser = Terms.Decimal().Unary((Terms.Char('-'), static d => -d));
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static (ParseContext _, decimal d) => -d));
 
         var context = new ParseContext(new Scanner("-"));
         var result = new ParseResult<decimal>();

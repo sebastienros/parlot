@@ -165,6 +165,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
         var start = context.Scanner.Cursor.Position;
 
+        // If all sub-parsers skip whitespaces, do it once here
         if (SkipWhitespace)
         {
             context.SkipWhiteSpace();
@@ -172,6 +173,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
         if (_map != null)
         {
+            // Each lookup entry also contains the non-seekable parsers
             var seekableParsers = _map[cursor.Current] ?? _otherParsers;
 
             if (seekableParsers != null)

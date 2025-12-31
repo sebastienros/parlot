@@ -353,3 +353,307 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
 
     public override string ToString() => Name ?? $"LeftAssociative({_parser})";
 }
+
+
+public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ICompilable, ISourceable
+{
+    private readonly Parser<T> _parser;
+    private readonly (Parser<TInput> Op, Func<ParseContext, T, T, T> Factory)[] _operators;
+
+    public LeftAssociativeWithContext(Parser<T> parser, (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] operators)
+    {
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _operators = operators ?? throw new ArgumentNullException(nameof(operators));
+
+        if (_operators.Length == 0)
+        {
+            throw new ArgumentException("At least one operator must be provided.", nameof(operators));
+        }
+    }
+
+    public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        if (!_parser.Parse(context, ref result))
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        var value = result.Value;
+        var end = result.End;
+
+        while (true)
+        {
+            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorResult = new ParseResult<TInput>();
+            Func<ParseContext, T, T, T>? matchedFactory = null;
+
+            foreach (var (op, factory) in _operators)
+            {
+                if (op.Parse(context, ref operatorResult))
+                {
+                    matchedFactory = factory;
+                    break;
+                }
+            }
+
+            if (matchedFactory == null)
+            {
+                break;
+            }
+
+            var rightResult = new ParseResult<T>();
+            if (!_parser.Parse(context, ref rightResult))
+            {
+                context.Scanner.Cursor.ResetPosition(operatorPosition);
+                break;
+            }
+
+            value = matchedFactory(context, value, rightResult.Value);
+            end = rightResult.End;
+        }
+
+        result = new ParseResult<T>(result.Start, end, value);
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<T>();
+
+        var nextNum = context.NextNumber;
+        var currentValue = result.DeclareVariable<T>($"leftAssocCtxValue{nextNum}");
+        var matchedFactory = result.DeclareVariable<Func<ParseContext, T, T, T>>($"matchedFactoryCtx{nextNum}");
+        var operatorPosition = result.DeclareVariable<TextPosition>($"leftAssocCtxPos{nextNum}");
+
+        var breakLabel = Expression.Label($"leftAssocCtxBreak{nextNum}");
+
+        var firstParserResult = _parser.Build(context);
+        var rightParserResult = _parser.Build(context);
+
+        var operatorChecks = new List<Expression>();
+        var allOperatorVariables = new List<ParameterExpression>();
+
+        for (int i = 0; i < _operators.Length; i++)
+        {
+            var (op, factory) = _operators[i];
+            var opCompileResult = op.Build(context);
+
+            foreach (var variable in opCompileResult.Variables)
+            {
+                allOperatorVariables.Add(variable);
+            }
+
+            var factoryConst = Expression.Constant(factory);
+
+            if (i > 0)
+            {
+                operatorChecks.Add(
+                    Expression.IfThen(
+                        Expression.Equal(matchedFactory, Expression.Constant(null, typeof(Func<ParseContext, T, T, T>))),
+                        Expression.Block(
+                            opCompileResult.Body.Concat([
+                                Expression.IfThen(
+                                    opCompileResult.Success,
+                                    Expression.Assign(matchedFactory, factoryConst)
+                                )
+                            ])
+                        )
+                    )
+                );
+            }
+            else
+            {
+                operatorChecks.AddRange(opCompileResult.Body);
+                operatorChecks.Add(
+                    Expression.IfThen(
+                        opCompileResult.Success,
+                        Expression.Assign(matchedFactory, factoryConst)
+                    )
+                );
+            }
+        }
+
+        var scanner = Expression.Field(context.ParseContext, nameof(ParseContext.Scanner));
+        var cursor = Expression.Field(scanner, nameof(Scanner.Cursor));
+        var cursorPosition = Expression.Property(cursor, nameof(Cursor.Position));
+        var resetPosition = typeof(Cursor).GetMethod(nameof(Cursor.ResetPosition), [typeof(TextPosition).MakeByRefType()])!;
+
+        var loopBody = Expression.Block(
+            allOperatorVariables.Concat(rightParserResult.Variables),
+            new Expression[]
+            {
+                Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<ParseContext, T, T, T>))),
+                Expression.Assign(operatorPosition, cursorPosition)
+            }
+            .Concat(operatorChecks)
+            .Concat([
+                Expression.IfThen(
+                    Expression.Equal(matchedFactory, Expression.Constant(null, typeof(Func<ParseContext, T, T, T>))),
+                    Expression.Break(breakLabel)
+                )
+            ])
+            .Concat(rightParserResult.Body)
+            .Concat([
+                Expression.IfThen(
+                    Expression.Not(rightParserResult.Success),
+                    Expression.Block(
+                        Expression.Call(cursor, resetPosition, operatorPosition),
+                        Expression.Break(breakLabel)
+                    )
+                ),
+                Expression.Assign(currentValue,
+                    Expression.Invoke(matchedFactory, context.ParseContext, currentValue, rightParserResult.Value))
+            ])
+        );
+
+        var loopExpr = Expression.Loop(loopBody, breakLabel);
+
+        result.Body.Add(
+            Expression.Block(
+                firstParserResult.Variables,
+                new Expression[] { Expression.Block(firstParserResult.Body) }.Concat([
+                    Expression.IfThenElse(
+                        firstParserResult.Success,
+                        Expression.Block(
+                            Expression.Assign(currentValue, firstParserResult.Value),
+                            loopExpr,
+                            Expression.Assign(result.Success, Expression.Constant(true)),
+                            context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, currentValue)
+                        ),
+                        Expression.Assign(result.Success, Expression.Constant(false))
+                    )
+                ])
+            )
+        );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parserSourceable)
+        {
+            throw new NotSupportedException("LeftAssociative requires the base parser to be source-generatable.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        var uniqueId = context.NextNumber();
+        var operatorMatchedName = $"opMatched{context.NextNumber()}";
+
+        result.Body.Add($"bool {operatorMatchedName} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        var baseHelperName = context.Helpers
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_LeftAssocCtx{uniqueId}", valueTypeName, () => parserSourceable.GenerateSource(context))
+            .MethodName;
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({baseHelperName}({ctx}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
+        }
+
+        result.Body.Add("{");
+        result.Body.Add("    while (true)");
+        result.Body.Add("    {");
+        result.Body.Add($"        {operatorMatchedName} = false;");
+
+        var operatorPositionName = $"opPos{context.NextNumber()}";
+        result.Body.Add($"        var {operatorPositionName} = {cursorName}.Position;");
+
+        for (int i = 0; i < _operators.Length; i++)
+        {
+            var (op, factory) = _operators[i];
+
+            if (op is not ISourceable opSourceable)
+            {
+                throw new NotSupportedException("LeftAssociative requires all operator parsers to be source-generatable.");
+            }
+
+            var factoryFieldName = context.RegisterLambda(factory);
+
+            var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
+            var opHelperName = context.Helpers
+                .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_LeftAssocCtx{uniqueId}", opValueTypeName, () => opSourceable.GenerateSource(context))
+                .MethodName;
+
+            var opResultName = $"opResult{context.NextNumber()}";
+
+            var indent = "        ";
+            if (i == 0)
+            {
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _))");
+            }
+            else
+            {
+                result.Body.Add($"{indent}if (!{operatorMatchedName})");
+                result.Body.Add($"{indent}{{");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _))");
+            }
+
+            var innerIndent = i == 0 ? indent : $"{indent}    ";
+            result.Body.Add($"{innerIndent}{{");
+            result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
+            result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        {operatorMatchedName} = true;");
+
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({ctx}, {result.ValueVariable}, {opResultName}RightValue);");
+            }
+            else
+            {
+                result.Body.Add($"{innerIndent}        {factoryFieldName}({ctx}, {result.ValueVariable}, {opResultName}RightValue);");
+            }
+
+            result.Body.Add($"{innerIndent}    }}");
+            result.Body.Add($"{innerIndent}    else");
+            result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        {cursorName}.ResetPosition({operatorPositionName});");
+            result.Body.Add($"{innerIndent}        break;");
+            result.Body.Add($"{innerIndent}    }}");
+            result.Body.Add($"{innerIndent}}}");
+
+            if (i > 0)
+            {
+                result.Body.Add($"{indent}}}");
+            }
+        }
+
+        result.Body.Add($"        if (!{operatorMatchedName}) break;");
+        result.Body.Add("    }");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+    public override string ToString() => Name ?? $"LeftAssociative({_parser})";
+}

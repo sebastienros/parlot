@@ -146,6 +146,22 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void GeneratedLeftAssociativeWithContext_RestoresCursorWhenRightOperandMissing()
+    {
+        var parser = Grammars.LeftAssociativeAdditionWithContextParser();
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void GeneratedUnary_RestoresCursorWhenOperandMissing()
     {
         var parser = Grammars.UnaryNegateDecimalParser();
@@ -156,6 +172,18 @@ public class GrammarsTests
         Assert.False(parser.Parse(context, ref result));
 
         // The '-' must not be consumed on failure.
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void GeneratedUnaryWithContext_RestoresCursorWhenOperandMissing()
+    {
+        var parser = Grammars.UnaryNegateDecimalWithContextParser();
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
         Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 

@@ -44,22 +44,7 @@ public static partial class Parsers
     /// </example>
     public static Parser<T> LeftAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list)
     {
-        var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory)).ToArray();
-
-        return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices).And(parser)))
-            .Then(static (context, x) =>
-            {
-                // multiplicative
-                var result = x.Item1;
-
-                // (("-" | "+") multiplicative ) *
-                foreach (var op in x.Item2)
-                {
-                    result = op.Item1(context, result, op.Item2);
-                }
-
-                return result;
-            });
+        return new LeftAssociativeWithContext<T, TInput>(parser, list);
     }
 
     /// <summary>
@@ -181,10 +166,6 @@ public static partial class Parsers
     /// <returns></returns>
     public static Parser<T> Unary<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<ParseContext, T, T> factory)[] list)
     {
-        return Recursive<T>((u) =>
-        {
-            var choices = list.Select(l => new Then<T, T>(l.op.SkipAnd(u), l.factory)).ToArray();
-            return new OneOf<T>([.. choices, parser]);
-        });
+        return new UnaryWithContext<T, TInput>(parser, list);
     }
 }

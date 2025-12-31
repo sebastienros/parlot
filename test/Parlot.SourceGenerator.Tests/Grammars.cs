@@ -520,7 +520,13 @@ public static partial class Grammars
     public static Parser<decimal> UnaryNegateDecimalParser() => Terms.Decimal().Unary((Terms.Char('-'), static d => -d));
 
     [GenerateParser]
+    public static Parser<decimal> UnaryNegateDecimalWithContextParser() => Terms.Decimal().Unary((Terms.Char('-'), static (ParseContext arg0, decimal arg1) => -arg1));
+
+    [GenerateParser]
     public static Parser<decimal> LeftAssociativeAdditionParser() => Terms.Decimal().LeftAssociative((Terms.Char('+'), static (a, b) => a + b));
+
+    [GenerateParser]
+    public static Parser<decimal> LeftAssociativeAdditionWithContextParser() => Terms.Decimal().LeftAssociative((Terms.Char('+'), static (ParseContext arg0, decimal arg1, decimal arg2) => arg1 + arg2));
 
     [GenerateParser]
     public static Parser<char> NotXCharParser() => Not(Terms.Char('x'));
