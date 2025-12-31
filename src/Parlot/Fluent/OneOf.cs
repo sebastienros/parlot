@@ -284,7 +284,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
         var startName = $"start{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = {cursorName}.Position;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
 
         if (SkipWhitespace)
         {
@@ -339,37 +338,46 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
                 defaultGroup = group;
             }
 
-            result.Body.Add($"if (!{result.SuccessVariable})");
+            result.Body.Add($"switch ({currentName})");
             result.Body.Add("{");
-            result.Body.Add($"    switch ({currentName})");
-            result.Body.Add("    {");
 
             foreach (var group in groups.Values)
             {
-                if (group.Chars.Count > 0)
+                if (group.Chars.Count == 0)
+                {
+                    continue;
+                }
+
+                if (context.SupportsCSharp9SwitchPatterns)
+                {
+                    // Use pattern matching to reduce the number of case labels, including range detection.
+                    // Example: case '.' or >= '0' and <= '9' or 'E' or 'e':
+                    var pattern = BuildCharPattern(group.Chars, rangeThreshold: 4);
+                    result.Body.Add($"    case {pattern}:");
+                }
+                else
                 {
                     foreach (var ch in group.Chars)
                     {
-                        result.Body.Add($"        case {ToCharLiteral(ch)}:");
+                        result.Body.Add($"    case {ToCharLiteral(ch)}:");
                     }
-
-                    result.Body.Add("        {");
-                    EmitParsers(group.Parsers, result, ctx, indent: "            ", getHelper: GetHelper, context);
-                    result.Body.Add("            break;");
-                    result.Body.Add("        }");
                 }
+
+                result.Body.Add("    {");
+                EmitParsers(group.Parsers, result, ctx, indent: "        ", getHelper: GetHelper, context);
+                result.Body.Add("        break;");
+                result.Body.Add("    }");
             }
 
             if (defaultGroup is not null)
             {
-                result.Body.Add("        default:");
-                result.Body.Add("        {");
-                EmitParsers(defaultGroup.Parsers, result, ctx, indent: "            ", getHelper: GetHelper, context);
-                result.Body.Add("            break;");
-                result.Body.Add("        }");
+                result.Body.Add("    default:");
+                result.Body.Add("    {");
+                EmitParsers(defaultGroup.Parsers, result, ctx, indent: "        ", getHelper: GetHelper, context);
+                result.Body.Add("        break;");
+                result.Body.Add("    }");
             }
 
-            result.Body.Add("    }");
             result.Body.Add("}");
         }
         else
@@ -393,27 +401,34 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
         Func<Parser<T>, string> getHelper,
         SourceGenerationContext context)
     {
+        if (parsers.Count == 0)
+        {
+            return;
+        }
+
         var successVar = outerResult.SuccessVariable;
         var valueVar = outerResult.ValueVariable;
 
-        for (var i = 0; i < parsers.Count; i++)
+        var outTarget = context.DiscardResult ? "_" : valueVar;
+
+        // Build a short-circuiting OR-chain:
+        // success = Helper1(ctx, out value) || Helper2(ctx, out value) || ...;
+        // (value may be assigned by failed helpers; callers only read it when success==true)
+        var firstHelper = getHelper(parsers[0]);
+
+        if (parsers.Count == 1)
         {
-            var parser = parsers[i];
+            outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget});");
+            return;
+        }
 
-            var helperName = getHelper(parser);
-            var helperResultName = $"helperResult{context.NextNumber()}";
+        outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget})");
 
-            outerResult.Body.Add($"{indent}if (!{successVar})");
-            outerResult.Body.Add($"{indent}{{");
-            outerResult.Body.Add($"{indent}    if ({helperName}({contextVariableName}, out var {helperResultName}Value))");
-            outerResult.Body.Add($"{indent}    {{");
-            outerResult.Body.Add($"{indent}        {successVar} = true;");
-            if (!context.DiscardResult)
-            {
-                outerResult.Body.Add($"{indent}        {valueVar} = {helperResultName}Value;");
-            }
-            outerResult.Body.Add($"{indent}    }}");
-            outerResult.Body.Add($"{indent}}}");
+        for (var i = 1; i < parsers.Count; i++)
+        {
+            var helperName = getHelper(parsers[i]);
+            var terminator = i == parsers.Count - 1 ? ";" : string.Empty;
+            outerResult.Body.Add($"{indent}    || {helperName}({contextVariableName}, out {outTarget}){terminator}");
         }
     }
 
@@ -435,6 +450,63 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
             _ when char.IsControl(c) || c > 0x7e => $"\\u{(int)c:X4}",
             _ => c.ToString()
         }) + "'";
+    }
+
+    private static string BuildCharPattern(IReadOnlyList<char> chars, int rangeThreshold)
+    {
+        // Sort and de-dup.
+        var list = new List<char>(chars);
+        list.Sort();
+
+        var parts = new List<string>();
+
+        for (var i = 0; i < list.Count; i++)
+        {
+            var start = list[i];
+            if (i > 0 && start == list[i - 1])
+            {
+                continue;
+            }
+
+            var end = start;
+            var runLength = 1;
+
+            while (i + 1 < list.Count)
+            {
+                var next = list[i + 1];
+                if (next == end)
+                {
+                    i++;
+                    continue;
+                }
+
+                if (next == (char)(end + 1))
+                {
+                    end = next;
+                    runLength++;
+                    i++;
+                    continue;
+                }
+
+                break;
+            }
+
+            if (runLength >= rangeThreshold)
+            {
+                parts.Add($">= {ToCharLiteral(start)} and <= {ToCharLiteral(end)}");
+            }
+            else
+            {
+                // Small runs are emitted as individual char patterns.
+                var c = start;
+                for (var r = 0; r < runLength; r++)
+                {
+                    parts.Add(ToCharLiteral((char)(c + r)));
+                }
+            }
+        }
+
+        return string.Join(" or ", parts);
     }
 
     private readonly record struct ParserListKey(IReadOnlyList<Parser<T>> Parsers);

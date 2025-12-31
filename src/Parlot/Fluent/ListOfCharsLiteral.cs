@@ -100,6 +100,29 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         // Escape the values string for use in generated code
         var escapedValues = LiteralHelper.EscapeStringContent(_values);
 
+        var useAsciiBitsetFallback = true;
+        ulong asciiLow = 0;
+        ulong asciiHigh = 0;
+
+        foreach (var c in _values)
+        {
+            if (c > 127)
+            {
+                useAsciiBitsetFallback = false;
+                break;
+            }
+
+            var bit = 1UL << (c & 63);
+            if (c < 64)
+            {
+                asciiLow |= bit;
+            }
+            else
+            {
+                asciiHigh |= bit;
+            }
+        }
+
         // Generate a unique field name base
         var fieldNum = context.NextNumber();
         var fieldName = $"_{context.MethodNamePrefix}_anyof{fieldNum}";
@@ -108,7 +131,15 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         context.StaticFields.Add($"#if NET8_0_OR_GREATER");
         context.StaticFields.Add($"private static readonly global::System.Buffers.SearchValues<char> {fieldName} = global::System.Buffers.SearchValues.Create(\"{escapedValues}\");");
         context.StaticFields.Add($"#else");
-        context.StaticFields.Add($"private static readonly global::System.Collections.Generic.HashSet<char> {fieldName} = new global::System.Collections.Generic.HashSet<char>(\"{escapedValues}\");");
+        if (useAsciiBitsetFallback)
+        {
+            context.StaticFields.Add($"private const ulong {fieldName}_low = 0x{asciiLow:X}UL;");
+            context.StaticFields.Add($"private const ulong {fieldName}_high = 0x{asciiHigh:X}UL;");
+        }
+        else
+        {
+            context.StaticFields.Add($"private static readonly global::System.Collections.Generic.HashSet<char> {fieldName} = new global::System.Collections.Generic.HashSet<char>(\"{escapedValues}\");");
+        }
         context.StaticFields.Add($"#endif");
 
         // Use direct SourceResult construction for early return optimization
@@ -149,7 +180,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
 
         result.Body.Add($"#else");
 
-        // Pre-NET8 path: use loop with HashSet.Contains
+        // Pre-NET8 path: prefer ASCII bitset membership when possible; otherwise fall back to HashSet.Contains
         result.Body.Add($"var {sizeVar} = 0;");
         var maxLengthExpr = _maxSize > 0
             ? $"global::System.Math.Min({spanVar}.Length, {_maxSize})"
@@ -161,15 +192,48 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         result.Body.Add($"for (var i = 0; i < {maxLengthVar}; i++)");
         result.Body.Add("{");
 
-        // For negate=false: break when char is NOT in the set (!Contains)
-        // For negate=true: break when char IS in the set (Contains)
-        var breakCondition = _negate
-            ? $"if ({fieldName}.Contains({spanVar}[i]))"
-            : $"if (!{fieldName}.Contains({spanVar}[i]))";
-        result.Body.Add($"    {breakCondition}");
-        result.Body.Add("    {");
-        result.Body.Add("        break;");
-        result.Body.Add("    }");
+        if (useAsciiBitsetFallback)
+        {
+            result.Body.Add($"    var c = {spanVar}[i];");
+            result.Body.Add("    var isMember = false;");
+            result.Body.Add("    if ((uint)c < 128u)");
+            result.Body.Add("    {");
+            result.Body.Add($"        if (c < 64)");
+            result.Body.Add("        {");
+            result.Body.Add($"            isMember = (({fieldName}_low >> (c & 63)) & 1UL) != 0;");
+            result.Body.Add("        }");
+            result.Body.Add("        else");
+            result.Body.Add("        {");
+            result.Body.Add($"            isMember = (({fieldName}_high >> (c & 63)) & 1UL) != 0;");
+            result.Body.Add("        }");
+            result.Body.Add("    }");
+
+            // For negate=false: consume while member
+            // For negate=true: consume while NOT member (non-ASCII counts as NOT member)
+            if (_negate)
+            {
+                result.Body.Add("    if (isMember)");
+            }
+            else
+            {
+                result.Body.Add("    if (!isMember)");
+            }
+            result.Body.Add("    {");
+            result.Body.Add("        break;");
+            result.Body.Add("    }");
+        }
+        else
+        {
+            // For negate=false: break when char is NOT in the set (!Contains)
+            // For negate=true: break when char IS in the set (Contains)
+            var breakCondition = _negate
+                ? $"if ({fieldName}.Contains({spanVar}[i]))"
+                : $"if (!{fieldName}.Contains({spanVar}[i]))";
+            result.Body.Add($"    {breakCondition}");
+            result.Body.Add("    {");
+            result.Body.Add("        break;");
+            result.Body.Add("    }");
+        }
         result.Body.Add($"    {sizeVar}++;");
         result.Body.Add("}");
 

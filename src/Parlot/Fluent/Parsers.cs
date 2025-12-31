@@ -158,12 +158,12 @@ public class LiteralBuilder
     /// <summary>
     /// Builds a parser that matches the specified text.
     /// </summary>
-    public Parser<string> Text(string text, bool caseInsensitive = false) => new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    public Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatchedText = false) => new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
 
     /// <summary>
     /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
     /// </summary>
-    public Parser<string> Keyword(string text, bool caseInsensitive = false) => new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    public Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
 
     /// <summary>
     /// Builds a parser that matches the specified char.
@@ -328,12 +328,12 @@ public class TermBuilder
     /// <summary>
     /// Builds a parser that matches the specified text.
     /// </summary>
-    public Parser<string> Text(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+    public Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatchedText = false) => Parsers.SkipWhiteSpace(new TextLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
 
     /// <summary>
     /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
     /// </summary>
-    public Parser<string> Keyword(string text, bool caseInsensitive = false) => Parsers.SkipWhiteSpace(new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+    public Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false) => Parsers.SkipWhiteSpace(new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
 
     /// <summary>
     /// Builds a parser that matches the specified char.

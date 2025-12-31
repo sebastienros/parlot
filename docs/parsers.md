@@ -111,8 +111,12 @@ If the selector returns an out-of-range index, the `Select` parser fails without
 Matches a given string, optionally in a case insensitive way.
 
 ```c#
-Parser<string> Text(string text, bool caseInsensitive = false)
+Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatchedText = false)
 ```
+
+When `caseInsensitive` is `true`, the default behavior is to return the **requested** text (the canonical literal you passed in), not the input slice. This avoids allocating a new string for case-insensitive matches.
+
+If you need to preserve the original casing from the input, set `returnMatchedText: true`.
 
 Usage:
 
@@ -125,6 +129,22 @@ Result:
 
 ```
 "hello"
+
+Case-insensitive example:
+
+```c#
+var parser = Terms.Text("hello", caseInsensitive: true);
+var result = parser.Parse(" HELLO world");
+// result == "hello" (no allocation)
+```
+
+Opt-in to return the matched input text:
+
+```c#
+var parser = Terms.Text("hello", caseInsensitive: true, returnMatchedText: true);
+var result = parser.Parse(" HELLO world");
+// result == "HELLO"
+```
 ```
 
 ### Char
@@ -153,8 +173,10 @@ Result:
 Matches a keyword string, ensuring the following character is not a letter. This prevents partial matches of identifiers that start with the keyword text.
 
 ```c#
-Parser<string> Keyword(string text, bool caseInsensitive = false)
+Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false)
 ```
+
+Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to return the matched input slice instead.
 
 This is useful when parsing programming language constructs like `if`, `while`, `return`, etc., where you want to match the exact keyword but not as part of a longer identifier.
 

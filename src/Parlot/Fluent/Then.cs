@@ -210,23 +210,19 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        result.Body.Add($"global::Parlot.ParseResult<{parsedTypeName}> {parsedName} = default;");
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
         result.Body.Add($"if ({helperName}({ctx}, out var {parsedName}Value))");
         result.Body.Add("{");
-        result.Body.Add($"    {parsedName} = new global::Parlot.ParseResult<{parsedTypeName}>(0, 0, {parsedName}Value);");
 
         if (_action1 != null)
         {
             var lambdaName = context.RegisterLambda(_action1);
             if (context.DiscardResult)
             {
-                result.Body.Add($"    {lambdaName}({parsedName}.Value);");
+                result.Body.Add($"    {lambdaName}({parsedName}Value);");
             }
             else
             {
-                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({parsedName}.Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({parsedName}Value);");
             }
         }
         else if (_action2 != null)
@@ -234,11 +230,11 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             var lambdaName = context.RegisterLambda(_action2);
             if (context.DiscardResult)
             {
-                result.Body.Add($"    {lambdaName}({ctx}, {parsedName}.Value);");
+                result.Body.Add($"    {lambdaName}({ctx}, {parsedName}Value);");
             }
             else
             {
-                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {parsedName}.Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {parsedName}Value);");
             }
         }
         else if (_action3 != null)
@@ -246,11 +242,11 @@ public sealed class Then<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
             var lambdaName = context.RegisterLambda(_action3);
             if (context.DiscardResult)
             {
-                result.Body.Add($"    {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+                result.Body.Add($"    {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
             }
             else
             {
-                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {parsedName}.Start, {parsedName}.End, {parsedName}.Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
             }
         }
         else

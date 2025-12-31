@@ -77,8 +77,10 @@ Example:
 ```c#
 var integer = Terms.Integer();
 var hello = Terms.Text("Hello", caseInsensitive: true);
-var intOrHello = integer.Or(Hello);
+var intOrHello = integer.Or(hello);
 ```
+
+Note: when `caseInsensitive: true`, `Text("Hello")` returns the canonical requested text ("Hello") by default to avoid allocating a new string. If you need the matched input text (e.g. "HELLO"), use `returnMatchedText: true`.
 
 Both **integer** and **hello** have well-known characters that can be at the start of their potential values: 
 - **integers** can start with `[0-9\.\-]`.

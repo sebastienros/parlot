@@ -13,11 +13,13 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
+    private readonly bool _returnMatchedText;
 
-    public TextLiteral(string text, StringComparison comparisonType)
+    public TextLiteral(string text, StringComparison comparisonType, bool returnMatchedText = false)
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
+        _returnMatchedText = returnMatchedText;
         _hasNewLines = text.Any(Character.IsNewLine);
 
         if (CanSeek = Text.Length > 0)
@@ -78,12 +80,25 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
             }
 
             var end = cursor.Offset;
-            var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
 
-            // Prevent an allocation if the text matches exactly
-            result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal) 
-                ? Text 
-                : parsedText.ToString());
+            var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
+                or StringComparison.CurrentCultureIgnoreCase
+                or StringComparison.InvariantCultureIgnoreCase;
+
+            if (ignoreCase && !_returnMatchedText)
+            {
+                // Default behavior: return the canonical source text (avoids allocation).
+                result.Set(start, end, Text);
+            }
+            else
+            {
+                var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
+
+                // Prevent an allocation if the text matches exactly
+                result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
+                    ? Text
+                    : parsedText.ToString());
+            }
 
             context.ExitParser(this);
             return true;
@@ -104,6 +119,10 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText), 
             [typeof(ReadOnlySpan<char>), typeof(StringComparison), typeof(ReadOnlySpan<char>).MakeByRefType()])!;
 
+        var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
+            or StringComparison.CurrentCultureIgnoreCase
+            or StringComparison.InvariantCultureIgnoreCase;
+
         var ifReadText = Expression.IfThen(
             Expression.Call(
                 Expression.Field(context.ParseContext, "Scanner"),
@@ -116,7 +135,11 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
                 Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                 context.DiscardResult
                 ? Expression.Empty()
-                : Expression.Assign(result.Value, Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
+                : Expression.Assign(
+                    result.Value,
+                    ignoreCase && !_returnMatchedText
+                        ? Expression.Constant(Text)
+                        : Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
             )
         );
 
@@ -140,6 +163,9 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var newLines = CountNewLines(Text);
         var trailingSegmentLength = TrailingSegmentLength(Text);
         var isNotOrdinal = _comparisonType != StringComparison.Ordinal;
+        var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
+            or StringComparison.CurrentCultureIgnoreCase
+            or StringComparison.InvariantCultureIgnoreCase;
 
         var startName = $"start{context.NextNumber()}";
 
@@ -151,16 +177,16 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
 
         result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
         result.Body.Add("{");
-        if (isNotOrdinal)
+        var shouldReturnMatchedText = isNotOrdinal && (!ignoreCase || _returnMatchedText);
+        if (shouldReturnMatchedText)
         {
             result.Body.Add($"    var {startName} = {cursorName}.Offset;");
         }
         result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
         
-        // Reuse the literal string for Ordinal comparison to avoid allocation (matches Fluent Parse behavior)
-        if (isNotOrdinal)
+        // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
+        if (shouldReturnMatchedText)
         {
-            // For case-insensitive comparisons, we need to extract the actual matched text
             result.Body.Add($"    {result.ValueVariable} = {scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}).ToString();");
         }
         else

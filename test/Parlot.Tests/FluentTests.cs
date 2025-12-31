@@ -1084,14 +1084,18 @@ public class FluentTests
         var parser1 = Literals.Text("not", caseInsensitive: true);
 
         Assert.Equal("not", parser1.Parse("not"));
-        Assert.Equal("nOt", parser1.Parse("nOt"));
-        Assert.Equal("NOT", parser1.Parse("NOT"));
+        Assert.Equal("not", parser1.Parse("nOt"));
+        Assert.Equal("not", parser1.Parse("NOT"));
 
         var parser2 = Terms.Text("not", caseInsensitive: true);
 
         Assert.Equal("not", parser2.Parse("not"));
-        Assert.Equal("nOt", parser2.Parse("nOt"));
-        Assert.Equal("NOT", parser2.Parse("NOT"));
+        Assert.Equal("not", parser2.Parse("nOt"));
+        Assert.Equal("not", parser2.Parse("NOT"));
+
+        // Opt-in to return the matched text
+        var parser3 = Terms.Text("not", caseInsensitive: true, returnMatchedText: true);
+        Assert.Equal("nOt", parser3.Parse("nOt"));
     }
 
     [Fact]
@@ -1104,7 +1108,7 @@ public class FluentTests
             );
 
         Assert.Equal("not", parser.Parse("not"));
-        Assert.Equal("nOt", parser.Parse("nOt"));
+        Assert.Equal("not", parser.Parse("nOt"));
         Assert.Equal("abc", parser.Parse("abc"));
         Assert.Equal("aBC", parser.Parse("aBC"));
         Assert.Null(parser.Parse("ABC"));
@@ -1825,13 +1829,18 @@ public class FluentTests
         Assert.Equal("if", result);
 
         Assert.True(parser.TryParse("IF", out result));
-        Assert.Equal("IF", result);
+        Assert.Equal("if", result);
 
         Assert.True(parser.TryParse("If", out result));
-        Assert.Equal("If", result);
+        Assert.Equal("if", result);
 
         Assert.False(parser.TryParse("ifoo", out result));
         Assert.False(parser.TryParse("IFoo", out result));
+
+        // Opt-in to return the matched text
+        var parser2 = Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true);
+        Assert.True(parser2.TryParse("IF", out var result2));
+        Assert.Equal("IF", result2);
     }
 
     [Fact]

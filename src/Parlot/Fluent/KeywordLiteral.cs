@@ -15,11 +15,12 @@ public sealed class KeywordLiteral : Parser<string>, ICompilable, ISeekable, ISo
 {
     private readonly TextLiteral _textLiteral;
 
-    public KeywordLiteral(string text, StringComparison comparison = StringComparison.Ordinal)
+    public KeywordLiteral(string text, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
     {
-        _textLiteral = new TextLiteral(text, comparison);
+        _textLiteral = new TextLiteral(text, comparison, returnMatchedText: returnMatchedText);
         Text = text;
         Comparison = comparison;
+        ReturnMatchedText = returnMatchedText;
         CanSeek = _textLiteral.CanSeek;
         ExpectedChars = _textLiteral.ExpectedChars;
         SkipWhitespace = _textLiteral.SkipWhitespace;
@@ -28,6 +29,8 @@ public sealed class KeywordLiteral : Parser<string>, ICompilable, ISeekable, ISo
     public string Text { get; }
 
     public StringComparison Comparison { get; }
+
+    public bool ReturnMatchedText { get; }
 
     public bool CanSeek { get; }
 
@@ -124,7 +127,7 @@ public sealed class KeywordLiteral : Parser<string>, ICompilable, ISeekable, ISo
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Keyword", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
 
-        var innerValueName = $"innerValue{context.NextNumber()}";
+        var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
         
         // if (Helper(context, out var innerValue))
         // {
@@ -140,15 +143,11 @@ public sealed class KeywordLiteral : Parser<string>, ICompilable, ISeekable, ISo
         //     }
         // }
         
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out {outTarget}))");
         result.Body.Add("{");
         result.Body.Add($"    if ({cursorName}.Eof || (!Parlot.Character.IsInRange({cursorName}.Current, 'a', 'z') && !Parlot.Character.IsInRange({cursorName}.Current, 'A', 'Z')))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"        {result.ValueVariable} = {innerValueName};");
-        }
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");

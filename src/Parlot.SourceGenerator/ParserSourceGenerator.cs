@@ -893,7 +893,38 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 return;
             }
 
-            var sgContext = new SourceGenerationContext(parseContextName: "context", methodNamePrefix: methodSymbol.Name, targetFramework: targetFramework);
+            static int GetCSharpLanguageMajorVersion(IMethodSymbol symbol)
+            {
+                var syntaxRef = symbol.DeclaringSyntaxReferences.FirstOrDefault();
+                if (syntaxRef?.SyntaxTree.Options is not Microsoft.CodeAnalysis.CSharp.CSharpParseOptions csharpOptions)
+                {
+                    return 0;
+                }
+
+                var lv = csharpOptions.LanguageVersion;
+
+                // Normalize common Roslyn values to a major integer.
+                if (lv == Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest || lv == Microsoft.CodeAnalysis.CSharp.LanguageVersion.Preview)
+                {
+                    return int.MaxValue;
+                }
+
+                // Roslyn uses enum values like CSharp9, CSharp10, ...
+                var name = lv.ToString();
+                const string prefix = "CSharp";
+                if (name.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(name.Substring(prefix.Length), out var major))
+                {
+                    return major;
+                }
+
+                return 0;
+            }
+
+            var sgContext = new SourceGenerationContext(
+                parseContextName: "context",
+                methodNamePrefix: methodSymbol.Name,
+                targetFramework: targetFramework,
+                csharpLanguageMajorVersion: GetCSharpLanguageMajorVersion(methodSymbol));
             
             // Set the lambda source map before invoking GenerateSource
             // This allows the LambdaRegistry to map runtime lambda pointers back to their original source
@@ -1246,7 +1277,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine($"        internal static bool {coreName}(ParseContext context, ref ParseResult<{valueTypeName}> result)");
         sb.AppendLine("        {");
-        sb.AppendLine("            context.CancellationToken.ThrowIfCancellationRequested();");
+        sb.AppendLine("            context.CheckCancellation();");
         sb.AppendLine("            var scanner = context.Scanner;");
         sb.AppendLine("            var cursor = scanner.Cursor;");
         
@@ -1330,7 +1361,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
             sb.AppendLine($"        private static bool {deferredMethodName}(ParseContext context, out {deferredValueTypeName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            context.CancellationToken.ThrowIfCancellationRequested();");
+            sb.AppendLine("            context.CheckCancellation();");
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
             sb.AppendLine();
@@ -1367,7 +1398,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
             sb.AppendLine($"        private static bool {helperMethodName}(ParseContext context, out {helperValueTypeName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            context.CancellationToken.ThrowIfCancellationRequested();");
+            sb.AppendLine("            context.CheckCancellation();");
             sb.AppendLine("            var scanner = context.Scanner;");
             sb.AppendLine("            var cursor = scanner.Cursor;");
             sb.AppendLine();

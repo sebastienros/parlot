@@ -170,12 +170,12 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
         var helper1 = Helper(parser1, "P1");
         var helper2 = Helper(parser2, "P2");
 
-        result.Body.Add($"if ({helper1}({context.ParseContextName}, out var h1Value))");
+        var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
+        result.Body.Add($"if ({helper1}({context.ParseContextName}, out {outTarget}))");
         result.Body.Add("{");
         result.Body.Add($"    if ({helper2}({context.ParseContextName}, out _))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add($"        {result.ValueVariable} = h1Value;");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");

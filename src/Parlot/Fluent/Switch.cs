@@ -179,17 +179,12 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable, ISourceable
                 .GetOrCreate(parser, $"{context.MethodNamePrefix}_Switch_{i}", valueTypeName, () => parserSourceable.GenerateSource(context))
                 .MethodName;
 
-            var caseValueName = $"caseValue{context.NextNumber()}";
-
             result.Body.Add($"        case {i}:");
             result.Body.Add("        {");
-            result.Body.Add($"            if ({targetHelperName}({ctx}, out var {caseValueName}))");
+            var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
+            result.Body.Add($"            if ({targetHelperName}({ctx}, out {outTarget}))");
             result.Body.Add("            {");
             result.Body.Add($"                {result.SuccessVariable} = true;");
-            if (!context.DiscardResult)
-            {
-                result.Body.Add($"                {result.ValueVariable} = {caseValueName};");
-            }
             result.Body.Add("            }");
             result.Body.Add("            break;");
             result.Body.Add("        }");

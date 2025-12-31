@@ -14,10 +14,20 @@ public sealed class SourceGenerationContext
     private int _staticFieldNumber;
 
     public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null, TargetFrameworkInfo? targetFramework = null)
+        : this(parseContextName, methodNamePrefix, targetFramework, csharpLanguageMajorVersion: 0)
+    {
+    }
+
+    public SourceGenerationContext(
+        string parseContextName,
+        string? methodNamePrefix,
+        TargetFrameworkInfo? targetFramework,
+        int csharpLanguageMajorVersion)
     {
         ParseContextName = parseContextName ?? throw new ArgumentNullException(nameof(parseContextName));
         MethodNamePrefix = methodNamePrefix ?? "";
         TargetFramework = targetFramework ?? TargetFrameworkInfo.Unknown;
+        CSharpLanguageMajorVersion = csharpLanguageMajorVersion;
 
         Helpers = new ParserHelperRegistry();
     }
@@ -60,6 +70,17 @@ public sealed class SourceGenerationContext
     /// Target framework for the current compilation.
     /// </summary>
     public TargetFrameworkInfo TargetFramework { get; }
+
+    /// <summary>
+    /// Major C# language version of the consuming project (e.g. 9, 10, 11...).
+    /// A value of 0 means "unknown".
+    /// </summary>
+    public int CSharpLanguageMajorVersion { get; }
+
+    /// <summary>
+    /// Whether the consuming project supports C# 9 switch pattern syntax (relational and <c>or</c> patterns).
+    /// </summary>
+    public bool SupportsCSharp9SwitchPatterns => CSharpLanguageMajorVersion >= 9;
 
     /// <summary>
     /// Global locals (as code lines) for the generated root method.
