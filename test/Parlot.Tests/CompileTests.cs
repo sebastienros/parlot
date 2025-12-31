@@ -1,7 +1,6 @@
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -666,6 +665,34 @@ public class CompileTests
         var noContext = new CustomCompileParseContext(new Scanner("no")) { PreferYes = false };
         Assert.True(parser.TryParse(noContext, out var no, out _));
         Assert.Equal("no", no);
+    }
+
+    [Fact]
+    public void LeftAssociativeCompiledShouldRestoreCursorWhenRightOperandMissing()
+    {
+        var parser = Terms.Decimal().LeftAssociative((Terms.Char('+'), static (a, b) => a + b)).Compile();
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void UnaryCompiledShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static d => -d)).Compile();
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 
     [Fact]

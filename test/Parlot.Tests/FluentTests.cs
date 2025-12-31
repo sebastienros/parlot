@@ -3,9 +3,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Xunit;
 
 using static Parlot.Fluent.Parsers;
@@ -1145,6 +1143,22 @@ public class FluentTests
         Assert.Equal(result, multiplicative.Parse(expression));
     }
 
+    [Fact]
+    public void LeftAssociativeShouldRestoreCursorWhenRightOperandMissing()
+    {
+        var parser = Terms.Decimal().LeftAssociative((Terms.Char('+'), static (a, b) => a + b));
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
     [Theory]
     [InlineData("2", 2)]
     [InlineData("-2", -2)]
@@ -1158,6 +1172,18 @@ public class FluentTests
             );
 
         Assert.Equal(result, unary.Parse(expression));
+    }
+
+    [Fact]
+    public void UnaryShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static d => -d));
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 
     [Fact]

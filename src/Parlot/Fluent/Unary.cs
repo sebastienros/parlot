@@ -1,6 +1,5 @@
 using FastExpressionCompiler;
 using Parlot.Compilation;
-using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
@@ -38,6 +37,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
         // Try each unary operator
         foreach (var (op, factory) in _operators)
         {
+            var operatorPosition = context.Scanner.Cursor.Position;
             var operatorResult = new ParseResult<TInput>();
             if (op.Parse(context, ref operatorResult))
             {
@@ -51,6 +51,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
                 else
                 {
                     // Operator matched but no operand - fail
+                    context.Scanner.Cursor.ResetPosition(operatorPosition);
                     context.ExitParser(this);
                     return false;
                 }
@@ -88,6 +89,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             var nextNum = innerContext.NextNumber;
             var matchedFactory = innerResult.DeclareVariable<Func<T, T>>($"unaryFactory{nextNum}");
             var operatorMatched = innerResult.DeclareVariable<bool>($"unaryOpMatched{nextNum}");
+            var operatorPosition = innerResult.DeclareVariable<TextPosition>($"unaryPos{nextNum}");
 
             // Compile the base parser
             var baseParserResult = _parser.Build(innerContext);
@@ -144,6 +146,11 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
                 }
             }
 
+            var scanner = Expression.Field(innerContext.ParseContext, nameof(ParseContext.Scanner));
+            var cursor = Expression.Field(scanner, nameof(Scanner.Cursor));
+            var cursorPosition = Expression.Property(cursor, nameof(Cursor.Position));
+            var resetPosition = typeof(Cursor).GetMethod(nameof(Cursor.ResetPosition), [typeof(TextPosition).MakeByRefType()])!;
+
             // Build the recursive call - we'll use the closure to call ourselves
             var closureConst = Expression.Constant(_closure);
             var getFuncs = typeof(Closure).GetMember(nameof(Closure.Func))[0];
@@ -160,7 +167,9 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
                 new Expression[] {
                     // Reset operator matched
                     Expression.Assign(operatorMatched, Expression.Constant(false)),
-                    Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<T, T>)))
+                    Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<T, T>))),
+                    // Capture cursor position before attempting to match an operator
+                    Expression.Assign(operatorPosition, cursorPosition)
                 }
                 .Concat(operatorCheckExpressions)
                 .Concat([
@@ -169,12 +178,13 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
                         // Operator matched - try recursive parse
                         Expression.Block(
                             Expression.Assign(recursiveResult, Expression.Invoke(castFunc, innerContext.ParseContext)),
-                            Expression.IfThen(
+                            Expression.IfThenElse(
                                 Expression.Field(recursiveResult, "Item1"),
                                 Expression.Block(
                                     Expression.Assign(innerResult.Success, Expression.Constant(true)),
                                     Expression.Assign(innerResult.Value, Expression.Invoke(matchedFactory, Expression.Field(recursiveResult, "Item2")))
-                                )
+                                ),
+                                Expression.Call(cursor, resetPosition, operatorPosition)
                             )
                         ),
                         // No operator - try base parser
@@ -254,6 +264,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var operatorMatchedName = $"unaryOpMatched{context.NextNumber()}";
@@ -298,16 +309,19 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
                 .MethodName;
 
             var opResultName = $"opResult{context.NextNumber()}";
+            var opPositionName = $"unaryPos{context.NextNumber()}";
 
             var indent = "";
             if (i == 0)
             {
+                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
                 result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _))");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
+                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
                 result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _))");
             }
 
@@ -327,6 +341,10 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable, ISourceable
             {
                 result.Body.Add($"{innerIndent}        {factoryFieldName}({opResultName}RecursiveValue);");
             }
+            result.Body.Add($"{innerIndent}    }}");
+            result.Body.Add($"{innerIndent}    else");
+            result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        {cursorName}.ResetPosition({opPositionName});");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 

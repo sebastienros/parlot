@@ -1,5 +1,4 @@
 using Parlot.Tests.Calc;
-using Parlot;
 using Parlot.Fluent;
 using System;
 using System.Threading;
@@ -127,6 +126,37 @@ public class GrammarsTests
         // Test left-associativity within same precedence
         result = parser.Parse("20 / 4 / 2");
         Assert.Equal(2.5, result); // (20 / 4) / 2 = 5 / 2 = 2.5
+    }
+
+    [Fact]
+    public void GeneratedLeftAssociative_RestoresCursorWhenRightOperandMissing()
+    {
+        var parser = Grammars.LeftAssociativeAdditionParser();
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        // The trailing '+' must not be consumed if the RHS doesn't parse.
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void GeneratedUnary_RestoresCursorWhenOperandMissing()
+    {
+        var parser = Grammars.UnaryNegateDecimalParser();
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+
+        // The '-' must not be consumed on failure.
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 
     [Fact]

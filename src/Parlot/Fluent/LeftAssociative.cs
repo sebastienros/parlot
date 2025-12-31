@@ -1,5 +1,4 @@
 using Parlot.Compilation;
-using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
@@ -42,10 +41,12 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         }
 
         var value = result.Value;
+        var end = result.End;
 
         // Parse zero or more (operator operand) pairs
         while (true)
         {
+            var operatorPosition = context.Scanner.Cursor.Position;
             var operatorResult = new ParseResult<TInput>();
             Func<T, T, T>? matchedFactory = null;
 
@@ -69,16 +70,17 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             var rightResult = new ParseResult<T>();
             if (!_parser.Parse(context, ref rightResult))
             {
-                // Operator matched but no right operand - this is an error
-                // For now we just stop parsing here
+                // Operator matched but no right operand - rollback operator consumption.
+                context.Scanner.Cursor.ResetPosition(operatorPosition);
                 break;
             }
 
             // Apply the operator
             value = matchedFactory(value, rightResult.Value);
+            end = rightResult.End;
         }
 
-        result = new ParseResult<T>(result.Start, result.End, value);
+        result = new ParseResult<T>(result.Start, end, value);
 
         context.ExitParser(this);
         return true;
@@ -92,6 +94,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         var nextNum = context.NextNumber;
         var currentValue = result.DeclareVariable<T>($"leftAssocValue{nextNum}");
         var matchedFactory = result.DeclareVariable<Func<T, T, T>>($"matchedFactory{nextNum}");
+        var operatorPosition = result.DeclareVariable<TextPosition>($"leftAssocPos{nextNum}");
 
         var breakLabel = Expression.Label($"leftAssocBreak{nextNum}");
 
@@ -152,13 +155,20 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             operatorChecks.AddRange(checkBlock);
         }
 
+        var scanner = Expression.Field(context.ParseContext, nameof(ParseContext.Scanner));
+        var cursor = Expression.Field(scanner, nameof(Scanner.Cursor));
+        var cursorPosition = Expression.Property(cursor, nameof(Cursor.Position));
+        var resetPosition = typeof(Cursor).GetMethod(nameof(Cursor.ResetPosition), [typeof(TextPosition).MakeByRefType()])!;
+
         // Build the loop body with its own variable scope
         var loopBody = Expression.Block(
             // Include operator variables and right parser variables in the loop scope
             allOperatorVariables.Concat(rightParserResult.Variables),
             new Expression[] {
                 // Reset matchedFactory
-                Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<T, T, T>)))
+                Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<T, T, T>))),
+                // Capture cursor position before attempting to match an operator
+                Expression.Assign(operatorPosition, cursorPosition)
             }
             .Concat(operatorChecks)
             .Concat([
@@ -173,7 +183,10 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
                 // If right operand failed, break
                 Expression.IfThen(
                     Expression.Not(rightParserResult.Success),
-                    Expression.Break(breakLabel)
+                    Expression.Block(
+                        Expression.Call(cursor, resetPosition, operatorPosition),
+                        Expression.Break(breakLabel)
+                    )
                 ),
 
                 // Apply operator: currentValue = matchedFactory(currentValue, rightValue)
@@ -222,6 +235,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
 
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
+        var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var inputTypeName = SourceGenerationContext.GetTypeName(typeof(TInput));
 
@@ -265,6 +279,8 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        {operatorMatchedName} = false;");
+        var operatorPositionName = $"opPos{context.NextNumber()}";
+        result.Body.Add($"        var {operatorPositionName} = {cursorName}.Position;");
 
         // Generate operator matching for each operator
         for (int i = 0; i < _operators.Length; i++)
@@ -301,11 +317,10 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
             result.Body.Add($"{innerIndent}{{");
-            result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
-
             // Parse right operand using helper
             result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        {operatorMatchedName} = true;");
             if (!context.DiscardResult)
             {
                 result.Body.Add($"{innerIndent}        {result.ValueVariable} = {factoryFieldName}({result.ValueVariable}, {opResultName}RightValue);");
@@ -314,6 +329,11 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
             {
                 result.Body.Add($"{innerIndent}        {factoryFieldName}({result.ValueVariable}, {opResultName}RightValue);");
             }
+            result.Body.Add($"{innerIndent}    }}");
+            result.Body.Add($"{innerIndent}    else");
+            result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        {cursorName}.ResetPosition({operatorPositionName});");
+            result.Body.Add($"{innerIndent}        break;");
             result.Body.Add($"{innerIndent}    }}");
             result.Body.Add($"{innerIndent}}}");
 
