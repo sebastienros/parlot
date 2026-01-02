@@ -7,6 +7,7 @@ namespace Parlot;
 public static partial class Character
 {
     internal static readonly SearchValues<char> _decimalDigits = SearchValues.Create(DecimalDigits);
+    internal static readonly SearchValues<char> _decimalDigitsAndUnderscore = SearchValues.Create(DecimalDigits + "_");
     internal static readonly SearchValues<char> _hexDigits = SearchValues.Create(HexDigits);
     internal static readonly SearchValues<char> _identifierStart = SearchValues.Create(DefaultIdentifierStart);
     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);
@@ -14,6 +15,9 @@ public static partial class Character
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsDecimalDigit(char ch) => _decimalDigits.Contains(ch);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsDecimalDigitOrUnderscore(char ch) => _decimalDigitsAndUnderscore.Contains(ch);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsIdentifierStart(char ch) => _identifierStart.Contains(ch);
