@@ -65,7 +65,10 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         bool IsMethodGroup,
         string? InferredReturnType,
         int ParameterCount,
-        IReadOnlyList<string> ParameterTypes);
+        IReadOnlyList<string> ParameterTypes,
+        string? FilePath,
+        int StartLine,
+        int StartColumn);
 
     public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
     {
@@ -103,12 +106,22 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             }
         }
 
+        // Get location information for debugging support
+        var location = originalLambda.GetLocation();
+        var lineSpan = location.GetLineSpan();
+        var filePath = lineSpan.Path;
+        var startLine = lineSpan.StartLinePosition.Line + 1; // Convert to 1-based
+        var startColumn = lineSpan.StartLinePosition.Character + 1; // Convert to 1-based
+
         _lambdas[pointer] = new LambdaInfo(
             originalSource,
             IsMethodGroup: false,
             returnType,
             parameters.Length,
-            paramTypes);
+            paramTypes,
+            filePath,
+            startLine,
+            startColumn);
 
         // Create the pointer registration statement
         // global::Parlot.SourceGeneration.LambdaPointer.CurrentPointer = {pointer};
@@ -164,12 +177,22 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 var paramTypes = method.Parameters.Select(p => p.Type.ToDisplayString()).ToList();
                 var returnType = method.ReturnType.Name.ToLowerInvariant();
 
+                // Get location information for debugging support
+                var location = node.Expression.GetLocation();
+                var lineSpan = location.GetLineSpan();
+                var filePath = lineSpan.Path;
+                var startLine = lineSpan.StartLinePosition.Line + 1; // Convert to 1-based
+                var startColumn = lineSpan.StartLinePosition.Character + 1; // Convert to 1-based
+
                 _lambdas[pointer] = new LambdaInfo(
                     originalSource,
                     IsMethodGroup: true,
                     returnType,
                     method.Parameters.Length,
-                    paramTypes);
+                    paramTypes,
+                    filePath,
+                    startLine,
+                    startColumn);
 
                 // Replace method group with a lambda that sets the pointer and calls the method
                 // e.g., char.IsLetter becomes (char arg0) => { LambdaPointer.CurrentPointer = N; return char.IsLetter(arg0); }

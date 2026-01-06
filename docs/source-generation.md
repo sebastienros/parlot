@@ -202,6 +202,8 @@ public class KeywordParser : Parser<string>, ISeekable, ISourceable
 
 ## Debugging Generated Code
 
+### Inspecting Generated Files
+
 To inspect the generated source files, add to your project:
 
 ```xml
@@ -212,6 +214,24 @@ To inspect the generated source files, add to your project:
 ```
 
 Generated files will appear in the specified output path.
+
+### Lambda Debugging Support
+
+The source generator emits `#line` directives in the generated code, which enables the debugger to map breakpoints and step-through debugging back to your original lambda expressions.
+
+When you set a breakpoint on a lambda in your parser definition:
+
+```csharp
+[GenerateParser]
+public static Parser<string> MyParser()
+{
+    return Terms.Identifier().Then(static x => x.ToString().ToUpper()); // Breakpoint here works!
+}
+```
+
+The debugger will stop at the original source location, even though the actual execution is in the generated static method.
+
+**Note:** This works best with expression lambdas. For complex block lambdas, the debugger may show the generated code instead.
 
 ## Troubleshooting
 

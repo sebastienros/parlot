@@ -1259,8 +1259,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 lambdaInfoMap.TryGetValue(pointer, out var lambdaInfo);
                 var isMethodGroup = lambdaInfo?.IsMethodGroup ?? !originalSource.Contains("=>");
                 
-                // Generate a method from the original source
-                var methodSource = GenerateLambdaMethod(fieldName, invokeMethod, originalSource, isMethodGroup);
+                // Generate a method from the original source with #line directive for debugging
+                var methodSource = GenerateLambdaMethod(
+                    fieldName, 
+                    invokeMethod, 
+                    originalSource, 
+                    isMethodGroup,
+                    lambdaInfo?.FilePath,
+                    lambdaInfo?.StartLine ?? 0);
                 sb.AppendLine(methodSource);
             }
             else
@@ -1495,8 +1501,15 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
     /// Generates a method from a lambda source or method group.
     /// Transforms "static x => 'w'" into "private static char MethodName(TextSpan x) => 'w';"
     /// Transforms "char.IsLetterOrDigit" into "private static bool MethodName(char x) => char.IsLetterOrDigit(x);"
+    /// Emits #line directives to enable debugging at the original source location.
     /// </summary>
-    private static string GenerateLambdaMethod(string methodName, System.Reflection.MethodInfo invokeMethod, string lambdaSource, bool isMethodGroup)
+    private static string GenerateLambdaMethod(
+        string methodName, 
+        System.Reflection.MethodInfo invokeMethod, 
+        string lambdaSource, 
+        bool isMethodGroup,
+        string? originalFilePath,
+        int originalLine)
     {
         var sb = new StringBuilder();
         var returnTypeName = TypeNameHelper.GetTypeName(invokeMethod.ReturnType);
@@ -1504,12 +1517,21 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         
         // Generate parameter list with types
         var paramList = GenerateParameterList(invokeMethod);
+
+        // Emit #line directive for debugging if we have location info
+        var hasLineInfo = !string.IsNullOrEmpty(originalFilePath) && originalLine > 0;
         
         if (isMethodGroup)
         {
             // For method groups like "char.IsLetterOrDigit", generate a call
             // private static bool _lambda0(char x) => char.IsLetterOrDigit(x);
             sb.Append("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n");
+            
+            if (hasLineInfo)
+            {
+                sb.Append($"#line {originalLine} \"{originalFilePath}\"\n");
+            }
+            
             sb.Append($"        private static {returnTypeName} {methodName}({paramList}) => ");
             sb.Append(lambdaSource);
             sb.Append('(');
@@ -1519,6 +1541,11 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 sb.Append(GetParameterName(i));
             }
             sb.Append(");");
+            
+            if (hasLineInfo)
+            {
+                sb.Append("\n#line default");
+            }
         }
         else
         {
@@ -1546,8 +1573,19 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                     body = ReplaceParameterNames(body, paramPart, parameters.Length);
                     
                     sb.Append($"        private static {returnTypeName} {methodName}({paramList})\n");
+                    
+                    if (hasLineInfo)
+                    {
+                        sb.Append($"#line {originalLine} \"{originalFilePath}\"\n");
+                    }
+                    
                     sb.Append("        ");
                     sb.Append(body);
+                    
+                    if (hasLineInfo)
+                    {
+                        sb.Append("\n#line default");
+                    }
                 }
                 else
                 {
@@ -1555,11 +1593,22 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                     body = ReplaceParameterNames(body, paramPart, parameters.Length);
                     
                     sb.Append("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n");
+                    
+                    if (hasLineInfo)
+                    {
+                        sb.Append($"#line {originalLine} \"{originalFilePath}\"\n");
+                    }
+                    
                     sb.Append($"        private static {returnTypeName} {methodName}({paramList}) => ");
                     sb.Append(body);
                     if (!body.EndsWith(";", StringComparison.Ordinal))
                     {
                         sb.Append(';');
+                    }
+                    
+                    if (hasLineInfo)
+                    {
+                        sb.Append("\n#line default");
                     }
                 }
             }
