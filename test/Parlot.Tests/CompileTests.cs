@@ -1214,4 +1214,32 @@ public class CompileTests
         Assert.True(parser.TryParse(source, out var result));
         Assert.Equal(source.Length, result.Count);
     }
+
+    [Fact]
+    public void CompiledParserImplementsISourceable()
+    {
+        // Verify that CompiledParser<T> implements ISourceable
+        var compiledParser = Terms.Integer().Compile();
+        
+        Assert.IsAssignableFrom<SourceGeneration.ISourceable>(compiledParser);
+    }
+
+    [Fact]
+    public void CompiledParserGenerateSourceDelegatesToSourceParser()
+    {
+        // Verify that CompiledParser.GenerateSource delegates to the source parser
+        var sourceParser = Terms.Integer();
+        var compiledParser = sourceParser.Compile();
+        
+        var sourceable = (SourceGeneration.ISourceable)compiledParser;
+        var context = new SourceGeneration.SourceGenerationContext();
+        
+        var result = sourceable.GenerateSource(context);
+        
+        // Should produce valid source result
+        Assert.NotNull(result);
+        Assert.NotNull(result.SuccessVariable);
+        Assert.NotNull(result.ValueVariable);
+        Assert.True(result.Body.Count > 0);
+    }
 }
