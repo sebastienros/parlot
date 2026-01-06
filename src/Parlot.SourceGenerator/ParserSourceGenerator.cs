@@ -119,6 +119,18 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor ClosureNotSupportedDescriptor = new(
+        "PARLOT015",
+        "Closures are not supported in source generation",
+        "Lambda in method '{0}' captures variable '{1}' from the enclosing scope. Source generation only supports static lambdas without captured variables. To pass state to lambdas, use a custom ParseContext subclass or store state in static fields.",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Lambdas used in source-generated parsers cannot capture variables from their enclosing scope (closures). " +
+                     "The generated code creates static methods that don't have access to captured state. " +
+                     "To pass custom state to lambda functions, create a custom ParseContext subclass with properties for your state, " +
+                     "or use static fields/properties that can be accessed from static lambda expressions.");
+
     #endregion
 
 
@@ -533,6 +545,21 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         // back to the original source code
         var rewriter = new LambdaRewriter(semanticModel);
         var rewrittenRoot = rewriter.Visit(originalSyntaxTree.GetRoot());
+
+        // Check for captured variables (closures) - these are not supported in source generation
+        if (rewriter.CapturedVariables.Count > 0)
+        {
+            // Report an error for each captured variable
+            foreach (var captured in rewriter.CapturedVariables)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ClosureNotSupportedDescriptor,
+                    captured.Location,
+                    methodSymbol.Name,
+                    captured.VariableName));
+            }
+            return;
+        }
         
         // Create a new syntax tree with the rewritten code
         var parseOptions = (CSharpParseOptions)originalSyntaxTree.Options;

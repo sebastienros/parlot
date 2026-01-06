@@ -209,4 +209,60 @@ public static partial class InvalidReturnGrammar
 
         return (driver.GetRunResult(), (CSharpCompilation)updatedCompilation);
     }
+
+    [Fact]
+    public void Lambda_With_Closure_Reports_Error()
+    {
+        // [GenerateParser] should report error when lambda captures variables
+        const string source = @"
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class ClosureGrammar
+{
+    [GenerateParser]
+    public static Parser<string> Foo()
+    {
+        var prefix = ""hello"";
+        return Terms.Identifier().Then(x => prefix + x.ToString());
+    }
+}
+";
+
+        var (result, _) = RunGenerator(source, "ClosureTest");
+        
+        var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
+        Assert.Single(parserDiagnostics);
+        Assert.Equal("PARLOT015", parserDiagnostics[0].Id);
+        Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
+        Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
+        Assert.Contains("prefix", parserDiagnostics[0].GetMessage());
+    }
+
+    [Fact]
+    public void Static_Lambda_Does_Not_Report_Closure_Error()
+    {
+        // Static lambdas should work without closure errors
+        const string source = @"
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class StaticLambdaGrammar
+{
+    [GenerateParser]
+    public static Parser<string> Foo()
+    {
+        return Terms.Identifier().Then(static x => x.ToString());
+    }
+}
+";
+
+        var (result, _) = RunGenerator(source, "StaticLambdaTest");
+        
+        // Should not have PARLOT015 (closure error)
+        var closureErrors = result.Diagnostics.Where(d => d.Id == "PARLOT015").ToList();
+        Assert.Empty(closureErrors);
+    }
 }

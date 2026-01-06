@@ -236,25 +236,72 @@ public static Parser<string> HelloParser() => Terms.Text("hello");
 public static Parser<string> WorldParser() => Terms.Text("world");
 ```
 
-### Missing types in generated code
+### Closures are not supported
 
-If the generated code references types the generator cannot find, use `[IncludeFiles]`:
-
-```csharp
-[GenerateParser]
-[IncludeFiles("MyAstTypes.cs")]
-public static Parser<MyExpression> CreateParser() => ...;
+```
+error PARLOT015: Lambda captures variable 'prefix' from the enclosing scope
 ```
 
-### Missing namespaces
-
-Use `[IncludeUsings]` to add required namespaces:
+Lambdas in source-generated parsers cannot capture variables from their enclosing scope (closures). The generated code creates static methods that don't have access to captured state.
 
 ```csharp
+// ❌ Wrong - captures 'prefix' variable
 [GenerateParser]
-[IncludeUsings("System.Collections.Immutable")]
-public static Parser<ImmutableList<Token>> CreateParser() => ...;
+public static Parser<string> MyParser()
+{
+    var prefix = "hello";  // Captured variable
+    return Terms.Identifier().Then(x => prefix + x.ToString());  // Error!
+}
 ```
+
+**Solutions:**
+
+1. **Use a custom `ParseContext` subclass** to pass state:
+
+```csharp
+public class MyParseContext : ParseContext
+{
+    public MyParseContext(Scanner scanner) : base(scanner) { }
+    public string Prefix { get; set; } = "";
+}
+
+[GenerateParser]
+public static Parser<string> MyParser()
+{
+    return Terms.Identifier().Then<MyParseContext, TextSpan, string>(
+        static (context, x) => context.Prefix + x.ToString());
+}
+
+// Usage:
+var parser = MyParser();
+var context = new MyParseContext(new Scanner("world")) { Prefix = "hello" };
+parser.Parse(context, out var result);
+```
+
+2. **Use static fields or properties:**
+
+```csharp
+private static string _prefix = "hello";
+
+[GenerateParser]
+public static Parser<string> MyParser()
+{
+    return Terms.Identifier().Then(static x => _prefix + x.ToString());
+}
+```
+
+3. **Use method groups for static methods:**
+
+```csharp
+private static string Transform(TextSpan x) => "hello" + x.ToString();
+
+[GenerateParser]
+public static Parser<string> MyParser()
+{
+    return Terms.Identifier().Then(Transform);
+}
+```
+
 
 ### Custom parser not generating code
 

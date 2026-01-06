@@ -19,11 +19,18 @@ namespace Parlot.SourceGenerator;
 /// Example transformation:
 ///   Original: x => x.ToLower()
 ///   Rewritten: x => { Parlot.SourceGeneration.LambdaPointer.CurrentPointer = 0; return x.ToLower(); }
+/// 
+/// <para>
+/// <strong>Important:</strong> Only static (closure-free) lambdas are supported. Lambdas that
+/// capture variables from their enclosing scope cannot be source-generated because the generated
+/// code creates static methods that don't have access to the captured state.
+/// </para>
 /// </summary>
 internal sealed class LambdaRewriter : CSharpSyntaxRewriter
 {
     private readonly SemanticModel _semanticModel;
     private readonly Dictionary<int, LambdaInfo> _lambdas = new();
+    private readonly List<CapturedVariableInfo> _capturedVariables = new();
     private int _nextPointer;
 
     public LambdaRewriter(SemanticModel semanticModel)
@@ -35,6 +42,20 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     /// Gets all recorded lambdas with their pointers and source code.
     /// </summary>
     public IReadOnlyDictionary<int, LambdaInfo> Lambdas => _lambdas;
+
+    /// <summary>
+    /// Gets information about any captured variables (closures) detected in lambdas.
+    /// If this list is non-empty, source generation will fail with appropriate diagnostics.
+    /// </summary>
+    public IReadOnlyList<CapturedVariableInfo> CapturedVariables => _capturedVariables;
+
+    /// <summary>
+    /// Information about a captured variable in a lambda (closure).
+    /// </summary>
+    public sealed record CapturedVariableInfo(
+        string VariableName,
+        string LambdaSource,
+        Location Location);
 
     /// <summary>
     /// Information about a rewritten lambda.
@@ -64,6 +85,9 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     {
         var pointer = _nextPointer++;
         var originalSource = originalLambda.ToFullString().Trim();
+
+        // Check for captured variables (closures) - these are not supported in source generation
+        DetectCapturedVariables(originalLambda, parameters, originalSource);
 
         // Determine return type and parameter types from semantic model
         var paramTypes = new List<string>();
@@ -179,6 +203,113 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         }
 
         return base.VisitArgument(node);
+    }
+
+    /// <summary>
+    /// Detects captured variables (closures) in a lambda expression.
+    /// Captured variables are local variables or parameters from the enclosing scope
+    /// that are referenced inside the lambda but are not lambda parameters themselves.
+    /// </summary>
+    private void DetectCapturedVariables(
+        LambdaExpressionSyntax lambda,
+        ParameterSyntax[] lambdaParameters,
+        string lambdaSource)
+    {
+        // Get all lambda parameter names
+        var parameterNames = new HashSet<string>(
+            lambdaParameters.Select(p => p.Identifier.Text),
+            StringComparer.Ordinal);
+
+        // Find all identifier references in the lambda body
+        var body = lambda.Body;
+        if (body is null)
+        {
+            return;
+        }
+
+        foreach (var identifier in body.DescendantNodes().OfType<IdentifierNameSyntax>())
+        {
+            var name = identifier.Identifier.Text;
+
+            // Skip if it's a lambda parameter
+            if (parameterNames.Contains(name))
+            {
+                continue;
+            }
+
+            // Get symbol info to determine what this identifier refers to
+            var symbolInfo = _semanticModel.GetSymbolInfo(identifier);
+            var symbol = symbolInfo.Symbol;
+
+            if (symbol is null)
+            {
+                continue;
+            }
+
+            // Check if this is a captured variable (local variable or parameter from enclosing scope)
+            if (symbol is ILocalSymbol localSymbol)
+            {
+                // This is a local variable - check if it's from outside the lambda
+                if (!IsDefinedWithinLambda(localSymbol, lambda))
+                {
+                    _capturedVariables.Add(new CapturedVariableInfo(
+                        name,
+                        lambdaSource,
+                        identifier.GetLocation()));
+                }
+            }
+            else if (symbol is IParameterSymbol paramSymbol)
+            {
+                // This is a parameter - check if it's from the containing method (not the lambda)
+                if (paramSymbol.ContainingSymbol is IMethodSymbol containingMethod &&
+                    !IsLambdaMethod(containingMethod, lambda))
+                {
+                    _capturedVariables.Add(new CapturedVariableInfo(
+                        name,
+                        lambdaSource,
+                        identifier.GetLocation()));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a local variable is defined within the lambda expression.
+    /// </summary>
+    private static bool IsDefinedWithinLambda(ILocalSymbol local, LambdaExpressionSyntax lambda)
+    {
+        foreach (var location in local.Locations)
+        {
+            if (location.SourceTree == lambda.SyntaxTree)
+            {
+                var span = location.SourceSpan;
+                if (lambda.Span.Contains(span))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a method symbol represents the lambda itself.
+    /// </summary>
+    private static bool IsLambdaMethod(IMethodSymbol method, LambdaExpressionSyntax lambda)
+    {
+        // Lambda methods have MethodKind.LambdaMethod or AnonymousFunction
+        if (method.MethodKind is MethodKind.LambdaMethod or MethodKind.AnonymousFunction)
+        {
+            // Check if the method's syntax reference matches our lambda
+            foreach (var syntaxRef in method.DeclaringSyntaxReferences)
+            {
+                if (syntaxRef.GetSyntax() == lambda)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>
