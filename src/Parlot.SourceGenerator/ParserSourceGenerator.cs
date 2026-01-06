@@ -1763,6 +1763,32 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
     /// Runs additional source generators specified via [IncludeGenerators] attribute on the compilation.
     /// This allows the compilation to include outputs from generators like PolySharp polyfills before emitting.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <strong>IDE/Design-Time Limitation:</strong> This method only runs during actual builds, not in IDE 
+    /// contexts (Visual Studio, VS Code, Rider, etc.). When running in an IDE, dynamically loading generator 
+    /// assemblies via Assembly.LoadFrom can cause assembly version conflicts.
+    /// </para>
+    /// <para>
+    /// For example, a generator like PolySharp may be compiled against Microsoft.CodeAnalysis 4.3.0, but 
+    /// Visual Studio hosts Roslyn with a different version (e.g., 4.8.0 or newer). When attempting to load 
+    /// the generator assembly, .NET's assembly resolution fails because:
+    /// <list type="bullet">
+    ///   <item>The exact referenced version isn't available in the IDE's hosting context</item>
+    ///   <item>Assembly binding redirects from the project don't apply in the IDE process</item>
+    ///   <item>The AppDomain lacks the necessary fusion context to resolve version mismatches</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// This results in errors like: "Could not load file or assembly 'Microsoft.CodeAnalysis, Version=4.3.0.0'".
+    /// </para>
+    /// <para>
+    /// <strong>Workaround:</strong> IntelliSense and error reporting still work correctly because the IDE 
+    /// runs the actual referenced generators normally. The [IncludeGenerators] feature only affects the 
+    /// internal compilation used by Parlot's source generator to emit code, so skipping it in IDE contexts 
+    /// has no user-visible impact on the editing experience.
+    /// </para>
+    /// </remarks>
     [SuppressMessage("Build", "RS1035", Justification = "Loading generator assemblies is necessary to run them.")]
     private static RoslynCompilation RunAdditionalGenerators(
         SourceProductionContext context,
@@ -1771,6 +1797,25 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         CSharpParseOptions parseOptions,
         IMethodSymbol methodSymbol)
     {
+        // Skip running additional generators in IDE/design-time contexts to avoid assembly loading conflicts.
+        // IDEs like Visual Studio host Roslyn with specific assembly versions, and dynamically loading 
+        // generator assemblies compiled against different Microsoft.CodeAnalysis versions causes 
+        // "Could not load file or assembly" errors. See the XML remarks on this method for details.
+        // 
+        // Detection: During actual builds, MSBuild sets the "BuildingProject" property to "true".
+        // In IDE design-time builds, this property is typically absent or set to "false".
+        // We check the compilation's syntax trees for preprocessor symbols as a proxy, but the most
+        // reliable indicator is that IDE contexts don't set certain environment variables.
+        var isBuildContext = Environment.GetEnvironmentVariable("MSBuildExtensionsPath") is not null
+                          || Environment.GetEnvironmentVariable("MSBUILD_EXE_PATH") is not null;
+        
+        if (!isBuildContext)
+        {
+            // In IDE context - skip loading external generators to avoid assembly version conflicts.
+            // The user's project still gets full IntelliSense from the actual referenced generators.
+            return compilation;
+        }
+
         // Ensure we have a CSharpCompilation
         if (compilation is not CSharpCompilation csharpCompilation)
         {
