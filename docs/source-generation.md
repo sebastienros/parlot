@@ -231,7 +231,45 @@ public static Parser<string> MyParser()
 
 The debugger will stop at the original source location, even though the actual execution is in the generated static method.
 
-**Note:** This works best with expression lambdas. For complex block lambdas, the debugger may show the generated code instead.
+The generator preserves your original parameter names in the generated code:
+
+```csharp
+// Original lambda:
+static (a, b) => a + b
+
+// Generated method (with original names preserved):
+#line 42 "/path/to/MyParser.cs"
+private static decimal _lambda0(decimal a, decimal b) => a + b;
+#line default
+```
+
+For multi-line block lambdas, each line gets its own `#line` directive:
+
+```csharp
+// Original block lambda:
+static x => {
+    var upper = x.ToString().ToUpper();
+    var result = "Result: " + upper;
+    return result;
+}
+
+// Generated method (each line mapped):
+private static string _lambda0(TextSpan x)
+{
+#line 10 "/path/to/MyParser.cs"
+    var upper = x.ToString().ToUpper();
+#line 11 "/path/to/MyParser.cs"
+    var result = "Result: " + upper;
+#line 12 "/path/to/MyParser.cs"
+    return result;
+}
+#line default
+```
+
+This ensures that:
+- Breakpoints work correctly on any line of the lambda expression
+- Variable names in the debugger match your original code
+- Step-through debugging works line-by-line through the lambda body
 
 ## Troubleshooting
 

@@ -529,6 +529,14 @@ public static partial class Grammars
     public static Parser<decimal> LeftAssociativeAdditionWithContextParser() => Terms.Decimal().LeftAssociative((Terms.Char('+'), static (ParseContext arg0, decimal arg1, decimal arg2) => arg1 + arg2));
 
     [GenerateParser]
+    public static Parser<string> BlockLambdaParser() => Terms.Identifier().Then(static x =>
+    {
+        var upper = x.ToString().ToUpper();
+        var result = "Result: " + upper;
+        return result;
+    });
+
+    [GenerateParser]
     public static Parser<char> NotXCharParser() => Not(Terms.Char('x'));
 
     [GenerateParser]

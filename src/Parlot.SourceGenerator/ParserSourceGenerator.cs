@@ -1283,7 +1283,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 
                 // Generate a throwing method for error cases
                 var errorReturnTypeName = TypeNameHelper.GetTypeName(invokeMethod.ReturnType);
-                var errorParamList = GenerateParameterList(invokeMethod);
+                var errorParamList = GenerateParameterListWithStandardNames(invokeMethod);
                 sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
                 sb.AppendLine($"        private static {errorReturnTypeName} {fieldName}({errorParamList}) => throw new global::System.InvalidOperationException(\"Lambda could not be extracted from source\");");
             }
@@ -1499,9 +1499,11 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Generates a method from a lambda source or method group.
-    /// Transforms "static x => 'w'" into "private static char MethodName(TextSpan x) => 'w';"
-    /// Transforms "char.IsLetterOrDigit" into "private static bool MethodName(char x) => char.IsLetterOrDigit(x);"
-    /// Emits #line directives to enable debugging at the original source location.
+    /// Transforms "static x => x.ToUpper()" into "private static string MethodName(TextSpan x) => x.ToUpper();"
+    /// Transforms "char.IsLetterOrDigit" into "private static bool MethodName(char arg0) => char.IsLetterOrDigit(arg0);"
+    /// 
+    /// For lambdas, preserves original parameter names and body verbatim to enable proper debugging.
+    /// Emits #line directives to map breakpoints back to the original source location.
     /// </summary>
     private static string GenerateLambdaMethod(
         string methodName, 
@@ -1514,17 +1516,16 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         var sb = new StringBuilder();
         var returnTypeName = TypeNameHelper.GetTypeName(invokeMethod.ReturnType);
         var parameters = invokeMethod.GetParameters();
-        
-        // Generate parameter list with types
-        var paramList = GenerateParameterList(invokeMethod);
 
         // Emit #line directive for debugging if we have location info
         var hasLineInfo = !string.IsNullOrEmpty(originalFilePath) && originalLine > 0;
         
         if (isMethodGroup)
         {
-            // For method groups like "char.IsLetterOrDigit", generate a call
-            // private static bool _lambda0(char x) => char.IsLetterOrDigit(x);
+            // For method groups like "char.IsLetterOrDigit", generate a call with standard param names
+            // private static bool _lambda0(char arg0) => char.IsLetterOrDigit(arg0);
+            var paramList = GenerateParameterListWithStandardNames(invokeMethod);
+            
             sb.Append("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n");
             
             if (hasLineInfo)
@@ -1549,8 +1550,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         }
         else
         {
-            // For lambdas, extract the body
-            // "static x => 'w'" becomes "'w'"
+            // For lambdas, preserve original parameter names and body verbatim for debugging
+            // "static x => x.ToUpper()" becomes "private static string _lambda0(TextSpan x) => x.ToUpper();"
             var source = lambdaSource.TrimStart();
             if (source.StartsWith("static ", StringComparison.Ordinal))
             {
@@ -1563,35 +1564,63 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 var body = source.Substring(arrowIndex + 2).Trim();
                 var paramPart = source.Substring(0, arrowIndex).Trim();
                 
+                // Extract original parameter names and generate param list with original names
+                var originalParamNames = ExtractParameterNames(paramPart);
+                var paramList = GenerateParameterListWithOriginalNames(invokeMethod, originalParamNames);
+                
                 // Check if it's a block lambda (body starts with {)
                 var isBlockLambda = body.StartsWith("{", StringComparison.Ordinal);
+                
+                // Handle tuple deconstruction pattern - single param but multiple names like (a, b)
+                var isTupleDeconstruction = parameters.Length == 1 && originalParamNames.Length > 1;
+                
+                if (isTupleDeconstruction)
+                {
+                    // For tuple deconstruction, we need to use a standard param name and add deconstruction
+                    paramList = GenerateParameterListWithStandardNames(invokeMethod);
+                    var deconstructNames = string.Join(", ", originalParamNames);
+                    
+                    if (isBlockLambda)
+                    {
+                        // Insert deconstruction after opening brace
+                        var braceIndex = body.IndexOf('{');
+                        if (braceIndex >= 0)
+                        {
+                            var deconstructLine = $"\n            var ({deconstructNames}) = arg0;";
+                            body = body.Insert(braceIndex + 1, deconstructLine);
+                        }
+                    }
+                    else
+                    {
+                        // Convert expression to block with deconstruction
+                        body = $"{{\n            var ({deconstructNames}) = arg0;\n            return {body};\n        }}";
+                        isBlockLambda = true;
+                    }
+                }
                 
                 if (isBlockLambda)
                 {
                     // Block lambda - generate a method with body
-                    // Need to replace parameter references in the body
-                    body = ReplaceParameterNames(body, paramPart, parameters.Length);
-                    
+                    // Add #line directive for each line to enable debugging on any line
                     sb.Append($"        private static {returnTypeName} {methodName}({paramList})\n");
                     
                     if (hasLineInfo)
                     {
-                        sb.Append($"#line {originalLine} \"{originalFilePath}\"\n");
-                    }
-                    
-                    sb.Append("        ");
-                    sb.Append(body);
-                    
-                    if (hasLineInfo)
-                    {
+                        // For block lambdas, add #line directive before each line of the body
+                        var bodyWithLineDirectives = AddLineDirectivesToBody(body, originalLine, originalFilePath!);
+                        sb.Append("        ");
+                        sb.Append(bodyWithLineDirectives);
                         sb.Append("\n#line default");
+                    }
+                    else
+                    {
+                        sb.Append("        ");
+                        sb.Append(body);
                     }
                 }
                 else
                 {
-                    // Expression lambda - use expression-bodied method
-                    body = ReplaceParameterNames(body, paramPart, parameters.Length);
-                    
+                    // Expression lambda - use expression-bodied method with body verbatim
                     sb.Append("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n");
                     
                     if (hasLineInfo)
@@ -1614,6 +1643,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             }
             else
             {
+                var paramList = GenerateParameterListWithStandardNames(invokeMethod);
                 sb.Append("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n");
                 sb.Append($"        private static {returnTypeName} {methodName}({paramList}) => default!;");
             }
@@ -1621,11 +1651,67 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Extracts parameter names from the lambda parameter part.
+    /// Handles various formats:
+    /// - Simple: "x", "(x)", "(x, y)"
+    /// - Typed: "(int x)", "(string a, int b)"
+    /// - Mixed: "(ParseContext ctx, decimal value)"
+    /// </summary>
+    private static string[] ExtractParameterNames(string paramPart)
+    {
+        paramPart = paramPart.Trim();
+        
+        // Remove parentheses if present
+        if (paramPart.StartsWith("(", StringComparison.Ordinal) && paramPart.EndsWith(")", StringComparison.Ordinal))
+        {
+            paramPart = paramPart.Substring(1, paramPart.Length - 2).Trim();
+        }
+        
+        if (string.IsNullOrEmpty(paramPart))
+        {
+            return Array.Empty<string>();
+        }
+        
+        // Split by comma and extract just the name (last word) from each parameter
+        return paramPart.Split(',').Select(p =>
+        {
+            var trimmed = p.Trim();
+            // If there's a space, it's a typed parameter like "int x" or "ParseContext ctx"
+            // Take the last word as the parameter name
+            var lastSpace = trimmed.LastIndexOf(' ');
+            return lastSpace >= 0 ? trimmed.Substring(lastSpace + 1) : trimmed;
+        }).ToArray();
+    }
+
+    /// <summary>
+    /// Generates a parameter list using original parameter names from the lambda.
+    /// For "x => x.Length" generates "TextSpan x".
+    /// </summary>
+    private static string GenerateParameterListWithOriginalNames(System.Reflection.MethodInfo invokeMethod, string[] originalNames)
+    {
+        var parameters = invokeMethod.GetParameters();
+        var sb = new StringBuilder();
+        
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            var paramTypeName = TypeNameHelper.GetTypeName(parameters[i].ParameterType);
+            sb.Append(paramTypeName);
+            sb.Append(' ');
+            // Use original name if available, otherwise fall back to standard name
+            sb.Append(i < originalNames.Length ? originalNames[i] : GetParameterName(i));
+        }
+        
+        return sb.ToString();
+    }
     
     /// <summary>
-    /// Generates a parameter list like "TextSpan arg0, char arg1".
+    /// Generates a parameter list with standard names like "TextSpan arg0, char arg1".
+    /// Used for method groups and fallback cases.
     /// </summary>
-    private static string GenerateParameterList(System.Reflection.MethodInfo invokeMethod)
+    private static string GenerateParameterListWithStandardNames(System.Reflection.MethodInfo invokeMethod)
     {
         var parameters = invokeMethod.GetParameters();
         var sb = new StringBuilder();
@@ -1646,84 +1732,50 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
     /// Gets a standard parameter name for index i.
     /// </summary>
     private static string GetParameterName(int index) => index == 0 ? "arg0" : $"arg{index}";
-    
+
     /// <summary>
-    /// Replaces parameter names in the lambda body with standard names.
-    /// For "x => x.Length" with 1 param, replaces "x" with "arg0".
-    /// For tuple deconstruction "(a, b) => ...", adds a deconstruction statement if it's a block.
+    /// Adds #line directives before each line of a lambda body to enable debugging on any line.
     /// </summary>
-    private static string ReplaceParameterNames(string body, string paramPart, int paramCount)
+    private static string AddLineDirectivesToBody(string body, int startLine, string filePath)
     {
-        if (paramCount == 0) return body;
-        
-        // Remove parentheses if present
-        paramPart = paramPart.Trim();
-        var hadParens = paramPart.StartsWith("(", StringComparison.Ordinal) && paramPart.EndsWith(")", StringComparison.Ordinal);
-        if (hadParens)
+        var lines = body.Split('\n');
+        if (lines.Length <= 1)
         {
-            paramPart = paramPart.Substring(1, paramPart.Length - 2).Trim();
+            // Single line - just add one directive
+            return $"#line {startLine} \"{filePath}\"\n{body}";
+        }
+
+        var sb = new StringBuilder();
+        var currentLine = startLine;
+        
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var trimmedLine = line.TrimStart();
+            
+            // Only add #line directive for non-empty lines that contain actual code
+            // Skip adding directives for lines that are just whitespace or closing braces
+            var isSignificantLine = !string.IsNullOrWhiteSpace(trimmedLine) && 
+                                    trimmedLine != "{" && 
+                                    trimmedLine != "}";
+            
+            if (isSignificantLine)
+            {
+                sb.Append($"#line {currentLine} \"{filePath}\"\n");
+            }
+            
+            sb.Append(line);
+            
+            if (i < lines.Length - 1)
+            {
+                sb.Append('\n');
+            }
+            
+            // Increment line number for each line in the original source
+            currentLine++;
         }
         
-        // Check for tuple deconstruction pattern - multiple names but single param
-        var commaCount = paramPart.Count(c => c == ',');
-        var isTupleDeconstruction = paramCount == 1 && commaCount > 0;
-        
-        if (isTupleDeconstruction)
-        {
-            // Tuple deconstruction case: (a, b) => { ... } with single tuple param
-            // We need to add a deconstruction line at the start of the body
-            var isBlockBody = body.TrimStart().StartsWith("{", StringComparison.Ordinal);
-            if (isBlockBody)
-            {
-                // Find the opening brace and insert deconstruction after it
-                var braceIndex = body.IndexOf('{');
-                if (braceIndex >= 0)
-                {
-                    var deconstructLine = $"\n            var ({paramPart}) = arg0;";
-                    body = body.Insert(braceIndex + 1, deconstructLine);
-                }
-            }
-            else
-            {
-                // Expression body with tuple deconstruction - wrap in block
-                // e.g., (a, b) => a + b  becomes { var (a, b) = arg0; return a + b; }
-                body = $"{{\n            var ({paramPart}) = arg0;\n            return {body};\n        }}";
-            }
-            return body;
-        }
-        
-        if (paramCount == 1)
-        {
-            // Single parameter - the whole paramPart is the name
-            var originalName = paramPart.Trim();
-            if (!string.IsNullOrEmpty(originalName) && originalName != "arg0")
-            {
-                // Use regex for whole-word replacement to avoid replacing substrings
-                body = System.Text.RegularExpressions.Regex.Replace(
-                    body, 
-                    $@"\b{System.Text.RegularExpressions.Regex.Escape(originalName)}\b", 
-                    "arg0");
-            }
-        }
-        else
-        {
-            // Multiple parameters - split by comma
-            var names = paramPart.Split(',').Select(n => n.Trim()).ToArray();
-            for (int i = 0; i < names.Length && i < paramCount; i++)
-            {
-                var originalName = names[i];
-                var newName = GetParameterName(i);
-                if (!string.IsNullOrEmpty(originalName) && originalName != newName)
-                {
-                    body = System.Text.RegularExpressions.Regex.Replace(
-                        body, 
-                        $@"\b{System.Text.RegularExpressions.Regex.Escape(originalName)}\b", 
-                        newName);
-                }
-            }
-        }
-        
-        return body;
+        return sb.ToString();
     }
 
     /// <summary>

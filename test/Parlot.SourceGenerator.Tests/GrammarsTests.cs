@@ -401,6 +401,17 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void BlockLambdaParser_GeneratesCorrectly()
+    {
+        // Test that block lambdas with multiple statements are generated correctly
+        var parser = Grammars.BlockLambdaParser();
+        var result = parser.Parse("hello");
+
+        Assert.NotNull(result);
+        Assert.Equal("Result: HELLO", result);
+    }
+
+    [Fact]
     public void GeneratedParser_SpanMatchesInputLength()
     {
         // Test that span length matches parsed content
