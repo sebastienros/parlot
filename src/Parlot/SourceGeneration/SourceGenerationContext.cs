@@ -13,6 +13,11 @@ public sealed class SourceGenerationContext
     private int _number;
     private int _staticFieldNumber;
 
+    public SourceGenerationContext(string parseContextName, string? methodNamePrefix)
+        : this(parseContextName, methodNamePrefix, targetFramework: null, csharpLanguageMajorVersion: 0)
+    {
+    }
+
     public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null, TargetFrameworkInfo? targetFramework = null)
         : this(parseContextName, methodNamePrefix, targetFramework, csharpLanguageMajorVersion: 0)
     {

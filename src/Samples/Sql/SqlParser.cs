@@ -23,7 +23,6 @@ public partial class SqlParser
     private static readonly ColumnItem StarColumnItem = new(new ColumnSourceIdentifier(Identifier.STAR), null);
 
     [GenerateParser]
-    [IncludeFiles("SqlAst.cs")]
     public static Parser<StatementList> CreateSqlParser()
     {
         // Basic terminals
