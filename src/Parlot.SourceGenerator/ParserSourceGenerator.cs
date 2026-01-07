@@ -152,7 +152,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             static (syntaxContext, ct) => GetInvocationToIntercept(syntaxContext, ct))
             .Where(static i => i is not null)!;
 
-        // 3. Capture target framework information for the current compilation.
+        // 3. Capture target framework information and build context for the current compilation.
         // These are provided by MSBuild and differ per target in multi-target builds.
         var targetFramework = context.AnalyzerConfigOptionsProvider
             .Select(static (options, _) =>
@@ -160,8 +160,9 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 options.GlobalOptions.TryGetValue("build_property.TargetFramework", out var tfm);
                 options.GlobalOptions.TryGetValue("build_property.TargetFrameworkIdentifier", out var identifier);
                 options.GlobalOptions.TryGetValue("build_property.TargetFrameworkVersion", out var version);
+                options.GlobalOptions.TryGetValue("build_property.DesignTimeBuild", out var designTimeBuild);
 
-                return (tfm: tfm ?? "", identifier: identifier ?? "", version: version ?? "");
+                return (tfm: tfm ?? "", identifier: identifier ?? "", version: version ?? "", isDesignTimeBuild: string.Equals(designTimeBuild, "true", StringComparison.OrdinalIgnoreCase));
             });
 
         // 4. Combine the collected methods with invocations, Compilation, and TFM.
@@ -237,7 +238,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
                     var targetFrameworkInfo = TargetFrameworkInfo.FromMsBuildProperties(tfmInfo.identifier, tfmInfo.version);
 
-                    GenerateForMethod(spc, compilation, targetFrameworkInfo, m.Value, methodInvocations ?? new List<InvocationInfo>());
+                    GenerateForMethod(spc, compilation, targetFrameworkInfo, m.Value, methodInvocations ?? new List<InvocationInfo>(), tfmInfo.isDesignTimeBuild);
                 }
                 catch (Exception ex)
                 {
@@ -518,7 +519,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         RoslynCompilation hostCompilation,
         TargetFrameworkInfo targetFramework,
         MethodToGenerate methodInfo,
-        List<InvocationInfo> invocations)
+        List<InvocationInfo> invocations,
+        bool isDesignTimeBuild)
     {
         var methodSymbol = methodInfo.Method;
 
@@ -581,7 +583,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         // Run additional source generators if specified via [IncludeGenerators] attribute
         if (methodInfo.AdditionalGenerators.Length > 0)
         {
-            tempCompilation = RunAdditionalGenerators(context, tempCompilation, methodInfo.AdditionalGenerators, parseOptions, methodSymbol);
+            tempCompilation = RunAdditionalGenerators(context, tempCompilation, methodInfo.AdditionalGenerators, parseOptions, methodSymbol, isDesignTimeBuild);
         }
 
         // Some generators (e.g. Logging, Regex) generate partial method implementations.
@@ -1893,9 +1895,9 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <strong>IDE/Design-Time Limitation:</strong> This method only runs during actual builds, not in IDE 
-    /// contexts (Visual Studio, VS Code, Rider, etc.). When running in an IDE, dynamically loading generator 
-    /// assemblies via Assembly.LoadFrom can cause assembly version conflicts.
+    /// <strong>IDE/Design-Time Limitation:</strong> This method only runs during actual builds, not in 
+    /// design-time builds (IDE IntelliSense, code analysis). When running in design-time contexts, 
+    /// dynamically loading generator assemblies via Assembly.LoadFrom can cause assembly version conflicts.
     /// </para>
     /// <para>
     /// For example, a generator like PolySharp may be compiled against Microsoft.CodeAnalysis 4.3.0, but 
@@ -1913,8 +1915,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
     /// <para>
     /// <strong>Workaround:</strong> IntelliSense and error reporting still work correctly because the IDE 
     /// runs the actual referenced generators normally. The [IncludeGenerators] feature only affects the 
-    /// internal compilation used by Parlot's source generator to emit code, so skipping it in IDE contexts 
-    /// has no user-visible impact on the editing experience.
+    /// internal compilation used by Parlot's source generator to emit code, so skipping it in design-time 
+    /// builds has no user-visible impact on the editing experience.
     /// </para>
     /// </remarks>
     [SuppressMessage("Build", "RS1035", Justification = "Loading generator assemblies is necessary to run them.")]
@@ -1923,23 +1925,17 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         RoslynCompilation compilation,
         string[] generatorAssemblyNames,
         CSharpParseOptions parseOptions,
-        IMethodSymbol methodSymbol)
+        IMethodSymbol methodSymbol,
+        bool isDesignTimeBuild)
     {
-        // Skip running additional generators in IDE/design-time contexts to avoid assembly loading conflicts.
-        // IDEs like Visual Studio host Roslyn with specific assembly versions, and dynamically loading 
-        // generator assemblies compiled against different Microsoft.CodeAnalysis versions causes 
-        // "Could not load file or assembly" errors. See the XML remarks on this method for details.
-        // 
-        // Detection: During actual builds, MSBuild sets the "BuildingProject" property to "true".
-        // In IDE design-time builds, this property is typically absent or set to "false".
-        // We check the compilation's syntax trees for preprocessor symbols as a proxy, but the most
-        // reliable indicator is that IDE contexts don't set certain environment variables.
-        var isBuildContext = Environment.GetEnvironmentVariable("MSBuildExtensionsPath") is not null
-                          || Environment.GetEnvironmentVariable("MSBUILD_EXE_PATH") is not null;
-        
-        if (!isBuildContext)
+        // Skip running additional generators in design-time builds to avoid assembly loading conflicts.
+        // During design-time builds (IDE IntelliSense, code analysis), MSBuild sets DesignTimeBuild=true.
+        // Dynamically loading generator assemblies compiled against different Microsoft.CodeAnalysis 
+        // versions causes "Could not load file or assembly" errors in these contexts.
+        // See the XML remarks on this method for details.
+        if (isDesignTimeBuild)
         {
-            // In IDE context - skip loading external generators to avoid assembly version conflicts.
+            // In design-time build - skip loading external generators to avoid assembly version conflicts.
             // The user's project still gets full IntelliSense from the actual referenced generators.
             return compilation;
         }
