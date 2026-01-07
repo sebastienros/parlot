@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -13,7 +14,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
+public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
 {
     private static readonly MethodInfo _jumpToNextExpectedCharMethod = typeof(TextBefore<T>).GetMethod(nameof(JumpToNextExpectedChar), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -281,6 +282,97 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
             );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_delimiter is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("TextBefore requires a source-generatable delimiter parser.");
+        }
+
+        var result = context.CreateResult(typeof(TextSpan));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+
+        var startName = $"start{context.NextNumber()}";
+        var previousName = $"previous{context.NextNumber()}";
+        var lengthName = $"length{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        var delimiterValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var delimiterHelperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_TextBefore_Delimiter", delimiterValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        result.Body.Add("while (true)");
+        result.Body.Add("{");
+        result.Body.Add($"    var {previousName} = {cursorName}.Position;");
+        result.Body.Add($"    if ({cursorName}.Eof)");
+        result.Body.Add("    {");
+        
+        if (_failOnEof)
+        {
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add($"        {result.SuccessVariable} = false;");
+            result.Body.Add("        break;");
+        }
+        else
+        {
+            result.Body.Add($"        var {lengthName} = {previousName}.Offset - {startName}.Offset;");
+            if (!_canBeEmpty)
+            {
+                result.Body.Add($"        if ({lengthName} == 0)");
+                result.Body.Add("        {");
+                result.Body.Add($"            {result.SuccessVariable} = false;");
+                result.Body.Add("            break;");
+                result.Body.Add("        }");
+            }
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+            }
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add("        break;");
+        }
+        
+        result.Body.Add("    }");
+
+        // Try to parse delimiter
+        result.Body.Add($"    if ({delimiterHelperName}({context.ParseContextName}, out _))");
+        result.Body.Add("    {");
+        result.Body.Add($"        var {lengthName} = {previousName}.Offset - {startName}.Offset;");
+        
+        if (!_consumeDelimiter)
+        {
+            result.Body.Add($"        {cursorName}.ResetPosition({previousName});");
+        }
+
+        if (!_canBeEmpty)
+        {
+            result.Body.Add($"        if ({lengthName} == 0)");
+            result.Body.Add("        {");
+            result.Body.Add($"            {result.SuccessVariable} = false;");
+            result.Body.Add("            break;");
+            result.Body.Add("        }");
+        }
+
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+        }
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add("        break;");
+        result.Body.Add("    }");
+        result.Body.Add($"    {cursorName}.Advance();");
+        result.Body.Add("}");
 
         return result;
     }

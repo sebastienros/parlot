@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 #if NET
@@ -13,7 +14,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser does NOT match at the current position without consuming input (negative lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable
+public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<object> _lookahead;
@@ -96,6 +97,69 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable
         parserResult.Body.AddRange(mainParserCompileResult.Body);
 
         return parserResult;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable parserSourceable)
+        {
+            throw new NotSupportedException("WhenNotFollowedBy requires a source-generatable parser.");
+        }
+
+        if (_lookahead is not ISourceable lookaheadSourceable)
+        {
+            throw new NotSupportedException("WhenNotFollowedBy requires a source-generatable lookahead parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+
+        var startName = $"start{context.NextNumber()}";
+        var beforeLookaheadName = $"beforeLookahead{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        var mainValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(typeof(object));
+
+        // Use helpers instead of inlining
+        var mainHelperName = context.Helpers
+            .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Main", mainValueTypeName, () => parserSourceable.GenerateSource(context))
+            .MethodName;
+
+        var lookaheadHelperName = context.Helpers
+            .GetOrCreate(lookaheadSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Lookahead", lookaheadValueTypeName, () => lookaheadSourceable.GenerateSource(context))
+            .MethodName;
+
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if (!{mainHelperName}({context.ParseContextName}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if (!{mainHelperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        }
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Position;");
+        result.Body.Add($"    if ({lookaheadHelperName}({context.ParseContextName}, out _))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"        {result.SuccessVariable} = false;");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({beforeLookaheadName});");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+
+        return result;
     }
 
     public override string ToString() => $"{_parser} (WhenNotFollowedBy {_lookahead})";

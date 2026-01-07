@@ -193,6 +193,39 @@ public class Cursor
         return Buffer[nextIndex];
     }
 
+    /// <summary>
+    /// Advances the cursor by a precomputed amount, applying known line/column deltas.
+    /// </summary>
+    /// <param name="consumedLength">How many characters were consumed.</param>
+    /// <param name="newLines">Number of newline characters encountered in the consumed span.</param>
+    /// <param name="trailingSegmentLength">Length of the segment after the last newline (or the full length when there are no newlines).</param>
+    public void AdvanceBy(int consumedLength, int newLines, int trailingSegmentLength)
+    {
+        Offset += consumedLength;
+
+        if (Offset >= Buffer.Length)
+        {
+            Eof = true;
+            Offset = Buffer.Length;
+            Current = NullChar;
+        }
+        else
+        {
+            Eof = false;
+            Current = Buffer[Offset];
+        }
+
+        if (newLines == 0)
+        {
+            _column += consumedLength;
+        }
+        else
+        {
+            _line += newLines;
+            _column = 1 + trailingSegmentLength;
+        }
+    }
+
     public bool Eof { get; private set; }
 
     public string Buffer { get; }

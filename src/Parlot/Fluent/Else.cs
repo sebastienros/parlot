@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
@@ -7,7 +8,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a default value if the previous parser failed.
 /// </summary>
-public sealed class Else<T> : Parser<T>, ICompilable
+public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly T? _value;
@@ -93,6 +94,71 @@ public sealed class Else<T> : Parser<T>, ICompilable
                 )
             )
         );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Else requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T), defaultSuccess: true);
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Else", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // if (Helper(context, out value))
+        // {
+        //     // value already assigned
+        // }
+        // else
+        // {
+        //     value = _func != null ? _func(context) : _value;
+        // }
+        // success = true; (always succeeds)
+        
+        result.Body.Add($"if (!{helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        result.Body.Add("{");
+        
+        if (_func != null)
+        {
+            var lambdaId = context.RegisterLambda(_func);
+            if (context.DiscardResult)
+            {
+                result.Body.Add($"    {lambdaId}({context.ParseContextName});");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {lambdaId}({context.ParseContextName});");
+            }
+        }
+        else
+        {
+            // Value-based: try to use LiteralHelper for supported types
+            var valueExpr = LiteralHelper.ToLiteral(_value);
+            if (valueExpr == null)
+            {
+                throw new NotSupportedException(
+                    $"Else<{typeof(T).Name}> with a value of type '{typeof(T).Name}' cannot be source-generated. " +
+                    $"Use a lambda instead, e.g., .Else(static _ => yourValue)");
+            }
+            
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
+            }
+        }
+        
+        result.Body.Add("}");
+        result.Body.Add($"{result.SuccessVariable} = true;");
 
         return result;
     }

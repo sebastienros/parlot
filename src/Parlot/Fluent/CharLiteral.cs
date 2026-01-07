@@ -1,10 +1,11 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
+public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourceable
 {
     public CharLiteral(char c)
     {
@@ -60,4 +61,33 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable
     }
 
     public override string ToString() => $"Char('{Char}')";
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var cursorName = context.CursorName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(char));
+        
+        // Precalculate line tracking values for the character
+        var newLines = Character.IsNewLine(Char) ? 1 : 0;
+        var trailingSegmentLength = Character.IsNewLine(Char) ? 0 : 1;
+        
+        // Use direct SourceResult construction for early return optimization
+        var result = new SourceResult(
+            successVariable: "success",  // Not used with early returns
+            valueVariable: "value",
+            valueTypeName: valueTypeName);
+
+        result.Body.Add($"if ({cursorName}.Match('{Char}'))");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.AdvanceBy(1, {newLines}, {trailingSegmentLength});");
+        result.Body.Add($"    {result.ValueVariable} = '{Char}';");
+        result.Body.Add("    return true;");
+        result.Body.Add("}");
+        result.Body.Add($"{result.ValueVariable} = default;");
+        result.Body.Add("return false;");
+
+        return result;
+    }
 }

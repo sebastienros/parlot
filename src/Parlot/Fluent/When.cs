@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 #if NET
 using System.Linq;
@@ -12,7 +13,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser is valid based on a condition, and backtracks if not.
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class When<T> : Parser<T>, ICompilable, ISeekable
+public sealed class When<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private readonly Func<ParseContext, T, bool> _action;
     private readonly Parser<T> _parser;
@@ -111,6 +112,59 @@ public sealed class When<T> : Parser<T>, ICompilable, ISeekable
 
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("When requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        
+        var startName = $"start{context.NextNumber()}";
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_When", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // Register the action lambda
+        var lambdaId = context.RegisterLambda(_action);
+
+        // if (Helper(context, out var innerValue) && _action(context, innerValue))
+        // {
+        //     success = true;
+        //     value = innerValue;
+        // }
+        // else
+        // {
+        //     cursor.ResetPosition(start);
+        //     success = false;
+        // }
+        
+        var innerValueName = $"innerValue{context.NextNumber()}";
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}) && {lambdaId}({context.ParseContextName}, {innerValueName}))");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = {innerValueName};");
+        }
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"    {result.SuccessVariable} = false;");
+        result.Body.Add("}");
 
         return result;
     }

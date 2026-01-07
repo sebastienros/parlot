@@ -1,12 +1,26 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+		<CompilerGeneratedFilesOutputPath>obj\$(Configuration)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
+    <!-- Enable interceptors for source generator -->
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Parlot.Tests.Sql;Parlot.Tests.Calc;Parlot.Tests.Json</InterceptorsPreviewNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Parlot\Parlot.csproj" />
-  </ItemGroup>
+    </ItemGroup>
 
+  <ItemGroup>
+    <!-- Reference the source generator as an analyzer -->
+    <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
+                      OutputItemType="Analyzer" 
+                      ReferenceOutputAssembly="false" />
+
+
+    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
+  </ItemGroup>
 </Project>

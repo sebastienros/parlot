@@ -19,6 +19,22 @@
     <PackageReference Include="System.Memory" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
     <PackageReference Include="System.Collections.Immutable" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
     <PackageReference Include="FastExpressionCompiler.Internal.src" PrivateAssets="all" />
+    <!-- Build-time only dependency for source generation literal escaping - not shipped with the package -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Pack the source generator into the analyzers folder for NuGet package -->
+  <!-- The source generator must be built before packing Parlot -->
+  <ItemGroup>
+    <None Include="../Parlot.SourceGenerator/bin/$(Configuration)/netstandard2.0/Parlot.SourceGenerator.dll" 
+          Pack="true" 
+          PackagePath="analyzers/dotnet/cs" 
+          Visible="false" />
+    <!-- Also include Parlot.dll itself as a dependency for the source generator at runtime -->
+    <None Include="bin/$(Configuration)/netstandard2.0/Parlot.dll" 
+          Pack="true" 
+          PackagePath="analyzers/dotnet/cs" 
+          Visible="false" />
   </ItemGroup>
 
   <!-- Include build props file in the NuGet package for automatic using static import when ImplicitUsings is enabled -->
@@ -26,9 +42,18 @@
     <None Include="buildTransitive\Parlot.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
   <ItemGroup>
+    <!-- This is the T4 template service and is added by VS anytime you modify a T4 template. Required for .tt files. -->
     <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Include the GenerateParserAttribute so it's available to consumers -->
+    <Compile Include="../Parlot.SourceGenerator/GenerateParserAttribute.cs" Link="SourceGeneration/GenerateParserAttribute.cs" />
+    <!-- Include the IncludeFilesAttribute so it's available to consumers -->
+    <Compile Include="../Parlot.SourceGenerator/IncludeFilesAttribute.cs" Link="SourceGeneration/IncludeFilesAttribute.cs" />
+    <!-- Include the IncludeUsingsAttribute so it's available to consumers -->
+    <Compile Include="../Parlot.SourceGenerator/IncludeUsingsAttribute.cs" Link="SourceGeneration/IncludeUsingsAttribute.cs" />
+    <!-- Include the IncludeGeneratorsAttribute so it's available to consumers -->
+    <Compile Include="../Parlot.SourceGenerator/IncludeGeneratorsAttribute.cs" Link="SourceGeneration/IncludeGeneratorsAttribute.cs" />
     <Compile Update="ParserOperatorExtensions.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>

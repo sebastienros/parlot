@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
@@ -7,7 +8,7 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable
+public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
@@ -122,6 +123,72 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("OneOrMany requires a source-generatable parser.");
+        }
+
+        var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var result = context.CreateResult(typeof(IReadOnlyList<T>));
+
+        var listName = $"list{context.NextNumber()}";
+
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+        }
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        static Type GetParserValueType(object parser)
+        {
+            var type = parser.GetType();
+            while (type != null)
+            {
+                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
+                {
+                    return type.GetGenericArguments()[0];
+                }
+                type = type.BaseType!;
+            }
+            throw new InvalidOperationException("Unable to determine parser value type.");
+        }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        result.Body.Add("while (true)");
+        result.Body.Add("{");
+        result.Body.Add($"    if (!{helperName}({context.ParseContextName}, out var itemValue{context.NextNumber()}))");
+        result.Body.Add("    {");
+        result.Body.Add("        break;");
+        result.Body.Add("    }");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    if ({listName} == null)");
+            result.Body.Add("    {");
+            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add("    }");
+            result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+        }
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"if ({listName} != null)");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.ValueVariable} = {listName};");
+            result.Body.Add("}");
+        }
 
         return result;
     }

@@ -1,10 +1,12 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable
+public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
 
@@ -98,6 +100,55 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable
                 )
             )
         );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Capture requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(TextSpan));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        
+        var startName = $"start{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+        var lengthName = $"length{context.NextNumber()}";
+        
+        result.Body.Add($"var {startName} = {cursorName}.Position;");
+
+        // Set DiscardResult to true for the inner parser, as we only care about whether it succeeds
+        var ignoreResults = context.DiscardResult;
+        context.DiscardResult = true;
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Capture", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        context.DiscardResult = ignoreResults;
+
+        // if (Helper(context, out _))
+        // {
+        //     var end = cursor.Offset;
+        //     var length = end - start.Offset;
+        //     value = new TextSpan(scanner.Buffer, start.Offset, length);
+        //     success = true;
+        // }
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        result.Body.Add("{");
+        result.Body.Add($"    var {endName} = {cursorName}.Offset;");
+        result.Body.Add($"    var {lengthName} = {endName} - {startName}.Offset;");
+        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
 
         return result;
     }

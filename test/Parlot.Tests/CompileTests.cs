@@ -1,7 +1,6 @@
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -22,9 +21,20 @@ public class CompileTests
     }
 
     [Fact]
-    public void ShouldReturnParsedTextNotRequestedTextForCaseInsensitiveMatch()
+    public void ShouldReturnRequestedTextForCaseInsensitiveMatchByDefault()
     {
         var parser = Terms.Text("hello", caseInsensitive: true).Compile();
+
+        var result = parser.Parse(" HELLO world");
+
+        Assert.NotNull(result);
+        Assert.Equal("hello", result);
+    }
+
+    [Fact]
+    public void ShouldReturnParsedTextForCaseInsensitiveMatchWhenRequested()
+    {
+        var parser = Terms.Text("hello", caseInsensitive: true, returnMatchedText: true).Compile();
 
         var result = parser.Parse(" HELLO world");
 
@@ -596,16 +606,22 @@ public class CompileTests
         var i = Literals.Text("i:");
         var s = Literals.Text("s:");
 
-        var parser = d.Or(i).Or(s).Switch((context, result) =>
+        var parsers = new Parser<object>[]
         {
-            switch (result)
+            Literals.Decimal().Then<object>(x => x),
+            Literals.Integer().Then<object>(x => x),
+            Literals.String().Then<object>(x => x),
+        };
+
+        var parser = d.Or(i).Or(s)
+            .Switch((context, result) => result switch
             {
-                case "d:": return Literals.Decimal().Then<object>(x => x);
-                case "i:": return Literals.Integer().Then<object>(x => x);
-                case "s:": return Literals.String().Then<object>(x => x);
-            }
-            return null;
-        }).Compile();
+                "d:" => 0,
+                "i:" => 1,
+                "s:" => 2,
+                _ => -1
+            }, parsers)
+            .Compile();
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
         Assert.Equal((decimal)123.456, resultD);
@@ -621,7 +637,10 @@ public class CompileTests
     public void SelectShouldCompilePickParserUsingRuntimeLogic()
     {
         var allowWhiteSpace = true;
-        var parser = Select<long>(_ => allowWhiteSpace ? Terms.Integer() : Literals.Integer()).Compile();
+        var terms = Terms.Integer();
+        var literals = Literals.Integer();
+
+        var parser = Select<long>(_ => allowWhiteSpace ? 0 : 1, terms, literals).Compile();
 
         Assert.True(parser.TryParse(" 42", out var result1));
         Assert.Equal(42, result1);
@@ -637,7 +656,7 @@ public class CompileTests
     [Fact]
     public void SelectShouldCompileFailWhenSelectorReturnsNull()
     {
-        var parser = Select<long>(_ => null!).Compile();
+        var parser = Select<long>(_ => -1, Terms.Integer()).Compile();
 
         Assert.False(parser.TryParse("123", out _));
     }
@@ -645,7 +664,10 @@ public class CompileTests
     [Fact]
     public void SelectShouldCompileHonorConcreteParseContext()
     {
-        var parser = Select<CustomCompileParseContext, string>(context => context.PreferYes ? Literals.Text("yes") : Literals.Text("no")).Compile();
+        var yesParser = Literals.Text("yes");
+        var noParser = Literals.Text("no");
+
+        var parser = Select<CustomCompileParseContext, string>(context => context.PreferYes ? 0 : 1, yesParser, noParser).Compile();
 
         var yesContext = new CustomCompileParseContext(new Scanner("yes")) { PreferYes = true };
         Assert.True(parser.TryParse(yesContext, out var yes, out _));
@@ -673,9 +695,37 @@ public class CompileTests
     }
 
     [Fact]
+    public void LeftAssociativeWithContextCompiledShouldRestoreCursorWhenRightOperandMissing()
+    {
+        var parser = Terms.Decimal().LeftAssociative((Terms.Char('+'), static (ParseContext _, decimal a, decimal b) => a + b)).Compile();
+
+        var context = new ParseContext(new Scanner("1+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(1, result.End);
+
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void UnaryCompiledShouldRestoreCursorWhenOperandMissing()
     {
         var parser = Terms.Decimal().Unary((Terms.Char('-'), static d => -d)).Compile();
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void UnaryWithContextCompiledShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static (ParseContext _, decimal d) => -d)).Compile();
 
         var context = new ParseContext(new Scanner("-"));
         var result = new ParseResult<decimal>();
@@ -928,14 +978,18 @@ public class CompileTests
         var parser1 = Literals.Text("not", caseInsensitive: true).Compile();
 
         Assert.Equal("not", parser1.Parse("not"));
-        Assert.Equal("nOt", parser1.Parse("nOt"));
-        Assert.Equal("NOT", parser1.Parse("NOT"));
+        Assert.Equal("not", parser1.Parse("nOt"));
+        Assert.Equal("not", parser1.Parse("NOT"));
 
         var parser2 = Terms.Text("not", caseInsensitive: true).Compile();
 
         Assert.Equal("not", parser2.Parse("not"));
-        Assert.Equal("nOt", parser2.Parse("nOt"));
-        Assert.Equal("NOT", parser2.Parse("NOT"));
+        Assert.Equal("not", parser2.Parse("nOt"));
+        Assert.Equal("not", parser2.Parse("NOT"));
+
+        // Opt-in to return the matched text
+        var parser3 = Terms.Text("not", caseInsensitive: true, returnMatchedText: true).Compile();
+        Assert.Equal("nOt", parser3.Parse("nOt"));
     }
 
     [Fact]
@@ -948,7 +1002,7 @@ public class CompileTests
             ).Compile();
 
         Assert.Equal("not", parser.Parse("not"));
-        Assert.Equal("nOt", parser.Parse("nOt"));
+        Assert.Equal("not", parser.Parse("nOt"));
         Assert.Equal("abc", parser.Parse("abc"));
         Assert.Equal("aBC", parser.Parse("aBC"));
         Assert.Null(parser.Parse("ABC"));
@@ -1159,5 +1213,33 @@ public class CompileTests
 
         Assert.True(parser.TryParse(source, out var result));
         Assert.Equal(source.Length, result.Count);
+    }
+
+    [Fact]
+    public void CompiledParserImplementsISourceable()
+    {
+        // Verify that CompiledParser<T> implements ISourceable
+        var compiledParser = Terms.Integer().Compile();
+        
+        Assert.IsAssignableFrom<SourceGeneration.ISourceable>(compiledParser);
+    }
+
+    [Fact]
+    public void CompiledParserGenerateSourceDelegatesToSourceParser()
+    {
+        // Verify that CompiledParser.GenerateSource delegates to the source parser
+        var sourceParser = Terms.Integer();
+        var compiledParser = sourceParser.Compile();
+        
+        var sourceable = (SourceGeneration.ISourceable)compiledParser;
+        var context = new SourceGeneration.SourceGenerationContext();
+        
+        var result = sourceable.GenerateSource(context);
+        
+        // Should produce valid source result
+        Assert.NotNull(result);
+        Assert.NotNull(result.SuccessVariable);
+        Assert.NotNull(result.ValueVariable);
+        Assert.True(result.Body.Count > 0);
     }
 }

@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -9,7 +10,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Wraps an existing parser as an <see cref="ISeekable"/> implementation by provide the seekable properties.
 /// </summary>
-internal sealed class Seekable<T> : Parser<T>, ISeekable, ICompilable
+internal sealed class Seekable<T> : Parser<T>, ISeekable, ICompilable, ISourceable
 {
     public bool CanSeek { get; set; }
 
@@ -53,6 +54,19 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable, ICompilable
         result.Body.Add(block);
 
         return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (Parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Seekable requires a source-generatable parser.");
+        }
+
+        // Passthrough - just delegate to the inner parser
+        return sourceable.GenerateSource(context);
     }
 
     public override string ToString() => $"{Parser} (Seekable)";

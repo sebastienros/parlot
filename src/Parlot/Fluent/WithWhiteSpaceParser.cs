@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 using System.Linq.Expressions;
 
@@ -8,7 +9,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// A parser that temporarily sets a custom whitespace parser for its inner parser.
 /// </summary>
-public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable
+public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<TextSpan> _whiteSpaceParser;
@@ -101,6 +102,62 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable
         };
 
         result.Body.AddRange(blockExpressions);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("WithWhiteSpaceParser requires a source-generatable parser.");
+        }
+
+        if (_whiteSpaceParser is not ISourceable whiteSpaceSourceable)
+        {
+            throw new NotSupportedException("WithWhiteSpaceParser requires a source-generatable whitespace parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        var previousWhiteSpaceParserName = $"previousWhiteSpaceParser{context.NextNumber()}";
+        
+        // Generate the whitespace parser as a helper method
+        var wsHelperName = context.Helpers
+            .GetOrCreate(whiteSpaceSourceable, $"{context.MethodNamePrefix}_WhiteSpace", "global::Parlot.TextSpan", () => whiteSpaceSourceable.GenerateSource(context))
+            .MethodName;
+
+        // Create a wrapper parser that delegates to the helper
+        var wsWrapperName = $"_{context.MethodNamePrefix}_WsWrapper{context.NextNumber()}";
+        context.StaticFields.Add($"private static readonly global::Parlot.Fluent.Parser<global::Parlot.TextSpan> {wsWrapperName} = new global::Parlot.Fluent.DelegateParser<global::Parlot.TextSpan>({wsHelperName});");
+
+        result.Body.Add($"var {previousWhiteSpaceParserName} = {ctx}.WhiteSpaceParser;");
+        result.Body.Add($"{ctx}.WhiteSpaceParser = {wsWrapperName};");
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_WithWhiteSpace", valueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        result.Body.Add("try");
+        result.Body.Add("{");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out _);");
+        }
+        else
+        {
+            result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {result.ValueVariable});");
+        }
+        result.Body.Add("}");
+        result.Body.Add("finally");
+        result.Body.Add("{");
+        result.Body.Add($"    {ctx}.WhiteSpaceParser = {previousWhiteSpaceParserName};");
+        result.Body.Add("}");
 
         return result;
     }
