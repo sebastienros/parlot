@@ -68,7 +68,7 @@ public class ParseContext
         UseNewLines = useNewLines;
         CancellationToken = cancellationToken;
         DisableLoopDetection = disableLoopDetection;
-        
+
         _activeParserPositions = !disableLoopDetection ? new HashSet<ParserPosition>(ParserPositionComparer.Instance) : null!;
     }
 
@@ -192,8 +192,7 @@ public class ParseContext
             unchecked
             {
                 var hash = RuntimeHelpers.GetHashCode(obj.Parser);
-                hash = (hash * 397) ^ obj.Position;
-                return hash;
+                return (hash * 397) ^ obj.Position;
             }
         }
     }

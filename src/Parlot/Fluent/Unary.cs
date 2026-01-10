@@ -94,10 +94,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable
                 var (op, factory) = _operators[i];
                 var opCompileResult = op.Build(innerContext);
 
-                foreach (var variable in opCompileResult.Variables)
-                {
-                    allOperatorVariables.Add(variable);
-                }
+                allOperatorVariables.AddRange(opCompileResult.Variables);
 
                 var factoryConst = Expression.Constant(factory);
 
@@ -318,10 +315,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ICompilable
                 var (op, factory) = _operators[i];
                 var opCompileResult = op.Build(innerContext);
 
-                foreach (var variable in opCompileResult.Variables)
-                {
-                    allOperatorVariables.Add(variable);
-                }
+                allOperatorVariables.AddRange(opCompileResult.Variables);
 
                 var factoryConst = Expression.Constant(factory);
 

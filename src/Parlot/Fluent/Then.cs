@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 namespace Parlot.Fluent;
 
 /// <summary>
-/// Returns a new <see cref="Parser{U}" /> converting the input value of 
+/// Returns a new <see cref="Parser{U}" /> converting the input value of
 /// type T to the output value of type U using a custom function.
 /// </summary>
 /// <typeparam name="T">The input parser type.</typeparam>

@@ -10,6 +10,7 @@ namespace Parlot.Fluent;
 public abstract partial class Parser<T>
 {
     private static readonly ConstructorInfo _valueTupleConstructor = typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!;
+    private readonly object _lockObject = new();
 
     /// <summary>
     /// Compiles the current parser.
@@ -17,7 +18,7 @@ public abstract partial class Parser<T>
     /// <returns>A compiled parser.</returns>
     public Parser<T> Compile()
     {
-        lock (this)
+        lock (_lockObject)
         {
             if (this is ICompiledParser)
             {
@@ -79,7 +80,7 @@ public abstract partial class Parser<T>
     }
 
     /// <summary>
-    /// Invokes the <see cref="ICompilable.Compile(CompilationContext)"/> method of the <see cref="Parser{T}"/> if it's available or 
+    /// Invokes the <see cref="ICompilable.Compile(CompilationContext)"/> method of the <see cref="Parser{T}"/> if it's available or
     /// creates a generic one.
     /// </summary>
     /// <param name="context">The <see cref="CompilationContext"/> instance.</param>

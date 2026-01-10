@@ -51,7 +51,7 @@ public abstract partial class Parser<T> : IParser<T>
     {
         // Check if U implements IConvertible at construction time for performance
         var targetImplementsIConvertible = typeof(IConvertible).IsAssignableFrom(typeof(U));
-        
+
         if (targetImplementsIConvertible)
         {
             return new Then<T, U?>(this, x =>
@@ -66,12 +66,12 @@ public abstract partial class Parser<T> : IParser<T>
                     catch
                     {
                         // Fall back to default if conversion fails
-                        return default(U);
+                        return default;
                     }
                 }
-                
+
                 // For non-convertible types, return default
-                return default(U);
+                return default;
             });
         }
         else

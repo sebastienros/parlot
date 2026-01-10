@@ -1,8 +1,3 @@
-using Parlot.Compilation;
-using Parlot.Rewriting;
-using System;
-using System.Linq.Expressions;
-
 namespace Parlot.Fluent;
 
 /// <summary>
@@ -10,10 +5,6 @@ namespace Parlot.Fluent;
 /// </summary>
 public sealed class WhiteSpaceParser : Parser<TextSpan>
 {
-    public WhiteSpaceParser()
-    {
-    }
-
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
         context.EnterParser(this);
@@ -36,5 +27,5 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>
         return true;
     }
 
-    public override string ToString() => $"WhiteSpaceParser";
+    public override string ToString() => "WhiteSpaceParser";
 }
