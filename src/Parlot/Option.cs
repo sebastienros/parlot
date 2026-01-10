@@ -6,33 +6,24 @@ namespace Parlot;
 /// <typeparam name="T">The type of the wrapped value.</typeparam>
 public readonly struct Option<T>
 {
-    private readonly bool _hasValue;
-    private readonly T _value;
-
-    private Option(bool hasValue, T value)
-    {
-        _hasValue = hasValue;
-        _value = value;
-    }
-
     /// <summary>
     /// Creates an <see cref="Option{T}"/> that wraps a value.
     /// </summary>
     public Option(T value)
     {
-        _hasValue = true;
-        _value = value;
+        HasValue = true;
+        Value = value;
     }
 
     /// <summary>
     /// Gets a value indicating whether the optional value has been set.
     /// </summary>
-    public bool HasValue => _hasValue;
+    public bool HasValue { get; }
 
     /// <summary>
     /// Gets the wrapped value. When <see cref="HasValue"/> is <see langword="false"/>, the default value of <typeparamref name="T"/> is returned.
     /// </summary>
-    public T Value => _value;
+    public T Value { get; }
 
     /// <summary>
     /// Tries to get the wrapped value.
@@ -41,8 +32,8 @@ public readonly struct Option<T>
     /// <returns><see langword="true"/> when the value is set; otherwise <see langword="false"/>.</returns>
     public bool TryGetValue(out T value)
     {
-        value = _value;
-        return _hasValue;
+        value = Value;
+        return HasValue;
     }
 
     /// <summary>
@@ -51,5 +42,5 @@ public readonly struct Option<T>
     /// <param name="defaultValue"></param>
     /// <returns></returns>
     public T OrSome(T? defaultValue)
-        => _hasValue ? _value : defaultValue!;
+        => HasValue ? Value : defaultValue!;
 }

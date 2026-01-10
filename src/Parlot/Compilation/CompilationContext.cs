@@ -12,12 +12,8 @@ public class CompilationContext
 {
     private int _number;
 
-    public CompilationContext()
-    {
-    }
-
     /// <summary>
-    /// Gets the expression containing the the <see cref="ParseContext"/> instance for the parser.
+    /// Gets the expression containing the <see cref="ParseContext"/> instance for the parser.
     /// </summary>
     public ParameterExpression ParseContext { get; } = Expression.Parameter(typeof(ParseContext));
 
@@ -27,12 +23,12 @@ public class CompilationContext
     public int NextNumber => _number++;
 
     /// <summary>
-    /// Gets the list of global variables to add the the final list of statements.
+    /// Gets the list of global variables to add the final list of statements.
     /// </summary>
     public List<ParameterExpression> GlobalVariables { get; } = new();
 
     /// <summary>
-    /// Gets the list of global expressions to add the the final list of statements.
+    /// Gets the list of global expressions to add the final list of statements.
     /// </summary>
     public List<Expression> GlobalExpressions { get; } = new();
 

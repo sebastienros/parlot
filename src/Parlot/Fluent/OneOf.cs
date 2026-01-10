@@ -151,7 +151,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
             lookupTable?.Remove(OtherSeekableChar);
             var expectedChars = string.Join(",", lookupTable?.Keys.ToArray() ?? []);
 
-            if (lookupTable != null && lookupTable.Count > 0)
+            if (lookupTable?.Count > 0)
             {
                 _map = new CharMap<List<Parser<T>>>(lookupTable);
 

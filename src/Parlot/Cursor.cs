@@ -110,7 +110,7 @@ public class Cursor
         {
             Current = NullChar;
             Offset = _textLength;
-            _column += 1;
+            _column++;
         }
     }
 

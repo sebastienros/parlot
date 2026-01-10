@@ -108,10 +108,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable
             var (op, factory) = _operators[i];
             var opCompileResult = op.Build(context);
 
-            foreach (var variable in opCompileResult.Variables)
-            {
-                allOperatorVariables.Add(variable);
-            }
+            allOperatorVariables.AddRange(opCompileResult.Variables);
 
             var factoryConst = Expression.Constant(factory);
 
@@ -291,10 +288,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ICompilab
             var (op, factory) = _operators[i];
             var opCompileResult = op.Build(context);
 
-            foreach (var variable in opCompileResult.Variables)
-            {
-                allOperatorVariables.Add(variable);
-            }
+            allOperatorVariables.AddRange(opCompileResult.Variables);
 
             var factoryConst = Expression.Constant(factory);
 

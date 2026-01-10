@@ -14,7 +14,7 @@ namespace Parlot.Fluent;
 public sealed class Optional<T> : Parser<Option<T>>, ICompilable
 {
     private static readonly ConstructorInfo _optionConstructor = typeof(Option<T>).GetConstructor([typeof(T)])!;
-    
+
     private readonly Parser<T> _parser;
     public Optional(Parser<T> parser)
     {

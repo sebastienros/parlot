@@ -77,21 +77,16 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable
 
     public CompilationResult Compile(CompilationContext context)
     {
-        var result = context.CreateCompilationResult<T>();
-
         var mainParserCompileResult = _parser.Build(context, requireResult: true);
 
         // For now, don't attempt to compile the lookahead check. Just compile the main parser.
         // Compilation support for lookahead can be added later if needed.
         // This ensures the parser still benefits from compilation of the main parser.
-        
+
         var parserResult = context.CreateCompilationResult<T>();
-        
+
         // Just add the compiled main parser
-        foreach (var variable in mainParserCompileResult.Variables)
-        {
-            parserResult.Variables.Add(variable);
-        }
+        parserResult.Variables.AddRange(mainParserCompileResult.Variables);
 
         parserResult.Body.AddRange(mainParserCompileResult.Body);
 
