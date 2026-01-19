@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.Memory" Version="4.6.3" />
-    <PackageVersion Include="System.Collections.Immutable" Version="10.0.1" />
+    <PackageVersion Include="System.Collections.Immutable" Version="10.0.2" />
     <PackageVersion Include="FastExpressionCompiler.Internal.src" Version="5.3.3" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
@@ -16,6 +16,6 @@
     <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <GlobalPackageReference Include="PolySharp" Version="1.15.0" />
     <!-- Testing -->
-    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.1" />
+    <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
   </ItemGroup>
 </Project>
