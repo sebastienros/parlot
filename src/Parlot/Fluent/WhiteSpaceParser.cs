@@ -11,10 +11,6 @@ namespace Parlot.Fluent;
 /// </summary>
 public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
 {
-    public WhiteSpaceParser()
-    {
-    }
-
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
         context.EnterParser(this);
@@ -62,5 +58,5 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
         return result;
     }
 
-    public override string ToString() => $"WhiteSpaceParser";
+    public override string ToString() => "WhiteSpaceParser";
 }

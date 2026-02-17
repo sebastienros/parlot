@@ -139,7 +139,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
     {
         var indexOfAny = int.MaxValue;
         var span = context.Scanner.Cursor.Span;
-        
+
         foreach (var c in expectedChars)
         {
             var index = span.IndexOf(c);

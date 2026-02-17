@@ -89,7 +89,7 @@ public class CommentsBuilder
         return this;
     }
 
-    public Parser<TextSpan> Build() 
+    public Parser<TextSpan> Build()
     {
         return Capture(ZeroOrMany(OneOf(_parsers.ToArray())));
     }

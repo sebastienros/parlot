@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 
@@ -9,7 +9,7 @@ namespace Parlot.Compilation;
 /// to parse the expected input.
 /// The convention is that these statements are returned in the <see cref="Body"/> property, and any variable that needs to be declared in the block
 /// that the <see cref="Body"/> is used in are set in the <see cref="Variables"/> list.
-/// The <see cref="Success"/> property represents the variable that contains the success of the statements once executed, and if <code>true</code> then 
+/// The <see cref="Success"/> property represents the variable that contains the success of the statements once executed, and if <code>true</code> then
 /// the <see cref="Value"/> property contains the result.
 /// </summary>
 public class CompilationResult

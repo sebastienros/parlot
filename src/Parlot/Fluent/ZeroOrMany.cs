@@ -43,7 +43,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
             }
 
             end = parsed.End;
-            
+
             results!.Add(parsed.Value);
         }
 

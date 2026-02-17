@@ -116,7 +116,7 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         var resultSpan = Expression.Variable(typeof(ReadOnlySpan<char>), $"result{context.NextNumber}");
         result.Variables.Add(resultSpan);
 
-        var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText), 
+        var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText),
             [typeof(ReadOnlySpan<char>), typeof(StringComparison), typeof(ReadOnlySpan<char>).MakeByRefType()])!;
 
         var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase

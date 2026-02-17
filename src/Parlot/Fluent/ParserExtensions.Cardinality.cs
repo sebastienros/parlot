@@ -1,7 +1,5 @@
 using System.Collections.Generic;
 
-using Parlot;
-
 namespace Parlot.Fluent;
 
 public static partial class ParserExtensions

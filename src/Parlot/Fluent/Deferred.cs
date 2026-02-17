@@ -13,6 +13,8 @@ namespace Parlot.Fluent;
 
 public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
 {
+
+    private readonly object _lockObject = new();
     private Parser<T>? _parser;
 
     public Parser<T>? Parser
@@ -216,7 +218,7 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable, ISourceable
     {
         // Handle recursion
 
-        lock (this)
+        lock (_lockObject)
         {
             if (!_toString)
             {
