@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Xunit;
 
 namespace Parlot.SourceGenerator.Tests;
@@ -158,7 +159,72 @@ public static partial class InvalidReturnGrammar
         Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
     }
 
-    private static (GeneratorDriverRunResult result, CSharpCompilation updatedCompilation) RunGenerator(string source, string assemblyName)
+    [Fact]
+    public void DesignTimeBuild_Skips_Parlot_Generation_And_Diagnostics()
+    {
+        const string source = @"
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class DesignTimeGrammar
+{
+    [GenerateParser]
+    public static Parser<string> Foo(string arg) => Terms.Text(arg);
+}
+";
+
+        var (result, _) = RunGenerator(
+            source,
+            "DesignTimeNoOp",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["build_property.DesignTimeBuild"] = "true",
+                ["build_property.TargetFramework"] = "net10.0",
+                ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
+                ["build_property.TargetFrameworkVersion"] = "v10.0"
+            });
+
+        Assert.DoesNotContain(result.Diagnostics, d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal));
+        Assert.Empty(result.Results.SelectMany(r => r.GeneratedSources));
+    }
+
+    [Fact]
+    public void VisualStudio_LiveAnalysis_Context_Skips_Parlot_Generation_And_Diagnostics()
+    {
+        const string source = @"
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class VisualStudioGrammar
+{
+    [GenerateParser]
+    public static Parser<string> Foo(string arg) => Terms.Text(arg);
+}
+";
+
+        var (result, _) = RunGenerator(
+            source,
+            "VisualStudioNoOp",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["build_property.DesignTimeBuild"] = "false",
+                ["build_property.BuildingInsideVisualStudio"] = "true",
+                ["build_property.BuildingProject"] = "false",
+                ["build_property.TargetFramework"] = "net10.0",
+                ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
+                ["build_property.TargetFrameworkVersion"] = "v10.0"
+            });
+
+        Assert.DoesNotContain(result.Diagnostics, d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal));
+        Assert.Empty(result.Results.SelectMany(r => r.GeneratedSources));
+    }
+
+    private static (GeneratorDriverRunResult result, CSharpCompilation updatedCompilation) RunGenerator(
+        string source,
+        string assemblyName,
+        IReadOnlyDictionary<string, string> globalOptions = null)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
@@ -204,7 +270,11 @@ public static partial class InvalidReturnGrammar
         var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
 
         var sourceGenerator = generator.AsSourceGenerator();
-        var driver = CSharpGeneratorDriver.Create(new[] { sourceGenerator }, parseOptions: parseOptions)
+        var optionsProvider = globalOptions is null
+            ? null
+            : new TestAnalyzerConfigOptionsProvider(globalOptions);
+
+        var driver = CSharpGeneratorDriver.Create(new[] { sourceGenerator }, parseOptions: parseOptions, optionsProvider: optionsProvider)
             .RunGeneratorsAndUpdateCompilation(compilation, out var updatedCompilation, out var generatorDiagnostics);
 
         return (driver.GetRunResult(), (CSharpCompilation)updatedCompilation);
@@ -264,5 +334,46 @@ public static partial class StaticLambdaGrammar
         // Should not have PARLOT015 (closure error)
         var closureErrors = result.Diagnostics.Where(d => d.Id == "PARLOT015").ToList();
         Assert.Empty(closureErrors);
+    }
+
+    private sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsProvider
+    {
+        private static readonly AnalyzerConfigOptions Empty = new TestAnalyzerConfigOptions(new Dictionary<string, string>());
+        private readonly AnalyzerConfigOptions _globalOptions;
+
+        public TestAnalyzerConfigOptionsProvider(IReadOnlyDictionary<string, string> globalOptions)
+        {
+            _globalOptions = new TestAnalyzerConfigOptions(globalOptions);
+        }
+
+        public override AnalyzerConfigOptions GlobalOptions => _globalOptions;
+
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)
+            => Empty;
+
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile)
+            => Empty;
+    }
+
+    private sealed class TestAnalyzerConfigOptions : AnalyzerConfigOptions
+    {
+        private readonly IReadOnlyDictionary<string, string> _values;
+
+        public TestAnalyzerConfigOptions(IReadOnlyDictionary<string, string> values)
+        {
+            _values = values;
+        }
+
+        public override bool TryGetValue(string key, out string value)
+        {
+            if (_values.TryGetValue(key, out var found))
+            {
+                value = found;
+                return true;
+            }
+
+            value = "";
+            return false;
+        }
     }
 }
