@@ -49,27 +49,34 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
-        if (Parser is null)
+        var parser = Parser;
+
+        if (parser is null)
         {
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
-        // Check for infinite recursion at the same position (unless disabled)
-        if (!context.DisableLoopDetection && context.IsParserActiveAtPosition(this))
-        {
-            // Cycle detected at this position - fail gracefully instead of stack overflow
-            return false;
-        }
+        var trackPosition = !context.DisableLoopDetection;
 
         // Remember the position where we entered this parser
-        var entryPosition = context.Scanner.Cursor.Position.Offset;
+        var entryPosition = 0;
 
-        // Mark this parser as active at the current position (unless loop detection is disabled)
-        var trackPosition = !context.DisableLoopDetection && context.PushParserAtPosition(this);
+        if (trackPosition)
+        {
+            entryPosition = context.Scanner.Cursor.Offset;
+
+            // Marking the parser as active also detects a cycle at this position, which saves a lookup
+            // compared to checking for the cycle first.
+            if (!context.PushParserAtPosition(this))
+            {
+                // Cycle detected at this position - fail gracefully instead of stack overflow
+                return false;
+            }
+        }
 
         context.EnterParser(this);
 
-        var outcome = Parser.Parse(context, ref result);
+        var outcome = parser.Parse(context, ref result);
 
         context.ExitParser(this);
 

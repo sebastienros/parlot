@@ -1635,6 +1635,62 @@ public class FluentTests
         Assert.Null(result2);
     }
 
+    /// <summary>
+    /// Rewinds the cursor to the beginning of the buffer before invoking the next parser, such that a parser
+    /// can be re-entered at a position it is already active at, with other positions recorded in between.
+    /// </summary>
+    private sealed class RewindParser : Parser<string>
+    {
+        private readonly Parser<string> _parser;
+
+        public RewindParser(Parser<string> parser) => _parser = parser;
+
+        public override bool Parse(ParseContext context, ref ParseResult<string> result)
+        {
+            context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+
+            return _parser.Parse(context, ref result);
+        }
+    }
+
+    [Fact]
+    public void ShouldDetectInfiniteRecursionWhenOtherPositionsAreRecordedInBetween()
+    {
+        // 'a' is entered at offset 0, consumes a char, then enters 'b' at offset 1 which rewinds and
+        // enters 'a' at offset 0 again. The cycle is only detectable by looking at every active parser,
+        // and not only at the ones recorded at the current position.
+
+        var a = Deferred<string>();
+        var b = Deferred<string>();
+
+        a.Parser = Literals.Char('x').SkipAnd(b);
+        b.Parser = new RewindParser(a);
+
+        // Should fail gracefully instead of causing a stack overflow
+        Assert.False(a.TryParse("xy", out var result));
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ShouldDetectInfiniteRecursionWhenDeeplyNested()
+    {
+        // Exercises the growth of the active parser tracking beyond its initial capacity
+
+        var list = Deferred<string>();
+
+        list.Parser = Between(Literals.Char('['), list, Literals.Char(']')).Then(x => "list")
+            .Or(Literals.Text("item"));
+
+        var depth = 512;
+        var source = new string('[', depth) + "item" + new string(']', depth);
+
+        Assert.True(list.TryParse(source, out var result));
+        Assert.Equal("list", result);
+
+        // The same grammar without a terminating item must not recurse forever
+        Assert.False(list.TryParse(new string('[', depth), out _));
+    }
+
     [Fact]
     public void DeferredShouldAllowValidRecursion()
     {

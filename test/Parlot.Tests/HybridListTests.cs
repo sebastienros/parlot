@@ -266,6 +266,92 @@ public class HybridListTests
         Assert.Equal(3, items.Count);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(20)]
+    public void ICollectionInterface_ExposesCountForPreSizing(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        ICollection<int> collection = list;
+
+        Assert.Equal(count, collection.Count);
+        Assert.False(collection.IsReadOnly);
+
+        // The pre-sizing constructors of the BCL collections rely on ICollection<T>
+        Assert.Equal(count, new List<int>(list).Count);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(20)]
+    public void ICollectionInterface_CopyToAndContains(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        ICollection<int> collection = list;
+
+        var target = new int[count + 2];
+        collection.CopyTo(target, 1);
+
+        for (var i = 0; i < count; i++)
+        {
+            Assert.Equal(i, target[i + 1]);
+            Assert.True(collection.Contains(i));
+        }
+
+        Assert.False(collection.Contains(count));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(20)]
+    public void ICollectionInterface_RemoveAndClear(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        ICollection<int> collection = list;
+
+        Assert.True(collection.Remove(0));
+        Assert.False(collection.Remove(count));
+        Assert.Equal(count - 1, collection.Count);
+
+        for (var i = 0; i < count - 1; i++)
+        {
+            Assert.Equal(i + 1, list[i]);
+        }
+
+        collection.Clear();
+        Assert.Empty(list);
+
+        // The list can still be used after being cleared
+        collection.Add(42);
+        Assert.Single(list);
+        Assert.Equal(42, list[0]);
+    }
+
     [Fact]
     public void TransitionPoint_ExactlyAtFourItems()
     {

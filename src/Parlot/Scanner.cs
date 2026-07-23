@@ -568,23 +568,29 @@ public class Scanner
             return false;
         }
 
-        var nextQuote = Cursor.Span.Slice(1).IndexOf(startChar);
+        var span = Cursor.Span;
 
-        if (nextQuote == -1)
+        // Look for the end quote and the first escape sequence in a single pass. Searching for '\\'
+        // on its own would scan the rest of the buffer whenever the string has no escape sequence,
+        // making a document containing many strings quadratic to parse.
+        var next = span.Slice(1).IndexOfAny(startChar, '\\');
+
+        if (next == -1)
         {
-            // There is no end quote, not a string
+            // There is no end quote nor an escape sequence, not a string
             result = [];
             return false;
         }
 
-        var nextEscape = Cursor.Span.IndexOf('\\');
+        // Index of the match in the full span, the start quote is at index 0
+        var nextEscape = next + 1;
 
-        // If the next escape is not before the next quote, we can return the string as-is
-        if (nextEscape == -1 || nextEscape > nextQuote)
+        // If the first match is the end quote there is no escape to decode, return the string as-is
+        if (span[nextEscape] == startChar)
         {
-            Cursor.Advance(nextQuote + 2); // include start quote
+            Cursor.Advance(next + 2); // include start quote
 
-            result = Cursor.Buffer.AsSpan().Slice(start.Offset, nextQuote + 2);
+            result = Cursor.Buffer.AsSpan().Slice(start.Offset, next + 2);
             return true;
         }
 
