@@ -240,4 +240,65 @@ public class NumberLiteralTests
         Assert.True(parser.TryParse("1.000.000", out var result));
         Assert.Equal(1000000, result);
     }
+
+    // Plain sequences of digits are parsed by a dedicated implementation, these cover its boundaries
+
+    [Theory]
+    [InlineData("1", 1L)]
+    [InlineData("9", 9L)]
+    [InlineData("10", 10L)]
+    [InlineData("999999999999999999", 999999999999999999L)] // 18 digits, the longest it handles
+    [InlineData("1000000000000000000", 1000000000000000000L)] // 19 digits, handled by the fallback
+    [InlineData("9223372036854775807", long.MaxValue)]
+    public void LongNumberLiteralShouldParseAnyDigitCount(string source, long expected)
+    {
+        Assert.True(Literals.Number<long>().TryParse(source, out var result));
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void LongNumberLiteralShouldFailOverLongMaxValue()
+    {
+        Assert.False(Literals.Number<long>().TryParse("9223372036854775808", out _));
+    }
+
+    [Theory]
+    // A number that fits in a long but not in the target type must not be truncated into a valid value
+    [InlineData("256")]
+    [InlineData("300")]
+    [InlineData("65536")]
+    [InlineData("4294967296")]
+    public void ByteNumberLiteralShouldNotTruncateLargerNumbers(string source)
+    {
+        Assert.False(Literals.Number<byte>().TryParse(source, out _));
+    }
+
+    [Theory]
+    [InlineData("65536")]
+    [InlineData("4294967296")]
+    public void ShortNumberLiteralShouldNotTruncateLargerNumbers(string source)
+    {
+        Assert.False(Literals.Number<short>().TryParse(source, out _));
+        Assert.False(Literals.Number<ushort>().TryParse(source, out _));
+    }
+
+    [Fact]
+    public void IntNumberLiteralShouldNotTruncateLargerNumbers()
+    {
+        Assert.False(Literals.Number<int>().TryParse("4294967296", out _));
+        Assert.False(Literals.Number<int>().TryParse("2147483648", out _));
+
+        Assert.True(Literals.Number<int>().TryParse("2147483647", out var result));
+        Assert.Equal(int.MaxValue, result);
+    }
+
+    [Theory]
+    [InlineData("2.5", 2.5)]
+    [InlineData("0.125", 0.125)]
+    [InlineData("12", 12)]
+    public void DecimalNumberLiteralShouldParseWithAndWithoutSeparator(string source, decimal expected)
+    {
+        Assert.True(Literals.Number<decimal>(NumberOptions.Float).TryParse(source, out var result));
+        Assert.Equal(expected, result);
+    }
 }
