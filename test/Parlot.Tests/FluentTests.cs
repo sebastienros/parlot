@@ -1681,7 +1681,9 @@ public class FluentTests
         list.Parser = Between(Literals.Char('['), list, Literals.Char(']')).Then(x => "list")
             .Or(Literals.Text("item"));
 
-        var depth = 512;
+        // Deep enough to grow the tracking arrays several times, but not so deep that a smaller
+        // stack turns a failure into a StackOverflowException that takes the test host down
+        var depth = 128;
         var source = new string('[', depth) + "item" + new string(']', depth);
 
         Assert.True(list.TryParse(source, out var result));

@@ -219,8 +219,16 @@ public class ParseContext
         }
         else if (count == _activePositions.Length)
         {
-            Array.Resize(ref _activePositions, count * 2);
-            Array.Resize(ref _activeParsers, count * 2);
+            // Both arrays are allocated before either field is assigned, such that a failed
+            // allocation can't leave them with different lengths
+            var positions = new int[count * 2];
+            var parsers = new object[count * 2];
+
+            Array.Copy(_activePositions, positions, count);
+            Array.Copy(_activeParsers!, parsers, count);
+
+            _activePositions = positions;
+            _activeParsers = parsers;
         }
 
         _activePositions[count] = position;
@@ -254,6 +262,8 @@ public class ParseContext
 
         if (_activePositions![last] == position && ReferenceEquals(_activeParsers![last], parser))
         {
+            // Released so the context doesn't keep the parsers it is done with alive
+            _activeParsers[last] = null!;
             _activeCount = last;
             return;
         }
@@ -279,5 +289,8 @@ public class ParseContext
         Array.Copy(_activeParsers!, index + 1, _activeParsers!, index, remaining);
 
         _activeCount--;
+
+        // Released so the context doesn't keep the parsers it is done with alive
+        _activeParsers![_activeCount] = null!;
     }
 }

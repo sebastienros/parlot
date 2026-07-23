@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -284,7 +285,7 @@ public class HybridListTests
         ICollection<int> collection = list;
 
         Assert.Equal(count, collection.Count);
-        Assert.False(collection.IsReadOnly);
+        Assert.True(collection.IsReadOnly);
 
         // The pre-sizing constructors of the BCL collections rely on ICollection<T>
         Assert.Equal(count, new List<int>(list).Count);
@@ -323,7 +324,36 @@ public class HybridListTests
     [InlineData(4)]
     [InlineData(5)]
     [InlineData(20)]
-    public void ICollectionInterface_RemoveAndClear(int count)
+    public void ICollectionInterface_DoesNotAllowMutation(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        // A parser result is handed out as an IReadOnlyList<T>, casting it to ICollection<T>
+        // must not be a way to alter it
+        ICollection<int> collection = list;
+
+        Assert.Throws<NotSupportedException>(() => collection.Remove(0));
+        Assert.Throws<NotSupportedException>(() => collection.Clear());
+        Assert.Throws<NotSupportedException>(() => collection.Add(42));
+
+        Assert.Equal(count, collection.Count);
+
+        for (var i = 0; i < count; i++)
+        {
+            Assert.Equal(i, list[i]);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void ICollectionInterface_CopyToValidatesItsArguments(int count)
     {
         var list = new HybridList<int>();
 
@@ -334,22 +364,11 @@ public class HybridListTests
 
         ICollection<int> collection = list;
 
-        Assert.True(collection.Remove(0));
-        Assert.False(collection.Remove(count));
-        Assert.Equal(count - 1, collection.Count);
+        Assert.Throws<ArgumentNullException>(() => collection.CopyTo(null!, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => collection.CopyTo(new int[count], -1));
 
-        for (var i = 0; i < count - 1; i++)
-        {
-            Assert.Equal(i + 1, list[i]);
-        }
-
-        collection.Clear();
-        Assert.Empty(list);
-
-        // The list can still be used after being cleared
-        collection.Add(42);
-        Assert.Single(list);
-        Assert.Equal(42, list[0]);
+        // An undersized destination is an ArgumentException, not an out of range index
+        Assert.Throws<ArgumentException>(() => collection.CopyTo(new int[count - 1], 0));
     }
 
     [Fact]

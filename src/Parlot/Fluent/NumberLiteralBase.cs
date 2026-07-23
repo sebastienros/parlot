@@ -21,9 +21,9 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
     private readonly MethodInfo _tryParseMethodInfo;
     private readonly NumberStyles _numberStyles;
 
-    // A NumberFormatInfo is stored instead of a CultureInfo since NumberFormatInfo.GetInstance()
-    // returns it directly, while a CultureInfo needs to be resolved on every call.
-    private readonly NumberFormatInfo _culture = CultureInfo.InvariantCulture.NumberFormat;
+    // Kept as a CultureInfo since it is handed to the public TryParseNumber overrides and to the
+    // caller supplied tryParseMethodInfo, which can both expect that exact type.
+    private readonly CultureInfo _culture = CultureInfo.InvariantCulture;
     private readonly bool _allowLeadingSign;
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
@@ -47,9 +47,9 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
         if (decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
             groupSeparator != NumberLiterals.DefaultGroupSeparator)
         {
-            _culture = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
-            _culture.NumberDecimalSeparator = decimalSeparator.ToString();
-            _culture.NumberGroupSeparator = groupSeparator.ToString();
+            _culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            _culture.NumberFormat.NumberDecimalSeparator = decimalSeparator.ToString();
+            _culture.NumberFormat.NumberGroupSeparator = groupSeparator.ToString();
         }
 
         _allowLeadingSign = (numberOptions & NumberOptions.AllowLeadingSign) != 0;
@@ -114,7 +114,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
         var reset = context.DeclarePositionVariable(result);
 
         var numberStyles = result.DeclareVariable<NumberStyles>($"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
-        var culture = result.DeclareVariable<NumberFormatInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
+        var culture = result.DeclareVariable<CultureInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
         var numberSpan = result.DeclareVariable($"number{context.NextNumber}", typeof(ReadOnlySpan<char>));
         var end = result.DeclareVariable<int>($"end{context.NextNumber}");
 

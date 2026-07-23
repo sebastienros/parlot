@@ -74,19 +74,25 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             }
         }
 
-        context.EnterParser(this);
-
-        var outcome = parser.Parse(context, ref result);
-
-        context.ExitParser(this);
-
-        // Mark this parser as inactive at the entry position (only if we tracked it)
-        if (trackPosition)
+        try
         {
-            context.PopParserAtPosition(this, entryPosition);
-        }
+            context.EnterParser(this);
 
-        return outcome;
+            var outcome = parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+
+            return outcome;
+        }
+        finally
+        {
+            // Marked as inactive even when a parser throws, otherwise a context that is reused
+            // after the exception was handled would report a cycle for this position
+            if (trackPosition)
+            {
+                context.PopParserAtPosition(this, entryPosition);
+            }
+        }
     }
 
     private bool _initialized;

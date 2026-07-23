@@ -87,6 +87,41 @@ public class ScannerTests
         Assert.False(s.ReadQuotedString());
     }
 
+    [Theory]
+    [InlineData("'Lorem \\n ipsum")]
+    [InlineData("'C:\\temp\\file")]
+    [InlineData("'\\u1234")]
+    public void ShouldNotReadStringWithEscapesAndNoEndQuote(string text)
+    {
+        Scanner s = new(text);
+
+        Assert.False(s.ReadQuotedString());
+        Assert.Equal(0, s.Cursor.Offset);
+    }
+
+    [Theory]
+    // The quote char is also the escape char, so the start quote is the first escape sequence
+    [InlineData("\\n\\rest", true, "\\n\\")]
+    [InlineData("\\p\\rest", false, null)]
+    [InlineData("\\u1234\\rest", false, null)]
+    [InlineData("\\u12\\rest", false, null)]
+    [InlineData("\\nrest", false, null)]
+    public void ShouldReadStringWhenQuoteCharIsTheEscapeChar(string text, bool success, string expected)
+    {
+        Scanner s = new(text);
+
+        Assert.Equal(success, s.ReadQuotedString('\\', out var result));
+
+        if (success)
+        {
+            Assert.Equal(expected, result.ToString());
+        }
+        else
+        {
+            Assert.Equal(0, s.Cursor.Offset);
+        }
+    }
+
     [Fact]
     public void ShouldReadQuotedStringPartial()
     {

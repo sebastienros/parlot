@@ -548,7 +548,9 @@ public class Scanner
         return ReadQuotedString(startChar, out result);
     }
 
-    public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(['\'', '\"'],out result);
+    private static readonly char[] _singleOrDoubleQuotes = ['\'', '\"'];
+
+    public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(_singleOrDoubleQuotes, out result);
 
     /// <summary>
     /// Reads a string token enclosed in quotes or custom characters.
@@ -560,7 +562,6 @@ public class Scanner
     public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
     {
         var startChar = Cursor.Current;
-        var start = Cursor.Position;
 
         if (startChar != quoteChar)
         {
@@ -568,6 +569,7 @@ public class Scanner
             return false;
         }
 
+        var startOffset = Cursor.Offset;
         var span = Cursor.Span;
 
         // Look for the end quote and the first escape sequence in a single pass. Searching for '\\'
@@ -582,17 +584,35 @@ public class Scanner
             return false;
         }
 
+        // When the quote char is a backslash it is also the escape char, in which case the start quote
+        // is itself the first escape sequence and the string is always decoded escape by escape.
+        var quoteIsEscape = startChar == '\\';
+
         // Index of the match in the full span, the start quote is at index 0
-        var nextEscape = next + 1;
+        var nextEscape = quoteIsEscape ? 0 : next + 1;
 
-        // If the first match is the end quote there is no escape to decode, return the string as-is
-        if (span[nextEscape] == startChar)
+        if (!quoteIsEscape)
         {
-            Cursor.Advance(next + 2); // include start quote
+            // If the first match is the end quote there is no escape to decode, return the string as-is
+            if (span[nextEscape] == startChar)
+            {
+                Cursor.Advance(next + 2); // include start quote
 
-            result = Cursor.Buffer.AsSpan().Slice(start.Offset, next + 2);
-            return true;
+                result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
+                return true;
+            }
+
+            // The end quote is only after the escape sequences. Make sure there is one at all before
+            // decoding them one by one, as reaching the end of the buffer that way is far more costly.
+            if (span.Slice(next + 2).IndexOf(startChar) == -1)
+            {
+                result = [];
+                return false;
+            }
         }
+
+        // Decoding the escape sequences needs to restore the line and the column when it fails
+        var start = Cursor.Position;
 
         while (nextEscape != -1)
         {

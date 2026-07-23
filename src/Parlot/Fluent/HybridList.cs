@@ -91,9 +91,17 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
 
     // ICollection<T> is implemented so that BCL collections built from a parser result, e.g.
     // new Dictionary<K, V>(result) or new List<T>(result), can allocate their storage once
-    // instead of growing it as they enumerate.
+    // instead of growing it as they enumerate. Only Count and CopyTo are needed for that, and the
+    // instance is handed out as an IReadOnlyList<T>, so the mutating members are implemented
+    // explicitly and throw rather than letting a cast alter a parser result.
 
-    bool ICollection<T>.IsReadOnly => false;
+    bool ICollection<T>.IsReadOnly => true;
+
+    void ICollection<T>.Add(T item) => throw new NotSupportedException();
+
+    void ICollection<T>.Clear() => throw new NotSupportedException();
+
+    bool ICollection<T>.Remove(T item) => throw new NotSupportedException();
 
     public bool Contains(T item)
     {
@@ -119,9 +127,14 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
     {
         _ = array ?? throw new ArgumentNullException(nameof(array));
 
-        if (arrayIndex < 0 || array.Length - arrayIndex < _count)
+        if (arrayIndex < 0 || arrayIndex > array.Length)
         {
             throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+        }
+
+        if (array.Length - arrayIndex < _count)
+        {
+            throw new ArgumentException("The destination array has insufficient space.", nameof(array));
         }
 
         if (_list is not null)
@@ -133,62 +146,6 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
         for (var i = 0; i < _count; i++)
         {
             array[arrayIndex + i] = this[i];
-        }
-    }
-
-    public void Clear()
-    {
-        _list = null;
-        _item1 = default;
-        _item2 = default;
-        _item3 = default;
-        _item4 = default;
-        _count = 0;
-    }
-
-    public bool Remove(T item)
-    {
-        var comparer = EqualityComparer<T>.Default;
-
-        for (var i = 0; i < _count; i++)
-        {
-            if (comparer.Equals(this[i], item))
-            {
-                RemoveAt(i);
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private void RemoveAt(int index)
-    {
-        if (_list is not null)
-        {
-            _list.RemoveAt(index);
-            _count--;
-            return;
-        }
-
-        for (var i = index; i < _count - 1; i++)
-        {
-            Set(i, this[i + 1]);
-        }
-
-        Set(_count - 1, default!);
-        _count--;
-    }
-
-    private void Set(int index, T value)
-    {
-        switch (index)
-        {
-            case 0: _item1 = value; break;
-            case 1: _item2 = value; break;
-            case 2: _item3 = value; break;
-            case 3: _item4 = value; break;
-            default: throw new ArgumentOutOfRangeException(nameof(index));
         }
     }
 
