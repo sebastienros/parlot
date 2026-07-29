@@ -459,6 +459,15 @@ public static partial class Grammars
     public static Parser<char> LiteralsCharParser() => Literals.Char('h');
 
     [GenerateParser]
+    public static Parser<char> LiteralsQuoteCharParser() => Literals.Char('\'');
+
+    [GenerateParser]
+    public static Parser<char> LiteralsBackslashCharParser() => Literals.Char('\\');
+
+    [GenerateParser]
+    public static Parser<char> LiteralsNewLineCharParser() => Literals.Char('\n');
+
+    [GenerateParser]
     public static Parser<TextSpan> LiteralsWhiteSpaceParser() => Literals.WhiteSpace();
 
     [GenerateParser]

@@ -245,6 +245,19 @@ public class ComprehensiveGeneratedParserTests
         Assert.Equal(expected, value);
     }
 
+    [Fact]
+    public void LiteralsChar_SpecialCharacters()
+    {
+        Assert.True(Grammars.LiteralsQuoteCharParser().TryParse("'", out var quote));
+        Assert.Equal('\'', quote);
+
+        Assert.True(Grammars.LiteralsBackslashCharParser().TryParse("\\", out var backslash));
+        Assert.Equal('\\', backslash);
+
+        Assert.True(Grammars.LiteralsNewLineCharParser().TryParse("\n", out var newLine));
+        Assert.Equal('\n', newLine);
+    }
+
     #endregion
 
     #region Sequence Parser Tests

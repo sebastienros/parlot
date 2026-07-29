@@ -79,10 +79,12 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourcea
             valueVariable: "value",
             valueTypeName: valueTypeName);
 
-        result.Body.Add($"if ({cursorName}.Match('{Char}'))");
+        var charExpression = $"(char){(int)Char}";
+
+        result.Body.Add($"if ({cursorName}.Match({charExpression}))");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.AdvanceBy(1, {newLines}, {trailingSegmentLength});");
-        result.Body.Add($"    {result.ValueVariable} = '{Char}';");
+        result.Body.Add($"    {result.ValueVariable} = {charExpression};");
         result.Body.Add("    return true;");
         result.Body.Add("}");
         result.Body.Add($"{result.ValueVariable} = default;");
