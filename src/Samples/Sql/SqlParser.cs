@@ -1,6 +1,7 @@
 #nullable enable
 
 using Parlot.Fluent;
+using Parlot.SourceGenerator;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,11 +9,21 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests.Sql;
 
-public class SqlParser
+public partial class SqlParser
 {
-    public static readonly Parser<StatementList> Statements;
+    // Keywords can't be used as identifiers or function names (static for source generation)
+    private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "SELECT", "FROM", "WHERE", "AS", "JOIN", "INNER", "LEFT", "RIGHT", "ON",
+        "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
+        "UNION", "ALL", "DISTINCT", "WITH", "AND", "OR", "NOT", "BETWEEN",
+        "IN", "LIKE", "TRUE", "FALSE", "OVER", "PARTITION",
+    };
 
-    static SqlParser()
+    private static readonly ColumnItem StarColumnItem = new(new ColumnSourceIdentifier(Identifier.STAR), null);
+
+    [GenerateParser]
+    public static Parser<StatementList> CreateSqlParser()
     {
         // Basic terminals
         var COMMA = Terms.Char(',');
@@ -56,15 +67,6 @@ public class SqlParser
         var FALSE = Terms.Keyword("FALSE", caseInsensitive: true);
         var OVER = Terms.Keyword("OVER", caseInsensitive: true);
         var PARTITION = Terms.Keyword("PARTITION", caseInsensitive: true);
-        
-        // Keywords can't be used as identifiers or function names
-        var keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "SELECT", "FROM", "WHERE", "AS", "JOIN", "INNER", "LEFT", "RIGHT", "ON",
-            "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-            "UNION", "ALL", "DISTINCT", "WITH", "AND", "OR", "NOT", "BETWEEN",
-            "IN", "LIKE", "TRUE", "FALSE", "OVER", "PARTITION",
-        };
 
         // Literals
         var numberLiteral = Terms.Decimal().Then<Expression>(d => new LiteralExpression<decimal>(d));
@@ -72,20 +74,20 @@ public class SqlParser
         var stringLiteral = Terms.String(StringLiteralQuotes.Single)
             .Then<Expression>(s => new LiteralExpression<string>(s.ToString()));
 
-        var booleanLiteral = TRUE.Then<Expression>(new LiteralExpression<bool>(true))
-            .Or(FALSE.Then<Expression>(new LiteralExpression<bool>(false)));
+        var booleanLiteral = TRUE.Then<Expression>(static _ => LiteralExpression<bool>.TRUE)
+            .Or(FALSE.Then<Expression>(static _ => LiteralExpression<bool>.FALSE));
 
         // Identifiers
         var simpleIdentifier = Terms.Identifier().Then(x => x.ToString())
             .Or(Between(Terms.Char('['), Literals.NoneOf("]"), Terms.Char(']')).Then(x => x.ToString()))
-            .Or(Between(Terms.Char('"'), Literals.NoneOf("\""), Terms.Char('"')).Then(x => x.ToString()));
+            .Or(Between(Terms.Char('"'), Literals.NoneOf("\""), Terms.Char('"')).Then(x => x.ToString())).Named("SimpleIdentifier");
 
-        var identifier = Separated(DOT, simpleIdentifier)
+        var identifier = Separated(DOT, simpleIdentifier).Named("Identifier")
             .Then(parts => new Identifier(parts));
 
         // Without the keywords check "FROM a WHERE" would interpret "WHERE" as an alias since "AS" is optional
-        var identifierNoKeywords = Separated(DOT, simpleIdentifier).When((ctx, parts) => parts.Count > 0 && !keywords.Contains(parts[0]))
-            .Then(parts => new Identifier(parts));
+        var identifierNoKeywords = Separated(DOT, simpleIdentifier).When(static (ctx, parts) => parts.Count > 0 && !Keywords.Contains(parts[0])).Named("IdentiferNoKeywords")
+            .Then(static parts => new Identifier(parts));
             
         // Deferred parsers
         var expression = Deferred<Expression>();
@@ -97,10 +99,11 @@ public class SqlParser
         var expressionList = Separated(COMMA, expression);
 
         // Function arguments
-        var starArg = STAR.Then<FunctionArguments>(_ => StarArgument.Instance);
-        var selectArg = selectStatement.Then<FunctionArguments>(s => new SelectStatementArgument(s));
-        var exprListArg = expressionList.Then<FunctionArguments>(exprs => new ExpressionListArguments(exprs));
-        var emptyArg = Always<FunctionArguments>(EmptyArguments.Instance);
+        var starArg = STAR.Then<FunctionArguments>(static _ => StarArgument.Instance);
+        var selectArg = selectStatement.Then<FunctionArguments>(static s => new SelectStatementArgument(s));
+        var exprListArg = expressionList.Then<FunctionArguments>(static exprs => new ExpressionListArguments(exprs));
+        // Use Always<object?>() as a base parser that always succeeds, then transform to EmptyArguments
+        var emptyArg = Always<object?>().Then<FunctionArguments>(static _ => EmptyArguments.Instance);
         var functionArgs = starArg.Or(selectArg).Or(exprListArg).Or(emptyArg);
 
         // Function call
@@ -213,10 +216,10 @@ public class SqlParser
         expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
 
         // Column source
-        var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id));
+        var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id)).Named("ColumnSourceIdentifier");
 
         // Deferred for OVER clause components
-        var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(new ColumnItem(new ColumnSourceIdentifier(Identifier.STAR), null))));
+        var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(_ => StarColumnItem)).Named("ColumnItemOrStart")).Named("ColumnItemList");
         var orderByList = Separated(COMMA, orderByItem);
 
         var orderByClause = ORDER.AndSkip(BY).And(orderByList)
@@ -235,19 +238,19 @@ public class SqlParser
                 );
             });
 
-        var columnSourceFunc = functionCall.And(overClause.Optional())
+        var columnSourceFunc = functionCall.And(overClause.Optional()).Named("ColumnSourceFunction")
             .Then<ColumnSource>(result =>
             {
                 var (func, over) = result;
                 return new ColumnSourceFunction((FunctionCall)func, over.OrSome(null));
             });
 
-        var columnSource = columnSourceFunc.Or(columnSourceId);
+        var columnSource = columnSourceFunc.Or(columnSourceId).Named("ColumnSource");
 
         // Column item with alias
         var columnAlias = AS.Optional().SkipAnd(identifierNoKeywords);
 
-        columnItem.Parser = columnSource.And(columnAlias.Optional())
+        columnItem.Parser = columnSource.And(columnAlias.Optional()).Named("ColumnItem")
             .Then(result =>
             {
                 var (source, alias) = result;
@@ -415,7 +418,7 @@ public class SqlParser
             .AndSkip(Terms.WhiteSpace().Optional()) // allow trailing whitespace
             .Eof();
 
-        Statements = statementList.WithComments(comments =>
+        return statementList.WithComments(comments =>
         {
             comments
                 .WithWhiteSpaceOrNewLine()
@@ -437,7 +440,8 @@ public class SqlParser
 
     public static bool TryParse(string input, out StatementList? result, out ParseError? error)
     {
+        var parser = CreateSqlParser();
         var context = new ParseContext(new Scanner(input), disableLoopDetection: true);
-        return Statements.TryParse(context, out result, out error);
+        return parser.TryParse(context, out result, out error);
     }
 }

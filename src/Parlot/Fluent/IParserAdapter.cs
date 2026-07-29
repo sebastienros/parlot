@@ -1,5 +1,7 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
+using System;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -8,7 +10,7 @@ namespace Parlot.Fluent;
 /// Adapts an IParser&lt;T&gt; to a Parser&lt;T&gt; for use in contexts that require Parser.
 /// This is used internally to support covariance.
 /// </summary>
-internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ICompilable
+internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ICompilable, ISourceable
 {
     private readonly IParser<T> _parser;
 
@@ -79,6 +81,35 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ICompilable
                     )
                 );
         }
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        // If the wrapped parser is actually a Parser<T> that implements ISourceable, delegate to it
+        if (_parser is Parser<T> { } parser && parser is ISourceable sourceable)
+        {
+            return sourceable.GenerateSource(context);
+        }
+
+        // Otherwise, fall back to using the Parse method
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+
+        var parseResultName = $"parseResult{context.NextNumber()}";
+
+        // Create a lambda that captures this instance
+        var adapterLambda = context.RegisterLambda(new Func<IParserAdapter<T>>(() => this));
+
+        result.Body.Add($"var {parseResultName} = new global::Parlot.ParseResult<{SourceGenerationContext.GetTypeName(typeof(T))}>();");
+        result.Body.Add($"{result.SuccessVariable} = {adapterLambda}().Parse({ctx}, ref {parseResultName});");
+        result.Body.Add($"if ({result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.ValueVariable} = {parseResultName}.Value;");
+        result.Body.Add("}");
 
         return result;
     }

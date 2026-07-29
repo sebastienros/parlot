@@ -22,13 +22,14 @@ jobs:
         DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-dotnet@v4
+    - uses: actions/checkout@v6
+    - uses: actions/setup-dotnet@v5
       with:
         dotnet-version: | 
           8.0.x
           10.0.x
         global-json-file: global.json
-
+    - name: Build
+      run: dotnet build --configuration Release
     - name: Test
-      run: dotnet test --project test/Parlot.Tests/Parlot.Tests.csproj --configuration Release
+      run: dotnet test --configuration Release --no-build

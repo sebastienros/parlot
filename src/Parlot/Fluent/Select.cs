@@ -1,7 +1,8 @@
 using Parlot.Compilation;
+using Parlot.SourceGeneration;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
@@ -10,28 +11,38 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class Select<C, T> : Parser<T>, ICompilable where C : ParseContext
+public sealed class Select<C, T> : Parser<T>, ICompilable, ISourceable where C : ParseContext
 {
-    private static readonly MethodInfo _parse = typeof(Parser<T>).GetMethod(nameof(Parse), [typeof(ParseContext), typeof(ParseResult<T>).MakeByRefType()])!;
+    private readonly Parser<T>[] _parsers;
+    private readonly Func<C, int> _selector;
 
-    private readonly Func<C, Parser<T>> _selector;
-
-    public Select(Func<C, Parser<T>> selector)
+    public Select(Func<C, int> selector, params Parser<T>[] parsers)
     {
         _selector = selector ?? throw new ArgumentNullException(nameof(selector));
+
+        ThrowHelper.ThrowIfNull(parsers, nameof(parsers));
+
+        _parsers = parsers;
+
+        for (var i = 0; i < _parsers.Length; i++)
+        {
+            _parsers[i] = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        var nextParser = _selector((C)context);
+        var index = _selector((C)context);
 
-        if (nextParser == null)
+        if ((uint)index >= (uint)_parsers.Length)
         {
             context.ExitParser(this);
             return false;
         }
+
+        var nextParser = _parsers[index];
 
         var parsed = new ParseResult<T>();
 
@@ -50,30 +61,86 @@ public sealed class Select<C, T> : Parser<T>, ICompilable where C : ParseContext
     public CompilationResult Compile(CompilationContext context)
     {
         var result = context.CreateCompilationResult<T>();
-        var parserVariable = Expression.Variable(typeof(Parser<T>), $"select{context.NextNumber}");
-        var parseResult = Expression.Variable(typeof(ParseResult<T>), $"value{context.NextNumber}");
+        var index = Expression.Variable(typeof(int), $"index{context.NextNumber}");
+
+        var cases = new SwitchCase[_parsers.Length];
+
+        for (var i = 0; i < _parsers.Length; i++)
+        {
+            var parserCompileResult = _parsers[i].Build(context);
+
+            Expression caseBody = Expression.Block(
+                parserCompileResult.Variables,
+                Expression.Block(parserCompileResult.Body),
+                Expression.Assign(result.Success, parserCompileResult.Success),
+                context.DiscardResult
+                    ? Expression.Empty()
+                    : Expression.IfThen(result.Success, Expression.Assign(result.Value, parserCompileResult.Value))
+            );
+
+            cases[i] = Expression.SwitchCase(caseBody, Expression.Constant(i));
+        }
 
         var selectorInvoke = Expression.Invoke(
             Expression.Constant(_selector),
             Expression.Convert(context.ParseContext, typeof(C)));
 
         var body = Expression.Block(
-            [parserVariable, parseResult],
-            Expression.Assign(parserVariable, selectorInvoke),
-            Expression.IfThen(
-                Expression.NotEqual(parserVariable, Expression.Constant(null, typeof(Parser<T>))),
-                Expression.Block(
-                    Expression.Assign(
-                        result.Success,
-                        Expression.Call(parserVariable, _parse, context.ParseContext, parseResult)),
-                    context.DiscardResult
-                        ? Expression.Empty()
-                        : Expression.IfThen(
-                            result.Success,
-                            Expression.Assign(result.Value, Expression.Field(parseResult, nameof(ParseResult<T>.Value))))
-                )));
+            [index],
+            Expression.Assign(index, selectorInvoke),
+            Expression.Switch(index, Expression.Empty(), cases)
+        );
 
         result.Body.Add(body);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        for (var i = 0; i < _parsers.Length; i++)
+        {
+            if (_parsers[i] is not ISourceable)
+            {
+                throw new NotSupportedException("Select requires all target parsers to be source-generatable.");
+            }
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var ctx = context.ParseContextName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Register the selector lambda
+        var selectorLambda = context.RegisterLambda(_selector);
+
+        var indexName = $"index{context.NextNumber()}";
+        result.Body.Add($"var {indexName} = {selectorLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx});");
+        result.Body.Add($"switch ({indexName})");
+        result.Body.Add("{");
+
+        for (var i = 0; i < _parsers.Length; i++)
+        {
+            var parser = _parsers[i];
+            var parserSourceable = (ISourceable)parser;
+
+            var helperName = context.Helpers
+                .GetOrCreate(parser, $"{context.MethodNamePrefix}_Select_{i}", valueTypeName, () => parserSourceable.GenerateSource(context))
+                .MethodName;
+
+            result.Body.Add($"    case {i}:");
+            result.Body.Add("    {");
+            var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
+            result.Body.Add($"        if ({helperName}({ctx}, out {outTarget}))");
+            result.Body.Add("        {");
+            result.Body.Add($"            {result.SuccessVariable} = true;");
+            result.Body.Add("        }");
+            result.Body.Add("        break;");
+            result.Body.Add("    }");
+        }
+
+        result.Body.Add("}");
 
         return result;
     }

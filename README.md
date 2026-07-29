@@ -95,6 +95,64 @@ static FluentParser()
 
 - [Existing parsers and usage examples](docs/parsers.md)
 - [Best practices for custom parsers](docs/writing.md)
+- [Source generation guide](docs/source-generation.md)
+
+## Source-generated parsers
+
+Parlot can generate parsers at **compile time** using C# interceptors, avoiding runtime graph construction and yielding **~20% faster parsing** with **faster startup**.
+
+### How it works
+
+- Annotate static, **parameterless** methods returning `Parlot.Fluent.Parser<T>` with `[GenerateParser]`.
+- The source generator executes the method at compile time to build the parser graph.
+- Uses C# interceptors to replace calls to the method with the generated, optimized code.
+- For parser variants (e.g., different keywords), create separate methods instead of using parameters.
+
+```csharp
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class MyGrammar
+{
+    // Simple parser
+    [GenerateParser]
+    public static Parser<string> HelloParser() => Terms.Text("hello");
+
+    // For variants, create separate methods
+    [GenerateParser]
+    public static Parser<string> FooParser() => Terms.Text("foo");
+
+    [GenerateParser]
+    public static Parser<string> BarParser() => Terms.Text("bar");
+}
+
+// Usage - calls are automatically intercepted
+var hello = MyGrammar.HelloParser();  // Uses generated code
+var foo = MyGrammar.FooParser();      // Uses generated code
+```
+
+### Requirements
+
+- Add `<InterceptorsNamespaces>$(InterceptorsNamespaces);YourNamespace</InterceptorsNamespaces>` to your project file.
+- Methods must be static and parameterless.
+- The containing class should be `partial` (optional but recommended).
+
+### Advanced Configuration
+
+Additional attributes can be combined with `[GenerateParser]`:
+
+- `[IncludeFiles("*.cs")]` – Include source files (supports globs) for types used by your parser.
+- `[IncludeUsings("Namespace")]` – Add extra using directives to generated code.
+- `[IncludeGenerators("AssemblyName")]` – Run other source generators before parser generation.
+
+For detailed documentation, see [Source Generation Guide](docs/source-generation.md).
+
+> **Why use source generation?**
+> - ~20% faster parsing vs. runtime-compiled graphs (see benchmarks)
+> - Faster startup (no runtime graph building/compilation)
+> - AOT-friendly, deterministic parser code
+> - Zero runtime overhead from method interception
 
 ## Compilation
 
@@ -122,30 +180,28 @@ This benchmark creates an expression tree (AST) representing mathematical expres
 
 Only Pidgin and Parlot are benchmarked here. These benchmarks don't evaluate the expressions but only parse them to create the same AST.
 
-In this benchmark, Parlot Fluent is more than 10 times faster than Pidgin, and Parlot Raw gives another 2 times boost. Allocations are also smaller with Parlot.
-When compiled, the Parlot grammar shows even better results, without losing its simplicity.
+In this benchmark, Parlot Fluent is more than 14 times faster than Pidgin, and Parlot Raw gives another 2 times boost. Allocations are also smaller with Parlot.
+The source-generated grammar is 14% faster for the small expression and 20% faster for the big expression than the runtime-compiled grammar, while allocating the same amount or less.
 
 ```
-BenchmarkDotNet v0.15.0, Windows 11 (10.0.26100.4770/24H2/2024Update/HudsonValley)
-12th Gen Intel Core i7-1260P 2.10GHz, 1 CPU, 16 logical and 12 physical cores
-.NET SDK 10.0.100-preview.6.25358.103
-  [Host]   : .NET 9.0.7 (9.0.725.31616), X64 RyuJIT AVX2
-  ShortRun : .NET 9.0.7 (9.0.725.31616), X64 RyuJIT AVX2
+BenchmarkDotNet v0.15.8, macOS Sequoia 15.7.8 (24G824) [Darwin 24.6.0]
+Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
+.NET SDK 10.0.301
+  [Host] : .NET 10.0.9 (10.0.9, 10.0.926.27113), Arm64 RyuJIT armv8.0-a
 
-Job=ShortRun  IterationCount=3  LaunchCount=1
-WarmupCount=3
-
-| Method              | Mean        | Error       | StdDev    | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
-|-------------------- |------------:|------------:|----------:|------:|--------:|-------:|----------:|------------:|
-| ParlotRawSmall      |    234.0 ns |   133.27 ns |   7.31 ns |  0.49 |    0.01 | 0.0322 |     304 B |        0.43 |
-| ParlotCompiledSmall |    481.6 ns |    89.48 ns |   4.90 ns |  1.00 |    0.01 | 0.0753 |     712 B |        1.00 |
-| ParlotFluentSmall   |    486.7 ns |   219.33 ns |  12.02 ns |  1.01 |    0.02 | 0.0753 |     712 B |        1.00 |
-| PidginSmall         |  5,301.9 ns | 1,864.01 ns | 102.17 ns | 11.01 |    0.21 | 0.0839 |     832 B |        1.17 |
-|                     |             |             |           |       |         |        |           |             |
-| ParlotRawBig        |  1,074.4 ns |   115.56 ns |   6.33 ns |  0.45 |    0.01 | 0.1259 |    1200 B |        0.39 |
-| ParlotCompiledBig   |  2,403.9 ns |   777.57 ns |  42.62 ns |  1.00 |    0.02 | 0.3281 |    3104 B |        1.00 |
-| ParlotFluentBig     |  2,443.7 ns |   204.37 ns |  11.20 ns |  1.02 |    0.02 | 0.3281 |    3104 B |        1.00 |
-| PidginBig           | 26,210.1 ns | 3,920.26 ns | 214.88 ns | 10.91 |    0.19 | 0.4272 |    4152 B |        1.34 |
+| Method               | Mean        | Error    | StdDev   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|--------------------- |------------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
+| ParlotRawSmall       |    130.2 ns |  1.42 ns |  1.33 ns |  0.61 |    0.01 | 0.0362 |     304 B |        0.73 |
+| ParlotCompiledSmall  |    212.6 ns |  0.63 ns |  0.56 ns |  1.00 |    0.00 | 0.0496 |     416 B |        1.00 |
+| ParlotFluentSmall    |    219.6 ns |  0.54 ns |  0.50 ns |  1.03 |    0.00 | 0.0668 |     560 B |        1.35 |
+| ParlotGeneratedSmall |    182.5 ns |  1.32 ns |  1.17 ns |  0.86 |    0.01 | 0.0496 |     416 B |        1.00 |
+| PidginSmall          |  3,473.7 ns | 49.78 ns | 46.57 ns | 16.34 |    0.22 | 0.0992 |     832 B |        2.00 |
+|                      |             |          |          |       |         |        |           |             |
+| ParlotRawBig         |    665.1 ns |  3.19 ns |  2.83 ns |  0.54 |    0.00 | 0.1431 |    1200 B |        0.82 |
+| ParlotCompiledBig    |  1,242.3 ns |  3.17 ns |  2.65 ns |  1.00 |    0.00 | 0.1736 |    1456 B |        1.00 |
+| ParlotFluentBig      |  1,215.8 ns |  6.70 ns |  5.94 ns |  0.98 |    0.01 | 0.1736 |    1456 B |        1.00 |
+| ParlotGeneratedBig   |    997.3 ns |  2.77 ns |  2.46 ns |  0.80 |    0.00 | 0.1564 |    1312 B |        0.90 |
+| PidginBig            | 17,498.6 ns | 89.52 ns | 83.74 ns | 14.09 |    0.07 | 0.4883 |    4152 B |        2.85 |
 ```
 
 ### JSON Benchmarks

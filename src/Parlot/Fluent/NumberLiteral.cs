@@ -1,8 +1,8 @@
 #if NET8_0_OR_GREATER
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
@@ -10,13 +10,15 @@ using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
+public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourceable
     where T : INumber<T>
 {
     private const char DefaultDecimalSeparator = '.';
     private const char DefaultGroupSeparator = ',';
 
-    private static readonly MethodInfo _tryParseMethodInfo = typeof(NumberLiteral<T>).GetMethod(nameof(TryParseNumber), BindingFlags.Static | BindingFlags.NonPublic)!;
+    private static readonly MethodInfo _tryParseMethodInfo = typeof(Numbers)
+        .GetMethod(nameof(Numbers.TryParseNumber), BindingFlags.Static | BindingFlags.Public)!
+        .MakeGenericMethod(typeof(T));
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -88,7 +90,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         {
             var end = context.Scanner.Cursor.Offset;
 
-            if (TryParseNumber(number, _numberStyles, _culture, out var value))
+            if (Numbers.TryParseNumber<T>(number, _numberStyles, _culture, out var value))
             {
                 result.Set(start, end, value);
 
@@ -101,51 +103,6 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
 
         context.ExitParser(this);
         return false;
-    }
-
-    /// <summary>
-    /// The number of digits that always fit in a <see cref="long"/>, <c>long.MaxValue</c> has 19 of them.
-    /// </summary>
-    private const int MaxFastDigits = 18;
-
-    /// <summary>
-    /// Parses a number, using a dedicated implementation for the plain sequences of digits that make up
-    /// most of the numbers found in a grammar.
-    /// </summary>
-    /// <remarks>
-    /// The general purpose parser has to handle everything <see cref="NumberStyles"/> allows, which is a
-    /// significant part of the parsing time even for a single digit. Anything that is not a short sequence
-    /// of digits, e.g. a sign, a decimal separator or an exponent, falls back to it.
-    /// </remarks>
-    internal static bool TryParseNumber(ReadOnlySpan<char> span, NumberStyles styles, NumberFormatInfo culture, [MaybeNullWhen(false)] out T value)
-    {
-        if ((uint)(span.Length - 1) < MaxFastDigits)
-        {
-            long parsed = 0;
-
-            foreach (var c in span)
-            {
-                var digit = (uint)(c - '0');
-
-                if (digit > 9)
-                {
-                    return T.TryParse(span, styles, culture, out value);
-                }
-
-                parsed = (parsed * 10) + digit;
-            }
-
-            value = T.CreateTruncating(parsed);
-
-            // T can be narrower than a long, e.g. Terms.Byte() reading "300", in which case the
-            // conversion silently wrapped and the general purpose parser decides whether it is valid.
-            if (long.CreateTruncating(value) == parsed)
-            {
-                return true;
-            }
-        }
-
-        return T.TryParse(span, styles, culture, out value);
     }
 
     public CompilationResult Compile(CompilationContext context)
@@ -205,6 +162,74 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
                 context.ResetPosition(reset)
                 )
             );
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        var resetName = $"reset{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+        var numberSpanName = $"numberSpan{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+        var parsedValueName = $"parsedValue{context.NextNumber()}";
+
+        result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {startName} = 0;");
+        result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
+        result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+        result.Body.Add($"{resetName} = {cursorName}.Position;");
+        result.Body.Add($"{startName} = {resetName}.Offset;");
+
+        var allowLeadingSign = _allowLeadingSign ? "true" : "false";
+        var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
+        var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
+        var allowExponent = _allowExponent ? "true" : "false";
+
+        // Emit NumberStyles as a literal cast
+        var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
+        
+        var cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat";
+        if (!ReferenceEquals(_culture, CultureInfo.InvariantCulture.NumberFormat))
+        {
+            var decimalSeparator = $"((char){(int)_decimalSeparator}).ToString()";
+            var groupSeparator = $"((char){(int)_groupSeparator}).ToString()";
+            cultureExpr = context.RegisterStaticField(
+                "private static readonly global::System.Globalization.NumberFormatInfo",
+                $"new global::System.Func<global::System.Globalization.NumberFormatInfo>(() => {{ var c = (global::System.Globalization.NumberFormatInfo)global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat.Clone(); c.NumberDecimalSeparator = {decimalSeparator}; c.NumberGroupSeparator = {groupSeparator}; return c; }})()");
+        }
+
+        var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
+        var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        result.Body.Add("{");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+        }
+        else
+        {
+            result.Body.Add($"    if (global::Parlot.Numbers.TryParseNumber<{valueTypeName}>({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.SuccessVariable} = true;");
+            result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
+            result.Body.Add("    }");
+        }
+        result.Body.Add("}");
+
+        result.Body.Add($"if (!{result.SuccessVariable})");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
+        result.Body.Add("}");
 
         return result;
     }

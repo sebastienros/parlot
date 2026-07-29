@@ -1,0 +1,185 @@
+using System;
+using System.Collections.Generic;
+using Parlot;
+
+namespace Parlot.SourceGeneration;
+
+/// <summary>
+/// Represents the context of a source-generation phase, coordinating all the parsers involved.
+/// This is the source-based counterpart to <see cref="Parlot.Compilation.CompilationContext"/>.
+/// </summary>
+public sealed class SourceGenerationContext
+{
+    private int _number;
+    private int _staticFieldNumber;
+
+    public SourceGenerationContext(string parseContextName, string? methodNamePrefix)
+        : this(parseContextName, methodNamePrefix, targetFramework: null, csharpLanguageMajorVersion: 0)
+    {
+    }
+
+    public SourceGenerationContext(string parseContextName = "context", string? methodNamePrefix = null, TargetFrameworkInfo? targetFramework = null)
+        : this(parseContextName, methodNamePrefix, targetFramework, csharpLanguageMajorVersion: 0)
+    {
+    }
+
+    public SourceGenerationContext(
+        string parseContextName,
+        string? methodNamePrefix,
+        TargetFrameworkInfo? targetFramework,
+        int csharpLanguageMajorVersion)
+    {
+        ParseContextName = parseContextName ?? throw new ArgumentNullException(nameof(parseContextName));
+        MethodNamePrefix = methodNamePrefix ?? "";
+        TargetFramework = targetFramework ?? TargetFrameworkInfo.Unknown;
+        CSharpLanguageMajorVersion = csharpLanguageMajorVersion;
+
+        Helpers = new ParserHelperRegistry();
+    }
+
+    /// <summary>
+    /// Sets the source code map from lambda pointers to their original source code.
+    /// This should be called before executing the parser factory method.
+    /// </summary>
+    public void SetLambdaSourceMap(Dictionary<int, string> pointerToSource)
+    {
+        Lambdas.SetSourceCodeMap(pointerToSource);
+    }
+
+    /// <summary>
+    /// Name of the <c>ParseContext</c> parameter in the generated methods.
+    /// </summary>
+    public string ParseContextName { get; }
+
+    /// <summary>
+    /// Name of the cached cursor variable in the generated method.
+    /// This is initialized once at the start of the method and reused throughout.
+    /// </summary>
+#pragma warning disable CA1822 // Mark members as static - keep as instance for API consistency
+    public string CursorName => "cursor";
+#pragma warning restore CA1822
+
+    /// <summary>
+    /// Name of the cached scanner variable in the generated method.
+    /// </summary>
+#pragma warning disable CA1822 // Mark members as static - keep as instance for API consistency
+    public string ScannerName => "scanner";
+#pragma warning restore CA1822
+
+    /// <summary>
+    /// Prefix for generated lambda field names to ensure uniqueness across multiple parsers in the same class.
+    /// </summary>
+    public string MethodNamePrefix { get; }
+
+    /// <summary>
+    /// Target framework for the current compilation.
+    /// </summary>
+    public TargetFrameworkInfo TargetFramework { get; }
+
+    /// <summary>
+    /// Major C# language version of the consuming project (e.g. 9, 10, 11...).
+    /// A value of 0 means "unknown".
+    /// </summary>
+    public int CSharpLanguageMajorVersion { get; }
+
+    /// <summary>
+    /// Whether the consuming project supports C# 9 switch pattern syntax (relational and <c>or</c> patterns).
+    /// </summary>
+    public bool SupportsCSharp9SwitchPatterns => CSharpLanguageMajorVersion >= 9;
+
+    /// <summary>
+    /// Global locals (as code lines) for the generated root method.
+    /// </summary>
+    public IList<string> GlobalLocals { get; } = new List<string>();
+
+    /// <summary>
+    /// Global body statements for the generated root method.
+    /// </summary>
+    public IList<string> GlobalBody { get; } = new List<string>();
+
+    /// <summary>
+    /// Static field declarations that should appear at class level.
+    /// Each entry is a complete field declaration (e.g., "private static readonly SearchValues&lt;char&gt; _field = ...;").
+    /// </summary>
+    public IList<string> StaticFields { get; } = new List<string>();
+
+    /// <summary>
+    /// Registry of user-provided delegates used by parsers such as <c>Then</c>.
+    /// </summary>
+    public LambdaRegistry Lambdas { get; } = new();
+
+    /// <summary>
+    /// Registry of deferred parsers that should become separate helper methods.
+    /// </summary>
+    public DeferredRegistry Deferred { get; } = new();
+
+    /// <summary>
+    /// Registry of helper parser methods (e.g., OneOf buckets) to emit once per descriptor.
+    /// </summary>
+    public ParserHelperRegistry Helpers { get; }
+
+    /// <summary>
+    /// Gets or sets whether the current source-generation phase should ignore the results of the parsers.
+    /// </summary>
+    /// <remarks>
+    /// When set to true, the generated statements don't need to record and define the result value.
+    /// This is done to optimize generated parsers that are usually used for pattern matching only (e.g., Capture).
+    /// </remarks>
+    public bool DiscardResult { get; set; }
+
+    /// <summary>
+    /// Returns a new unique number for the current compilation.
+    /// </summary>
+    public int NextNumber() => _number++;
+
+    /// <summary>
+    /// Registers a static field and returns its unique name.
+    /// </summary>
+    /// <param name="declaration">The field declaration without the field name (e.g., "private static readonly SearchValues&lt;char&gt;").</param>
+    /// <param name="initializer">The initializer expression (e.g., "SearchValues.Create(\"abc\")").</param>
+    /// <returns>The unique field name that was generated.</returns>
+    public string RegisterStaticField(string declaration, string initializer)
+    {
+        ThrowHelper.ThrowIfNull(declaration, nameof(declaration));
+        ThrowHelper.ThrowIfNull(initializer, nameof(initializer));
+
+        var fieldName = $"_{MethodNamePrefix}_static{_staticFieldNumber++}";
+        StaticFields.Add($"{declaration} {fieldName} = {initializer};");
+        return fieldName;
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="SourceResult"/> with conventional success and value names.
+    /// </summary>
+    public SourceResult CreateResult(Type valueType, bool defaultSuccess = false, string? defaultValueExpression = null)
+    {
+        ThrowHelper.ThrowIfNull(valueType, nameof(valueType));
+
+        var successName = $"success{NextNumber()}";
+        var valueName = $"value{NextNumber()}";
+        var valueTypeName = GetTypeName(valueType);
+
+        var result = new SourceResult(successName, valueName, valueTypeName);
+
+        var successInit = defaultSuccess ? "true" : "false";
+        result.Locals.Add($"bool {successName} = {successInit};");
+
+        var defaultValueExpr = defaultValueExpression ?? "default";
+        result.Locals.Add($"{valueTypeName} {valueName} = {defaultValueExpr};");
+
+        return result;
+    }
+
+    public static string GetTypeName(Type type) => TypeNameHelper.GetTypeName(type);
+
+    public string RegisterLambda(Delegate lambda)
+    {
+        var id = Lambdas.Register(lambda);
+        return GetLambdaFieldName(id);
+    }
+
+    /// <summary>
+    /// Returns a field name for a lambda that is unique to this method context.
+    /// </summary>
+    public string GetLambdaFieldName(int id) => $"_{MethodNamePrefix}_lambda{id}";
+}

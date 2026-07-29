@@ -1,6 +1,8 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -15,7 +17,7 @@ public enum StringLiteralQuotes
     Custom
 }
 
-public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
+public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable, ISourceable
 {
     private static readonly MethodInfo _decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(string), typeof(int), typeof(int)])!;
 
@@ -145,6 +147,40 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
                             ))
                 )
             ));
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(TextSpan));
+        var cursorName = context.CursorName;
+        var scannerName = context.ScannerName;
+
+        var startName = $"start{context.NextNumber()}";
+        var endName = $"end{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
+
+        // Generate the appropriate read method call based on quote type
+        var readMethod = _quotes switch
+        {
+            StringLiteralQuotes.Single => $"{scannerName}.ReadSingleQuotedString()",
+            StringLiteralQuotes.Double => $"{scannerName}.ReadDoubleQuotedString()",
+            StringLiteralQuotes.SingleOrDouble => $"{scannerName}.ReadQuotedString()",
+            StringLiteralQuotes.Backtick => $"{scannerName}.ReadBacktickString()",
+            StringLiteralQuotes.Custom => $"{scannerName}.ReadQuotedString(new char[] {{ {string.Join(", ", ExpectedChars.Select(c => $"'{c}'"))} }})",
+            _ => throw new InvalidOperationException()
+        };
+
+        result.Body.Add($"if ({readMethod})");
+        result.Body.Add("{");
+        result.Body.Add($"    var {endName} = {cursorName}.Offset;");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1, {endName} - {startName} - 2);");
+        result.Body.Add("}");
 
         return result;
     }

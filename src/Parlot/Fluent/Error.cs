@@ -1,5 +1,6 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
+using Parlot.SourceGeneration;
 using System;
 #if NET
 using System.Linq;
@@ -8,7 +9,7 @@ using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class ElseError<T> : Parser<T>, ICompilable
+public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -76,10 +77,56 @@ public sealed class ElseError<T> : Parser<T>, ICompilable
         return result;
     }
 
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("ElseError requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T), defaultSuccess: true);
+        var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ElseError", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // if (Helper(context, out value))
+        // {
+        //     success = true;
+        // }
+        // else
+        // {
+        //     throw new ParseException(_message, cursor.Position);
+        // }
+        
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        }
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add("}");
+
+        return result;
+    }
+
     public override string ToString() => $"{_parser} (ElseError)";
 }
 
-public sealed class Error<T> : Parser<T>, ICompilable
+public sealed class Error<T> : Parser<T>, ICompilable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -135,10 +182,42 @@ public sealed class Error<T> : Parser<T>, ICompilable
         return result;
     }
 
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Error requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(T));
+        var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Error", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // if (Helper(context, out _))
+        // {
+        //     throw new ParseException(_message, cursor.Position);
+        // }
+        // success = false;
+        
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        result.Body.Add("{");
+        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add("}");
+
+        return result;
+    }
+
     public override string ToString() => $"{_parser} (Error)";
 }
 
-public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
+public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -204,6 +283,38 @@ public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable
         );
 
         result.Body.Add(block);
+
+        return result;
+    }
+
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (_parser is not ISourceable sourceable)
+        {
+            throw new NotSupportedException("Error requires a source-generatable parser.");
+        }
+
+        var result = context.CreateResult(typeof(U));
+        var cursorName = context.CursorName;
+        var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+
+        // Use helper instead of inlining
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Error", innerValueTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        // if (Helper(context, out _))
+        // {
+        //     throw new ParseException(_message, cursor.Position);
+        // }
+        // success = false;
+        
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        result.Body.Add("{");
+        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add("}");
 
         return result;
     }
