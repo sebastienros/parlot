@@ -26,7 +26,8 @@
     <!-- Reference the source generator as an analyzer -->
     <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
                       OutputItemType="Analyzer" 
-                      ReferenceOutputAssembly="false" />
+                      ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="ArtifactsPath;OutDir;OutputPath;PublishDir" />
     
     <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
     <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
@@ -34,5 +35,13 @@
     <!-- Make Samples.dll available to the source generator at compile time -->
     <Analyzer Include="..\..\src\Samples\bin\$(Configuration)\net10.0\Samples.dll" />
   </ItemGroup>
+
+  <!-- BenchmarkDotNet flattens project-reference outputs, so netstandard2.0 can overwrite the net10.0 Parlot assembly. -->
+  <Target Name="CopyNet10ParlotForBenchmarkDotNet"
+          AfterTargets="Build"
+          Condition="'$(ArtifactsPath)' != ''">
+    <Copy SourceFiles="..\..\src\Parlot\bin\$(Configuration)\net10.0\Parlot.dll"
+          DestinationFiles="$(OutDir)Parlot.dll" />
+  </Target>
 
 </Project>
