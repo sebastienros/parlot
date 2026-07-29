@@ -186,6 +186,8 @@ public class NumberLiteralTests
     }
 
     [Theory]
+    [InlineData("999999999999999999", true, 999999999999999999)]
+    [InlineData("1000000000000000000", true, 1000000000000000000)]
     [InlineData("9223372036854775807", true, 9223372036854775807)]
     [InlineData("-9223372036854775808", true, -9223372036854775808)]
     [InlineData("  12345", true, 12345L)]
@@ -200,6 +202,19 @@ public class NumberLiteralTests
         {
             Assert.Equal(expected, value);
         }
+    }
+
+    [Theory]
+    [InlineData("0", true, 0)]
+    [InlineData("255", true, 255)]
+    [InlineData("256", false, 0)]
+    [InlineData("300", false, 0)]
+    public void ByteNumberLiteral_DoesNotTruncate(string input, bool shouldSucceed, byte expected)
+    {
+        var result = Grammars.ByteNumberLiteralParser().TryParse(input, out var value);
+
+        Assert.Equal(shouldSucceed, result);
+        Assert.Equal(expected, value);
     }
 
     #endregion

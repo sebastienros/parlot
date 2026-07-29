@@ -53,6 +53,26 @@ public class SimpleParsersBenchmarks
         return result;
     }
 
+    // ==================== Integer ====================
+
+    private static readonly Parser<long> _integerFluent = Terms.Integer();
+
+    private const string IntegerInput = "123";
+
+    [Benchmark(Baseline = true), BenchmarkCategory("Integer")]
+    public long Integer_Fluent()
+    {
+        _integerFluent.TryParse(IntegerInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Integer")]
+    public long Integer_Generated()
+    {
+        GeneratedParsers.IntegerParser().TryParse(IntegerInput, out var result);
+        return result;
+    }
+
     // ==================== OneOf ====================
 
     private static readonly Parser<string> _oneOfFluent = OneOf(Terms.Text("apple"), Terms.Text("banana"), Terms.Text("cherry"));
@@ -70,6 +90,24 @@ public class SimpleParsersBenchmarks
     public string OneOf_Generated()
     {
         GeneratedParsers.OneOfParser().TryParse(OneOfInput, out var result);
+        return result;
+    }
+
+    // ==================== OneOf without whitespace ====================
+
+    private static readonly Parser<string> _literalOneOfFluent = OneOf(Literals.Text("apple"), Literals.Text("banana"), Literals.Text("cherry"));
+
+    [Benchmark(Baseline = true), BenchmarkCategory("LiteralOneOf")]
+    public string LiteralOneOf_Fluent()
+    {
+        _literalOneOfFluent.TryParse(OneOfInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("LiteralOneOf")]
+    public string LiteralOneOf_Generated()
+    {
+        GeneratedParsers.LiteralOneOfParser().TryParse(OneOfInput, out var result);
         return result;
     }
 

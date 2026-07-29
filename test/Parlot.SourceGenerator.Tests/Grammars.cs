@@ -668,6 +668,9 @@ public static partial class Grammars
     public static Parser<long> LongNumberLiteralParser() => Terms.Integer(NumberOptions.Integer);
 
     [GenerateParser]
+    public static Parser<byte> ByteNumberLiteralParser() => Terms.Number<byte>(NumberOptions.Integer);
+
+    [GenerateParser]
     public static Parser<decimal> DecimalNumberLiteralCustomCultureParser() => 
         Terms.Number<decimal>(NumberOptions.Number | NumberOptions.AllowGroupSeparators, decimalSeparator: ',', groupSeparator: '_');
 

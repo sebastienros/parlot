@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Linq;
@@ -141,6 +142,44 @@ public static class Numbers
     }
 
 #if NET7_0_OR_GREATER // INumber<T> arrives in net7
+        /// <summary>
+        /// Parses a number, using a fast path for plain sequences of digits.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryParseNumber<TNumber>(ReadOnlySpan<char> span, NumberStyles styles, IFormatProvider provider, [MaybeNullWhen(false)] out TNumber value)
+                where TNumber : INumber<TNumber>
+        {
+                if ((uint)(span.Length - 1) < MaxFastDigits)
+                {
+                        long parsed = 0;
+
+                        foreach (var c in span)
+                        {
+                                var digit = (uint)(c - '0');
+
+                                if (digit > 9)
+                                {
+                                        return TNumber.TryParse(span, styles, provider, out value);
+                                }
+
+                                parsed = (parsed * 10) + digit;
+                        }
+
+                        value = TNumber.CreateTruncating(parsed);
+
+                        // A narrower number type can wrap during conversion, so only keep exact values.
+                        if (long.CreateTruncating(value) == parsed)
+                        {
+                                return true;
+                        }
+                }
+
+                return TNumber.TryParse(span, styles, provider, out value);
+        }
+
+        // long.MaxValue has 19 digits, so every number with at most 18 digits fits.
+        private const int MaxFastDigits = 18;
+
         private delegate bool TryParseSpanWithStyles<TNumber>(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out TNumber value);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

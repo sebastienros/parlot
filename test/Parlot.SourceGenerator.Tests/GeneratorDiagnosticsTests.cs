@@ -159,6 +159,47 @@ public static partial class InvalidReturnGrammar
         Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
     }
 
+    [Theory]
+    [InlineData(6, false)]
+    [InlineData(7, false)]
+    [InlineData(8, true)]
+    [InlineData(10, true)]
+    public void Number_Literal_Selects_Fast_Path_By_Target_Framework(int targetFrameworkVersion, bool usesFastPath)
+    {
+        var context = new global::Parlot.SourceGeneration.SourceGenerationContext(
+            targetFramework: new global::Parlot.SourceGeneration.TargetFrameworkInfo(
+                global::Parlot.SourceGeneration.TargetFrameworkIdentifier.NetCoreApp,
+                new Version(targetFrameworkVersion, 0)));
+        var result = new TestLongNumberLiteral().GenerateSource(context);
+        var generated = string.Join(Environment.NewLine, result.Body);
+
+        Assert.Equal(usesFastPath, generated.Contains("Numbers.TryParseNumber<", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Literal_OneOf_Does_Not_Capture_Position()
+    {
+        const string source = @"
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class OneOfGrammar
+{
+    [GenerateParser]
+    public static Parser<string> Choice() => OneOf(Literals.Text(""a""), Literals.Text(""b""));
+}
+";
+
+        var (result, updatedCompilation) = RunGenerator(source, "LiteralOneOf");
+        var generated = string.Join(
+            Environment.NewLine,
+            result.Results.SelectMany(static r => r.GeneratedSources).Select(static s => s.SourceText.ToString()));
+
+        Assert.DoesNotContain("cursor.Position", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+    }
+
     [Fact]
     public void DesignTimeBuild_Skips_Parlot_Generation_And_Diagnostics()
     {
@@ -375,5 +416,15 @@ public static partial class StaticLambdaGrammar
             value = "";
             return false;
         }
+    }
+
+    private sealed class TestLongNumberLiteral : global::Parlot.Fluent.NumberLiteralBase<long>
+    {
+        public override bool TryParseNumber(
+            ReadOnlySpan<char> s,
+            System.Globalization.NumberStyles style,
+            IFormatProvider provider,
+            out long value) =>
+            long.TryParse(s, style, provider, out value);
     }
 }

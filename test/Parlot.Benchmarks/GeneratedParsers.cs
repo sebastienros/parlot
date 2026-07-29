@@ -75,7 +75,13 @@ public static partial class GeneratedParsers
     public static Parser<decimal> DecimalParser() => Terms.Decimal();
 
     [GenerateParser]
+    public static Parser<long> IntegerParser() => Terms.Integer();
+
+    [GenerateParser]
     public static Parser<string> OneOfParser() => OneOf(Terms.Text("apple"), Terms.Text("banana"), Terms.Text("cherry"));
+
+    [GenerateParser]
+    public static Parser<string> LiteralOneOfParser() => OneOf(Literals.Text("apple"), Literals.Text("banana"), Literals.Text("cherry"));
 
     [GenerateParser]
     public static Parser<(string, decimal)> AndParser() => Terms.Text("price").And(Terms.Decimal());

@@ -284,12 +284,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
             return methodName;
         }
 
-        var startName = $"start{context.NextNumber()}";
-
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        string? startName = null;
 
         if (SkipWhitespace)
         {
+            startName = $"start{context.NextNumber()}";
+            result.Body.Add($"var {startName} = {cursorName}.Position;");
             result.Body.Add($"{ctx}.SkipWhiteSpace();");
         }
 
@@ -388,10 +388,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
             EmitParsers(Parsers, result, ctx, indent: string.Empty, getHelper: GetHelper, context);
         }
 
-        result.Body.Add($"if (!{result.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
+        if (startName is not null)
+        {
+            result.Body.Add($"if (!{result.SuccessVariable})");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
 
         return result;
     }
