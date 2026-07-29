@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// flexibility for larger lists.
 /// </summary>
 #nullable enable
-internal sealed class HybridList<T> : IReadOnlyList<T>
+internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
 {
     private T? _item1;
     private T? _item2;
@@ -88,6 +88,76 @@ internal sealed class HybridList<T> : IReadOnlyList<T>
             }
         }
     }
+
+    // ICollection<T> is implemented so that BCL collections built from a parser result, e.g.
+    // new Dictionary<K, V>(result) or new List<T>(result), can allocate their storage once
+    // instead of growing it as they enumerate. Only Count and CopyTo are needed for that, and the
+    // instance is handed out as an IReadOnlyList<T>, so the mutating members are implemented
+    // explicitly and throw rather than letting a cast alter a parser result.
+
+    bool ICollection<T>.IsReadOnly => true;
+
+    void ICollection<T>.Add(T item) => throw new NotSupportedException();
+
+    void ICollection<T>.Clear() => throw new NotSupportedException();
+
+    bool ICollection<T>.Remove(T item) => throw new NotSupportedException();
+
+    public bool Contains(T item)
+    {
+        if (_list is not null)
+        {
+            return _list.Contains(item);
+        }
+
+        var comparer = EqualityComparer<T>.Default;
+
+        for (var i = 0; i < _count; i++)
+        {
+            if (comparer.Equals(this[i], item))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void CopyTo(T[] array, int arrayIndex)
+    {
+        _ = array ?? throw new ArgumentNullException(nameof(array));
+
+        if (arrayIndex < 0 || arrayIndex > array.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+        }
+
+        if (array.Length - arrayIndex < _count)
+        {
+            throw new ArgumentException("The destination array has insufficient space.", nameof(array));
+        }
+
+        if (_list is not null)
+        {
+            _list.CopyTo(array, arrayIndex);
+            return;
+        }
+
+        for (var i = 0; i < _count; i++)
+        {
+            array[arrayIndex + i] = this[i];
+        }
+    }
+
+    /// <summary>
+    /// Returns the items in the representation that is the most efficient for the consumers.
+    /// </summary>
+    /// <remarks>
+    /// The BCL collections have fast paths for <see cref="List{T}"/>, e.g. <c>new Dictionary&lt;K, V&gt;(items)</c>
+    /// iterates its span instead of allocating an enumerator for it, so the inner list is returned once it has
+    /// been allocated. This is also the type the compiled parsers return.
+    /// </remarks>
+    public IReadOnlyList<T> AsReadOnlyList() => _list ?? (IReadOnlyList<T>)this;
 
     public IEnumerator<T> GetEnumerator()
     {

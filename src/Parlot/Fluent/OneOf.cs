@@ -199,11 +199,14 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
         var cursor = context.Scanner.Cursor;
 
-        var start = context.Scanner.Cursor.Position;
+        // The position is only needed to revert the whitespaces this parser skipped, the sub-parsers
+        // revert their own state. Reading it is not free as it also tracks the line and column.
+        var start = default(TextPosition);
 
         // If all sub-parsers skip whitespaces, do it once here
         if (SkipWhitespace)
         {
+            start = cursor.Position;
             context.SkipWhiteSpace();
         }
 
@@ -246,7 +249,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /*, ICompilable
 
         if (SkipWhitespace)
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            cursor.ResetPosition(start);
         }
 
         context.ExitParser(this);
