@@ -110,6 +110,12 @@ public class ParlotBenchmarks
         return _exprBench.ParlotFluentSmall();
     }
 
+    [Benchmark, BenchmarkCategory("Expressions - Small")]
+    public Expression ExpressionGeneratedSmall()
+    {
+        return _exprBench.ParlotGeneratedSmall();
+    }
+
     [Benchmark, BenchmarkCategory("Expressions - Big")]
     public Expression ExpressionRawBig()
     {
@@ -128,6 +134,12 @@ public class ParlotBenchmarks
         return _exprBench.ParlotFluentBig();
     }
 
+    [Benchmark, BenchmarkCategory("Expressions - Big")]
+    public Expression ExpressionGeneratedBig()
+    {
+        return _exprBench.ParlotGeneratedBig();
+    }
+
     [Benchmark, BenchmarkCategory("Json - Big")]
     public IJson BigJson()
     {
@@ -138,6 +150,12 @@ public class ParlotBenchmarks
     public IJson BigJsonCompiled()
     {
         return _jsonBench.BigJson_ParlotCompiled();
+    }
+
+    [Benchmark, BenchmarkCategory("Json - Big")]
+    public IJson BigJsonGenerated()
+    {
+        return _jsonBench.BigJson_ParlotGenerated();
     }
 
     [Benchmark, BenchmarkCategory("Json - Deep")]
@@ -152,6 +170,12 @@ public class ParlotBenchmarks
         return _jsonBench.DeepJson_ParlotCompiled();
     }
 
+    [Benchmark, BenchmarkCategory("Json - Deep")]
+    public IJson DeepJsonGenerated()
+    {
+        return _jsonBench.DeepJson_ParlotGenerated();
+    }
+
     [Benchmark, BenchmarkCategory("Json - Long")]
     public IJson LongJson()
     {
@@ -164,6 +188,12 @@ public class ParlotBenchmarks
         return _jsonBench.LongJson_ParlotCompiled();
     }
 
+    [Benchmark, BenchmarkCategory("Json - Long")]
+    public IJson LongJsonGenerated()
+    {
+        return _jsonBench.LongJson_ParlotGenerated();
+    }
+
     [Benchmark, BenchmarkCategory("Json - Wide")]
     public IJson WideJson()
     {
@@ -174,6 +204,12 @@ public class ParlotBenchmarks
     public IJson WideJsonCompiled()
     {
         return _jsonBench.WideJson_ParlotCompiled();
+    }
+
+    [Benchmark, BenchmarkCategory("Json - Wide")]
+    public IJson WideJsonGenerated()
+    {
+        return _jsonBench.WideJson_ParlotGenerated();
     }
 
     [Benchmark, BenchmarkCategory("Constructors")]

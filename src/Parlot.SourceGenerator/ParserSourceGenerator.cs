@@ -714,27 +714,42 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 if (filePath.Contains(Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar) ||
                     filePath.Contains("/ref/"))
                 {
+                    var refDirectory = Path.GetDirectoryName(filePath);
+                    var intermediateDirectory = refDirectory is null ? null : Path.GetDirectoryName(refDirectory);
+                    var intermediatePath = intermediateDirectory is null
+                        ? null
+                        : Path.Combine(intermediateDirectory, Path.GetFileName(filePath));
+                    var resolvedImplementation = intermediatePath is not null && File.Exists(intermediatePath);
+
+                    if (resolvedImplementation)
+                    {
+                        filePath = intermediatePath!;
+                    }
+
                     // Try to find the actual assembly in bin folder
                     // Path like: .../obj/Debug/net10.0/ref/Samples.dll -> .../bin/Debug/net10.0/Samples.dll
-                    var objIndex = filePath.LastIndexOf(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-                    if (objIndex < 0) objIndex = filePath.LastIndexOf("/obj/", StringComparison.OrdinalIgnoreCase);
-                    
-                    if (objIndex >= 0)
+                    if (!resolvedImplementation)
                     {
-                        var baseDir = filePath.Substring(0, objIndex);
-                        var afterObj = filePath.Substring(objIndex + 4); // Skip "/obj"
-                        var refIndex = afterObj.IndexOf(Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-                        if (refIndex < 0) refIndex = afterObj.IndexOf("/ref/", StringComparison.OrdinalIgnoreCase);
-                        
-                        if (refIndex >= 0)
+                        var objIndex = filePath.LastIndexOf(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                        if (objIndex < 0) objIndex = filePath.LastIndexOf("/obj/", StringComparison.OrdinalIgnoreCase);
+
+                        if (objIndex >= 0)
                         {
-                            var configTfm = afterObj.Substring(0, refIndex); // e.g., "/Debug/net10.0"
-                            var fileName = Path.GetFileName(filePath);
-                            var binPath = baseDir + Path.DirectorySeparatorChar + "bin" + configTfm + Path.DirectorySeparatorChar + fileName;
-                            
-                            if (File.Exists(binPath))
+                            var baseDir = filePath.Substring(0, objIndex);
+                            var afterObj = filePath.Substring(objIndex + 4); // Skip "/obj"
+                            var refIndex = afterObj.IndexOf(Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                            if (refIndex < 0) refIndex = afterObj.IndexOf("/ref/", StringComparison.OrdinalIgnoreCase);
+
+                            if (refIndex >= 0)
                             {
-                                filePath = binPath;
+                                var configTfm = afterObj.Substring(0, refIndex); // e.g., "/Debug/net10.0"
+                                var fileName = Path.GetFileName(filePath);
+                                var binPath = baseDir + Path.DirectorySeparatorChar + "bin" + configTfm + Path.DirectorySeparatorChar + fileName;
+
+                                if (File.Exists(binPath))
+                                {
+                                    filePath = binPath;
+                                }
                             }
                         }
                     }

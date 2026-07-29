@@ -23,6 +23,7 @@ public class JsonBench
     private string _wideJson;
     private string _deepJson;
     private Parser<IJson> _compiled;
+    private Parser<IJson> _generated;
 #nullable restore
 
     private static readonly JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
@@ -38,6 +39,7 @@ public class JsonBench
         _deepJson = BuildJson(1, 256, 1).ToString()!;
 
         _compiled = JsonParser.Json.Compile();
+        _generated = GeneratedParsers.JsonParser();
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Big")]
@@ -50,6 +52,12 @@ public class JsonBench
     public IJson BigJson_Parlot()
     {
         return JsonParser.Parse(_bigJson);
+    }
+
+    [Benchmark, BenchmarkCategory("Big")]
+    public IJson BigJson_ParlotGenerated()
+    {
+        return _generated.Parse(_bigJson);
     }
 
     [Benchmark, BenchmarkCategory("Big")]
@@ -92,6 +100,12 @@ public class JsonBench
     public IJson LongJson_Parlot()
     {
         return JsonParser.Parse(_longJson);
+    }
+
+    [Benchmark, BenchmarkCategory("Long")]
+    public IJson LongJson_ParlotGenerated()
+    {
+        return _generated.Parse(_longJson);
     }
 
     [Benchmark, BenchmarkCategory("Long")]
@@ -138,6 +152,12 @@ public class JsonBench
     }
 
     [Benchmark, BenchmarkCategory("Deep")]
+    public IJson DeepJson_ParlotGenerated()
+    {
+        return _generated.Parse(_deepJson);
+    }
+
+    [Benchmark, BenchmarkCategory("Deep")]
     public IJson DeepJson_Pidgin()
     {
         return PidginJsonParser.Parse(_deepJson).Value;
@@ -178,6 +198,12 @@ public class JsonBench
     public IJson WideJson_Parlot()
     {
         return JsonParser.Parse(_wideJson);
+    }
+
+    [Benchmark, BenchmarkCategory("Wide")]
+    public IJson WideJson_ParlotGenerated()
+    {
+        return _generated.Parse(_wideJson);
     }
 
     [Benchmark, BenchmarkCategory("Wide")]
