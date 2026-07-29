@@ -245,15 +245,15 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable, ISourc
         var cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat";
         if (!ReferenceEquals(_culture, CultureInfo.InvariantCulture.NumberFormat))
         {
-            var decimalSeparator = LiteralHelper.StringToLiteral(_decimalSeparator.ToString());
-            var groupSeparator = LiteralHelper.StringToLiteral(_groupSeparator.ToString());
+            var decimalSeparator = $"((char){(int)_decimalSeparator}).ToString()";
+            var groupSeparator = $"((char){(int)_groupSeparator}).ToString()";
             cultureExpr = context.RegisterStaticField(
                 "private static readonly global::System.Globalization.NumberFormatInfo",
                 $"new global::System.Func<global::System.Globalization.NumberFormatInfo>(() => {{ var c = (global::System.Globalization.NumberFormatInfo)global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat.Clone(); c.NumberDecimalSeparator = {decimalSeparator}; c.NumberGroupSeparator = {groupSeparator}; return c; }})()");
         }
 
-        var decimalSeparatorLiteral = LiteralHelper.CharToLiteral(_decimalSeparator);
-        var groupSeparatorLiteral = LiteralHelper.CharToLiteral(_groupSeparator);
+        var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
+        var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         if (context.DiscardResult)
