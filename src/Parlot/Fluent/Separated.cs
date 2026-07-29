@@ -84,7 +84,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
             results!.Add(parsed.Value);
         }
 
-        result.Set(start, end.Offset, results ?? (IReadOnlyList<T>)[]);
+        result.Set(start, end.Offset, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
 
         context.ExitParser(this);
         return true;

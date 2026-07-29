@@ -2,6 +2,7 @@
 using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
@@ -15,12 +16,15 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
     private const char DefaultDecimalSeparator = '.';
     private const char DefaultGroupSeparator = ',';
 
-    private static readonly MethodInfo _tryParseMethodInfo = typeof(T).GetMethod(nameof(INumber<T>.TryParse), [typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()])!;
+    private static readonly MethodInfo _tryParseMethodInfo = typeof(NumberLiteral<T>).GetMethod(nameof(TryParseNumber), BindingFlags.Static | BindingFlags.NonPublic)!;
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
     private readonly NumberStyles _numberStyles;
-    private readonly CultureInfo _culture = CultureInfo.InvariantCulture;
+
+    // A NumberFormatInfo is stored instead of a CultureInfo since NumberFormatInfo.GetInstance()
+    // returns it directly, while a CultureInfo needs to be resolved on every call.
+    private readonly NumberFormatInfo _culture = CultureInfo.InvariantCulture.NumberFormat;
     private readonly bool _allowLeadingSign;
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
@@ -41,9 +45,9 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         if (decimalSeparator != NumberLiterals.DefaultDecimalSeparator ||
             groupSeparator != NumberLiterals.DefaultGroupSeparator)
         {
-            _culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
-            _culture.NumberFormat.NumberDecimalSeparator = decimalSeparator.ToString();
-            _culture.NumberFormat.NumberGroupSeparator = groupSeparator.ToString();
+            _culture = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
+            _culture.NumberDecimalSeparator = decimalSeparator.ToString();
+            _culture.NumberGroupSeparator = groupSeparator.ToString();
         }
 
         _allowLeadingSign = (numberOptions & NumberOptions.AllowLeadingSign) != 0;
@@ -84,7 +88,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         {
             var end = context.Scanner.Cursor.Offset;
 
-            if (T.TryParse(number, _numberStyles, _culture, out var value))
+            if (TryParseNumber(number, _numberStyles, _culture, out var value))
             {
                 result.Set(start, end, value);
 
@@ -99,6 +103,51 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         return false;
     }
 
+    /// <summary>
+    /// The number of digits that always fit in a <see cref="long"/>, <c>long.MaxValue</c> has 19 of them.
+    /// </summary>
+    private const int MaxFastDigits = 18;
+
+    /// <summary>
+    /// Parses a number, using a dedicated implementation for the plain sequences of digits that make up
+    /// most of the numbers found in a grammar.
+    /// </summary>
+    /// <remarks>
+    /// The general purpose parser has to handle everything <see cref="NumberStyles"/> allows, which is a
+    /// significant part of the parsing time even for a single digit. Anything that is not a short sequence
+    /// of digits, e.g. a sign, a decimal separator or an exponent, falls back to it.
+    /// </remarks>
+    internal static bool TryParseNumber(ReadOnlySpan<char> span, NumberStyles styles, NumberFormatInfo culture, [MaybeNullWhen(false)] out T value)
+    {
+        if ((uint)(span.Length - 1) < MaxFastDigits)
+        {
+            long parsed = 0;
+
+            foreach (var c in span)
+            {
+                var digit = (uint)(c - '0');
+
+                if (digit > 9)
+                {
+                    return T.TryParse(span, styles, culture, out value);
+                }
+
+                parsed = (parsed * 10) + digit;
+            }
+
+            value = T.CreateTruncating(parsed);
+
+            // T can be narrower than a long, e.g. Terms.Byte() reading "300", in which case the
+            // conversion silently wrapped and the general purpose parser decides whether it is valid.
+            if (long.CreateTruncating(value) == parsed)
+            {
+                return true;
+            }
+        }
+
+        return T.TryParse(span, styles, culture, out value);
+    }
+
     public CompilationResult Compile(CompilationContext context)
     {
         var result = context.CreateCompilationResult<T>();
@@ -108,7 +157,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
         var reset = context.DeclarePositionVariable(result);
 
         var numberStyles = result.DeclareVariable<NumberStyles>($"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
-        var culture = result.DeclareVariable<CultureInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
+        var culture = result.DeclareVariable<NumberFormatInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
         var numberSpan = result.DeclareVariable($"number{context.NextNumber}", typeof(ReadOnlySpan<char>));
         var end = result.DeclareVariable<int>($"end{context.NextNumber}");
 

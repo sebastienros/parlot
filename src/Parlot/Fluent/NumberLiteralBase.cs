@@ -20,6 +20,9 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
     private readonly char _groupSeparator;
     private readonly MethodInfo _tryParseMethodInfo;
     private readonly NumberStyles _numberStyles;
+
+    // Kept as a CultureInfo since it is handed to the public TryParseNumber overrides and to the
+    // caller supplied tryParseMethodInfo, which can both expect that exact type.
     private readonly CultureInfo _culture = CultureInfo.InvariantCulture;
     private readonly bool _allowLeadingSign;
     private readonly bool _allowDecimalSeparator;

@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System;
 using System.Collections.Generic;
 using Xunit;
 
@@ -264,6 +265,110 @@ public class HybridListTests
             items.Add(item);
         }
         Assert.Equal(3, items.Count);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(20)]
+    public void ICollectionInterface_ExposesCountForPreSizing(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        ICollection<int> collection = list;
+
+        Assert.Equal(count, collection.Count);
+        Assert.True(collection.IsReadOnly);
+
+        // The pre-sizing constructors of the BCL collections rely on ICollection<T>
+        Assert.Equal(count, new List<int>(list).Count);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(20)]
+    public void ICollectionInterface_CopyToAndContains(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        ICollection<int> collection = list;
+
+        var target = new int[count + 2];
+        collection.CopyTo(target, 1);
+
+        for (var i = 0; i < count; i++)
+        {
+            Assert.Equal(i, target[i + 1]);
+            Assert.True(collection.Contains(i));
+        }
+
+        Assert.False(collection.Contains(count));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(20)]
+    public void ICollectionInterface_DoesNotAllowMutation(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        // A parser result is handed out as an IReadOnlyList<T>, casting it to ICollection<T>
+        // must not be a way to alter it
+        ICollection<int> collection = list;
+
+        Assert.Throws<NotSupportedException>(() => collection.Remove(0));
+        Assert.Throws<NotSupportedException>(() => collection.Clear());
+        Assert.Throws<NotSupportedException>(() => collection.Add(42));
+
+        Assert.Equal(count, collection.Count);
+
+        for (var i = 0; i < count; i++)
+        {
+            Assert.Equal(i, list[i]);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void ICollectionInterface_CopyToValidatesItsArguments(int count)
+    {
+        var list = new HybridList<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(i);
+        }
+
+        ICollection<int> collection = list;
+
+        Assert.Throws<ArgumentNullException>(() => collection.CopyTo(null!, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => collection.CopyTo(new int[count], -1));
+
+        // An undersized destination is an ArgumentException, not an out of range index
+        Assert.Throws<ArgumentException>(() => collection.CopyTo(new int[count - 1], 0));
     }
 
     [Fact]

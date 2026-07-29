@@ -49,37 +49,50 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
-        if (Parser is null)
+        var parser = Parser;
+
+        if (parser is null)
         {
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
-        // Check for infinite recursion at the same position (unless disabled)
-        if (!context.DisableLoopDetection && context.IsParserActiveAtPosition(this))
-        {
-            // Cycle detected at this position - fail gracefully instead of stack overflow
-            return false;
-        }
+        var trackPosition = !context.DisableLoopDetection;
 
         // Remember the position where we entered this parser
-        var entryPosition = context.Scanner.Cursor.Position.Offset;
+        var entryPosition = 0;
 
-        // Mark this parser as active at the current position (unless loop detection is disabled)
-        var trackPosition = !context.DisableLoopDetection && context.PushParserAtPosition(this);
-
-        context.EnterParser(this);
-
-        var outcome = Parser.Parse(context, ref result);
-
-        context.ExitParser(this);
-
-        // Mark this parser as inactive at the entry position (only if we tracked it)
         if (trackPosition)
         {
-            context.PopParserAtPosition(this, entryPosition);
+            entryPosition = context.Scanner.Cursor.Offset;
+
+            // Marking the parser as active also detects a cycle at this position, which saves a lookup
+            // compared to checking for the cycle first.
+            if (!context.PushParserAtPosition(this))
+            {
+                // Cycle detected at this position - fail gracefully instead of stack overflow
+                return false;
+            }
         }
 
-        return outcome;
+        try
+        {
+            context.EnterParser(this);
+
+            var outcome = parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+
+            return outcome;
+        }
+        finally
+        {
+            // Marked as inactive even when a parser throws, otherwise a context that is reused
+            // after the exception was handled would report a cycle for this position
+            if (trackPosition)
+            {
+                context.PopParserAtPosition(this, entryPosition);
+            }
+        }
     }
 
     private bool _initialized;

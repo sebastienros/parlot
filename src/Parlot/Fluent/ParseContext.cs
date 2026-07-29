@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -43,7 +42,15 @@ public class ParseContext
     /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.
     /// </summary>
-    private readonly HashSet<ParserPosition> _activeParserPositions;
+    /// <remarks>
+    /// The pairs are pushed and popped in LIFO order since they follow the parsers' call stack, so they are
+    /// kept in a plain stack rather than a hash set. A stack doesn't need to rehash its content while it grows,
+    /// which was allocating several intermediate tables for deeply nested grammars, and a lookup is a vectorized
+    /// scan over the recorded positions since two entries rarely share the same one.
+    /// </remarks>
+    private int[]? _activePositions;
+    private object[]? _activeParsers;
+    private int _activeCount;
 
     /// <summary>
     /// The cancellation token used to stop the parsing operation.
@@ -68,8 +75,6 @@ public class ParseContext
         UseNewLines = useNewLines;
         CancellationToken = cancellationToken;
         DisableLoopDetection = disableLoopDetection;
-
-        _activeParserPositions = !disableLoopDetection ? new HashSet<ParserPosition>(ParserPositionComparer.Instance) : null!;
     }
 
     /// <summary>
@@ -92,7 +97,7 @@ public class ParseContext
 
     public void SkipWhiteSpace()
     {
-        var offset = Scanner.Cursor.Position.Offset;
+        var offset = Scanner.Cursor.Offset;
 
         if (offset == _cacheOffset)
         {
@@ -148,7 +153,47 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsParserActiveAtPosition(object parser)
     {
-        return _activeParserPositions.Contains(new ParserPosition(parser, Scanner.Cursor.Position.Offset));
+        return IndexOfActiveParser(parser, Scanner.Cursor.Offset) >= 0;
+    }
+
+    /// <summary>
+    /// Returns the index of an active parser at the specified position, or <c>-1</c> when it's not active.
+    /// </summary>
+    private int IndexOfActiveParser(object parser, int position)
+    {
+        var count = _activeCount;
+
+        if (count == 0)
+        {
+            return -1;
+        }
+
+        // Scan the recorded positions first, the parsers are only compared when a position matches.
+        // A parser that consumed something has a different position, so matches are rare.
+
+        var positions = _activePositions!.AsSpan(0, count);
+        var parsers = _activeParsers!;
+        var start = 0;
+
+        while (true)
+        {
+            var found = positions.IndexOf(position);
+
+            if (found < 0)
+            {
+                return -1;
+            }
+
+            var index = start + found;
+
+            if (ReferenceEquals(parsers[index], parser))
+            {
+                return index;
+            }
+
+            positions = positions.Slice(found + 1);
+            start = index + 1;
+        }
     }
 
     /// <summary>
@@ -156,11 +201,45 @@ public class ParseContext
     /// </summary>
     /// <param name="parser">The parser to mark as active.</param>
     /// <returns>True if the parser was added (not previously active at this position), false if it was already active at this position.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool PushParserAtPosition(object parser)
     {
-        return _activeParserPositions.Add(new ParserPosition(parser, Scanner.Cursor.Position.Offset));
+        var position = Scanner.Cursor.Offset;
+
+        if (IndexOfActiveParser(parser, position) >= 0)
+        {
+            return false;
+        }
+
+        var count = _activeCount;
+
+        if (_activePositions is null)
+        {
+            _activePositions = new int[InitialActiveParsersCapacity];
+            _activeParsers = new object[InitialActiveParsersCapacity];
+        }
+        else if (count == _activePositions.Length)
+        {
+            // Both arrays are allocated before either field is assigned, such that a failed
+            // allocation can't leave them with different lengths
+            var positions = new int[count * 2];
+            var parsers = new object[count * 2];
+
+            Array.Copy(_activePositions, positions, count);
+            Array.Copy(_activeParsers!, parsers, count);
+
+            _activePositions = positions;
+            _activeParsers = parsers;
+        }
+
+        _activePositions[count] = position;
+        _activeParsers![count] = parser;
+        _activeCount = count + 1;
+
+        return true;
     }
+
+    // Kept small since most grammars only nest a few parsers, the arrays grow for the deeper ones
+    private const int InitialActiveParsersCapacity = 8;
 
     /// <summary>
     /// Marks a parser as inactive at the current position.
@@ -170,30 +249,48 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PopParserAtPosition(object parser, int position)
     {
-        _activeParserPositions.Remove(new ParserPosition(parser, position));
+        var count = _activeCount;
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        // Parsers are entered and left in LIFO order, so the entry to remove is the last one
+
+        var last = count - 1;
+
+        if (_activePositions![last] == position && ReferenceEquals(_activeParsers![last], parser))
+        {
+            // Released so the context doesn't keep the parsers it is done with alive
+            _activeParsers[last] = null!;
+            _activeCount = last;
+            return;
+        }
+
+        RemoveActiveParserNotInlined(parser, position);
     }
 
-    /// <summary>
-    /// Represents a parser instance at a specific position for cycle detection.
-    /// </summary>
-    private readonly record struct ParserPosition(object Parser, int Position);
-
-    /// <summary>
-    /// Uses reference equality for parsers to avoid calling user GetHashCode overrides.
-    /// </summary>
-    private sealed class ParserPositionComparer : IEqualityComparer<ParserPosition>
+    private void RemoveActiveParserNotInlined(object parser, int position)
     {
-        public static readonly ParserPositionComparer Instance = new();
+        // A custom parser could leave entries out of order, in which case the entry is looked up.
+        // An entry can't be recorded twice since PushParserAtPosition rejects duplicates.
 
-        public bool Equals(ParserPosition x, ParserPosition y) => ReferenceEquals(x.Parser, y.Parser) && x.Position == y.Position;
+        var index = IndexOfActiveParser(parser, position);
 
-        public int GetHashCode(ParserPosition obj)
+        if (index < 0)
         {
-            unchecked
-            {
-                var hash = RuntimeHelpers.GetHashCode(obj.Parser);
-                return (hash * 397) ^ obj.Position;
-            }
+            return;
         }
+
+        var remaining = _activeCount - index - 1;
+
+        Array.Copy(_activePositions!, index + 1, _activePositions!, index, remaining);
+        Array.Copy(_activeParsers!, index + 1, _activeParsers!, index, remaining);
+
+        _activeCount--;
+
+        // Released so the context doesn't keep the parsers it is done with alive
+        _activeParsers![_activeCount] = null!;
     }
 }

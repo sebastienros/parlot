@@ -53,7 +53,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
 
         } while (_parser.Parse(context, ref parsed));
 
-        result.Set(start, end, results);
+        result.Set(start, end, results.AsReadOnlyList());
 
         context.ExitParser(this);
         return true;

@@ -46,7 +46,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
             results!.Add(parsed.Value);
         }
 
-        result.Set(start, end, results ?? (IReadOnlyList<T>)[]);
+        result.Set(start, end, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
 
         context.ExitParser(this);
         return true;
