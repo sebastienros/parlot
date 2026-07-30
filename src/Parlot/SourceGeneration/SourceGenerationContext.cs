@@ -6,7 +6,6 @@ namespace Parlot.SourceGeneration;
 
 /// <summary>
 /// Represents the context of a source-generation phase, coordinating all the parsers involved.
-/// This is the source-based counterpart to <see cref="Parlot.Compilation.CompilationContext"/>.
 /// </summary>
 public sealed class SourceGenerationContext
 {

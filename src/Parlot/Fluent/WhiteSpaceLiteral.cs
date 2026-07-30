@@ -1,12 +1,10 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISeekable, ISourceable
+public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
 {
     private readonly bool _includeNewLines;
 
@@ -64,32 +62,6 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISeekable
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<TextSpan>();
-
-        var start = context.DeclareOffsetVariable(result);
-
-        result.Body.Add(
-            _includeNewLines
-                ? context.SkipWhiteSpaceOrNewLine()
-                : context.SkipWhiteSpace()
-            );
-
-        var end = context.DeclareOffsetVariable(result);
-
-        result.Body.Add(
-            Expression.Block(
-                Expression.IfThen(
-                    Expression.NotEqual(start, end),
-                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                    ),
-                context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
-                )
-            );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

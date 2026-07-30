@@ -1,8 +1,6 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -13,7 +11,7 @@ namespace Parlot.Fluent;
 /// <typeparam name="A">The type of the parser before the main parser.</typeparam>
 /// <typeparam name="T">The type of the value parsed by the main parser.</typeparam>
 /// <typeparam name="B">The type of the parser after the main parser.</typeparam>
-public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourceable
+public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<A> _before;
@@ -79,48 +77,6 @@ public sealed class Between<A, T, B> : Parser<T>, ICompilable, ISeekable, ISourc
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        var start = context.DeclarePositionVariable(result);
-
-        var beforeCR = _before.Build(context);
-        var parserCR = _parser.Build(context);
-        var afterCR = _after.Build(context);
-
-        // Build the block: before -> parser -> after with resets on failure
-        var block = Expression.Block(
-            beforeCR.Variables,
-            Expression.Block(beforeCR.Body),
-            Expression.IfThen(
-                beforeCR.Success,
-                Expression.Block(
-                    parserCR.Variables,
-                    Expression.Block(parserCR.Body),
-                    Expression.IfThen(
-                        parserCR.Success,
-                        Expression.Block(
-                            afterCR.Variables,
-                            Expression.Block(afterCR.Body),
-                            Expression.IfThenElse(
-                                afterCR.Success,
-                                Expression.Block(
-                                    context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, parserCR.Value),
-                                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                                ),
-                                context.ResetPosition(start)
-                            )
-                        )
-                    )
-                )
-            )
-        );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

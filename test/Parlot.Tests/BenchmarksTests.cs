@@ -11,24 +11,6 @@ public class BenchmarksTests
     const decimal _expected2 = (decimal)-64.5;
 
     [Fact]
-    public void CreateCompiledSmallParser()
-    {
-        var benchmarks = new ParlotBenchmarks();
-        benchmarks.Setup();
-        var result = benchmarks.CreateCompiledSmallParser();
-        Assert.NotNull(result);
-    }
-
-    [Fact]
-    public void CreateCompiledExpressionParser()
-    {
-        var benchmarks = new ParlotBenchmarks();
-        benchmarks.Setup();
-        var result = benchmarks.CreateCompiledExpressionParser();
-        Assert.NotNull(result);
-    }
-
-    [Fact]
     public void CursorMatchHello()
     {
         var benchmarks = new ParlotBenchmarks();
@@ -110,15 +92,6 @@ public class BenchmarksTests
     }
 
     [Fact]
-    public void ExpressionCompiledSmall()
-    {
-        var benchmarks = new ExprBench();
-        var result = benchmarks.ParlotCompiledSmall();
-        Assert.NotNull(result);
-        Assert.Equal(_expected1, result.Evaluate());
-    }
-
-    [Fact]
     public void ExpressionFluentSmall()
     {
         var benchmarks = new ExprBench();
@@ -132,15 +105,6 @@ public class BenchmarksTests
     {
         var benchmarks = new ExprBench();
         var result = benchmarks.ParlotRawBig();
-        Assert.NotNull(result);
-        Assert.Equal(_expected2, result.Evaluate());
-    }
-
-    [Fact]
-    public void ExpressionCompiledBig()
-    {
-        var benchmarks = new ExprBench();
-        var result = benchmarks.ParlotCompiledBig();
         Assert.NotNull(result);
         Assert.Equal(_expected2, result.Evaluate());
     }
@@ -164,29 +128,11 @@ public class BenchmarksTests
     }
 
     [Fact]
-    public void BigJsonCompiled()
-    {
-        var benchmarks = new JsonBench();
-        benchmarks.Setup();
-        var result = benchmarks.BigJson_ParlotCompiled();
-        Assert.NotNull(result);
-    }
-
-    [Fact]
     public void DeepJson()
     {
         var benchmarks = new JsonBench();
         benchmarks.Setup();
         var result = benchmarks.DeepJson_Parlot();
-        Assert.NotNull(result);
-    }
-
-    [Fact]
-    public void DeepJsonCompiled()
-    {
-        var benchmarks = new JsonBench();
-        benchmarks.Setup();
-        var result = benchmarks.DeepJson_ParlotCompiled();
         Assert.NotNull(result);
     }
 
@@ -200,37 +146,11 @@ public class BenchmarksTests
     }
 
     [Fact]
-    public void LongJsonCompiled()
-    {
-        var benchmarks = new JsonBench();
-        benchmarks.Setup();
-        var result = benchmarks.LongJson_ParlotCompiled();
-        Assert.NotNull(result);
-    }
-
-    [Fact]
     public void WideJson()
     {
         var benchmarks = new JsonBench();
         benchmarks.Setup();
         benchmarks.WideJson_Parlot();
-    }
-
-    [Fact]
-    public void WideJsonCompiled()
-    {
-        var benchmarks = new JsonBench();
-        benchmarks.Setup();
-        var result = benchmarks.WideJson_ParlotCompiled();
-        Assert.NotNull(result);
-    }
-
-    [Fact]
-    public void ParlotEmailCompiled()
-    {
-        var benchmarks = new RegexBenchmarks();
-        var result = benchmarks.ParlotEmailCompiled();
-        Assert.Equal(RegexBenchmarks.Email, result);
     }
 
     [Fact]
@@ -249,12 +169,5 @@ public class BenchmarksTests
         var result = benchmarks.LookupMatchFluent();
     }
 
-    [Fact]
-    public void ParlotLookupCompiled()
-    {
-        var benchmarks = new SwitchExpressionBenchmarks() { Length = 2 };
-        benchmarks.Setup();
-        var result = benchmarks.LookupMatchCompiled();
-    }
 }
 #endif

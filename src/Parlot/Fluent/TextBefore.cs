@@ -1,4 +1,3 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
@@ -9,12 +8,11 @@ using System.Buffers;
 #if NETCOREAPP
 using System.Linq;
 #endif
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
+public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 {
     private static readonly MethodInfo _jumpToNextExpectedCharMethod = typeof(TextBefore<T>).GetMethod(nameof(JumpToNextExpectedChar), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -162,129 +160,6 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable, ISourceable
     }
 #endif
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<TextSpan>();
-
-        //  var start = context.Scanner.Cursor.Position;
-        //
-        //  [if _canJumpToNextExpectedChar]
-        //      JumpToNextExpectedChar(context, expectedChars);
-        //
-        //  while (true)
-        //  {
-        //      var previous = context.Scanner.Cursor.Position;
-        //  
-        //      if (context.Scanner.Cursor.Eof)
-        //      {
-        //          [if _failOnEof]
-        //          {
-        //              context.Scanner.Cursor.ResetPosition(start);
-        //              return false;
-        //          }
-        //          [else]
-        //          {
-        //              var length = previous - start;
-        //  
-        //              [if !_canBeEmpty]
-        //              if (length == 0)
-        //              {
-        //                  break;
-        //              }
-        //  
-        //              success = true;
-        //              value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
-        //              break;
-        //          }
-        //      }
-        //  
-        //      delimiter instructions
-        //  
-        //      if (delimiter.success)
-        //      {
-        //          var length = previous - start;
-        //  
-        //          [if !_consumeDelimiter]
-        //          {
-        //              context.Scanner.Cursor.ResetPosition(previous);
-        //          }
-        //  
-        //          [if !_canBeEmpty]
-        //          if (length == 0)
-        //          {
-        //              break;
-        //          }
-        //  
-        //          success = true;
-        //          value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
-        //          break;
-        //      }
-        //  
-        //      context.Scanner.Cursor.Advance();
-        //  }
-
-        var delimiterCompiledResult = _delimiter.Build(context);
-
-        var breakLabel = Expression.Label($"break_{context.NextNumber}");
-        var previous = Expression.Parameter(typeof(TextPosition), $"previous_{context.NextNumber}");
-        var length = Expression.Parameter(typeof(int), $"length_{context.NextNumber}");
-        var start = context.DeclarePositionVariable(result);
-
-#if NET8_0_OR_GREATER
-        var expectedCharsExpression = Expression.Constant(_expectedSearchValues);
-#else
-        var expectedCharsExpression = Expression.Constant(_expectedChars);
-#endif
-        var block = Expression.Block(
-            delimiterCompiledResult.Variables.Append(previous).Append(length),
-            _canJumpToNextExpectedChar ? Expression.Call(null, _jumpToNextExpectedCharMethod, context.ParseContext, expectedCharsExpression) : Expression.Empty(),
-            Expression.Loop(
-                Expression.Block(
-                    Expression.Assign(previous, context.Position()),
-                    Expression.IfThen(
-                        context.Eof(),
-                        _failOnEof
-                        ? Expression.Block(
-                            context.ResetPosition(start),
-                            Expression.Break(breakLabel)
-                            )
-                        : Expression.Block(
-                            Expression.Assign(length, Expression.Subtract(context.Offset(previous), context.Offset(start))),
-                            _canBeEmpty
-                            ? Expression.Empty()
-                            : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
-                            Expression.Assign(result.Success, Expression.Constant(true)),
-                            context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
-                            Expression.Break(breakLabel)
-                            )
-                        ),
-
-                    Expression.Block(delimiterCompiledResult.Body),
-
-                    Expression.IfThen(
-                        delimiterCompiledResult.Success,
-                        Expression.Block(
-                            Expression.Assign(length, Expression.Subtract(context.Offset(previous), context.Offset(start))),
-                            _consumeDelimiter
-                            ? Expression.Empty()
-                            : context.ResetPosition(previous),
-                            _canBeEmpty
-                            ? Expression.Empty()
-                            : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
-                            Expression.Assign(result.Success, Expression.Constant(true)),
-                            context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
-                            Expression.Break(breakLabel)
-                            )
-                        ),
-                    context.Advance()
-                    ),
-                breakLabel)
-            );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

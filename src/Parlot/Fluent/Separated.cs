@@ -1,14 +1,12 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISeekable, ISourceable
+public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISourceable
 {
     private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
 
@@ -91,103 +89,6 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<IReadOnlyList<T>>(false, ExpressionHelper.ArrayEmpty<T>());
-        var first = result.DeclareVariable<bool>($"first{context.NextNumber}", Expression.Constant(true));
-        var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}");
-
-        var end = context.DeclarePositionVariable(result);
-
-        // success = false;
-        //
-        // IReadonlyList<T> value = Array.Empty<T>();
-        // List<T> results = null;
-        //
-        // while (true)
-        // {
-        //   parse1 instructions
-        // 
-        //   if (parser1.Success)
-        //   {
-        //      success = true;
-        //      if (first)
-        //      {
-        //          results = new List<T>();
-        //          first = false;
-        //          value = results;
-        //      }
-        //      results.Add(parse1.Value);
-        //      end = currenPosition;
-        //   }
-        //   else
-        //   {
-        //      break;
-        //   }
-        //   
-        //   parseSeparatorExpression with conditional break
-        //
-        //   if (context.Scanner.Cursor.Eof)
-        //   {
-        //      break;
-        //   }
-        // }
-        // 
-        // resetPosition(end);
-        // 
-
-        var parserCompileResult = _parser.Build(context);
-        var breakLabel = Expression.Label($"break{context.NextNumber}");
-
-        var separatorCompileResult = _separator.Build(context);
-
-        var block = Expression.Block(
-            parserCompileResult.Variables,
-            Expression.Loop(
-                Expression.Block(
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        Expression.Block(
-                            context.DiscardResult
-                            ? Expression.Empty()
-                            : Expression.Block(
-                                Expression.IfThen(
-                                    Expression.IsTrue(first),
-                                    Expression.Block(
-                                        Expression.Assign(first, Expression.Constant(false)),
-                                        Expression.Assign(results, ExpressionHelper.New<List<T>>()),
-                                        Expression.Assign(result.Value, results)
-                                        )
-                                    ),
-                                Expression.Call(results, _listAddMethodInfo, parserCompileResult.Value)
-                                ),
-                            Expression.Assign(result.Success, Expression.Constant(true)),
-                            Expression.Assign(end, context.Position())
-                            ),
-                        Expression.Break(breakLabel)
-                        ),
-                    Expression.Block(
-                        separatorCompileResult.Variables,
-                        Expression.Block(separatorCompileResult.Body),
-                        Expression.IfThen(
-                            Expression.Not(separatorCompileResult.Success),
-                            Expression.Break(breakLabel)
-                            )
-                        ),
-                    Expression.IfThen(
-                        context.Eof(),
-                        Expression.Break(breakLabel)
-                        )
-                    ),
-                breakLabel),
-            context.ResetPosition(end)
-            );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

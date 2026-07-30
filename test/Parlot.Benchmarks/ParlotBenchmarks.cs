@@ -26,18 +26,6 @@ public class ParlotBenchmarks
         _jsonBench.Setup();
     }
 
-    [Benchmark, BenchmarkCategory("Compilation")]
-    public Parser<char> CreateCompiledSmallParser()
-    {
-        return Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d')).Compile();
-    }
-
-    [Benchmark, BenchmarkCategory("Compilation")]
-    public Parser<Expression> CreateCompiledExpressionParser()
-    {
-        return FluentParser.Expression.Compile();
-    }
-
     [Benchmark, BenchmarkCategory("Cursor.Match(string)")]
     public string CursorMatchHello()
     {
@@ -99,12 +87,6 @@ public class ParlotBenchmarks
     }
 
     [Benchmark, BenchmarkCategory("Expressions - Small")]
-    public Expression ExpressionCompiledSmall()
-    {
-        return _exprBench.ParlotCompiledSmall();
-    }
-
-    [Benchmark, BenchmarkCategory("Expressions - Small")]
     public Expression ExpressionFluentSmall()
     {
         return _exprBench.ParlotFluentSmall();
@@ -120,12 +102,6 @@ public class ParlotBenchmarks
     public Expression ExpressionRawBig()
     {
         return _exprBench.ParlotRawBig();
-    }
-
-    [Benchmark, BenchmarkCategory("Expressions - Big")]
-    public Expression ExpressionCompiledBig()
-    {
-        return _exprBench.ParlotCompiledBig();
     }
 
     [Benchmark, BenchmarkCategory("Expressions - Big")]
@@ -147,12 +123,6 @@ public class ParlotBenchmarks
     }
 
     [Benchmark, BenchmarkCategory("Json - Big")]
-    public IJson BigJsonCompiled()
-    {
-        return _jsonBench.BigJson_ParlotCompiled();
-    }
-
-    [Benchmark, BenchmarkCategory("Json - Big")]
     public IJson BigJsonGenerated()
     {
         return _jsonBench.BigJson_ParlotGenerated();
@@ -162,12 +132,6 @@ public class ParlotBenchmarks
     public IJson DeepJson()
     {
         return _jsonBench.DeepJson_Parlot();
-    }
-
-    [Benchmark, BenchmarkCategory("Json - Deep")]
-    public IJson DeepJsonCompiled()
-    {
-        return _jsonBench.DeepJson_ParlotCompiled();
     }
 
     [Benchmark, BenchmarkCategory("Json - Deep")]
@@ -183,12 +147,6 @@ public class ParlotBenchmarks
     }
 
     [Benchmark, BenchmarkCategory("Json - Long")]
-    public IJson LongJsonCompiled()
-    {
-        return _jsonBench.LongJson_ParlotCompiled();
-    }
-
-    [Benchmark, BenchmarkCategory("Json - Long")]
     public IJson LongJsonGenerated()
     {
         return _jsonBench.LongJson_ParlotGenerated();
@@ -198,12 +156,6 @@ public class ParlotBenchmarks
     public IJson WideJson()
     {
         return _jsonBench.WideJson_Parlot();
-    }
-
-    [Benchmark, BenchmarkCategory("Json - Wide")]
-    public IJson WideJsonCompiled()
-    {
-        return _jsonBench.WideJson_ParlotCompiled();
     }
 
     [Benchmark, BenchmarkCategory("Json - Wide")]

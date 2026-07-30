@@ -1,4 +1,3 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
@@ -6,7 +5,6 @@ using System.Collections.Generic;
 #if NET
 using System.Linq;
 #endif
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -14,7 +12,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser does NOT match at the current position without consuming input (negative lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable, ISourceable
+public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<object> _lookahead;
@@ -76,23 +74,6 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ICompilable, ISeekable, IS
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var mainParserCompileResult = _parser.Build(context, requireResult: true);
-
-        // For now, don't attempt to compile the lookahead check. Just compile the main parser.
-        // Compilation support for lookahead can be added later if needed.
-        // This ensures the parser still benefits from compilation of the main parser.
-
-        var parserResult = context.CreateCompilationResult<T>();
-
-        // Just add the compiled main parser
-        parserResult.Variables.AddRange(mainParserCompileResult.Variables);
-
-        parserResult.Body.AddRange(mainParserCompileResult.Body);
-
-        return parserResult;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

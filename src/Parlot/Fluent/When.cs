@@ -1,11 +1,9 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 #if NET
 using System.Linq;
 #endif
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -13,7 +11,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser is valid based on a condition, and backtracks if not.
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class When<T> : Parser<T>, ICompilable, ISeekable, ISourceable
+public sealed class When<T> : Parser<T>, ISeekable, ISourceable
 {
     private readonly Func<ParseContext, T, bool> _action;
     private readonly Parser<T> _parser;
@@ -66,55 +64,6 @@ public sealed class When<T> : Parser<T>, ICompilable, ISeekable, ISourceable
         return valid;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        var parserCompileResult = _parser.Build(context, requireResult: true);
-
-        // success = false;
-        // value = default;
-        // start = context.Scanner.Cursor.Position;
-        // parser instructions
-        // 
-        // if (parser.Success && _action(value))
-        // {
-        //   success = true;
-        //   value = parser.Value;
-        // }
-        // else
-        // {
-        //    context.Scanner.Cursor.ResetPosition(start);
-        // }
-        //
-
-        var start = context.DeclarePositionVariable(result);
-
-        var block = Expression.Block(
-                parserCompileResult.Variables,
-                parserCompileResult.Body
-                .Append(
-                    Expression.IfThenElse(
-                        Expression.AndAlso(
-                            parserCompileResult.Success,
-                            Expression.Invoke(Expression.Constant(_action), [context.ParseContext, parserCompileResult.Value])
-                            ),
-                        Expression.Block(
-                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                            context.DiscardResult
-                                ? Expression.Empty()
-                                : Expression.Assign(result.Value, parserCompileResult.Value)
-                            ),
-                        context.ResetPosition(start)
-                        )
-                    )
-                );
-
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

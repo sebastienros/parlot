@@ -1,11 +1,9 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISourceable
+public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
 {
     private readonly bool _includeNewLines;
 
@@ -50,55 +48,6 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ICompilable, ISourc
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<TextSpan>();
-
-        // if (!context.Scanner.Cursor.Eof)
-        // {
-        //     var start = context.Scanner.Cursor.Offset;
-        //     
-        //     [if (_includeNewLines)]
-        //         context.Scanner.ReadNonWhiteSpaceOrNewLine();
-        //     [else]
-        //         context.Scanner.ReadNonWhiteSpace();
-        //     
-        //     var end = context.Scanner.Cursor.Offset;
-        //     
-        //     if (start != end)
-        //     {
-        //         value = new TextSpan(context.Scanner.Buffer, start, end - start);
-        //         success = true;
-        //     }
-        // }
-
-        var start = Expression.Parameter(typeof(int));
-        var end = Expression.Parameter(typeof(int));
-
-        result.Body.Add(
-            Expression.IfThen(
-                Expression.Not(context.Eof()),
-                Expression.Block(
-                    [start, end],
-                    Expression.Assign(start, context.Offset()),
-                    _includeNewLines
-                        ? context.ReadNonWhiteSpaceOrNewLine()
-                        : context.ReadNonWhiteSpace(),
-                    Expression.Assign(end, context.Offset()),
-                    Expression.IfThen(
-                        Expression.NotEqual(start, end),
-                        Expression.Block(
-                            Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                            context.DiscardResult
-                                ? Expression.Empty()
-                                : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start))
-                            )
-                        )
-                )))
-        );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

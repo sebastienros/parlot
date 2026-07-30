@@ -1,15 +1,13 @@
 using Parlot;
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Globalization;
 using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourceable
+public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
@@ -108,45 +106,6 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable, ISourc
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<string>();
-
-        var start = context.DeclareOffsetVariable(result);
-        var resultSpan = Expression.Variable(typeof(ReadOnlySpan<char>), $"result{context.NextNumber}");
-        result.Variables.Add(resultSpan);
-
-        var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText),
-            [typeof(ReadOnlySpan<char>), typeof(StringComparison), typeof(ReadOnlySpan<char>).MakeByRefType()])!;
-
-        var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
-            or StringComparison.CurrentCultureIgnoreCase
-            or StringComparison.InvariantCultureIgnoreCase;
-
-        var ifReadText = Expression.IfThen(
-            Expression.Call(
-                Expression.Field(context.ParseContext, "Scanner"),
-                readTextMethod,
-                Expression.Call(ExpressionHelper.MemoryExtensions_AsSpan, Expression.Constant(Text)),
-                Expression.Constant(_comparisonType, typeof(StringComparison)),
-                resultSpan
-            ),
-            Expression.Block(
-                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                context.DiscardResult
-                ? Expression.Empty()
-                : Expression.Assign(
-                    result.Value,
-                    ignoreCase && !_returnMatchedText
-                        ? Expression.Constant(Text)
-                        : Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
-            )
-        );
-
-        result.Body.Add(ifReadText);
-
-        return result;
-    }
 
     
     public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)

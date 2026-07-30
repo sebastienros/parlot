@@ -925,7 +925,7 @@ Result:
 "Parsed 'hello' at offset 0, length 5"
 ```
 
-> **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects. For `Literals` parsers, these offsets correspond exactly to where the parser matched. For `Terms` parsers (which skip whitespace), the behavior differs slightly between compiled and non-compiled modes due to how whitespace skipping is handled in the compilation process.
+> **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects.
 
 ### Else
 

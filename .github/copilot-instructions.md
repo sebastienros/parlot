@@ -63,7 +63,7 @@ dotnet test
 - Parlot prioritizes performance - always consider allocation patterns
 - Use `TextSpan` and `ReadOnlySpan<char>` where possible
 - Avoid unnecessary string allocations
-- Consider compilation for frequently used parsers
+- Consider source generation for frequently used parsers
 
 ### Testing Strategy
 - Write comprehensive unit tests for new parser combinators
@@ -144,7 +144,7 @@ var optionalParser = Terms.Integer().Optional().Then(x => x.HasValue ? x.Value :
 - `Scanner.cs` - Low-level text scanning
 - `Cursor.cs` - Position tracking
 - `Fluent/` - High-level fluent API
-- `Compilation/` - Parser compilation for performance
+- `SourceGeneration/` - Parser source-generation support
 
 ### Tests Structure
 - Mirror the source structure in test files

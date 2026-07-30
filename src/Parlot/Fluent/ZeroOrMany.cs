@@ -1,13 +1,11 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISourceable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
 {
     private static readonly MethodInfo _listAdd = typeof(List<T>).GetMethod("Add")!;
 
@@ -53,81 +51,6 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISour
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<IReadOnlyList<T>>(true, ExpressionHelper.ArrayEmpty<T>());
-
-        var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}");
-        var first = result.DeclareVariable<bool>($"first{context.NextNumber}", Expression.Constant(true));
-
-        // success = true;
-        //
-        // IReadonlyList<T> value = Array.Empty<T>();
-        // List<T> results = null;
-        //
-        // while (true)
-        // {
-        //
-        //   parse1 instructions
-        // 
-        //   if (parser1.Success)
-        //   {
-        //      if (results == null)
-        //      {
-        //          results = new List<T>();
-        //          value = results;
-        //      }
-        //
-        //      results.Add(parse1.Value);
-        //   }
-        //   else
-        //   {
-        //      break;
-        //   }
-        //
-        //   if (context.Scanner.Cursor.Eof)
-        //   {
-        //      break;
-        //   }
-        // }
-
-        var parserCompileResult = _parser.Build(context);
-
-        var breakLabel = Expression.Label($"break{context.NextNumber}");
-
-        var block =
-            Expression.Loop(
-                Expression.Block(
-                    parserCompileResult.Variables,
-                    Expression.Block(parserCompileResult.Body),
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        context.DiscardResult
-                        ? Expression.Empty()
-                        : Expression.Block(
-                            Expression.IfThen(
-                                Expression.IsTrue(first),
-                                Expression.Block(
-                                    Expression.Assign(first, Expression.Constant(false)),
-                                    Expression.Assign(results, ExpressionHelper.New<List<T>>()),
-                                    Expression.Assign(result.Value, results)
-                                    )
-                                ),
-                            Expression.Call(results, _listAdd, parserCompileResult.Value)
-                            ),
-                        Expression.Break(breakLabel)
-                        ),
-                    Expression.IfThen(
-                        context.Eof(),
-                        Expression.Break(breakLabel)
-                        )),
-                breakLabel
-                );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public override string ToString() => $"{_parser}*";
 

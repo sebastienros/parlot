@@ -1,9 +1,7 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -13,7 +11,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISourceable
+public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T, T> Factory)[] _operators;
@@ -86,140 +84,6 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        // Create variables for the loop
-        var nextNum = context.NextNumber;
-        var currentValue = result.DeclareVariable<T>($"leftAssocValue{nextNum}");
-        var matchedFactory = result.DeclareVariable<Func<T, T, T>>($"matchedFactory{nextNum}");
-        var operatorPosition = result.DeclareVariable<TextPosition>($"leftAssocPos{nextNum}");
-
-        var breakLabel = Expression.Label($"leftAssocBreak{nextNum}");
-
-        // Compile the base parser for the first operand
-        var firstParserResult = _parser.Build(context);
-
-        // Compile the base parser for the right operand in the loop
-        var rightParserResult = _parser.Build(context);
-
-        // Build operator matching expressions - each operator sets matchedFactory if it matches
-        var operatorChecks = new List<Expression>();
-        var allOperatorVariables = new List<ParameterExpression>();
-
-        for (int i = 0; i < _operators.Length; i++)
-        {
-            var (op, factory) = _operators[i];
-            var opCompileResult = op.Build(context);
-
-            allOperatorVariables.AddRange(opCompileResult.Variables);
-
-            var factoryConst = Expression.Constant(factory);
-
-            // Reset success if not already matched (for subsequent operators)
-            var checkBlock = new List<Expression>();
-            
-            // Only try this operator if we haven't matched yet
-            if (i > 0)
-            {
-                checkBlock.Add(
-                    Expression.IfThen(
-                        Expression.Equal(matchedFactory, Expression.Constant(null, typeof(Func<T, T, T>))),
-                        Expression.Block(
-                            opCompileResult.Body.Concat([
-                                Expression.IfThen(
-                                    opCompileResult.Success,
-                                    Expression.Assign(matchedFactory, factoryConst)
-                                )
-                            ])
-                        )
-                    )
-                );
-            }
-            else
-            {
-                // First operator - always try it
-                checkBlock.AddRange(opCompileResult.Body);
-                checkBlock.Add(
-                    Expression.IfThen(
-                        opCompileResult.Success,
-                        Expression.Assign(matchedFactory, factoryConst)
-                    )
-                );
-            }
-
-            operatorChecks.AddRange(checkBlock);
-        }
-
-        var scanner = Expression.Field(context.ParseContext, nameof(ParseContext.Scanner));
-        var cursor = Expression.Field(scanner, nameof(Scanner.Cursor));
-        var cursorPosition = Expression.Property(cursor, nameof(Cursor.Position));
-        var resetPosition = typeof(Cursor).GetMethod(nameof(Cursor.ResetPosition), [typeof(TextPosition).MakeByRefType()])!;
-
-        // Build the loop body with its own variable scope
-        var loopBody = Expression.Block(
-            // Include operator variables and right parser variables in the loop scope
-            allOperatorVariables.Concat(rightParserResult.Variables),
-            new Expression[] {
-                // Reset matchedFactory
-                Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<T, T, T>))),
-                // Capture cursor position before attempting to match an operator
-                Expression.Assign(operatorPosition, cursorPosition)
-            }
-            .Concat(operatorChecks)
-            .Concat([
-                // If no operator matched, break
-                Expression.IfThen(
-                    Expression.Equal(matchedFactory, Expression.Constant(null, typeof(Func<T, T, T>))),
-                    Expression.Break(breakLabel)
-                )
-            ])
-            .Concat(rightParserResult.Body)
-            .Concat([
-                // If right operand failed, break
-                Expression.IfThen(
-                    Expression.Not(rightParserResult.Success),
-                    Expression.Block(
-                        Expression.Call(cursor, resetPosition, operatorPosition),
-                        Expression.Break(breakLabel)
-                    )
-                ),
-
-                // Apply operator: currentValue = matchedFactory(currentValue, rightValue)
-                Expression.Assign(currentValue,
-                    Expression.Invoke(matchedFactory, currentValue, rightParserResult.Value))
-            ])
-        );
-
-        var loopExpr = Expression.Loop(loopBody, breakLabel);
-
-        // Build the full expression
-        result.Body.Add(
-            Expression.Block(
-                firstParserResult.Variables,
-                new Expression[] { Expression.Block(firstParserResult.Body) }.Concat([
-                    Expression.IfThenElse(
-                        firstParserResult.Success,
-                        Expression.Block(
-                            // Store first value
-                            Expression.Assign(currentValue, firstParserResult.Value),
-
-                            // Loop for additional operands
-                            loopExpr,
-
-                            // Success
-                            Expression.Assign(result.Success, Expression.Constant(true)),
-                            Expression.Assign(result.Value, currentValue)
-                        ),
-                        Expression.Assign(result.Success, Expression.Constant(false))
-                    )
-                ])
-            )
-        );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -352,7 +216,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable, ISource
 }
 
 
-public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ICompilable, ISourceable
+public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T, T> Factory)[] _operators;
@@ -418,115 +282,6 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ICompilab
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        var nextNum = context.NextNumber;
-        var currentValue = result.DeclareVariable<T>($"leftAssocCtxValue{nextNum}");
-        var matchedFactory = result.DeclareVariable<Func<ParseContext, T, T, T>>($"matchedFactoryCtx{nextNum}");
-        var operatorPosition = result.DeclareVariable<TextPosition>($"leftAssocCtxPos{nextNum}");
-
-        var breakLabel = Expression.Label($"leftAssocCtxBreak{nextNum}");
-
-        var firstParserResult = _parser.Build(context);
-        var rightParserResult = _parser.Build(context);
-
-        var operatorChecks = new List<Expression>();
-        var allOperatorVariables = new List<ParameterExpression>();
-
-        for (int i = 0; i < _operators.Length; i++)
-        {
-            var (op, factory) = _operators[i];
-            var opCompileResult = op.Build(context);
-
-            allOperatorVariables.AddRange(opCompileResult.Variables);
-
-            var factoryConst = Expression.Constant(factory);
-
-            if (i > 0)
-            {
-                operatorChecks.Add(
-                    Expression.IfThen(
-                        Expression.Equal(matchedFactory, Expression.Constant(null, typeof(Func<ParseContext, T, T, T>))),
-                        Expression.Block(
-                            opCompileResult.Body.Concat([
-                                Expression.IfThen(
-                                    opCompileResult.Success,
-                                    Expression.Assign(matchedFactory, factoryConst)
-                                )
-                            ])
-                        )
-                    )
-                );
-            }
-            else
-            {
-                operatorChecks.AddRange(opCompileResult.Body);
-                operatorChecks.Add(
-                    Expression.IfThen(
-                        opCompileResult.Success,
-                        Expression.Assign(matchedFactory, factoryConst)
-                    )
-                );
-            }
-        }
-
-        var scanner = Expression.Field(context.ParseContext, nameof(ParseContext.Scanner));
-        var cursor = Expression.Field(scanner, nameof(Scanner.Cursor));
-        var cursorPosition = Expression.Property(cursor, nameof(Cursor.Position));
-        var resetPosition = typeof(Cursor).GetMethod(nameof(Cursor.ResetPosition), [typeof(TextPosition).MakeByRefType()])!;
-
-        var loopBody = Expression.Block(
-            allOperatorVariables.Concat(rightParserResult.Variables),
-            new Expression[]
-            {
-                Expression.Assign(matchedFactory, Expression.Constant(null, typeof(Func<ParseContext, T, T, T>))),
-                Expression.Assign(operatorPosition, cursorPosition)
-            }
-            .Concat(operatorChecks)
-            .Concat([
-                Expression.IfThen(
-                    Expression.Equal(matchedFactory, Expression.Constant(null, typeof(Func<ParseContext, T, T, T>))),
-                    Expression.Break(breakLabel)
-                )
-            ])
-            .Concat(rightParserResult.Body)
-            .Concat([
-                Expression.IfThen(
-                    Expression.Not(rightParserResult.Success),
-                    Expression.Block(
-                        Expression.Call(cursor, resetPosition, operatorPosition),
-                        Expression.Break(breakLabel)
-                    )
-                ),
-                Expression.Assign(currentValue,
-                    Expression.Invoke(matchedFactory, context.ParseContext, currentValue, rightParserResult.Value))
-            ])
-        );
-
-        var loopExpr = Expression.Loop(loopBody, breakLabel);
-
-        result.Body.Add(
-            Expression.Block(
-                firstParserResult.Variables,
-                new Expression[] { Expression.Block(firstParserResult.Body) }.Concat([
-                    Expression.IfThenElse(
-                        firstParserResult.Success,
-                        Expression.Block(
-                            Expression.Assign(currentValue, firstParserResult.Value),
-                            loopExpr,
-                            Expression.Assign(result.Success, Expression.Constant(true)),
-                            context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, currentValue)
-                        ),
-                        Expression.Assign(result.Success, Expression.Constant(false))
-                    )
-                ])
-            )
-        );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

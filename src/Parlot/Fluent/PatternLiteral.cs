@@ -1,11 +1,9 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class PatternLiteral : Parser<TextSpan>, ICompilable, ISourceable
+public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 {
     private readonly Func<char, bool> _predicate;
     private readonly int _minSize;
@@ -58,105 +56,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<TextSpan>();
-
-        // var start = context.Scanner.Cursor.Position;
-
-        var start = Expression.Variable(typeof(TextPosition), $"start{context.NextNumber}");
-        result.Variables.Add(start);
-
-        result.Body.Add(Expression.Assign(start, context.Position()));
-
-        // var size = 0;
-
-        var size = Expression.Variable(typeof(int), $"size{context.NextNumber}");
-        result.Variables.Add(size);
-        result.Body.Add(Expression.Assign(size, Expression.Constant(0, typeof(int))));
-
-        // while (true)
-        // {
-        //     if (context.Scanner.Cursor.Eof)
-        //     {
-        //        break;
-        //     }
-        //
-        //     if (!_predicate(context.Scanner.Cursor.Current))
-        //     {
-        //        break;
-        //     }
-        //
-        //     context.Scanner.Cursor.Advance();
-        // 
-        //     size++;
-        //
-        //     #if _maxSize > 0 ?
-        //     if (size == _maxSize)
-        //     {
-        //        break;
-        //     }
-        //     #endif
-        // }
-
-        var breakLabel = Expression.Label($"break{context.NextNumber}");
-
-        result.Body.Add(
-            Expression.Loop(
-                Expression.Block(
-                    Expression.IfThen(
-                        context.Eof(),
-                        Expression.Break(breakLabel)
-                    ),
-                    Expression.IfThen(
-                        Expression.Not(Expression.Invoke(Expression.Constant(_predicate), context.Current())),
-                        Expression.Break(breakLabel)
-                    ),
-                    context.Advance(),
-                    Expression.Assign(size, Expression.Add(size, Expression.Constant(1))),
-                    _maxSize == 0
-                    ? Expression.Empty()
-                    : Expression.IfThen(
-                        Expression.Equal(size, Expression.Constant(_maxSize)),
-                        Expression.Break(breakLabel)
-                        )
-                ),
-                breakLabel)
-            );
-
-
-        // if (size < _minSize)
-        // {
-        //     context.Scanner.Cursor.ResetPosition(startPosition);
-        // }
-        // else
-        // {
-        //     value = new TextSpan(context.Scanner.Buffer, start, end - start);
-        //     success = true;
-        // }
-
-        var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
-
-        result.Body.Add(
-            Expression.IfThenElse(
-                Expression.LessThan(size, Expression.Constant(_minSize)),
-                context.ResetPosition(start),
-                Expression.Block(
-                    context.DiscardResult
-                    ? Expression.Empty()
-                    : Expression.Assign(result.Value,
-                        context.NewTextSpan(
-                            context.Buffer(),
-                            startOffset,
-                            Expression.Subtract(context.Offset(), startOffset)
-                            )),
-                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                    )
-                )
-            );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

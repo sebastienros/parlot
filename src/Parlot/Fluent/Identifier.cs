@@ -1,12 +1,10 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class Identifier : Parser<TextSpan>, ICompilable, ISourceable
+public sealed class Identifier : Parser<TextSpan>, ISourceable
 {
     private static readonly MethodInfo _isIdentifierStartMethodInfo = typeof(Character).GetMethod(nameof(Character.IsIdentifierStart))!;
     private static readonly MethodInfo _isIdentifierPartMethodInfo = typeof(Character).GetMethod(nameof(Character.IsIdentifierPart))!;
@@ -53,79 +51,6 @@ public sealed class Identifier : Parser<TextSpan>, ICompilable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<TextSpan>();
-
-        // var first = context.Scanner.Cursor.Current;
-
-        var first = Expression.Parameter(typeof(char), $"first{context.NextNumber}");
-        result.Body.Add(Expression.Assign(first, context.Current()));
-        result.Variables.Add(first);
-
-        //
-        // success = false;
-        // TextSpan value;
-        // 
-        // if (Character.IsIdentifierStart(first) [_extraStart != null] || _extraStart(first))
-        // {
-        //    var start = context.Scanner.Cursor.Offset;
-        //
-        //    context.Scanner.Cursor.Advance();
-        //    
-        //    while (!context.Scanner.Cursor.Eof && (Character.IsIdentifierPart(context.Scanner.Cursor.Current) || (_extraPart != null && _extraPart(context.Scanner.Cursor.Current))))
-        //    {
-        //        context.Scanner.Cursor.Advance();
-        //    }
-        //    
-        //    value = new TextSpan(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset - start);
-        //    success = true;
-        // }
-
-        var start = Expression.Parameter(typeof(int), $"start{context.NextNumber}");
-
-        var breakLabel = Expression.Label($"break_{context.NextNumber}");
-
-        var block = Expression.Block(
-            Expression.IfThen(
-                Expression.OrElse(
-                    Expression.Call(_isIdentifierStartMethodInfo, first),
-                    _extraStart != null
-                        ? Expression.Invoke(Expression.Constant(_extraStart), first)
-                        : Expression.Constant(false, typeof(bool))
-                        ),
-                Expression.Block(
-                    [start],
-                    Expression.Assign(start, context.Offset()),
-                    context.AdvanceNoNewLine(Expression.Constant(1)),
-                    Expression.Loop(
-                        Expression.IfThenElse(
-                            /* if */ Expression.AndAlso(
-                                Expression.Not(context.Eof()),
-                                    Expression.OrElse(
-                                        Expression.Call(_isIdentifierPartMethodInfo, context.Current()),
-                                        _extraPart != null
-                                            ? Expression.Invoke(Expression.Constant(_extraPart), context.Current())
-                                            : Expression.Constant(false, typeof(bool))
-                                        )
-                                ),
-                            /* then */ context.AdvanceNoNewLine(Expression.Constant(1)),
-                            /* else */ Expression.Break(breakLabel)
-                            ),
-                        breakLabel
-                        ),
-                    context.DiscardResult
-                        ? Expression.Empty()
-                        : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(context.Offset(), start))),
-                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                )
-            )
-        );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

@@ -113,7 +113,7 @@ public static partial class Parsers
 
     /// <summary>
     /// Builds a parser that captures the output of another parser.
-    /// This is used to provide pattern matching capabilities, and optimized compiled parsers that then don't need to materialize each parser result.
+    /// This is used to provide pattern matching capabilities and lets source-generated parsers avoid materializing each parser result.
     /// </summary>
     public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 
