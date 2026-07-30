@@ -1,15 +1,13 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 #if NET
 using System.Linq;
 #endif
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
+public sealed class ElseError<T> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -34,48 +32,6 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>(true);
-
-        // parse1 instructions
-        // success = true
-        // 
-        // if (parser1.Success)
-        // {
-        //   value = parser1.Value
-        // }
-        // else
-        // {
-        //    throw new ParseException(_message, context.Scanner.Cursor.Position);
-        // }
-        //
-
-        var parserCompileResult = _parser.Build(context, requireResult: true);
-
-        var block = Expression.Block(
-            parserCompileResult.Variables,
-            parserCompileResult.Body
-            .Append(
-                context.DiscardResult
-                        ? Expression.Empty()
-                        : Expression.Assign(result.Value, parserCompileResult.Value))
-                .Append(
-                    Expression.IfThenElse(
-                        parserCompileResult.Success,
-                        context.DiscardResult
-                            ? Expression.Empty()
-                            : Expression.Assign(result.Value, parserCompileResult.Value),
-                        context.ThrowParseException(Expression.Constant(_message))
-
-
-                ))
-        );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -126,7 +82,7 @@ public sealed class ElseError<T> : Parser<T>, ICompilable, ISourceable
     public override string ToString() => $"{_parser} (ElseError)";
 }
 
-public sealed class Error<T> : Parser<T>, ICompilable, ISourceable
+public sealed class Error<T> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -151,36 +107,6 @@ public sealed class Error<T> : Parser<T>, ICompilable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        // parse1 instructions
-        // success = false;
-        //
-        // if (parser1.Success)
-        // {
-        //    value = parser1.Value;
-        //    throw new ParseException(_message, context.Scanner.Cursor.Position);
-        // }
-
-        var parserCompileResult = _parser.Build(context, requireResult: false);
-
-        var block = Expression.Block(
-            parserCompileResult.Variables,
-            parserCompileResult.Body
-                .Append(
-                    Expression.IfThen(
-                        parserCompileResult.Success,
-                        context.ThrowParseException(Expression.Constant(_message))
-                    )
-                )
-        );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -217,7 +143,7 @@ public sealed class Error<T> : Parser<T>, ICompilable, ISourceable
     public override string ToString() => $"{_parser} (Error)";
 }
 
-public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
+public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -257,35 +183,6 @@ public sealed class Error<T, U> : Parser<U>, ICompilable, ISeekable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<U>();
-
-        // parse1 instructions
-        // success = false;
-        // 
-        // if (parser1.Success)
-        // {
-        //    throw new ParseException(_message, context.Scanner.Cursor.Position);
-        // }
-
-        var parserCompileResult = _parser.Build(context, requireResult: false);
-
-        var block = Expression.Block(
-            parserCompileResult.Variables,
-            parserCompileResult.Body
-                .Append(
-                    Expression.IfThen(
-                        parserCompileResult.Success,
-                        context.ThrowParseException(Expression.Constant(_message))
-                    )
-                )
-        );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

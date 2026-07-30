@@ -18,7 +18,6 @@ public partial class RegexBenchmarks
     public static readonly Regex EmailRegex = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+");
     public static readonly Regex EmailRegexCompiled = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+", RegexOptions.Compiled);
 
-    public static readonly Parser<TextSpan> EmailCompiled = EmailParser.Parser.Compile();
     public static readonly Parser<TextSpan> EmailGenerated = EmailParser.GeneratedParser();
 
     public static readonly string Email = "sebastien.ros@gmail.com";
@@ -29,7 +28,6 @@ public partial class RegexBenchmarks
         if (RegexEmail() != Email) throw new Exception(nameof(RegexEmail));
         if (RegexEmailCompiled() != Email) throw new Exception(nameof(RegexEmailCompiled));
         if (ParlotEmail() != Email) throw new Exception(nameof(ParlotEmail));
-        if (ParlotEmailCompiled() != Email) throw new Exception(nameof(ParlotEmailCompiled));
         if (ParlotEmailGenerated() != Email) throw new Exception(nameof(ParlotEmailGenerated));
     }
 
@@ -52,12 +50,6 @@ public partial class RegexBenchmarks
         return EmailRegexGenerated().Match(Email).Value;
     }
 #endif
-
-    [Benchmark]
-    public TextSpan ParlotEmailCompiled()
-    {
-        return EmailCompiled.Parse(Email);
-    }
 
     [Benchmark]
     public TextSpan ParlotEmail()

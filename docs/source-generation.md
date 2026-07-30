@@ -1,6 +1,6 @@
 # Source Generation Guide
 
-Parlot supports compile-time source generation using C# interceptors, providing ~20% faster parsing and faster startup compared to runtime-compiled parsers.
+Parlot supports compile-time source generation using C# interceptors, providing faster parsing and startup than equivalent Fluent parser graphs.
 
 ## Quick Start
 
@@ -38,7 +38,7 @@ var result = parser.Parse("hello world");
 1. The source generator executes your method at compile time to build the parser graph.
 2. It traverses the graph and generates optimized C# code for each parser.
 3. C# interceptors replace calls to your method with the generated implementation.
-4. At runtime, no graph construction or compilation occurs—just the generated code runs.
+4. At runtime, no parser graph construction occurs—just the generated code runs.
 
 ## Requirements
 
@@ -369,8 +369,8 @@ Ensure your custom parser implements `ISourceable`. Parsers without this interfa
 
 Source-generated parsers provide:
 
-- **~20% faster parsing** vs. runtime-compiled parsers
-- **Faster startup** (no runtime graph building or JIT compilation)
+- **Faster parsing** than equivalent Fluent parser graphs
+- **Faster startup** (no runtime parser graph construction)
 - **AOT compatibility** (deterministic code at compile time)
 - **Reduced allocations** during parser construction
 

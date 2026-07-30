@@ -1,10 +1,8 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Numerics;
 using System.Reflection;
 
@@ -14,7 +12,7 @@ namespace Parlot.Fluent;
 /// This class is used as a base class for custom number parsers which don't implement INumber<typeparamref name="T"/> after .NET 7.0.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, ISourceable
+public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
 {
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -105,63 +103,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable, 
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        // var reset = context.Scanner.Cursor.Position;
-
-        var reset = context.DeclarePositionVariable(result);
-
-        var numberStyles = result.DeclareVariable<NumberStyles>($"numberStyles{context.NextNumber}", Expression.Constant(_numberStyles));
-        var culture = result.DeclareVariable<CultureInfo>($"culture{context.NextNumber}", Expression.Constant(_culture));
-        var numberSpan = result.DeclareVariable($"number{context.NextNumber}", typeof(ReadOnlySpan<char>));
-        var end = result.DeclareVariable<int>($"end{context.NextNumber}");
-
-        // if (context.Scanner.ReadDecimal(_numberOptions, out var numberSpan, _decimalSeparator, _groupSeparator))
-        // {
-        //    var end = context.Scanner.Cursor.Offset;
-        //    success = T.TryParse(numberSpan.ToString(), numberStyles, culture, out var value));
-        //    // or when possible T.TryParse(numberSpan, numberStyles, culture, out var value));
-        // }
-        //
-        // if (!success)
-        // {
-        //    context.Scanner.Cursor.ResetPosition(begin);
-        // }
-        //
-
-        var block =
-            Expression.IfThen(
-                context.ReadDecimal(Expression.Constant(_allowLeadingSign),
-                    Expression.Constant(_allowDecimalSeparator),
-                    Expression.Constant(_allowGroupSeparator),
-                    Expression.Constant(_allowExponent),
-                    numberSpan, Expression.Constant(_decimalSeparator), Expression.Constant(_groupSeparator)),
-                Expression.Block(
-                    Expression.Assign(end, context.Offset()),
-                    Expression.Assign(result.Success,
-                        Expression.Call(
-                            _tryParseMethodInfo,
-                            numberSpan,
-                            numberStyles,
-                            culture,
-                            result.Value)
-                        )
-                )
-            );
-
-        result.Body.Add(block);
-
-        result.Body.Add(
-            Expression.IfThen(
-                Expression.Not(result.Success),
-                context.ResetPosition(reset)
-                )
-            );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

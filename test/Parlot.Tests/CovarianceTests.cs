@@ -84,13 +84,12 @@ public class CovarianceTests
     }
 
     [Fact]
-    public void CovariantParsersShouldWorkWithCompilation()
+    public void CovariantParsersShouldWorkWithOneOf()
     {
-        // Test that covariance works with compiled parsers
         var dogParser = Terms.Text("dog").Then(_ => new Dog { Name = "Buddy", Breed = "Golden Retriever" });
         var catParser = Terms.Text("cat").Then(_ => new Cat { Name = "Whiskers", Color = "Orange" });
 
-        var animalParser = OneOf<Animal>(dogParser, catParser).Compile();
+        var animalParser = OneOf<Animal>(dogParser, catParser);
 
         var result1 = animalParser.Parse("dog");
         Assert.NotNull(result1);

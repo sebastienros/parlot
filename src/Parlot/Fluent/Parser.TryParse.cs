@@ -5,9 +5,6 @@ namespace Parlot.Fluent;
 
 public abstract partial class Parser<T>
 {
-    private int _invocations;
-    private volatile Parser<T>? _compiledParser;
-
     /// <summary>
     /// Gets or sets the text which is to render the textual representation of the parser.
     /// </summary>
@@ -31,7 +28,7 @@ public abstract partial class Parser<T>
     {
         var localResult = new ParseResult<T>();
 
-        var success = CheckCompiled(context).Parse(context, ref localResult);
+        var success = Parse(context, ref localResult);
 
         if (success)
         {
@@ -39,38 +36,6 @@ public abstract partial class Parser<T>
         }
 
         return default;
-    }
-
-    private Parser<T> CheckCompiled(ParseContext context)
-    {
-#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_0_OR_GREATER
-        if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
-        {
-            // NativeAOT supports System.Linq.Expressions via an interpreter, but the parser compilation code path is
-            // fundamentally incompatible with trimming & AOT.
-            // Unless .Compile is explicitly called elsewhere, trim it (and the interpreter) from the build.
-            // See https://github.com/dotnet/runtime/blob/main/docs/design/tools/illink/feature-checks.md
-            return this;
-        }
-#endif
-
-        if (_compiledParser != null || context.CompilationThreshold == 0)
-        {
-            return _compiledParser ?? this;
-        }
-
-        // Only the thread that reaches CompilationThreshold compiles the parser.
-        // Any other concurrent call here will return 'this'. This prevents multiple compilations of 
-        // the same parser, and a lock.
-
-        if (context.CompilationThreshold > 0 &&
-            _invocations < context.CompilationThreshold &&
-            Interlocked.Increment(ref _invocations) == context.CompilationThreshold)
-        {
-            return _compiledParser = this.Compile();
-        }
-
-        return this;
     }
 
     public bool TryParse(string text, out T? value)
@@ -101,7 +66,7 @@ public abstract partial class Parser<T>
         {
             var localResult = new ParseResult<T>();
 
-            var success = CheckCompiled(context).Parse(context, ref localResult);
+            var success = Parse(context, ref localResult);
 
             if (success)
             {

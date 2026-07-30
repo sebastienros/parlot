@@ -1,11 +1,9 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISourceable
+public sealed class ZeroOrOne<T> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly T _defaultValue;
@@ -31,37 +29,6 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable, ISourceable
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>(true, Expression.Constant(_defaultValue, typeof(T)));
-
-        // T value = _defaultValue;
-        //
-        // parse1 instructions
-        // 
-        // value = new OptionalResult<T>(parser1.Success, parse1.Value);
-        //
-
-        var parserCompileResult = _parser.Build(context);
-
-        var block = Expression.Block(
-            parserCompileResult.Variables,
-                Expression.Block(
-                    Expression.Block(parserCompileResult.Body),
-                    context.DiscardResult
-                        ? Expression.Empty()
-                        : Expression.IfThenElse(
-                            parserCompileResult.Success,
-                            Expression.Assign(result.Value, parserCompileResult.Value),
-                            Expression.Assign(result.Value, Expression.Constant(_defaultValue, typeof(T)))
-                        )
-                    )
-                );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

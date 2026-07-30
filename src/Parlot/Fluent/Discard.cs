@@ -1,7 +1,5 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -9,7 +7,7 @@ namespace Parlot.Fluent;
 /// Doesn't parse anything and return the default value.
 /// </summary>
 [Obsolete("Use the Then parser instead.")]
-public sealed class Discard<T, U> : Parser<U>, ICompilable, ISourceable
+public sealed class Discard<T, U> : Parser<U>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly U _value;
@@ -38,29 +36,6 @@ public sealed class Discard<T, U> : Parser<U>, ICompilable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<U>(false, Expression.Constant(_value, typeof(U)));
-
-        var parserCompileResult = _parser.Build(context);
-
-        // success = false;
-        // value = _value;
-        // 
-        // parser instructions
-        // 
-        // success = parser.success;
-
-        result.Body.Add(
-            Expression.Block(
-                parserCompileResult.Variables,
-                Expression.Block(parserCompileResult.Body),
-                Expression.Assign(result.Success, parserCompileResult.Success)
-                )
-            );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

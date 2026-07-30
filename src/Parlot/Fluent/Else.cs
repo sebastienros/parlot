@@ -1,14 +1,12 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
 /// <summary>
 /// Returns a default value if the previous parser failed.
 /// </summary>
-public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
+public sealed class Else<T> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly T? _value;
@@ -47,56 +45,6 @@ public sealed class Else<T> : Parser<T>, ICompilable, ISourceable
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>(true);
-
-        var parserCompileResult = _parser.Build(context);
-
-        // success = true;
-        //
-        // parser instructions
-        // 
-        // if (parser.success)
-        // {
-        //    value = parser.Value
-        // }
-        // else
-        // {
-        //   value = _func != null ? _func(context) : _value
-        // }
-
-        Expression elseExpression;
-        if (_func != null)
-        {
-            var invokeFuncExpression = Expression.Invoke(Expression.Constant(_func), [context.ParseContext]);
-            elseExpression = context.DiscardResult
-                ? invokeFuncExpression
-                : Expression.Assign(result.Value, invokeFuncExpression);
-        }
-        else
-        {
-            elseExpression = context.DiscardResult
-                ? Expression.Empty()
-                : Expression.Assign(result.Value, Expression.Constant(_value, typeof(T)));
-        }
-
-        result.Body.Add(
-            Expression.Block(
-                parserCompileResult.Variables,
-                Expression.Block(parserCompileResult.Body),
-                context.DiscardResult
-                ? Expression.Empty()
-                : Expression.IfThenElse(
-                    parserCompileResult.Success,
-                    Expression.Assign(result.Value, parserCompileResult.Value),
-                    elseExpression
-                )
-            )
-        );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

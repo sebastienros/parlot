@@ -224,7 +224,6 @@ public class FluentTests
     [Fact]
     public void ThenShouldProvideStartAndEndOffsets()
     {
-        // Use Literals for consistent behavior between compiled and non-compiled modes
         var parser = Literals.Identifier().Then((context, start, end, value) =>
         {
             return $"{value}:{start}-{end}";
@@ -232,11 +231,6 @@ public class FluentTests
 
         Assert.True(parser.TryParse("hello", out var result));
         Assert.Equal("hello:0-5", result);
-
-        // Test with compiled parser - should have the same behavior
-        var compiled = parser.Compile();
-        Assert.True(compiled.TryParse("world", out var result2));
-        Assert.Equal("world:0-5", result2);
     }
 
     [Fact]
@@ -1625,23 +1619,17 @@ public class FluentTests
     }
 
     [Fact]
-    public void WithWhiteSpaceParserShouldWorkWithCompilation()
+    public void WithWhiteSpaceParserShouldParseCustomWhiteSpace()
     {
-        // Test that compilation works correctly with WithWhiteSpaceParser
         var hello = Terms.Text("hello");
         var world = Terms.Text("world");
         var parser = hello.And(world).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char('.'))));
 
-        // Compile the parser
-        var compiled = parser.Compile();
-
-        // Should work the same as non-compiled version
-        Assert.True(compiled.TryParse("..hello.world", out var result));
+        Assert.True(parser.TryParse("..hello.world", out var result));
         Assert.Equal("hello", result.Item1.ToString());
         Assert.Equal("world", result.Item2.ToString());
 
-        // Should not skip regular whitespace
-        Assert.False(compiled.TryParse("hello world", out _));
+        Assert.False(parser.TryParse("hello world", out _));
     }
 
     [Fact]

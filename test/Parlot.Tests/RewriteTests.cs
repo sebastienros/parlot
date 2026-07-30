@@ -49,16 +49,12 @@ public partial class RewriteTests
         Assert.False(seekable.SkipWhitespace);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void OneOfShouldRewriteAllSeekable(bool compile)
+    [Fact]
+    public void OneOfShouldRewriteAllSeekable()
     {
         var hello = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], SkipWhitespace = false, Success = true, Result = "hello" };
         var goodbye = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "goodbye" };
         var oneof = Parsers.OneOf(hello, goodbye);
-        if (compile) oneof = oneof.Compile();
-
         Assert.Equal("hello", oneof.Parse("a"));
         Assert.Equal("goodbye", oneof.Parse("b"));
         Assert.Null(oneof.Parse("hello"));
@@ -83,18 +79,14 @@ public partial class RewriteTests
         Assert.Equal("c", p.Parse("d"));
     }
     
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void LookupTableSkipsParsers(bool compile)
+    [Fact]
+    public void LookupTableSkipsParsers()
     {
         var p1 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], ThrowOnParse = true };
         var p2 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "b" };
         var p3 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['c'], SkipWhitespace = false, Success = true, Result = "c" };
         
         var p = OneOf(p1, p2, p3);
-        if (compile) p = p.Compile();
-
         Assert.Equal("b", p.Parse("b"));
         Assert.Equal("c", p.Parse("c"));
     }
@@ -152,10 +144,8 @@ public partial class RewriteTests
 
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void OneOfCanForwardSeekable(bool compiled)
+    [Fact]
+    public void OneOfCanForwardSeekable()
     {
         // OneOf can create a lookup table based on ISeekable.
         // It can bee seekable even if one of its parsers is not seekable.
@@ -177,8 +167,6 @@ public partial class RewriteTests
 
         var p3 = OneOf(p1, p2);
 
-        if (compiled) p3 = p3.Compile();
-
         Assert.Equal("a", p3.Parse("a"));
         Assert.Equal("b", p3.Parse("b"));
         Assert.Equal("b", p3.Parse("c"));  // p1's non-seekable are invoked, and pb is always successful
@@ -192,10 +180,8 @@ public partial class RewriteTests
         Assert.Equal("d", p3.Parse("d"));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void OneOfShouldFoldOneOfs(bool compiled)
+    [Fact]
+    public void OneOfShouldFoldOneOfs()
     {
         // Recursive one-ofs should build a lookup table that is a combination of all the lookups.
         // There should be a single lookup to find the best match
@@ -213,8 +199,6 @@ public partial class RewriteTests
         Assert.True(p3 is ISeekable seekable && seekable.CanSeek);
         Assert.Equal(['a', 'b', 'c', 'd'], ((ISeekable)p3).ExpectedChars);
 
-        if (compiled) p3 = p3.Compile();
-
         Assert.Equal("a", p3.Parse("a"));
         Assert.Equal("b", p3.Parse("b"));
         Assert.Equal("c", p3.Parse("c"));
@@ -222,13 +206,13 @@ public partial class RewriteTests
     }
 
     [Fact]
-    public void OneOfCompiled()
+    public void OneOfShouldUseNonSeekableFallback()
     {
         var pa = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], Success = true, Result = "a" };
         var pb = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], Success = true, Result = "b" };
         var pc = new FakeParser<string> { CanSeek = false, Success = true, Result = "c" };
 
-        var p1 = OneOf(pa, pb, pc).Compile();
+        var p1 = OneOf(pa, pb, pc);
         Assert.Equal("a", p1.Parse("a"));
         Assert.Equal("b", p1.Parse("b"));
         Assert.Equal("c", p1.Parse("c"));
@@ -238,18 +222,14 @@ public partial class RewriteTests
         Assert.Null(p1.Parse("c"));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void OneOfShouldHandleWhiteSpace(bool compiled)
+    [Fact]
+    public void OneOfShouldHandleWhiteSpace()
     {
         var pa = Literals.Text("a");
         var pb = Literals.Text("b");
         var pc = Terms.Text("b").Then("c");
 
         var p = OneOf(pa, pb, pc);
-
-        if (compiled) p = p.Compile();
 
         Assert.Equal("a", p.Parse("a"));
         Assert.Equal("b", p.Parse("b"));
@@ -259,19 +239,15 @@ public partial class RewriteTests
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    public void OneOfShouldFindNonSeekableWithSpace(bool compiled, bool skipWhiteSpace)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OneOfShouldFindNonSeekableWithSpace(bool skipWhiteSpace)
     {
         var pa = Literals.Text("a");
         var pb = Literals.Text("b");
         var pc = new FakeParser<string> { CanSeek = false, Success = true, SkipWhitespace = skipWhiteSpace, Result = "c" };
 
         var p = OneOf(pa, pb, pc);
-
-        if (compiled) p = p.Compile();
 
         Assert.Equal("a", p.Parse("a"));
         Assert.Equal("b", p.Parse("b"));
@@ -298,11 +274,9 @@ public partial class RewriteTests
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    public void LookupParserShouldEnhanceUnseekableParsersWithCustomSet(bool useInnerParsers, bool compile)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LookupParserShouldEnhanceUnseekableParsersWithCustomSet(bool useInnerParsers)
     {
         // Lookup() is wrapping the parser in a Seekable<T>. This test ensures the inner parser is invoked correctly.
 
@@ -321,8 +295,6 @@ public partial class RewriteTests
             ? result.Lookup(innera, innerb)
             : result.Lookup(expectedChars: "ab");
 
-        if (compile) p = p.Compile();
-
         Assert.Null(p.Parse("a"));
         Assert.True(aCalled);
         Assert.False(bCalled);
@@ -335,11 +307,9 @@ public partial class RewriteTests
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    public void LookupParserShouldOverrideExpectedChars(bool canSeek, bool compile)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LookupParserShouldOverrideExpectedChars(bool canSeek)
     {
         // By setting expectedChars, the inner parsers are not invoked if the next char is not in the list.
 
@@ -350,8 +320,6 @@ public partial class RewriteTests
         var innerb = new FakeParser<string> { CanSeek = canSeek, Success = false, ExpectedChars = ['b'], Result = "b", OnParse = c => bCalled = true };
 
         var p = OneOf(innera.Lookup(expectedChars: "cde"), innerb.Lookup(expectedChars: "cde"));
-
-        if (compile) p = p.Compile();
 
         Assert.Null(p.Parse("a"));
         Assert.False(aCalled);

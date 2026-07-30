@@ -1,8 +1,6 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -10,7 +8,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Routes the parsing based on a custom delegate.
 /// </summary>
-public sealed class Switch<T, U> : Parser<U>, ICompilable, ISourceable
+public sealed class Switch<T, U> : Parser<U>, ISourceable
 {
     private readonly Parser<T> _previousParser;
     private readonly Parser<U>[] _parsers;
@@ -68,68 +66,6 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<U>();
-
-        // previousParser instructions
-        // 
-        // if (previousParser.Success)
-        // {
-        //    var nextParser = _action(context, previousParser.Value);
-        //
-        //    if (nextParser != null)
-        //    {
-        //       var parsed = new ParseResult<U>();
-        //
-        //       if (nextParser.Parse(context, ref parsed))
-        //       {
-        //           value = parsed.Value;
-        //           success = true;
-        //       }
-        //    }
-        // }
-
-        var previousParserCompileResult = _previousParser.Build(context, requireResult: true);
-        var index = Expression.Variable(typeof(int), $"index{context.NextNumber}");
-
-        var cases = new SwitchCase[_parsers.Length];
-
-        for (var i = 0; i < _parsers.Length; i++)
-        {
-            var parserCompileResult = _parsers[i].Build(context);
-
-            Expression caseBody = Expression.Block(
-                parserCompileResult.Variables,
-                Expression.Block(parserCompileResult.Body),
-                Expression.Assign(result.Success, parserCompileResult.Success),
-                context.DiscardResult
-                    ? Expression.Empty()
-                    : Expression.IfThen(result.Success, Expression.Assign(result.Value, parserCompileResult.Value))
-            );
-
-            cases[i] = Expression.SwitchCase(caseBody, Expression.Constant(i));
-        }
-
-        var block = Expression.Block(
-            previousParserCompileResult.Variables,
-            previousParserCompileResult.Body
-                .Append(
-                    Expression.IfThen(
-                        previousParserCompileResult.Success,
-                        Expression.Block(
-                            [index],
-                            Expression.Assign(index, Expression.Invoke(Expression.Constant(_selector), new[] { context.ParseContext, previousParserCompileResult.Value })),
-                            Expression.Switch(index, Expression.Empty(), cases)
-                        )
-                    )
-                )
-        );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

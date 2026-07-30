@@ -1,15 +1,13 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
 /// <summary>
 /// A parser that temporarily sets a custom whitespace parser for its inner parser.
 /// </summary>
-public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable, ISourceable
+public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<TextSpan> _whiteSpaceParser;
@@ -58,53 +56,6 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ICompilable, ISeekable,
         }
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-
-        // We need to save and restore the WhiteSpaceParser property
-        var whiteSpaceParserProperty = Expression.Property(
-            context.ParseContext,
-            typeof(ParseContext).GetProperty(nameof(ParseContext.WhiteSpaceParser))!
-        );
-
-        var previousWhiteSpaceParser = Expression.Variable(typeof(Parser<TextSpan>), "previousWhiteSpaceParser");
-        var whiteSpaceParserConstant = Expression.Constant(_whiteSpaceParser, typeof(Parser<TextSpan>));
-
-        result.Variables.Add(previousWhiteSpaceParser);
-
-        var parserCompileResult = _parser.Build(context);
-
-        var blockExpressions = new System.Collections.Generic.List<Expression>
-        {
-            // Save current whitespace parser
-            Expression.Assign(previousWhiteSpaceParser, whiteSpaceParserProperty),
-            // Set custom whitespace parser
-            Expression.Assign(whiteSpaceParserProperty, whiteSpaceParserConstant),
-            // Try to parse
-            Expression.TryFinally(
-                Expression.Block(
-                    parserCompileResult.Variables,
-                    Expression.Block(
-                        parserCompileResult.Body
-                    ),
-                    Expression.IfThen(
-                        parserCompileResult.Success,
-                        context.DiscardResult ?
-                            Expression.Empty() :
-                            Expression.Assign(result.Value, parserCompileResult.Value)
-                    ),
-                    Expression.Assign(result.Success, parserCompileResult.Success)
-                ),
-                // Restore previous whitespace parser
-                Expression.Assign(whiteSpaceParserProperty, previousWhiteSpaceParser)
-            )
-        };
-
-        result.Body.AddRange(blockExpressions);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

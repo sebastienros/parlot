@@ -1,8 +1,6 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -11,7 +9,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class Select<C, T> : Parser<T>, ICompilable, ISourceable where C : ParseContext
+public sealed class Select<C, T> : Parser<T>, ISourceable where C : ParseContext
 {
     private readonly Parser<T>[] _parsers;
     private readonly Func<C, int> _selector;
@@ -58,43 +56,6 @@ public sealed class Select<C, T> : Parser<T>, ICompilable, ISourceable where C :
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<T>();
-        var index = Expression.Variable(typeof(int), $"index{context.NextNumber}");
-
-        var cases = new SwitchCase[_parsers.Length];
-
-        for (var i = 0; i < _parsers.Length; i++)
-        {
-            var parserCompileResult = _parsers[i].Build(context);
-
-            Expression caseBody = Expression.Block(
-                parserCompileResult.Variables,
-                Expression.Block(parserCompileResult.Body),
-                Expression.Assign(result.Success, parserCompileResult.Success),
-                context.DiscardResult
-                    ? Expression.Empty()
-                    : Expression.IfThen(result.Success, Expression.Assign(result.Value, parserCompileResult.Value))
-            );
-
-            cases[i] = Expression.SwitchCase(caseBody, Expression.Constant(i));
-        }
-
-        var selectorInvoke = Expression.Invoke(
-            Expression.Constant(_selector),
-            Expression.Convert(context.ParseContext, typeof(C)));
-
-        var body = Expression.Block(
-            [index],
-            Expression.Assign(index, selectorInvoke),
-            Expression.Switch(index, Expression.Empty(), cases)
-        );
-
-        result.Body.Add(body);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

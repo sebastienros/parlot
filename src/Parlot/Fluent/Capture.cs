@@ -1,12 +1,10 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable, ISourceable
+public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
 
@@ -53,56 +51,6 @@ public sealed class Capture<T> : Parser<TextSpan>, ICompilable, ISeekable, ISour
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<TextSpan>();
-
-        // var start = context.Scanner.Cursor.Position;
-        var start = context.DeclarePositionVariable(result);
-
-        var ignoreResults = context.DiscardResult;
-        context.DiscardResult = true;
-
-        var parserCompileResult = _parser.Build(context);
-
-        context.DiscardResult = ignoreResults;
-
-        // parse1 instructions
-        //
-        // if (parser1.Success)
-        // {
-        //     var end = context.Scanner.Cursor.Offset;
-        //     var length = end - start.Offset;
-        //   
-        //     value = new TextSpan(context.Scanner.Buffer, start.Offset, length);
-        //   
-        //     success = true;
-        // }
-
-        var startOffset = result.DeclareVariable<int>($"startOffset{context.NextNumber}", context.Offset(start));
-
-        result.Body.Add(
-            Expression.Block(
-                parserCompileResult.Variables,
-                Expression.Block(parserCompileResult.Body),
-                Expression.IfThen(
-                    test: parserCompileResult.Success,
-                    ifTrue: Expression.Block(
-                        // Never discard result here, that would nullify this parser
-                        Expression.Assign(result.Value,
-                            context.NewTextSpan(
-                                context.Buffer(),
-                                startOffset,
-                                Expression.Subtract(context.Offset(), startOffset)
-                                )),
-                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                        )
-                )
-            )
-        );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

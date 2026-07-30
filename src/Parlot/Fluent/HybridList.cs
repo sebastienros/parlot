@@ -155,7 +155,7 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
     /// <remarks>
     /// The BCL collections have fast paths for <see cref="List{T}"/>, e.g. <c>new Dictionary&lt;K, V&gt;(items)</c>
     /// iterates its span instead of allocating an enumerator for it, so the inner list is returned once it has
-    /// been allocated. This is also the type the compiled parsers return.
+    /// been allocated.
     /// </remarks>
     public IReadOnlyList<T> AsReadOnlyList() => _list ?? (IReadOnlyList<T>)this;
 

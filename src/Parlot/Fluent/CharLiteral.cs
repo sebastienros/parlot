@@ -1,11 +1,9 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourceable
+public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
 {
     public CharLiteral(char c)
     {
@@ -41,24 +39,6 @@ public sealed class CharLiteral : Parser<char>, ICompilable, ISeekable, ISourcea
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<char>();
-
-        result.Body.Add(
-            Expression.IfThen(
-                context.ReadChar(Char),
-                Expression.Block(
-                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                    context.DiscardResult
-                    ? Expression.Empty()
-                    : Expression.Assign(result.Value, Expression.Constant(Char, typeof(char)))
-                    )
-                )
-        );
-
-        return result;
-    }
 
     public override string ToString() => $"Char('{Char}')";
 

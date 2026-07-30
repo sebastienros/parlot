@@ -1,13 +1,11 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
-public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekable, ISourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -58,76 +56,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        return
-            [
-                new SkippableCompilationResult(_parser1.Build(context), false),
-                new SkippableCompilationResult(_parser2.Build(context), true)
-            ];
-    }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        // The common skippable sequence compilation helper can't be reused since this doesn't return a tuple
-
-        var result = context.CreateCompilationResult<T1>();
-
-        // T value;
-        //
-        // parse1 instructions
-        // 
-        // var start = context.Scanner.Cursor.Position;
-        //
-        // parse1 instructions
-        //
-        // if (parser1.Success)
-        // {
-        //    
-        //    parse2 instructions
-        //   
-        //    if (parser2.Success)
-        //    {
-        //       success = true;
-        //       value = parse1.Value;
-        //    }
-        //    else
-        //    {
-        //        context.Scanner.Cursor.ResetPosition(start);
-        //    }
-        // }
-
-        // var start = context.Scanner.Cursor.Position;
-
-        var start = context.DeclarePositionVariable(result);
-
-        var parser1CompileResult = _parser1.Build(context);
-        var parser2CompileResult = _parser2.Build(context);
-
-        result.Body.Add(
-            Expression.Block(
-                parser1CompileResult.Variables,
-                Expression.Block(parser1CompileResult.Body),
-                Expression.IfThen(
-                    parser1CompileResult.Success,
-                        Expression.Block(
-                        parser2CompileResult.Variables,
-                        Expression.Block(parser2CompileResult.Body),
-                        Expression.IfThenElse(
-                            parser2CompileResult.Success,
-                            Expression.Block(
-                                context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, parser1CompileResult.Value),
-                                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                            ),
-                            context.ResetPosition(start)
-                            )
-                        )
-                    )
-                )
-        );
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -193,7 +122,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ICompilable, ISkippabl
     public override string ToString() => $"{_parser1} & (skip) {_parser2}";
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
@@ -252,20 +181,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IC
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        if (_parser is not ISkippableSequenceParser sequenceParser)
-        {
-            throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
-        }
 
-        return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), true)).ToArray();
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -333,7 +249,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IC
 
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3>>, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
@@ -390,20 +306,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        if (_parser is not ISkippableSequenceParser sequenceParser)
-        {
-            throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
-        }
 
-        return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), true)).ToArray();
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -470,7 +373,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
@@ -528,20 +431,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        if (_parser is not ISkippableSequenceParser sequenceParser)
-        {
-            throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
-        }
 
-        return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), true)).ToArray();
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -609,7 +499,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
 
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
@@ -670,20 +560,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        if (_parser is not ISkippableSequenceParser sequenceParser)
-        {
-            throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
-        }
 
-        return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), true)).ToArray();
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -750,7 +627,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
@@ -811,20 +688,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        if (_parser is not ISkippableSequenceParser sequenceParser)
-        {
-            throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
-        }
 
-        return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), true)).ToArray();
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -892,7 +756,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ICompilable, ISkippableSequenceParser, ISeekable, ISourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekable, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> _parser;
     private readonly Parser<T8> _lastParser;
@@ -954,20 +818,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
         return false;
     }
 
-    public SkippableCompilationResult[] BuildSkippableParsers(CompilationContext context)
-    {
-        if (_parser is not ISkippableSequenceParser sequenceParser)
-        {
-            throw new InvalidOperationException(SequenceCompileHelper.SequenceRequired);
-        }
 
-        return sequenceParser.BuildSkippableParsers(context).Append(new SkippableCompilationResult(_lastParser.Build(context), true)).ToArray();
-    }
-
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return SequenceCompileHelper.CreateSequenceCompileResult(BuildSkippableParsers(context), context);
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

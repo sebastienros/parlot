@@ -1,14 +1,12 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
 /// <summary>
 /// Doesn't parse anything and return the default value.
 /// </summary>
-public sealed class Always<T> : Parser<T>, ICompilable, ISourceable
+public sealed class Always<T> : Parser<T>, ISourceable
 {
     private readonly T _value;
 
@@ -28,10 +26,6 @@ public sealed class Always<T> : Parser<T>, ICompilable, ISourceable
         return true;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return context.CreateCompilationResult<T>(true, Expression.Constant(_value, typeof(T)));
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

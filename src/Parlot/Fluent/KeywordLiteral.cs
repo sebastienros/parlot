@@ -1,9 +1,7 @@
-using Parlot.Compilation;
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Linq;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
@@ -11,7 +9,7 @@ namespace Parlot.Fluent;
 /// Parses a keyword (text followed by non-letter character or EOF).
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
-public sealed class KeywordLiteral : Parser<string>, ICompilable, ISeekable, ISourceable
+public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
 {
     private readonly TextLiteral _textLiteral;
 
@@ -62,49 +60,6 @@ public sealed class KeywordLiteral : Parser<string>, ICompilable, ISeekable, ISo
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        var result = context.CreateCompilationResult<string>();
-
-        var parserCompileResult = _textLiteral.Build(context, requireResult: true);
-
-        var start = context.DeclarePositionVariable(result);
-
-        // Check for keyword boundary: cursor.Eof || (!IsInRange(current, 'a', 'z') && !IsInRange(current, 'A', 'Z'))
-        var cursorExpr = Expression.Property(Expression.Property(context.ParseContext, nameof(ParseContext.Scanner)), nameof(Scanner.Cursor));
-        var eofExpr = Expression.Property(cursorExpr, nameof(Cursor.Eof));
-        var currentExpr = Expression.Property(cursorExpr, nameof(Cursor.Current));
-
-        var isLowerLetter = Expression.Call(typeof(Character).GetMethod(nameof(Character.IsInRange), [typeof(char), typeof(char), typeof(char)])!,
-            currentExpr, Expression.Constant('a'), Expression.Constant('z'));
-        var isUpperLetter = Expression.Call(typeof(Character).GetMethod(nameof(Character.IsInRange), [typeof(char), typeof(char), typeof(char)])!,
-            currentExpr, Expression.Constant('A'), Expression.Constant('Z'));
-
-        var keywordBoundaryCheck = Expression.OrElse(
-            eofExpr,
-            Expression.AndAlso(Expression.Not(isLowerLetter), Expression.Not(isUpperLetter)));
-
-        var block = Expression.Block(
-            parserCompileResult.Variables,
-            parserCompileResult.Body
-            .Append(
-                Expression.IfThenElse(
-                    Expression.AndAlso(parserCompileResult.Success, keywordBoundaryCheck),
-                    Expression.Block(
-                        Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                        context.DiscardResult
-                            ? Expression.Empty()
-                            : Expression.Assign(result.Value, parserCompileResult.Value)
-                        ),
-                    context.ResetPosition(start)
-                    )
-                )
-            );
-
-        result.Body.Add(block);
-
-        return result;
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

@@ -1,14 +1,12 @@
-using Parlot.Compilation;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
 
 /// <summary>
 /// Doesn't parse anything and fails parsing.
 /// </summary>
-public sealed class Fail<T> : Parser<T>, ICompilable, ISourceable
+public sealed class Fail<T> : Parser<T>, ISourceable
 {
     public Fail()
     {
@@ -23,10 +21,6 @@ public sealed class Fail<T> : Parser<T>, ICompilable, ISourceable
         return false;
     }
 
-    public CompilationResult Compile(CompilationContext context)
-    {
-        return context.CreateCompilationResult<T>(false, Expression.Constant(default(T), typeof(T)));
-    }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
