@@ -16,113 +16,71 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out byte value)
     {
-#if NET8_0_OR_GREATER
         return byte.TryParse(s, style, provider, out value);
-#else
-        return byte.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out sbyte value)
     {
-#if NET8_0_OR_GREATER
         return sbyte.TryParse(s, style, provider, out value);
-#else
-        return sbyte.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out short value)
     {
-#if NET8_0_OR_GREATER
         return short.TryParse(s, style, provider, out value);
-#else
-        return short.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out ushort value)
     {
-#if NET8_0_OR_GREATER
         return ushort.TryParse(s, style, provider, out value);
-#else
-        return ushort.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out int value)
     {
-#if NET8_0_OR_GREATER
         return int.TryParse(s, style, provider, out value);
-#else
-        return int.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out uint value)
     {
-#if NET8_0_OR_GREATER
         return uint.TryParse(s, style, provider, out value);
-#else
-        return uint.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out long value)
     {
-#if NET8_0_OR_GREATER
         return long.TryParse(s, style, provider, out value);
-#else
-        return long.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out ulong value)
     {
-#if NET8_0_OR_GREATER
         return ulong.TryParse(s, style, provider, out value);
-#else
-        return ulong.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out float value)
     {
-#if NET8_0_OR_GREATER
         return float.TryParse(s, style, provider, out value);
-#else
-        return float.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out double value)
     {
-#if NET8_0_OR_GREATER
         return double.TryParse(s, style, provider, out value);
-#else
-        return double.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out decimal value)
     {
-#if NET8_0_OR_GREATER
         return decimal.TryParse(s, style, provider, out value);
-#else
-        return decimal.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
+// System.Half arrived in .NET 5; net472 and netstandard2.0 lack the type, so this overload
+// cannot exist there at all. A missing type is not polyfillable, unlike a missing member.
 #if NET8_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out Half value)
@@ -134,11 +92,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out BigInteger value)
     {
-#if NET8_0_OR_GREATER
         return BigInteger.TryParse(s, style, provider, out value);
-#else
-        return BigInteger.TryParse(s.ToString(), style, provider, out value);
-#endif
     }
 
 // INumber<T> arrived in .NET 7; net472 and netstandard2.0 lack the type entirely,
