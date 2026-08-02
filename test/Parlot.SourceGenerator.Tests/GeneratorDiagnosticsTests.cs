@@ -201,6 +201,42 @@ public static partial class OneOfGrammar
     }
 
     [Fact]
+    public void Generated_Parser_Only_Aggressively_Inlines_Small_Hot_Path_Methods()
+    {
+        const string source = @"
+using Parlot.SourceGenerator;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
+
+public static partial class InlineGrammar
+{
+    [GenerateParser]
+    public static Parser<(char, char)> Pair() => Literals.Char('a').And(Literals.Char('b'));
+
+    [GenerateParser]
+    public static Parser<char> LargeChoice() => OneOf(
+        Literals.Char('a'), Literals.Char('b'), Literals.Char('c'), Literals.Char('d'),
+        Literals.Char('e'), Literals.Char('f'), Literals.Char('g'), Literals.Char('h'),
+        Literals.Char('i'), Literals.Char('j'), Literals.Char('k'), Literals.Char('l'),
+        Literals.Char('m'), Literals.Char('n'), Literals.Char('o'), Literals.Char('p'));
+}
+";
+
+        var (result, updatedCompilation) = RunGenerator(source, "AggressiveInlining");
+        var generated = string.Join(
+            Environment.NewLine,
+            result.Results.SelectMany(static r => r.GeneratedSources).Select(static s => s.SourceText.ToString()));
+
+        const string attribute = "MethodImplOptions.AggressiveInlining";
+        Assert.Contains($"{attribute})]{Environment.NewLine}            public override bool Parse", generated, StringComparison.Ordinal);
+        Assert.Contains($"{attribute})]{Environment.NewLine}        internal static bool Pair_Core", generated, StringComparison.Ordinal);
+        Assert.Contains($"{attribute})]{Environment.NewLine}        private static bool Pair_Sequence_P1", generated, StringComparison.Ordinal);
+        Assert.Contains($"{attribute})]{Environment.NewLine}        private static bool Pair_Sequence_P2", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain($"{attribute})]{Environment.NewLine}        internal static bool LargeChoice_Core", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
     public void DesignTimeBuild_Skips_Parlot_Generation_And_Diagnostics()
     {
         const string source = @"

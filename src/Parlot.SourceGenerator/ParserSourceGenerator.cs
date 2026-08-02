@@ -31,6 +31,8 @@ namespace Parlot.SourceGenerator;
 [Generator]
 public sealed class ParserSourceGenerator : IIncrementalGenerator
 {
+    private const int AggressiveInliningStatementLimit = 24;
+
     #region Diagnostic Descriptors
 
     private static readonly DiagnosticDescriptor ClassNotPartialDescriptor = new(
@@ -1362,12 +1364,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
         sb.AppendLine($"        private sealed class {wrapperName} : Parser<{valueTypeName}>");
         sb.AppendLine("        {");
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine($"            public override bool Parse(ParseContext context, ref ParseResult<{valueTypeName}> result)");
         sb.AppendLine("            {");
         sb.AppendLine($"                return {coreName}(context, ref result);");
         sb.AppendLine("            }");
         sb.AppendLine("        }");
         sb.AppendLine();
+        AppendAggressiveInliningIfSmall(sb, result);
         sb.AppendLine($"        internal static bool {coreName}(ParseContext context, ref ParseResult<{valueTypeName}> result)");
         sb.AppendLine("        {");
         sb.AppendLine("            context.CheckCancellation();");
@@ -1452,6 +1456,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             {
                 sb.AppendLine($"        // {deferredParserName}");
             }
+            AppendAggressiveInliningIfSmall(sb, deferredResult);
             sb.AppendLine($"        private static bool {deferredMethodName}(ParseContext context, out {deferredValueTypeName} value)");
             sb.AppendLine("        {");
             sb.AppendLine("            context.CheckCancellation();");
@@ -1489,6 +1494,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             {
                 sb.AppendLine($"        // {helperParserName}");
             }
+            AppendAggressiveInliningIfSmall(sb, helperResult);
             sb.AppendLine($"        private static bool {helperMethodName}(ParseContext context, out {helperValueTypeName} value)");
             sb.AppendLine("        {");
             sb.AppendLine("            context.CheckCancellation();");
@@ -1555,6 +1561,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         }
 
         return (sb.ToString(), failedLambdas);
+    }
+
+    private static void AppendAggressiveInliningIfSmall(StringBuilder builder, SourceResult result)
+    {
+        if (result.Locals.Count + result.Body.Count <= AggressiveInliningStatementLimit)
+        {
+            builder.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        }
     }
 
     /// <summary>
