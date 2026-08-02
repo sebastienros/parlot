@@ -196,7 +196,9 @@ public class UtilityTypesTests
         var readOnlySpan = span.Span;
 
         Assert.Equal(5, readOnlySpan.Length);
-        Assert.Equal("world", new string(readOnlySpan));
+        // new string(ReadOnlySpan<char>) is .NET Core 2.1+. Constructors cannot be polyfilled as
+        // extension members, so the call site uses ToString() instead.
+        Assert.Equal("world", readOnlySpan.ToString());
     }
 
     [Fact]

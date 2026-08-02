@@ -16,7 +16,15 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    # windows-latest additionally builds and runs the net472 leg of Parlot.Tests, which is the only
+    # target framework that executes the downlevel polyfills in src/Parlot/Polyfills. The leg is
+    # conditioned on the OS in the csproj, so both jobs run the same two commands unchanged.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+
+    runs-on: ${{ matrix.os }}
     env:
         DOTNET_NOLOGO: true
         DOTNET_CLI_TELEMETRY_OPTOUT: 1
