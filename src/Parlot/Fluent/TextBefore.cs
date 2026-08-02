@@ -5,9 +5,6 @@ using System;
 using System.Buffers;
 #endif
 
-#if NET8_0_OR_GREATER
-using System.Linq;
-#endif
 using System.Reflection;
 
 namespace Parlot.Fluent;
