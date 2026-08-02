@@ -12,16 +12,14 @@ public static partial class Character
     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);
     internal static readonly SearchValues<char> _newLines = SearchValues.Create(NewLines);
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsDecimalDigit(char ch) => _decimalDigits.Contains(ch);
+    // _decimalDigits and _hexDigits are still used for span-wide IndexOfAnyExcept scans in Scanner,
+    // which is what SearchValues is good at. The single-char predicates live in Character.cs and use
+    // the BCL's char.IsAscii* instead -- see the comment there.
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsIdentifierStart(char ch) => _identifierStart.Contains(ch);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsIdentifierPart(char ch) => _identifierPart.Contains(ch);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsHexDigit(char ch) => _hexDigits.Contains(ch);
 }
 #endif

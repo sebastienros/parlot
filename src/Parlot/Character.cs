@@ -10,6 +10,18 @@ public static partial class Character
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsInRange(char ch, char min, char max) => ch - (uint)min <= max - (uint)min;
 
+    // DecimalDigits and HexDigits are exactly the ASCII digit and ASCII hex-digit sets, so the BCL
+    // predicates are equivalent and compile to arithmetic instead of a SearchValues probe. See
+    // CharacterSetsBenchmarks: 0.19 ns -> 0.02 ns for digits, 0.12-0.21 ns -> ~0 ns for hex digits.
+    // IsIdentifierStart/IsIdentifierPart have no such BCL equivalent and keep using SearchValues,
+    // which the same benchmark shows is the fastest option for those sets.
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsDecimalDigit(char ch) => char.IsAsciiDigit(ch);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsHexDigit(char ch) => char.IsAsciiHexDigit(ch);
+
     public static char ScanHexEscape(string text, int index, out int length)
     {
         return ScanHexEscape(text.AsSpan(index), out length);
