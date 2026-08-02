@@ -2,7 +2,7 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-#if NET
+#if NET8_0_OR_GREATER
 using System.Linq;
 #endif
 

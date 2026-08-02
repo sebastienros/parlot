@@ -69,7 +69,7 @@ public static class NumberLiterals
             var literal = new FloatNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         else if (typeof(T) == typeof(Half))
         {
             var literal = new HalfNumberLiteral(numberOptions, decimalSeparator, groupSeparator);

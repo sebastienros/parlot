@@ -119,7 +119,7 @@ public class Parser
 
         if (_scanner.ReadDecimal(out var number))
         {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
             return new Number(decimal.Parse(number, provider: CultureInfo.InvariantCulture));
 #else
             return new Number(decimal.Parse(number.ToString(), provider: CultureInfo.InvariantCulture));

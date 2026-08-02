@@ -1279,7 +1279,7 @@ public class FluentTests
         Assert.Equal((decimal)123, Literals.Number<decimal>().Parse("123"));
         Assert.Equal((double)123, Literals.Number<double>().Parse("123"));
         Assert.Equal((float)123, Literals.Number<float>().Parse("123"));
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         Assert.Equal((Half)123, Literals.Number<Half>().Parse("123"));
 #endif
         Assert.Equal((BigInteger)123, Literals.Number<BigInteger>().Parse("123"));
@@ -1307,7 +1307,7 @@ public class FluentTests
         Assert.Equal((decimal)120, Literals.Number<decimal>(e).Parse("12e1"));
         Assert.Equal((double)120, Literals.Number<double>(e).Parse("12e1"));
         Assert.Equal((float)120, Literals.Number<float>(e).Parse("12e1"));
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         Assert.Equal((Half)120, Literals.Number<Half>(e).Parse("12e1"));
 #endif
         Assert.Equal((BigInteger)120, Literals.Number<BigInteger>(e).Parse("12e1"));

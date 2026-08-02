@@ -16,7 +16,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out byte value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return byte.TryParse(s, style, provider, out value);
 #else
         return byte.TryParse(s.ToString(), style, provider, out value);
@@ -26,7 +26,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out sbyte value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return sbyte.TryParse(s, style, provider, out value);
 #else
         return sbyte.TryParse(s.ToString(), style, provider, out value);
@@ -36,7 +36,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out short value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return short.TryParse(s, style, provider, out value);
 #else
         return short.TryParse(s.ToString(), style, provider, out value);
@@ -46,7 +46,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out ushort value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return ushort.TryParse(s, style, provider, out value);
 #else
         return ushort.TryParse(s.ToString(), style, provider, out value);
@@ -56,7 +56,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out int value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return int.TryParse(s, style, provider, out value);
 #else
         return int.TryParse(s.ToString(), style, provider, out value);
@@ -66,7 +66,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out uint value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return uint.TryParse(s, style, provider, out value);
 #else
         return uint.TryParse(s.ToString(), style, provider, out value);
@@ -76,7 +76,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out long value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return long.TryParse(s, style, provider, out value);
 #else
         return long.TryParse(s.ToString(), style, provider, out value);
@@ -86,7 +86,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out ulong value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return ulong.TryParse(s, style, provider, out value);
 #else
         return ulong.TryParse(s.ToString(), style, provider, out value);
@@ -96,7 +96,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out float value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return float.TryParse(s, style, provider, out value);
 #else
         return float.TryParse(s.ToString(), style, provider, out value);
@@ -106,7 +106,7 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out double value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return double.TryParse(s, style, provider, out value);
 #else
         return double.TryParse(s.ToString(), style, provider, out value);
@@ -116,14 +116,14 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out decimal value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return decimal.TryParse(s, style, provider, out value);
 #else
         return decimal.TryParse(s.ToString(), style, provider, out value);
 #endif
     }
 
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out Half value)
     {
@@ -134,14 +134,16 @@ public static class Numbers
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out BigInteger value)
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return BigInteger.TryParse(s, style, provider, out value);
 #else
         return BigInteger.TryParse(s.ToString(), style, provider, out value);
 #endif
     }
 
-#if NET7_0_OR_GREATER // INumber<T> arrives in net7
+// INumber<T> arrived in .NET 7; net472 and netstandard2.0 lack the type entirely,
+// so this whole generic lane is modern-only and cannot be polyfilled.
+#if NET8_0_OR_GREATER
         /// <summary>
         /// Parses a number, using a fast path for plain sequences of digits.
         /// </summary>
@@ -231,7 +233,7 @@ public static class Numbers
                         types: new[] { typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), type.MakeByRefType() },
                         modifiers: null);
 
-#if NET7_0_OR_GREATER
+#if NET8_0_OR_GREATER
                 if (method is null && ImplementsINumber(type))
                 {
                         method = _genericTryParseMethod?.MakeGenericMethod(type);
@@ -244,7 +246,7 @@ public static class Numbers
         internal static MethodInfo GetTryParseMethod<T>()
                 => GetTryParseMethod(typeof(T));
 
-#if NET7_0_OR_GREATER
+#if NET8_0_OR_GREATER
         private static readonly MethodInfo? _genericTryParseMethod = typeof(Numbers)
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .FirstOrDefault(m => m.IsGenericMethodDefinition && m.Name == nameof(TryParse) && m.GetParameters().Length == 4);

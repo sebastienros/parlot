@@ -305,7 +305,7 @@ public class CursorTests
         Assert.Equal(0, t2.Length);
         Assert.Equal(0, t2.Offset);
 
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         Assert.True(ReadOnlySpan<char>.Empty == t2.Span);
 #endif
     }

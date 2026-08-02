@@ -338,7 +338,7 @@ internal sealed class FloatNumberLiteral : NumberLiteralBase<float>
     }
 }
 
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
 internal sealed class HalfNumberLiteral : NumberLiteralBase<Half>
 {
     public HalfNumberLiteral(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = NumberLiterals.DefaultDecimalSeparator, char groupSeparator = NumberLiterals.DefaultGroupSeparator)

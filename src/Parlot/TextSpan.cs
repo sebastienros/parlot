@@ -59,7 +59,7 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
 
     public override int GetHashCode()
     {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         return CultureInfo.InvariantCulture.CompareInfo.GetHashCode(Span, CompareOptions.Ordinal);
 #else
         return (ToString() ?? "").GetHashCode();
