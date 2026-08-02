@@ -1908,4 +1908,51 @@ public class FluentTests
 
         Assert.False(parser.TryParse("returns", out result));
     }
+
+    [Fact]
+    public void TermsFactoriesShouldSkipWhiteSpaceExactlyOnce()
+    {
+        // Every Terms.* factory wraps its literal in a single SkipWhiteSpace. Wrapping twice is
+        // silently correct but pays for an extra parser layer on every invocation.
+        var parsers = new Parser<TextSpan>[]
+        {
+            Terms.AnyOf("abc"),
+            Terms.NoneOf("abc"),
+            Terms.Pattern(char.IsLetter),
+            Terms.Identifier(),
+            Terms.String(),
+            Terms.NonWhiteSpace(),
+        };
+
+        foreach (var parser in parsers)
+        {
+            var outer = Assert.IsType<SkipWhiteSpace<TextSpan>>(parser);
+
+            Assert.IsNotType<SkipWhiteSpace<TextSpan>>(outer.Parser);
+        }
+    }
+
+    [Fact]
+    public void TermsAnyOfShouldSkipLeadingWhiteSpace()
+    {
+        var parser = Terms.AnyOf("abc");
+
+        Assert.True(parser.TryParse("   cab!", out var result));
+        Assert.Equal("cab", result.ToString());
+    }
+
+    [Fact]
+    public void AnyOfShouldBeSeekable()
+    {
+        // Building the literal from a SearchValues instance loses the source chars, so a parser built
+        // that way reports CanSeek == false and cannot take part in the seeking optimizations.
+        // Terms.AnyOf and Literals.AnyOf must both keep the chars.
+        foreach (var parser in new Parser<TextSpan>[] { Literals.AnyOf("abc"), Terms.AnyOf("abc") })
+        {
+            var seekable = Assert.IsAssignableFrom<ISeekable>(parser);
+
+            Assert.True(seekable.CanSeek);
+            Assert.Equal(['a', 'b', 'c'], seekable.ExpectedChars);
+        }
+    }
 }

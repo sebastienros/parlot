@@ -48,6 +48,13 @@ public class AnyOfPatternBenchmarks
     private static readonly Parser<TextSpan> AnyOfNonDigitsSet = Literals.AnyOf(NonDigitsSet);
     private static readonly Parser<TextSpan> PatternNonDigitsSetContains = Literals.Pattern(static c => NonDigitsSet.Contains(c));
 
+    // Terms.AnyOf(ReadOnlySpan<char>) used to delegate to Terms.AnyOf(SearchValues<char>), which already
+    // wraps in SkipWhiteSpace -- so it produced SkipWhiteSpace(SkipWhiteSpace(literal)). These two measure
+    // the cost of that extra layer: the first is the shape it produces now, the second the shape it used
+    // to produce.
+    private static readonly Parser<TextSpan> TermsAnyOfDigits = Terms.AnyOf(DigitsSet);
+    private static readonly Parser<TextSpan> TermsAnyOfDigitsDoubleSkip = Parsers.SkipWhiteSpace(Terms.AnyOf(DigitsSet));
+
     private static readonly Parser<TextSpan> NoneOfDigits = Literals.NoneOf(DigitsSet);
     private static readonly Parser<TextSpan> PatternNotDigit = Literals.Pattern(static c => !char.IsDigit(c));
     private static readonly Parser<TextSpan> PatternNotDigitContains = Literals.Pattern(static c => !DigitsSet.Contains(c));
@@ -58,6 +65,9 @@ public class AnyOfPatternBenchmarks
         if (AnyOf_Digits().Length != DigitsInput.Length) throw new InvalidOperationException(nameof(AnyOf_Digits));
         if (Pattern_Digits().Length != DigitsInput.Length) throw new InvalidOperationException(nameof(Pattern_Digits));
         if (Pattern_Digits_Contains().Length != DigitsInput.Length) throw new InvalidOperationException(nameof(Pattern_Digits_Contains));
+
+        if (TermsAnyOf_Digits().Length != DigitsInput.Length) throw new InvalidOperationException(nameof(TermsAnyOf_Digits));
+        if (TermsAnyOf_Digits_DoubleSkip().Length != DigitsInput.Length) throw new InvalidOperationException(nameof(TermsAnyOf_Digits_DoubleSkip));
 
         if (AnyOf_NonDigitsSet().Length != LettersInput.Length) throw new InvalidOperationException(nameof(AnyOf_NonDigitsSet));
         if (Pattern_NonDigitsSet_Contains().Length != LettersInput.Length) throw new InvalidOperationException(nameof(Pattern_NonDigitsSet_Contains));
@@ -81,6 +91,12 @@ public class AnyOfPatternBenchmarks
 
     [Benchmark, BenchmarkCategory("NonDigitsSet: AnyOf vs Pattern")]
     public TextSpan Pattern_NonDigitsSet_Contains() => PatternNonDigitsSetContains.Parse(LettersInput);
+
+    [Benchmark(Baseline = true), BenchmarkCategory("Digits: Terms.AnyOf skip-whitespace layers")]
+    public TextSpan TermsAnyOf_Digits() => TermsAnyOfDigits.Parse(DigitsInput);
+
+    [Benchmark, BenchmarkCategory("Digits: Terms.AnyOf skip-whitespace layers")]
+    public TextSpan TermsAnyOf_Digits_DoubleSkip() => TermsAnyOfDigitsDoubleSkip.Parse(DigitsInput);
 
     [Benchmark(Baseline = true), BenchmarkCategory("NonDigits: NoneOf vs Pattern")]
     public TextSpan NoneOf_NonDigits() => NoneOfDigits.Parse(LettersInput);
