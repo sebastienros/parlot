@@ -69,13 +69,8 @@ public static class NumberLiterals
             var literal = new FloatNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
-#if NET8_0_OR_GREATER
-        else if (typeof(T) == typeof(Half))
-        {
-            var literal = new HalfNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
-            return (literal as NumberLiteralBase<T>)!;
-        }
-#endif
+        // No Half branch: this is the !NET8_0_OR_GREATER leg, and System.Half does not exist on
+        // net472 or netstandard2.0. On net8.0+ the INumber<T> lane above handles Half instead.
         else if (typeof(T) == typeof(BigInteger))
         {
             var literal = new BigIntegerNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
