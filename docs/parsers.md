@@ -269,6 +269,25 @@ Result:
 -12345.6
 ```
 
+### Hexadecimal, Octal and Binary
+
+Match integer digits in a specific radix and return any integer .NET type. These parsers don't consume
+a radix prefix or a leading sign.
+
+```c#
+Parser<T> Hexadecimal<T>() where T : IBinaryInteger<T>
+Parser<T> Octal<T>() where T : IBinaryInteger<T>
+Parser<T> Binary<T>() where T : IBinaryInteger<T>
+```
+
+Prefixes can be composed independently:
+
+```c#
+var hexadecimal = Terms.Text("0x").SkipAnd(Literals.Hexadecimal<int>());
+var octal = Terms.Text("0o").SkipAnd(Literals.Octal<int>());
+var binary = Terms.Text("0b").SkipAnd(Literals.Binary<int>());
+```
+
 ### String
 
 Matches a quoted string literal with escape sequences. Use this parser to parse strings from a programming language.

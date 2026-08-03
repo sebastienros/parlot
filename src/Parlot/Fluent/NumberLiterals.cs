@@ -82,4 +82,58 @@ public static class NumberLiterals
         }
 #endif
     }
+
+    public static Parser<T> CreateRadixNumberLiteralParser<T>(int radix)
+#if NET8_0_OR_GREATER
+    where T : IBinaryInteger<T>
+#endif
+    {
+        if (typeof(T) == typeof(byte))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<byte>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(sbyte))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<sbyte>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(short))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<short>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(ushort))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<ushort>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(int))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<int>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(uint))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<uint>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(long))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<long>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(ulong))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<ulong>(radix, Numbers.TryParseRadix);
+        }
+        else if (typeof(T) == typeof(BigInteger))
+        {
+            return (Parser<T>)(object)new RadixNumberLiteral<BigInteger>(radix, Numbers.TryParseRadix);
+        }
+#if NET8_0_OR_GREATER
+        else
+        {
+            return new RadixNumberLiteral<T>(radix, Numbers.TryParseRadix<T>);
+        }
+#else
+        else
+        {
+            throw new NotSupportedException($"The type '{typeof(T)}' is not supported as a radix number type.");
+        }
+#endif
+    }
 }
