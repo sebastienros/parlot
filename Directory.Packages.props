@@ -4,8 +4,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.Memory" Version="4.6.3" />
-    <PackageVersion Include="System.Collections.Immutable" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <PackageVersion Include="System.Collections.Immutable" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Pidgin" Version="3.5.1" />
@@ -13,7 +13,7 @@
     <PackageVersion Include="Superpower" Version="3.2.1" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <!-- Global Package References -->
-    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
+    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.301" />
     <GlobalPackageReference Include="PolySharp" Version="1.16.0" />
     <!-- Testing -->
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
