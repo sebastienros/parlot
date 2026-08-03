@@ -196,6 +196,87 @@ public class NumberLiteralTests
         Assert.Equal(BigInteger.Parse("-123456789012345678901234567890"), result3);
     }
 
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("2a", 42)]
+    [InlineData("CAFE", 51966)]
+    public void HexadecimalNumberLiteralShouldParseValidNumbers(string source, int expected)
+    {
+        Assert.True(Literals.Hexadecimal<int>().TryParse(source, out var result));
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("52", 42)]
+    [InlineData("177777", 65535)]
+    public void OctalNumberLiteralShouldParseValidNumbers(string source, long expected)
+    {
+        Assert.True(Literals.Octal<long>().TryParse(source, out var result));
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("101010", 42)]
+    [InlineData("11111111", 255)]
+    public void BinaryNumberLiteralShouldParseValidNumbers(string source, byte expected)
+    {
+        Assert.True(Literals.Binary<byte>().TryParse(source, out var result));
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void RadixNumberLiteralsShouldSupportDifferentNumericTypes()
+    {
+        Assert.Equal(255u, Literals.Hexadecimal<uint>().Parse("ff"));
+        Assert.Equal(uint.MaxValue, Literals.Hexadecimal<uint>().Parse("ffffffff"));
+        Assert.Equal(int.MaxValue, Literals.Hexadecimal<int>().Parse("7fffffff"));
+        Assert.Equal((ushort)511, Literals.Octal<ushort>().Parse("777"));
+        Assert.Equal(10L, Literals.Binary<long>().Parse("1010"));
+        Assert.Equal(new BigInteger(255), Literals.Hexadecimal<BigInteger>().Parse("ff"));
+    }
+
+    [Fact]
+    public void RadixNumberLiteralsShouldNotConsumePrefixes()
+    {
+        var parser = Literals.Text("0x").SkipAnd(Literals.Hexadecimal<int>());
+
+        Assert.True(parser.TryParse("0x2a", out var result));
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void RadixNumberLiteralsShouldFailOnInvalidOrOverflowingNumbers()
+    {
+        Assert.False(Literals.Hexadecimal<int>().TryParse("xyz", out _));
+        Assert.False(Literals.Octal<int>().TryParse("89", out _));
+        Assert.False(Literals.Binary<int>().TryParse("2", out _));
+        Assert.False(Literals.Hexadecimal<byte>().TryParse("100", out _));
+        Assert.False(Literals.Hexadecimal<int>().TryParse("80000000", out _));
+        Assert.False(Literals.Octal<byte>().TryParse("400", out _));
+        Assert.False(Literals.Binary<byte>().TryParse("100000000", out _));
+    }
+
+    [Fact]
+    public void RadixNumberLiteralsShouldResetPositionWhenTheyFail()
+    {
+        var parser = OneOf(
+            Literals.Hexadecimal<byte>().Then(static _ => "number"),
+            Literals.Text("100").Then(static _ => "text"));
+
+        Assert.True(parser.TryParse("100", out var result));
+        Assert.Equal("text", result);
+    }
+
+    [Fact]
+    public void RadixNumberTermsShouldSkipWhiteSpace()
+    {
+        Assert.Equal(42, Terms.Hexadecimal<int>().Parse("  2a"));
+        Assert.Equal(42, Terms.Octal<int>().Parse("  52"));
+        Assert.Equal(42, Terms.Binary<int>().Parse("  101010"));
+    }
+
     [Fact]
     public void NumberLiteralsShouldSupportExponent()
     {

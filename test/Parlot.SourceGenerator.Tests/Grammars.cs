@@ -674,5 +674,14 @@ public static partial class Grammars
     public static Parser<decimal> DecimalNumberLiteralCustomCultureParser() => 
         Terms.Number<decimal>(NumberOptions.Number | NumberOptions.AllowGroupSeparators, decimalSeparator: ',', groupSeparator: '_');
 
+    [GenerateParser]
+    public static Parser<int> HexadecimalNumberLiteralParser() => Terms.Hexadecimal<int>();
+
+    [GenerateParser]
+    public static Parser<long> OctalNumberLiteralParser() => Terms.Octal<long>();
+
+    [GenerateParser]
+    public static Parser<byte> BinaryNumberLiteralParser() => Terms.Binary<byte>();
+
     #endregion
 }

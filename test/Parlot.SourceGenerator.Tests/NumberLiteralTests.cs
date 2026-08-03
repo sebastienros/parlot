@@ -217,6 +217,43 @@ public class NumberLiteralTests
         Assert.Equal(expected, value);
     }
 
+    [Theory]
+    [InlineData("2a", true, 42)]
+    [InlineData("  CAFE", true, 51966)]
+    [InlineData("xyz", false, 0)]
+    public void HexadecimalNumberLiteral_VariousInputs(string input, bool shouldSucceed, int expected)
+    {
+        var result = Grammars.HexadecimalNumberLiteralParser().TryParse(input, out var value);
+
+        Assert.Equal(shouldSucceed, result);
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("52", true, 42)]
+    [InlineData("  177777", true, 65535)]
+    [InlineData("8", false, 0)]
+    public void OctalNumberLiteral_VariousInputs(string input, bool shouldSucceed, long expected)
+    {
+        var result = Grammars.OctalNumberLiteralParser().TryParse(input, out var value);
+
+        Assert.Equal(shouldSucceed, result);
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("101010", true, 42)]
+    [InlineData("  11111111", true, 255)]
+    [InlineData("100000000", false, 0)]
+    [InlineData("2", false, 0)]
+    public void BinaryNumberLiteral_VariousInputs(string input, bool shouldSucceed, byte expected)
+    {
+        var result = Grammars.BinaryNumberLiteralParser().TryParse(input, out var value);
+
+        Assert.Equal(shouldSucceed, result);
+        Assert.Equal(expected, value);
+    }
+
     #endregion
 
     #region Combined Custom Culture Tests

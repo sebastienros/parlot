@@ -180,6 +180,33 @@ public class LiteralBuilder
     => NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator);
 
     /// <summary>
+    /// Builds a parser that matches hexadecimal digits without a prefix and returns any integer type.
+    /// </summary>
+    public Parser<T> Hexadecimal<T>()
+#if NET8_0_OR_GREATER
+    where T : IBinaryInteger<T>
+#endif
+    => NumberLiterals.CreateRadixNumberLiteralParser<T>(16);
+
+    /// <summary>
+    /// Builds a parser that matches octal digits without a prefix and returns any integer type.
+    /// </summary>
+    public Parser<T> Octal<T>()
+#if NET8_0_OR_GREATER
+    where T : IBinaryInteger<T>
+#endif
+    => NumberLiterals.CreateRadixNumberLiteralParser<T>(8);
+
+    /// <summary>
+    /// Builds a parser that matches binary digits without a prefix and returns any integer type.
+    /// </summary>
+    public Parser<T> Binary<T>()
+#if NET8_0_OR_GREATER
+    where T : IBinaryInteger<T>
+#endif
+    => NumberLiterals.CreateRadixNumberLiteralParser<T>(2);
+
+    /// <summary>
     /// Builds a parser that matches an integer with an option leading sign.
     /// </summary>
     public Parser<long> Integer(NumberOptions numberOptions = NumberOptions.Integer) => Number<long>(numberOptions);
@@ -348,6 +375,33 @@ public class TermBuilder
         where T : INumber<T>
 #endif
         => Parsers.SkipWhiteSpace(NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator));
+
+    /// <summary>
+    /// Builds a parser that matches hexadecimal digits without a prefix and returns any integer type.
+    /// </summary>
+    public Parser<T> Hexadecimal<T>()
+#if NET8_0_OR_GREATER
+        where T : IBinaryInteger<T>
+#endif
+        => Parsers.SkipWhiteSpace(NumberLiterals.CreateRadixNumberLiteralParser<T>(16));
+
+    /// <summary>
+    /// Builds a parser that matches octal digits without a prefix and returns any integer type.
+    /// </summary>
+    public Parser<T> Octal<T>()
+#if NET8_0_OR_GREATER
+        where T : IBinaryInteger<T>
+#endif
+        => Parsers.SkipWhiteSpace(NumberLiterals.CreateRadixNumberLiteralParser<T>(8));
+
+    /// <summary>
+    /// Builds a parser that matches binary digits without a prefix and returns any integer type.
+    /// </summary>
+    public Parser<T> Binary<T>()
+#if NET8_0_OR_GREATER
+        where T : IBinaryInteger<T>
+#endif
+        => Parsers.SkipWhiteSpace(NumberLiterals.CreateRadixNumberLiteralParser<T>(2));
 
     /// <summary>
     /// Builds a parser that matches an integer with an option leading sign.

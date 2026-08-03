@@ -13,6 +13,142 @@ namespace Parlot;
 /// </summary>
 public static class Numbers
 {
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out byte value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, byte.MaxValue, out charsRead, out var parsed);
+        value = (byte)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out sbyte value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, (ulong)sbyte.MaxValue, out charsRead, out var parsed);
+        value = (sbyte)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out short value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, (ulong)short.MaxValue, out charsRead, out var parsed);
+        value = (short)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out ushort value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, ushort.MaxValue, out charsRead, out var parsed);
+        value = (ushort)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out int value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, int.MaxValue, out charsRead, out var parsed);
+        value = (int)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out uint value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, uint.MaxValue, out charsRead, out var parsed);
+        value = (uint)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out long value)
+    {
+        var success = TryParseUnsignedRadix(span, radix, long.MaxValue, out charsRead, out var parsed);
+        value = (long)parsed;
+        return success;
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out ulong value)
+    {
+        return TryParseUnsignedRadix(span, radix, ulong.MaxValue, out charsRead, out value);
+    }
+
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix(ReadOnlySpan<char> span, int radix, out int charsRead, out BigInteger value)
+    {
+        value = BigInteger.Zero;
+        charsRead = 0;
+
+        if (!IsValidRadix(radix))
+        {
+            return false;
+        }
+
+        while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
+        {
+            value = (value * radix) + digit;
+            charsRead++;
+        }
+
+        return charsRead > 0;
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Parses digits in the specified radix.
+    /// </summary>
+    public static bool TryParseRadix<TNumber>(ReadOnlySpan<char> span, int radix, out int charsRead, [MaybeNullWhen(false)] out TNumber value)
+        where TNumber : IBinaryInteger<TNumber>
+    {
+        value = TNumber.Zero;
+        charsRead = 0;
+
+        if (!IsValidRadix(radix))
+        {
+            return false;
+        }
+
+        var radixValue = TNumber.CreateChecked(radix);
+
+        try
+        {
+            while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
+            {
+                value = checked((value * radixValue) + TNumber.CreateChecked(digit));
+                charsRead++;
+            }
+        }
+        catch (OverflowException)
+        {
+            value = default;
+            charsRead = 0;
+            return false;
+        }
+
+        return charsRead > 0;
+    }
+#endif
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out byte value)
     {
@@ -174,6 +310,74 @@ public static class Numbers
                 }
         }
 #endif
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryGetDigit(char c, int radix, out int digit)
+    {
+        if ((uint)(c - '0') <= 9)
+        {
+            digit = c - '0';
+        }
+        else if ((uint)(c - 'A') <= 5)
+        {
+            digit = c - 'A' + 10;
+        }
+        else if ((uint)(c - 'a') <= 5)
+        {
+            digit = c - 'a' + 10;
+        }
+        else
+        {
+            digit = 0;
+            return false;
+        }
+
+        return digit < radix;
+    }
+
+    private static bool TryParseUnsignedRadix(ReadOnlySpan<char> span, int radix, ulong maxValue, out int charsRead, out ulong value)
+    {
+        value = 0;
+        charsRead = 0;
+
+        if (!IsValidRadix(radix))
+        {
+            return false;
+        }
+
+        var unsignedRadix = (uint)radix;
+
+        while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
+        {
+            if (value > (maxValue - (uint)digit) / unsignedRadix)
+            {
+                value = default;
+                charsRead = 0;
+                return false;
+            }
+
+            value = (value * unsignedRadix) + (uint)digit;
+            charsRead++;
+        }
+
+        return charsRead > 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsValidRadix(int radix) => (uint)(radix - 2) <= 14;
+
+    internal static bool HasTryParseRadixOverload(Type type)
+    {
+        return type == typeof(byte)
+            || type == typeof(sbyte)
+            || type == typeof(short)
+            || type == typeof(ushort)
+            || type == typeof(int)
+            || type == typeof(uint)
+            || type == typeof(long)
+            || type == typeof(ulong)
+            || type == typeof(BigInteger);
+    }
 
         /// <summary>
         /// Gets the Numbers.TryParse method for a specific numeric type.
