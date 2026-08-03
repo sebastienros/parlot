@@ -77,5 +77,61 @@ public class CharacterSetsBenchmarks
     {
         return _identifierPart.Contains(_identifier2[0]);
     }
+
+    // The conclusion above holds for the identifier sets, which is why Character.IsIdentifierStart and
+    // Character.IsIdentifierPart use SearchValues.Contains on net8.0+. It does not carry over to the
+    // digit sets: char.IsAsciiDigit is a single range check and char.IsAsciiHexDigit is a branchless
+    // 64-bit shift-and-mask, so neither touches memory at all. DecimalDigits and HexDigits are exactly
+    // the ASCII digit and ASCII hex-digit sets, so the BCL predicates are drop-in equivalents.
+
+    // BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200)
+    // Job = MediumRun  IterationCount=15  LaunchCount=2  WarmupCount=10
+    //
+    // | Method                                    | Mean      | Error     | StdDev    |
+    // |------------------------------------------ |----------:|----------:|----------:|
+    // | SearchValuesContains_IsDecimalDigit_True  | 0.1911 ns | 0.0066 ns | 0.0092 ns |
+    // | SearchValuesContains_IsDecimalDigit_False | 0.1945 ns | 0.0094 ns | 0.0132 ns |
+    // | IsAsciiDigit_True                         | 0.0159 ns | 0.0165 ns | 0.0246 ns |
+    // | IsAsciiDigit_False                        | 0.0138 ns | 0.0231 ns | 0.0323 ns |
+    // | SearchValuesContains_IsHexDigit_True      | 0.1163 ns | 0.0215 ns | 0.0309 ns |
+    // | SearchValuesContains_IsHexDigit_False     | 0.2146 ns | 0.0670 ns | 0.0983 ns |
+    // | IsAsciiHexDigit_True                      | 0.0000 ns | 0.0000 ns | 0.0000 ns |
+    // | IsAsciiHexDigit_False                     | 0.0074 ns | 0.0061 ns | 0.0089 ns |
+    //
+    // CONCLUSION: char.IsAscii* wins by an order of magnitude for the digit sets, so Character.IsDecimalDigit
+    // and Character.IsHexDigit use them on every target framework. The IsAscii* rows are at the resolution
+    // floor -- they inline to a couple of instructions -- so treat them as "free" rather than as exact values.
+
+    private static readonly SearchValues<char> _decimalDigits = SearchValues.Create(Character.DecimalDigits);
+    private static readonly SearchValues<char> _hexDigits = SearchValues.Create(Character.HexDigits);
+
+    private static readonly char _digit = '7';
+    private static readonly char _notDigit = 'z';
+    private static readonly char _hexDigit = 'e';
+    private static readonly char _notHexDigit = 'z';
+
+    [Benchmark]
+    public bool SearchValuesContains_IsDecimalDigit_True() => _decimalDigits.Contains(_digit);
+
+    [Benchmark]
+    public bool SearchValuesContains_IsDecimalDigit_False() => _decimalDigits.Contains(_notDigit);
+
+    [Benchmark]
+    public bool IsAsciiDigit_True() => char.IsAsciiDigit(_digit);
+
+    [Benchmark]
+    public bool IsAsciiDigit_False() => char.IsAsciiDigit(_notDigit);
+
+    [Benchmark]
+    public bool SearchValuesContains_IsHexDigit_True() => _hexDigits.Contains(_hexDigit);
+
+    [Benchmark]
+    public bool SearchValuesContains_IsHexDigit_False() => _hexDigits.Contains(_notHexDigit);
+
+    [Benchmark]
+    public bool IsAsciiHexDigit_True() => char.IsAsciiHexDigit(_hexDigit);
+
+    [Benchmark]
+    public bool IsAsciiHexDigit_False() => char.IsAsciiHexDigit(_notHexDigit);
 }
 #endif

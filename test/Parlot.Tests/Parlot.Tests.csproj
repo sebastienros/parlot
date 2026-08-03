@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <!-- net472 is the only downlevel target the polyfills in src/Parlot/Polyfills are executed on.
+         Windows-only, so plain `dotnet build` / `dotnet test` are unchanged on Linux. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net472;$(TargetFrameworks)</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>False</SignAssembly>

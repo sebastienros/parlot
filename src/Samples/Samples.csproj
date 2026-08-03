@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <!-- The net472 leg exists so Parlot.Tests can execute the downlevel polyfills. It is
+         Windows-only, so `dotnet build` and `dotnet test` keep working unchanged on Linux. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net472;$(TargetFrameworks)</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 		<CompilerGeneratedFilesOutputPath>obj\$(Configuration)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>

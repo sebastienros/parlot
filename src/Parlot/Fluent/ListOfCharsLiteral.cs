@@ -34,15 +34,15 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
             }
         }
 
-        if (_minSize > 0 && !_negate)
+        _minSize = minSize;
+        _maxSize = maxSize;
+        _negate = negate;
+
+        if (minSize > 0 && !negate)
         {
             ExpectedChars = _values.ToCharArray();
             CanSeek = true;
         }
-
-        _minSize = minSize;
-        _maxSize = maxSize;
-        _negate = negate;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)

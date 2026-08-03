@@ -65,4 +65,25 @@ public class CharacterTests
     {
         Assert.Equal(isWhiteSpace, Character.IsWhiteSpaceOrNewLine(c));
     }
+
+    [Fact]
+    public void IsDecimalDigitShouldMatchDecimalDigitsSetForEveryChar()
+    {
+        // Character.IsDecimalDigit is implemented as char.IsAsciiDigit, which is the BCL member on
+        // net8.0+ and a polyfill on net472/netstandard2.0. Both must agree with the set the
+        // SearchValues instances are built from, for every char, on every target framework.
+        for (var c = 0; c <= char.MaxValue; c++)
+        {
+            Assert.Equal(Character.DecimalDigits.IndexOf((char)c) >= 0, Character.IsDecimalDigit((char)c));
+        }
+    }
+
+    [Fact]
+    public void IsHexDigitShouldMatchHexDigitsSetForEveryChar()
+    {
+        for (var c = 0; c <= char.MaxValue; c++)
+        {
+            Assert.Equal(Character.HexDigits.IndexOf((char)c) >= 0, Character.IsHexDigit((char)c));
+        }
+    }
 }

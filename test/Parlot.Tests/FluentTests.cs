@@ -1279,7 +1279,7 @@ public class FluentTests
         Assert.Equal((decimal)123, Literals.Number<decimal>().Parse("123"));
         Assert.Equal((double)123, Literals.Number<double>().Parse("123"));
         Assert.Equal((float)123, Literals.Number<float>().Parse("123"));
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         Assert.Equal((Half)123, Literals.Number<Half>().Parse("123"));
 #endif
         Assert.Equal((BigInteger)123, Literals.Number<BigInteger>().Parse("123"));
@@ -1307,7 +1307,7 @@ public class FluentTests
         Assert.Equal((decimal)120, Literals.Number<decimal>(e).Parse("12e1"));
         Assert.Equal((double)120, Literals.Number<double>(e).Parse("12e1"));
         Assert.Equal((float)120, Literals.Number<float>(e).Parse("12e1"));
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         Assert.Equal((Half)120, Literals.Number<Half>(e).Parse("12e1"));
 #endif
         Assert.Equal((BigInteger)120, Literals.Number<BigInteger>(e).Parse("12e1"));
@@ -1907,5 +1907,52 @@ public class FluentTests
         Assert.Equal("return", result);
 
         Assert.False(parser.TryParse("returns", out result));
+    }
+
+    [Fact]
+    public void TermsFactoriesShouldSkipWhiteSpaceExactlyOnce()
+    {
+        // Every Terms.* factory wraps its literal in a single SkipWhiteSpace. Wrapping twice is
+        // silently correct but pays for an extra parser layer on every invocation.
+        var parsers = new Parser<TextSpan>[]
+        {
+            Terms.AnyOf("abc"),
+            Terms.NoneOf("abc"),
+            Terms.Pattern(char.IsLetter),
+            Terms.Identifier(),
+            Terms.String(),
+            Terms.NonWhiteSpace(),
+        };
+
+        foreach (var parser in parsers)
+        {
+            var outer = Assert.IsType<SkipWhiteSpace<TextSpan>>(parser);
+
+            Assert.IsNotType<SkipWhiteSpace<TextSpan>>(outer.Parser);
+        }
+    }
+
+    [Fact]
+    public void TermsAnyOfShouldSkipLeadingWhiteSpace()
+    {
+        var parser = Terms.AnyOf("abc");
+
+        Assert.True(parser.TryParse("   cab!", out var result));
+        Assert.Equal("cab", result.ToString());
+    }
+
+    [Fact]
+    public void AnyOfShouldBeSeekable()
+    {
+        // Building the literal from a SearchValues instance loses the source chars, so a parser built
+        // that way reports CanSeek == false and cannot take part in the seeking optimizations.
+        // Terms.AnyOf and Literals.AnyOf must both keep the chars.
+        foreach (var parser in new Parser<TextSpan>[] { Literals.AnyOf("abc"), Terms.AnyOf("abc") })
+        {
+            var seekable = Assert.IsAssignableFrom<ISeekable>(parser);
+
+            Assert.True(seekable.CanSeek);
+            Assert.Equal(['a', 'b', 'c'], seekable.ExpectedChars);
+        }
     }
 }

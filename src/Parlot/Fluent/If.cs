@@ -1,8 +1,5 @@
 using Parlot.SourceGeneration;
 using System;
-#if NET
-using System.Linq;
-#endif
 
 namespace Parlot.Fluent;
 

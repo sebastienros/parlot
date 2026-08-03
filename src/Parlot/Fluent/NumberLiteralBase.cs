@@ -338,22 +338,6 @@ internal sealed class FloatNumberLiteral : NumberLiteralBase<float>
     }
 }
 
-#if NET6_0_OR_GREATER
-internal sealed class HalfNumberLiteral : NumberLiteralBase<Half>
-{
-    public HalfNumberLiteral(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = NumberLiterals.DefaultDecimalSeparator, char groupSeparator = NumberLiterals.DefaultGroupSeparator)
-        : base(numberOptions, decimalSeparator, groupSeparator)
-    {
-
-    }
-
-    public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out Half value)
-    {
-        return Numbers.TryParse(s, style, provider, out value);
-    }
-}
-#endif
-
 internal sealed class BigIntegerNumberLiteral : NumberLiteralBase<BigInteger>
 {
     public BigIntegerNumberLiteral(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = NumberLiterals.DefaultDecimalSeparator, char groupSeparator = NumberLiterals.DefaultGroupSeparator)

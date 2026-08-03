@@ -59,7 +59,12 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
 
     public override int GetHashCode()
     {
-#if NET6_0_OR_GREATER
+        // Deliberately not polyfilled. Hashing a span without allocating needs either
+        // CompareInfo.GetHashCode(ReadOnlySpan<char>, CompareOptions) or
+        // string.GetHashCode(ReadOnlySpan<char>, StringComparison), both .NET Core 2.1+, and the
+        // downlevel bodies of both would have to allocate the string anyway -- which is what the
+        // #else already does, directly and without the indirection.
+#if NET8_0_OR_GREATER
         return CultureInfo.InvariantCulture.CompareInfo.GetHashCode(Span, CompareOptions.Ordinal);
 #else
         return (ToString() ?? "").GetHashCode();

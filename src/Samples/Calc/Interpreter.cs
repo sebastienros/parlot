@@ -112,7 +112,7 @@ public class Interpreter
 
         if (_scanner.ReadDecimal(out var number))
         {
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
             return decimal.Parse(number, provider: CultureInfo.InvariantCulture);
 #else
             return decimal.Parse(number.ToString(), provider: CultureInfo.InvariantCulture);

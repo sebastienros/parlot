@@ -5,9 +5,6 @@ using System;
 using System.Buffers;
 #endif
 
-#if NETCOREAPP
-using System.Linq;
-#endif
 using System.Reflection;
 
 namespace Parlot.Fluent;

@@ -1,6 +1,7 @@
 using Parlot.Fluent;
 using Parlot.Tests.Json;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 using static Parlot.Fluent.Parsers;
@@ -134,7 +135,9 @@ public class OperatorsTests
 
         var jsonObject =
             (LBrace + Separated(Comma, jsonMember) + RBrace)
-                .Then(static kvps => new JsonObject(new Dictionary<string, IJson>(kvps.Item2)));
+                // Dictionary<,>(IEnumerable<KeyValuePair<,>>) is .NET Core 2.0+; on .NET Framework it
+                // binds to the (int capacity) overload instead, so build the dictionary explicitly.
+                .Then(static kvps => new JsonObject(kvps.Item2.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value)));
 
         var Json = json.Parser = jsonString.Then<IJson>() | jsonArray |jsonObject;
 

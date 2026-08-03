@@ -35,7 +35,7 @@ public class JsonParser
 
         var jsonObject =
             Between(LBrace, Separated(Comma, jsonMember), RBrace)
-                .Then(static kvps => new JsonObject(new Dictionary<string, IJson>(kvps)));
+                .Then(static kvps => new JsonObject(ToDictionary(kvps)));
 
         Json = json.Parser = OneOf<IJson>(jsonString, jsonArray, jsonObject);
     }
@@ -50,5 +50,19 @@ public class JsonParser
         {
             return null;
         }
+    }
+
+    // Dictionary<TKey, TValue>(IEnumerable<KeyValuePair<TKey, TValue>>) arrived in .NET Core 2.0 and is
+    // absent on .NET Framework, where the call silently binds to the (int capacity) overload instead.
+    private static Dictionary<string, IJson> ToDictionary(IReadOnlyList<KeyValuePair<string, IJson>> members)
+    {
+        var result = new Dictionary<string, IJson>(members.Count);
+
+        for (var i = 0; i < members.Count; i++)
+        {
+            result[members[i].Key] = members[i].Value;
+        }
+
+        return result;
     }
 }
