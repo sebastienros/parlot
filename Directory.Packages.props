@@ -10,8 +10,8 @@
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Pidgin" Version="3.5.1" />
     <PackageVersion Include="Sprache" Version="3.0.0-develop-00049" />
-    <PackageVersion Include="Superpower" Version="3.2.1" />
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageVersion Include="Superpower" Version="3.2.2-dev-00214" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.5-beta1" />
     <!-- Global Package References -->
     <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
     <GlobalPackageReference Include="PolySharp" Version="1.16.0" />
