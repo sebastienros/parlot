@@ -266,6 +266,24 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void GeneratedCalculatorParser_EnforcesMaxRecursionDepth()
+    {
+        var parser = Grammars.CalculatorParser();
+        const string source = "((1))";
+
+        var allowedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 3);
+        Assert.True(parser.TryParse(allowedContext, out var result, out var error));
+        Assert.NotNull(result);
+        Assert.Null(error);
+
+        var limitedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 2);
+        Assert.False(parser.TryParse(limitedContext, out _, out error));
+        Assert.NotNull(error);
+        Assert.Equal("The maximum parser recursion depth of 2 was exceeded.", error.Message);
+        Assert.Equal(2, error.Position.Offset);
+    }
+
+    [Fact]
     public void CountingOneOf_OnlyMatchingParserInvoked()
     {
         CountingParser.Reset();

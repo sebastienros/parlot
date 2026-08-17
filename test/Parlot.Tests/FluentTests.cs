@@ -1728,6 +1728,66 @@ public class FluentTests
     }
 
     [Fact]
+    public void DeferredShouldEnforceMaxRecursionDepth()
+    {
+        var list = Deferred<string>();
+        list.Parser = Between(Literals.Char('['), list, Literals.Char(']')).Then(static _ => "list")
+            .Or(Literals.Text("item"));
+        var source = "[[[item]]]";
+
+        var allowedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 4);
+        Assert.True(list.TryParse(allowedContext, out var result, out var error));
+        Assert.Equal("list", result);
+        Assert.Null(error);
+
+        var limitedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 3);
+        Assert.False(list.TryParse(limitedContext, out _, out error));
+        Assert.NotNull(error);
+        Assert.Equal("The maximum parser recursion depth of 3 was exceeded.", error.Message);
+        Assert.Equal(3, error.Position.Offset);
+    }
+
+    [Fact]
+    public void UnaryShouldEnforceMaxRecursionDepth()
+    {
+        var parser = Literals.Char('a').Unary(
+            (Literals.Char('-'), static value => value));
+        const string source = "---a";
+
+        var allowedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 4);
+        Assert.True(parser.TryParse(allowedContext, out _, out var error));
+        Assert.Null(error);
+
+        var limitedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 3);
+        Assert.False(parser.TryParse(limitedContext, out _, out error));
+        Assert.NotNull(error);
+        Assert.Equal("The maximum parser recursion depth of 3 was exceeded.", error.Message);
+        Assert.Equal(3, error.Position.Offset);
+    }
+
+    [Fact]
+    public void RecursionLimitShouldWorkWhenLoopDetectionIsDisabled()
+    {
+        var loop = Deferred<string>();
+        loop.Parser = loop;
+        var context = new ParseContext(
+            new Scanner("test"),
+            maxRecursionDepth: 4,
+            disableLoopDetection: true);
+
+        Assert.False(loop.TryParse(context, out _, out var error));
+        Assert.NotNull(error);
+        Assert.Equal("The maximum parser recursion depth of 4 was exceeded.", error.Message);
+    }
+
+    [Fact]
+    public void ParseContextShouldRejectNegativeMaxRecursionDepth()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            static () => new ParseContext(new Scanner("test"), maxRecursionDepth: -1));
+    }
+
+    [Fact]
     public void DeferredShouldAllowValidRecursion()
     {
         // Valid recursive parser - should still work
