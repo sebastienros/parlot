@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 using System.IO;
 using System.Reflection;
@@ -31,6 +32,7 @@ namespace Parlot.SourceGenerator;
 [Generator]
 public sealed class ParserSourceGenerator : IIncrementalGenerator
 {
+    private static readonly char[] _invalidLineDirectivePathCharacters = ['\r', '\n', '\u2028', '\u2029'];
     private const int AggressiveInliningStatementLimit = 24;
 
     #region Diagnostic Descriptors
@@ -105,13 +107,56 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor IncludeFileNotFoundDescriptor = new(
+    internal static readonly DiagnosticDescriptor IncludeFileNotFoundDescriptor = new(
         "PARLOT006",
         "Include file not found",
-        "Could not find included file '{0}' for method '{1}'",
+        "[IncludeFiles] entry {0} matched no files for method '{1}'",
         "Parlot.SourceGenerator",
-        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor InvalidIncludeFileDescriptor = new(
+        "PARLOT016",
+        "Invalid include file path",
+        "[IncludeFiles] entry {0} for method '{1}' was rejected: {2}",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "IncludeFiles paths must be relative C# paths that remain within the project root.");
+
+    internal static readonly DiagnosticDescriptor IncludeFileSymlinkDescriptor = new(
+        "PARLOT017",
+        "Include file path uses a symbolic link",
+        "[IncludeFiles] entry {0} for method '{1}' was rejected because it traverses a symbolic link",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "IncludeFiles does not follow symbolic links because their targets can escape the project root.");
+
+    internal static readonly DiagnosticDescriptor IncludeFileLimitDescriptor = new(
+        "PARLOT018",
+        "Include file limit exceeded",
+        "[IncludeFiles] entry {0} for method '{1}' exceeded the {2} limit",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor IncludeFileReadDescriptor = new(
+        "PARLOT019",
+        "Include file could not be read",
+        "[IncludeFiles] entry {0} for method '{1}' could not be read ({2})",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor ProjectRootUnavailableDescriptor = new(
+        "PARLOT020",
+        "Project root unavailable",
+        "[IncludeFiles] for method '{0}' requires the MSBuild project directory",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The Parlot build-transitive props expose MSBuildProjectDirectory to enforce project-root containment.");
 
     private static readonly DiagnosticDescriptor MethodNotFoundDescriptor = new(
         "PARLOT011",
@@ -165,11 +210,13 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                 options.GlobalOptions.TryGetValue("build_property.DesignTimeBuild", out var designTimeBuild);
                 options.GlobalOptions.TryGetValue("build_property.BuildingProject", out var buildingProject);
                 options.GlobalOptions.TryGetValue("build_property.BuildingInsideVisualStudio", out var buildingInsideVisualStudio);
+                options.GlobalOptions.TryGetValue("build_property.MSBuildProjectDirectory", out var projectDirectory);
 
                 return (
                     tfm: tfm ?? "",
                     identifier: identifier ?? "",
                     version: version ?? "",
+                    projectDirectory: projectDirectory ?? "",
                     isDesignTimeBuild: IsDesignTimeOrIdeContext(designTimeBuild, buildingProject, buildingInsideVisualStudio));
             });
 
@@ -252,7 +299,14 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
                     var targetFrameworkInfo = TargetFrameworkInfo.FromMsBuildProperties(tfmInfo.identifier, tfmInfo.version);
 
-                    GenerateForMethod(spc, compilation, targetFrameworkInfo, m.Value, methodInvocations ?? new List<InvocationInfo>(), tfmInfo.isDesignTimeBuild);
+                    GenerateForMethod(
+                        spc,
+                        compilation,
+                        targetFrameworkInfo,
+                        m.Value,
+                        methodInvocations ?? new List<InvocationInfo>(),
+                        tfmInfo.projectDirectory,
+                        tfmInfo.isDesignTimeBuild);
                 }
                 catch (Exception ex)
                 {
@@ -565,6 +619,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         TargetFrameworkInfo targetFramework,
         MethodToGenerate methodInfo,
         List<InvocationInfo> invocations,
+        string projectDirectory,
         bool isDesignTimeBuild)
     {
         var methodSymbol = methodInfo.Method;
@@ -624,6 +679,28 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         // This allows us to execute the parser with lambda stubs while keeping all other files intact
         var tempCompilation = hostCompilation
             .ReplaceSyntaxTree(originalSyntaxTree, rewrittenTree);
+
+        if (methodInfo.AdditionalFiles.Length > 0)
+        {
+            if (!IncludeFilesResolver.TryLoad(
+                context,
+                methodInfo.Method,
+                methodInfo.AttributeLocation,
+                methodInfo.AdditionalFiles,
+                originalSyntaxTree,
+                projectDirectory,
+                parseOptions,
+                tempCompilation.SyntaxTrees,
+                out var includedTrees))
+            {
+                return;
+            }
+
+            if (includedTrees.Count > 0)
+            {
+                tempCompilation = tempCompilation.AddSyntaxTrees(includedTrees);
+            }
+        }
 
         // Run additional source generators if specified via [IncludeGenerators] attribute
         if (methodInfo.AdditionalGenerators.Length > 0)
@@ -1011,7 +1088,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
 
             var sgContext = new SourceGenerationContext(
                 parseContextName: "context",
-                methodNamePrefix: methodSymbol.Name,
+                methodNamePrefix: GetGeneratedIdentifier(methodSymbol),
                 targetFramework: targetFramework,
                 csharpLanguageMajorVersion: GetCSharpLanguageMajorVersion(methodSymbol));
             
@@ -1128,8 +1205,8 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             ? null
             : methodSymbol.ContainingNamespace.ToDisplayString();
 
-        var typeName = methodSymbol.ContainingType.Name;
-        var methodName = methodSymbol.Name;
+        var typeName = EscapeIdentifier(methodSymbol.ContainingType.Name);
+        var methodName = GetGeneratedIdentifier(methodSymbol);
         var valueTypeName = TypeNameHelper.GetTypeName(valueType);
         var coreName = methodName + "_Core";
         var wrapperName = "GeneratedParser_" + methodName;
@@ -1583,6 +1660,49 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         return (sb.ToString(), failedLambdas);
     }
 
+    private static string GetGeneratedIdentifier(IMethodSymbol method)
+    {
+        var identifier = $"__Parlot_{method.Name.Length}_{method.Name}";
+        var candidate = identifier;
+        var suffix = 0;
+
+        while (HasGeneratedMemberCollision(method.ContainingType, candidate))
+        {
+            candidate = identifier + "_" + (++suffix).ToString(CultureInfo.InvariantCulture);
+        }
+
+        return candidate;
+    }
+
+    private static bool HasGeneratedMemberCollision(INamedTypeSymbol containingType, string identifier)
+    {
+        var generatedPrefix = identifier + "_";
+        var generatedFieldPrefix = "_" + generatedPrefix;
+        var wrapperName = "GeneratedParser_" + identifier;
+        var parserFieldName = "_generated_" + identifier;
+
+        foreach (var member in containingType.GetMembers())
+        {
+            var name = member.Name;
+            if (name == identifier
+                || name.StartsWith(generatedPrefix, StringComparison.Ordinal)
+                || name.StartsWith(generatedFieldPrefix, StringComparison.Ordinal)
+                || name == wrapperName
+                || name == parserFieldName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string EscapeIdentifier(string identifier)
+        => IsReservedKeyword(identifier) ? "@" + identifier : identifier;
+
+    private static bool IsReservedKeyword(string identifier)
+        => SyntaxFacts.GetKeywordKind(identifier) != SyntaxKind.None;
+
     private static void AppendAggressiveInliningIfSmall(StringBuilder builder, SourceResult result)
     {
         if (result.Locals.Count + result.Body.Count <= AggressiveInliningStatementLimit)
@@ -1612,7 +1732,9 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         var parameters = invokeMethod.GetParameters();
 
         // Emit #line directive for debugging if we have location info
-        var hasLineInfo = !string.IsNullOrEmpty(originalFilePath) && originalLine > 0;
+        var hasLineInfo = !string.IsNullOrEmpty(originalFilePath)
+            && originalLine > 0
+            && CanEmitLineDirective(originalFilePath!);
         
         if (isMethodGroup)
         {
@@ -1624,7 +1746,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             
             if (hasLineInfo)
             {
-                sb.Append($"#line {originalLine} \"{originalFilePath}\"\n");
+                AppendLineDirective(sb, originalLine, originalFilePath!);
             }
             
             sb.Append($"        private static {returnTypeName} {methodName}({paramList}) => ");
@@ -1719,7 +1841,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
                     
                     if (hasLineInfo)
                     {
-                        sb.Append($"#line {originalLine} \"{originalFilePath}\"\n");
+                        AppendLineDirective(sb, originalLine, originalFilePath!);
                     }
                     
                     sb.Append($"        private static {returnTypeName} {methodName}({paramList}) => ");
@@ -1836,7 +1958,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         if (lines.Length <= 1)
         {
             // Single line - just add one directive
-            return $"#line {startLine} \"{filePath}\"\n{body}";
+            return $"#line {startLine} {LiteralHelper.StringToLiteral(filePath)}\n{body}";
         }
 
         var sb = new StringBuilder();
@@ -1855,7 +1977,7 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             
             if (isSignificantLine)
             {
-                sb.Append($"#line {currentLine} \"{filePath}\"\n");
+                AppendLineDirective(sb, currentLine, filePath);
             }
             
             sb.Append(line);
@@ -1871,6 +1993,17 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
         
         return sb.ToString();
     }
+
+    private static void AppendLineDirective(StringBuilder builder, int line, string filePath)
+        => builder
+            .Append("#line ")
+            .Append(line)
+            .Append(' ')
+            .Append(LiteralHelper.StringToLiteral(filePath))
+            .Append('\n');
+
+    private static bool CanEmitLineDirective(string filePath)
+        => filePath.IndexOfAny(_invalidLineDirectivePathCharacters) < 0;
 
     /// <summary>
     /// Generates a diagnostics file containing compilation information for debugging.

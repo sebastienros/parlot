@@ -28,11 +28,15 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         var first = true;
         var parsed = new ParseResult<T>();
 
-        // TODO: it's not restoring an intermediate failed text position
-        // is the inner parser supposed to be clean?
-
-        while (_parser.Parse(context, ref parsed))
+        while (true)
         {
+            var previousOffset = context.Scanner.Cursor.Offset;
+            if (!_parser.Parse(context, ref parsed)
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
             if (first)
             {
                 results = [];
@@ -94,10 +98,13 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         var helperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
+        var previousOffsetName = $"previousOffset{context.NextNumber()}";
+        var itemValueName = $"itemValue{context.NextNumber()}";
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
-        result.Body.Add($"    if (!{helperName}({ctx}, out var itemValue{context.NextNumber()}))");
+        result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
+        result.Body.Add($"    if (!{helperName}({ctx}, out var {itemValueName}) || {context.CursorName}.Offset == {previousOffsetName})");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -109,7 +116,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
             result.Body.Add($"        {result.ValueVariable} = {listName};");
             result.Body.Add($"        {firstName} = false;");
             result.Body.Add("    }");
-            result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+            result.Body.Add($"    {listName}!.Add({itemValueName});");
         }
         result.Body.Add("}");
         if (!context.DiscardResult)

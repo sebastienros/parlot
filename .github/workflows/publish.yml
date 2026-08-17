@@ -1,37 +1,85 @@
 name: Publish
 
+permissions:
+  contents: read
+
 on:
   push:
     tags: 
       - 'v*.*.*'
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
-
     runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
     env:
         DOTNET_NOLOGO: true
         DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
     steps:
-    - uses: actions/checkout@v6
-    - uses: actions/setup-dotnet@v5
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
       with:
         dotnet-version: | 
           8.0.x
           10.0.x
         global-json-file: global.json
-    
-    - name: Test
-      run: dotnet test --project test/Parlot.Tests/Parlot.Tests.csproj --configuration Release
+
+    - name: Validate release tag
+      id: release
+      shell: bash
+      run: |
+        set -euo pipefail
+        core_identifier='(0|[1-9][0-9]*)'
+        prerelease_identifier='(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+        release_pattern="^v${core_identifier}\.${core_identifier}\.${core_identifier}(-${prerelease_identifier}(\.${prerelease_identifier})*)?$"
+        if [[ ! "$GITHUB_REF_NAME" =~ $release_pattern ]]; then
+          echo "::error::Release tags must be semantic versions such as v1.2.3 or v1.2.3-preview.1."
+          exit 1
+        fi
+
+        git fetch --no-tags origin main
+        release_commit="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+        if ! git merge-base --is-ancestor "$release_commit" origin/main; then
+          echo "::error::Release tags must point to a commit contained in origin/main."
+          exit 1
+        fi
+
+        echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+    - name: Build
+      run: dotnet build --configuration Release -p:Version=${{ steps.release.outputs.version }} -p:ContinuousIntegrationBuild=True
+
+    - name: Test Parlot
+      run: dotnet test test/Parlot.Tests/Parlot.Tests.csproj --configuration Release --no-build -f net10.0
+
+    - name: Test source generator
+      run: dotnet test test/Parlot.SourceGenerator.Tests/Parlot.SourceGenerator.Tests.csproj --configuration Release --no-build
 
     - name: Pack with dotnet
-      run: |
-        arrTag=(${GITHUB_REF//\// })
-        VERSION="${arrTag[2]}"
-        VERSION="${VERSION#v}"
-        echo "$VERSION"
-        dotnet pack --output artifacts --configuration Release -p:Version=$VERSION -p:ContinuousIntegrationBuild=True
+      run: dotnet pack --output artifacts --configuration Release --no-build -p:Version=${{ steps.release.outputs.version }} -p:ContinuousIntegrationBuild=True
+
+    - name: Attest NuGet packages
+      uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+      with:
+        subject-path: artifacts/*.nupkg
 
     - name: Push with dotnet
-      run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      shell: bash
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: |
+        set -euo pipefail
+        for package in artifacts/*.nupkg; do
+          dotnet nuget push "$package" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        done

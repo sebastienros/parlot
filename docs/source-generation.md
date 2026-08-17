@@ -35,10 +35,17 @@ var result = parser.Parse("hello world");
 
 ## How It Works
 
-1. The source generator executes your method at compile time to build the parser graph.
+1. The source generator executes your method at compile time inside the compiler host to build the parser graph.
 2. It traverses the graph and generates optimized C# code for each parser.
 3. C# interceptors replace calls to your method with the generated implementation.
 4. At runtime, no parser graph construction occurs—just the generated code runs.
+
+> [!WARNING]
+> `[GenerateParser]` factory methods are executable build code, not declarative metadata. They run with the
+> compiler host's process permissions and can access the build environment. `[IncludeGenerators]` additionally
+> loads and executes the selected analyzer assemblies, which is equivalent to trusting executable build
+> dependencies. Only build trusted parser factories and generators outside an isolated environment. See the
+> [security guidance](security.md#source-generation-and-build-time-code-execution).
 
 ## Requirements
 
@@ -82,8 +89,14 @@ Examples:
 [IncludeFiles("*.cs")]                    // All .cs files in same directory
 [IncludeFiles("Models/*.cs")]             // All .cs files in Models subdirectory
 [IncludeFiles("**/*.cs")]                 // All .cs files recursively
-[IncludeFiles("../Shared/**/*.cs")]       // Relative paths supported
+[IncludeFiles("../Shared/**/*.cs")]       // Parent paths are allowed only within the project root
 ```
+
+Paths are resolved from the parser source file but must remain inside the MSBuild project root. Absolute
+paths, symbolic-link traversal, and patterns not ending in `.cs` are rejected. A parser can include at most
+256 files, each no larger than 1 MiB and no larger than 8 MiB in total; glob traversal is capped at 10,000
+entries. Rejections are reported as `PARLOT016`-`PARLOT020` diagnostics without resolved filesystem paths.
+Use exact files or narrow directory globs rather than project-wide `**/*.cs` patterns.
 
 ### [IncludeUsings]
 
@@ -107,6 +120,9 @@ public static Parser<Expression> CreateParser() => ...;
 // Multiple generators
 [IncludeGenerators("PolySharp", "Microsoft.Extensions.Logging.Generators")]
 ```
+
+Included generators execute in the compiler host. Treat every named generator and its transitive package
+dependencies as trusted executable build code.
 
 ### Class-Level Attributes
 

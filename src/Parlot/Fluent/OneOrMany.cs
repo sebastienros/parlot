@@ -34,23 +34,33 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         context.EnterParser(this);
 
         var parsed = new ParseResult<T>();
-
-        if (!_parser.Parse(context, ref parsed))
+        var previousOffset = context.Scanner.Cursor.Offset;
+        if (!_parser.Parse(context, ref parsed)
+            || context.Scanner.Cursor.Offset == previousOffset)
         {
+            context.ExitParser(this);
             return false;
         }
 
         var start = parsed.Start;
-        var results = new HybridList<T>();
-
-        int end;
-
-        do
+        var end = parsed.End;
+        var results = new HybridList<T>
         {
+            parsed.Value
+        };
+
+        while (true)
+        {
+            previousOffset = context.Scanner.Cursor.Offset;
+            if (!_parser.Parse(context, ref parsed)
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
             end = parsed.End;
             results.Add(parsed.Value);
-
-        } while (_parser.Parse(context, ref parsed));
+        }
 
         result.Set(start, end, results.AsReadOnlyList());
 
@@ -97,10 +107,13 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         var helperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
+        var previousOffsetName = $"previousOffset{context.NextNumber()}";
+        var itemValueName = $"itemValue{context.NextNumber()}";
 
         result.Body.Add("while (true)");
         result.Body.Add("{");
-        result.Body.Add($"    if (!{helperName}({context.ParseContextName}, out var itemValue{context.NextNumber()}))");
+        result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
+        result.Body.Add($"    if (!{helperName}({context.ParseContextName}, out var {itemValueName}) || {context.CursorName}.Offset == {previousOffsetName})");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -110,7 +123,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             result.Body.Add("    {");
             result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
             result.Body.Add("    }");
-            result.Body.Add($"    {listName}!.Add(itemValue{context.NextNumber() - 1});");
+            result.Body.Add($"    {listName}!.Add({itemValueName});");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");

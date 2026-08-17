@@ -10,4 +10,8 @@
   <ItemGroup Condition="'$(ImplicitUsings)' == 'true' or '$(ImplicitUsings)' == 'enable'">
     <Using Include="Parlot.Fluent.Parsers" Static="true" />
   </ItemGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="MSBuildProjectDirectory" />
+  </ItemGroup>
 </Project>
