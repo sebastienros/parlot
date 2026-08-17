@@ -1,6 +1,5 @@
 # Parlot Security Threat Model
 
-**Status:** Current baseline  
 **Version:** 1.1  
 **Last updated:** August 17, 2026  
 **Implementation reference:** [PR #324](https://github.com/sebastienros/parlot/pull/324)
@@ -147,4 +146,3 @@ dependency, distinct target-framework implementation, package-content change, or
 | Source-generator risks | Source-generator maintainers |
 | Release and credential risks | Repository administrators |
 | Input, result, semantic, and process limits | Consuming application owners |
-
