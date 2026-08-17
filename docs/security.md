@@ -2,6 +2,8 @@
 
 Parlot parses data in the caller's process and source-generates parsers in the compiler process. Applications
 and build pipelines must set resource and trust boundaries appropriate for the data and code they process.
+See the [threat model](threat-model.md) for the system boundaries, threat register, implemented controls, and
+residual risks behind this guidance.
 
 ## Source generation and build-time code execution
 
