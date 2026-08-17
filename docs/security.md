@@ -62,21 +62,3 @@ resource limits in hostile multi-tenant scenarios.
 Semantic actions (`Then`, predicates, custom parsers, and custom `ParseContext` hooks) execute arbitrary
 application code. Use only trusted actions, avoid ambient secrets and side effects, and apply the same output
 and cancellation limits to code called from them.
-
-## Release controls
-
-The repository workflows use explicit least-privilege permissions, immutable action commits, semantic-version
-tag validation, a main-branch ancestry check, and GitHub build-provenance attestations for `.nupkg` files.
-The following controls require repository or NuGet configuration and cannot be enforced safely in source:
-
-- protect the `v*` tag namespace with a GitHub ruleset and restrict tag creation and deletion to release
-  maintainers or the release automation;
-- require reviewed pull requests and successful required checks on `main`;
-- place publishing behind a protected GitHub environment with required reviewers;
-- configure NuGet.org Trusted Publishing for this repository and `publish.yml`, then replace the long-lived
-  `NUGET_API_KEY` with the short-lived credential produced by `NuGet/login`; and
-- restrict or remove the legacy NuGet API key after Trusted Publishing is verified.
-
-The workflow intentionally retains the existing API-key publication step until the NuGet.org Trusted
-Publishing policy exists. Published package provenance can be checked with
-`gh attestation verify <package.nupkg> --repo sebastienros/parlot`.
