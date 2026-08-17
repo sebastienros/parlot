@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Expose the project root to the generator so IncludeFiles tests can enforce project containment. -->
     <CompilerVisibleProperty Include="MSBuildProjectDirectory" />
 
     <!-- Reference Parlot for the library types -->
