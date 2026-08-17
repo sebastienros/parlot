@@ -11,6 +11,21 @@
 
 > Note: when samples use a local `input` variable representing the input text to parse, and a `parser` variable, the result is usually the outcome of calling `var result = parser.Parse(input)` or `var success = parser.TryParse(input, out var result)`.
 
+## Limiting parser recursion
+
+Recursive grammars can limit the nesting depth accepted from untrusted input by setting
+`maxRecursionDepth` on the `ParseContext`. The default value is `0`, which applies no limit.
+The limit applies to both runtime and source-generated parsers.
+
+```c#
+var context = new ParseContext(new Scanner(input), maxRecursionDepth: 128);
+
+if (!parser.TryParse(context, out var result, out var error))
+{
+    // error reports when the configured recursion limit was exceeded
+}
+```
+
 ## Terms and Literals
 
 These are lowest level elements of a grammar, like a `'.'` (dot), predefined strings like `"hello"`, numbers, and more.

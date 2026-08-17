@@ -1456,8 +1456,28 @@ public sealed class ParserSourceGenerator : IIncrementalGenerator
             {
                 sb.AppendLine($"        // {deferredParserName}");
             }
-            AppendAggressiveInliningIfSmall(sb, deferredResult);
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        private static bool {deferredMethodName}(ParseContext context, out {deferredValueTypeName} value)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            if (context.MaxRecursionDepth > 0)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                context.EnterRecursion();");
+            sb.AppendLine();
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            sb.AppendLine($"                    return {deferredMethodName}_Core(context, out value);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                finally");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    context.ExitRecursion();");
+            sb.AppendLine("                }");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine($"            return {deferredMethodName}_Core(context, out value);");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            AppendAggressiveInliningIfSmall(sb, deferredResult);
+            sb.AppendLine($"        private static bool {deferredMethodName}_Core(ParseContext context, out {deferredValueTypeName} value)");
             sb.AppendLine("        {");
             sb.AppendLine("            context.CheckCancellation();");
             sb.AppendLine("            var scanner = context.Scanner;");

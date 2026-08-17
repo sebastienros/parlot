@@ -1,6 +1,7 @@
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -26,7 +27,27 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        if (context.MaxRecursionDepth > 0)
+        {
+            context.EnterRecursion();
+
+            try
+            {
+                return ParseCore(context, ref result);
+            }
+            finally
+            {
+                context.ExitRecursion();
+            }
+        }
+
+        return ParseCore(context, ref result);
+    }
+
+    private bool ParseCore(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
@@ -205,7 +226,27 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
+    {
+        if (context.MaxRecursionDepth > 0)
+        {
+            context.EnterRecursion();
+
+            try
+            {
+                return ParseCore(context, ref result);
+            }
+            finally
+            {
+                context.ExitRecursion();
+            }
+        }
+
+        return ParseCore(context, ref result);
+    }
+
+    private bool ParseCore(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
