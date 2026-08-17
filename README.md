@@ -96,6 +96,7 @@ static FluentParser()
 - [Existing parsers and usage examples](docs/parsers.md)
 - [Best practices for custom parsers](docs/writing.md)
 - [Source generation guide](docs/source-generation.md)
+- [Security guidance](docs/security.md)
 
 ## Source-generated parsers
 

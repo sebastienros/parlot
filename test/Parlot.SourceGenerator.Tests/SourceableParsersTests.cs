@@ -225,6 +225,16 @@ namespace Parlot.SourceGenerator.Tests
         }
 
         [Fact]
+        public void RepetitionParsers_StopWhenInnerParserMakesNoProgress()
+        {
+            Assert.Equal(3, Grammars.ZeroOrManyOptionalParser().Parse("aaa")!.Count);
+            Assert.Equal(3, Grammars.OneOrManyOptionalParser().Parse("aaa")!.Count);
+            Assert.False(Grammars.OneOrManyOptionalParser().TryParse("", out _));
+            Assert.Equal(3, Grammars.SeparatedOptionalParser().Parse("aaa")!.Count);
+            Assert.False(Grammars.SeparatedOptionalParser().TryParse("", out _));
+        }
+
+        [Fact]
         public void SeparatedDecimals_Works()
         {
             var p = Grammars.SeparatedDecimalsParser();

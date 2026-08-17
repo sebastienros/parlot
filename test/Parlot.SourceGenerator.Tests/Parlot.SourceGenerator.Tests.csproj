@@ -15,6 +15,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <CompilerVisibleProperty Include="MSBuildProjectDirectory" />
+
     <!-- Reference Parlot for the library types -->
     <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
     

@@ -46,6 +46,10 @@ var foo = MyGrammar.FooParser();
 
 Include additional source files for types your parser depends on. Paths are relative to the source file containing the `[GenerateParser]` method.
 
+Paths must remain inside the MSBuild project root. Absolute paths, symbolic links, and patterns not ending
+in `.cs` are rejected. Use exact files or narrow globs; see the
+[security guidance](../../docs/security.md#includefiles-containment).
+
 ```csharp
 [GenerateParser]
 [IncludeFiles("Ast.cs", "Tokens.cs")]
@@ -80,6 +84,9 @@ Run other source generators (e.g., PolySharp) before parser generation:
 [IncludeGenerators("PolySharp")]
 public static Parser<Expression> CreateParser() => ...;
 ```
+
+`[GenerateParser]` factory methods and `[IncludeGenerators]` assemblies execute as trusted code inside the
+compiler host. Do not build untrusted factories or generators outside an isolated build environment.
 
 ### Class-level Attributes
 
@@ -120,4 +127,3 @@ public class MyCustomParser : Parser<string>, ISourceable
 ```
 
 For comprehensive documentation, see [Source Generation Guide](../../docs/source-generation.md).
-

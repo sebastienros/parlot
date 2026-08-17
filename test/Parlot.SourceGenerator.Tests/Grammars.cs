@@ -526,6 +526,18 @@ public static partial class Grammars
     public static Parser<IReadOnlyList<decimal>> SeparatedDecimalsParser() => Separated(Terms.Char(','), Terms.Decimal());
 
     [GenerateParser]
+    public static Parser<IReadOnlyList<char>> ZeroOrManyOptionalParser() =>
+        ZeroOrMany(ZeroOrOne(Literals.Char('a')));
+
+    [GenerateParser]
+    public static Parser<IReadOnlyList<char>> OneOrManyOptionalParser() =>
+        OneOrMany(ZeroOrOne(Literals.Char('a')));
+
+    [GenerateParser]
+    public static Parser<IReadOnlyList<char>> SeparatedOptionalParser() =>
+        Separated(ZeroOrOne(Literals.Char(',')), ZeroOrOne(Literals.Char('a')));
+
+    [GenerateParser]
     public static Parser<decimal> UnaryNegateDecimalParser() => Terms.Decimal().Unary((Terms.Char('-'), static d => -d));
 
     [GenerateParser]

@@ -11,6 +11,11 @@ namespace Parlot.SourceGenerator;
 /// that your parser method may depend on. By specifying the generator assembly names, Parlot's
 /// source generator will load and run those generators before emitting the compilation.
 /// </para>
+///
+/// <para>
+/// Included generators execute inside the compiler host. Only include generator assemblies that you trust
+/// as executable build dependencies.
+/// </para>
 /// 
 /// <para>
 /// The assembly names should match the assembly name of the source generator (typically the

@@ -7,8 +7,9 @@ namespace Parlot.SourceGenerator;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <strong>Root Directory:</strong> All file paths are resolved relative to the directory containing 
-/// the source file where the <c>[GenerateParser]</c> method is defined, not the project root or solution root.
+/// <strong>Root Directory:</strong> All file paths are resolved relative to the directory containing
+/// the source file where the <c>[GenerateParser]</c> method is defined. Paths must remain within the
+/// MSBuild project root. Absolute paths, symbolic links, and patterns not ending in <c>.cs</c> are rejected.
 /// Both forward slashes (/) and backslashes (\) are accepted as path separators.
 /// </para>
 /// 
@@ -41,7 +42,7 @@ namespace Parlot.SourceGenerator;
 /// Using glob patterns to include multiple files:
 /// <code>
 /// [GenerateParser]
-/// [IncludeFiles("*.cs", "../Shared/**/*.cs")]
+/// [IncludeFiles("*.cs", "../Shared/**/*.cs")] // Shared must remain inside the project root.
 /// public static Parser&lt;Expression&gt; CreateExpressionParser() =&gt; ...;
 /// </code>
 /// 
@@ -78,7 +79,8 @@ sealed class IncludeFilesAttribute : System.Attribute
     /// Specifies additional source files to include when generating the parser.
     /// </summary>
     /// <param name="files">
-    /// Relative paths or glob patterns for files to include (relative to the file containing the parser method).
+    /// Relative paths or glob patterns for C# files to include (relative to the file containing the parser method
+    /// and contained by the MSBuild project root).
     /// Supports wildcards: * (any characters except /), ** (recursive, any characters including /), and ? (single character).
     /// Both / and \ are accepted as path separators.
     /// </param>
