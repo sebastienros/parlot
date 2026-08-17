@@ -73,11 +73,17 @@ jobs:
       uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
       with:
         subject-path: artifacts/*.nupkg
+    
+    - name: NuGet login
+      id: nuget-login
+      uses: NuGet/login@v1
+      with:
+        user: sebastienros
 
     - name: Push with dotnet
       shell: bash
       env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
       run: |
         set -euo pipefail
         for package in artifacts/*.nupkg; do
