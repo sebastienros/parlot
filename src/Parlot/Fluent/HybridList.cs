@@ -1,17 +1,26 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Parlot.Fluent;
 
 /// <summary>
-/// An internal implementation of IReadOnlyList&lt;T&gt; that stores up to 4 items inline
+/// A parser result builder that stores up to 4 items inline
 /// before switching to a List&lt;T&gt; for growth.
 /// This provides efficient memory usage for small result sets while maintaining
 /// flexibility for larger lists.
 /// </summary>
+/// <remarks>
+/// This type is public to support source-generated parsers in consumer assemblies.
+/// Parser consumers should use <see cref="IReadOnlyList{T}"/> rather than depending on this implementation.
+/// </remarks>
+/// <typeparam name="T">The element type.</typeparam>
 #nullable enable
-internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
+[EditorBrowsable(EditorBrowsableState.Never)]
+[SuppressMessage("Naming", "CA1710:Identifiers should have correct suffix", Justification = "The type implements IReadOnlyList<T>; ICollection<T> supports pre-sized copies.")]
+public sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
 {
     private T? _item1;
     private T? _item2;
@@ -20,8 +29,10 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
     private List<T>? _list;
     private int _count;
 
+    /// <summary>Gets the number of items.</summary>
     public int Count => _count;
 
+    /// <summary>Gets the item at the specified index.</summary>
     public T this[int index]
     {
         get
@@ -47,6 +58,7 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
         }
     }
 
+    /// <summary>Adds an item while building a parser result.</summary>
     public void Add(T item)
     {
         if (_list is not null)
@@ -103,6 +115,7 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
 
     bool ICollection<T>.Remove(T item) => throw new NotSupportedException();
 
+    /// <summary>Determines whether the collection contains an item.</summary>
     public bool Contains(T item)
     {
         if (_list is not null)
@@ -123,6 +136,7 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
         return false;
     }
 
+    /// <summary>Copies the items to an array starting at the specified index.</summary>
     public void CopyTo(T[] array, int arrayIndex)
     {
         _ = array ?? throw new ArgumentNullException(nameof(array));
@@ -159,6 +173,7 @@ internal sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
     /// </remarks>
     public IReadOnlyList<T> AsReadOnlyList() => _list ?? (IReadOnlyList<T>)this;
 
+    /// <summary>Returns an enumerator over the items.</summary>
     public IEnumerator<T> GetEnumerator()
     {
         if (_list is not null)

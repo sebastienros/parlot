@@ -2,14 +2,12 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
 public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
-    private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
 
     public OneOrMany(Parser<T> parser)
     {
@@ -85,7 +83,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
         }
         result.Body.Add($"{result.SuccessVariable} = false;");
 
@@ -121,7 +119,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         {
             result.Body.Add($"    if ({listName} == null)");
             result.Body.Add("    {");
-            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
             result.Body.Add("    }");
             result.Body.Add($"    {listName}!.Add({itemValueName});");
         }
@@ -131,7 +129,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         {
             result.Body.Add($"if ({listName} != null)");
             result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {listName};");
+            result.Body.Add($"    {result.ValueVariable} = {listName}.AsReadOnlyList();");
             result.Body.Add("}");
         }
 

@@ -1,14 +1,11 @@
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
 public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
 {
-    private static readonly MethodInfo _listAdd = typeof(List<T>).GetMethod("Add")!;
-
     private readonly Parser<T> _parser;
 
     public ZeroOrMany(Parser<T> parser)
@@ -76,7 +73,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
             result.Body.Add($"bool {firstName} = true;");
         }
 
@@ -112,8 +109,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         {
             result.Body.Add($"    if ({firstName})");
             result.Body.Add("    {");
-            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
-            result.Body.Add($"        {result.ValueVariable} = {listName};");
+            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
             result.Body.Add($"        {firstName} = false;");
             result.Body.Add("    }");
             result.Body.Add($"    {listName}!.Add({itemValueName});");
@@ -121,10 +117,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         result.Body.Add("}");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"if ({listName} is null)");
-            result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
-            result.Body.Add("}");
+            result.Body.Add($"{result.ValueVariable} = {listName}?.AsReadOnlyList() ?? global::System.Array.Empty<{elementTypeName}>();");
         }
 
         return result;
