@@ -1,18 +1,43 @@
 # Parlot
 
-[![NuGet](https://img.shields.io/nuget/v/Parlot.svg)](https://nuget.org/packages/Parlot)
 [![BSD 3-Clause](https://img.shields.io/github/license/sebastienros/parlot)](https://github.com/sebastienros/parlot/blob/main/LICENSE) [![Join the chat at https://gitter.im/sebastienros/parlot](https://badges.gitter.im/sebastienros/parlot.svg)](https://gitter.im/sebastienros/parlot?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Parlot is a __fast__, __lightweight__ and simple to use .NET parser combinator.
 
 Parlot provides a fluent API based on parser combinators that provide a more readable grammar definition.
 
-## Preview packages
+## Branches and NuGet feeds
 
-Successful Ubuntu builds for pushes to `main` publish preview packages to the
-[Parlot Feedz feed](https://f.feedz.io/sebastienros/parlot/nuget/index.json).
+| Branch | Purpose | Package feed |
+| --- | --- | --- |
+| [`release/1.x`](https://github.com/sebastienros/parlot/tree/release/1.x) | Maintenance of stable Parlot 1.x releases. | [![NuGet.org stable version](https://img.shields.io/nuget/v/Parlot.svg?label=nuget.org)](https://www.nuget.org/packages/Parlot) |
+| [`main`](https://github.com/sebastienros/parlot/tree/main) | Development of Parlot 2.0, including source-generated parsers. | [![Feedz preview version](https://img.shields.io/endpoint?url=https%3A%2F%2Ff.feedz.io%2Fsebastienros%2Fparlot%2Fshield%2FParlot%2Flatest)](https://f.feedz.io/sebastienros/parlot/nuget/index.json) |
+
+### Stable packages
+
+Tagged releases are published to [NuGet.org](https://www.nuget.org/packages/Parlot),
+using the feed `https://api.nuget.org/v3/index.json`. To install the latest stable version:
+
+```shell
+dotnet add package Parlot
+```
+
+### Preview packages
+
+After a successful Ubuntu build triggered by a push to `main`, the workflow publishes preview packages to the
+[Parlot feed on feedz.io](https://f.feedz.io/sebastienros/parlot/nuget/index.json).
 Versions follow `2.0.0-preview-<run number>`, using the GitHub Actions build run number.
-Tagged releases continue to be published to NuGet.org.
+These packages contain the latest development changes and are intended for testing before release.
+
+Add the preview feed alongside NuGet.org, then install the latest prerelease version:
+
+```shell
+dotnet nuget add source https://f.feedz.io/sebastienros/parlot/nuget/index.json --name parlot-preview
+dotnet add package Parlot --prerelease
+```
+
+Keep NuGet.org enabled so dependencies can be restored. If your `NuGet.config` uses package source
+mapping, also map `Parlot` to the `parlot-preview` source.
 
 ## Fluent API
 
