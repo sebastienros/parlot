@@ -2,14 +2,11 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
 public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISourceable
 {
-    private static readonly MethodInfo _listAddMethodInfo = typeof(List<T>).GetMethod("Add")!;
-
     private readonly Parser<U> _separator;
     private readonly Parser<T> _parser;
 
@@ -124,7 +121,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"System.Collections.Generic.List<{elementTypeName}>? {listName} = null;");
+            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
         }
         result.Body.Add($"bool {firstName} = true;");
         result.Body.Add($"var {endName} = {cursorName}.Position;");
@@ -183,7 +180,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         result.Body.Add("    {");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"        {listName} = new System.Collections.Generic.List<{elementTypeName}>();");
+            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
             result.Body.Add($"        {startName} = {endName}.Offset;");
         }
         result.Body.Add($"        {firstName} = false;");
@@ -199,7 +196,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         {
             result.Body.Add($"if ({listName} != null)");
             result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {listName};");
+            result.Body.Add($"    {result.ValueVariable} = {listName}.AsReadOnlyList();");
             result.Body.Add($"    {result.SuccessVariable} = true;");
             result.Body.Add("}");
             result.Body.Add("else");

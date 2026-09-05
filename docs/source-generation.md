@@ -40,6 +40,13 @@ var result = parser.Parse("hello world");
 3. C# interceptors replace calls to your method with the generated implementation.
 4. At runtime, no parser graph construction occurs—just the generated code runs.
 
+Generated `ZeroOrMany`, `OneOrMany`, and `Separated` parsers use the same collection storage as
+runtime parsers: up to four elements are stored inline, with no separate backing array. Larger
+results use a growing `List<T>`, and an empty `ZeroOrMany` result uses `Array.Empty<T>()`.
+Results remain exposed as `IReadOnlyList<T>`; their concrete type is an implementation detail.
+`Parlot.Fluent.HybridList<T>` is public, but hidden from IntelliSense, to support generated code
+in consumer assemblies. It is a result builder, not a general-purpose collection API.
+
 > [!WARNING]
 > `[GenerateParser]` factory methods are executable build code, not declarative metadata. They run with the
 > compiler host's process permissions and can access the build environment. `[IncludeGenerators]` additionally
