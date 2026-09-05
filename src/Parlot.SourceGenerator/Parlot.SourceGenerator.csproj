@@ -3,6 +3,9 @@
   <PropertyGroup>
     <!-- Source generators typically target netstandard2.0 to work with multiple compiler hosts -->
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Title>Parlot Source Generator</Title>
+    <Description>Roslyn source generator for compiling Parlot parser combinators into optimized C# code.</Description>
+    <PackageTags>parlot;parser;parser-combinator;source-generator;roslyn</PackageTags>
     <IsPackable>true</IsPackable>
     <AssemblyOriginatorKeyFile>../Parlot/Parlot.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
