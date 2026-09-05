@@ -103,6 +103,7 @@ Result:
 Selects the parser to execute at runtime. Use it when the next parser depends on mutable state or a custom `ParseContext` implementation.
 
 ```c#
+Parser<T> Select<T>(Func<int> selector, params Parser<T>[] parsers)
 Parser<T> Select<T>(Func<ParseContext, int> selector, params Parser<T>[] parsers)
 Parser<T> Select<C, T>(Func<C, int> selector, params Parser<T>[] parsers) where C : ParseContext
 ```
@@ -119,7 +120,7 @@ var result = parser.Parse(new CustomContext(new Scanner("yes")) { PreferYes = tr
 ```
 `CustomContext` is an application-defined type that derives from `ParseContext` and exposes additional configuration.
 
-If the selector returns an out-of-range index, the `Select` parser fails without consuming any input. Capture additional state through closures or custom `ParseContext` properties when needed.
+The selector is evaluated once per parse, before any branch skips whitespace. Only the selected parser runs; its failure does not try another branch. If the selector returns an out-of-range index, the `Select` parser fails without consuming any input. Capture additional state through closures or custom `ParseContext` properties when needed.
 
 ### Text
 
@@ -1119,17 +1120,37 @@ parser.Parse("42:"); // failure, lookahead matches
 
 The lookahead parser is checked at the current position but doesn't consume input. If the lookahead succeeds, the entire parser fails and the cursor is reset to the beginning.
 
-### If (Deprecated)
-
-NB: This parser can be rewritten using `Select` (and `Fail`) which is more flexible and simpler to understand.
+### If
 
 Executes a parser only if a condition is true.
 
 ```c#
-Parser<T> If<TContext, TState, T>(Func<ParseContext, TState, bool> predicate, TState state, Parser<T> parser)
+Parser<T> If<T>(Func<bool> condition, Parser<T> parser)
+Parser<T> If<T>(Func<ParseContext, bool> condition, Parser<T> parser)
+Parser<T> If<C, T>(Func<C, bool> condition, Parser<T> parser) where C : ParseContext
 ```
 
-To evaluate a condition before a parser is executed use the `If` parser instead.
+The condition is evaluated once per parse, at the current cursor position before any branch skips whitespace.
+When it is false, the two-argument form fails without consuming input or changing the result.
+When it is true, the parser succeeds only if the selected child succeeds.
+
+Provide an else parser to select between two fixed branches:
+
+```c#
+Parser<T> If<T>(Func<bool> condition, Parser<T> thenParser, Parser<T> elseParser)
+Parser<T> If<T>(Func<ParseContext, bool> condition, Parser<T> thenParser, Parser<T> elseParser)
+Parser<T> If<C, T>(Func<C, bool> condition, Parser<T> thenParser, Parser<T> elseParser) where C : ParseContext
+
+var allowWhiteSpace = true;
+var parser = If(() => allowWhiteSpace, Terms.Integer(), Literals.Integer());
+```
+
+Only the selected branch executes. If it fails, the cursor is restored and `If` fails;
+it never falls back to the other branch. Conditions and selectors should not consume input.
+To validate a parsed value instead, use `When`.
+
+The obsolete overloads taking a separate state argument and the `If<C, S, T>` type have been removed
+in this major version. Capture state in the condition or read it from a custom `ParseContext`.
 
 ### Switch
 

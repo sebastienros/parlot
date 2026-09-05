@@ -9,10 +9,10 @@ To debug the generated code, add this to a project:
 
 ## GenerateParser attribute
 
-- Apply `[GenerateParser]` to static, **parameterless** methods returning `Parlot.Fluent.Parser<T>`.
+- Apply `[GenerateParser]` to static, non-generic methods returning `Parlot.Fluent.Parser<T>`.
 - Uses C# interceptors to replace calls to the annotated method with generated, optimized code at compile time.
 - Each method can only have one `[GenerateParser]` attribute.
-- If you need multiple parser variants (e.g., different keywords), create separate methods.
+- Bind by-value factory arguments through inline parse-time callbacks, for example `If(() => enabled, a, b)`. Arguments must not be used eagerly to construct the graph.
 
 Example:
 
@@ -27,17 +27,15 @@ public static partial class MyGrammar
     [GenerateParser]
     public static Parser<string> HelloParser() => Terms.Text("hello");
 
-    // For variants, create separate methods instead of parameterized ones
+    // Both branches are generated; the argument is bound at runtime.
     [GenerateParser]
-    public static Parser<string> FooParser() => Terms.Text("foo");
-
-    [GenerateParser]
-    public static Parser<string> BarParser() => Terms.Text("bar");
+    public static Parser<string> FooParser(bool uppercase) =>
+        If(() => uppercase, Terms.Text("FOO"), Terms.Text("foo"));
 }
 
 // Usage - calls are intercepted and replaced with generated code
 var hello = MyGrammar.HelloParser();
-var foo = MyGrammar.FooParser();
+var foo = MyGrammar.FooParser(uppercase: false);
 ```
 
 ## Helper Attributes

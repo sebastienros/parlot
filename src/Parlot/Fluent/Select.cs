@@ -1,6 +1,5 @@
 using Parlot.SourceGeneration;
 using System;
-using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -12,12 +11,33 @@ namespace Parlot.Fluent;
 public sealed class Select<C, T> : Parser<T>, ISourceable where C : ParseContext
 {
     private readonly Parser<T>[] _parsers;
-    private readonly Func<C, int> _selector;
+    private readonly Func<C, int>? _contextSelector;
+    private readonly Func<int>? _selector;
 
+    /// <summary>
+    /// Creates a parser that executes the branch selected using the current context.
+    /// </summary>
+    /// <param name="selector">The selector to evaluate once before parsing.</param>
+    /// <param name="parsers">The fixed set of parsers to select from.</param>
     public Select(Func<C, int> selector, params Parser<T>[] parsers)
+        : this(parsers)
+    {
+        _contextSelector = selector ?? throw new ArgumentNullException(nameof(selector));
+    }
+
+    /// <summary>
+    /// Creates a parser that executes the branch selected by a context-free callback.
+    /// </summary>
+    /// <param name="selector">The selector to evaluate once before parsing.</param>
+    /// <param name="parsers">The fixed set of parsers to select from.</param>
+    public Select(Func<int> selector, params Parser<T>[] parsers)
+        : this(parsers)
     {
         _selector = selector ?? throw new ArgumentNullException(nameof(selector));
+    }
 
+    private Select(Parser<T>[] parsers)
+    {
         ThrowHelper.ThrowIfNull(parsers, nameof(parsers));
 
         _parsers = parsers;
@@ -32,7 +52,7 @@ public sealed class Select<C, T> : Parser<T>, ISourceable where C : ParseContext
     {
         context.EnterParser(this);
 
-        var index = _selector((C)context);
+        var index = _selector is not null ? _selector() : _contextSelector!((C)context);
 
         if ((uint)index >= (uint)_parsers.Length)
         {
@@ -73,11 +93,12 @@ public sealed class Select<C, T> : Parser<T>, ISourceable where C : ParseContext
         var ctx = context.ParseContextName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        // Register the selector lambda
-        var selectorLambda = context.RegisterLambda(_selector);
+        var selectorCall = _selector is not null
+            ? $"{context.RegisterLambda(_selector)}()"
+            : $"{context.RegisterLambda(_contextSelector!)}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx})";
 
         var indexName = $"index{context.NextNumber()}";
-        result.Body.Add($"var {indexName} = {selectorLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx});");
+        result.Body.Add($"var {indexName} = {selectorCall};");
         result.Body.Add($"switch ({indexName})");
         result.Body.Add("{");
 
