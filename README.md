@@ -7,6 +7,13 @@ Parlot is a __fast__, __lightweight__ and simple to use .NET parser combinator.
 
 Parlot provides a fluent API based on parser combinators that provide a more readable grammar definition.
 
+## Preview packages
+
+Successful Ubuntu builds for pushes to `main` publish preview packages to the
+[Parlot Feedz feed](https://f.feedz.io/sebastienros/parlot/nuget/index.json).
+Versions follow `2.0.0-preview-<run number>`, using the GitHub Actions build run number.
+Tagged releases continue to be published to NuGet.org.
+
 ## Fluent API
 
 The Fluent API provides simple parser combinators that are assembled to express more complex expressions.

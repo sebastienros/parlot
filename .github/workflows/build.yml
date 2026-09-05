@@ -43,6 +43,21 @@ jobs:
           10.0.x
         global-json-file: global.json
     - name: Build
-      run: dotnet build --configuration Release
+      run: dotnet build --configuration Release -p:VersionSuffix=preview-${{ github.run_number }} -p:ContinuousIntegrationBuild=True
     - name: Test
       run: dotnet test --configuration Release --no-build
+
+    - name: Pack preview packages
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
+      run: dotnet pack --output artifacts --configuration Release --no-build -p:VersionSuffix=preview-${{ github.run_number }} -p:ContinuousIntegrationBuild=True
+
+    - name: Push preview packages to Feedz
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
+      shell: bash
+      env:
+        FEEDZ_IO_API_KEY: ${{ secrets.FEEDZ_IO_API_KEY }}
+      run: |
+        set -euo pipefail
+        for package in artifacts/*.nupkg; do
+          dotnet nuget push "$package" --api-key "$FEEDZ_IO_API_KEY" --source https://f.feedz.io/sebastienros/parlot/nuget/index.json --skip-duplicate
+        done

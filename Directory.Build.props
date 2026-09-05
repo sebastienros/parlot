@@ -6,7 +6,8 @@
     <Authors>Sebastien Ros</Authors>
     <PackageProjectUrl>https://github.com/sebastienros/parlot</PackageProjectUrl>
     <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
-    <Version>0.0.0-preview</Version>
+    <VersionPrefix>2.0.0</VersionPrefix>
+    <VersionSuffix>preview</VersionSuffix>
 
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
