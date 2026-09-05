@@ -50,9 +50,95 @@ var result = parser.Parse("hello world");
 ## Requirements
 
 - **Static methods**: The annotated method must be `static`.
-- **Parameterless**: Methods cannot have parameters (create separate methods for variants).
+- **Parameters**: Ordinary by-value arguments can be captured by inline parse-time callbacks. They cannot determine the parser graph during construction.
+- **Non-generic**: Generic factories and generic containing types are not supported. Neither are `ref`, `out`, `in`, ref-like, pointer, or function-pointer parameters.
 - **Return type**: Must return `Parlot.Fluent.Parser<T>`.
-- **Partial class**: Recommended but not required.
+- **Partial class**: The containing class must be `partial`.
+
+## Parameterized Parsers
+
+Factory arguments configure a generated parser instance. The generator emits every branch once; the
+actual arguments are bound when the factory is called at runtime.
+
+```csharp
+public static partial class MyGrammar
+{
+    [GenerateParser]
+    public static Parser<string> Greeting(bool formal, string prefix)
+    {
+        return If(
+            () => formal,
+            Literals.Text("Hello"),
+            Literals.Text("Hi"))
+            .Then(text => prefix + text);
+    }
+}
+
+var formal = MyGrammar.Greeting(true, "Greeting: ");
+var informal = MyGrammar.Greeting(false, "");
+
+formal.Parse("Hello"); // "Greeting: Hello"
+informal.Parse("Hi");  // "Hi"
+```
+
+Multiple parameters, overloads, named arguments, optional arguments, and `params` arrays are supported.
+Calls evaluate their arguments normally, once and in source order. Parameterless factories still return
+a cached singleton; parameterized factories create a small bound parser instance, not a parser graph.
+Build that instance once and reuse it.
+
+### Conditional branches and context
+
+`If(condition, thenParser, elseParser)` evaluates the predicate once each time it is parsed and runs only
+the selected branch. Failure does not try the other branch. `If(condition, parser)` fails without
+consuming input when the condition is false. Both forms also accept `Func<ParseContext, bool>` or
+`Func<C, bool>` where `C : ParseContext`:
+
+```csharp
+return If(
+    (LanguageParseContext context) => options.AllowExtensions && context.InsideFunction,
+    extensionExpression,
+    standardExpression);
+```
+
+Factory arguments belong to the parser instance; the context always comes from the current parse.
+Predicates must not consume input. Use `Select(() => index, a, b, c)` for multiple branches, or its
+context-aware overloads. All branch parsers are constructed at compile time, including inactive ones.
+
+### Capture restrictions
+
+Factory parameters may be read in inline callbacks passed to `If`, `Select`, `Then`, `ThenElse`, `When`,
+`Switch`, and `Else`. Generated callbacks access instance fields directly, without allocating closures
+or invoking delegates during parsing. An ordinary, non-intercepted factory call retains its normal
+runtime combinator behavior.
+
+Captured arguments retain normal value/reference semantics. A reference-type options object is not
+cloned or frozen, so later mutations are visible to predicates. Prefer immutable options for parsers
+shared across threads. Value-type arguments are copied when the factory is called.
+
+Parameters cannot be reassigned or passed by reference. Factory-parameter captures must be inline;
+storing such a callback in a local variable is not supported. Captured locals and captures of parameters
+belonging to a different helper method are also unsupported. Move calculations that depend on arguments
+into the callback, or compute them before calling the factory.
+
+The graph must not depend on placeholder argument values. These examples are rejected with `PARLOT021`:
+
+```csharp
+// Eager branch selection would omit one branch from the generated parser.
+return formal ? Literals.Text("Hello") : Literals.Text("Hi");
+
+// A runtime-configured literal is not a compile-time constant.
+return Literals.Text(keyword);
+
+// Even eager normalization reads an unavailable runtime argument.
+var normalized = prefix.Trim();
+return Literals.Text("Hello").Then(text => normalized + text);
+```
+
+Use `If` or `Select` for alternatives and callbacks such as `.Then(text => prefix.Trim() + text)` for
+deferred computation. Eager argument validation also belongs before the factory call. Deferred callbacks
+are identified without executing their user bodies for source extraction; a callback capturing factory
+state cannot be invoked while building the graph. Such execution is rejected even if the factory catches
+the resulting exception (`PARLOT022`).
 
 ## Attributes Reference
 
@@ -289,34 +375,35 @@ This ensures that:
 
 ## Troubleshooting
 
-### Parser method has parameters
+### Unsupported factory parameters
 
 ```
-error: [GenerateParser] methods must be parameterless
+error PARLOT009: Unsupported parser factory signature
 ```
 
-Create separate methods for each variant:
+Use ordinary by-value parameters, not generic factories, by-reference parameters, or ref-like types.
+If an ordinary parameter is used eagerly during graph construction, `PARLOT021` explains that it must
+instead be read in a supported parse-time callback:
 
 ```csharp
 // ❌ Wrong
 [GenerateParser]
-public static Parser<string> TextParser(string text) => Terms.Text(text);
+public static Parser<string> TextParser(bool formal) =>
+    formal ? Terms.Text("Hello") : Terms.Text("Hi");
 
 // ✅ Correct
 [GenerateParser]
-public static Parser<string> HelloParser() => Terms.Text("hello");
-
-[GenerateParser]
-public static Parser<string> WorldParser() => Terms.Text("world");
+public static Parser<string> TextParser(bool formal) =>
+    If(() => formal, Terms.Text("Hello"), Terms.Text("Hi"));
 ```
 
-### Closures are not supported
+### Unsupported captures
 
 ```
 error PARLOT015: Lambda captures variable 'prefix' from the enclosing scope
 ```
 
-Lambdas in source-generated parsers cannot capture variables from their enclosing scope (closures). The generated code creates static methods that don't have access to captured state.
+Lambdas may capture their factory's parameters, but not arbitrary locals or another method's parameters.
 
 ```csharp
 // ❌ Wrong - captures 'prefix' variable
@@ -330,7 +417,15 @@ public static Parser<string> MyParser()
 
 **Solutions:**
 
-1. **Use a custom `ParseContext` subclass** to pass state:
+1. **Pass the state as a factory parameter:**
+
+```csharp
+[GenerateParser]
+public static Parser<string> MyParser(string prefix) =>
+    Terms.Identifier().Then(x => prefix + x.ToString());
+```
+
+2. **Use a custom `ParseContext` subclass** for per-execution state:
 
 ```csharp
 public class MyParseContext : ParseContext
@@ -342,8 +437,8 @@ public class MyParseContext : ParseContext
 [GenerateParser]
 public static Parser<string> MyParser()
 {
-    return Terms.Identifier().Then<MyParseContext, TextSpan, string>(
-        static (context, x) => context.Prefix + x.ToString());
+    return Terms.Identifier().Then(
+        static (context, x) => ((MyParseContext)context).Prefix + x.ToString());
 }
 
 // Usage:
@@ -352,7 +447,7 @@ var context = new MyParseContext(new Scanner("world")) { Prefix = "hello" };
 parser.Parse(context, out var result);
 ```
 
-2. **Use static fields or properties:**
+3. **Use static fields or properties:**
 
 ```csharp
 private static string _prefix = "hello";
@@ -364,7 +459,7 @@ public static Parser<string> MyParser()
 }
 ```
 
-3. **Use method groups for static methods:**
+4. **Use method groups for static methods:**
 
 ```csharp
 private static string Transform(TextSpan x) => "hello" + x.ToString();

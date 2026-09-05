@@ -4,42 +4,82 @@ using System;
 namespace Parlot.Fluent;
 
 /// <summary>
-/// Ensure the given parser is valid based on a condition, and backtracks if not.
+/// Evaluates a condition once and executes only the selected parser.
 /// </summary>
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
-/// <typeparam name="S">The type of the state to pass.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class If<C, S, T> : Parser<T>, ISourceable where C : ParseContext
+public sealed class If<C, T> : Parser<T>, ISourceable where C : ParseContext
 {
-    private readonly Func<C, S?, bool> _predicate;
-    private readonly S? _state;
-    private readonly Parser<T> _parser;
+    private readonly Func<C, bool>? _contextCondition;
+    private readonly Func<bool>? _condition;
+    private readonly Parser<T> _thenParser;
+    private readonly Parser<T>? _elseParser;
 
-    public If(Parser<T> parser, Func<C, S?, bool> predicate, S? state)
+    /// <summary>
+    /// Creates a parser that fails without consuming input when <paramref name="condition"/> is false.
+    /// </summary>
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="parser">The parser to execute when the condition is true.</param>
+    public If(Func<C, bool> condition, Parser<T> parser)
     {
-        _predicate = predicate ?? throw new ArgumentNullException(nameof(predicate));
-        _state = state;
-        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _contextCondition = condition ?? throw new ArgumentNullException(nameof(condition));
+        _thenParser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
+
+    /// <summary>
+    /// Creates a parser that fails without consuming input when <paramref name="condition"/> is false.
+    /// </summary>
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="parser">The parser to execute when the condition is true.</param>
+    public If(Func<bool> condition, Parser<T> parser)
+    {
+        _condition = condition ?? throw new ArgumentNullException(nameof(condition));
+        _thenParser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
+
+    /// <summary>
+    /// Creates a parser that executes only the selected branch, without falling back if it fails.
+    /// </summary>
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="thenParser">The parser to execute when the condition is true.</param>
+    /// <param name="elseParser">The parser to execute when the condition is false.</param>
+    public If(Func<C, bool> condition, Parser<T> thenParser, Parser<T> elseParser)
+    {
+        _contextCondition = condition ?? throw new ArgumentNullException(nameof(condition));
+        _thenParser = thenParser ?? throw new ArgumentNullException(nameof(thenParser));
+        _elseParser = elseParser ?? throw new ArgumentNullException(nameof(elseParser));
+    }
+
+    /// <summary>
+    /// Creates a parser that executes only the selected branch, without falling back if it fails.
+    /// </summary>
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="thenParser">The parser to execute when the condition is true.</param>
+    /// <param name="elseParser">The parser to execute when the condition is false.</param>
+    public If(Func<bool> condition, Parser<T> thenParser, Parser<T> elseParser)
+    {
+        _condition = condition ?? throw new ArgumentNullException(nameof(condition));
+        _thenParser = thenParser ?? throw new ArgumentNullException(nameof(thenParser));
+        _elseParser = elseParser ?? throw new ArgumentNullException(nameof(elseParser));
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        var valid = _predicate((C)context, _state);
+        var condition = _condition is not null ? _condition() : _contextCondition!((C)context);
+        var parser = condition ? _thenParser : _elseParser;
+        var parsed = new ParseResult<T>();
 
-        if (valid)
+        if (parser is not null && parser.Parse(context, ref parsed))
         {
-            var start = context.Scanner.Cursor.Position;
-
-            if (!_parser.Parse(context, ref result))
-            {
-                context.Scanner.Cursor.ResetPosition(start);
-            }
+            result.Set(parsed.Start, parsed.End, parsed.Value);
+            context.ExitParser(this);
+            return true;
         }
 
         context.ExitParser(this);
-        return valid;
+        return false;
     }
 
 
@@ -47,61 +87,43 @@ public sealed class If<C, S, T> : Parser<T>, ISourceable where C : ParseContext
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        if (_parser is not ISourceable sourceable)
+        if (_thenParser is not ISourceable thenSourceable || (_elseParser is not null && _elseParser is not ISourceable))
         {
-            throw new NotSupportedException("If requires a source-generatable parser.");
+            throw new NotSupportedException("If requires all branch parsers to be source-generatable.");
         }
 
         var result = context.CreateResult(typeof(T));
-        var cursorName = context.CursorName;
         var ctx = context.ParseContextName;
-
-        var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
-
-        // Register the predicate lambda
-        var predicateLambda = context.RegisterLambda(_predicate);
-        var stateLambda = context.RegisterLambda(new Func<S?>(() => _state));
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
 
-        // Use helper instead of inlining
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_If", valueTypeName, () => sourceable.GenerateSource(context))
+        var conditionCall = _condition is not null
+            ? $"{context.RegisterLambda(_condition)}()"
+            : $"{context.RegisterLambda(_contextCondition!)}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx})";
+
+        var thenHelper = context.Helpers
+            .GetOrCreate(_thenParser, $"{context.MethodNamePrefix}_If_Then", valueTypeName, () => thenSourceable.GenerateSource(context))
             .MethodName;
 
-        // if (_predicate((C)context, _state))
-        // {
-        //     if (Helper(context, out value))
-        //     {
-        //         success = true;
-        //     }
-        // }
-        // if (!success)
-        // {
-        //     cursor.ResetPosition(start);
-        // }
+        result.Body.Add($"if ({conditionCall})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = {thenHelper}({ctx}, out {outTarget});");
+        result.Body.Add("}");
 
-        result.Body.Add($"if ({predicateLambda}(({SourceGenerationContext.GetTypeName(typeof(C))}){ctx}, {stateLambda}()))");
-        result.Body.Add("{");
-        if (context.DiscardResult)
+        if (_elseParser is ISourceable elseSourceable)
         {
-            result.Body.Add($"    if ({helperName}({ctx}, out _))");
+            var elseHelper = context.Helpers
+                .GetOrCreate(_elseParser, $"{context.MethodNamePrefix}_If_Else", valueTypeName, () => elseSourceable.GenerateSource(context))
+                .MethodName;
+
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {result.SuccessVariable} = {elseHelper}({ctx}, out {outTarget});");
+            result.Body.Add("}");
         }
-        else
-        {
-            result.Body.Add($"    if ({helperName}({ctx}, out {result.ValueVariable}))");
-        }
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.SuccessVariable} = true;");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add($"if (!{result.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
 
         return result;
     }
 
-    public override string ToString() => $"{_parser} (If)";
+    public override string ToString() => _elseParser is null ? $"{_thenParser} (If)" : $"{_thenParser} (If) {_elseParser} (Else)";
 }

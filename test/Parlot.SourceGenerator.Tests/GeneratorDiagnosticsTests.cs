@@ -13,9 +13,8 @@ namespace Parlot.SourceGenerator.Tests;
 public class GeneratorDiagnosticsTests
 {
     [Fact]
-    public void Method_With_Parameters_Is_Not_Generated()
+    public void Parameter_Used_To_Build_The_Graph_Is_Rejected()
     {
-        // [GenerateParser] should only work on parameterless methods
         const string source = @"
 using Parlot.SourceGenerator;
 using Parlot.Fluent;
@@ -28,60 +27,166 @@ public static partial class ParameterizedGrammar
 }
 ";
 
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
-
-        var references = new List<MetadataReference>();
-        var trusted = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        if (!string.IsNullOrEmpty(trusted))
-        {
-            foreach (var path in trusted!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
-
-        void AddReference(string path)
-        {
-            if (!references.OfType<PortableExecutableReference>().Any(r => string.Equals(r.FilePath, path, StringComparison.OrdinalIgnoreCase)))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
-
-        AddReference(typeof(global::Parlot.Fluent.ParseContext).Assembly.Location);
-        AddReference(typeof(global::Parlot.SourceGenerator.GenerateParserAttribute).Assembly.Location);
-
-        var compilation = CSharpCompilation.Create(
-            assemblyName: "Parlot.SourceGenerator.Tests.ParameterizedMethod",
-            syntaxTrees: new[] { syntaxTree },
-            references: references,
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        var config = 
-#if DEBUG
-            "Debug";
-#else
-            "Release";
-#endif
-        var generatorPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/Parlot.SourceGenerator/bin", config, "netstandard2.0/Parlot.SourceGenerator.dll"));
-        Assert.True(File.Exists(generatorPath), $"Generator assembly not found at {generatorPath}");
-
-        var generatorAssembly = Assembly.LoadFrom(generatorPath);
-        var generatorType = generatorAssembly.GetType("Parlot.SourceGenerator.ParserSourceGenerator", throwOnError: true)!;
-        var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
-
-        var sourceGenerator = generator.AsSourceGenerator();
-        var driver = CSharpGeneratorDriver.Create(new[] { sourceGenerator }, parseOptions: parseOptions)
-            .RunGeneratorsAndUpdateCompilation(compilation, out var updatedCompilation, out var generatorDiagnostics);
-        
-        // The method should generate a PARLOT009 error since it has parameters
-        var result = driver.GetRunResult();
+        var (result, _) = RunGenerator(source, "ParameterizedMethod");
         var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
         Assert.Single(parserDiagnostics);
-        Assert.Equal("PARLOT009", parserDiagnostics[0].Id);
+        Assert.Equal("PARLOT021", parserDiagnostics[0].Id);
         Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
         Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
+    }
+
+    [Theory]
+    [InlineData("return enabled ? Terms.Text(\"yes\") : Terms.Text(\"no\");")]
+    [InlineData("var selected = enabled; return If(() => selected, Terms.Text(\"yes\"));")]
+    [InlineData("enabled = true; return If(() => enabled, Terms.Text(\"yes\"));")]
+    [InlineData("return If(() => enabled = true, Terms.Text(\"yes\"));")]
+    [InlineData("return If(() => Change(ref enabled), Terms.Text(\"yes\"));")]
+    [InlineData("return If(() => { (enabled, enabled) = (true, false); return true; }, Terms.Text(\"yes\"));")]
+    [InlineData("System.Func<bool> predicate = () => enabled; return If(predicate, Terms.Text(\"yes\"));")]
+    [InlineData("return Build(() => enabled);")]
+    public void Factory_Parameters_Must_Be_Read_Only_And_Deferred(string body)
+    {
+        var source = $$"""
+            using System;
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+            using static Parlot.Fluent.Parsers;
+            public static partial class InvalidParameterGrammar
+            {
+                [GenerateParser]
+                public static Parser<string> Create(bool enabled) { {{body}} }
+                private static bool Change(ref bool value) => value = true;
+                private static Parser<string> Build(Func<bool> predicate) => If(predicate, Terms.Text("yes"));
+            }
+            """;
+
+        var (result, _) = RunGenerator(source, "InvalidParameter" + Guid.NewGuid().ToString("N"));
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT021");
+        Assert.DoesNotContain(result.Results.SelectMany(static result => result.GeneratedSources),
+            static source => source.HintName.EndsWith(".Parlot.g.cs", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("ref int value")]
+    [InlineData("in int value")]
+    [InlineData("out int value")]
+    [InlineData("System.ReadOnlySpan<char> value")]
+    public void Unsupported_Factory_Parameters_Report_A_Diagnostic(string parameter)
+    {
+        var source = $$"""
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+            using static Parlot.Fluent.Parsers;
+            public static partial class UnsupportedParameterGrammar
+            {
+                [GenerateParser]
+                public static Parser<char> Create({{parameter}}) => Literals.Char('x');
+            }
+            """;
+
+        var (result, _) = RunGenerator(source, "UnsupportedParameter" + Guid.NewGuid().ToString("N"));
+        Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT009");
+    }
+
+    [Fact]
+    public void Deferred_Callbacks_Are_Not_Executed_For_Source_Extraction()
+    {
+        const string source = """
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+            using static Parlot.Fluent.Parsers;
+            public static partial class DeferredCallbackGrammar
+            {
+                public static int Evaluations;
+                private static bool Condition() { Evaluations++; return true; }
+                [GenerateParser]
+                public static Parser<char> Create()
+                {
+                    System.Func<char, char> convert = value => { Evaluations++; return value; };
+                    return If(Condition, Literals.Char('x')).Then(convert);
+                }
+            }
+            """;
+        var assemblyName = "DeferredCallbacks" + Guid.NewGuid().ToString("N");
+        var (result, updatedCompilation) = RunGenerator(source, assemblyName);
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+
+        var assembly = Assert.Single(AppDomain.CurrentDomain.GetAssemblies(),
+            assembly => assembly.GetName().Name == "Parlot.SourceGenerator.Tests." + assemblyName);
+        Assert.Equal(0, assembly.GetType("DeferredCallbackGrammar").GetField("Evaluations").GetValue(null));
+    }
+
+    [Fact]
+    public void Captures_In_Unrelated_Code_Do_Not_Reject_The_Factory()
+    {
+        const string source = """
+            using System;
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+            using static Parlot.Fluent.Parsers;
+            public static partial class ScopedCaptureGrammar
+            {
+                [GenerateParser]
+                public static Parser<char> Create() => Literals.Char('x');
+                public static Func<int> Unrelated(int value) => () => value;
+            }
+            """;
+
+        var (result, updatedCompilation) = RunGenerator(source, "ScopedCapture");
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Captured_Callback_Cannot_Be_Executed_While_Building_The_Graph()
+    {
+        const string source = """
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+            using static Parlot.Fluent.Parsers;
+            public static partial class EagerCallbackGrammar
+            {
+                [GenerateParser]
+                public static Parser<string> Create(bool enabled)
+                {
+                    var probe = If(() => enabled, Literals.Text("yes"));
+                    return probe.Parse("yes") != null ? Literals.Text("enabled") : Literals.Text("disabled");
+                }
+            }
+            """;
+
+        var (result, _) = RunGenerator(source, "EagerCallback");
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("cannot be executed while building", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Catching_Eager_Callback_Exception_Still_Rejects_Generation()
+    {
+        const string source = """
+            using System;
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+            using static Parlot.Fluent.Parsers;
+            public static partial class CaughtCallbackGrammar
+            {
+                [GenerateParser]
+                public static Parser<string> Create(bool enabled)
+                {
+                    var probe = Literals.Char('x').Then(_ => enabled ? "yes" : "no");
+                    string text;
+                    try { text = probe.Parse("x"); }
+                    catch (InvalidOperationException) { text = "fallback"; }
+                    return Literals.Text(text);
+                }
+            }
+            """;
+
+        var (result, _) = RunGenerator(source, "CaughtCallback");
+        Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT022");
+        Assert.DoesNotContain(result.Results.SelectMany(static result => result.GeneratedSources),
+            static source => source.HintName.EndsWith(".Parlot.g.cs", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -104,17 +104,20 @@ it — that is also the supported way to pass state into source-generated parser
 
 ### Source generation
 
-`src/Parlot.SourceGenerator` (netstandard2.0, Roslyn 4.11) makes `[GenerateParser]`-annotated static
-parameterless methods free at runtime: it loads `Parlot.dll`, executes the method at compile time to build
+`src/Parlot.SourceGenerator` (netstandard2.0, Roslyn 4.11) handles `[GenerateParser]`-annotated static
+methods: it loads `Parlot.dll`, executes the method at compile time to build
 the graph, walks it calling `ISourceable.GenerateSource`, and emits C# interceptors that replace the call
-sites. Consumers must set `<InterceptorsNamespaces>`.
+sites. Consumers must set `<InterceptorsNamespaces>`. Parameterless factories use a cached singleton;
+parameterized factories bind arguments to a small generated parser instance that callers should reuse.
 
-- `ParserSourceGenerator.cs` (~2.3k lines) drives it; `LambdaRewriter.cs` lifts lambdas into static methods
+- `ParserSourceGenerator.cs` drives it; `LambdaRewriter.cs` lifts lambdas into generated methods
   with `#line` mappings so breakpoints still land in the original source.
 - Registries in `src/Parlot/SourceGeneration` (`LambdaRegistry`, `DeferredRegistry`, `ParserHelperRegistry`,
   `TargetFrameworkInfo`, `SourceGenerationContext`, `SourceResult`) are the emission API.
-- Diagnostics are `PARLOT000`–`PARLOT015`; `PARLOT015` is the common one — **lambdas may not capture**
-  (no closures). Use `static` lambdas, static fields, method groups, or a custom `ParseContext`.
+- `PARLOT015` rejects captured locals or other methods' parameters. Inline parse-time callbacks in
+  `If`, `Select`, `Then`, `ThenElse`, `When`, `Switch`, and `Else` may capture their factory's by-value
+  parameters. `PARLOT021` rejects eager argument use or reassignment: keep the graph fixed and use
+  `If`/`Select` for runtime branches. Conditions may also accept a typed `ParseContext`.
 - Inspect output via `EmitCompilerGeneratedFiles` (both test/benchmark projects already set it; look under
   `obj/.../GeneratedFiles`).
 - The generator ships inside the Parlot NuGet package under `analyzers/dotnet/cs`, so `Parlot.csproj`

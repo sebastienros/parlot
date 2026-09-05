@@ -28,6 +28,36 @@ public static class LambdaPointer
     [ThreadStatic]
     private static int _currentPointer;
 
+    [ThreadStatic]
+    private static bool _isRegistering;
+
+    [ThreadStatic]
+    private static bool _hasEagerCapture;
+
+    /// <summary>
+    /// Whether a callback attempted to use captured state while constructing the current parser graph.
+    /// </summary>
+    public static bool HasEagerCapture => _hasEagerCapture;
+
+    /// <summary>
+    /// Records prohibited callback execution and creates its exception. The generator also checks
+    /// the recorded state in case factory code catches the exception.
+    /// </summary>
+    public static InvalidOperationException CreateEagerCaptureException()
+    {
+        _hasEagerCapture = true;
+        return new InvalidOperationException("Callbacks capturing factory state cannot be executed while building the parser graph.");
+    }
+
+    /// <summary>
+    /// Whether a deferred callback is being inspected for source generation rather than executed.
+    /// </summary>
+    public static bool IsRegistering
+    {
+        get => _isRegistering;
+        internal set => _isRegistering = value;
+    }
+
     /// <summary>
     /// Gets or sets the current lambda pointer.
     /// This is set by rewritten lambdas at the start of their execution.
@@ -44,6 +74,7 @@ public static class LambdaPointer
     public static void Reset()
     {
         _currentPointer = -1;
+        _hasEagerCapture = false;
     }
 
     /// <summary>
@@ -133,8 +164,8 @@ public sealed class LambdaRegistry
                 args[i] = GetDefaultValue(paramType);
             }
             
-            // Invoke the delegate - this will set LambdaPointer.CurrentPointer
-            // We ignore the return value and any exceptions from the original body
+            var wasRegistering = LambdaPointer.IsRegistering;
+            LambdaPointer.IsRegistering = true;
             try
             {
                 @delegate.DynamicInvoke(args);
@@ -143,6 +174,10 @@ public sealed class LambdaRegistry
             {
                 // Ignore exceptions from the original lambda body
                 // The pointer should still be set even if the body fails
+            }
+            finally
+            {
+                LambdaPointer.IsRegistering = wasRegistering;
             }
             
             // Read the pointer that was set by the rewritten lambda
@@ -161,7 +196,7 @@ public sealed class LambdaRegistry
     {
         if (type.IsValueType)
         {
-            return Activator.CreateInstance(type);
+            return Array.CreateInstance(type, 1).GetValue(0);
         }
         
         // For reference types, try some common cases

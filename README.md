@@ -104,10 +104,10 @@ Parlot can generate parsers at **compile time** using C# interceptors, avoiding 
 
 ### How it works
 
-- Annotate static, **parameterless** methods returning `Parlot.Fluent.Parser<T>` with `[GenerateParser]`.
+- Annotate static methods returning `Parlot.Fluent.Parser<T>` with `[GenerateParser]`.
 - The source generator executes the method at compile time to build the parser graph.
 - Uses C# interceptors to replace calls to the method with the generated, optimized code.
-- For parser variants (e.g., different keywords), create separate methods instead of using parameters.
+- For parser variants, capture factory parameters in `If`, `Select`, or other supported parse-time callbacks. Every branch is generated; runtime arguments configure the returned parser instance.
 
 ```csharp
 using Parlot.SourceGenerator;
@@ -136,8 +136,8 @@ var foo = MyGrammar.FooParser();      // Uses generated code
 ### Requirements
 
 - Add `<InterceptorsNamespaces>$(InterceptorsNamespaces);YourNamespace</InterceptorsNamespaces>` to your project file.
-- Methods must be static and parameterless.
-- The containing class should be `partial` (optional but recommended).
+- Methods must be static and non-generic. By-value parameters may only be read in supported parse-time callbacks, not during graph construction.
+- The containing class must be `partial`.
 
 ### Advanced Configuration
 

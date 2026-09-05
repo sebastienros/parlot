@@ -58,28 +58,60 @@ public static partial class Parsers
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
     /// <summary>
-    /// Builds a parser that invoked the next one if a condition is true.
+    /// Evaluates a condition once and executes <paramref name="parser"/> if it is true.
+    /// Otherwise, fails without consuming input or changing the result.
     /// </summary>
-    [Obsolete("Use the Select parser instead.")]
-    public static Parser<T> If<C, S, T>(Func<C, S?, bool> predicate, S? state, Parser<T> parser) where C : ParseContext => new If<C, S, T>(parser, predicate, state);
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="parser">The parser to execute when the condition is true.</param>
+    public static Parser<T> If<T>(Func<bool> condition, Parser<T> parser) => new If<ParseContext, T>(condition, parser);
 
     /// <summary>
-    /// Builds a parser that invoked the next one if a condition is true.
+    /// Evaluates a condition once using the current context and executes <paramref name="parser"/> if it is true.
+    /// Otherwise, fails without consuming input or changing the result.
     /// </summary>
-    [Obsolete("Use the Select parser instead.")]
-    public static Parser<T> If<S, T>(Func<ParseContext, S?, bool> predicate, S? state, Parser<T> parser) => new If<ParseContext, S, T>(parser, predicate, state);
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="parser">The parser to execute when the condition is true.</param>
+    public static Parser<T> If<T>(Func<ParseContext, bool> condition, Parser<T> parser) => new If<ParseContext, T>(condition, parser);
 
     /// <summary>
-    /// Builds a parser that invoked the next one if a condition is true.
+    /// Evaluates a condition once using the concrete context and executes <paramref name="parser"/> if it is true.
+    /// Otherwise, fails without consuming input or changing the result.
     /// </summary>
-    [Obsolete("Use the Select parser instead.")]
-    public static Parser<T> If<C, T>(Func<C, bool> predicate, Parser<T> parser) where C : ParseContext => new If<C, object?, T>(parser, (c, s) => predicate(c), null);
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="parser">The parser to execute when the condition is true.</param>
+    public static Parser<T> If<C, T>(Func<C, bool> condition, Parser<T> parser) where C : ParseContext => new If<C, T>(condition, parser);
 
     /// <summary>
-    /// Builds a parser that invoked the next one if a condition is true.
+    /// Evaluates a condition once and executes only the selected branch, without falling back if it fails.
     /// </summary>
-    [Obsolete("Use the Select parser instead.")]
-    public static Parser<T> If<T>(Func<ParseContext, bool> predicate, Parser<T> parser) => new If<ParseContext, object?, T>(parser, (c, s) => predicate(c), null);
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="thenParser">The parser to execute when the condition is true.</param>
+    /// <param name="elseParser">The parser to execute when the condition is false.</param>
+    public static Parser<T> If<T>(Func<bool> condition, Parser<T> thenParser, Parser<T> elseParser) => new If<ParseContext, T>(condition, thenParser, elseParser);
+
+    /// <summary>
+    /// Evaluates a condition once using the current context and executes only the selected branch, without falling back if it fails.
+    /// </summary>
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="thenParser">The parser to execute when the condition is true.</param>
+    /// <param name="elseParser">The parser to execute when the condition is false.</param>
+    public static Parser<T> If<T>(Func<ParseContext, bool> condition, Parser<T> thenParser, Parser<T> elseParser) => new If<ParseContext, T>(condition, thenParser, elseParser);
+
+    /// <summary>
+    /// Evaluates a condition once using the concrete context and executes only the selected branch, without falling back if it fails.
+    /// </summary>
+    /// <param name="condition">The condition to evaluate before parsing.</param>
+    /// <param name="thenParser">The parser to execute when the condition is true.</param>
+    /// <param name="elseParser">The parser to execute when the condition is false.</param>
+    public static Parser<T> If<C, T>(Func<C, bool> condition, Parser<T> thenParser, Parser<T> elseParser) where C : ParseContext => new If<C, T>(condition, thenParser, elseParser);
+
+    /// <summary>
+    /// Evaluates a selector once and executes the parser at its index.
+    /// An out-of-range index fails without consuming input.
+    /// </summary>
+    /// <param name="selector">The selector to evaluate before parsing.</param>
+    /// <param name="parsers">The fixed set of parsers to select from.</param>
+    public static Parser<T> Select<T>(Func<int> selector, params Parser<T>[] parsers) => new Select<ParseContext, T>(selector, parsers);
 
     /// <summary>
     /// Builds a parser that selects another parser using custom logic.

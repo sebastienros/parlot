@@ -2,7 +2,9 @@ namespace Parlot.SourceGenerator;
 
 /// <summary>
 /// Marks a parser descriptor method for Parlot source generation using interceptors.
-/// The annotated method must be static, parameterless, and return Parlot.Fluent.Parser&lt;T&gt;.
+/// The annotated method must be static, non-generic, and return Parlot.Fluent.Parser&lt;T&gt;.
+/// By-value parameters may be captured by inline parse-time callbacks, but cannot be used
+/// to construct the parser graph eagerly.
 /// 
 /// When applied, the source generator will:
 /// 1. Execute the method at compile time to build the parser graph
@@ -22,14 +24,14 @@ namespace Parlot.SourceGenerator;
 /// var parser = HelloParser();
 /// </code>
 /// 
-/// If you need different parser variants with different configurations, create separate methods:
+/// Bind runtime arguments to a generated parser instance using conditional parsers:
 /// <code>
 /// [GenerateParser]
-/// public static Parser&lt;string&gt; FooLowerParser() =&gt; Terms.Text("foo");
-/// 
-/// [GenerateParser]
-/// public static Parser&lt;string&gt; FooUpperParser() =&gt; Terms.Text("FOO");
+/// public static Parser&lt;string&gt; FooParser(bool uppercase) =&gt;
+///     If(() =&gt; uppercase, Terms.Text("FOO"), Terms.Text("foo"));
 /// </code>
+/// Parameterless factories return a cached parser. Parameterized factories return a new bound
+/// instance that should be reused. Conditions may also accept the current ParseContext.
 /// </remarks>
 [System.AttributeUsage(System.AttributeTargets.Method)]
 #if SOURCE_GENERATOR

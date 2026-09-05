@@ -13,41 +13,35 @@ namespace Parlot.SourceGenerator;
 /// that register their pointer ID when invoked. This allows the source generator to match
 /// runtime-registered lambdas back to their original source code.
 /// 
-/// The approach: Instead of replacing the lambda body entirely (which loses type information),
-/// we wrap the lambda to first register its pointer, then execute the original body.
+/// Deferred parser callbacks register their pointer without executing the user body.
+/// Other lambdas still execute normally, since they may participate in building the graph.
 /// 
 /// Example transformation:
 ///   Original: x => x.ToLower()
-///   Rewritten: x => { Parlot.SourceGeneration.LambdaPointer.CurrentPointer = 0; return x.ToLower(); }
+///   Rewritten: x => { Parlot.SourceGeneration.LambdaPointer.CurrentPointer = 0; return default(string); }
 /// 
 /// <para>
-/// <strong>Important:</strong> Only static (closure-free) lambdas are supported. Lambdas that
-/// capture variables from their enclosing scope cannot be source-generated because the generated
-/// code creates static methods that don't have access to the captured state.
+/// Factory parameter captures are bound to generated instance fields. Other captures are reported
+/// only when the callback is actually used by the generated graph.
 /// </para>
 /// </summary>
 internal sealed class LambdaRewriter : CSharpSyntaxRewriter
 {
     private readonly SemanticModel _semanticModel;
+    private readonly IMethodSymbol _factory;
     private readonly Dictionary<int, LambdaInfo> _lambdas = new();
-    private readonly List<CapturedVariableInfo> _capturedVariables = new();
     private int _nextPointer;
 
-    public LambdaRewriter(SemanticModel semanticModel)
+    public LambdaRewriter(SemanticModel semanticModel, IMethodSymbol factory)
     {
         _semanticModel = semanticModel;
+        _factory = factory;
     }
 
     /// <summary>
     /// Gets all recorded lambdas with their pointers and source code.
     /// </summary>
     public IReadOnlyDictionary<int, LambdaInfo> Lambdas => _lambdas;
-
-    /// <summary>
-    /// Gets information about any captured variables (closures) detected in lambdas.
-    /// If this list is non-empty, source generation will fail with appropriate diagnostics.
-    /// </summary>
-    public IReadOnlyList<CapturedVariableInfo> CapturedVariables => _capturedVariables;
 
     /// <summary>
     /// Information about a captured variable in a lambda (closure).
@@ -68,7 +62,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         IReadOnlyList<string> ParameterTypes,
         string? FilePath,
         int StartLine,
-        int StartColumn);
+        int StartColumn,
+        IReadOnlyList<CapturedVariableInfo> CapturedVariables);
 
     public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
     {
@@ -87,18 +82,19 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         BlockSyntax? blockBody)
     {
         var pointer = _nextPointer++;
-        var originalSource = originalLambda.ToFullString().Trim();
-
-        // Check for captured variables (closures) - these are not supported in source generation
-        DetectCapturedVariables(originalLambda, parameters, originalSource);
+        var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
+            .Visit(originalLambda)!.ToFullString().Trim();
+        var capturedVariables = DetectCapturedVariables(originalLambda, originalSource);
 
         // Determine return type and parameter types from semantic model
         var paramTypes = new List<string>();
         string? returnType = null;
+        IMethodSymbol? delegateInvokeMethod = null;
 
         var typeInfo = _semanticModel.GetTypeInfo(originalLambda);
         if (typeInfo.ConvertedType is INamedTypeSymbol namedType && namedType.DelegateInvokeMethod is { } invokeMethod)
         {
+            delegateInvokeMethod = invokeMethod;
             returnType = invokeMethod.ReturnType.Name.ToLowerInvariant();
             foreach (var param in invokeMethod.Parameters)
             {
@@ -121,25 +117,45 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             paramTypes,
             filePath,
             startLine,
-            startColumn);
+            startColumn,
+            capturedVariables);
 
         // Create the pointer registration statement
         // global::Parlot.SourceGeneration.LambdaPointer.CurrentPointer = {pointer};
         var registrationStatement = CreatePointerRegistrationStatement(pointer);
 
         BlockSyntax newBody;
-        if (blockBody != null)
+        if (delegateInvokeMethod is not null)
+        {
+            var hasCaptures = _semanticModel.AnalyzeDataFlow(originalLambda)?.CapturedInside.Any(symbol =>
+                !symbol.Locations.Any(location =>
+                    location.SourceTree == originalLambda.SyntaxTree && originalLambda.Span.Contains(location.SourceSpan))) == true;
+            var executionBody = blockBody is not null
+                ? (BlockSyntax)Visit(blockBody)!
+                : SyntaxFactory.Block(delegateInvokeMethod.ReturnsVoid
+                    ? SyntaxFactory.ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!)
+                    : SyntaxFactory.ReturnStatement((ExpressionSyntax)Visit(expressionBody)!));
+            if (hasCaptures && FactoryParameterUsage.IsDeferredCallback(originalLambda, _semanticModel))
+            {
+                executionBody = SyntaxFactory.Block(
+                    SyntaxFactory.ThrowStatement(SyntaxFactory.ParseExpression(
+                        "global::Parlot.SourceGeneration.LambdaPointer.CreateEagerCaptureException()")));
+            }
+            newBody = CreateDeferredBody(registrationStatement, delegateInvokeMethod, executionBody);
+        }
+        else if (blockBody != null)
         {
             // Already a block body - prepend the registration
-            newBody = blockBody.WithStatements(
-                blockBody.Statements.Insert(0, registrationStatement));
+            var visitedBody = (BlockSyntax)Visit(blockBody)!;
+            newBody = visitedBody.WithStatements(
+                visitedBody.Statements.Insert(0, registrationStatement));
         }
         else if (expressionBody != null)
         {
             // Expression body - convert to block with registration + return
             newBody = SyntaxFactory.Block(
                 registrationStatement,
-                SyntaxFactory.ReturnStatement(expressionBody));
+                SyntaxFactory.ReturnStatement((ExpressionSyntax)Visit(expressionBody)!));
         }
         else
         {
@@ -172,7 +188,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 var method = (IMethodSymbol)(symbolInfo.Symbol ?? symbolInfo.CandidateSymbols[0]);
                 
                 var pointer = _nextPointer++;
-                var originalSource = node.Expression.ToFullString().Trim();
+                var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
+                    .Visit(node.Expression)!.ToFullString().Trim();
 
                 var paramTypes = method.Parameters.Select(p => p.Type.ToDisplayString()).ToList();
                 var returnType = method.ReturnType.Name.ToLowerInvariant();
@@ -192,7 +209,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                     paramTypes,
                     filePath,
                     startLine,
-                    startColumn);
+                    startColumn,
+                    Array.Empty<CapturedVariableInfo>());
 
                 // Replace method group with a lambda that sets the pointer and calls the method
                 // e.g., char.IsLetter becomes (char arg0) => { LambdaPointer.CurrentPointer = N; return char.IsLetter(arg0); }
@@ -215,9 +233,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                     node.Expression,
                     SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments)));
 
-                var body = SyntaxFactory.Block(
-                    registrationStatement,
-                    SyntaxFactory.ReturnStatement(methodCall));
+                var body = CreateDeferredBody(registrationStatement, method, SyntaxFactory.Block(
+                    method.ReturnsVoid ? SyntaxFactory.ExpressionStatement(methodCall) : SyntaxFactory.ReturnStatement(methodCall)));
 
                 var stubLambda = SyntaxFactory.ParenthesizedLambdaExpression(parameterList, body);
 
@@ -233,38 +250,20 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     /// Captured variables are local variables or parameters from the enclosing scope
     /// that are referenced inside the lambda but are not lambda parameters themselves.
     /// </summary>
-    private void DetectCapturedVariables(
+    private List<CapturedVariableInfo> DetectCapturedVariables(
         LambdaExpressionSyntax lambda,
-        ParameterSyntax[] lambdaParameters,
         string lambdaSource)
     {
-        // Get all lambda parameter names
-        var parameterNames = new HashSet<string>(
-            lambdaParameters.Select(p => p.Identifier.Text),
-            StringComparer.Ordinal);
-
-        // Find all identifier references in the lambda body
-        var body = lambda.Body;
-        if (body is null)
-        {
-            return;
-        }
-
-        foreach (var identifier in body.DescendantNodes().OfType<IdentifierNameSyntax>())
+        var captures = new List<CapturedVariableInfo>();
+        var capturedSymbols = _semanticModel.AnalyzeDataFlow(lambda)?.CapturedInside;
+        foreach (var identifier in lambda.Body.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
         {
             var name = identifier.Identifier.Text;
-
-            // Skip if it's a lambda parameter
-            if (parameterNames.Contains(name))
-            {
-                continue;
-            }
-
             // Get symbol info to determine what this identifier refers to
             var symbolInfo = _semanticModel.GetSymbolInfo(identifier);
             var symbol = symbolInfo.Symbol;
 
-            if (symbol is null)
+            if (symbol is null || capturedSymbols?.Contains(symbol, SymbolEqualityComparer.Default) != true)
             {
                 continue;
             }
@@ -275,7 +274,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 // This is a local variable - check if it's from outside the lambda
                 if (!IsDefinedWithinLambda(localSymbol, lambda))
                 {
-                    _capturedVariables.Add(new CapturedVariableInfo(
+                    captures.Add(new CapturedVariableInfo(
                         name,
                         lambdaSource,
                         identifier.GetLocation()));
@@ -283,17 +282,20 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             }
             else if (symbol is IParameterSymbol paramSymbol)
             {
-                // This is a parameter - check if it's from the containing method (not the lambda)
-                if (paramSymbol.ContainingSymbol is IMethodSymbol containingMethod &&
-                    !IsLambdaMethod(containingMethod, lambda))
+                if (!SymbolEqualityComparer.Default.Equals(paramSymbol.ContainingSymbol, _factory)
+                    && !paramSymbol.Locations.Any(location =>
+                        location.SourceTree == lambda.SyntaxTree && lambda.Span.Contains(location.SourceSpan)))
                 {
-                    _capturedVariables.Add(new CapturedVariableInfo(
+                    captures.Add(new CapturedVariableInfo(
                         name,
                         lambdaSource,
                         identifier.GetLocation()));
                 }
             }
+
         }
+
+        return captures;
     }
 
     /// <summary>
@@ -315,24 +317,129 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         return false;
     }
 
-    /// <summary>
-    /// Checks if a method symbol represents the lambda itself.
-    /// </summary>
-    private static bool IsLambdaMethod(IMethodSymbol method, LambdaExpressionSyntax lambda)
+    private static BlockSyntax CreateStubBody(StatementSyntax registration, IMethodSymbol method)
     {
-        // Lambda methods have MethodKind.LambdaMethod or AnonymousFunction
-        if (method.MethodKind is MethodKind.LambdaMethod or MethodKind.AnonymousFunction)
+        return method.ReturnsVoid
+            ? SyntaxFactory.Block(registration)
+            : SyntaxFactory.Block(
+                registration,
+                SyntaxFactory.ReturnStatement(SyntaxFactory.PostfixUnaryExpression(
+                    SyntaxKind.SuppressNullableWarningExpression,
+                    SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(
+                        method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))));
+    }
+
+    private static BlockSyntax CreateDeferredBody(StatementSyntax registration, IMethodSymbol method, BlockSyntax executionBody)
+    {
+        var registrationBody = CreateStubBody(registration, method);
+        if (method.ReturnsVoid)
         {
-            // Check if the method's syntax reference matches our lambda
-            foreach (var syntaxRef in method.DeclaringSyntaxReferences)
+            registrationBody = registrationBody.AddStatements(SyntaxFactory.ReturnStatement());
+        }
+
+        return executionBody.WithStatements(executionBody.Statements.Insert(0, SyntaxFactory.IfStatement(
+            SyntaxFactory.ParseExpression("global::Parlot.SourceGeneration.LambdaPointer.IsRegistering"),
+            registrationBody)));
+    }
+
+    private sealed class ParameterBindingRewriter : CSharpSyntaxRewriter
+    {
+        private readonly SemanticModel _semanticModel;
+        private readonly IMethodSymbol _factory;
+
+        public ParameterBindingRewriter(SemanticModel semanticModel, IMethodSymbol factory)
+        {
+            _semanticModel = semanticModel;
+            _factory = factory;
+        }
+
+        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+        {
+            if (_semanticModel.GetSymbolInfo(node).Symbol is IParameterSymbol parameter
+                && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, _factory))
             {
-                if (syntaxRef.GetSyntax() == lambda)
+                return SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.ThisExpression(),
+                    SyntaxFactory.IdentifierName(FactoryParameterUsage.GetFieldName(parameter)))
+                    .WithTriviaFrom(node);
+            }
+
+            return QualifyMember(node) ?? base.VisitIdentifierName(node);
+        }
+
+        public override SyntaxNode? VisitGenericName(GenericNameSyntax node)
+            => QualifyMember(node) ?? base.VisitGenericName(node);
+
+        private MemberAccessExpressionSyntax? QualifyMember(SimpleNameSyntax node)
+        {
+            if (node.Parent is MemberAccessExpressionSyntax member && member.Name == node
+                || node.Parent is MemberBindingExpressionSyntax or QualifiedNameSyntax or AliasQualifiedNameSyntax
+                || node.Parent is NameColonSyntax or NameEqualsSyntax)
+            {
+                return null;
+            }
+
+            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            if (symbol is IMethodSymbol { IsStatic: true, MethodKind: MethodKind.Ordinary }
+                or IFieldSymbol { IsStatic: true }
+                or IPropertySymbol { IsStatic: true }
+                or IEventSymbol { IsStatic: true })
+            {
+                return SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.ParseName(symbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                    node.WithoutTrivia()).WithTriviaFrom(node);
+            }
+
+            return null;
+        }
+
+        public override SyntaxNode? VisitAnonymousObjectMemberDeclarator(AnonymousObjectMemberDeclaratorSyntax node)
+        {
+            var rewritten = (AnonymousObjectMemberDeclaratorSyntax)base.VisitAnonymousObjectMemberDeclarator(node)!;
+            if (node.NameEquals is null && IsFactoryParameter(node.Expression))
+            {
+                rewritten = rewritten.WithNameEquals(SyntaxFactory.NameEquals(
+                    SyntaxFactory.IdentifierName(((IdentifierNameSyntax)node.Expression).Identifier)));
+            }
+
+            return rewritten;
+        }
+
+        public override SyntaxNode? VisitTupleExpression(TupleExpressionSyntax node)
+        {
+            var rewritten = (TupleExpressionSyntax)base.VisitTupleExpression(node)!;
+            for (var index = 0; index < node.Arguments.Count; index++)
+            {
+                var argument = node.Arguments[index];
+                if (argument.NameColon is null && IsFactoryParameter(argument.Expression))
                 {
-                    return true;
+                    rewritten = rewritten.WithArguments(rewritten.Arguments.Replace(rewritten.Arguments[index],
+                        rewritten.Arguments[index].WithNameColon(SyntaxFactory.NameColon(
+                            SyntaxFactory.IdentifierName(((IdentifierNameSyntax)argument.Expression).Identifier)))));
                 }
             }
+
+            return rewritten;
         }
-        return false;
+
+        private bool IsFactoryParameter(ExpressionSyntax expression)
+            => expression is IdentifierNameSyntax
+                && _semanticModel.GetSymbolInfo(expression).Symbol is IParameterSymbol parameter
+                && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, _factory);
+
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            if (node.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" }
+                && _semanticModel.GetConstantValue(node) is { HasValue: true, Value: string name })
+            {
+                return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(name))
+                    .WithTriviaFrom(node);
+            }
+
+            return base.VisitInvocationExpression(node);
+        }
     }
 
     /// <summary>
