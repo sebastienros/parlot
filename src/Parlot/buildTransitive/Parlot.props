@@ -13,5 +13,9 @@
 
   <ItemGroup>
     <CompilerVisibleProperty Include="MSBuildProjectDirectory" />
+    <!-- Let the generator distinguish IDE analysis from explicit builds, including builds inside VS. -->
+    <CompilerVisibleProperty Include="DesignTimeBuild" />
+    <CompilerVisibleProperty Include="BuildingProject" />
+    <CompilerVisibleProperty Include="BuildingInsideVisualStudio" />
   </ItemGroup>
 </Project>

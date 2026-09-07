@@ -403,6 +403,105 @@ public static partial class VisualStudioGrammar
         Assert.Empty(result.Results.SelectMany(r => r.GeneratedSources));
     }
 
+    public static TheoryData<string, string, string, bool> BuildContexts
+    {
+        get
+        {
+            var data = new TheoryData<string, string, string, bool>();
+            var values = new[] { null, "false", "true" };
+
+            foreach (var designTimeBuild in values)
+            {
+                foreach (var buildingProject in values)
+                {
+                    foreach (var buildingInsideVisualStudio in values)
+                    {
+                        data.Add(designTimeBuild, buildingProject, buildingInsideVisualStudio,
+                            designTimeBuild == "true"
+                            || (buildingInsideVisualStudio == "true" && buildingProject == "false"));
+                    }
+                }
+            }
+
+            data.Add("", "", "", false);
+            data.Add("invalid", "true", "true", false);
+            data.Add("false", "", "true", false);
+            data.Add("false", "invalid", "true", false);
+            data.Add("false", "false", "invalid", false);
+            data.Add(" TRUE ", "true", "false", true);
+            data.Add("", " FALSE ", "TrUe", true);
+            data.Add("invalid", "false", "true", true);
+
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(BuildContexts))]
+    public void Build_Context_Preserves_Explicit_Builds(
+        string designTimeBuild,
+        string buildingProject,
+        string buildingInsideVisualStudio,
+        bool shouldSkip)
+    {
+        const string source = """
+            using Parlot.SourceGenerator;
+            using Parlot.Fluent;
+
+            namespace Parlot.SourceGenerator.Tests;
+
+            internal static partial class BuildContextGrammar
+            {
+                [GenerateParser]
+                private static Parser<string> Create() => Parsers.Terms.Text("ok");
+
+                public static Parser<string> Parser() => Create();
+            }
+            """;
+
+        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        AddProperty("DesignTimeBuild", designTimeBuild);
+        AddProperty("BuildingProject", buildingProject);
+        AddProperty("BuildingInsideVisualStudio", buildingInsideVisualStudio);
+
+        var (result, updatedCompilation) = RunGenerator(
+            source,
+            "BuildContext" + Guid.NewGuid().ToString("N"),
+            options,
+            sourcePath: "BuildContextGrammar.cs",
+            interceptorsNamespace: "Parlot.SourceGenerator.Tests");
+
+        Assert.DoesNotContain(result.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+
+        if (shouldSkip)
+        {
+            Assert.Empty(result.Diagnostics);
+            Assert.Empty(result.Results.SelectMany(static r => r.GeneratedSources));
+        }
+        else
+        {
+            AssertGeneratedParser(result);
+        }
+
+        void AddProperty(string name, string value)
+        {
+            if (value is not null)
+            {
+                options["build_property." + name] = value;
+            }
+        }
+    }
+
+    internal static void AssertGeneratedParser(GeneratorDriverRunResult result)
+    {
+        var source = Assert.Single(result.Results[0].GeneratedSources,
+            static s => s.HintName.EndsWith(".Parlot.g.cs", StringComparison.Ordinal));
+        Assert.Contains("GeneratedParser_", source.SourceText.ToString(), StringComparison.Ordinal);
+        Assert.Contains("[global::System.Runtime.CompilerServices.InterceptsLocationAttribute(",
+            source.SourceText.ToString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void IncludeFiles_Allows_Contained_Parent_Path()
     {
@@ -660,9 +759,16 @@ public static partial class VisualStudioGrammar
         string source,
         string assemblyName,
         IReadOnlyDictionary<string, string> globalOptions = null,
-        string sourcePath = "")
+        string sourcePath = "",
+        string interceptorsNamespace = null)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
+        if (interceptorsNamespace is not null)
+        {
+            parseOptions = parseOptions.WithFeatures(
+                new[] { new KeyValuePair<string, string>("InterceptorsNamespaces", interceptorsNamespace) });
+        }
+
         var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions, sourcePath);
 
         var references = new List<MetadataReference>();
@@ -692,16 +798,29 @@ public static partial class VisualStudioGrammar
             references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
+        return RunGenerator(compilation, globalOptions);
+    }
+
+    internal static (GeneratorDriverRunResult result, CSharpCompilation updatedCompilation) RunGenerator(
+        CSharpCompilation compilation,
+        IReadOnlyDictionary<string, string> globalOptions,
+        string generatorPath = null,
+        IEnumerable<ISourceGenerator> additionalGenerators = null)
+    {
         var config = 
 #if DEBUG
             "Debug";
 #else
             "Release";
 #endif
-        var generatorPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/Parlot.SourceGenerator/bin", config, "netstandard2.0/Parlot.SourceGenerator.dll"));
+        var isPackagedGenerator = generatorPath is not null;
+        generatorPath ??= Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/Parlot.SourceGenerator/bin", config, "netstandard2.0/Parlot.SourceGenerator.dll"));
         Assert.True(File.Exists(generatorPath), $"Generator assembly not found at {generatorPath}");
 
-        var generatorAssembly = Assembly.LoadFrom(generatorPath);
+        // Avoid reusing a same-identity assembly or locking a temporary package on Windows.
+        var generatorAssembly = isPackagedGenerator
+            ? Assembly.Load(File.ReadAllBytes(generatorPath))
+            : Assembly.LoadFrom(generatorPath);
         var generatorType = generatorAssembly.GetType("Parlot.SourceGenerator.ParserSourceGenerator", throwOnError: true)!;
         var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
 
@@ -710,7 +829,9 @@ public static partial class VisualStudioGrammar
             ? null
             : new TestAnalyzerConfigOptionsProvider(globalOptions);
 
-        var driver = CSharpGeneratorDriver.Create(new[] { sourceGenerator }, parseOptions: parseOptions, optionsProvider: optionsProvider)
+        var generators = new[] { sourceGenerator }.Concat(additionalGenerators ?? Array.Empty<ISourceGenerator>());
+        var parseOptions = (CSharpParseOptions)compilation.SyntaxTrees.First().Options;
+        var driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions, optionsProvider: optionsProvider)
             .RunGeneratorsAndUpdateCompilation(compilation, out var updatedCompilation, out var generatorDiagnostics);
 
         return (driver.GetRunResult(), (CSharpCompilation)updatedCompilation);

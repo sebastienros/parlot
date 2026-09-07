@@ -62,6 +62,21 @@ in consumer assemblies. It is a result builder, not a general-purpose collection
 - **Return type**: Must return `Parlot.Fluent.Parser<T>`.
 - **Partial class**: The containing class must be `partial`.
 
+## IDE and Design-Time Analysis
+
+Parlot skips parser generation, factory execution, and its generation diagnostics during recognized
+IDE/design-time analysis. The original parser factory remains available without generated interceptors.
+Other generators, such as PolySharp, still run normally in the IDE; Parlot does not load and execute
+them through `[IncludeGenerators]` during these runs.
+
+Command-line builds and explicit builds started inside Visual Studio still generate parsers and
+interceptors. Parlot skips generation when `DesignTimeBuild` is `true`, or when
+`BuildingInsideVisualStudio` is `true` and `BuildingProject` is explicitly `false`.
+Missing property values alone do not disable generation.
+
+The Parlot NuGet package exposes these properties to the compiler through its `buildTransitive` props.
+Keep those package assets enabled so the generator can distinguish live analysis from a real build.
+
 ## Parameterized Parsers
 
 Factory arguments configure a generated parser instance. The generator emits every branch once; the
