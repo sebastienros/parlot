@@ -10,6 +10,19 @@ public class BenchmarksTests
     const decimal _expected1 = (decimal)3.5;
     const decimal _expected2 = (decimal)-64.5;
 
+    [Theory]
+    [InlineData("a", true)]
+    [InlineData("\u00e9", true)]
+    [InlineData("\u4e2d", false)]
+    public void CharacterMapLookup(string input, bool success)
+    {
+        var benchmarks = new CharMapBenchmarks { Input = input };
+        benchmarks.Setup();
+
+        Assert.Equal(success, benchmarks.Lookup());
+        Assert.Equal(success, benchmarks.Lookup());
+    }
+
     [Fact]
     public void CreateCompiledSmallParser()
     {
