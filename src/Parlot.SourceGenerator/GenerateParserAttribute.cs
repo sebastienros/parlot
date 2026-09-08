@@ -8,7 +8,9 @@ namespace Parlot.SourceGenerator;
 /// </summary>
 /// <remarks>
 /// The entry point is a static partial bool method in the same class, taking a string input,
-/// the factory's by-value configuration arguments, and an out T result.
+/// the factory's by-value configuration arguments, optionally an additional
+/// System.Threading.CancellationToken for cooperative cancellation, and an out T result.
+/// The additional cancellation token is not a factory parameter.
 /// Configuration arguments may only be used in supported parse-time callbacks.
 /// </remarks>
 [System.AttributeUsage(System.AttributeTargets.Method)]

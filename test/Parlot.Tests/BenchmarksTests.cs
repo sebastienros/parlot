@@ -11,6 +11,25 @@ public class BenchmarksTests
     const decimal _expected2 = (decimal)-64.5;
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CancellationParsing(bool canBeCanceled)
+    {
+        var benchmarks = new CancellationBenchmarks { CanBeCanceled = canBeCanceled };
+        benchmarks.Setup();
+        try
+        {
+            Assert.Equal(128, benchmarks.Fluent());
+            Assert.Equal(128, benchmarks.Generated());
+            Assert.Equal(128, benchmarks.GeneratedWithoutToken());
+        }
+        finally
+        {
+            benchmarks.Cleanup();
+        }
+    }
+
+    [Theory]
     [InlineData("a", true)]
     [InlineData("\u00e9", true)]
     [InlineData("\u4e2d", false)]

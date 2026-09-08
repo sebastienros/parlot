@@ -1,20 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows')) or '$(ParlotTestNetFramework)' == 'true'">net472;$(TargetFrameworks)</TargetFrameworks>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>12</LangVersion>
     <IsPackable>false</IsPackable>
-    <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>false</SignAssembly>
-    <OutputType>Exe</OutputType>
-    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <AnalysisLevel>latest-Default</AnalysisLevel>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'net472'" />
-    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="System.Memory" />
+    <Compile Include="../Parlot.Standalone.Tests/Grammar.cs" Link="Grammar.cs" />
+    <AdditionalFiles Include="../Parlot.Standalone.Tests/Grammar.parlot.cs" Link="Grammar.parlot.cs" />
     <ProjectReference Include="../../src/Parlot.SourceGenerator/Parlot.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <Analyzer Include="../../src/Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll" />

@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Parlot.SourceGenerator</id>
+    <version>$version$</version>
+    <title>Parlot Source Generator</title>
+    <authors>$authors$</authors>
+    <description>$description$</description>
+    <copyright>$copyright$</copyright>
+    <license type="expression">BSD-3-Clause</license>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/sebastienros/parlot</projectUrl>
+    <repository type="git" url="$repositoryUrl$" commit="$repositoryCommit$" />
+    <tags>parlot parser parser-combinator source-generator roslyn</tags>
+    <dependencies>
+      <group targetFramework=".NETFramework4.7.2">
+        <dependency id="System.Memory" version="$memoryVersion$" />
+      </group>
+      <group targetFramework=".NETStandard2.0">
+        <dependency id="System.Memory" version="$memoryVersion$" />
+      </group>
+      <group targetFramework="net8.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin/$configuration$/netstandard2.0/Parlot.SourceGenerator.dll" target="analyzers/dotnet/cs" />
+    <file src="../Parlot/bin/$configuration$/netstandard2.0/Parlot.dll" target="analyzers/dotnet/cs" />
+    <file src="build/Parlot.SourceGenerator.props" target="build" />
+    <file src="build/Parlot.SourceGenerator.targets" target="build" />
+    <file src="../../LICENSE" target="LICENSE" />
+    <file src="README.md" target="README.md" />
+  </files>
+</package>

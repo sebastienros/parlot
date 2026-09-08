@@ -32,7 +32,7 @@ public sealed partial class ParserSourceGenerator
 
     private static readonly DiagnosticDescriptor StandaloneTargetDescriptor = new(
         "PARLOT026", "Unsupported standalone target",
-        "Standalone generation requires .NET 8 or later and C# 12 or later",
+        "Standalone generation requires .NET Framework 4.7.2+, .NET Standard 2.0+, or .NET 8+, and C# 12 or later",
         "Parlot.SourceGenerator", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
     private sealed class StandaloneEntryPoint
@@ -45,6 +45,9 @@ public sealed partial class ParserSourceGenerator
 
         public IMethodSymbol Method { get; }
         public MethodToGenerate Factory { get; }
+        public IParameterSymbol? CancellationTokenParameter => Method.Parameters.Length == Factory.Method.Parameters.Length + 3
+            ? Method.Parameters[Method.Parameters.Length - 2]
+            : null;
         public string? Source { get; set; }
     }
 
@@ -103,8 +106,14 @@ public sealed partial class ParserSourceGenerator
         string projectDirectory,
         bool designTime)
     {
-        if (!designTime && (target.Identifier != TargetFrameworkIdentifier.NetCoreApp
-            || target.Version < new Version(8, 0) || options.LanguageVersion < LanguageVersion.CSharp12))
+        var supportedTarget = target.Identifier switch
+        {
+            TargetFrameworkIdentifier.NetFramework => target.Version >= new Version(4, 7, 2),
+            TargetFrameworkIdentifier.NetStandard => target.Version >= new Version(2, 0),
+            TargetFrameworkIdentifier.NetCoreApp => target.Version >= new Version(8, 0),
+            _ => false,
+        };
+        if (!designTime && (!supportedTarget || options.LanguageVersion < LanguageVersion.CSharp12))
         {
             output.ReportDiagnostic(Diagnostic.Create(StandaloneTargetDescriptor, Location.None));
             return;
@@ -181,7 +190,8 @@ public sealed partial class ParserSourceGenerator
                     continue;
                 }
 
-                var entry = FindStandaloneEntryPoint(factory.Value, trees, out var error);
+                var entry = FindStandaloneEntryPoint(factory.Value, trees,
+                    compilation.GetTypeByMetadataName("System.Threading.CancellationToken"), out var error);
                 if (entry is null)
                 {
                     if (!designTime)
@@ -304,10 +314,10 @@ public sealed partial class ParserSourceGenerator
     }
 
     private static StandaloneEntryPoint? FindStandaloneEntryPoint(
-        MethodToGenerate factory, List<SyntaxTree> grammarTrees, out string error)
+        MethodToGenerate factory, List<SyntaxTree> grammarTrees, INamedTypeSymbol? cancellationTokenType, out string error)
     {
         error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
-            + "taking string input, the factory's configuration arguments, and an out result.";
+            + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result.";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -326,7 +336,10 @@ public sealed partial class ParserSourceGenerator
         var candidates = type.GetMembers(name!).OfType<IMethodSymbol>().Where(method =>
             method.IsStatic && method.IsPartialDefinition && method.PartialImplementationPart is null
             && !method.IsGenericMethod && !method.ReturnsByRef && method.ReturnType.SpecialType == SpecialType.System_Boolean
-            && method.Parameters.Length == factory.Method.Parameters.Length + 2
+            && (method.Parameters.Length == factory.Method.Parameters.Length + 2
+                || method.Parameters.Length == factory.Method.Parameters.Length + 3
+                    && method.Parameters[method.Parameters.Length - 2].RefKind == RefKind.None
+                    && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 2].Type, cancellationTokenType))
             && method.Parameters[0].Type.SpecialType == SpecialType.System_String && method.Parameters[0].RefKind == RefKind.None
             && method.Parameters[method.Parameters.Length - 1].RefKind == RefKind.Out
             && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 1].Type, resultType)
@@ -344,8 +357,10 @@ public sealed partial class ParserSourceGenerator
             || type is IArrayTypeSymbol array && UsesParlotType(array.ElementType)
             || type is INamedTypeSymbol named && named.TypeArguments.Any(UsesParlotType);
 
-    private static void AppendStandaloneEntryPoint(StringBuilder source, IMethodSymbol entry, IMethodSymbol factory, string wrapper, string core)
+    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core)
     {
+        var entry = standalone.Method;
+        var factory = standalone.Factory.Method;
         var input = EscapeIdentifier(entry.Parameters[0].Name);
         var value = EscapeIdentifier(entry.Parameters[entry.Parameters.Length - 1].Name);
         var valueType = GetParameterTypeName(entry.Parameters[entry.Parameters.Length - 1]);
@@ -361,9 +376,12 @@ public sealed partial class ParserSourceGenerator
         var result = prefix + "_result";
         source.AppendLine($"        {StandaloneSignature(entry)}");
         source.AppendLine("        {");
+        var cancellationArgument = standalone.CancellationTokenParameter is { } token
+            ? $", {EscapeIdentifier(token.Name)}"
+            : "";
         var contextCreation = factory.Parameters.Length > 0
-            ? $"new {wrapper}(new global::Parlot.Scanner({input}), {arguments})"
-            : $"new global::Parlot.Fluent.ParseContext(new global::Parlot.Scanner({input}))";
+            ? $"new {wrapper}(new global::Parlot.Scanner({input}){cancellationArgument}, {arguments})"
+            : $"new global::Parlot.Fluent.ParseContext(new global::Parlot.Scanner({input}){cancellationArgument})";
         source.AppendLine($"            var {context} = {contextCreation};");
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");

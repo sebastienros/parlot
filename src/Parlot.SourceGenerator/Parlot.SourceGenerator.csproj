@@ -11,6 +11,7 @@
     <!-- Analyzer-only packages have no lib assets for a separate symbols package. -->
     <IncludeSymbols>false</IncludeSymbols>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NuspecFile>Parlot.SourceGenerator.nuspec</NuspecFile>
     <AssemblyOriginatorKeyFile>../Parlot/Parlot.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -23,7 +24,8 @@
     <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
     <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
-    <NoWarn>$(NoWarn);RS2007;RS2008</NoWarn>
+    <!-- Dependency groups describe generated consumers; analyzer-only packages intentionally have no lib assets. -->
+    <NoWarn>$(NoWarn);RS2007;RS2008;NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -59,6 +61,9 @@
     <EmbeddedResource Include="../Parlot/Numbers.cs" LogicalName="Parlot.StandaloneRuntime.Numbers.cs" />
     <EmbeddedResource Include="../Parlot/HexConverter.cs" LogicalName="Parlot.StandaloneRuntime.HexConverter.cs" />
     <EmbeddedResource Include="../Parlot/ThrowHelper.cs" LogicalName="Parlot.StandaloneRuntime.ThrowHelper.cs" />
+    <EmbeddedResource Include="../Parlot/Polyfills/Polyfills.Numbers.cs" LogicalName="Parlot.StandaloneRuntime.Polyfills.Numbers.cs" />
+    <EmbeddedResource Include="../Parlot/Polyfills/Polyfills.Char.cs" LogicalName="Parlot.StandaloneRuntime.Polyfills.Char.cs" />
+    <EmbeddedResource Include="../Parlot/Polyfills/Polyfills.ArgumentNullException.cs" LogicalName="Parlot.StandaloneRuntime.Polyfills.ArgumentNullException.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/ParseContext.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ParseContext.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/HybridList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.HybridList.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/NumberOptions.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.NumberOptions.cs" />
@@ -66,12 +71,15 @@
     <EmbeddedResource Include="StandaloneRuntime/Parser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.Parser.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="../../LICENSE" Pack="true" PackagePath="LICENSE" Visible="false" />
-    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    <None Include="../Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    <None Update="build/Parlot.SourceGenerator.props" Pack="true" PackagePath="build/Parlot.SourceGenerator.props" />
-    <None Update="build/Parlot.SourceGenerator.targets" Pack="true" PackagePath="build/Parlot.SourceGenerator.targets" />
-  </ItemGroup>
+  <Target Name="SetParlotNuspecProperties" BeforeTargets="_GetOutputItemsFromPack">
+    <PropertyGroup>
+      <NuspecProperties>$(NuspecProperties);version=$(PackageVersion);configuration=$(Configuration);authors=$(Authors);description=$(Description);copyright=$(Copyright);memoryVersion=@(PackageVersion->WithMetadataValue('Identity', 'System.Memory')->Metadata('Version'))</NuspecProperties>
+    </PropertyGroup>
+  </Target>
+  <Target Name="SetParlotNuspecRepository" BeforeTargets="GenerateNuspec" DependsOnTargets="SetParlotNuspecProperties">
+    <PropertyGroup>
+      <NuspecProperties>$(NuspecProperties);repositoryUrl=$(RepositoryUrl);repositoryCommit=$(RepositoryCommit)</NuspecProperties>
+    </PropertyGroup>
+  </Target>
 
 </Project>

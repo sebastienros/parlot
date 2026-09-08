@@ -16,7 +16,8 @@ Microsoft.Testing.Platform (also configured in `global.json`) with xunit v3.
 dotnet build                       # all TFMs: net472, netstandard2.0, net8.0, net10.0 (~3s incremental)
 dotnet test test/Parlot.Tests/Parlot.Tests.csproj -f net10.0
 dotnet test test/Parlot.SourceGenerator.Tests/Parlot.SourceGenerator.Tests.csproj   # net10.0 only
-dotnet test test/Parlot.Standalone.Tests/Parlot.Standalone.Tests.csproj              # net8.0/net10.0, no runtime Parlot reference
+dotnet test test/Parlot.Standalone.Tests/Parlot.Standalone.Tests.csproj              # net8.0/net10.0; net472 on Windows, no Parlot reference
+dotnet build test/Parlot.Standalone.NetStandard/Parlot.Standalone.NetStandard.csproj # netstandard2.0 generated consumer
 ```
 
 Develop and validate against `net10.0` first; only widen to the other TFMs once the behaviour is right.
@@ -109,11 +110,17 @@ can subclass it; generated entry points instead accept application-owned configu
 annotated `[GenerateParser(nameof(TryParse))]` builds the graph using Parlot inside the compiler host.
 The analyzer implements a matching static partial `bool TryParse(string text, [configuration], out T value)`
 method and emits shared internal support sources into the application assembly. No interceptors,
-public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Targets require .NET 8+
-and C# 12+. Factory files must be excluded from `Compile`; the analyzer package's build targets do this.
+public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Generated consumers support
+`net472`, `netstandard2.0`, `net8.0`, and `net10.0`, using C# 12+ even on older runtimes. Downlevel
+compatibility packages do not introduce a Parlot dependency. Factory files must be excluded from
+`Compile`; the analyzer package's build targets do this.
+The analyzer requires a Roslyn 5.9+ compiler host regardless of the consumer's runtime target.
 
 - `ParserSourceGenerator.cs` drives it; `LambdaRewriter.cs` lifts lambdas into generated methods
   with `#line` mappings so breakpoints still land in the original source.
+- An extra by-value `CancellationToken` immediately before the entry point's `out` result initializes
+  the internal context's cancellation token. It is not a factory parameter. Tokens in the factory's
+  configuration list remain ordinary application state; cancellation throws rather than returning false.
 - Registries in `src/Parlot/SourceGeneration` (`LambdaRegistry`, `DeferredRegistry`, `ParserHelperRegistry`,
   `TargetFrameworkInfo`, `SourceGenerationContext`, `SourceResult`) are the emission API.
 - `PARLOT015` rejects captured locals or other methods' parameters. Inline parse-time callbacks in
@@ -128,8 +135,11 @@ and C# 12+. Factory files must be excluded from `Compile`; the analyzer package'
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
 - The analyzer-only `Parlot.SourceGenerator` package bundles its build-time Parlot dependency.
   `StandaloneRuntimeSources` embeds shared runtime files and maps them to internal `Parlot.Generated`
-  types. Do not fork those algorithms into separately maintained copies. Application models and
-  runtime callback helpers belong in normal `.cs` files, not solely in `.parlot.cs` files.
+  types. It lowers the shared downlevel polyfills' static extension syntax to C# 12 helpers; consumers
+  do not need PolySharp. Library packages targeting older frameworks must reference System.Memory
+  explicitly (not privately) to propagate that dependency. Do not fork algorithms into separately
+  maintained copies. Application models and runtime callback helpers belong in normal `.cs` files,
+  not solely in `.parlot.cs` files.
 
 Full reference: `docs/source-generation.md`.
 
@@ -163,9 +173,9 @@ Full reference: `docs/source-generation.md`.
 
 ## Conventions
 
-- Multi-target: `net472;netstandard2.0;net8.0;net10.0`. Tests only execute on net8.0/net10.0 (source
-  generator tests on net10.0), so downlevel targets are compile-verified only — be deliberate about
-  `#if` branches.
+- Multi-target: `net472;netstandard2.0;net8.0;net10.0`. Runtime and standalone tests execute on
+  net8.0/net10.0 and net472 on Windows (source generator tests on net10.0). On other hosts, downlevel
+  targets are compile-verified only — be deliberate about `#if` branches.
 - `Nullable` is enabled and `AllowUnsafeBlocks` is on for `src/Parlot`; the assembly is strong-named
   (`Parlot.snk`), test projects are not signed.
 - Generated files, never hand-edited: `Character.Generated.cs` (see above) and `ParserOperatorExtensions.cs`

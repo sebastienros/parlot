@@ -94,11 +94,11 @@ public static partial class Character
                         case 't': c = '\t'; break;
                         case 'v': c = '\v'; break;
                         case 'u':
-                            c = Character.ScanHexEscape(span[i..], out var length);
+                            c = Character.ScanHexEscape(span.Slice(i), out var length);
                             i += length;
                             break;
                         case 'x':
-                            c = Character.ScanHexEscape(span[i..], out length);
+                            c = Character.ScanHexEscape(span.Slice(i), out length);
                             i += length;
                             break;
                     }
@@ -107,7 +107,7 @@ public static partial class Character
                 buffer[dataIndex++] = c;
             }
 
-            return buffer[..dataIndex].ToString();
+            return buffer.Slice(0, dataIndex).ToString();
         }
         finally
         {

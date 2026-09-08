@@ -258,7 +258,7 @@ public class Scanner
         }
         else
         {
-            result = span[..noDigitIndex];
+            result = span.Slice(0, noDigitIndex);
         }
 
         Cursor.AdvanceNoNewLines(result.Length);
@@ -480,7 +480,7 @@ public class Scanner
         }
         else
         {
-            result = span[..notInRangeIndex];
+            result = span.Slice(0, notInRangeIndex);
         }
 
         Cursor.Advance(result.Length);
@@ -773,7 +773,7 @@ public class Scanner
             }
         }
 
-        result = Cursor.Buffer.AsSpan()[start.Offset..Cursor.Offset];
+        result = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
 
         return true;
     }
