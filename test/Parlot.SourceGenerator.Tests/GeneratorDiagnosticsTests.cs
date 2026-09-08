@@ -254,7 +254,9 @@ public class GeneratorDiagnosticsTests
 
     [Theory]
     [InlineData(".NETCoreApp", "v7.0", LanguageVersion.CSharp12)]
-    [InlineData(".NETStandard", "v2.0", LanguageVersion.CSharp12)]
+    [InlineData(".NETStandard", "v1.6", LanguageVersion.CSharp12)]
+    [InlineData(".NETFramework", "v4.7.1", LanguageVersion.CSharp12)]
+    [InlineData("Unknown", "v10.0", LanguageVersion.CSharp12)]
     [InlineData(".NETCoreApp", "v10.0", LanguageVersion.CSharp11)]
     public void Unsupported_Target_Reports_A_Diagnostic(
         string identifier,

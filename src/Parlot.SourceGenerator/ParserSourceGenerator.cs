@@ -1191,7 +1191,16 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             {
                 scannerParameter += "_";
             }
-            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner {scannerParameter}, {parameterList}) : base({scannerParameter})");
+            var cancellationParameter = "__parlotCancellationToken";
+            while (methodSymbol.Parameters.Any(parameter => parameter.Name == cancellationParameter))
+            {
+                cancellationParameter += "_";
+            }
+            var cancellationDeclaration = standalone.CancellationTokenParameter is not null
+                ? $", global::System.Threading.CancellationToken {cancellationParameter}"
+                : "";
+            var cancellationArgument = standalone.CancellationTokenParameter is not null ? $", {cancellationParameter}" : "";
+            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner {scannerParameter}{cancellationDeclaration}, {parameterList}) : base({scannerParameter}{cancellationArgument})");
             sb.AppendLine("            {");
             foreach (var parameter in methodSymbol.Parameters)
             {
@@ -1480,7 +1489,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        AppendStandaloneEntryPoint(sb, standalone.Method, methodSymbol, wrapperName, coreName);
+        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName);
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
         // Note: Currently no helper methods are needed since we use HashSet<char> and SearchValues<char>

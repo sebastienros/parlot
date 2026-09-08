@@ -168,10 +168,70 @@ public class StandaloneGeneratorTests
     [InlineData("public static partial bool TryParse(string text, out string value);")]
     [InlineData("public static partial bool TryParse(System.ReadOnlySpan<char> text, out int value);")]
     [InlineData("public static bool TryParse(string text, out int value) { value = 0; return true; }")]
+    [InlineData("public static partial bool TryParse(string text, int cancellationToken, out int value);")]
+    [InlineData("public static partial bool TryParse(string text, ref System.Threading.CancellationToken cancellationToken, out int value);")]
+    [InlineData("public static partial bool TryParse(string text, System.Threading.CancellationToken? cancellationToken, out int value);")]
+    [InlineData("public static partial bool TryParse(string text, System.Threading.CancellationToken first, System.Threading.CancellationToken second, out int value);")]
     public void Invalid_Entry_Point_Is_Rejected(string declaration)
     {
         var (result, _) = Generate("public static partial class Grammar { " + declaration + " }", Grammar);
         Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT023");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Cancellation_Argument_Is_Wired_Without_Name_Collisions(bool configured)
+    {
+        var declaration = Declaration.Replace("out int value",
+            "System.Threading.CancellationToken result, out int value", StringComparison.Ordinal);
+        var grammar = Grammar;
+        if (configured)
+        {
+            declaration = declaration.Replace("string text, ", "string text, int context, ", StringComparison.Ordinal);
+            grammar = grammar.Replace("Build()", "Build(int __parlotCancellationToken)", StringComparison.Ordinal)
+                .Replace(".Eof()", ".Then(value => value + __parlotCancellationToken).Eof()", StringComparison.Ordinal);
+        }
+
+        var (result, compilation) = Generate(declaration, grammar);
+        AssertNoErrors(result, compilation);
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var assembly = Assembly.Load(stream.ToArray());
+        var parse = assembly.GetType("Grammar").GetMethod("TryParse");
+        using var source = new CancellationTokenSource();
+        object[] arguments = configured ? ["42", 1, source.Token, null] : ["42", source.Token, null];
+        Assert.True((bool)parse.Invoke(null, arguments));
+        Assert.Equal(configured ? 43 : 42, arguments[^1]);
+        source.Cancel();
+        var exception = Assert.Throws<TargetInvocationException>(() => parse.Invoke(null, arguments));
+        Assert.Equal(source.Token, Assert.IsType<OperationCanceledException>(exception.InnerException).CancellationToken);
+
+        var (designTimeResult, designTimeCompilation) = Generate(declaration, grammar, designTime: true);
+        AssertNoErrors(designTimeResult, designTimeCompilation);
+    }
+
+    [Fact]
+    public void Application_And_Engine_Cancellation_Tokens_Are_Independent()
+    {
+        var declaration = Declaration.Replace("out int value",
+            "System.Threading.CancellationToken applicationToken, System.Threading.CancellationToken engineToken, out int value", StringComparison.Ordinal);
+        var grammar = Grammar.Replace("Build()", "Build(System.Threading.CancellationToken cancellationToken)", StringComparison.Ordinal)
+            .Replace(".Eof()", ".Then(value => cancellationToken.IsCancellationRequested ? value + 1 : value).Eof()", StringComparison.Ordinal);
+        var (result, compilation) = Generate(declaration, grammar);
+        AssertNoErrors(result, compilation);
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var parse = Assembly.Load(stream.ToArray()).GetType("Grammar").GetMethod("TryParse");
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        object[] arguments = ["42", source.Token, CancellationToken.None, null];
+        Assert.True((bool)parse.Invoke(null, arguments));
+        Assert.Equal(43, arguments[^1]);
+        arguments[1] = CancellationToken.None;
+        arguments[2] = source.Token;
+        var exception = Assert.Throws<TargetInvocationException>(() => parse.Invoke(null, arguments));
+        Assert.IsType<OperationCanceledException>(exception.InnerException);
     }
 
     [Fact]

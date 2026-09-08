@@ -63,4 +63,33 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParseExplicitLambda))]
     private static Parser<string> ExplicitLambda() =>
         Literals.Char('x').Then(static string (char value) => value.ToString());
+
+    [GenerateParser(nameof(TryParseCancelableNumber))]
+    private static Parser<int> CancelableNumber() => Terms.Number<int>(NumberOptions.Integer).Eof();
+
+    [GenerateParser(nameof(TryParseCancelableRecursive))]
+    private static Parser<int> CancelableRecursive() => Recursive();
+
+    [GenerateParser(nameof(TryParseCancelableSequence))]
+    private static Parser<int> CancelableSequence(CancellationOptions options) =>
+        ZeroOrMany(Literals.Char('x').Then(value =>
+        {
+            options.Evaluations++;
+            options.Source.Cancel();
+            return value;
+        })).Then(static values => values.Count).Eof();
+
+    [GenerateParser(nameof(TryParseCancelableWhitespace))]
+    private static Parser<string> CancelableWhitespace(CancellationOptions options) =>
+        Terms.Text("hello").Eof().WithWhiteSpaceParser(Capture(OneOrMany(
+            Literals.Char('_').Then(value =>
+            {
+                options.Evaluations++;
+                options.Source.Cancel();
+                return value;
+            }))));
+
+    [GenerateParser(nameof(TryParseTokenConfiguration))]
+    private static Parser<bool> TokenConfiguration(System.Threading.CancellationToken applicationToken) =>
+        Literals.Char('x').Then(_ => applicationToken.IsCancellationRequested).Eof();
 }

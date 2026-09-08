@@ -4,8 +4,32 @@ Parlot source generation compiles a build-only Fluent grammar into a direct part
 The generated parser and its support code are emitted into the consuming assembly, so application code
 does not need a runtime reference to `Parlot`.
 
-Build with .NET SDK 10.0.400 or later, which provides the analyzer's required Roslyn version.
-Generated consumers can target .NET 8 or later and C# 12 or later.
+Use an SDK or IDE with a Roslyn 5.9 or later compiler host, independently of the application's runtime
+target. For example, .NET SDK 10.0.400 supplies a compatible compiler.
+Generated consumers support the same target frameworks as Parlot: .NET Framework 4.7.2,
+.NET Standard 2.0, .NET 8, and .NET 10. C# 12 or later is required even when targeting an older runtime.
+Downlevel targets use compatibility packages such as `System.Memory`, but never require the Parlot
+runtime package or assembly.
+
+## Downlevel package dependencies
+
+The analyzer package automatically restores `System.Memory` 4.6.3 for downlevel applications. Shared
+polyfills are emitted as C# 12-compatible internal helpers, so consuming projects do not need PolySharp.
+Modern targets do not acquire these compatibility dependencies.
+
+When publishing a library that contains generated parsers for downlevel targets, explicitly reference
+`System.Memory` so it is included in your library's package dependencies:
+
+```xml
+<ItemGroup Condition="'$(TargetFramework)' == 'net472' or '$(TargetFramework)' == 'netstandard2.0'">
+  <PackageReference Include="System.Memory" Version="4.6.3" />
+</ItemGroup>
+```
+
+Do not mark that reference `PrivateAssets="all"`. The analyzer itself should remain private, but its
+private transitive dependencies are not propagated to consumers of your library. Packing reports an
+error if the explicit compatibility reference is missing. With central package management, put the
+version in `Directory.Packages.props` and omit `Version` on the `PackageReference`.
 
 ## Getting started
 
@@ -111,6 +135,7 @@ The application-facing method:
 - is a static, non-generic partial method returning `bool`;
 - takes the input `string` first;
 - takes the factory's configuration parameters next, in the same type and order;
+- may take one additional by-value `CancellationToken` after configuration and before the result;
 - takes `out T value` last, where `T` is the factory parser's result type.
 
 Parameter names do not need to match. The entry point may be public, internal, or private as appropriate.
@@ -137,23 +162,52 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - `Error` and `ElseError` throw `ParseException` internally; the direct entry point converts that exception
   to `false` and a default result.
 - Exceptions thrown by application callbacks are not swallowed and propagate to the caller.
+- Cancellation throws `OperationCanceledException`; it is not reported as a parse mismatch.
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
 
+### Cancellation
+
+To enable cooperative cancellation, add a `System.Threading.CancellationToken` parameter immediately
+before `out T` in the entry point. Do not add this engine parameter to the grammar factory:
+
+```csharp
+// Normal application source; the Build(GreetingOptions options) factory is unchanged.
+public static partial bool TryParse(
+    string input,
+    GreetingOptions options,
+    System.Threading.CancellationToken cancellationToken,
+    out string value);
+```
+
+The generated method initializes its internal execution context with the supplied token. An already
+cancelled token throws before parsing starts, and parsing checks cancellation cooperatively at parser
+boundaries, throttled to every 64 checks. This includes recursive parsers, repetition, and custom
+whitespace grammars. A single long scanner operation or application callback is not interrupted in the
+middle of its execution.
+
+Pass `CancellationToken.None` when cancellation is not needed, or keep the original token-free signature.
+There is no additional parser, closure, or token-source allocation. Parameter names are unrestricted:
+the extra parameter's type and position identify it, not its name.
+
+A token declared in the factory remains ordinary application configuration. It is not implicitly used
+for engine cancellation; a separate extra token in the entry point controls the engine. If both
+token-free and cancellable public overloads are desired, declare only the cancellable one as partial
+and write a normal forwarding overload that supplies `CancellationToken.None`.
+
 ### Deliberate standalone boundary
 
-Standalone entry points intentionally expose only the input string, application configuration, and the
-parsed value. They do not expose the internal execution context:
+Standalone entry points expose the input string, application configuration, optional cancellation, and
+the parsed value. They do not expose the internal execution context:
 
 - No consumed offset is returned. Without `.Eof()`, a parser may successfully match a prefix, but the
   caller cannot retrieve the position where parsing stopped. Use `.Eof()` for whole-input parsing.
-- No `CancellationToken` is accepted and parsing cannot be cancelled through the entry point.
 - No custom `ParseContext`, recursion-depth setting, or other execution-context option can be supplied.
   Factory parameters configure generated callbacks and branches; they do not configure the parsing engine.
 - The input is a `string`; `ReadOnlySpan<char>` entry points are not supported.
 
-Use the normal Parlot runtime API when consumed positions, cancellation, or custom parse contexts are
+Use the normal Parlot runtime API when consumed positions or custom parse contexts are
 required.
 
 Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
@@ -377,7 +431,7 @@ context support into the consuming assembly. These support types are internal an
 `Parlot.Generated`.
 
 Every generated shared-support source file retains Parlot's original BSD-3-Clause license notice, and the
-`Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a runtime
+`Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a Parlot runtime
 package dependency, but binary distributions containing the generated support should retain the Parlot BSD
 notice in their third-party notices or equivalent distribution materials.
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -30,6 +31,9 @@ internal static class StandaloneRuntimeSources
         "Numbers.cs",
         "HexConverter.cs",
         "ThrowHelper.cs",
+        "Polyfills.Numbers.cs",
+        "Polyfills.Char.cs",
+        "Polyfills.ArgumentNullException.cs",
         "Fluent.ParseContext.cs",
         "Fluent.HybridList.cs",
         "Fluent.NumberOptions.cs",
@@ -41,7 +45,7 @@ internal static class StandaloneRuntimeSources
     {
         var assembly = typeof(StandaloneRuntimeSources).Assembly;
         var sources = new List<(string HintName, SyntaxTree Tree)>(SourceNames.Length);
-        var rewriter = new RuntimeRewriter(rewriteDeclarations: true);
+        var rewriter = new RuntimeRewriter(rewriteDeclarations: true, downlevel: !options.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER"));
         using var licenseStream = assembly.GetManifestResourceStream(ResourcePrefix + "License")
             ?? throw new InvalidOperationException("Missing embedded runtime license.");
         using var licenseReader = new StreamReader(licenseStream, Encoding.UTF8);
@@ -53,7 +57,7 @@ internal static class StandaloneRuntimeSources
                 ?? throw new InvalidOperationException($"Missing standalone runtime resource '{ResourcePrefix + name}'.");
             using var reader = new StreamReader(stream, Encoding.UTF8);
             var hintName = ResourcePrefix + name.Replace(".cs", ".g.cs");
-            var tree = CSharpSyntaxTree.ParseText(reader.ReadToEnd(), options, hintName, Encoding.UTF8);
+            var tree = CSharpSyntaxTree.ParseText(reader.ReadToEnd(), options.WithLanguageVersion(LanguageVersion.Latest), hintName, Encoding.UTF8);
             var root = (CompilationUnitSyntax)rewriter.Visit(tree.GetRoot())!;
             var text = header + root.ToFullString();
             sources.Add((hintName, CSharpSyntaxTree.ParseText(text, options, hintName, Encoding.UTF8)));
@@ -65,16 +69,18 @@ internal static class StandaloneRuntimeSources
     internal static string RewriteGeneratedSource(string source, CSharpParseOptions options)
     {
         var tree = CSharpSyntaxTree.ParseText(source, options);
-        return new RuntimeRewriter(rewriteDeclarations: false).Visit(tree.GetRoot())!.ToFullString();
+        return new RuntimeRewriter(rewriteDeclarations: false, downlevel: false).Visit(tree.GetRoot())!.ToFullString();
     }
 
     private sealed class RuntimeRewriter : CSharpSyntaxRewriter
     {
         private readonly bool _rewriteDeclarations;
+        private readonly bool _downlevel;
 
-        public RuntimeRewriter(bool rewriteDeclarations)
+        public RuntimeRewriter(bool rewriteDeclarations, bool downlevel)
         {
             _rewriteDeclarations = rewriteDeclarations;
+            _downlevel = downlevel;
         }
 
         public override SyntaxNode? VisitUsingDirective(UsingDirectiveSyntax node)
@@ -115,6 +121,23 @@ internal static class StandaloneRuntimeSources
         public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
         {
             var rewritten = (MemberAccessExpressionSyntax)base.VisitMemberAccessExpression(node)!;
+            if (_downlevel && node.FirstAncestorOrSelf<ClassDeclarationSyntax>()?.Identifier.ValueText
+                is not ("NumberPolyfills" or "CharPolyfills" or "ArgumentNullExceptionPolyfills"))
+            {
+                var helper = (node.Expression.ToString(), node.Name.Identifier.ValueText) switch
+                {
+                    ("byte" or "sbyte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong"
+                        or "float" or "double" or "decimal" or "BigInteger", "TryParse") => "NumberPolyfills",
+                    ("char", "IsAsciiDigit" or "IsAsciiHexDigit") => "CharPolyfills",
+                    ("ArgumentNullException", "ThrowIfNull") => "ArgumentNullExceptionPolyfills",
+                    _ => null,
+                };
+                if (helper is not null)
+                {
+                    return rewritten.WithExpression(SyntaxFactory.IdentifierName(helper).WithTriviaFrom(node.Expression));
+                }
+            }
+
             if (!IsRuntimeNamespace(node.Expression, out var fluent) || !IsRuntimeType(node.Name, fluent))
             {
                 return rewritten;
@@ -132,7 +155,40 @@ internal static class StandaloneRuntimeSources
         public override SyntaxNode? VisitClassDeclaration(ClassDeclarationSyntax node)
         {
             var rewritten = (ClassDeclarationSyntax)base.VisitClassDeclaration(node)!;
+            if (_downlevel)
+            {
+                // Keep one shared implementation while lowering C# 14 static extensions to C# 12.
+                var members = new List<MemberDeclarationSyntax>();
+                foreach (var member in rewritten.Members)
+                {
+                    if (member is ExtensionBlockDeclarationSyntax extension)
+                    {
+                        members.AddRange(extension.Members);
+                    }
+                    else
+                    {
+                        members.Add(member);
+                    }
+                }
+
+                rewritten = rewritten.WithMembers(SyntaxFactory.List(members));
+            }
+
             return IsRuntimeDeclaration(node) ? rewritten.WithModifiers(Internalize(node.Modifiers)) : rewritten;
+        }
+
+        public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
+        {
+            if (!_downlevel)
+            {
+                return base.VisitAttributeList(node);
+            }
+
+            // These annotations have no runtime behavior, and the generated helpers are internal.
+            // Avoid requiring PolySharp or declaring BCL-shaped attributes in the application.
+            var attributes = node.Attributes.Where(static attribute =>
+                attribute.Name.ToString() is not ("NotNull" or "DoesNotReturn" or "CallerArgumentExpression")).ToArray();
+            return attributes.Length == 0 ? null : node.WithAttributes(SyntaxFactory.SeparatedList(attributes));
         }
 
         public override SyntaxNode? VisitStructDeclaration(StructDeclarationSyntax node)

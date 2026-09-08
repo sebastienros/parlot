@@ -134,7 +134,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             valueVariable: "value",
             valueTypeName: valueTypeName);
 
-        result.Body.Add($"if ({cursorName}.Match({textLiteral}, {comparison}))");
+        result.Body.Add($"if ({cursorName}.Match({textLiteral}.AsSpan(), {comparison}))");
         result.Body.Add("{");
         var shouldReturnMatchedText = isNotOrdinal && (!ignoreCase || _returnMatchedText);
         if (shouldReturnMatchedText)

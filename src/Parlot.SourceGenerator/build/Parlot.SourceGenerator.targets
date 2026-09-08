@@ -1,4 +1,22 @@
 <Project>
+  <ItemGroup Condition="'$(TargetFramework)' != '' and $([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework'">
+    <!-- The grammar factory is compiled against the analyzer's netstandard2.0 build-time Parlot assembly. -->
+    <Reference Include="netstandard" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);ValidateParlotRuntimePackageDependency</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+  <Target Name="ValidateParlotRuntimePackageDependency"
+          Condition="'$(TargetFramework)' != '' and ($([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework' or $([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETStandard')">
+    <!-- NuGet excludes package build imports during restore. An analyzer-private transitive dependency
+         compiles the library, but does not enter its nuspec without an explicit project reference. -->
+    <Error Condition="'@(PackageReference->WithMetadataValue('Identity', 'System.Memory'))' == ''"
+           Text="Packaging generated Parlot parsers for $(TargetFramework) requires an explicit non-private PackageReference to System.Memory 4.6.3 or later, so downstream applications restore the runtime dependency." />
+    <Error Condition="'%(PackageReference.Identity)' == 'System.Memory' and ('%(PackageReference.PrivateAssets)' == 'all' or '%(PackageReference.PrivateAssets)' == 'All')"
+           Text="The System.Memory PackageReference must not use PrivateAssets=all when packaging generated Parlot parsers for $(TargetFramework)." />
+  </Target>
+
   <Target Name="CollectParlotGrammarFiles"
           BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun;CoreCompile">
     <ItemGroup>
