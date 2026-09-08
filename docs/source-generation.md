@@ -446,6 +446,16 @@ Custom parser types used by a build-only grammar must implement `ISourceable` an
 that resolves only to BCL types, application code, or the generated internal support layer. A custom parser
 that requires the runtime Parlot assembly cannot be used by a dependency-free entry point.
 
+### Native AOT
+
+Generated support can be used in libraries with `IsAotCompatible=true` and warnings treated as errors,
+and in applications published with `PublishAot=true`. Numeric parsing uses statically resolved calls;
+runtime grammar-construction reflection and delegate-discovery helpers are not emitted.
+
+This applies to the generated support, not arbitrary application code. Callbacks, models, and custom
+sourceable parsers must also be compatible with trimming and Native AOT. The analyzer and build-only
+grammar still execute in the normal compiler host, not in the published application.
+
 ## IDE and design-time behavior
 
 IDE/design-time analysis does not execute grammar factories. The generator emits throwing stubs so partial

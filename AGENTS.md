@@ -140,6 +140,10 @@ The analyzer requires a Roslyn 5.9+ compiler host regardless of the consumer's r
   explicitly (not privately) to propagate that dependency. Do not fork algorithms into separately
   maintained copies. Application models and runtime callback helpers belong in normal `.cs` files,
   not solely in `.parlot.cs` files.
+- `Numbers.Reflection.cs` stays in the runtime library, not the embedded support. Generated numeric
+  parsing uses static dispatch from `Numbers.cs`; do not reintroduce reflection-only helpers into
+  generated consumers. The package tests enforce `IsAotCompatible` with warnings as errors and publish
+  and execute a net10.0 Native AOT consumer, requiring the platform's native compiler toolchain.
 
 Full reference: `docs/source-generation.md`.
 

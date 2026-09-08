@@ -56,6 +56,22 @@ public class StandaloneGeneratorTests
     }
 
     [Fact]
+    public void Generated_Numeric_Support_Excludes_Runtime_Reflection()
+    {
+        var (result, compilation) = Generate(Declaration, Grammar);
+        AssertNoErrors(result, compilation);
+        var sources = result.Results.SelectMany(static result => result.GeneratedSources).ToArray();
+        var numbers = Assert.Single(sources, static source => source.HintName == "Parlot.StandaloneRuntime.Numbers.g.cs");
+        var source = numbers.SourceText.ToString();
+        Assert.Contains("TNumber.TryParse(span, styles, provider, out value)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Reflection", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetTryParseMethod", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryParseDelegate", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImplementsINumber", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("HasTryParseRadixOverload", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Top_Level_Applications_Generate_Without_Executing_Startup()
     {
         var source = """

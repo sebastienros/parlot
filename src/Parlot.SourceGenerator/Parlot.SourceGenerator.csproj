@@ -58,6 +58,7 @@
     <EmbeddedResource Include="../Parlot/Character.Generated.cs" LogicalName="Parlot.StandaloneRuntime.Character.Generated.cs" />
     <EmbeddedResource Include="../Parlot/Character.Mask.cs" LogicalName="Parlot.StandaloneRuntime.Character.Mask.cs" />
     <EmbeddedResource Include="../Parlot/Character.SearchValues.cs" LogicalName="Parlot.StandaloneRuntime.Character.SearchValues.cs" />
+    <!-- Numbers.Reflection.cs is used only by the runtime library, not by generated parsers. -->
     <EmbeddedResource Include="../Parlot/Numbers.cs" LogicalName="Parlot.StandaloneRuntime.Numbers.cs" />
     <EmbeddedResource Include="../Parlot/HexConverter.cs" LogicalName="Parlot.StandaloneRuntime.HexConverter.cs" />
     <EmbeddedResource Include="../Parlot/ThrowHelper.cs" LogicalName="Parlot.StandaloneRuntime.ThrowHelper.cs" />
