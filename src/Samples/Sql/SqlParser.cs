@@ -77,8 +77,8 @@ public partial class SqlParser
 
         // Identifiers
         var simpleIdentifier = Terms.Identifier().Then(x => x.ToString())
-            .Or(Between(Terms.Char('['), Literals.NoneOf("]"), Terms.Char(']')).Then(x => x.ToString()))
-            .Or(Between(Terms.Char('"'), Literals.NoneOf("\""), Terms.Char('"')).Then(x => x.ToString())).Named("SimpleIdentifier");
+            .Or(Between(Terms.Char('['), Literals.NoneOf("]".AsSpan()), Terms.Char(']')).Then(x => x.ToString()))
+            .Or(Between(Terms.Char('"'), Literals.NoneOf("\"".AsSpan()), Terms.Char('"')).Then(x => x.ToString())).Named("SimpleIdentifier");
 
         var identifier = Separated(DOT, simpleIdentifier).Named("Identifier")
             .Then(parts => new Identifier(parts));
