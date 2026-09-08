@@ -79,9 +79,9 @@ public sealed class When<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
         // Use helper instead of inlining
-        var helperName = context.Helpers
+        var helperName = context.WithDiscardResult(false, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_When", valueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         // Register the action lambda
         var lambdaId = context.RegisterLambda(_action);

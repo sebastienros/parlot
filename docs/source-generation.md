@@ -453,3 +453,9 @@ retain their own inlining hints.
 
 Measure representative grammars. Result models and callbacks can still allocate, and conversions such as
 `TextSpan.ToString()` intentionally create application-owned strings when the public result requires them.
+
+Custom string delimiters use the scanner's single-character overload without allocating a delimiter array
+per token. When `Capture` discards a string parser's decoded value, the generated parser still validates
+escape sequences but skips decoding and its string allocation. Callbacks and predicates that consume the
+value still receive decoded text and execute normally, even when their result is captured or discarded.
+Helpers are specialized by result mode so the same parser can be used both for capture and for its value.

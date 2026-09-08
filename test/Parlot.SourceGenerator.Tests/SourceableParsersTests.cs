@@ -10,6 +10,56 @@ namespace Parlot.SourceGenerator.Tests;
 
 public class SourceableParsersTests
 {
+    [Theory]
+    [InlineData('%')]
+    [InlineData('\\')]
+    [InlineData('\n')]
+    [InlineData('\r')]
+    [InlineData('\0')]
+    [InlineData('\u2028')]
+    public void Custom_String_Emitter_Uses_The_Scalar_Quote_Overload(char quote)
+    {
+        var source = Generate(new StringLiteral(quote));
+        var generated = string.Join(Environment.NewLine, source.Body);
+
+        Assert.Contains($"scanner.ReadQuotedString((char){(int)quote}, out _)", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("new char[]", generated, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void String_Helpers_Are_Cached_Per_Result_Mode(bool discardFirst)
+    {
+        var context = new SourceGenerationContext { DiscardResult = discardFirst };
+        var parser = new StringLiteral('%');
+        var valueType = SourceGenerationContext.GetTypeName(typeof(TextSpan));
+        var first = context.Helpers.GetOrCreate(parser, "String", valueType, () => parser.GenerateSource(context));
+
+        context.DiscardResult = !discardFirst;
+        var second = context.Helpers.GetOrCreate(parser, "String", valueType, () => parser.GenerateSource(context));
+
+        Assert.NotEqual(first.MethodName, second.MethodName);
+        Assert.Equal(!discardFirst, first.Result.Body.Any(static line => line.Contains("DecodeString", StringComparison.Ordinal)));
+        Assert.Equal(discardFirst, second.Result.Body.Any(static line => line.Contains("DecodeString", StringComparison.Ordinal)));
+
+        context.DiscardResult = discardFirst;
+        var repeated = context.Helpers.GetOrCreate(parser, "String", valueType, () => parser.GenerateSource(context));
+        Assert.Equal(first.MethodName, repeated.MethodName);
+        Assert.Same(first.Result, repeated.Result);
+        Assert.Equal(2, context.Helpers.Enumerate().Count());
+    }
+
+    [Fact]
+    public void Capture_Restores_Result_Mode_When_Inner_Emission_Throws()
+    {
+        var context = new SourceGenerationContext();
+        var parser = Capture(new ThrowingSourceableParser());
+
+        Assert.Throws<NotSupportedException>(() => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context));
+        Assert.False(context.DiscardResult);
+    }
+
     [Fact]
     public void Text_Emitter_Produces_A_Direct_Cursor_Check()
     {
@@ -90,6 +140,15 @@ public class SourceableParsersTests
     private sealed class RuntimeOnlyParser : Parser<char>
     {
         public override bool Parse(ParseContext context, ref ParseResult<char> result) => false;
+    }
+
+    private sealed class ThrowingSourceableParser : Parser<char>, ISourceable
+    {
+        public override bool Parse(ParseContext context, ref ParseResult<char> result) =>
+            throw new NotSupportedException();
+
+        public SourceResult GenerateSource(SourceGenerationContext context) =>
+            throw new NotSupportedException();
     }
 
     private sealed class TestLongNumberLiteral : NumberLiteralBase<long>
