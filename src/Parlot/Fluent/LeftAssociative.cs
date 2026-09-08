@@ -89,6 +89,12 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        // Each callback needs the accumulated value, even if the final value is discarded.
+        if (context.DiscardResult)
+        {
+            return context.WithDiscardResult(false, () => GenerateSource(context));
+        }
+
         if (_parser is not ISourceable parserSourceable)
         {
             throw new NotSupportedException("LeftAssociative requires the base parser to be source-generatable.");
@@ -286,6 +292,11 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.DiscardResult)
+        {
+            return context.WithDiscardResult(false, () => GenerateSource(context));
+        }
 
         if (_parser is not ISourceable parserSourceable)
         {

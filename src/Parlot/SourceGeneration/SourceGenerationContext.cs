@@ -33,7 +33,7 @@ public sealed class SourceGenerationContext
         TargetFramework = targetFramework ?? TargetFrameworkInfo.Unknown;
         CSharpLanguageMajorVersion = csharpLanguageMajorVersion;
 
-        Helpers = new ParserHelperRegistry();
+        Helpers = new ParserHelperRegistry(this);
     }
 
     /// <summary>
@@ -113,7 +113,7 @@ public sealed class SourceGenerationContext
     public DeferredRegistry Deferred { get; } = new();
 
     /// <summary>
-    /// Registry of helper parser methods (e.g., OneOf buckets) to emit once per descriptor.
+    /// Registry of helper parser methods (e.g., OneOf buckets) to emit once per descriptor and result mode.
     /// </summary>
     public ParserHelperRegistry Helpers { get; }
 
@@ -123,8 +123,23 @@ public sealed class SourceGenerationContext
     /// <remarks>
     /// When set to true, the generated statements don't need to record and define the result value.
     /// This is done to optimize generated parsers that are usually used for pattern matching only (e.g., Capture).
+    /// Inputs consumed by callbacks must still be generated with this flag set to false.
     /// </remarks>
     public bool DiscardResult { get; set; }
+
+    internal TResult WithDiscardResult<TResult>(bool discardResult, Func<TResult> action)
+    {
+        var previous = DiscardResult;
+        DiscardResult = discardResult;
+        try
+        {
+            return action();
+        }
+        finally
+        {
+            DiscardResult = previous;
+        }
+    }
 
     /// <summary>
     /// Returns a new unique number for the current compilation.

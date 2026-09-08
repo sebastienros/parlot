@@ -86,6 +86,12 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        // Recursive callbacks must receive the value produced by the inner operator.
+        if (context.DiscardResult)
+        {
+            return context.WithDiscardResult(false, () => GenerateSource(context));
+        }
+
         if (_parser is not ISourceable parserSourceable)
         {
             throw new NotSupportedException("Unary requires the base parser to be source-generatable.");
@@ -279,6 +285,11 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.DiscardResult)
+        {
+            return context.WithDiscardResult(false, () => GenerateSource(context));
+        }
 
         if (_parser is not ISourceable parserSourceable)
         {

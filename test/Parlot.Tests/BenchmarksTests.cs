@@ -11,6 +11,18 @@ public class BenchmarksTests
     const decimal _expected2 = (decimal)-64.5;
 
     [Theory]
+    [InlineData("%hello%", 5)]
+    [InlineData("%hello\\nworld%", 11)]
+    public void GeneratedStrings(string input, int decodedLength)
+    {
+        var benchmarks = new GeneratedStringBenchmarks { Input = input };
+        benchmarks.Setup();
+
+        Assert.Equal(input.Length, benchmarks.Captured());
+        Assert.Equal(decodedLength, benchmarks.Decoded());
+    }
+
+    [Theory]
     [InlineData("a", true)]
     [InlineData("\u00e9", true)]
     [InlineData("\u4e2d", false)]

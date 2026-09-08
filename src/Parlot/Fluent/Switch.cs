@@ -90,9 +90,9 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
         // Use helper instead of inlining
-        var helperName = context.Helpers
+        var helperName = context.WithDiscardResult(false, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Switch", previousValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         // Register the selector lambda
         var selectorLambda = context.RegisterLambda(_selector);
