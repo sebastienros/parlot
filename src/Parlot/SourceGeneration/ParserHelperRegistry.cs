@@ -9,8 +9,21 @@ namespace Parlot.SourceGeneration;
 /// </summary>
 public sealed class ParserHelperRegistry
 {
-    private readonly Dictionary<object, HelperEntry> _helpers = new();
+    private readonly Dictionary<(object Parser, bool DiscardResult), HelperEntry> _helpers = new();
+    private readonly SourceGenerationContext? _context;
     private int _nextId;
+
+    /// <summary>
+    /// Creates a registry for value-producing parser helpers.
+    /// </summary>
+    public ParserHelperRegistry()
+    {
+    }
+
+    internal ParserHelperRegistry(SourceGenerationContext context)
+    {
+        _context = context;
+    }
 
     public (string MethodName, string ValueTypeName, SourceResult Result, string? ParserName) GetOrCreate(
         object parser,
@@ -18,7 +31,8 @@ public sealed class ParserHelperRegistry
         string valueTypeName,
         Func<SourceResult> resultFactory)
     {
-        if (!_helpers.TryGetValue(parser, out var entry))
+        var key = (parser, _context?.DiscardResult ?? false);
+        if (!_helpers.TryGetValue(key, out var entry))
         {
             var methodName = suggestedName + "_" + _nextId++;
             var result = resultFactory();
@@ -32,7 +46,7 @@ public sealed class ParserHelperRegistry
             }
             
             entry = new HelperEntry(methodName, valueTypeName, result, parserName);
-            _helpers[parser] = entry;
+            _helpers[key] = entry;
         }
 
         return (entry.MethodName, entry.ValueTypeName, entry.Result, entry.ParserName);

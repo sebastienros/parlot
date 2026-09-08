@@ -72,16 +72,10 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
         
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
-        // Set DiscardResult to true for the inner parser, as we only care about whether it succeeds
-        var ignoreResults = context.DiscardResult;
-        context.DiscardResult = true;
-
         // Use helper instead of inlining
-        var helperName = context.Helpers
+        var helperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Capture", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
-
-        context.DiscardResult = ignoreResults;
+            .MethodName);
 
         // if (Helper(context, out _))
         // {

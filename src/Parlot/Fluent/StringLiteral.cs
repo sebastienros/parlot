@@ -1,7 +1,6 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq;
 using System.Reflection;
 
 namespace Parlot.Fluent;
@@ -110,7 +109,10 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         var startName = $"start{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        }
 
         // Generate the appropriate read method call based on quote type
         var readMethod = _quotes switch
@@ -119,15 +121,18 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
             StringLiteralQuotes.Double => $"{scannerName}.ReadDoubleQuotedString()",
             StringLiteralQuotes.SingleOrDouble => $"{scannerName}.ReadQuotedString()",
             StringLiteralQuotes.Backtick => $"{scannerName}.ReadBacktickString()",
-            StringLiteralQuotes.Custom => $"{scannerName}.ReadQuotedString(new char[] {{ {string.Join(", ", ExpectedChars.Select(c => $"'{c}'"))} }})",
+            StringLiteralQuotes.Custom => $"{scannerName}.ReadQuotedString((char){(int)ExpectedChars[0]}, out _)",
             _ => throw new InvalidOperationException()
         };
 
         result.Body.Add($"if ({readMethod})");
         result.Body.Add("{");
-        result.Body.Add($"    var {endName} = {cursorName}.Offset;");
         result.Body.Add($"    {result.SuccessVariable} = true;");
-        result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1, {endName} - {startName} - 2);");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"    var {endName} = {cursorName}.Offset;");
+            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1, {endName} - {startName} - 2);");
+        }
         result.Body.Add("}");
 
         return result;

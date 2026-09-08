@@ -126,9 +126,10 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
 
         var innerValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
         var helperKey = $"{context.MethodNamePrefix}_Then_{context.NextNumber()}";
-        var helperName = context.Helpers
+        // The callback still consumes the inner value when its own result is discarded.
+        var helperName = context.WithDiscardResult(false, () => context.Helpers
             .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         result.Body.Add($"if ({helperName}({ctx}, out var {parsedName}Value))");
         result.Body.Add("{");
