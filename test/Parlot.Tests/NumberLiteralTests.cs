@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using System.Globalization;
 using System.Numerics;
 using Xunit;
 
@@ -8,6 +9,16 @@ namespace Parlot.Tests;
 
 public class NumberLiteralTests
 {
+#if NET8_0_OR_GREATER
+    [Fact]
+    public void GenericRuntimeTryParseShouldStillHonorNumberStyles()
+    {
+        Assert.True(Numbers.TryParse<int>("2A", NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value));
+        Assert.Equal(42, value);
+        Assert.False(Numbers.TryParse<int>("-42", NumberStyles.None, CultureInfo.InvariantCulture, out _));
+    }
+#endif
+
     [Fact]
     public void ByteNumberLiteralShouldParseValidNumbers()
     {

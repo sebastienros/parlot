@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
@@ -67,6 +68,7 @@ public class StandalonePackageTests
                     <PackageId>Standalone.Author</PackageId>
                     <Version>{{version}}</Version>
                     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                    <IsAotCompatible Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net10.0'">true</IsAotCompatible>
                   </PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="Parlot.SourceGenerator" Version="{{version}}" PrivateAssets="all" />
@@ -90,6 +92,9 @@ public class StandalonePackageTests
                 public static partial class Grammar
                 {
                     public static partial bool TryParse(string text, out int value);
+                    public static partial bool TryParseLong(string text, System.Threading.CancellationToken cancellationToken, out long value);
+                    public static partial bool TryParseDecimal(string text, out decimal value);
+                    public static partial bool TryParseDouble(string text, out double value);
                 }
                 """);
             File.WriteAllText(Path.Combine(author, "Grammar.parlot.cs"), """
@@ -101,6 +106,15 @@ public class StandalonePackageTests
                 {
                     [GenerateParser(nameof(TryParse))]
                     private static Parser<int> Build() => Terms.Number<int>(NumberOptions.Integer).Eof();
+
+                    [GenerateParser(nameof(TryParseLong))]
+                    private static Parser<long> BuildLong() => Terms.Number<long>(NumberOptions.Integer).Eof();
+
+                    [GenerateParser(nameof(TryParseDecimal))]
+                    private static Parser<decimal> BuildDecimal() => Terms.Number<decimal>(NumberOptions.Number, ',', '.').Eof();
+
+                    [GenerateParser(nameof(TryParseDouble))]
+                    private static Parser<double> BuildDouble() => Terms.Number<double>(NumberOptions.Float).Eof();
                 }
                 """);
 
@@ -161,6 +175,7 @@ public class StandalonePackageTests
                     <TargetFramework>{{consumerFramework}}</TargetFramework>
                     <OutputType>Exe</OutputType>
                     <LangVersion>12</LangVersion>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
                   </PropertyGroup>
                   <ItemGroup><PackageReference Include="Standalone.Author" Version="{{version}}" /></ItemGroup>
                 </Project>
@@ -170,6 +185,26 @@ public class StandalonePackageTests
                     throw new System.InvalidOperationException("Generated parser failed.");
                 if (Standalone.Author.Grammar.TryParse("42x", out _))
                     throw new System.InvalidOperationException("Generated EOF check failed.");
+                if (Standalone.Author.Grammar.TryParse("2147483648", out _))
+                    throw new System.InvalidOperationException("Generated overflow check failed.");
+                if (!Standalone.Author.Grammar.TryParseLong("-9223372036854775808", default, out var integer) || integer != long.MinValue)
+                    throw new System.InvalidOperationException("Generated long parser failed.");
+                if (!Standalone.Author.Grammar.TryParseDecimal("1.234,5", out var number) || number != 1234.5m)
+                    throw new System.InvalidOperationException("Generated custom-culture decimal parser failed.");
+                if (!Standalone.Author.Grammar.TryParseDouble("-1.25e2", out var floating) || floating != -125d)
+                    throw new System.InvalidOperationException("Generated double parser failed.");
+                using (var source = new System.Threading.CancellationTokenSource())
+                {
+                    source.Cancel();
+                    try
+                    {
+                        Standalone.Author.Grammar.TryParseLong("42", source.Token, out _);
+                        throw new System.InvalidOperationException("Generated cancellation check failed.");
+                    }
+                    catch (System.OperationCanceledException exception) when (exception.CancellationToken == source.Token)
+                    {
+                    }
+                }
                 System.Console.WriteLine(value);
                 """);
             await BuildContextIntegrationTests.RunDotnet(consumer, "restore", "--packages",
@@ -185,6 +220,20 @@ public class StandalonePackageTests
                 static path => Path.GetFileName(path).StartsWith("Parlot", StringComparison.Ordinal));
             Assert.DoesNotContain(Directory.GetDirectories(Path.Combine(directory, "consumer-packages")),
                 static path => Path.GetFileName(path).StartsWith("parlot", StringComparison.OrdinalIgnoreCase));
+
+            if (targetFramework == "net10.0")
+            {
+                var publish = Path.Combine(directory, "native");
+                await BuildContextIntegrationTests.RunDotnet(consumer, "publish", "--configuration", configuration,
+                    "--runtime", RuntimeInformation.RuntimeIdentifier, "--output", publish,
+                    "-p:PublishAot=true", "-p:UseSharedCompilation=false", "-p:NuGetAudit=false",
+                    "-p:RestorePackagesPath=" + Path.Combine(directory, "consumer-packages"));
+                var executable = Path.Combine(publish, OperatingSystem.IsWindows() ? "Consumer.exe" : "Consumer");
+                Assert.False(File.Exists(Path.Combine(publish, "Consumer.dll")));
+                Assert.Equal("42", (await BuildContextIntegrationTests.RunProcess(consumer, executable)).Trim());
+                Assert.DoesNotContain(Directory.GetFiles(publish),
+                    static path => Path.GetFileName(path).StartsWith("Parlot", StringComparison.Ordinal));
+            }
         }
 
         finally

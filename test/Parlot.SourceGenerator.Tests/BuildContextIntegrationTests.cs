@@ -102,11 +102,14 @@ public class BuildContextIntegrationTests
         }
     }
 
-    internal static async Task<string> RunDotnet(string directory, params string[] arguments)
+    internal static Task<string> RunDotnet(string directory, params string[] arguments)
+        => RunProcess(directory, "dotnet", arguments);
+
+    internal static async Task<string> RunProcess(string directory, string executable, params string[] arguments)
     {
         using var process = new Process
         {
-            StartInfo = new ProcessStartInfo("dotnet")
+            StartInfo = new ProcessStartInfo(executable)
             {
                 WorkingDirectory = directory,
                 RedirectStandardOutput = true,
@@ -144,7 +147,7 @@ public class BuildContextIntegrationTests
         var stderr = await error;
         Assert.True(
             process.ExitCode == 0,
-            $"dotnet {string.Join(" ", arguments)}{Environment.NewLine}{stdout}{stderr}");
+            $"{executable} {string.Join(" ", arguments)}{Environment.NewLine}{stdout}{stderr}");
         return stdout;
     }
 
