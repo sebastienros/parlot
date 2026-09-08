@@ -8,7 +8,7 @@ namespace Parlot.SourceGenerator;
 /// <remarks>
 /// Example usage:
 /// <code>
-/// [GenerateParser]
+/// [GenerateParser("TryParseExpression")]
 /// [IncludeUsings("System.Collections.Generic", "MyProject.Models")]
 /// public static Parser&lt;Expression&gt; CreateExpressionParser()
 /// {
@@ -19,18 +19,18 @@ namespace Parlot.SourceGenerator;
 /// You can apply this attribute to methods or container classes:
 /// <code>
 /// [IncludeUsings("System.Text", "System.Linq")]
-/// public static class MyParsers
+/// public static partial class MyParsers
 /// {
-///     [GenerateParser]
+///     [GenerateParser("TryParseText")]
 ///     public static Parser&lt;string&gt; TextParser() =&gt; ...;
 ///     
-///     [GenerateParser]
+///     [GenerateParser("TryParseNumber")]
 ///     public static Parser&lt;int&gt; NumberParser() =&gt; ...;
 /// }
 /// </code>
 /// 
 /// When applied to a class, the using directives will be included in all generated
-/// parsers within that class.
+/// parsers within that class. These factories belong in build-only .parlot.cs files.
 /// </remarks>
 [System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Class, AllowMultiple = false)]
 #if SOURCE_GENERATOR

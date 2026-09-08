@@ -67,6 +67,9 @@ jobs:
     - name: Test source generator
       run: dotnet test test/Parlot.SourceGenerator.Tests/Parlot.SourceGenerator.Tests.csproj --configuration Release --no-build
 
+    - name: Test standalone parsers
+      run: dotnet test test/Parlot.Standalone.Tests/Parlot.Standalone.Tests.csproj --configuration Release --no-build
+
     - name: Pack with dotnet
       run: dotnet pack --output artifacts --configuration Release --no-build -p:Version=${{ steps.release.outputs.version }} -p:ContinuousIntegrationBuild=True
 

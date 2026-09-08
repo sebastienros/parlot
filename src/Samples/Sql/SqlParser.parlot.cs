@@ -1,7 +1,7 @@
 #nullable enable
 
 using Parlot.Fluent;
-using System;
+using Parlot.SourceGenerator;
 using System.Collections.Generic;
 using System.Linq;
 using static Parlot.Fluent.Parsers;
@@ -10,20 +10,10 @@ namespace Parlot.Tests.Sql;
 
 public partial class SqlParser
 {
-    // Keywords can't be used as identifiers or function names.
-    private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    [GenerateParser(nameof(TryParse))]
+    [IncludeUsings("System.Linq")]
+    private static Parser<StatementList> BuildGeneratedParser()
     {
-        "SELECT", "FROM", "WHERE", "AS", "JOIN", "INNER", "LEFT", "RIGHT", "ON",
-        "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-        "UNION", "ALL", "DISTINCT", "WITH", "AND", "OR", "NOT", "BETWEEN",
-        "IN", "LIKE", "TRUE", "FALSE", "OVER", "PARTITION",
-    };
-
-    private static readonly ColumnItem StarColumnItem = new(new ColumnSourceIdentifier(Identifier.STAR), null);
-
-    private static Parser<StatementList> CreateRuntimeParser()
-    {
-        // Basic terminals
         var COMMA = Terms.Char(',');
         var DOT = Terms.Char('.');
         var SEMICOLON = Terms.Char(';');
@@ -33,7 +23,6 @@ public partial class SqlParser
         var STAR = Terms.Char('*');
         var EQ = Terms.Char('=');
 
-        // Keywords
         var SELECT = Terms.Keyword("SELECT", caseInsensitive: true);
         var FROM = Terms.Keyword("FROM", caseInsensitive: true);
         var WHERE = Terms.Keyword("WHERE", caseInsensitive: true);
@@ -66,7 +55,12 @@ public partial class SqlParser
         var OVER = Terms.Keyword("OVER", caseInsensitive: true);
         var PARTITION = Terms.Keyword("PARTITION", caseInsensitive: true);
 
-        // Literals
+        var reservedKeyword = OneOf(
+            SELECT, FROM, WHERE, AS, JOIN, INNER, LEFT, RIGHT, ON,
+            GROUP, BY, HAVING, ORDER, ASC, DESC, LIMIT, OFFSET,
+            UNION, ALL, DISTINCT, WITH, AND, OR, NOT, BETWEEN,
+            IN, LIKE, TRUE, FALSE, OVER, PARTITION);
+
         var numberLiteral = Terms.Decimal().Then<Expression>(d => new LiteralExpression<decimal>(d));
 
         var stringLiteral = Terms.String(StringLiteralQuotes.Single)
@@ -75,7 +69,6 @@ public partial class SqlParser
         var booleanLiteral = TRUE.Then<Expression>(static _ => LiteralExpression<bool>.TRUE)
             .Or(FALSE.Then<Expression>(static _ => LiteralExpression<bool>.FALSE));
 
-        // Identifiers
         var simpleIdentifier = Terms.Identifier().Then(x => x.ToString())
             .Or(Between(Terms.Char('['), Literals.NoneOf("]"), Terms.Char(']')).Then(x => x.ToString()))
             .Or(Between(Terms.Char('"'), Literals.NoneOf("\""), Terms.Char('"')).Then(x => x.ToString())).Named("SimpleIdentifier");
@@ -83,45 +76,37 @@ public partial class SqlParser
         var identifier = Separated(DOT, simpleIdentifier).Named("Identifier")
             .Then(parts => new Identifier(parts));
 
-        // Without the keywords check "FROM a WHERE" would interpret "WHERE" as an alias since "AS" is optional
-        var identifierNoKeywords = Separated(DOT, simpleIdentifier).When(static (ctx, parts) => parts.Count > 0 && !Keywords.Contains(parts[0])).Named("IdentiferNoKeywords")
+        var identifierNoKeywords = Not(reservedKeyword)
+            .SkipAnd(Separated(DOT, simpleIdentifier))
+            .Named("IdentiferNoKeywords")
             .Then(static parts => new Identifier(parts));
-            
-        // Deferred parsers
+
         var expression = Deferred<Expression>();
         var selectStatement = Deferred<SelectStatement>();
         var columnItem = Deferred<ColumnItem>();
         var orderByItem = Deferred<OrderByItem>();
 
-        // Expression list
         var expressionList = Separated(COMMA, expression);
 
-        // Function arguments
         var starArg = STAR.Then<FunctionArguments>(static _ => StarArgument.Instance);
-        var selectArg = selectStatement.Then<FunctionArguments>(static s => new SelectStatementArgument(s));
-        var exprListArg = expressionList.Then<FunctionArguments>(static exprs => new ExpressionListArguments(exprs));
-        // Use Always<object?>() as a base parser that always succeeds, then transform to EmptyArguments
+        var selectArg = selectStatement.Then<FunctionArguments>(static statement => new SelectStatementArgument(statement));
+        var exprListArg = expressionList.Then<FunctionArguments>(static expressions => new ExpressionListArguments(expressions));
         var emptyArg = Always<object?>().Then<FunctionArguments>(static _ => EmptyArguments.Instance);
         var functionArgs = starArg.Or(selectArg).Or(exprListArg).Or(emptyArg);
 
-        // Function call
         var functionCall = identifier.And(Between(LPAREN, functionArgs, RPAREN))
-            .Then(x => new FunctionCall(x.Item1, x.Item2));
+            .Then(value => new FunctionCall(value.Item1, value.Item2));
 
-        // Tuple
         var tuple = Between(LPAREN, expressionList, RPAREN)
-            .Then<Expression>(exprs => new TupleExpression(exprs));
+            .Then<Expression>(expressions => new TupleExpression(expressions));
 
-        // Parenthesized select
         var parSelectStatement = Between(LPAREN, selectStatement, RPAREN)
-            .Then<Expression>(s => new ParenthesizedSelectStatement(s));
+            .Then<Expression>(statement => new ParenthesizedSelectStatement(statement));
 
-        // Basic term - use identifierNoKeywords to prevent keywords from being parsed as identifiers in expressions
         var identifierExpr = identifierNoKeywords.Then<Expression>(id => new IdentifierExpression(id));
 
-        // Function calls in expressions must use identifierNoKeywords to prevent keywords from being parsed as function names
         var functionCallExpr = identifierNoKeywords.And(Between(LPAREN, functionArgs, RPAREN))
-            .Then<Expression>(x => new FunctionCall(x.Item1, x.Item2));
+            .Then<Expression>(value => new FunctionCall(value.Item1, value.Item2));
 
         var termNoParameter = functionCallExpr
             .Or(parSelectStatement)
@@ -129,104 +114,111 @@ public partial class SqlParser
             .Or(booleanLiteral)
             .Or(stringLiteral)
             .Or(numberLiteral)
-            .Or(identifierExpr)
-            ;
+            .Or(identifierExpr);
 
-        // Parameter - keywords are allowed as parameter names
-        var parameter = AT.SkipAnd(identifier).And(Literals.Char(':').SkipAnd(termNoParameter).Optional()).Then<Expression>(x => new ParameterExpression(x.Item1, x.Item2.HasValue ? x.Item2.Value : null));
+        var parameter = AT.SkipAnd(identifier)
+            .And(Literals.Char(':').SkipAnd(termNoParameter).Optional())
+            .Then<Expression>(value => new ParameterExpression(
+                value.Item1,
+                value.Item2.HasValue ? value.Item2.Value : null));
 
         var term = termNoParameter.Or(parameter);
 
-        // Unary expressions
-        var unaryMinus = Terms.Char('-').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Minus, x.Item2));
-        var unaryPlus = Terms.Char('+').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Plus, x.Item2));
-        var unaryNot = NOT.And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Not, x.Item2));
-        var unaryBitwiseNot = Terms.Char('~').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.BitwiseNot, x.Item2));
+        var unaryMinus = Terms.Char('-').And(term)
+            .Then<Expression>(value => new UnaryExpression(UnaryOperator.Minus, value.Item2));
+        var unaryPlus = Terms.Char('+').And(term)
+            .Then<Expression>(value => new UnaryExpression(UnaryOperator.Plus, value.Item2));
+        var unaryNot = NOT.And(term)
+            .Then<Expression>(value => new UnaryExpression(UnaryOperator.Not, value.Item2));
+        var unaryBitwiseNot = Terms.Char('~').And(term)
+            .Then<Expression>(value => new UnaryExpression(UnaryOperator.BitwiseNot, value.Item2));
 
         var unaryExpr = unaryMinus.Or(unaryPlus).Or(unaryNot).Or(unaryBitwiseNot);
         var primary = unaryExpr.Or(term);
 
-        // Binary operators
         var notLike = NOT.AndSkip(LIKE);
-        var likeOp = notLike.Or(LIKE);
 
-        // Build expression with proper precedence
         var multiplicative = primary.LeftAssociative(
-            (Terms.Char('*'), (a, b) => new BinaryExpression(a, BinaryOperator.Multiply, b)),
-            (Terms.Char('/'), (a, b) => new BinaryExpression(a, BinaryOperator.Divide, b)),
-            (Terms.Char('%'), (a, b) => new BinaryExpression(a, BinaryOperator.Modulo, b))
+            (Terms.Char('*'), (left, right) => new BinaryExpression(left, BinaryOperator.Multiply, right)),
+            (Terms.Char('/'), (left, right) => new BinaryExpression(left, BinaryOperator.Divide, right)),
+            (Terms.Char('%'), (left, right) => new BinaryExpression(left, BinaryOperator.Modulo, right))
         );
 
         var additive = multiplicative.LeftAssociative(
-            (Terms.Char('+'), (a, b) => new BinaryExpression(a, BinaryOperator.Add, b)),
-            (Terms.Char('-'), (a, b) => new BinaryExpression(a, BinaryOperator.Subtract, b))
+            (Terms.Char('+'), (left, right) => new BinaryExpression(left, BinaryOperator.Add, right)),
+            (Terms.Char('-'), (left, right) => new BinaryExpression(left, BinaryOperator.Subtract, right))
         );
 
         var comparisonText = additive.LeftAssociative(
-            (Terms.Text(">="), (a, b) => new BinaryExpression(a, BinaryOperator.GreaterThanOrEqual, b)),
-            (Terms.Text("<="), (a, b) => new BinaryExpression(a, BinaryOperator.LessThanOrEqual, b)),
-            (Terms.Text("<>"), (a, b) => new BinaryExpression(a, BinaryOperator.NotEqual, b)),
-            (Terms.Text("!="), (a, b) => new BinaryExpression(a, BinaryOperator.NotEqualAlt, b)),
-            (Terms.Text("!<"), (a, b) => new BinaryExpression(a, BinaryOperator.NotLessThan, b)),
-            (Terms.Text("!>"), (a, b) => new BinaryExpression(a, BinaryOperator.NotGreaterThan, b))
+            (Terms.Text(">="), (left, right) => new BinaryExpression(left, BinaryOperator.GreaterThanOrEqual, right)),
+            (Terms.Text("<="), (left, right) => new BinaryExpression(left, BinaryOperator.LessThanOrEqual, right)),
+            (Terms.Text("<>"), (left, right) => new BinaryExpression(left, BinaryOperator.NotEqual, right)),
+            (Terms.Text("!="), (left, right) => new BinaryExpression(left, BinaryOperator.NotEqualAlt, right)),
+            (Terms.Text("!<"), (left, right) => new BinaryExpression(left, BinaryOperator.NotLessThan, right)),
+            (Terms.Text("!>"), (left, right) => new BinaryExpression(left, BinaryOperator.NotGreaterThan, right))
         );
 
         var comparisonChar = comparisonText.LeftAssociative(
-            (Terms.Char('>'), (a, b) => new BinaryExpression(a, BinaryOperator.GreaterThan, b)),
-            (Terms.Char('<'), (a, b) => new BinaryExpression(a, BinaryOperator.LessThan, b)),
-            (EQ, (a, b) => new BinaryExpression(a, BinaryOperator.Equal, b))
+            (Terms.Char('>'), (left, right) => new BinaryExpression(left, BinaryOperator.GreaterThan, right)),
+            (Terms.Char('<'), (left, right) => new BinaryExpression(left, BinaryOperator.LessThan, right)),
+            (EQ, (left, right) => new BinaryExpression(left, BinaryOperator.Equal, right))
         );
 
         var comparison = comparisonChar.LeftAssociative(
-            (notLike, (a, b) => new BinaryExpression(a, BinaryOperator.NotLike, b)),
-            (LIKE, (a, b) => new BinaryExpression(a, BinaryOperator.Like, b))
+            (notLike, (left, right) => new BinaryExpression(left, BinaryOperator.NotLike, right)),
+            (LIKE, (left, right) => new BinaryExpression(left, BinaryOperator.Like, right))
         );
 
         var bitwise = comparison.LeftAssociative(
-            (Terms.Char('^'), (a, b) => new BinaryExpression(a, BinaryOperator.BitwiseXor, b)),
-            (Terms.Char('&'), (a, b) => new BinaryExpression(a, BinaryOperator.BitwiseAnd, b)),
-            (Terms.Char('|'), (a, b) => new BinaryExpression(a, BinaryOperator.BitwiseOr, b))
+            (Terms.Char('^'), (left, right) => new BinaryExpression(left, BinaryOperator.BitwiseXor, right)),
+            (Terms.Char('&'), (left, right) => new BinaryExpression(left, BinaryOperator.BitwiseAnd, right)),
+            (Terms.Char('|'), (left, right) => new BinaryExpression(left, BinaryOperator.BitwiseOr, right))
         );
 
         var andExpr = bitwise.LeftAssociative(
-            (AND, (a, b) => new BinaryExpression(a, BinaryOperator.And, b))
+            (AND, (left, right) => new BinaryExpression(left, BinaryOperator.And, right))
         );
 
         var orExpr = andExpr.LeftAssociative(
-            (OR, (a, b) => new BinaryExpression(a, BinaryOperator.Or, b))
+            (OR, (left, right) => new BinaryExpression(left, BinaryOperator.Or, right))
         );
 
-        // BETWEEN and IN expressions
         var betweenExpr = andExpr.And(NOT.Optional()).AndSkip(BETWEEN).And(bitwise).AndSkip(AND).And(bitwise)
             .Then<Expression>(result =>
             {
-                var (expr, notKeyword, lower, upper) = result;
-                return new BetweenExpression(expr, lower, upper, notKeyword.HasValue);
+                var (value, notKeyword, lower, upper) = result;
+                return new BetweenExpression(value, lower, upper, notKeyword.HasValue);
             });
 
         var inExpr = andExpr.And(NOT.Optional()).AndSkip(IN).AndSkip(LPAREN).And(functionArgs).AndSkip(RPAREN)
             .Then<Expression>(result =>
             {
-                var (expr, notKeyword, values) = result;
-                return new InExpression(expr, values, notKeyword.HasValue);
+                var (value, notKeyword, values) = result;
+                return new InExpression(value, values, notKeyword.HasValue);
             });
 
         expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
 
-        // Column source
-        var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id)).Named("ColumnSourceIdentifier");
+        var columnSourceId = identifier
+            .Then<ColumnSource>(id => new ColumnSourceIdentifier(id))
+            .Named("ColumnSourceIdentifier");
 
-        // Deferred for OVER clause components
-        var columnItemList = Separated(COMMA, columnItem.Or(STAR.Then(_ => StarColumnItem)).Named("ColumnItemOrStart")).Named("ColumnItemList");
+        var columnItemList = Separated(
+            COMMA,
+            columnItem.Or(STAR.Then(_ => StarColumnItem)).Named("ColumnItemOrStart"))
+            .Named("ColumnItemList");
         var orderByList = Separated(COMMA, orderByItem);
 
         var orderByClause = ORDER.AndSkip(BY).And(orderByList)
-            .Then(x => new OrderByClause(x.Item2));
+            .Then(value => new OrderByClause(value.Item2));
 
         var partitionBy = PARTITION.AndSkip(BY).And(columnItemList)
-            .Then(x => new PartitionByClause(x.Item2));
+            .Then(value => new PartitionByClause(value.Item2));
 
-        var overClause = OVER.AndSkip(LPAREN).And(partitionBy.Optional()).And(orderByClause.Optional()).AndSkip(RPAREN)
+        var overClause = OVER.AndSkip(LPAREN)
+            .And(partitionBy.Optional())
+            .And(orderByClause.Optional())
+            .AndSkip(RPAREN)
             .Then(result =>
             {
                 var (_, partition, orderBy) = result;
@@ -236,26 +228,26 @@ public partial class SqlParser
                 );
             });
 
-        var columnSourceFunc = functionCall.And(overClause.Optional()).Named("ColumnSourceFunction")
+        var columnSourceFunc = functionCall.And(overClause.Optional())
+            .Named("ColumnSourceFunction")
             .Then<ColumnSource>(result =>
             {
-                var (func, over) = result;
-                return new ColumnSourceFunction((FunctionCall)func, over.OrSome(null));
+                var (function, over) = result;
+                return new ColumnSourceFunction((FunctionCall)function, over.OrSome(null));
             });
 
         var columnSource = columnSourceFunc.Or(columnSourceId).Named("ColumnSource");
 
-        // Column item with alias
         var columnAlias = AS.Optional().SkipAnd(identifierNoKeywords);
 
-        columnItem.Parser = columnSource.And(columnAlias.Optional()).Named("ColumnItem")
+        columnItem.Parser = columnSource.And(columnAlias.Optional())
+            .Named("ColumnItem")
             .Then(result =>
             {
                 var (source, alias) = result;
                 return new ColumnItem(source, alias.OrSome(null));
             });
 
-        // Table source
         var tableAlias = AS.Optional().SkipAnd(identifierNoKeywords);
 
         var tableSourceItem = identifier.And(tableAlias.Optional())
@@ -265,21 +257,22 @@ public partial class SqlParser
                 return new TableSourceItem(id, alias.OrSome(null));
             });
 
-        // Deferred union statement list for subqueries
         var unionStatementList = Deferred<IReadOnlyList<UnionStatement>>();
 
-        var tableSourceSubQuery = LPAREN.SkipAnd(unionStatementList).AndSkip(RPAREN).AndSkip(AS).And(simpleIdentifier)
+        var tableSourceSubQuery = LPAREN.SkipAnd(unionStatementList)
+            .AndSkip(RPAREN)
+            .AndSkip(AS)
+            .And(simpleIdentifier)
             .Then<TableSource>(result =>
             {
                 var (query, alias) = result;
                 return new TableSourceSubQuery(query, alias.ToString());
             });
 
-        var tableSourceItemAsTableSource = tableSourceItem.Then<TableSource>(t => t);
+        var tableSourceItemAsTableSource = tableSourceItem.Then<TableSource>(table => table);
         var tableSource = tableSourceSubQuery.Or(tableSourceItemAsTableSource);
         var tableSourceList = Separated(COMMA, tableSource);
 
-        // Join
         var joinKind = INNER.Then(JoinKind.Inner)
             .Or(LEFT.Then(JoinKind.Left))
             .Or(RIGHT.Then(JoinKind.Right));
@@ -287,7 +280,10 @@ public partial class SqlParser
         var joinCondition = ON.SkipAnd(andExpr);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
-        var joinStatement = joinKind.Else(JoinKind.None).AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)
+        var joinStatement = joinKind.Else(JoinKind.None)
+            .AndSkip(JOIN)
+            .And(tableSourceItemList)
+            .And(joinCondition)
             .Then(result =>
             {
                 var (kind, tables, conditions) = result;
@@ -296,27 +292,25 @@ public partial class SqlParser
 
         var joins = ZeroOrMany(joinStatement);
 
-        // FROM clause
         var fromClause = FROM.SkipAnd(tableSourceList).And(joins)
             .Then(result =>
             {
                 var (tables, joinList) = result;
-                return new FromClause(tables, joinList.Count > 0 ? joinList : null);
+                return new FromClause(tables, joinList.Any() ? joinList : null);
             });
 
-        // WHERE clause
-        var whereClause = WHERE.And(expression).Then(x => new WhereClause(x.Item2));
+        var whereClause = WHERE.And(expression)
+            .Then(value => new WhereClause(value.Item2));
 
-        // GROUP BY clause
         var columnSourceList = Separated(COMMA, columnSource);
         var groupByClause = GROUP.AndSkip(BY).And(columnSourceList)
-            .Then(x => new GroupByClause(x.Item2));
+            .Then(value => new GroupByClause(value.Item2));
 
-        // HAVING clause
-        var havingClause = HAVING.And(expression).Then(x => new HavingClause(x.Item2));
+        var havingClause = HAVING.And(expression)
+            .Then(value => new HavingClause(value.Item2));
 
-        // ORDER BY item
-        var orderDirection = ASC.Then(OrderDirection.Asc).Or(DESC.Then(OrderDirection.Desc));
+        var orderDirection = ASC.Then(OrderDirection.Asc)
+            .Or(DESC.Then(OrderDirection.Desc));
 
         orderByItem.Parser =
             identifier.And(Between(LPAREN, functionArgs, RPAREN))
@@ -324,20 +318,21 @@ public partial class SqlParser
                 {
                     var (id, arguments) = result;
                     return new OrderByItem(id, arguments, OrderDirection.NotSpecified);
-                }).Or(
-            identifier.And(orderDirection.Optional())
-                .Then(result =>
-                {
-                    var (id, dir) = result;
-                    return new OrderByItem(id, null, dir.OrSome(OrderDirection.NotSpecified));
-                }));
+                })
+                .Or(identifier.And(orderDirection.Optional())
+                    .Then(result =>
+                    {
+                        var (id, direction) = result;
+                        return new OrderByItem(id, null, direction.OrSome(OrderDirection.NotSpecified));
+                    }));
 
-        // LIMIT and OFFSET clauses
-        var limitClause = LIMIT.And(expression).Then(x => new LimitClause(x.Item2));
-        var offsetClause = OFFSET.And(expression).Then(x => new OffsetClause(x.Item2));
+        var limitClause = LIMIT.And(expression)
+            .Then(value => new LimitClause(value.Item2));
+        var offsetClause = OFFSET.And(expression)
+            .Then(value => new OffsetClause(value.Item2));
 
-        // SELECT statement
-        var selectRestriction = ALL.Then(SelectRestriction.All).Or(DISTINCT.Then(SelectRestriction.Distinct));
+        var selectRestriction = ALL.Then(SelectRestriction.All)
+            .Or(DISTINCT.Then(SelectRestriction.Distinct));
 
         selectStatement.Parser = SELECT
             .SkipAnd(selectRestriction.Else(SelectRestriction.NotSpecified))
@@ -366,9 +361,7 @@ public partial class SqlParser
                 );
             });
 
-        // WITH clause (CTEs)
         var columnNames = Separated(COMMA, simpleIdentifier);
-
         var cteColumnList = Between(LPAREN, columnNames, RPAREN);
 
         var cte = simpleIdentifier
@@ -383,13 +376,11 @@ public partial class SqlParser
 
         var cteList = Separated(COMMA, cte);
         var withClause = WITH.And(cteList)
-            .Then(x => new WithClause(x.Item2));
+            .Then(value => new WithClause(value.Item2));
 
-        // UNION
         var unionClause = UNION.And(ALL.Optional())
-            .Then(x => new UnionClause(x.Item2.HasValue));
+            .Then(value => new UnionClause(value.Item2.HasValue));
 
-        // Statement
         var statement = withClause.Optional().And(selectStatement)
             .Then(result =>
             {
@@ -406,14 +397,12 @@ public partial class SqlParser
 
         unionStatementList.Parser = OneOrMany(unionStatement);
 
-        // Statement line
         var statementLine = unionStatementList.AndSkip(SEMICOLON.Optional())
-            .Then(x => new StatementLine(x));
+            .Then(statements => new StatementLine(statements));
 
-        // Statement list
         var statementList = ZeroOrMany(statementLine)
             .Then(statements => new StatementList(statements))
-            .AndSkip(Terms.WhiteSpace().Optional()) // allow trailing whitespace
+            .AndSkip(Terms.WhiteSpace().Optional())
             .Eof();
 
         return statementList.WithComments(comments =>
@@ -421,33 +410,7 @@ public partial class SqlParser
             comments
                 .WithWhiteSpaceOrNewLine()
                 .WithSingleLine("--")
-                .WithMultiLine("/*", "*/")
-                ;
+                .WithMultiLine("/*", "*/");
         });
-    }
-
-    public static StatementList? Parse(string input)
-    {
-        if (TryParse(input, out var result, out var _))
-        {
-            return result;
-        }
-
-        return null;
-    }
-
-    public static bool TryParse(string input, out StatementList? result, out ParseError? error)
-    {
-        var context = new ParseContext(new Scanner(input), disableLoopDetection: true);
-        return RuntimeState.Parser.TryParse(context, out result, out error);
-    }
-
-#if NET8_0_OR_GREATER
-    public static partial bool TryParse(string input, out StatementList value);
-#endif
-
-    private static class RuntimeState
-    {
-        internal static readonly Parser<StatementList> Parser = CreateRuntimeParser();
     }
 }

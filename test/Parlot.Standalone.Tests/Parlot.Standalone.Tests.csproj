@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <LangVersion>12</LangVersion>
+    <IsPackable>false</IsPackable>
+    <AnalysisLevel>latest-Default</AnalysisLevel>
+    <SignAssembly>false</SignAssembly>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/GeneratedFiles</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <ProjectReference Include="../../src/Parlot.SourceGenerator/Parlot.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <Analyzer Include="../../src/Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll" />
+  </ItemGroup>
+  <Import Project="../../src/Parlot.SourceGenerator/build/Parlot.SourceGenerator.props" />
+  <Import Project="../../src/Parlot.SourceGenerator/build/Parlot.SourceGenerator.targets" />
+</Project>

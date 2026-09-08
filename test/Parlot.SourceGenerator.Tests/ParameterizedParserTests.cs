@@ -1,237 +1,153 @@
+#nullable enable
+
 using System;
-using Parlot.Fluent;
+using System.Linq;
+using System.Reflection;
 using Xunit;
-using static Parlot.Fluent.Parsers;
 
 namespace Parlot.SourceGenerator.Tests;
 
 public class ParameterizedParserTests
 {
     [Fact]
-    public void ParameterlessIf_UsesCurrentContextAndRetainsSingleton()
-    {
-        var parser = ParameterizedGrammars.ContextOnly();
-        AssertGenerated(parser);
-        Assert.Same(parser, ParameterizedGrammars.ContextOnly());
-        var result = new ParseResult<string>();
-        Assert.True(parser.Parse(new ConditionalContext("yes") { Enabled = true }, ref result));
-        Assert.Equal("yes", result.Value);
-        Assert.True(parser.Parse(new ConditionalContext("no") { Enabled = false }, ref result));
-        Assert.Equal("no", result.Value);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(3)]
-    [InlineData(4)]
-    [InlineData(5)]
-    public void If_UsesBoundArgumentsAndCurrentContext(int kind)
+    public void Configuration_Is_Evaluated_Per_Call()
     {
         var options = new ConditionalOptions { Enabled = true };
-        var parser = kind switch
-        {
-            0 => ParameterizedGrammars.Gate(options),
-            1 => ParameterizedGrammars.Choice(options),
-            2 => ParameterizedGrammars.ContextGate(options),
-            3 => ParameterizedGrammars.ContextChoice(options),
-            4 => ParameterizedGrammars.TypedGate(options),
-            _ => ParameterizedGrammars.TypedChoice(options)
-        };
-        AssertGenerated(parser);
-        Assert.Equal(0, options.Evaluations);
 
-        var context = new ConditionalContext("  yes") { Enabled = true };
-        var result = new ParseResult<string>();
-        Assert.True(parser.Parse(context, ref result));
-        Assert.Equal("yes", result.Value);
+        Assert.True(ParameterizedGrammars.TryParseChoice(" yes", options, out var value));
+        Assert.Equal("yes", value);
         Assert.Equal(1, options.Evaluations);
 
         options.Enabled = false;
-        context = new ConditionalContext("  no") { Enabled = true };
-        var succeeds = kind % 2 == 1;
-        Assert.Equal(succeeds, parser.Parse(context, ref result));
-        Assert.Equal(succeeds ? 4 : 0, context.Scanner.Cursor.Offset);
+        Assert.True(ParameterizedGrammars.TryParseChoice(" no", options, out value));
+        Assert.Equal("no", value);
         Assert.Equal(2, options.Evaluations);
+    }
 
-        if (kind >= 2)
+    [Fact]
+    public void Selected_Branch_Failure_Does_Not_Fall_Back()
+    {
+        Assert.False(ParameterizedGrammars.TryParseBacktracking("no!", enabled: true, out var value));
+        Assert.Null(value);
+        Assert.False(ParameterizedGrammars.TryParseBacktracking("yes!", enabled: false, out value));
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public void Multiple_Arguments_Have_Independent_Per_Call_State()
+    {
+        Assert.True(ParameterizedGrammars.TryParseMultiple("x", 3, 4, "first:", out var first));
+        Assert.True(ParameterizedGrammars.TryParseMultiple("x", 10, 20, "second:", out var second));
+        Assert.Equal("first:7", first);
+        Assert.Equal("second:30", second);
+    }
+
+    [Fact]
+    public void Select_When_Switch_And_Fallbacks_Support_Captures()
+    {
+        Assert.True(ParameterizedGrammars.TryParseSelected("no", 1, "no", out var selected));
+        Assert.Equal("no", selected);
+        Assert.False(ParameterizedGrammars.TryParseSelected("yes", 1, "no", out _));
+
+        Assert.True(ParameterizedGrammars.TryParseSwitched("xno", 1, out var switched));
+        Assert.Equal("no", switched);
+        Assert.False(ParameterizedGrammars.TryParseSwitched("xyes", 1, out _));
+
+        Assert.True(ParameterizedGrammars.TryParseFallback("", "prefix:", out var fallback));
+        Assert.Equal("prefix:0", fallback);
+        Assert.True(ParameterizedGrammars.TryParseFallback("x", "prefix:", out fallback));
+        Assert.Equal("prefix:x", fallback);
+    }
+
+    [Fact]
+    public void Recursive_Grammar_Uses_Per_Call_Configuration()
+    {
+        Assert.True(ParameterizedGrammars.TryParseRecursiveChoice("((x))", enabled: true, out var enabled));
+        Assert.Equal("x", enabled);
+        Assert.False(ParameterizedGrammars.TryParseRecursiveChoice("(x)", enabled: false, out _));
+        Assert.True(ParameterizedGrammars.TryParseRecursiveChoice("x", enabled: false, out var disabled));
+        Assert.Equal("x", disabled);
+    }
+
+    [Fact]
+    public void Tuple_Array_And_Nullable_Configuration_Are_Not_Baked_In()
+    {
+        Assert.True(ParameterizedGrammars.TryParseValues("x", (2, 3), new[,] { { 4 } }, null, out var first));
+        Assert.True(ParameterizedGrammars.TryParseValues("x", (2, 3), new[,] { { 4 } }, 5, out var second));
+        Assert.Equal(9, first);
+        Assert.Equal(14, second);
+
+        Assert.True(ParameterizedGrammars.TryParseNullable("x", null, out var nullValue));
+        Assert.Null(nullValue);
+        Assert.True(ParameterizedGrammars.TryParseNullable("x", "value", out var value));
+        Assert.Equal("value", value);
+    }
+
+    [Fact]
+    public void Overloaded_Factory_Names_Generate_Independent_Entry_Points()
+    {
+        Assert.True(ParameterizedGrammars.TryParseOverloadedDefault("default", out var defaultValue));
+        Assert.Equal("default", defaultValue);
+        Assert.True(ParameterizedGrammars.TryParseOverloadedBoolean("yes", enabled: true, out var booleanValue));
+        Assert.Equal("yes", booleanValue);
+        Assert.True(ParameterizedGrammars.TryParseOverloadedInteger("x", 42, out var integerValue));
+        Assert.Equal("42", integerValue);
+    }
+
+    [Fact]
+    public void Mutable_Struct_Configuration_Remains_Addressable_Within_A_Parse()
+    {
+        Assert.True(ParameterizedGrammars.TryParseCountedPair("xx", default, out var value));
+        Assert.Equal(12, value);
+    }
+
+    [Fact]
+    public void Captures_Preserve_Symbol_Identity_Nameof_And_Inferred_Names()
+    {
+        Assert.True(ParameterizedGrammars.TryParseSymbols("x", "bound", 7, out var symbols));
+        Assert.Equal("bound:7:context", symbols);
+        Assert.True(ParameterizedGrammars.TryParseInferredNames("x", "value", out var inferred));
+        Assert.Equal("valuevalue", inferred);
+    }
+
+    [Fact]
+    public void Runtime_Helpers_Live_In_Compiled_Code()
+    {
+        Assert.True(ParameterizedGrammars.TryParseEnclosingMembers("x", "prefix:", out var value));
+        Assert.Equal("prefix:grammar:x", value);
+        Assert.True(ParameterizedGrammars.TryParseMethodGroup("x", out var methodGroup));
+        Assert.Equal("grammar:x", methodGroup);
+    }
+
+    [Fact]
+    public void User_Callback_Exceptions_Propagate()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ParameterizedGrammars.TryParseCallback("x", new CallbackOptions { Throw = true }, out _));
+        Assert.Equal("callback failed", exception.Message);
+    }
+
+    [Fact]
+    public void Explicit_Grammar_Errors_Return_False_And_Default()
+    {
+        Assert.False(ParameterizedGrammars.TryParseRequiredBang("x", out var value));
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public void Generated_Configuration_Uses_The_Existing_Execution_Context()
+    {
+        var wrappers = typeof(ParameterizedGrammars).GetNestedTypes(BindingFlags.NonPublic)
+            .Where(static type => type.Name.StartsWith("GeneratedParser_", StringComparison.Ordinal) && !type.IsAbstract)
+            .ToArray();
+
+        Assert.NotEmpty(wrappers);
+        Assert.All(wrappers, static wrapper =>
         {
-            options.Enabled = true;
-            context = new ConditionalContext("  no") { Enabled = false };
-            Assert.Equal(succeeds, parser.Parse(context, ref result));
-            Assert.Equal(3, options.Evaluations);
-        }
+            Assert.True(wrapper.IsSealed);
+            Assert.Equal("Parlot.Generated.Fluent.ParseContext", wrapper.BaseType!.FullName);
+        });
     }
-
-    [Theory]
-    [InlineData(true, " no!")]
-    [InlineData(false, " yes!")]
-    [InlineData(true, " yes?")]
-    [InlineData(false, " no?")]
-    public void SelectedBranchFailure_RestoresCursorWithoutFallback(bool enabled, string input)
-    {
-        var generated = ParameterizedGrammars.Backtracking(enabled);
-        Func<bool, Parser<string>> factory = ParameterizedGrammars.Backtracking;
-        var runtime = factory(enabled);
-        AssertGenerated(generated);
-
-        foreach (var parser in new[] { generated, runtime })
-        {
-            var context = new ParseContext(new Scanner(input));
-            var start = context.Scanner.Cursor.Position;
-            var result = new ParseResult<string>();
-            Assert.False(parser.Parse(context, ref result));
-            Assert.Equal(start, context.Scanner.Cursor.Position);
-        }
-    }
-
-    [Fact]
-    public void FactoryCalls_HaveIndependentState()
-    {
-        var first = ParameterizedGrammars.Multiple(3, 4, "first:");
-        var second = ParameterizedGrammars.Multiple(10, 20, "second:");
-        AssertGenerated(first);
-        AssertGenerated(second);
-        Assert.NotSame(first, second);
-        Assert.Equal("first:7", first.Parse("x"));
-        Assert.Equal("second:30", second.Parse("x"));
-        Assert.Equal("first:7", first.Parse("x"));
-    }
-
-    [Fact]
-    public void SelectAndWhen_SupportCaptures()
-    {
-        var parser = ParameterizedGrammars.Selected(1, "no");
-        AssertGenerated(parser);
-        Assert.Equal("no", parser.Parse("no"));
-        Assert.Null(parser.Parse("yes"));
-        Assert.Null(ParameterizedGrammars.Selected(1, "yes").Parse("no"));
-        Assert.Null(ParameterizedGrammars.Selected(-1, "yes").Parse("yes"));
-    }
-
-    [Fact]
-    public void SwitchAndFallbacks_SupportCaptures()
-    {
-        var switched = ParameterizedGrammars.Switched(1);
-        AssertGenerated(switched);
-        Assert.Equal("no", switched.Parse("xno"));
-        Assert.Null(switched.Parse("xyes"));
-        Assert.Equal("prefix:0", ParameterizedGrammars.Fallback("prefix:").Parse(""));
-        Assert.Equal("prefix:x", ParameterizedGrammars.Fallback("prefix:").Parse("x"));
-        Assert.Equal("prefix:x", ParameterizedGrammars.TransformedOrElse("prefix:").Parse("x"));
-        Assert.Equal("fallback", ParameterizedGrammars.TransformedOrElse("prefix:").Parse(""));
-    }
-
-    [Fact]
-    public void RecursiveHelpers_RetainBoundArguments()
-    {
-        var enabled = ParameterizedGrammars.RecursiveChoice(true);
-        var disabled = ParameterizedGrammars.RecursiveChoice(false);
-        AssertGenerated(enabled);
-        Assert.Equal("x", enabled.Parse("((x))"));
-        Assert.Null(disabled.Parse("(x)"));
-        Assert.Equal("x", disabled.Parse("x"));
-    }
-
-    [Fact]
-    public void Overloads_InterceptIndependently()
-    {
-        var parameterless = ParameterizedGrammars.Overloaded();
-        var boolean = ParameterizedGrammars.Overloaded(true);
-        var integer = ParameterizedGrammars.Overloaded(42);
-        AssertGenerated(parameterless);
-        AssertGenerated(boolean);
-        AssertGenerated(integer);
-        Assert.Same(parameterless, ParameterizedGrammars.Overloaded());
-        Assert.Equal("default", parameterless.Parse("default"));
-        Assert.Equal("yes", boolean.Parse("yes"));
-        Assert.Equal("42", integer.Parse("x"));
-    }
-
-    [Fact]
-    public void NamedAndOptionalArguments_AreForwarded()
-    {
-        Assert.Equal("default:2", ParameterizedGrammars.Optional().Parse("x"));
-        Assert.Equal("named:5", ParameterizedGrammars.Optional(count: 5, prefix: "named:").Parse("x"));
-        Assert.Equal("last", ParameterizedGrammars.Variadic("first", "last").Parse("x"));
-    }
-
-    [Fact]
-    public void Arguments_AreEvaluatedOnceInSourceOrder()
-    {
-        var next = 0;
-        var parser = ParameterizedGrammars.ArgumentOrder(second: ++next, first: ++next);
-        AssertGenerated(parser);
-        Assert.Equal(2, next);
-        Assert.Equal(21, parser.Parse("x"));
-        Assert.Equal(2, next);
-    }
-
-    [Fact]
-    public void Captures_PreserveSymbolIdentityAndNameof()
-    {
-        var parser = ParameterizedGrammars.Symbols("bound", 7);
-        AssertGenerated(parser);
-        Assert.Equal("bound:7:context", parser.Parse("x"));
-    }
-
-    [Fact]
-    public void ReferenceAndValueTypeArguments_AreNotBakedIntoGeneratedSource()
-    {
-        var parser = ParameterizedGrammars.Values((2, 3), new[,] { { 4 } }, null);
-        AssertGenerated(parser);
-        Assert.Equal(9, parser.Parse("x"));
-        Assert.Equal(14, ParameterizedGrammars.Values((2, 3), new[,] { { 4 } }, 5).Parse("x"));
-    }
-
-    [Fact]
-    public void NullableResults_UseRuntimeArguments()
-    {
-        var parser = ParameterizedGrammars.NullableValue(null);
-        AssertGenerated(parser);
-        var result = new ParseResult<string>();
-        Assert.True(parser.Parse(new ParseContext(new Scanner("x")), ref result));
-        Assert.Null(result.Value);
-        Assert.Equal("value", ParameterizedGrammars.NullableValue("value").Parse("x"));
-    }
-
-    [Fact]
-    public void MutableStructCaptures_PreserveClosureSemantics()
-    {
-        var parser = ParameterizedGrammars.Counted(default);
-        AssertGenerated(parser);
-        Assert.Equal(1, parser.Parse("x"));
-        Assert.Equal(2, parser.Parse("x"));
-    }
-
-    [Fact]
-    public void RelocatedCallbacks_PreserveEnclosingMemberBindings()
-    {
-        var parser = ParameterizedGrammars.EnclosingMembers("prefix:");
-        AssertGenerated(parser);
-        Assert.Equal("prefix:grammar:x", parser.Parse("x"));
-        Assert.Equal("grammar:x", ParameterizedGrammars.EnclosingMethodGroup(0).Parse("x"));
-    }
-
-    [Fact]
-    public void Captures_PreserveInferredTupleAndAnonymousPropertyNames()
-    {
-        var parser = ParameterizedGrammars.InferredNames("value");
-        AssertGenerated(parser);
-        Assert.Equal("valuevalue", parser.Parse("x"));
-    }
-
-    [Fact]
-    public void Nameof_DoesNotCaptureRuntimeState()
-    {
-        var parser = ParameterizedGrammars.NameOnly(42);
-        AssertGenerated(parser);
-        Assert.Equal("value", parser.Parse("value"));
-    }
-
-    private static void AssertGenerated<T>(Parser<T> parser)
-        => Assert.StartsWith("GeneratedParser_", parser.GetType().Name, StringComparison.Ordinal);
 }
 
 public sealed class ConditionalOptions
@@ -251,13 +167,24 @@ public sealed class ConditionalOptions
     }
 }
 
-public sealed class ConditionalContext : ParseContext
+public sealed class CallbackOptions
 {
-    public ConditionalContext(string input) : base(new Scanner(input))
-    {
-    }
+    public bool Throw { get; init; }
+}
 
-    public bool Enabled { get; set; }
+public static class ParameterizedCallbacks
+{
+    public static string Format(char value) => "grammar:" + value;
+
+    public static string Transform(CallbackOptions options, char value)
+    {
+        if (options.Throw)
+        {
+            throw new InvalidOperationException("callback failed");
+        }
+
+        return value.ToString();
+    }
 }
 
 public struct ConditionalCounter
@@ -269,131 +196,30 @@ public struct ConditionalCounter
 
 public static partial class ParameterizedGrammars
 {
-    private const string Name = "grammar";
+    internal const string Name = "grammar";
 
-    private static string Parse(char value) => Name + ":" + value;
-
-    [GenerateParser]
-    public static Parser<string> ContextOnly()
-        => If(static (ConditionalContext context) => context.Enabled, Literals.Text("yes"), Literals.Text("no"));
-
-    [GenerateParser]
-    public static Parser<string> Gate(ConditionalOptions options)
-        => If(() => options.Enabled, Terms.Text("yes"));
-
-    [GenerateParser]
-    public static Parser<string> Choice(ConditionalOptions options)
-        => If(() => options.Enabled, Terms.Text("yes"), Terms.Text("no"));
-
-    [GenerateParser]
-    public static Parser<string> ContextGate(ConditionalOptions options)
-        => If(context => options.Enabled && ((ConditionalContext)context).Enabled, Terms.Text("yes"));
-
-    [GenerateParser]
-    public static Parser<string> ContextChoice(ConditionalOptions options)
-        => If(context => options.Enabled && ((ConditionalContext)context).Enabled, Terms.Text("yes"), Terms.Text("no"));
-
-    [GenerateParser]
-    public static Parser<string> TypedGate(ConditionalOptions options)
-        => If((ConditionalContext context) => options.Enabled && context.Enabled, Terms.Text("yes"));
-
-    [GenerateParser]
-    public static Parser<string> TypedChoice(ConditionalOptions options)
-        => If((ConditionalContext context) => options.Enabled && context.Enabled, Terms.Text("yes"), Terms.Text("no"));
-
-    [GenerateParser]
-    public static Parser<string> Backtracking(bool enabled)
-        => If(() => enabled, Terms.Text("yes").AndSkip(Literals.Char('!')), Terms.Text("no").AndSkip(Literals.Char('!')));
-
-    [GenerateParser]
-    public static Parser<string> Multiple(int first, int second, string prefix)
-        => Literals.Char('x').Then(_ => prefix + (first + second).ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    [GenerateParser]
-    public static Parser<int> ArgumentOrder(int first, int second)
-        => Literals.Char('x').Then(_ => first * 10 + second);
-
-    [GenerateParser]
-    public static Parser<string> Selected(int index, string expected)
-        => Select(() => index, Literals.Text("yes"), Literals.Text("no"))
-            .When((_, value) => value == expected);
-
-    [GenerateParser]
-    public static Parser<string> Switched(int index)
-        => Literals.Char('x').Switch((_, value) => index, Literals.Text("yes"), Literals.Text("no"));
-
-    [GenerateParser]
-    public static Parser<string> Fallback(string prefix)
-        => Literals.Text("x").Then(value => prefix + value)
-            .Else(context => prefix + context.Scanner.Cursor.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    [GenerateParser]
-    public static Parser<string> TransformedOrElse(string prefix)
-        => Literals.Text("x").ThenElse(value => prefix + value, "fallback");
-
-    [GenerateParser]
-    public static Parser<string> RecursiveChoice(bool enabled)
-        => Recursive<string>(self => OneOf(
-            If(() => enabled, Between(Literals.Char('('), self, Literals.Char(')'))),
-            Literals.Text("x")));
-
-    [GenerateParser]
-    public static Parser<string> Overloaded() => Literals.Text("default");
-
-    [GenerateParser]
-    public static Parser<string> Overloaded(bool enabled)
-        => If(() => enabled, Literals.Text("yes"), Literals.Text("no"));
-
-    [GenerateParser]
-    public static Parser<string> Overloaded(int value)
-        => Literals.Char('x').Then(_ => value.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    [GenerateParser]
-    public static Parser<string> Optional(string prefix = "default:", int count = 2)
-        => Literals.Char('x').Then(_ => prefix + count.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    [GenerateParser]
-    public static Parser<string> Variadic(params string[] values)
-        => Literals.Char('x').Then(_ => values[values.Length - 1]);
-
-    [GenerateParser]
-    public static Parser<string> Symbols(string context, int @class)
-        => Literals.Char('x').Then((_, value) =>
-            context + ":" + @class.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + nameof(context));
-
-    [GenerateParser]
-    public static Parser<int> Values((int First, int Second) pair, int[,] values, int? optional)
-        => Literals.Char('x').Then(_ => pair.First + pair.Second + values[0, 0] + (optional ?? 0));
-
-    [GenerateParser]
-    public static Parser<string> NullableValue(string value)
-        => Literals.Char('x').Then(_ => value);
-
-    [GenerateParser]
-    public static Parser<int> Counted(ConditionalCounter counter)
-        => Literals.Char('x').Then(_ => counter.Next());
-
-    [GenerateParser]
-    public static Parser<string> EnclosingMembers(string prefix)
-        => Literals.Char('x').Then(value => prefix + Name + ":" + value);
-
-    [GenerateParser]
-    public static Parser<string> EnclosingMethodGroup(int unused)
-        => Literals.Char('x').Then(Parse);
-
-    [GenerateParser]
-    public static Parser<string> InferredNames(string value)
-        => Literals.Char('x').Then(_ =>
-        {
-            var item = new { value };
-            var tuple = (value, 1);
-            return item.value + tuple.value;
-        });
-
-    [GenerateParser]
-    public static Parser<string> NameOnly(int value)
-    {
-        var probe = Literals.Char('x').Then(_ => nameof(value));
-        return Literals.Text(probe.Parse("x"));
-    }
+    public static partial bool TryParseChoice(string text, ConditionalOptions options, out string value);
+    public static partial bool TryParseBacktracking(string text, bool enabled, out string value);
+    public static partial bool TryParseMultiple(string text, int first, int second, string prefix, out string value);
+    public static partial bool TryParseSelected(string text, int index, string expected, out string value);
+    public static partial bool TryParseSwitched(string text, int index, out string value);
+    public static partial bool TryParseFallback(string text, string prefix, out string value);
+    public static partial bool TryParseRecursiveChoice(string text, bool enabled, out string value);
+    public static partial bool TryParseValues(
+        string text,
+        (int First, int Second) pair,
+        int[,] values,
+        int? optional,
+        out int value);
+    public static partial bool TryParseNullable(string text, string? configuredValue, out string? value);
+    public static partial bool TryParseEnclosingMembers(string text, string prefix, out string value);
+    public static partial bool TryParseCallback(string text, CallbackOptions options, out string value);
+    public static partial bool TryParseRequiredBang(string text, out string value);
+    public static partial bool TryParseOverloadedDefault(string text, out string value);
+    public static partial bool TryParseOverloadedBoolean(string text, bool enabled, out string value);
+    public static partial bool TryParseOverloadedInteger(string text, int number, out string value);
+    public static partial bool TryParseCountedPair(string text, ConditionalCounter counter, out int value);
+    public static partial bool TryParseSymbols(string text, string context, int @class, out string value);
+    public static partial bool TryParseInferredNames(string text, string configuredValue, out string value);
+    public static partial bool TryParseMethodGroup(string text, out string value);
 }

@@ -1,0 +1,11 @@
+<Project>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="MSBuildProjectDirectory" />
+    <CompilerVisibleProperty Include="TargetFramework" />
+    <CompilerVisibleProperty Include="TargetFrameworkIdentifier" />
+    <CompilerVisibleProperty Include="TargetFrameworkVersion" />
+    <CompilerVisibleProperty Include="DesignTimeBuild" />
+    <CompilerVisibleProperty Include="BuildingProject" />
+    <CompilerVisibleProperty Include="BuildingInsideVisualStudio" />
+  </ItemGroup>
+</Project>

@@ -7,7 +7,6 @@ using Parlot.Tests.Json;
 using Parlot.Benchmarks.SpracheParsers;
 using Parlot.Benchmarks.SuperpowerParsers;
 using Parlot.Benchmarks.PidginParsers;
-using Parlot.Fluent;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Text.Json;
@@ -22,7 +21,6 @@ public class JsonBench
     private string _longJson;
     private string _wideJson;
     private string _deepJson;
-    private Parser<IJson> _generated;
 #nullable restore
 
     private static readonly JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
@@ -36,8 +34,6 @@ public class JsonBench
         _longJson = BuildJson(256, 1, 1).ToString()!;
         _wideJson = BuildJson(1, 1, 256).ToString()!;
         _deepJson = BuildJson(1, 256, 1).ToString()!;
-
-        _generated = GeneratedParsers.JsonParser();
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Big")]
@@ -49,7 +45,8 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Big")]
     public IJson BigJson_ParlotGenerated()
     {
-        return _generated.Parse(_bigJson);
+        _ = GeneratedParsers.TryParseJson(_bigJson, out var result);
+        return result;
     }
 
     [Benchmark, BenchmarkCategory("Big")]
@@ -91,7 +88,8 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Long")]
     public IJson LongJson_ParlotGenerated()
     {
-        return _generated.Parse(_longJson);
+        _ = GeneratedParsers.TryParseJson(_longJson, out var result);
+        return result;
     }
 
     [Benchmark, BenchmarkCategory("Long")]
@@ -134,7 +132,8 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Deep")]
     public IJson DeepJson_ParlotGenerated()
     {
-        return _generated.Parse(_deepJson);
+        _ = GeneratedParsers.TryParseJson(_deepJson, out var result);
+        return result;
     }
 
     [Benchmark, BenchmarkCategory("Deep")]
@@ -177,7 +176,8 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Wide")]
     public IJson WideJson_ParlotGenerated()
     {
-        return _generated.Parse(_wideJson);
+        _ = GeneratedParsers.TryParseJson(_wideJson, out var result);
+        return result;
     }
 
     [Benchmark, BenchmarkCategory("Wide")]

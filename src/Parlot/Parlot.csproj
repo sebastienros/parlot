@@ -21,20 +21,6 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Pack the source generator into the analyzers folder for NuGet package -->
-  <!-- The source generator must be built before packing Parlot -->
-  <ItemGroup>
-    <None Include="../Parlot.SourceGenerator/bin/$(Configuration)/netstandard2.0/Parlot.SourceGenerator.dll" 
-          Pack="true" 
-          PackagePath="analyzers/dotnet/cs" 
-          Visible="false" />
-    <!-- Also include Parlot.dll itself as a dependency for the source generator at runtime -->
-    <None Include="bin/$(Configuration)/netstandard2.0/Parlot.dll" 
-          Pack="true" 
-          PackagePath="analyzers/dotnet/cs" 
-          Visible="false" />
-  </ItemGroup>
-
   <!-- Include build props file in the NuGet package for automatic using static import when ImplicitUsings is enabled -->
   <ItemGroup>
     <None Include="buildTransitive\Parlot.props" Pack="true" PackagePath="buildTransitive" />

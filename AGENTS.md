@@ -16,6 +16,7 @@ Microsoft.Testing.Platform (also configured in `global.json`) with xunit v3.
 dotnet build                       # all TFMs: net472, netstandard2.0, net8.0, net10.0 (~3s incremental)
 dotnet test test/Parlot.Tests/Parlot.Tests.csproj -f net10.0
 dotnet test test/Parlot.SourceGenerator.Tests/Parlot.SourceGenerator.Tests.csproj   # net10.0 only
+dotnet test test/Parlot.Standalone.Tests/Parlot.Standalone.Tests.csproj              # net8.0/net10.0, no runtime Parlot reference
 ```
 
 Develop and validate against `net10.0` first; only widen to the other TFMs once the behaviour is right.
@@ -94,21 +95,22 @@ A new parser type should implement each one that applies:
 |---|---|---|
 | `ISeekable` | `Parlot.Rewriting` | Declares the first chars that can match, so `OneOf` builds a char lookup table, skips branches that cannot match, and hoists the whitespace skip. About two thirds of the parser types implement it. |
 | `IRewritable<T>` | `Parlot.Rewriting` | Lets a parser replace itself with a faster equivalent when the graph is built. |
-| `ISourceable` | `Parlot.SourceGeneration` | Emits C# for the source generator. Nearly every parser type implements it. **Without it, a parser silently falls back to runtime execution inside otherwise-generated parsers**, quietly losing the win. |
+| `ISourceable` | `Parlot.SourceGeneration` | Emits C# for the source generator. Nearly every parser type implements it. Generated parsers must be self-contained; unsupported runtime code is rejected rather than falling back to Parlot execution. |
 
 `ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
 scanned with a vectorized `IndexOf` rather than a hash set), cancellation checks throttled to every 64
-parser entries, and the `OnEnterParser` / `OnExitParser` hooks. Grammars that need external state subclass
-it — that is also the supported way to pass state into source-generated parsers.
+parser entries, and the `OnEnterParser` / `OnExitParser` hooks. Runtime grammars that need external state
+can subclass it; generated entry points instead accept application-owned configuration parameters.
 
 ### Source generation
 
-`src/Parlot.SourceGenerator` (netstandard2.0, Roslyn 4.11) handles `[GenerateParser]`-annotated static
-methods: it loads `Parlot.dll`, executes the method at compile time to build
-the graph, walks it calling `ISourceable.GenerateSource`, and emits C# interceptors that replace the call
-sites. Consumers must set `<InterceptorsNamespaces>`. Parameterless factories use a cached singleton;
-parameterized factories bind arguments to a small generated parser instance that callers should reuse.
+`src/Parlot.SourceGenerator` (netstandard2.0) reads build-only `.parlot.cs` AdditionalFiles. A factory
+annotated `[GenerateParser(nameof(TryParse))]` builds the graph using Parlot inside the compiler host.
+The analyzer implements a matching static partial `bool TryParse(string text, [configuration], out T value)`
+method and emits shared internal support sources into the application assembly. No interceptors,
+public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Targets require .NET 8+
+and C# 12+. Factory files must be excluded from `Compile`; the analyzer package's build targets do this.
 
 - `ParserSourceGenerator.cs` drives it; `LambdaRewriter.cs` lifts lambdas into generated methods
   with `#line` mappings so breakpoints still land in the original source.
@@ -117,11 +119,17 @@ parameterized factories bind arguments to a small generated parser instance that
 - `PARLOT015` rejects captured locals or other methods' parameters. Inline parse-time callbacks in
   `If`, `Select`, `Then`, `ThenElse`, `When`, `Switch`, and `Else` may capture their factory's by-value
   parameters. `PARLOT021` rejects eager argument use or reassignment: keep the graph fixed and use
-  `If`/`Select` for runtime branches. Conditions may also accept a typed `ParseContext`.
+  `If`/`Select` for runtime branches. Pass application state through configuration parameters rather
+  than exposing Parlot context types in entry point signatures.
 - Inspect output via `EmitCompilerGeneratedFiles` (both test/benchmark projects already set it; look under
   `obj/.../GeneratedFiles`).
-- The generator ships inside the Parlot NuGet package under `analyzers/dotnet/cs`, so `Parlot.csproj`
-  packs it from `../Parlot.SourceGenerator/bin/$(Configuration)/netstandard2.0/`.
+- Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
+  large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
+  a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
+- The analyzer-only `Parlot.SourceGenerator` package bundles its build-time Parlot dependency.
+  `StandaloneRuntimeSources` embeds shared runtime files and maps them to internal `Parlot.Generated`
+  types. Do not fork those algorithms into separately maintained copies. Application models and
+  runtime callback helpers belong in normal `.cs` files, not solely in `.parlot.cs` files.
 
 Full reference: `docs/source-generation.md`.
 

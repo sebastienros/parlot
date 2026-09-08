@@ -132,14 +132,30 @@ static FluentParser()
 
 ## Source-generated parsers
 
-Parlot can generate parsers at **compile time** using C# interceptors, avoiding runtime graph construction and yielding **~20% faster parsing** with **faster startup**.
+Parlot's analyzer generates **direct parsing methods** during the normal build. Generated code and
+shared internal support sources compile into your assembly, with **no Parlot runtime dependency**.
 
 ### How it works
 
-- Annotate static methods returning `Parlot.Fluent.Parser<T>` with `[GenerateParser]`.
-- The source generator executes the method at compile time to build the parser graph.
-- Uses C# interceptors to replace calls to the method with the generated, optimized code.
-- For parser variants, capture factory parameters in `If`, `Select`, or other supported parse-time callbacks. Every branch is generated; runtime arguments configure the returned parser instance.
+- Reference the `Parlot.SourceGenerator` package with `PrivateAssets="all"`.
+- Declare a static partial `bool TryParse(string text, out T value)` method in a normal `.cs` file.
+- Define its factory in a build-only `.parlot.cs` file with `[GenerateParser(nameof(TryParse))]`.
+- The analyzer executes the factory at build time and emits the method implementation and support code.
+- For variants, pass configuration arguments between the input and output parameters and capture them
+  in `If`, `Select`, or other supported parse-time callbacks in the matching factory.
+
+Application code, in `MyGrammar.cs`:
+
+```csharp
+public static partial class MyGrammar
+{
+    public static partial bool TryParse(string text, out string value);
+}
+
+// Usage: MyGrammar.TryParse("hello", out var value)
+```
+
+Build-only grammar, in `MyGrammar.parlot.cs`:
 
 ```csharp
 using Parlot.SourceGenerator;
@@ -148,26 +164,15 @@ using static Parlot.Fluent.Parsers;
 
 public static partial class MyGrammar
 {
-    // Simple parser
-    [GenerateParser]
-    public static Parser<string> HelloParser() => Terms.Text("hello");
-
-    // For variants, create separate methods
-    [GenerateParser]
-    public static Parser<string> FooParser() => Terms.Text("foo");
-
-    [GenerateParser]
-    public static Parser<string> BarParser() => Terms.Text("bar");
+    [GenerateParser(nameof(TryParse))]
+    private static Parser<string> Build() => Terms.Text("hello").Eof();
 }
-
-// Usage - calls are automatically intercepted
-var hello = MyGrammar.HelloParser();  // Uses generated code
-var foo = MyGrammar.FooParser();      // Uses generated code
 ```
 
 ### Requirements
 
-- Add `<InterceptorsNamespaces>$(InterceptorsNamespaces);YourNamespace</InterceptorsNamespaces>` to your project file.
+- Build with .NET SDK 10.0.400 or later. Generated code can target .NET 8 or later and C# 12 or later.
+- No interceptors configuration is needed.
 - Methods must be static and non-generic. By-value parameters may only be read in supported parse-time callbacks, not during graph construction.
 - The containing class must be `partial`.
 
@@ -182,10 +187,10 @@ Additional attributes can be combined with `[GenerateParser]`:
 For detailed documentation, see [Source Generation Guide](docs/source-generation.md).
 
 > **Why use source generation?**
-> - Faster parsing than equivalent Fluent parser graphs (see benchmarks)
+> - Inlined parsing without combinator dispatch
 > - Faster startup (no runtime parser graph construction)
 > - AOT-friendly, deterministic parser code
-> - Zero runtime overhead from method interception
+> - No Parlot assembly or package dependency for downstream consumers
 
 ## Performance
 
@@ -199,38 +204,56 @@ It was originally created to provide a more efficient alternative to projects li
 
 Finally, even though [Pidgin](https://github.com/benjamin-hodgson/Pidgin) showed some very good performance, Parlot is still faster.
 
+The tables below were measured on September 7, 2026 using the current dependency-free generated parsers.
+All 41 cases use BenchmarkDotNet's out-of-process `ShortRun` job, with three warmup and three measurement
+iterations. These are short-run estimates; consider the reported error bounds when comparing timings.
+
+To reproduce:
+
+```bash
+dotnet build -c Release
+dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release --no-build -- --filter "*ExprBench*" "*JsonBench*" "*RegexBenchmarks*"
+```
+
 ### Expression Benchmarks
 
-This benchmark creates an expression tree (AST) representing mathematical expressions with operator precedence and grouping. It exercises two expressions:
+This benchmark creates an expression tree (AST) representing mathematical expressions with operator precedence and grouping. It exercises three expressions:
 
 - Small: `3 - 1 / 2 + 1`
 - Big: `1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2`
+- Unary: `-(3 + 2) * -4 + --6`
 
 The benchmark compares Raw, Fluent, and source-generated Parlot parsers with Pidgin. It parses the expressions into the same AST without evaluating them.
 
-In these results, Parlot Fluent is about 12-14 times faster than Pidgin and Parlot Raw is faster still. The source-generated parser allocates less than the Fluent parser; this short run measured it 17% slower for the small expression and 2% slower for the big expression.
+In these results, Parlot Fluent is about 12-13 times faster than Pidgin and Parlot Raw is faster still.
+The source-generated parser takes about 20-26% less time than Fluent and allocates 144 fewer bytes per
+parse in all three expressions. Generated helpers use normal JIT inlining heuristics to avoid expanding
+large parser chains into oversized native methods.
 
 ```
 BenchmarkDotNet v0.15.8, macOS Sequoia 15.7.9 (24G830) [Darwin 24.6.0]
 Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 10.0.302
-  [Host]   : .NET 10.0.10 (10.0.10, 10.0.1026.32716), Arm64 RyuJIT armv8.0-a
-  ShortRun : .NET 10.0.10 (10.0.10, 10.0.1026.32716), Arm64 RyuJIT armv8.0-a
+.NET SDK 11.0.100-rc.1.26413.103
+  [Host]   : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
+  ShortRun : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
 | Method               | Mean        | Error       | StdDev    | Gen0   | Allocated |
 |--------------------- |------------:|------------:|----------:|-------:|----------:|
-| ParlotRawSmall       |    123.4 ns |     7.04 ns |   0.39 ns | 0.0362 |     304 B |
-| ParlotFluentSmall    |    219.1 ns |     1.51 ns |   0.08 ns | 0.0668 |     560 B |
-| ParlotGeneratedSmall |    256.8 ns |    19.05 ns |   1.04 ns | 0.0496 |     416 B |
-| PidginSmall          |  3,105.8 ns |   686.70 ns |  37.64 ns | 0.0992 |     832 B |
+| ParlotRawSmall       |    122.8 ns |    12.99 ns |   0.71 ns | 0.0362 |     304 B |
+| ParlotFluentSmall    |    230.5 ns |    58.15 ns |   3.19 ns | 0.0668 |     560 B |
+| ParlotGeneratedSmall |    177.3 ns |    25.68 ns |   1.41 ns | 0.0496 |     416 B |
+| PidginSmall          |  3,087.1 ns |   153.50 ns |   8.41 ns | 0.0992 |     832 B |
 |                      |             |             |           |        |           |
-| ParlotRawBig         |    671.1 ns |    15.22 ns |   0.83 ns | 0.1431 |    1200 B |
-| ParlotFluentBig      |  1,300.6 ns |   260.54 ns |  14.28 ns | 0.1736 |    1456 B |
-| ParlotGeneratedBig   |  1,324.8 ns |    35.25 ns |   1.93 ns | 0.1564 |    1312 B |
-| PidginBig            | 15,521.2 ns | 1,261.73 ns |  69.16 ns | 0.4883 |    4152 B |
+| ParlotRawBig         |    655.1 ns |   100.91 ns |   5.53 ns | 0.1431 |    1200 B |
+| ParlotFluentBig      |  1,319.8 ns |   432.50 ns |  23.71 ns | 0.1736 |    1456 B |
+| ParlotGeneratedBig   |    981.2 ns |    88.60 ns |   4.86 ns | 0.1564 |    1312 B |
+| PidginBig            | 16,051.9 ns | 3,345.67 ns | 183.39 ns | 0.4883 |    4152 B |
+|                      |             |             |           |        |           |
+| ParlotFluentUnary    |    307.4 ns |    65.74 ns |   3.60 ns | 0.0782 |     656 B |
+| ParlotGeneratedUnary |    246.4 ns |    34.78 ns |   1.91 ns | 0.0610 |     512 B |
 ```
 
 ### JSON Benchmarks
@@ -242,44 +265,44 @@ The benchmark compares Fluent and source-generated Parlot parsers with Pidgin, S
 ```
 BenchmarkDotNet v0.15.8, macOS Sequoia 15.7.9 (24G830) [Darwin 24.6.0]
 Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 10.0.302
-  [Host]   : .NET 10.0.10 (10.0.10, 10.0.1026.32716), Arm64 RyuJIT armv8.0-a
-  ShortRun : .NET 10.0.10 (10.0.10, 10.0.1026.32716), Arm64 RyuJIT armv8.0-a
+.NET SDK 11.0.100-rc.1.26413.103
+  [Host]   : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
+  ShortRun : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-| Method                   | Mean       | Error       | StdDev     | Gen0     | Gen1     | Allocated  |
-|------------------------- |-----------:|------------:|-----------:|---------:|---------:|-----------:|
-| BigJson_Parlot           |  36.797 us |   0.5195 us |  0.0285 us |  10.7422 |   1.8311 |   88.16 KB |
-| BigJson_ParlotGenerated  |  31.659 us |   0.3483 us |  0.0191 us |  11.2305 |   1.8921 |    91.8 KB |
-| BigJson_Pidgin           |  76.997 us |   0.8952 us |  0.0491 us |  11.1084 |   1.7090 |    91.7 KB |
-| BigJson_Newtonsoft       |  48.892 us |   2.3675 us |  0.1298 us |  24.8413 |   8.2397 |   203.1 KB |
-| BigJson_SystemTextJson   |  14.912 us |   0.7656 us |  0.0420 us |   2.9297 |   0.3204 |   24.12 KB |
-| BigJson_Sprache          | 807.783 us | 129.9628 us |  7.1237 us | 631.8359 | 130.8594 | 5161.74 KB |
-| BigJson_Superpower       | 356.457 us |  26.1486 us |  1.4333 us | 103.5156 |  18.0664 |  845.93 KB |
-|                          |            |             |            |          |          |            |
-| DeepJson_Parlot          |  28.795 us |   5.6271 us |  0.3084 us |  12.7869 |   1.4038 |  104.57 KB |
-| DeepJson_ParlotGenerated |  24.167 us |   0.5363 us |  0.0294 us |  12.0239 |   1.2512 |   98.36 KB |
-| DeepJson_Pidgin          | 100.953 us |  16.4148 us |  0.8998 us |  14.1602 |   3.5400 |  116.29 KB |
-| DeepJson_Newtonsoft      |  41.074 us |   6.1893 us |  0.3393 us |  21.9116 |   8.7280 |  179.13 KB |
-| DeepJson_SystemTextJson  |  58.011 us |   1.7527 us |  0.0961 us |   2.4414 |   0.1831 |   20.24 KB |
-| DeepJson_Sprache         | 628.468 us | 353.3203 us | 19.3667 us | 342.7734 | 141.6016 | 2802.33 KB |
-|                          |            |             |            |          |          |            |
-| LongJson_Parlot          |  29.772 us |   1.0465 us |  0.0574 us |  13.7634 |   2.8076 |  112.52 KB |
-| LongJson_ParlotGenerated |  26.750 us |   1.5866 us |  0.0870 us |  14.4653 |   3.5706 |  118.38 KB |
-| LongJson_Pidgin          |  70.988 us |   9.4521 us |  0.5181 us |  14.6484 |   3.0518 |  120.25 KB |
-| LongJson_Newtonsoft      |  37.257 us |   4.3815 us |  0.2402 us |  24.7803 |   9.6436 |  202.68 KB |
-| LongJson_SystemTextJson  |   9.422 us |   0.2364 us |  0.0130 us |   2.9297 |   0.3204 |   24.12 KB |
-| LongJson_Sprache         | 671.931 us | 127.6828 us |  6.9987 us | 509.7656 | 129.8828 |  4165.2 KB |
-| LongJson_Superpower      | 295.297 us |  12.4582 us |  0.6829 us |  83.0078 |  20.0195 |  678.79 KB |
-|                          |            |             |            |          |          |            |
-| WideJson_Parlot          |  17.604 us |   1.3398 us |  0.0734 us |   4.9744 |   0.4883 |   40.72 KB |
-| WideJson_ParlotGenerated |  14.807 us |   0.8907 us |  0.0488 us |   4.9591 |   0.4883 |   40.59 KB |
-| WideJson_Pidgin          |  32.984 us |   4.0433 us |  0.2216 us |   4.9438 |   0.4883 |   40.48 KB |
-| WideJson_Newtonsoft      |  24.726 us |   1.2357 us |  0.0677 us |  13.0615 |   3.2349 |  106.72 KB |
-| WideJson_Sprache         | 354.187 us |  10.4665 us |  0.5737 us | 320.8008 |  45.4102 | 2622.69 KB |
-| WideJson_Superpower      | 173.612 us |  10.3190 us |  0.5656 us |  51.2695 |   4.8828 |  419.81 KB |
+| Method                   | Mean       | Error       | StdDev    | Gen0     | Gen1     | Allocated  |
+|------------------------- |-----------:|------------:|----------:|---------:|---------:|-----------:|
+| BigJson_Parlot           |  37.518 us |   9.4310 us | 0.5169 us |  10.7422 |   1.8311 |   88.16 KB |
+| BigJson_ParlotGenerated  |  34.607 us |   1.3631 us | 0.0747 us |  11.6577 |   2.1362 |   95.52 KB |
+| BigJson_Pidgin           |  80.389 us |  11.6536 us | 0.6388 us |  11.1084 |   1.7090 |    91.7 KB |
+| BigJson_Newtonsoft       |  49.972 us |   6.8959 us | 0.3780 us |  24.8413 |   8.2397 |   203.1 KB |
+| BigJson_SystemTextJson   |  15.034 us |   0.7112 us | 0.0390 us |   2.9297 |   0.3204 |   24.12 KB |
+| BigJson_Sprache          | 806.730 us | 130.6465 us | 7.1612 us | 632.8125 | 132.8125 | 5171.49 KB |
+| BigJson_Superpower       | 369.483 us |  13.5161 us | 0.7409 us | 103.5156 |  18.0664 |  845.93 KB |
+|                          |            |             |           |          |          |            |
+| DeepJson_Parlot          |  28.972 us |   5.3522 us | 0.2934 us |  12.7869 |   1.4038 |  104.57 KB |
+| DeepJson_ParlotGenerated |  24.236 us |   0.3640 us | 0.0200 us |  12.7563 |   1.3733 |  104.34 KB |
+| DeepJson_Pidgin          | 101.181 us |  14.7459 us | 0.8083 us |  14.1602 |   3.5400 |  116.29 KB |
+| DeepJson_Newtonsoft      |  31.064 us |   2.5722 us | 0.1410 us |  21.9116 |   8.7280 |  179.13 KB |
+| DeepJson_SystemTextJson  |  59.066 us |   2.9614 us | 0.1623 us |   2.4414 |   0.1831 |   20.24 KB |
+| DeepJson_Sprache         | 644.871 us |  11.5540 us | 0.6333 us | 344.7266 | 139.6484 | 2818.33 KB |
+|                          |            |             |           |          |          |            |
+| LongJson_Parlot          |  29.986 us |   1.3879 us | 0.0761 us |  13.7634 |   2.8076 |  112.52 KB |
+| LongJson_ParlotGenerated |  28.654 us |   0.4009 us | 0.0220 us |  15.1978 |   3.7231 |  124.38 KB |
+| LongJson_Pidgin          |  68.719 us |   8.6527 us | 0.4743 us |  14.6484 |   3.0518 |  120.25 KB |
+| LongJson_Newtonsoft      |  38.660 us |  15.3922 us | 0.8437 us |  24.7803 |   9.6436 |  202.68 KB |
+| LongJson_SystemTextJson  |   9.512 us |   2.7074 us | 0.1484 us |   2.9297 |   0.3204 |   24.12 KB |
+| LongJson_Sprache         | 658.102 us |  97.0088 us | 5.3174 us | 513.6719 | 131.8359 |  4197.2 KB |
+| LongJson_Superpower      | 297.433 us |   7.9671 us | 0.4367 us |  83.0078 |  20.0195 |  678.79 KB |
+|                          |            |             |           |          |          |            |
+| WideJson_Parlot          |  17.801 us |   4.7442 us | 0.2600 us |   4.9744 |   0.4883 |   40.72 KB |
+| WideJson_ParlotGenerated |  14.613 us |   0.4515 us | 0.0247 us |   4.9591 |   0.5493 |   40.58 KB |
+| WideJson_Pidgin          |  32.517 us |   1.9075 us | 0.1046 us |   4.9438 |   0.4883 |   40.48 KB |
+| WideJson_Newtonsoft      |  24.943 us |   3.6234 us | 0.1986 us |  13.0310 |   3.2349 |  106.72 KB |
+| WideJson_Sprache         | 359.650 us |  40.9163 us | 2.2428 us | 324.7070 |  44.4336 | 2654.69 KB |
+| WideJson_Superpower      | 180.493 us |  16.6559 us | 0.9130 us |  49.3164 |   4.6387 |  403.63 KB |
 ```
 
 ### Regular Expressions
@@ -291,20 +314,20 @@ The benchmark compares regular, compiled, and source-generated .NET regular expr
 ```
 BenchmarkDotNet v0.15.8, macOS Sequoia 15.7.9 (24G830) [Darwin 24.6.0]
 Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 10.0.302
-  [Host]   : .NET 10.0.10 (10.0.10, 10.0.1026.32716), Arm64 RyuJIT armv8.0-a
-  ShortRun : .NET 10.0.10 (10.0.10, 10.0.1026.32716), Arm64 RyuJIT armv8.0-a
+.NET SDK 11.0.100-rc.1.26413.103
+  [Host]   : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
+  ShortRun : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-| Method               | Mean      | Error     | StdDev   | Ratio | Gen0   | Allocated | Alloc Ratio |
-|--------------------- |----------:|----------:|---------:|------:|-------:|----------:|------------:|
-| RegexEmailCompiled   |  39.98 ns |  8.539 ns | 0.468 ns |  1.00 | 0.0249 |     208 B |        1.00 |
-| RegexEmail           |  91.41 ns |  3.353 ns | 0.184 ns |  2.29 | 0.0248 |     208 B |        1.00 |
-| RegexEmailGenerated  |  40.36 ns |  4.797 ns | 0.263 ns |  1.01 | 0.0249 |     208 B |        1.00 |
-| ParlotEmail          | 147.08 ns | 27.495 ns | 1.507 ns |  3.68 | 0.0372 |     312 B |        1.50 |
-| ParlotEmailGenerated |  62.36 ns |  8.718 ns | 0.478 ns |  1.56 | 0.0229 |     192 B |        0.92 |
+| Method               | Mean      | Error    | StdDev   | Ratio | Gen0   | Allocated | Alloc Ratio |
+|--------------------- |----------:|---------:|---------:|------:|-------:|----------:|------------:|
+| RegexEmailCompiled   |  40.09 ns | 3.324 ns | 0.182 ns |  1.00 | 0.0249 |     208 B |        1.00 |
+| RegexEmail           |  93.01 ns | 7.898 ns | 0.433 ns |  2.32 | 0.0248 |     208 B |        1.00 |
+| RegexEmailGenerated  |  40.25 ns | 0.454 ns | 0.025 ns |  1.00 | 0.0249 |     208 B |        1.00 |
+| ParlotEmail          | 142.07 ns | 1.729 ns | 0.095 ns |  3.54 | 0.0372 |     312 B |        1.50 |
+| ParlotEmailGenerated |  70.55 ns | 4.013 ns | 0.220 ns |  1.76 | 0.0229 |     192 B |        0.92 |
 ```
 
 ### Versions

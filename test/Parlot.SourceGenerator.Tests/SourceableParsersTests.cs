@@ -1,291 +1,104 @@
-using Parlot.SourceGenerator.Tests;
+using System;
+using System.Globalization;
+using System.Linq;
+using Parlot.Fluent;
+using Parlot.SourceGeneration;
 using Xunit;
+using static Parlot.Fluent.Parsers;
 
-namespace Parlot.SourceGenerator.Tests
+namespace Parlot.SourceGenerator.Tests;
+
+public class SourceableParsersTests
 {
-    public class SourceableParsersTests
+    [Fact]
+    public void Text_Emitter_Produces_A_Direct_Cursor_Check()
     {
-        [Fact]
-        public void TermsText_Works()
-        {
-            var p = Grammars.TermsTextParser();
-            Assert.Equal("hello", p.Parse("hello"));
-            Assert.Null(p.Parse("world"));
-        }
+        var source = Generate(Literals.Text("hello"));
+        var generated = string.Join(Environment.NewLine, source.Body);
 
-        [Fact]
-        public void TermsChar_Works()
-        {
-            var p = Grammars.TermsCharParser();
-            Assert.Equal('h', p.Parse("h"));
-            Assert.Equal(default(char), p.Parse("x"));
-        }
+        Assert.Contains("\"hello\"", generated, StringComparison.Ordinal);
+        Assert.Contains("cursor", generated, StringComparison.OrdinalIgnoreCase);
+    }
 
-        [Fact]
-        public void TermsString_Works()
-        {
-            var p = Grammars.TermsStringParser();
-            var span = p.Parse("\"hello\"");
-            Assert.Equal("hello", span.ToString());
-        }
+    [Fact]
+    public void Sequence_Emitter_Registers_Both_Children()
+    {
+        var context = new SourceGenerationContext("context", "Sequence");
+        var parser = Literals.Char('a').And(Literals.Char('b'));
 
-        [Fact]
-        public void TermsPattern_Works()
-        {
-            var p = Grammars.TermsPatternParser();
-            var span = p.Parse("abc123");
-            Assert.Equal("abc", span.ToString());
-            Assert.False(p.TryParse("123", out TextSpan _));
-        }
+        var source = Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context);
 
-        [Fact]
-        public void TermsIdentifier_Works()
-        {
-            var p = Grammars.TermsIdentifierParser();
-            var span = p.Parse("  foo123 ");
-            Assert.Equal("foo123", span.ToString());
-            Assert.False(p.TryParse("  123foo", out TextSpan _));
-        }
+        Assert.NotEmpty(source.Body);
+        Assert.True(context.Helpers.Enumerate().Count() >= 2);
+    }
 
-        [Fact]
-        public void TermsWhiteSpace_Works()
-        {
-            var p = Grammars.TermsWhiteSpaceParser();
-            var span = p.Parse("   \tfoo");
-            Assert.Equal("   \t", span.ToString());
-            Assert.False(p.TryParse("foo", out TextSpan _));
-        }
+    [Fact]
+    public void If_Emitter_Registers_The_Callback_And_Branches()
+    {
+        Func<bool> condition = static () => true;
+        var context = new SourceGenerationContext("context", "Conditional");
+        var parser = If(condition, Literals.Char('a'), Literals.Char('b'));
 
-        [Fact]
-        public void TermsNonWhiteSpace_Works()
-        {
-            var p = Grammars.TermsNonWhiteSpaceParser();
-            var span = p.Parse("  hello world");
-            Assert.Equal("hello", span.ToString());
-            Assert.Equal("world", p.Parse("  world").ToString());
-        }
+        var source = Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context);
 
-        [Fact]
-        public void TermsDecimal_Works()
-        {
-            var p = Grammars.TermsDecimalParser();
-            Assert.Equal(123m, p.Parse("123"));
-            Assert.Equal(-45.67m, p.Parse("  -45.67"));
-            Assert.False(p.TryParse("abc", out decimal _));
-        }
+        Assert.Same(condition, Assert.Single(context.Lambdas.Enumerate()).Delegate);
+        Assert.Equal(2, context.Helpers.Enumerate().Count());
+        Assert.Contains(source.Body, static line => line.StartsWith("if (", StringComparison.Ordinal));
+    }
 
-        [Fact]
-        public void TermsKeyword_Works()
-        {
-            var p = Grammars.TermsKeywordParser();
-            Assert.Equal("if", p.Parse("if "));
-            Assert.Null(p.Parse("ifx"));
-        }
+    [Fact]
+    public void Select_Emitter_Registers_The_Callback_And_All_Branches()
+    {
+        Func<int> selector = static () => 1;
+        var context = new SourceGenerationContext("context", "Select");
+        var parser = Select(selector, Literals.Char('a'), Literals.Char('b'));
 
-        [Fact]
-        public void LiteralsText_Works()
-        {
-            var p = Grammars.LiteralsTextParser();
-            Assert.Equal("hello", p.Parse("hello"));
-            Assert.False(p.TryParse(" hello", out string _));
-        }
+        Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context);
 
-        [Fact]
-        public void LiteralsChar_Works()
-        {
-            var p = Grammars.LiteralsCharParser();
-            Assert.Equal('h', p.Parse("hello"));
-            Assert.False(p.TryParse("x", out char _));
-        }
+        Assert.Same(selector, Assert.Single(context.Lambdas.Enumerate()).Delegate);
+        Assert.Equal(2, context.Helpers.Enumerate().Count());
+    }
 
-        [Fact]
-        public void LiteralsWhiteSpace_Works()
-        {
-            var p = Grammars.LiteralsWhiteSpaceParser();
-            var span = p.Parse("   foo");
-            Assert.Equal("   ", span.ToString());
-            Assert.False(p.TryParse("foo", out TextSpan _));
-        }
+    [Fact]
+    public void Number_Emitter_Selects_The_Target_Framework_Path()
+    {
+        var downlevel = new SourceGenerationContext(targetFramework: new TargetFrameworkInfo(
+            TargetFrameworkIdentifier.NetCoreApp, new Version(7, 0)));
+        var modern = new SourceGenerationContext(targetFramework: new TargetFrameworkInfo(
+            TargetFrameworkIdentifier.NetCoreApp, new Version(8, 0)));
+        var parser = new TestLongNumberLiteral();
 
-        [Fact]
-        public void LiteralsNonWhiteSpace_Works()
-        {
-            var p = Grammars.LiteralsNonWhiteSpaceParser();
-            var span = p.Parse("hello world");
-            Assert.Equal("hello", span.ToString());
-            Assert.False(p.TryParse("   ", out TextSpan _));
-        }
+        var downlevelSource = string.Join(Environment.NewLine, parser.GenerateSource(downlevel).Body);
+        var modernSource = string.Join(Environment.NewLine, parser.GenerateSource(modern).Body);
 
-        [Fact]
-        public void LiteralsDecimal_Works()
-        {
-            var p = Grammars.LiteralsDecimalParser();
-            Assert.Equal(123m, p.Parse("123"));
-            Assert.Equal(-45.67m, p.Parse("-45.67"));
-            Assert.False(p.TryParse(" abc", out decimal _));
-        }
+        Assert.DoesNotContain("Numbers.TryParseNumber<", downlevelSource, StringComparison.Ordinal);
+        Assert.Contains("Numbers.TryParseNumber<", modernSource, StringComparison.Ordinal);
+    }
 
-        [Fact]
-        public void LiteralsKeyword_Works()
-        {
-            var p = Grammars.LiteralsKeywordParser();
-            Assert.Equal("if", p.Parse("if"));
-            Assert.False(p.TryParse("ifx", out string _));
-        }
+    [Fact]
+    public void Unsupported_Runtime_Parser_Is_Rejected_By_Combinator_Emitter()
+    {
+        var parser = If(static () => true, new RuntimeOnlyParser());
 
-        [Fact]
-        public void SequenceTextChar_Works()
-        {
-            var p = Grammars.SequenceTextCharParser();
-            var (text, ch) = p.Parse("hi!");
-            Assert.Equal("hi", text);
-            Assert.Equal('!', ch);
-            Assert.False(p.TryParse("hi?", out _));
-        }
+        Assert.Throws<NotSupportedException>(
+            () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
+    }
 
-        [Fact]
-        public void SkipAnd_Works()
-        {
-            var p = Grammars.SkipAndParser();
-            Assert.Equal('!', p.Parse("hi!"));
-            Assert.False(p.TryParse("hi?", out char _));
-        }
+    private static SourceResult Generate<T>(Parser<T> parser) =>
+        Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext());
 
-        [Fact]
-        public void AndSkip_Works()
-        {
-            var p = Grammars.AndSkipParser();
-            Assert.Equal('!', p.Parse("!hi"));
-            Assert.False(p.TryParse("!by", out char _));
-        }
+    private sealed class RuntimeOnlyParser : Parser<char>
+    {
+        public override bool Parse(ParseContext context, ref ParseResult<char> result) => false;
+    }
 
-        [Fact]
-        public void OptionalText_Works()
-        {
-            var p = Grammars.OptionalTextParser();
-            var some = p.Parse("hi");
-            Assert.True(some.HasValue);
-            Assert.Equal("hi", some.Value);
-
-            var none = p.Parse("hello");
-            Assert.False(none.HasValue);
-        }
-
-        [Fact]
-        public void ZeroOrManyChar_Works()
-        {
-            var p = Grammars.ZeroOrManyCharParser();
-            var list = p.Parse("aaab");
-            Assert.Equal(new[] { 'a', 'a', 'a' }, list);
-            var empty = p.Parse("bbb");
-            Assert.Empty(empty);
-        }
-
-        [Fact]
-        public void ZeroOrOneChar_Works()
-        {
-            var p = Grammars.ZeroOrOneCharParser();
-            Assert.Equal('a', p.Parse("a"));
-            Assert.Equal('x', p.Parse("b"));
-        }
-
-        [Fact]
-        public void EofText_Works()
-        {
-            var p = Grammars.EofTextParser();
-            Assert.Equal("end", p.Parse("end"));
-            Assert.False(p.TryParse("end!", out string _));
-        }
-
-        [Fact]
-        public void CaptureChar_Works()
-        {
-            var p = Grammars.CaptureCharParser();
-            var span = p.Parse("z");
-            Assert.Equal("z", span.ToString());
-            Assert.False(p.TryParse("a", out TextSpan _));
-        }
-
-        [Fact]
-        public void OneOfChar_Works()
-        {
-            var p = Grammars.OneOfCharParser();
-            Assert.Equal('a', p.Parse("a"));
-            Assert.Equal('b', p.Parse("b"));
-            Assert.False(p.TryParse("c", out char _));
-        }
-
-        [Fact]
-        public void BetweenParensIdentifier_Works()
-        {
-            var p = Grammars.BetweenParensIdentifierParser();
-            var span = p.Parse("(foo)");
-            Assert.Equal("foo", span.ToString());
-            Assert.False(p.TryParse("foo", out TextSpan _));
-        }
-
-        [Fact]
-        public void RepetitionParsers_StopWhenInnerParserMakesNoProgress()
-        {
-            Assert.Equal(3, Grammars.ZeroOrManyOptionalParser().Parse("aaa")!.Count);
-            Assert.Equal(3, Grammars.OneOrManyOptionalParser().Parse("aaa")!.Count);
-            Assert.False(Grammars.OneOrManyOptionalParser().TryParse("", out _));
-            Assert.Equal(3, Grammars.SeparatedOptionalParser().Parse("aaa")!.Count);
-            Assert.False(Grammars.SeparatedOptionalParser().TryParse("", out _));
-        }
-
-        [Fact]
-        public void SeparatedDecimals_Works()
-        {
-            var p = Grammars.SeparatedDecimalsParser();
-            var list = p.Parse("1,2,3");
-            Assert.Equal(new decimal[] { 1m, 2m, 3m }, list);
-            // Separated requires at least one element - returns null when no items match
-            Assert.Null(p.Parse("abc"));
-            Assert.Null(p.Parse(""));
-        }
-
-        [Fact]
-        public void UnaryNegateDecimal_Works()
-        {
-            var p = Grammars.UnaryNegateDecimalParser();
-            Assert.Equal(-1m, p.Parse("-1"));
-            Assert.Equal(2m, p.Parse("2"));
-            Assert.False(p.TryParse("abc", out decimal _));
-        }
-
-        [Fact]
-        public void LeftAssociativeAddition_Works()
-        {
-            var p = Grammars.LeftAssociativeAdditionParser();
-            Assert.Equal(6m, p.Parse("1+2+3"));
-            Assert.Equal(1m, p.Parse("1"));
-        }
-
-        [Fact]
-        public void NotXChar_Works()
-        {
-            var p = Grammars.NotXCharParser();
-            Assert.Equal(default(char), p.Parse("a"));
-            Assert.False(p.TryParse("x", out char _));
-        }
-
-        [Fact]
-        public void WhenNotFollowedByHelloBang_Works()
-        {
-            var p = Grammars.WhenNotFollowedByHelloBangParser();
-            Assert.Equal("hello", p.Parse("hello"));
-            Assert.False(p.TryParse("hello!", out string _));
-        }
-
-        [Fact]
-        public void WhenFollowedByHelloBang_Works()
-        {
-            var p = Grammars.WhenFollowedByHelloBangParser();
-            Assert.Equal("hello", p.Parse("hello!")); // consumes '!'
-            Assert.False(p.TryParse("hello", out string _));
-        }
-
-        // Additional parser tests will be enabled incrementally
+    private sealed class TestLongNumberLiteral : NumberLiteralBase<long>
+    {
+        public override bool TryParseNumber(
+            ReadOnlySpan<char> text,
+            NumberStyles style,
+            IFormatProvider provider,
+            out long value) =>
+            long.TryParse(text, style, provider, out value);
     }
 }

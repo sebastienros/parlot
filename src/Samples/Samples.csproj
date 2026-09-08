@@ -2,28 +2,33 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <LangVersion>12</LangVersion>
     <!-- The net472 leg exists so Parlot.Tests can execute the downlevel polyfills. It is
          Windows-only, so `dotnet build` and `dotnet test` keep working unchanged on Linux. -->
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net472;$(TargetFrameworks)</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 		<CompilerGeneratedFilesOutputPath>obj\$(Configuration)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
-    <!-- Enable interceptors for source generator -->
-    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Parlot.Tests.Sql;Parlot.Tests.Calc;Parlot.Tests.Json</InterceptorsPreviewNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Parlot\Parlot.csproj" />
-    </ItemGroup>
+    <Compile Remove="**\*.parlot.cs" />
+  </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">
     <!-- Reference the source generator as an analyzer -->
     <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
                       OutputItemType="Analyzer" 
                       ReferenceOutputAssembly="false" />
 
 
-    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <!-- Make Parlot.dll available while the analyzer executes build-only grammar factories -->
     <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
   </ItemGroup>
+
+  <Import Project="..\Parlot.SourceGenerator\build\Parlot.SourceGenerator.props"
+          Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
+  <Import Project="..\Parlot.SourceGenerator\build\Parlot.SourceGenerator.targets"
+          Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
 </Project>

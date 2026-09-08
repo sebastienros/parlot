@@ -10,11 +10,11 @@ namespace Parlot.Benchmarks;
 public class ExprBench
 {
     private readonly Parser<Expression> _parser = FluentParser.Expression;
-    private readonly Parser<Expression> _generated = GeneratedParsers.ExpressionParser();
     private readonly Parser _rawParser = new();
 
     private const string _expression1 = "3 - 1 / 2 + 1";
     private const string _expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";
+    private const string _unaryExpression = "-(3 + 2) * -4 + --6";
 
     [Benchmark, BenchmarkCategory("Expression1")]
     public Expression ParlotRawSmall()
@@ -32,7 +32,7 @@ public class ExprBench
     [Benchmark, BenchmarkCategory("Expression1")]
     public Expression ParlotGeneratedSmall()
     {
-        _ = _generated.TryParse(_expression1, out var result);
+        _ = GeneratedParsers.TryParseExpression(_expression1, out var result);
         return result;
     }
 
@@ -58,7 +58,7 @@ public class ExprBench
     [Benchmark, BenchmarkCategory("Expression2")]
     public Expression ParlotGeneratedBig()
     {
-        _ = _generated.TryParse(_expression2, out var result);
+        _ = GeneratedParsers.TryParseExpression(_expression2, out var result);
         return result;
     }
 
@@ -66,5 +66,19 @@ public class ExprBench
     public Expression PidginBig()
     {
         return ExprParser.ParseOrThrow(_expression2);
+    }
+
+    [Benchmark(Baseline = true), BenchmarkCategory("Unary")]
+    public Expression ParlotFluentUnary()
+    {
+        _ = _parser.TryParse(_unaryExpression, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Unary")]
+    public Expression ParlotGeneratedUnary()
+    {
+        _ = GeneratedParsers.TryParseExpression(_unaryExpression, out var result);
+        return result;
     }
 }
