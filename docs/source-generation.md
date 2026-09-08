@@ -1,510 +1,455 @@
 # Source Generation Guide
 
-Parlot supports compile-time source generation using C# interceptors, providing faster parsing and startup than equivalent Fluent parser graphs.
+Parlot source generation compiles a build-only Fluent grammar into a direct partial parsing method.
+The generated parser and its support code are emitted into the consuming assembly, so application code
+does not need a runtime reference to `Parlot`.
 
-## Quick Start
+Build with .NET SDK 10.0.400 or later, which provides the analyzer's required Roslyn version.
+Generated consumers can target .NET 8 or later and C# 12 or later.
 
-1. Add the interceptors namespace to your project file:
+## Getting started
+
+Add the analyzer package to the project that owns the grammar:
 
 ```xml
 <PropertyGroup>
-  <InterceptorsNamespaces>$(InterceptorsNamespaces);YourNamespace</InterceptorsNamespaces>
+  <TargetFramework>net8.0</TargetFramework>
+  <LangVersion>12</LangVersion>
 </PropertyGroup>
+
+<ItemGroup>
+  <PackageReference Include="Parlot.SourceGenerator"
+                    Version="2.0.0-preview"
+                    PrivateAssets="all" />
+</ItemGroup>
 ```
 
-2. Annotate your parser method:
+`Parlot.SourceGenerator` is a dedicated analyzer-only package. Installing the runtime `Parlot` package
+does not enable source generation, and a dependency-free generated consumer should not reference it.
+
+The package's build props and targets find `**/*.parlot.cs`, remove those files from `Compile`, and add
+them as `AdditionalFiles`. Repository projects that reference the generator project directly instead of
+using the package must import the same files explicitly:
+
+```xml
+<Import Project="../Parlot.SourceGenerator/build/Parlot.SourceGenerator.props" />
+<Import Project="../Parlot.SourceGenerator/build/Parlot.SourceGenerator.targets" />
+```
+
+No interceptor namespace or other call-site rewriting configuration is required.
+
+Declare the application-facing entry point in a normal `.cs` file:
 
 ```csharp
-using Parlot.SourceGenerator;
+namespace MyApp;
+
+public static partial class GreetingParser
+{
+    public static partial bool TryParse(
+        string input,
+        GreetingOptions options,
+        out string value);
+}
+
+public sealed class GreetingOptions
+{
+    public bool Formal { get; init; }
+    public string Prefix { get; init; } = "";
+}
+```
+
+Define the grammar factory in a paired build-only file such as `GreetingParser.parlot.cs`:
+
+```csharp
 using Parlot.Fluent;
+using Parlot.SourceGenerator;
 using static Parlot.Fluent.Parsers;
 
-public static partial class MyGrammar
+namespace MyApp;
+
+public static partial class GreetingParser
 {
-    [GenerateParser]
-    public static Parser<string> HelloParser() => Terms.Text("hello");
+    [GenerateParser(nameof(TryParse))]
+    private static Parser<string> Build(GreetingOptions options) =>
+        If(
+            () => options.Formal,
+            Terms.Text("Hello"),
+            Terms.Text("Hi"))
+        .Then(text => options.Prefix + text)
+        .Eof();
 }
 ```
 
-3. Use the parser normally—calls are intercepted automatically:
+Application code calls the generated method directly:
 
 ```csharp
-var parser = MyGrammar.HelloParser();  // Uses generated code
-var result = parser.Parse("hello world");
-```
+var options = new GreetingOptions { Formal = true, Prefix = "Greeting: " };
 
-## How It Works
-
-1. The source generator executes your method at compile time inside the compiler host to build the parser graph.
-2. It traverses the graph and generates optimized C# code for each parser.
-3. C# interceptors replace calls to your method with the generated implementation.
-4. At runtime, no parser graph construction occurs—just the generated code runs.
-
-Generated `ZeroOrMany`, `OneOrMany`, and `Separated` parsers use the same collection storage as
-runtime parsers: up to four elements are stored inline, with no separate backing array. Larger
-results use a growing `List<T>`, and an empty `ZeroOrMany` result uses `Array.Empty<T>()`.
-Results remain exposed as `IReadOnlyList<T>`; their concrete type is an implementation detail.
-`Parlot.Fluent.HybridList<T>` is public, but hidden from IntelliSense, to support generated code
-in consumer assemblies. It is a result builder, not a general-purpose collection API.
-
-> [!WARNING]
-> `[GenerateParser]` factory methods are executable build code, not declarative metadata. They run with the
-> compiler host's process permissions and can access the build environment. `[IncludeGenerators]` additionally
-> loads and executes the selected analyzer assemblies, which is equivalent to trusting executable build
-> dependencies. Only build trusted parser factories and generators outside an isolated environment. See the
-> [security guidance](security.md#source-generation-and-build-time-code-execution).
-
-## Requirements
-
-- **Static methods**: The annotated method must be `static`.
-- **Parameters**: Ordinary by-value arguments can be captured by inline parse-time callbacks. They cannot determine the parser graph during construction.
-- **Non-generic**: Generic factories and generic containing types are not supported. Neither are `ref`, `out`, `in`, ref-like, pointer, or function-pointer parameters.
-- **Return type**: Must return `Parlot.Fluent.Parser<T>`.
-- **Partial class**: The containing class must be `partial`.
-
-## IDE and Design-Time Analysis
-
-Parlot skips parser generation, factory execution, and its generation diagnostics during recognized
-IDE/design-time analysis. The original parser factory remains available without generated interceptors.
-Other generators, such as PolySharp, still run normally in the IDE; Parlot does not load and execute
-them through `[IncludeGenerators]` during these runs.
-
-Command-line builds and explicit builds started inside Visual Studio still generate parsers and
-interceptors. Parlot skips generation when `DesignTimeBuild` is `true`, or when
-`BuildingInsideVisualStudio` is `true` and `BuildingProject` is explicitly `false`.
-Missing property values alone do not disable generation.
-
-The Parlot NuGet package exposes these properties to the compiler through its `buildTransitive` props.
-Keep those package assets enabled so the generator can distinguish live analysis from a real build.
-
-## Parameterized Parsers
-
-Factory arguments configure a generated parser instance. The generator emits every branch once; the
-actual arguments are bound when the factory is called at runtime.
-
-```csharp
-public static partial class MyGrammar
+if (GreetingParser.TryParse("Hello", options, out var greeting))
 {
-    [GenerateParser]
-    public static Parser<string> Greeting(bool formal, string prefix)
-    {
-        return If(
-            () => formal,
-            Literals.Text("Hello"),
-            Literals.Text("Hi"))
-            .Then(text => prefix + text);
-    }
+    Console.WriteLine(greeting);
 }
-
-var formal = MyGrammar.Greeting(true, "Greeting: ");
-var informal = MyGrammar.Greeting(false, "");
-
-formal.Parse("Hello"); // "Greeting: Hello"
-informal.Parse("Hi");  // "Hi"
 ```
 
-Multiple parameters, overloads, named arguments, optional arguments, and `params` arrays are supported.
-Calls evaluate their arguments normally, once and in source order. Parameterless factories still return
-a cached singleton; parameterized factories create a small bound parser instance, not a parser graph.
-Build that instance once and reuse it.
+The factory exists only in the generator's private build compilation. It is not emitted into the
+application and no `Parser<T>` object or combinator graph is created when `TryParse` runs.
 
-### Conditional branches and context
+## Entry point contract
 
-`If(condition, thenParser, elseParser)` evaluates the predicate once each time it is parsed and runs only
-the selected branch. Failure does not try the other branch. `If(condition, parser)` fails without
-consuming input when the condition is false. Both forms also accept `Func<ParseContext, bool>` or
-`Func<C, bool>` where `C : ParseContext`:
+Each `[GenerateParser(nameof(...))]` factory must have exactly one matching partial method declaration.
+
+The factory:
+
+- is in a `.parlot.cs` file supplied as an `AdditionalFile` and excluded from `Compile`;
+- is static and non-generic;
+- is contained by the same top-level, non-generic partial class as the entry point;
+- returns `Parlot.Fluent.Parser<T>`;
+- uses only ordinary by-value configuration parameters.
+
+The application-facing method:
+
+- is a static, non-generic partial method returning `bool`;
+- takes the input `string` first;
+- takes the factory's configuration parameters next, in the same type and order;
+- takes `out T value` last, where `T` is the factory parser's result type.
+
+Parameter names do not need to match. The entry point may be public, internal, or private as appropriate.
+Results and configuration values must be BCL or application-owned types. Do not expose source-generation
+implementation types such as `TextSpan`, `Option<T>`, `ParseContext`, or `ParseResult<T>` in the entry
+point signature. Convert them inside the grammar:
+
+```csharp
+[GenerateParser(nameof(TryParseIdentifier))]
+private static Parser<string> BuildIdentifier() =>
+    Terms.Identifier()
+        .Then(static span => span.ToString())
+        .Eof();
+```
+
+## Parse behavior
+
+The generated method creates its per-parse execution context and executes the emitted parser directly.
+Configuration is stored in the existing per-call execution context, without a separate parser or closure
+allocation. The scanner, cursor, and context use the shared runtime implementations.
+
+- A successful parse assigns `value` and returns `true`.
+- An ordinary mismatch returns `false` and assigns `default` to `value`.
+- `Error` and `ElseError` throw `ParseException` internally; the direct entry point converts that exception
+  to `false` and a default result.
+- Exceptions thrown by application callbacks are not swallowed and propagate to the caller.
+- A null input is rejected.
+- End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
+- `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+
+### Deliberate standalone boundary
+
+Standalone entry points intentionally expose only the input string, application configuration, and the
+parsed value. They do not expose the internal execution context:
+
+- No consumed offset is returned. Without `.Eof()`, a parser may successfully match a prefix, but the
+  caller cannot retrieve the position where parsing stopped. Use `.Eof()` for whole-input parsing.
+- No `CancellationToken` is accepted and parsing cannot be cancelled through the entry point.
+- No custom `ParseContext`, recursion-depth setting, or other execution-context option can be supplied.
+  Factory parameters configure generated callbacks and branches; they do not configure the parsing engine.
+- The input is a `string`; `ReadOnlySpan<char>` entry points are not supported.
+
+Use the normal Parlot runtime API when consumed positions, cancellation, or custom parse contexts are
+required.
+
+Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
+larger results grow into a list, and an empty `ZeroOrMany` result uses an empty array. Public results should
+normally use `IReadOnlyList<T>`.
+
+## Configuration and captures
+
+Factory parameters are configuration values supplied on every direct method call. The generator emits the
+graph once and stores the current call's values in the execution context; it does not allocate a separate parser
+or rebuild the graph per parse.
+
+Parameters may be read by inline parse-time callbacks passed to:
+
+- `If`
+- `Select`
+- `Then` and `ThenElse`
+- `When`
+- `Switch`
+- `Else`
+
+For example:
+
+```csharp
+[GenerateParser(nameof(TryParseKeyword))]
+private static Parser<string> BuildKeyword(ParserOptions options) =>
+    If(
+        () => options.UseLongForm,
+        Literals.Text("configuration"),
+        Literals.Text("config"))
+    .Then(text => options.Prefix + text);
+```
+
+Both branches are generated. The predicate runs once per parse and only the selected branch is attempted.
+Reference-type configuration is not cloned or frozen, so mutations made before a call are visible during
+that call. Prefer immutable options when calls may run concurrently.
+
+### Unsupported eager parameter use
+
+Configuration cannot determine the graph while the factory executes:
+
+```csharp
+// Wrong: one branch would be missing from generated code.
+return options.Formal ? Literals.Text("Hello") : Literals.Text("Hi");
+
+// Wrong: a runtime value cannot become a build-time literal.
+return Literals.Text(options.Keyword);
+
+// Wrong: normalization eagerly reads a value that exists only at parse time.
+var prefix = options.Prefix.Trim();
+return Literals.Text("Hello").Then(text => prefix + text);
+```
+
+Defer those reads:
 
 ```csharp
 return If(
-    (LanguageParseContext context) => options.AllowExtensions && context.InsideFunction,
-    extensionExpression,
-    standardExpression);
+        () => options.Formal,
+        Literals.Text("Hello"),
+        Literals.Text("Hi"))
+    .Then(text => options.Prefix.Trim() + text);
 ```
 
-Factory arguments belong to the parser instance; the context always comes from the current parse.
-Predicates must not consume input. Use `Select(() => index, a, b, c)` for multiple branches, or its
-context-aware overloads. All branch parsers are constructed at compile time, including inactive ones.
+Parameters cannot be reassigned or passed by reference. A callback that captures configuration must be
+written inline rather than stored in a local variable.
 
-### Capture restrictions
+### Other capture restrictions
 
-Factory parameters may be read in inline callbacks passed to `If`, `Select`, `Then`, `ThenElse`, `When`,
-`Switch`, and `Else`. Generated callbacks access instance fields directly, without allocating closures
-or invoking delegates during parsing. An ordinary, non-intercepted factory call retains its normal
-runtime combinator behavior.
-
-Captured arguments retain normal value/reference semantics. A reference-type options object is not
-cloned or frozen, so later mutations are visible to predicates. Prefer immutable options for parsers
-shared across threads. Value-type arguments are copied when the factory is called.
-
-Parameters cannot be reassigned or passed by reference. Factory-parameter captures must be inline;
-storing such a callback in a local variable is not supported. Captured locals and captures of parameters
-belonging to a different helper method are also unsupported. Move calculations that depend on arguments
-into the callback, or compute them before calling the factory.
-
-The graph must not depend on placeholder argument values. These examples are rejected with `PARLOT021`:
+Generated callbacks may not capture arbitrary locals or parameters belonging to another helper method:
 
 ```csharp
-// Eager branch selection would omit one branch from the generated parser.
-return formal ? Literals.Text("Hello") : Literals.Text("Hi");
-
-// A runtime-configured literal is not a compile-time constant.
-return Literals.Text(keyword);
-
-// Even eager normalization reads an unavailable runtime argument.
-var normalized = prefix.Trim();
-return Literals.Text("Hello").Then(text => normalized + text);
+// Wrong: prefix is a local captured by the callback.
+var prefix = "hello";
+return Terms.Identifier().Then(value => prefix + value.ToString());
 ```
 
-Use `If` or `Select` for alternatives and callbacks such as `.Then(text => prefix.Trim() + text)` for
-deferred computation. Eager argument validation also belongs before the factory call. Deferred callbacks
-are identified without executing their user bodies for source extraction; a callback capturing factory
-state cannot be invoked while building the graph. Such execution is rejected even if the factory catches
-the resulting exception (`PARLOT022`).
+Use one of these alternatives:
 
-## Attributes Reference
-
-### [GenerateParser]
-
-Marks a method for source generation.
+1. Pass state as a factory configuration parameter and read it in an inline callback.
+2. Use static fields or properties when global shared state is intentional.
+3. Use a static method group for a callback whose dependencies are available from its arguments or static
+   state. A helper that mentions Parlot types must remain in build-only grammar source.
 
 ```csharp
-[GenerateParser]
-public static Parser<Expression> CreateParser() => ...;
+// In the .parlot.cs file:
+private static string Normalize(TextSpan value) => value.ToString().ToUpperInvariant();
+
+[GenerateParser(nameof(TryParseIdentifier))]
+private static Parser<string> BuildIdentifier() =>
+    Terms.Identifier().Then(Normalize);
 ```
 
-### [IncludeFiles]
+The `TextSpan` in this example is build-time grammar code only; the direct entry point still returns
+`string`. A normal compiled application helper should instead accept and return application-owned types.
 
-Includes additional source files in the compilation. Paths are resolved relative to the source file containing the `[GenerateParser]` method.
+### Parse context subclasses
+
+Application subclasses of Parlot's runtime `ParseContext` are not compatible with the dependency-free
+entry point. The generated parser uses an internal context under `Parlot.Generated`, and that type is not
+interchangeable with the runtime library type.
+
+Pass application-owned state through configuration parameters instead. Context-aware callbacks may use the
+built-in context for parser internals, but public entry points and application state must not depend on
+Parlot context types.
+
+## Application models and runtime helpers
+
+Result models, callback helpers, and any code called while parsing belong in normal `.cs` files. The
+generator's private compilation can see the consuming project's source and references, while generated code
+must resolve against the final application compilation.
+
+Do not place an application model or runtime helper only in `.parlot.cs`; build-only grammar files are not
+compiled into the application. A grammar can construct and return application-owned types:
 
 ```csharp
-[GenerateParser]
-[IncludeFiles("Ast.cs", "Tokens.cs")]
-public static Parser<Expression> CreateParser() => ...;
+// Expression.cs
+namespace MyApp;
+
+public sealed record Expression(int Value);
+
+public static partial class ExpressionParser
+{
+    public static partial bool TryParse(string input, out Expression value);
+}
 ```
 
-#### Glob Patterns
+```csharp
+// ExpressionParser.parlot.cs
+[GenerateParser(nameof(TryParse))]
+private static Parser<Expression> Build() =>
+    Terms.Integer()
+        .Then(static value => new Expression(checked((int)value)))
+        .Eof();
+```
 
-| Pattern | Description |
-|---------|-------------|
-| `*` | Matches any characters except path separator |
-| `**` | Matches any characters including path separators (recursive) |
-| `?` | Matches any single character except path separator |
+## Helper attributes
+
+Helper attributes may be applied to an individual factory or to its containing partial class.
+Method-level values are combined with class-level values.
+
+### `[IncludeUsings]`
+
+Adds namespace imports needed by emitted callback or helper source:
+
+```csharp
+[GenerateParser(nameof(TryParse))]
+[IncludeUsings("System.Collections.Generic", "MyApp.Models")]
+private static Parser<Expression> Build() => ...;
+```
+
+Usings in the `.parlot.cs` file compile the build-time factory. `[IncludeUsings]` applies to the generated
+output, so add it when copied callback expressions require extension methods or unqualified application
+types that are not otherwise emitted with fully qualified names.
+
+### `[IncludeFiles]`
+
+Adds source files to the generator's private factory compilation:
+
+```csharp
+[GenerateParser(nameof(TryParse))]
+[IncludeFiles("GrammarHelpers.cs", "Tokens/*.cs")]
+private static Parser<Expression> Build() => ...;
+```
+
+Use this for build-time grammar helpers that are not already part of the consuming compilation. Included
+files are not copied into the application. Application models and runtime callback helpers must still be
+normal compiled source.
+
+Paths are resolved relative to the `.parlot.cs` file and must remain inside the MSBuild project root.
+Absolute paths, symbolic-link traversal, and patterns not ending in `.cs` are rejected.
+
+| Pattern | Meaning |
+|---|---|
+| `*` | Any characters except a path separator |
+| `**` | Any characters including path separators |
+| `?` | One character except a path separator |
 
 Examples:
 
 ```csharp
-[IncludeFiles("*.cs")]                    // All .cs files in same directory
-[IncludeFiles("Models/*.cs")]             // All .cs files in Models subdirectory
-[IncludeFiles("**/*.cs")]                 // All .cs files recursively
-[IncludeFiles("../Shared/**/*.cs")]       // Parent paths are allowed only within the project root
+[IncludeFiles("*.cs")]
+[IncludeFiles("Grammar/*.cs")]
+[IncludeFiles("Grammar/**/*.cs")]
+[IncludeFiles("../SharedGrammar/**/*.cs")]
 ```
 
-Paths are resolved from the parser source file but must remain inside the MSBuild project root. Absolute
-paths, symbolic-link traversal, and patterns not ending in `.cs` are rejected. A parser can include at most
-256 files, each no larger than 1 MiB and no larger than 8 MiB in total; glob traversal is capped at 10,000
-entries. Rejections are reported as `PARLOT016`-`PARLOT020` diagnostics without resolved filesystem paths.
-Use exact files or narrow directory globs rather than project-wide `**/*.cs` patterns.
+Parent paths are valid only while the resolved files remain inside the project root. A factory may include
+at most 256 files, each no larger than 1 MiB and no larger than 8 MiB in total. Glob traversal is capped at
+10,000 entries. Rejections are reported as `PARLOT016` through `PARLOT020` without exposing resolved
+filesystem paths. Prefer exact files or narrow directory globs.
 
-### [IncludeUsings]
+### `[IncludeGenerators]`
 
-Adds using directives to the generated code.
-
-```csharp
-[GenerateParser]
-[IncludeUsings("System.Collections.Generic", "MyProject.Models")]
-public static Parser<Expression> CreateParser() => ...;
-```
-
-### [IncludeGenerators]
-
-Specifies source generator assemblies to run before parser generation. Use when your parser depends on code produced by other generators.
+Runs selected analyzer assemblies before the private factory compilation is emitted. Use this only when
+build-time grammar code depends on another generator's output:
 
 ```csharp
-[GenerateParser]
+[GenerateParser(nameof(TryParse))]
 [IncludeGenerators("PolySharp")]
-public static Parser<Expression> CreateParser() => ...;
-
-// Multiple generators
-[IncludeGenerators("PolySharp", "Microsoft.Extensions.Logging.Generators")]
+private static Parser<Expression> Build() => ...;
 ```
 
-Included generators execute in the compiler host. Treat every named generator and its transitive package
-dependencies as trusted executable build code.
+Assembly names must match analyzer references available to the consuming project. Multiple names may be
+specified, and class-level and method-level values are combined.
 
-### Class-Level Attributes
+## Build-time security
 
-`[IncludeFiles]`, `[IncludeUsings]`, and `[IncludeGenerators]` can be applied at class level to affect all parsers in the class:
+`[GenerateParser]` factories are executable build code, not declarative metadata. They run inside the
+compiler host with the build process's permissions and can access the build environment.
+`[IncludeGenerators]` additionally loads and executes the selected analyzer assemblies.
 
-```csharp
-[IncludeFiles("Ast.cs")]
-[IncludeUsings("MyProject.Models")]
-[IncludeGenerators("PolySharp")]
-public static partial class SqlParsers
-{
-    [GenerateParser]
-    public static Parser<SelectStatement> SelectParser() => ...;
+Only build trusted grammar factories and generators outside an isolated environment. Keep `[IncludeFiles]`
+patterns narrow and review changes to build-only source with the same care as build scripts. See
+[Source generation and build-time code execution](security.md#source-generation-and-build-time-code-execution)
+and the [`IncludeFiles` containment guidance](security.md#includefiles-containment).
 
-    [GenerateParser]
-    public static Parser<InsertStatement> InsertParser() => ...;
+## Generated support code
 
-    [GenerateParser]
-    [IncludeFiles("DeleteAst.cs")]  // Combined with class-level includes
-    public static Parser<DeleteStatement> DeleteParser() => ...;
-}
-```
+The generator emits the parser implementation plus shared scanner, cursor, character, number, result, and
+context support into the consuming assembly. These support types are internal and live under
+`Parlot.Generated`.
 
-## Custom Parsers with ISourceable
+Every generated shared-support source file retains Parlot's original BSD-3-Clause license notice, and the
+`Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a runtime
+package dependency, but binary distributions containing the generated support should retain the Parlot BSD
+notice in their third-party notices or equivalent distribution materials.
 
-Built-in Parlot parsers implement `ISourceable` for source generation. To make custom parsers compatible, implement the interface:
+The support layer is an implementation detail:
 
-```csharp
-using Parlot.SourceGeneration;
+- it is not a public parser-combinator API;
+- it is not interchangeable with types from the runtime `Parlot` assembly;
+- internal support emitted into separate assemblies is not shared across those assemblies;
+- unsupported runtime references fail generation instead of falling back to runtime Parlot execution.
 
-public class KeywordParser : Parser<string>, ISeekable, ISourceable
-{
-    private readonly string _keyword;
+Custom parser types used by a build-only grammar must implement `ISourceable` and emit self-contained code
+that resolves only to BCL types, application code, or the generated internal support layer. A custom parser
+that requires the runtime Parlot assembly cannot be used by a dependency-free entry point.
 
-    public KeywordParser(string keyword) => _keyword = keyword;
+## IDE and design-time behavior
 
-    // ISeekable implementation
-    public bool CanSeek => true;
-    public char[] ExpectedChars => new[] { _keyword[0] };
-    public bool SkipWhitespace => true;
+IDE/design-time analysis does not execute grammar factories. The generator emits throwing stubs so partial
+method declarations remain available to IntelliSense and other compiler features. A real command-line or
+explicit IDE build executes the factory and emits the parser implementation.
 
-    // Runtime parsing
-    public override bool Parse(ParseContext context, ref ParseResult<string> result)
-    {
-        context.SkipWhiteSpace();
-        var start = context.Scanner.Cursor.Position;
-        
-        if (context.Scanner.ReadText(_keyword))
-        {
-            result.Set(start.Offset, context.Scanner.Cursor.Offset, _keyword);
-            return true;
-        }
-        return false;
-    }
+Do not call a generated entry point while constructing another grammar. Entry points are parse-time APIs,
+not factory-composition APIs.
 
-    // Source generation
-    public SourceResult GenerateSource(SourceGenerationContext context)
-    {
-        var res = context.CreateResult(typeof(string));
-        var ctx = context.ParseContextName;
-        var cursor = context.CursorName;
+## Debugging generated code
 
-        res.Body.Add($"{ctx}.SkipWhiteSpace();");
-        res.Body.Add($"var __start = {cursor}.Position;");
-        res.Body.Add($"if ({ctx}.Scanner.ReadText(\"{_keyword}\"))");
-        res.Body.Add("{");
-        res.Body.Add($"    {res.SuccessVariable} = true;");
-        res.Body.Add($"    {res.ValueVariable} = \"{_keyword}\";");
-        res.Body.Add("}");
-
-        return res;
-    }
-}
-```
-
-### SourceGenerationContext API
-
-| Member | Description |
-|--------|-------------|
-| `CreateResult(Type)` | Creates a `SourceResult` for the given return type |
-| `ParseContextName` | Variable name for the `ParseContext` |
-| `CursorName` | Variable name for the cursor |
-| `ScannerName` | Variable name for the scanner |
-
-### SourceResult API
-
-| Member | Description |
-|--------|-------------|
-| `Body` | List of code statements to emit |
-| `SuccessVariable` | Variable name to set for success (`true`/`false`) |
-| `ValueVariable` | Variable name to assign the parsed value |
-| `DeclareSubExpression<T>()` | Declare a helper variable |
-
-## Debugging Generated Code
-
-### Inspecting Generated Files
-
-To inspect the generated source files, add to your project:
+Enable compiler-generated file output to inspect the direct parser and shared support:
 
 ```xml
 <PropertyGroup>
   <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-  <CompilerGeneratedFilesOutputPath>obj\$(Configuration)\$(TargetFramework)</CompilerGeneratedFilesOutputPath>
+  <CompilerGeneratedFilesOutputPath>
+    obj/$(Configuration)/$(TargetFramework)/GeneratedFiles
+  </CompilerGeneratedFilesOutputPath>
 </PropertyGroup>
 ```
 
-Generated files will appear in the specified output path.
+Generated callbacks include `#line` mappings to their `.parlot.cs` source, so breakpoints and stack traces
+map back to the original lambda or method-group location.
 
-### Lambda Debugging Support
+## Diagnostics
 
-The source generator emits `#line` directives in the generated code, which enables the debugger to map breakpoints and step-through debugging back to your original lambda expressions.
+Standalone-specific diagnostics are:
 
-When you set a breakpoint on a lambda in your parser definition:
+| Diagnostic | Meaning |
+|---|---|
+| `PARLOT023` | The named direct entry point is missing, ambiguous, or has an invalid signature |
+| `PARLOT024` | Generated code requires unsupported runtime code |
+| `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
+| `PARLOT026` | The project targets an unsupported framework or C# language version |
 
-```csharp
-[GenerateParser]
-public static Parser<string> MyParser()
-{
-    return Terms.Identifier().Then(static x => x.ToString().ToUpper()); // Breakpoint here works!
-}
-```
+Other factory diagnostics still apply. Common cases include:
 
-The debugger will stop at the original source location, even though the actual execution is in the generated static method.
+- `PARLOT009`: unsupported generic, by-reference, ref-like, pointer, or function-pointer factory signature;
+- `PARLOT015`: callback captures a local or a parameter from another method;
+- `PARLOT016`-`PARLOT020`: invalid, unsafe, unreadable, or excessive `[IncludeFiles]` input;
+- `PARLOT021`: configuration was read eagerly while constructing the graph;
+- `PARLOT022`: a deferred callback capturing configuration was invoked while constructing the graph.
 
-The generator preserves your original parameter names in the generated code:
+There is no runtime fallback for unsupported standalone code. Treat generator errors as compatibility issues
+in the grammar or callback and move runtime dependencies into supported application-owned helpers.
 
-```csharp
-// Original lambda:
-static (a, b) => a + b
+## Performance characteristics
 
-// Generated method (with original names preserved):
-#line 42 "/path/to/MyParser.cs"
-private static decimal _lambda0(decimal a, decimal b) => a + b;
-#line default
-```
+Direct generated parsers avoid runtime graph construction, parser-instance caching, delegate invocation for
+generated callbacks, and an application dependency on the Parlot runtime assembly. Configuration is supplied
+per call without allocating a bound parser object.
 
-For multi-line block lambdas, each line gets its own `#line` directive:
+Generated parser helpers and callbacks use normal JIT inlining heuristics. Forcing inlining based only
+on a helper's local statement count can duplicate large parser chains, increasing native code size and
+stack initialization costs. A bounded hint is retained only for the entry core, which can inline into
+the public wrapper without forcing internal helper chains. The shared scanner and runtime support code
+retain their own inlining hints.
 
-```csharp
-// Original block lambda:
-static x => {
-    var upper = x.ToString().ToUpper();
-    var result = "Result: " + upper;
-    return result;
-}
-
-// Generated method (each line mapped):
-private static string _lambda0(TextSpan x)
-{
-#line 10 "/path/to/MyParser.cs"
-    var upper = x.ToString().ToUpper();
-#line 11 "/path/to/MyParser.cs"
-    var result = "Result: " + upper;
-#line 12 "/path/to/MyParser.cs"
-    return result;
-}
-#line default
-```
-
-This ensures that:
-- Breakpoints work correctly on any line of the lambda expression
-- Variable names in the debugger match your original code
-- Step-through debugging works line-by-line through the lambda body
-
-## Troubleshooting
-
-### Unsupported factory parameters
-
-```
-error PARLOT009: Unsupported parser factory signature
-```
-
-Use ordinary by-value parameters, not generic factories, by-reference parameters, or ref-like types.
-If an ordinary parameter is used eagerly during graph construction, `PARLOT021` explains that it must
-instead be read in a supported parse-time callback:
-
-```csharp
-// ❌ Wrong
-[GenerateParser]
-public static Parser<string> TextParser(bool formal) =>
-    formal ? Terms.Text("Hello") : Terms.Text("Hi");
-
-// ✅ Correct
-[GenerateParser]
-public static Parser<string> TextParser(bool formal) =>
-    If(() => formal, Terms.Text("Hello"), Terms.Text("Hi"));
-```
-
-### Unsupported captures
-
-```
-error PARLOT015: Lambda captures variable 'prefix' from the enclosing scope
-```
-
-Lambdas may capture their factory's parameters, but not arbitrary locals or another method's parameters.
-
-```csharp
-// ❌ Wrong - captures 'prefix' variable
-[GenerateParser]
-public static Parser<string> MyParser()
-{
-    var prefix = "hello";  // Captured variable
-    return Terms.Identifier().Then(x => prefix + x.ToString());  // Error!
-}
-```
-
-**Solutions:**
-
-1. **Pass the state as a factory parameter:**
-
-```csharp
-[GenerateParser]
-public static Parser<string> MyParser(string prefix) =>
-    Terms.Identifier().Then(x => prefix + x.ToString());
-```
-
-2. **Use a custom `ParseContext` subclass** for per-execution state:
-
-```csharp
-public class MyParseContext : ParseContext
-{
-    public MyParseContext(Scanner scanner) : base(scanner) { }
-    public string Prefix { get; set; } = "";
-}
-
-[GenerateParser]
-public static Parser<string> MyParser()
-{
-    return Terms.Identifier().Then(
-        static (context, x) => ((MyParseContext)context).Prefix + x.ToString());
-}
-
-// Usage:
-var parser = MyParser();
-var context = new MyParseContext(new Scanner("world")) { Prefix = "hello" };
-parser.Parse(context, out var result);
-```
-
-3. **Use static fields or properties:**
-
-```csharp
-private static string _prefix = "hello";
-
-[GenerateParser]
-public static Parser<string> MyParser()
-{
-    return Terms.Identifier().Then(static x => _prefix + x.ToString());
-}
-```
-
-4. **Use method groups for static methods:**
-
-```csharp
-private static string Transform(TextSpan x) => "hello" + x.ToString();
-
-[GenerateParser]
-public static Parser<string> MyParser()
-{
-    return Terms.Identifier().Then(Transform);
-}
-```
-
-
-### Custom parser not generating code
-
-Ensure your custom parser implements `ISourceable`. Parsers without this interface fall back to runtime execution.
-
-## Performance Comparison
-
-Source-generated parsers provide:
-
-- **Faster parsing** than equivalent Fluent parser graphs
-- **Faster startup** (no runtime parser graph construction)
-- **AOT compatibility** (deterministic code at compile time)
-- **Reduced allocations** during parser construction
-
-See benchmarks in the main [README](../README.md#performance).
+Measure representative grammars. Result models and callbacks can still allocate, and conversions such as
+`TextSpan.ToString()` intentionally create application-owned strings when the public result requires them.

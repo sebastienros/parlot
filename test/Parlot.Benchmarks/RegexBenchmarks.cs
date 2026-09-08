@@ -1,7 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Fluent;
-using Parlot.SourceGenerator;
 using System;
 using System.Text.RegularExpressions;
 
@@ -17,8 +16,6 @@ public partial class RegexBenchmarks
 
     public static readonly Regex EmailRegex = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+");
     public static readonly Regex EmailRegexCompiled = new("[\\w\\.+-]+@[\\w-]+\\.[\\w\\.-]+", RegexOptions.Compiled);
-
-    public static readonly Parser<TextSpan> EmailGenerated = EmailParser.GeneratedParser();
 
     public static readonly string Email = "sebastien.ros@gmail.com";
 
@@ -52,14 +49,15 @@ public partial class RegexBenchmarks
 #endif
 
     [Benchmark]
-    public TextSpan ParlotEmail()
+    public string ParlotEmail()
     {
-        return EmailParser.Parser.Parse(Email);
+        return EmailParser.Parser.Parse(Email).ToString();
     }
 
     [Benchmark]
-    public TextSpan ParlotEmailGenerated()
+    public string ParlotEmailGenerated()
     {
-        return EmailGenerated.Parse(Email);
+        _ = EmailParser.TryParseGenerated(Email, out var result);
+        return result;
     }
 }

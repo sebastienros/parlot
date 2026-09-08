@@ -39,14 +39,27 @@ public class SqlParserBenchmarks
     )]
     public string Sql { get; set; } = string.Empty;
 
-    [Benchmark]
-    public bool ParseExpression()
+    [Benchmark(Baseline = true)]
+    public bool Runtime()
     {
         var result = SqlParser.TryParse(Sql, out var statementList, out var error);
 
         if (statementList is null || error is not null)
         {
             throw new InvalidOperationException($"Parsing failed: {error}");
+        }
+
+        return result;
+    }
+
+    [Benchmark]
+    public bool Generated()
+    {
+        var result = SqlParser.TryParse(Sql, out var statementList);
+
+        if (statementList is null)
+        {
+            throw new InvalidOperationException("Generated parsing failed.");
         }
 
         return result;

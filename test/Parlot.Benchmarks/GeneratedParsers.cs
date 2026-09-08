@@ -1,124 +1,22 @@
 using System.Collections.Generic;
-using Parlot.Fluent;
-using Parlot.SourceGenerator;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
-using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Benchmarks;
 
 /// <summary>
-/// Generated parsers for benchmarking.
-/// These parsers use the [GenerateParser] attribute to generate optimized parse methods at compile time.
+/// Dependency-free source-generated entry points used by the benchmarks.
 /// </summary>
 public static partial class GeneratedParsers
 {
-    /// <summary>
-    /// A source-generated calculator expression parser.
-    /// This is equivalent to FluentParser.Expression but uses compile-time generated code.
-    /// </summary>
-    [GenerateParser]
-    public static Parser<Expression> ExpressionParser()
-    {
-        // Grammar:
-        // additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
-        // multiplicative => unary ( ( "/" | "*" ) unary )* ;
-        // unary          => ( "-" ) unary | primary ;
-        // primary        => NUMBER | "(" expression ")" ;
-
-        // The Deferred helper creates a parser that can be referenced by others before it is defined
-        var expression = Deferred<Expression>();
-
-        var number = Terms.Decimal()
-            .Then<Expression>(static d => new Parlot.Tests.Calc.Number(d));
-
-        var divided = Terms.Char('/');
-        var times = Terms.Char('*');
-        var minus = Terms.Char('-');
-        var plus = Terms.Char('+');
-        var openParen = Terms.Char('(');
-        var closeParen = Terms.Char(')');
-
-        // "(" expression ")"
-        var groupExpression = Between(openParen, expression, closeParen);
-
-        // primary => NUMBER | "(" expression ")";
-        var primary = number.Or(groupExpression);
-
-        // ( "-" ) unary | primary;
-        var unary = primary.Unary(
-            (minus, static x => new Parlot.Tests.Calc.NegateExpression(x))
-        );
-
-        // multiplicative => unary ( ( "/" | "*" ) unary )* ;
-        var multiplicative = unary.LeftAssociative(
-            (divided, static (a, b) => new Parlot.Tests.Calc.Division(a, b)),
-            (times, static (a, b) => new Parlot.Tests.Calc.Multiplication(a, b))
-        );
-
-        // additive => multiplicative(("-" | "+") multiplicative) * ;
-        var additive = multiplicative.LeftAssociative(
-            (plus, static (a, b) => new Parlot.Tests.Calc.Addition(a, b)),
-            (minus, static (a, b) => new Parlot.Tests.Calc.Subtraction(a, b))
-        );
-
-        expression.Parser = additive;
-
-        return expression;
-    }
-
-    [GenerateParser]
-    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
-    public static Parser<IJson> JsonParser()
-    {
-        var lBrace = Terms.Char('{');
-        var rBrace = Terms.Char('}');
-        var lBracket = Terms.Char('[');
-        var rBracket = Terms.Char(']');
-        var colon = Terms.Char(':');
-        var comma = Terms.Char(',');
-        var json = Deferred<IJson>();
-
-        var jsonString = Terms.String(StringLiteralQuotes.Double)
-            .Then<IJson>(static value => new JsonString(value.ToString()));
-
-        var jsonArray = Between(lBracket, Separated(comma, json), rBracket)
-            .Then<IJson>(static elements => new JsonArray(elements));
-
-        var jsonMember = Terms.String(StringLiteralQuotes.Double).And(colon).And(json)
-            .Then(static member => new KeyValuePair<string, IJson>(member.Item1.ToString(), member.Item3));
-
-        var jsonObject = Between(lBrace, Separated(comma, jsonMember), rBrace)
-            .Then<IJson>(static members => new JsonObject(new Dictionary<string, IJson>(members)));
-
-        json.Parser = OneOf(jsonString, jsonArray, jsonObject);
-
-        return json;
-    }
-
-    // Simple parser definitions for benchmarking individual combinators
-    
-    [GenerateParser]
-    public static Parser<string> TextParser() => Terms.Text("hello");
-
-    [GenerateParser]
-    public static Parser<decimal> DecimalParser() => Terms.Decimal();
-
-    [GenerateParser]
-    public static Parser<long> IntegerParser() => Terms.Integer();
-
-    [GenerateParser]
-    public static Parser<string> OneOfParser() => OneOf(Terms.Text("apple"), Terms.Text("banana"), Terms.Text("cherry"));
-
-    [GenerateParser]
-    public static Parser<string> LiteralOneOfParser() => OneOf(Literals.Text("apple"), Literals.Text("banana"), Literals.Text("cherry"));
-
-    [GenerateParser]
-    public static Parser<(string, decimal)> AndParser() => Terms.Text("price").And(Terms.Decimal());
-
-    [GenerateParser]
-    public static Parser<IReadOnlyList<decimal>> ZeroOrManyParser() => ZeroOrMany(Terms.Decimal());
-
-    [GenerateParser]
-    public static Parser<decimal> SkipWhiteSpaceParser() => SkipWhiteSpace(Literals.Decimal());
+    public static partial bool TryParseExpression(string input, out Expression value);
+    public static partial bool TryParseJson(string input, out IJson value);
+    public static partial bool TryParseText(string input, out string value);
+    public static partial bool TryParseDecimal(string input, out decimal value);
+    public static partial bool TryParseInteger(string input, out long value);
+    public static partial bool TryParseOneOf(string input, out string value);
+    public static partial bool TryParseLiteralOneOf(string input, out string value);
+    public static partial bool TryParseAnd(string input, out (string, decimal) value);
+    public static partial bool TryParseZeroOrMany(string input, out IReadOnlyList<decimal> value);
+    public static partial bool TryParseSkipWhiteSpace(string input, out decimal value);
 }

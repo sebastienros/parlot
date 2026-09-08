@@ -1,11 +1,13 @@
 # SQL Parser for Parlot
 
-This directory contains a SQL parser implementation using Parlot's Fluent API, based on the OrchardCore SQL Grammar.
+This directory contains runtime Fluent and dependency-free source-generated SQL parsers based on the
+OrchardCore SQL grammar.
 
 ## Files
 
 - `SqlAst.cs`: Complete Abstract Syntax Tree (AST) classes for SQL statements
-- `SqlParser.cs`: Parser implementation using Parlot (Work in Progress)
+- `SqlParser.cs`: AST-facing APIs and the runtime Fluent grammar
+- `SqlParser.parlot.cs`: Build-only grammar for the direct source-generated API
 - `../../test/Parlot.Tests/Sql/SqlParserTests.cs`: Test suite
 
 ## Supported SQL Features
@@ -40,28 +42,20 @@ Based on the OrchardCore SQL Grammar, the parser supports:
 - Literals (numbers, strings, booleans)
 - Identifiers (simple and dotted notation)
 
-## Current Status
-
-- ✅ AST classes are complete and ready to use
-- ⚠️  Parser implementation is structurally complete but has compilation errors
-- ✅ Test cases are defined
-
-## Next Steps
-
-To complete the parser:
-1. Fix tuple unwrapping in complex parser combinators
-2. Resolve type casting issues for generic collections
-3. Test and validate with the defined test cases
-4. Add additional test coverage
-
-## Example Usage (when complete)
+## Example usage
 
 ```csharp
-var result = SqlParser.Parse("SELECT * FROM users WHERE id > 10");
-if (result != null)
+var sql = "SELECT * FROM users WHERE id > 10";
+
+// Runtime Fluent parser, including detailed ParseError output.
+if (SqlParser.TryParse(sql, out var runtimeResult, out var error))
 {
-    // Work with the AST
-    var statement = result.Statements[0].UnionStatements[0].Statement.SelectStatement;
-    // ...
+    var statement = runtimeResult.Statements[0].UnionStatements[0].Statement.SelectStatement;
+}
+
+// Dependency-free direct parser on .NET 8 and later.
+if (SqlParser.TryParse(sql, out var generatedResult))
+{
+    var statement = generatedResult.Statements[0].UnionStatements[0].Statement.SelectStatement;
 }
 ```

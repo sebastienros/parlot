@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Parlot.Fluent;
-using Parlot.SourceGenerator;
 using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Benchmarks;
@@ -11,26 +10,28 @@ namespace Parlot.Benchmarks;
 /// </summary>
 public static partial class EmailParser
 {
-    public static readonly Parser<char> Dot = Literals.Char('.');
-    public static readonly Parser<char> Plus = Literals.Char('+');
-    public static readonly Parser<char> Minus = Literals.Char('-');
-    public static readonly Parser<char> At = Literals.Char('@');
-    public static readonly Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
-    public static readonly Parser<IReadOnlyList<char>> WordDotPlusMinus = OneOrMany(OneOf(WordChar.Then(static x => 'w'), Dot, Plus, Minus));
-    public static readonly Parser<IReadOnlyList<char>> WordDotMinus = OneOrMany(OneOf(WordChar.Then(static x => 'w'), Dot, Minus));
-    public static readonly Parser<IReadOnlyList<char>> WordMinus = OneOrMany(OneOf(WordChar.Then(static x => 'w'), Minus));
-
     /// <summary>
     /// Parses email addresses like "user.name+tag@domain.com"
     /// </summary>
-    public static readonly Parser<TextSpan> Parser = Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
+    public static Parser<TextSpan> Parser => RuntimeState.Parser;
 
-    /// <summary>
-    /// Source-generated email parser for benchmarking.
-    /// </summary>
-    [GenerateParser]
-    public static Parser<TextSpan> GeneratedParser()
+    public static partial bool TryParseGenerated(string input, out string value);
+
+    private static class RuntimeState
     {
-        return Parser;
+        private static readonly Parser<char> Dot = Literals.Char('.');
+        private static readonly Parser<char> Plus = Literals.Char('+');
+        private static readonly Parser<char> Minus = Literals.Char('-');
+        private static readonly Parser<char> At = Literals.Char('@');
+        private static readonly Parser<TextSpan> WordChar = Literals.Pattern(char.IsLetterOrDigit);
+        private static readonly Parser<IReadOnlyList<char>> WordDotPlusMinus =
+            OneOrMany(OneOf(WordChar.Then(static _ => 'w'), Dot, Plus, Minus));
+        private static readonly Parser<IReadOnlyList<char>> WordDotMinus =
+            OneOrMany(OneOf(WordChar.Then(static _ => 'w'), Dot, Minus));
+        private static readonly Parser<IReadOnlyList<char>> WordMinus =
+            OneOrMany(OneOf(WordChar.Then(static _ => 'w'), Minus));
+
+        internal static readonly Parser<TextSpan> Parser =
+            Capture(WordDotPlusMinus.And(At).And(WordMinus).And(Dot).And(WordDotMinus));
     }
 }

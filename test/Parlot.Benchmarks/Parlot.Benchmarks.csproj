@@ -3,12 +3,12 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0</TargetFrameworks>
+    <LangVersion>12</LangVersion>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>False</SignAssembly>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
-    <InterceptorsNamespaces>$(InterceptorsNamespaces);Parlot.Benchmarks;</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,7 +29,7 @@
                       ReferenceOutputAssembly="false"
                       GlobalPropertiesToRemove="ArtifactsPath;OutDir;OutputPath;PublishDir" />
     
-    <!-- Make Parlot.dll available to the source generator at compile time for dynamic assembly loading -->
+    <!-- Make Parlot.dll available while the analyzer executes build-only grammar factories -->
     <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
     
     <!-- Make Samples.dll available to the source generator at compile time -->
@@ -43,5 +43,8 @@
     <Copy SourceFiles="..\..\src\Parlot\bin\$(Configuration)\net10.0\Parlot.dll"
           DestinationFiles="$(OutDir)Parlot.dll" />
   </Target>
+
+  <Import Project="..\..\src\Parlot.SourceGenerator\build\Parlot.SourceGenerator.props" />
+  <Import Project="..\..\src\Parlot.SourceGenerator\build\Parlot.SourceGenerator.targets" />
 
 </Project>

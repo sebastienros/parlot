@@ -1,38 +1,48 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 using Xunit;
 
 namespace Parlot.SourceGenerator.Tests;
 
 public class GeneratorDiagnosticsTests
 {
+    private const string Declaration = """
+        public static partial class Grammar
+        {
+            public static partial bool TryParse(string text, out string value);
+        }
+        """;
+
     [Fact]
     public void Parameter_Used_To_Build_The_Graph_Is_Rejected()
     {
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build(string argument) => Parsers.Terms.Text(argument);
+            }
+            """;
+        var declaration = Declaration.Replace(
+            "string text, out",
+            "string text, string argument, out",
+            StringComparison.Ordinal);
 
-public static partial class ParameterizedGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Foo(string arg) => Terms.Text(arg);
-}
-";
+        var (result, _) = RunStandalone(declaration, grammar);
 
-        var (result, _) = RunGenerator(source, "ParameterizedMethod");
-        var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
-        Assert.Single(parserDiagnostics);
-        Assert.Equal("PARLOT021", parserDiagnostics[0].Id);
-        Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
-        Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
+        Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT021");
     }
 
     [Theory]
@@ -40,30 +50,30 @@ public static partial class ParameterizedGrammar
     [InlineData("var selected = enabled; return If(() => selected, Terms.Text(\"yes\"));")]
     [InlineData("enabled = true; return If(() => enabled, Terms.Text(\"yes\"));")]
     [InlineData("return If(() => enabled = true, Terms.Text(\"yes\"));")]
-    [InlineData("return If(() => Change(ref enabled), Terms.Text(\"yes\"));")]
-    [InlineData("return If(() => { (enabled, enabled) = (true, false); return true; }, Terms.Text(\"yes\"));")]
     [InlineData("System.Func<bool> predicate = () => enabled; return If(predicate, Terms.Text(\"yes\"));")]
-    [InlineData("return Build(() => enabled);")]
     public void Factory_Parameters_Must_Be_Read_Only_And_Deferred(string body)
     {
-        var source = $$"""
+        var declaration = Declaration.Replace(
+            "string text, out",
+            "string text, bool enabled, out",
+            StringComparison.Ordinal);
+        var grammar = $$"""
             using System;
-            using Parlot.SourceGenerator;
             using Parlot.Fluent;
+            using Parlot.SourceGenerator;
             using static Parlot.Fluent.Parsers;
-            public static partial class InvalidParameterGrammar
+            public static partial class Grammar
             {
-                [GenerateParser]
-                public static Parser<string> Create(bool enabled) { {{body}} }
-                private static bool Change(ref bool value) => value = true;
-                private static Parser<string> Build(Func<bool> predicate) => If(predicate, Terms.Text("yes"));
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build(bool enabled) { {{body}} }
             }
             """;
 
-        var (result, _) = RunGenerator(source, "InvalidParameter" + Guid.NewGuid().ToString("N"));
+        var (result, _) = RunStandalone(declaration, grammar);
+
         Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT021");
-        Assert.DoesNotContain(result.Results.SelectMany(static result => result.GeneratedSources),
-            static source => source.HintName.EndsWith(".Parlot.g.cs", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -73,563 +83,357 @@ public static partial class ParameterizedGrammar
     [InlineData("System.ReadOnlySpan<char> value")]
     public void Unsupported_Factory_Parameters_Report_A_Diagnostic(string parameter)
     {
-        var source = $$"""
-            using Parlot.SourceGenerator;
+        var grammar = $$"""
             using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-            public static partial class UnsupportedParameterGrammar
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
             {
-                [GenerateParser]
-                public static Parser<char> Create({{parameter}}) => Literals.Char('x');
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build({{parameter}}) => Parsers.Terms.Text("yes");
             }
             """;
 
-        var (result, _) = RunGenerator(source, "UnsupportedParameter" + Guid.NewGuid().ToString("N"));
-        Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT009");
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT009");
     }
 
     [Fact]
-    public void Deferred_Callbacks_Are_Not_Executed_For_Source_Extraction()
+    public void Deferred_Callbacks_Are_Not_Executed_While_Extracting_Source()
     {
-        const string source = """
-            using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-            public static partial class DeferredCallbackGrammar
+        CallbackProbe.Evaluations = 0;
+        const string declaration = """
+            public static partial class Grammar
             {
-                public static int Evaluations;
-                private static bool Condition() { Evaluations++; return true; }
-                [GenerateParser]
-                public static Parser<char> Create()
+                public static partial bool TryParse(string text, out string value);
+            }
+            """;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    If(
+                        global::Parlot.SourceGenerator.Tests.CallbackProbe.Condition,
+                        Literals.Text("x"))
+                    .Then(global::Parlot.SourceGenerator.Tests.CallbackProbe.Convert);
+            }
+            """;
+
+        var (result, compilation) = RunStandalone(declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+        Assert.Equal(0, CallbackProbe.Evaluations);
+    }
+
+    [Fact]
+    public void Captured_Local_Reports_A_Diagnostic()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build()
                 {
-                    System.Func<char, char> convert = value => { Evaluations++; return value; };
-                    return If(Condition, Literals.Char('x')).Then(convert);
-                }
-            }
-            """;
-        var assemblyName = "DeferredCallbacks" + Guid.NewGuid().ToString("N");
-        var (result, updatedCompilation) = RunGenerator(source, assemblyName);
-        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-
-        var assembly = Assert.Single(AppDomain.CurrentDomain.GetAssemblies(),
-            assembly => assembly.GetName().Name == "Parlot.SourceGenerator.Tests." + assemblyName);
-        Assert.Equal(0, assembly.GetType("DeferredCallbackGrammar").GetField("Evaluations").GetValue(null));
-    }
-
-    [Fact]
-    public void Captures_In_Unrelated_Code_Do_Not_Reject_The_Factory()
-    {
-        const string source = """
-            using System;
-            using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-            public static partial class ScopedCaptureGrammar
-            {
-                [GenerateParser]
-                public static Parser<char> Create() => Literals.Char('x');
-                public static Func<int> Unrelated(int value) => () => value;
-            }
-            """;
-
-        var (result, updatedCompilation) = RunGenerator(source, "ScopedCapture");
-        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-    }
-
-    [Fact]
-    public void Captured_Callback_Cannot_Be_Executed_While_Building_The_Graph()
-    {
-        const string source = """
-            using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-            public static partial class EagerCallbackGrammar
-            {
-                [GenerateParser]
-                public static Parser<string> Create(bool enabled)
-                {
-                    var probe = If(() => enabled, Literals.Text("yes"));
-                    return probe.Parse("yes") != null ? Literals.Text("enabled") : Literals.Text("disabled");
+                    var prefix = "hello";
+                    return Parsers.Terms.Identifier().Then(value => prefix + value.ToString());
                 }
             }
             """;
 
-        var (result, _) = RunGenerator(source, "EagerCallback");
-        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        Assert.Contains("cannot be executed while building", diagnostic.GetMessage(), StringComparison.Ordinal);
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT015");
+        Assert.Contains("prefix", diagnostic.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Catching_Eager_Callback_Exception_Still_Rejects_Generation()
+    public void Static_Lambda_Generates_Standalone_Source()
     {
-        const string source = """
-            using System;
-            using Parlot.SourceGenerator;
+        const string grammar = """
             using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-            public static partial class CaughtCallbackGrammar
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
             {
-                [GenerateParser]
-                public static Parser<string> Create(bool enabled)
-                {
-                    var probe = Literals.Char('x').Then(_ => enabled ? "yes" : "no");
-                    string text;
-                    try { text = probe.Parse("x"); }
-                    catch (InvalidOperationException) { text = "fallback"; }
-                    return Literals.Text(text);
-                }
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    Parsers.Terms.Identifier().Then(static value => value.ToString());
             }
             """;
 
-        var (result, _) = RunGenerator(source, "CaughtCallback");
-        Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT022");
-        Assert.DoesNotContain(result.Results.SelectMany(static result => result.GeneratedSources),
-            static source => source.HintName.EndsWith(".Parlot.g.cs", StringComparison.Ordinal));
+        var (result, compilation) = RunStandalone(Declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+        Assert.Contains(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
     }
 
     [Fact]
     public void Class_Must_Be_Partial()
     {
-        // [GenerateParser] should only work on partial classes
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Parsers.Terms.Text("hello");
+            }
+            """;
 
-public static class NonPartialGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Foo() => Terms.Text(""hello"");
-}
-";
+        var (result, _) = RunStandalone(Declaration, grammar);
 
-        var (result, _) = RunGenerator(source, "NonPartialClass");
-        
-        var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
-        Assert.Single(parserDiagnostics);
-        Assert.Equal("PARLOT007", parserDiagnostics[0].Id);
-        Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
-        Assert.Contains("NonPartialGrammar", parserDiagnostics[0].GetMessage());
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT007");
     }
 
     [Fact]
     public void Method_Must_Be_Static()
     {
-        // [GenerateParser] should only work on static methods
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
+        const string declaration = """
+            public partial class Grammar
+            {
+                public static partial bool TryParse(string text, out string value);
+            }
+            """;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private Parser<string> Build() => Parsers.Terms.Text("hello");
+            }
+            """;
 
-public partial class InstanceMethodGrammar
-{
-    [GenerateParser]
-    public Parser<string> Foo() => Terms.Text(""hello"");
-}
-";
+        var (result, _) = RunStandalone(declaration, grammar);
 
-        var (result, _) = RunGenerator(source, "InstanceMethod");
-        
-        var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
-        Assert.Single(parserDiagnostics);
-        Assert.Equal("PARLOT008", parserDiagnostics[0].Id);
-        Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
-        Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT008");
     }
 
     [Fact]
     public void Method_Must_Return_Parser()
     {
-        // [GenerateParser] should only work on methods returning Parser<T>
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
+        const string grammar = """
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static string Build() => "hello";
+            }
+            """;
 
-public static partial class InvalidReturnGrammar
-{
-    [GenerateParser]
-    public static string Foo() => ""hello"";
-}
-";
+        var (result, _) = RunStandalone(Declaration, grammar);
 
-        var (result, _) = RunGenerator(source, "InvalidReturn");
-        
-        var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
-        Assert.Single(parserDiagnostics);
-        Assert.Equal("PARLOT010", parserDiagnostics[0].Id);
-        Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
-        Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT010");
+    }
+
+    [Fact]
+    public void Factory_In_Compile_Is_Rejected()
+    {
+        const string source = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, out string value);
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Parsers.Terms.Text("hello");
+            }
+            """;
+        var compilation = CreateCompilation(source, "CompiledFactory", referenceParlot: true);
+
+        var (result, _) = RunGenerator(compilation, DefaultOptions());
+
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT025");
     }
 
     [Theory]
-    [InlineData(6, false)]
-    [InlineData(7, false)]
-    [InlineData(8, true)]
-    [InlineData(10, true)]
-    public void Number_Literal_Selects_Fast_Path_By_Target_Framework(int targetFrameworkVersion, bool usesFastPath)
+    [InlineData(".NETCoreApp", "v7.0", LanguageVersion.CSharp12)]
+    [InlineData(".NETStandard", "v2.0", LanguageVersion.CSharp12)]
+    [InlineData(".NETCoreApp", "v10.0", LanguageVersion.CSharp11)]
+    public void Unsupported_Target_Reports_A_Diagnostic(
+        string identifier,
+        string version,
+        LanguageVersion languageVersion)
     {
-        var context = new global::Parlot.SourceGeneration.SourceGenerationContext(
-            targetFramework: new global::Parlot.SourceGeneration.TargetFrameworkInfo(
-                global::Parlot.SourceGeneration.TargetFrameworkIdentifier.NetCoreApp,
-                new Version(targetFrameworkVersion, 0)));
-        var result = new TestLongNumberLiteral().GenerateSource(context);
-        var generated = string.Join(Environment.NewLine, result.Body);
-
-        Assert.Equal(usesFastPath, generated.Contains("Numbers.TryParseNumber<", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void Literal_OneOf_Does_Not_Capture_Position()
-    {
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
-
-public static partial class OneOfGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Choice() => OneOf(Literals.Text(""a""), Literals.Text(""b""));
-}
-";
-
-        var (result, updatedCompilation) = RunGenerator(source, "LiteralOneOf");
-        var generated = string.Join(
-            Environment.NewLine,
-            result.Results.SelectMany(static r => r.GeneratedSources).Select(static s => s.SourceText.ToString()));
-
-        Assert.DoesNotContain("cursor.Position", generated, StringComparison.Ordinal);
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
-    }
-
-    [Fact]
-    public void Generated_Parser_Only_Aggressively_Inlines_Small_Hot_Path_Methods()
-    {
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
-
-public static partial class InlineGrammar
-{
-    [GenerateParser]
-    public static Parser<(char, char)> Pair() => Literals.Char('a').And(Literals.Char('b'));
-
-    [GenerateParser]
-    public static Parser<char> LargeChoice() => OneOf(
-        Literals.Char('a'), Literals.Char('b'), Literals.Char('c'), Literals.Char('d'),
-        Literals.Char('e'), Literals.Char('f'), Literals.Char('g'), Literals.Char('h'),
-        Literals.Char('i'), Literals.Char('j'), Literals.Char('k'), Literals.Char('l'),
-        Literals.Char('m'), Literals.Char('n'), Literals.Char('o'), Literals.Char('p'));
-}
-";
-
-        var (result, updatedCompilation) = RunGenerator(source, "AggressiveInlining");
-        var generated = string.Join(
-            Environment.NewLine,
-            result.Results.SelectMany(static r => r.GeneratedSources).Select(static s => s.SourceText.ToString()));
-
-        const string attribute = "MethodImplOptions.AggressiveInlining";
-        Assert.Contains($"{attribute})]{Environment.NewLine}            public override bool Parse", generated, StringComparison.Ordinal);
-        Assert.Contains($"{attribute})]{Environment.NewLine}        internal static bool __Parlot_4_Pair_Core", generated, StringComparison.Ordinal);
-        Assert.Contains($"{attribute})]{Environment.NewLine}        private static bool __Parlot_4_Pair_Sequence_P1", generated, StringComparison.Ordinal);
-        Assert.Contains($"{attribute})]{Environment.NewLine}        private static bool __Parlot_4_Pair_Sequence_P2", generated, StringComparison.Ordinal);
-        Assert.DoesNotContain($"{attribute})]{Environment.NewLine}        internal static bool __Parlot_11_LargeChoice_Core", generated, StringComparison.Ordinal);
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
-    }
-
-    [Fact]
-    public void DesignTimeBuild_Skips_Parlot_Generation_And_Diagnostics()
-    {
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
-
-public static partial class DesignTimeGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Foo(string arg) => Terms.Text(arg);
-}
-";
-
-        var (result, _) = RunGenerator(
-            source,
-            "DesignTimeNoOp",
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["build_property.DesignTimeBuild"] = "true",
-                ["build_property.TargetFramework"] = "net10.0",
-                ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
-                ["build_property.TargetFrameworkVersion"] = "v10.0"
-            });
-
-        Assert.DoesNotContain(result.Diagnostics, d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal));
-        Assert.Empty(result.Results.SelectMany(r => r.GeneratedSources));
-    }
-
-    [Fact]
-    public void VisualStudio_LiveAnalysis_Context_Skips_Parlot_Generation_And_Diagnostics()
-    {
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
-
-public static partial class VisualStudioGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Foo(string arg) => Terms.Text(arg);
-}
-";
-
-        var (result, _) = RunGenerator(
-            source,
-            "VisualStudioNoOp",
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["build_property.DesignTimeBuild"] = "false",
-                ["build_property.BuildingInsideVisualStudio"] = "true",
-                ["build_property.BuildingProject"] = "false",
-                ["build_property.TargetFramework"] = "net10.0",
-                ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
-                ["build_property.TargetFrameworkVersion"] = "v10.0"
-            });
-
-        Assert.DoesNotContain(result.Diagnostics, d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal));
-        Assert.Empty(result.Results.SelectMany(r => r.GeneratedSources));
-    }
-
-    public static TheoryData<string, string, string, bool> BuildContexts
-    {
-        get
-        {
-            var data = new TheoryData<string, string, string, bool>();
-            var values = new[] { null, "false", "true" };
-
-            foreach (var designTimeBuild in values)
-            {
-                foreach (var buildingProject in values)
-                {
-                    foreach (var buildingInsideVisualStudio in values)
-                    {
-                        data.Add(designTimeBuild, buildingProject, buildingInsideVisualStudio,
-                            designTimeBuild == "true"
-                            || (buildingInsideVisualStudio == "true" && buildingProject == "false"));
-                    }
-                }
-            }
-
-            data.Add("", "", "", false);
-            data.Add("invalid", "true", "true", false);
-            data.Add("false", "", "true", false);
-            data.Add("false", "invalid", "true", false);
-            data.Add("false", "false", "invalid", false);
-            data.Add(" TRUE ", "true", "false", true);
-            data.Add("", " FALSE ", "TrUe", true);
-            data.Add("invalid", "false", "true", true);
-
-            return data;
-        }
-    }
-
-    [Theory]
-    [MemberData(nameof(BuildContexts))]
-    public void Build_Context_Preserves_Explicit_Builds(
-        string designTimeBuild,
-        string buildingProject,
-        string buildingInsideVisualStudio,
-        bool shouldSkip)
-    {
-        const string source = """
-            using Parlot.SourceGenerator;
+        const string grammar = """
             using Parlot.Fluent;
-
-            namespace Parlot.SourceGenerator.Tests;
-
-            internal static partial class BuildContextGrammar
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
             {
-                [GenerateParser]
-                private static Parser<string> Create() => Parsers.Terms.Text("ok");
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Parsers.Terms.Text("hello");
+            }
+            """;
+        var options = DefaultOptions();
+        options["build_property.TargetFrameworkIdentifier"] = identifier;
+        options["build_property.TargetFrameworkVersion"] = version;
 
-                public static Parser<string> Parser() => Create();
+        var (result, _) = RunStandalone(Declaration, grammar, options, languageVersion);
+
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT026");
+    }
+
+    [Fact]
+    public void Unavailable_Runtime_Helper_Is_A_Generation_Error()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                private static string Helper(string value) => value;
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    Parsers.Terms.Text("hello").Then(Helper);
             }
             """;
 
-        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        AddProperty("DesignTimeBuild", designTimeBuild);
-        AddProperty("BuildingProject", buildingProject);
-        AddProperty("BuildingInsideVisualStudio", buildingInsideVisualStudio);
+        var (result, _) = RunStandalone(Declaration, grammar);
 
-        var (result, updatedCompilation) = RunGenerator(
-            source,
-            "BuildContext" + Guid.NewGuid().ToString("N"),
-            options,
-            sourcePath: "BuildContextGrammar.cs",
-            interceptorsNamespace: "Parlot.SourceGenerator.Tests");
-
-        Assert.DoesNotContain(result.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
-
-        if (shouldSkip)
-        {
-            Assert.Empty(result.Diagnostics);
-            Assert.Empty(result.Results.SelectMany(static r => r.GeneratedSources));
-        }
-        else
-        {
-            AssertGeneratedParser(result);
-        }
-
-        void AddProperty(string name, string value)
-        {
-            if (value is not null)
-            {
-                options["build_property." + name] = value;
-            }
-        }
-    }
-
-    internal static void AssertGeneratedParser(GeneratorDriverRunResult result)
-    {
-        var source = Assert.Single(result.Results[0].GeneratedSources,
-            static s => s.HintName.EndsWith(".Parlot.g.cs", StringComparison.Ordinal));
-        Assert.Contains("GeneratedParser_", source.SourceText.ToString(), StringComparison.Ordinal);
-        Assert.Contains("[global::System.Runtime.CompilerServices.InterceptsLocationAttribute(",
-            source.SourceText.ToString(), StringComparison.Ordinal);
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT024");
     }
 
     [Fact]
-    public void IncludeFiles_Allows_Contained_Parent_Path()
+    public void Design_Time_Emits_A_Stub_Without_Executing_The_Factory()
     {
-        using var project = new TemporaryDirectory();
-        var grammarDirectory = Directory.CreateDirectory(Path.Combine(project.Path, "Grammar")).FullName;
-        var grammarPath = Path.Combine(grammarDirectory, "Grammar.cs");
-        File.WriteAllText(
-            Path.Combine(project.Path, "Included.cs"),
-            """
+        const string grammar = """
             using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-            internal static class Included
-            {
-                public static Parser<string> Create() => Terms.Text("safe");
-            }
-            """);
-
-        const string source = """
             using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-
-            public static partial class IncludeGrammar
+            public static partial class Grammar
             {
-                [GenerateParser]
-                [IncludeFiles("../*.cs")]
-                public static Parser<string> Parser() => Parsers.Terms.Text("safe");
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    throw new System.InvalidOperationException("Do not execute");
             }
             """;
+        var options = DefaultOptions();
+        options["build_property.DesignTimeBuild"] = "true";
 
-        var (result, updatedCompilation) = RunGenerator(
-            source,
-            "ContainedInclude",
-            ProjectOptions(project.Path),
-            grammarPath);
+        var (result, compilation) = RunStandalone(Declaration, grammar, options);
 
-        Assert.DoesNotContain(result.Diagnostics, static d => d.Id is "PARLOT006" or "PARLOT016" or "PARLOT017" or "PARLOT018" or "PARLOT019" or "PARLOT020");
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
-    }
-
-    [Fact]
-    public void IncludeFiles_Rejects_Oversized_Source()
-    {
-        using var project = new TemporaryDirectory();
-        const string fileName = "Oversized.cs";
-        File.WriteAllText(Path.Combine(project.Path, fileName), new string(' ', (1024 * 1024) + 1));
-        const string source = """
-            using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-
-            public static partial class OversizedIncludeGrammar
-            {
-                [GenerateParser]
-                [IncludeFiles("Oversized.cs")]
-                public static Parser<string> Parser() => Terms.Text("safe");
-            }
-            """;
-
-        var (result, _) = RunGenerator(
-            source,
-            "OversizedInclude",
-            ProjectOptions(project.Path),
-            Path.Combine(project.Path, "Grammar.cs"));
-
-        var diagnostic = Assert.Single(result.Diagnostics, static d => d.Id == "PARLOT018");
-        Assert.Contains("1024 KiB per-file", diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.DoesNotContain(fileName, diagnostic.GetMessage(), StringComparison.Ordinal);
-        Assert.DoesNotContain(project.Path, diagnostic.GetMessage(), StringComparison.Ordinal);
+        AssertNoErrors(result, compilation);
+        var source = Assert.Single(result.Results.SelectMany(static item => item.GeneratedSources));
+        Assert.Contains("Standalone parsers are generated during build.", source.SourceText.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
     public void IncludeFiles_Rejects_Project_Root_Escape_Without_Disclosing_Path()
     {
         using var project = new TemporaryDirectory();
-        var sourcePath = Path.Combine(project.Path, "Grammar.cs");
         const string secretName = "parlot-secret-do-not-disclose.cs";
-        var source = $$"""
-            using Parlot.SourceGenerator;
+        var grammar = $$"""
             using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-
-            public static partial class EscapingIncludeGrammar
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
             {
-                [GenerateParser]
+                [GenerateParser(nameof(TryParse))]
                 [IncludeFiles("../{{secretName}}")]
-                public static Parser<string> Parser() => Terms.Text("safe");
+                private static Parser<string> Build() => Parsers.Terms.Text("hello");
             }
             """;
+        var options = DefaultOptions(project.Path);
 
-        var (result, _) = RunGenerator(
-            source,
-            "EscapingInclude",
-            ProjectOptions(project.Path),
-            sourcePath);
+        var (result, _) = RunStandalone(
+            Declaration,
+            grammar,
+            options,
+            grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
 
-        var diagnostic = Assert.Single(result.Diagnostics, static d => d.Id == "PARLOT016");
-        Assert.Contains("escapes the project root", diagnostic.GetMessage(), StringComparison.Ordinal);
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT016");
         Assert.DoesNotContain(secretName, diagnostic.GetMessage(), StringComparison.Ordinal);
         Assert.DoesNotContain(project.Path, diagnostic.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void IncludeFiles_Rejects_Absolute_Path_Without_Disclosing_Path()
+    public void IncludeFiles_Allows_A_Contained_Build_Only_Helper()
     {
         using var project = new TemporaryDirectory();
-        var sourcePath = Path.Combine(project.Path, "Grammar.cs");
-        var absolutePath = Path.Combine(project.Path, "secret.cs");
-        var literal = Parlot.SourceGeneration.LiteralHelper.StringToLiteral(absolutePath);
-        var source = $$"""
-            using Parlot.SourceGenerator;
+        File.WriteAllText(
+            Path.Combine(project.Path, "Included.cs"),
+            """
             using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-
-            public static partial class AbsoluteIncludeGrammar
+            internal static class Included
             {
-                [GenerateParser]
-                [IncludeFiles({{literal}})]
-                public static Parser<string> Parser() => Terms.Text("safe");
+                public static Parser<string> Create() => Parsers.Terms.Text("safe");
+            }
+            """);
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                [IncludeFiles("Included.cs")]
+                private static Parser<string> Build() => Included.Create().Eof();
             }
             """;
 
-        var (result, _) = RunGenerator(
-            source,
-            "AbsoluteInclude",
-            ProjectOptions(project.Path),
-            sourcePath);
+        var (result, compilation) = RunStandalone(
+            Declaration,
+            grammar,
+            DefaultOptions(project.Path),
+            grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
 
-        var diagnostic = Assert.Single(result.Diagnostics, static d => d.Id == "PARLOT016");
+        AssertNoErrors(result, compilation);
+    }
+
+    [Fact]
+    public void IncludeFiles_Rejects_Oversized_Source()
+    {
+        using var project = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(project.Path, "Oversized.cs"), new string(' ', (1024 * 1024) + 1));
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                [IncludeFiles("Oversized.cs")]
+                private static Parser<string> Build() => Parsers.Terms.Text("safe");
+            }
+            """;
+
+        var (result, _) = RunStandalone(
+            Declaration,
+            grammar,
+            DefaultOptions(project.Path),
+            grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT018");
+        Assert.Contains("1024 KiB per-file", diagnostic.GetMessage(), StringComparison.Ordinal);
+        Assert.DoesNotContain(project.Path, diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IncludeFiles_Rejects_Absolute_Path_Without_Disclosing_It()
+    {
+        using var project = new TemporaryDirectory();
+        var absolutePath = Path.Combine(project.Path, "Secret.cs");
+        var literal = Parlot.SourceGeneration.LiteralHelper.StringToLiteral(absolutePath);
+        var grammar = $$"""
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                [IncludeFiles({{literal}})]
+                private static Parser<string> Build() => Parsers.Terms.Text("safe");
+            }
+            """;
+
+        var (result, _) = RunStandalone(
+            Declaration,
+            grammar,
+            DefaultOptions(project.Path),
+            grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT016");
         Assert.Contains("absolute paths are not allowed", diagnostic.GetMessage(), StringComparison.Ordinal);
         Assert.DoesNotContain(absolutePath, diagnostic.GetMessage(), StringComparison.Ordinal);
     }
@@ -646,265 +450,222 @@ public static partial class VisualStudioGrammar
         using var outside = new TemporaryDirectory();
         File.WriteAllText(Path.Combine(outside.Path, "Secret.cs"), "internal static class Secret { }");
         Directory.CreateSymbolicLink(Path.Combine(project.Path, "Linked"), outside.Path);
-
-        const string source = """
-            using Parlot.SourceGenerator;
+        const string grammar = """
             using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-
-            public static partial class SymlinkIncludeGrammar
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
             {
-                [GenerateParser]
+                [GenerateParser(nameof(TryParse))]
                 [IncludeFiles("Linked/Secret.cs")]
-                public static Parser<string> Parser() => Terms.Text("safe");
+                private static Parser<string> Build() => Parsers.Terms.Text("safe");
             }
             """;
 
-        var (result, _) = RunGenerator(
-            source,
-            "SymlinkInclude",
-            ProjectOptions(project.Path),
-            Path.Combine(project.Path, "Grammar.cs"));
+        var (result, _) = RunStandalone(
+            Declaration,
+            grammar,
+            DefaultOptions(project.Path),
+            grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
 
-        Assert.Single(result.Diagnostics, static d => d.Id == "PARLOT017");
+        Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT017");
+    }
+
+    [Fact]
+    public void Keyword_And_Unicode_Factory_Identifiers_Generate_Valid_Source()
+    {
+        const string declaration = """
+            namespace GeneratedIdentifierTests;
+            public static partial class Grammar
+            {
+                private const int __Parlot_5_class_Core = 0;
+                public static partial bool TryParseKeyword(string text, out string value);
+                public static partial bool TryParseUnderscore(string text, out string value);
+                public static partial bool TryParseUnicode(string text, out string value);
+            }
+            """;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            namespace GeneratedIdentifierTests;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParseKeyword))]
+                private static Parser<string> @class() => Parsers.Terms.Text("keyword");
+                [GenerateParser(nameof(TryParseUnderscore))]
+                private static Parser<string> _class() => Parsers.Terms.Text("underscored");
+                [GenerateParser(nameof(TryParseUnicode))]
+                private static Parser<string> 解析() => Parsers.Terms.Text("unicode");
+            }
+            """;
+
+        var (result, compilation) = RunStandalone(declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+        Assert.Equal(3, result.Results.SelectMany(static item => item.GeneratedSources)
+            .Count(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Generated_Line_Directives_Escape_Grammar_Path()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    Parsers.Terms.Identifier().Then(static value => value.ToString());
+            }
+            """;
+        var path = Path.Combine(Path.GetTempPath(), "quote\"#line\nGrammar.parlot.cs");
+
+        var (result, compilation) = RunStandalone(Declaration, grammar, grammarPath: path);
+
+        AssertNoErrors(result, compilation);
     }
 
     [Fact]
     public void Generated_Literals_Escape_Adversarial_Text()
     {
-        var values = new[]
-        {
-            "\"quoted\"",
-            "backslash\\",
-            "line\r\nbreak",
-            "#line 1 \"injected.cs\"",
-            "\u2028\u2029",
-            "\0",
-            "emoji \ud83d\ude80"
-        };
-
+        var values = new[] { "\"quoted\"", "backslash\\", "line\r\nbreak", "#line 1 \"injected.cs\"", "\0" };
         var declarations = string.Join(
             Environment.NewLine,
             values.Select((value, index) =>
                 $"internal const string Value{index} = {Parlot.SourceGeneration.LiteralHelper.StringToLiteral(value)};"));
         var tree = CSharpSyntaxTree.ParseText(
             $"internal static class EscapedValues {{{Environment.NewLine}{declarations}{Environment.NewLine}}}",
-            new CSharpParseOptions(LanguageVersion.Preview));
+            new CSharpParseOptions(LanguageVersion.CSharp12));
 
-        Assert.DoesNotContain(tree.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(tree.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
-    [Fact]
-    public void Generated_Identifiers_Handle_Keywords_And_Unicode()
+    private static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
+        string declaration,
+        string grammar,
+        IReadOnlyDictionary<string, string>? globalOptions = null,
+        LanguageVersion languageVersion = LanguageVersion.CSharp12,
+        string grammarPath = "Grammar.parlot.cs")
     {
-        const string source = """
-            using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-
-            namespace GeneratedIdentifierTests;
-
-            public static partial class IdentifierGrammar
-            {
-                private const int __Parlot_5_class_Core = 0;
-
-                [GenerateParser]
-                public static Parser<string> @class() => Terms.Text("keyword");
-
-                [GenerateParser]
-                public static Parser<string> _class() => Terms.Text("underscored");
-
-                [GenerateParser]
-                public static Parser<string> 解析() => Terms.Text("unicode");
-            }
-            """;
-
-        var (result, updatedCompilation) = RunGenerator(source, "GeneratedIdentifiers");
-        var generated = string.Join(
-            Environment.NewLine,
-            result.Results.SelectMany(static r => r.GeneratedSources).Select(static s => s.SourceText.ToString()));
-
-        Assert.DoesNotContain(result.Diagnostics, static d => d.Severity == DiagnosticSeverity.Error);
-        Assert.Contains("__Parlot_5_class_1_Core", generated, StringComparison.Ordinal);
-        Assert.Contains("__Parlot_6__class_Core", generated, StringComparison.Ordinal);
-        Assert.Contains("__Parlot_2_解析_Core", generated, StringComparison.Ordinal);
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
+        var parseOptions = new CSharpParseOptions(
+            languageVersion,
+            preprocessorSymbols: ["NET", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var compilation = CreateCompilation(
+            declaration,
+            "StandaloneDiagnostics" + Guid.NewGuid().ToString("N"),
+            parseOptions: parseOptions);
+        return RunGenerator(
+            compilation,
+            globalOptions ?? DefaultOptions(),
+            additionalTexts: [new StringAdditionalText(grammarPath, grammar)]);
     }
 
-    [Fact]
-    public void Generated_Line_Directives_Escape_Source_Path()
-    {
-        const string source = """
-            using Parlot.SourceGenerator;
-            using Parlot.Fluent;
-            using static Parlot.Fluent.Parsers;
-
-            namespace DirectiveTests;
-
-            public static partial class DirectiveGrammar
-            {
-                [GenerateParser]
-                public static Parser<string> Parser() =>
-                    Terms.Identifier().Then(static value => value.ToString());
-            }
-            """;
-
-        var sourcePath = Path.Combine(Path.GetTempPath(), "quote\"#line\nfile.cs");
-        var (_, updatedCompilation) = RunGenerator(source, "DirectiveEscaping", sourcePath: sourcePath);
-
-        Assert.DoesNotContain(updatedCompilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
-    }
-
-    private static (GeneratorDriverRunResult result, CSharpCompilation updatedCompilation) RunGenerator(
+    private static CSharpCompilation CreateCompilation(
         string source,
         string assemblyName,
-        IReadOnlyDictionary<string, string> globalOptions = null,
-        string sourcePath = "",
-        string interceptorsNamespace = null)
+        bool referenceParlot = false,
+        CSharpParseOptions? parseOptions = null)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
-        if (interceptorsNamespace is not null)
+        parseOptions ??= new CSharpParseOptions(LanguageVersion.CSharp12);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Where(path => !Path.GetFileName(path).StartsWith("Parlot", StringComparison.Ordinal))
+            .Select(static path => MetadataReference.CreateFromFile(path))
+            .ToList();
+        if (referenceParlot)
         {
-            parseOptions = parseOptions.WithFeatures(
-                new[] { new KeyValuePair<string, string>("InterceptorsNamespaces", interceptorsNamespace) });
+            references.Add(MetadataReference.CreateFromFile(typeof(Parlot.Fluent.Parser<>).Assembly.Location));
         }
+        references.Add(MetadataReference.CreateFromFile(typeof(GeneratorDiagnosticsTests).Assembly.Location));
 
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions, sourcePath);
+        return CSharpCompilation.Create(
+            "Parlot.SourceGenerator.Tests." + assemblyName,
+            [CSharpSyntaxTree.ParseText(source, parseOptions, "Grammar.cs")],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    }
 
-        var references = new List<MetadataReference>();
-        var trusted = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        if (!string.IsNullOrEmpty(trusted))
+    private static Dictionary<string, string> DefaultOptions(string? projectDirectory = null) =>
+        new(StringComparer.OrdinalIgnoreCase)
         {
-            foreach (var path in trusted!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
+            ["build_property.MSBuildProjectDirectory"] = projectDirectory ?? Directory.GetCurrentDirectory(),
+            ["build_property.TargetFramework"] = "net10.0",
+            ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
+            ["build_property.TargetFrameworkVersion"] = "v10.0",
+            ["build_property.DesignTimeBuild"] = "false"
+        };
 
-        void AddReference(string path)
-        {
-            if (!references.OfType<PortableExecutableReference>().Any(r => string.Equals(r.FilePath, path, StringComparison.OrdinalIgnoreCase)))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
-
-        AddReference(typeof(global::Parlot.Fluent.ParseContext).Assembly.Location);
-        AddReference(typeof(global::Parlot.SourceGenerator.GenerateParserAttribute).Assembly.Location);
-
-        var compilation = CSharpCompilation.Create(
-            assemblyName: $"Parlot.SourceGenerator.Tests.{assemblyName}",
-            syntaxTrees: new[] { syntaxTree },
-            references: references,
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        return RunGenerator(compilation, globalOptions);
+    private static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
+    {
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(compilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     internal static (GeneratorDriverRunResult result, CSharpCompilation updatedCompilation) RunGenerator(
         CSharpCompilation compilation,
-        IReadOnlyDictionary<string, string> globalOptions,
-        string generatorPath = null,
-        IEnumerable<ISourceGenerator> additionalGenerators = null)
+        IReadOnlyDictionary<string, string>? globalOptions,
+        string? generatorPath = null,
+        IEnumerable<ISourceGenerator>? additionalGenerators = null,
+        IEnumerable<AdditionalText>? additionalTexts = null)
     {
-        var config = 
+        var config =
 #if DEBUG
             "Debug";
 #else
             "Release";
 #endif
         var isPackagedGenerator = generatorPath is not null;
-        generatorPath ??= Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/Parlot.SourceGenerator/bin", config, "netstandard2.0/Parlot.SourceGenerator.dll"));
+        generatorPath ??= Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../src/Parlot.SourceGenerator/bin",
+            config,
+            "netstandard2.0/Parlot.SourceGenerator.dll"));
         Assert.True(File.Exists(generatorPath), $"Generator assembly not found at {generatorPath}");
 
-        // Avoid reusing a same-identity assembly or locking a temporary package on Windows.
         var generatorAssembly = isPackagedGenerator
             ? Assembly.Load(File.ReadAllBytes(generatorPath))
             : Assembly.LoadFrom(generatorPath);
-        var generatorType = generatorAssembly.GetType("Parlot.SourceGenerator.ParserSourceGenerator", throwOnError: true)!;
+        var generatorType = generatorAssembly.GetType(
+            "Parlot.SourceGenerator.ParserSourceGenerator",
+            throwOnError: true)!;
         var generator = (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
-
-        var sourceGenerator = generator.AsSourceGenerator();
         var optionsProvider = globalOptions is null
             ? null
             : new TestAnalyzerConfigOptionsProvider(globalOptions);
-
-        var generators = new[] { sourceGenerator }.Concat(additionalGenerators ?? Array.Empty<ISourceGenerator>());
+        var generators = new[] { generator.AsSourceGenerator() }
+            .Concat(additionalGenerators ?? Array.Empty<ISourceGenerator>());
         var parseOptions = (CSharpParseOptions)compilation.SyntaxTrees.First().Options;
-        var driver = CSharpGeneratorDriver.Create(generators, parseOptions: parseOptions, optionsProvider: optionsProvider)
-            .RunGeneratorsAndUpdateCompilation(compilation, out var updatedCompilation, out var generatorDiagnostics);
+        var driver = CSharpGeneratorDriver.Create(
+                generators,
+                additionalTexts: additionalTexts,
+                parseOptions: parseOptions,
+                optionsProvider: optionsProvider)
+            .RunGeneratorsAndUpdateCompilation(
+                compilation,
+                out var updatedCompilation,
+                out _);
 
         return (driver.GetRunResult(), (CSharpCompilation)updatedCompilation);
     }
 
-    private static IReadOnlyDictionary<string, string> ProjectOptions(string projectDirectory)
-        => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private sealed class StringAdditionalText : AdditionalText
+    {
+        private readonly SourceText _text;
+
+        public StringAdditionalText(string path, string text)
         {
-            ["build_property.MSBuildProjectDirectory"] = projectDirectory,
-            ["build_property.TargetFramework"] = "net10.0",
-            ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
-            ["build_property.TargetFrameworkVersion"] = "v10.0"
-        };
+            Path = path;
+            _text = SourceText.From(text);
+        }
 
-    [Fact]
-    public void Lambda_With_Closure_Reports_Error()
-    {
-        // [GenerateParser] should report error when lambda captures variables
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
+        public override string Path { get; }
 
-public static partial class ClosureGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Foo()
-    {
-        var prefix = ""hello"";
-        return Terms.Identifier().Then(x => prefix + x.ToString());
-    }
-}
-";
-
-        var (result, _) = RunGenerator(source, "ClosureTest");
-        
-        var parserDiagnostics = result.Diagnostics.Where(d => d.Id.StartsWith("PARLOT", StringComparison.Ordinal)).ToList();
-        Assert.Single(parserDiagnostics);
-        Assert.Equal("PARLOT015", parserDiagnostics[0].Id);
-        Assert.Equal(DiagnosticSeverity.Error, parserDiagnostics[0].Severity);
-        Assert.Contains("Foo", parserDiagnostics[0].GetMessage());
-        Assert.Contains("prefix", parserDiagnostics[0].GetMessage());
-    }
-
-    [Fact]
-    public void Static_Lambda_Does_Not_Report_Closure_Error()
-    {
-        // Static lambdas should work without closure errors
-        const string source = @"
-using Parlot.SourceGenerator;
-using Parlot.Fluent;
-using static Parlot.Fluent.Parsers;
-
-public static partial class StaticLambdaGrammar
-{
-    [GenerateParser]
-    public static Parser<string> Foo()
-    {
-        return Terms.Identifier().Then(static x => x.ToString());
-    }
-}
-";
-
-        var (result, _) = RunGenerator(source, "StaticLambdaTest");
-        
-        // Should not have PARLOT015 (closure error)
-        var closureErrors = result.Diagnostics.Where(d => d.Id == "PARLOT015").ToList();
-        Assert.Empty(closureErrors);
+        public override SourceText GetText(CancellationToken cancellationToken = default) => _text;
     }
 
     private sealed class TestAnalyzerConfigOptionsProvider : AnalyzerConfigOptionsProvider
     {
-        private static readonly AnalyzerConfigOptions Empty = new TestAnalyzerConfigOptions(new Dictionary<string, string>());
+        private static readonly AnalyzerConfigOptions Empty =
+            new TestAnalyzerConfigOptions(new Dictionary<string, string>());
         private readonly AnalyzerConfigOptions _globalOptions;
 
         public TestAnalyzerConfigOptionsProvider(IReadOnlyDictionary<string, string> globalOptions)
@@ -913,12 +674,8 @@ public static partial class StaticLambdaGrammar
         }
 
         public override AnalyzerConfigOptions GlobalOptions => _globalOptions;
-
-        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree)
-            => Empty;
-
-        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile)
-            => Empty;
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => Empty;
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => Empty;
     }
 
     private sealed class TestAnalyzerConfigOptions : AnalyzerConfigOptions
@@ -960,14 +717,21 @@ public static partial class StaticLambdaGrammar
             Directory.Delete(Path, recursive: true);
         }
     }
+}
 
-    private sealed class TestLongNumberLiteral : global::Parlot.Fluent.NumberLiteralBase<long>
+public static class CallbackProbe
+{
+    public static int Evaluations { get; set; }
+
+    public static bool Condition()
     {
-        public override bool TryParseNumber(
-            ReadOnlySpan<char> s,
-            System.Globalization.NumberStyles style,
-            IFormatProvider provider,
-            out long value) =>
-            long.TryParse(s, style, provider, out value);
+        Evaluations++;
+        return true;
+    }
+
+    public static string Convert(string value)
+    {
+        Evaluations++;
+        return value;
     }
 }

@@ -132,9 +132,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                     location.SourceTree == originalLambda.SyntaxTree && originalLambda.Span.Contains(location.SourceSpan))) == true;
             var executionBody = blockBody is not null
                 ? (BlockSyntax)Visit(blockBody)!
-                : SyntaxFactory.Block(delegateInvokeMethod.ReturnsVoid
-                    ? SyntaxFactory.ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!)
-                    : SyntaxFactory.ReturnStatement((ExpressionSyntax)Visit(expressionBody)!));
+                : SyntaxFactory.Block(ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, delegateInvokeMethod.ReturnsVoid));
             if (hasCaptures && FactoryParameterUsage.IsDeferredCallback(originalLambda, _semanticModel))
             {
                 executionBody = SyntaxFactory.Block(
@@ -155,7 +153,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             // Expression body - convert to block with registration + return
             newBody = SyntaxFactory.Block(
                 registrationStatement,
-                SyntaxFactory.ReturnStatement((ExpressionSyntax)Visit(expressionBody)!));
+                ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, returnsVoid: false));
         }
         else
         {
@@ -174,10 +172,16 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         return newLambda;
     }
 
+    private static StatementSyntax ExpressionStatement(ExpressionSyntax expression, bool returnsVoid)
+        => expression is ThrowExpressionSyntax thrown
+            ? SyntaxFactory.ThrowStatement(thrown.Expression)
+            : returnsVoid ? SyntaxFactory.ExpressionStatement(expression) : SyntaxFactory.ReturnStatement(expression);
+
     public override SyntaxNode? VisitArgument(ArgumentSyntax node)
     {
         // Check if the argument is a method group (identifier or member access without invocation)
-        if (node.Expression is IdentifierNameSyntax or MemberAccessExpressionSyntax)
+        if (node.Expression is IdentifierNameSyntax or MemberAccessExpressionSyntax
+            && _semanticModel.GetTypeInfo(node.Expression).ConvertedType?.TypeKind == TypeKind.Delegate)
         {
             var symbolInfo = _semanticModel.GetSymbolInfo(node.Expression);
             
@@ -371,7 +375,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         public override SyntaxNode? VisitGenericName(GenericNameSyntax node)
             => QualifyMember(node) ?? base.VisitGenericName(node);
 
-        private MemberAccessExpressionSyntax? QualifyMember(SimpleNameSyntax node)
+        private ExpressionSyntax? QualifyMember(SimpleNameSyntax node)
         {
             if (node.Parent is MemberAccessExpressionSyntax member && member.Name == node
                 || node.Parent is MemberBindingExpressionSyntax or QualifiedNameSyntax or AliasQualifiedNameSyntax
@@ -381,6 +385,11 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             }
 
             var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            if (symbol is INamedTypeSymbol { ContainingAssembly.Identity.Name: "Parlot" } type)
+            {
+                return SyntaxFactory.ParseName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .WithTriviaFrom(node);
+            }
             if (symbol is IMethodSymbol { IsStatic: true, MethodKind: MethodKind.Ordinary }
                 or IFieldSymbol { IsStatic: true }
                 or IPropertySymbol { IsStatic: true }

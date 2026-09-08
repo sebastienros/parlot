@@ -1,0 +1,11 @@
+<Project>
+  <Target Name="CollectParlotGrammarFiles"
+          BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun;CoreCompile">
+    <ItemGroup>
+      <AdditionalFiles Include="**/*.parlot.cs"
+                       Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder);@(AdditionalFiles)" />
+      <Compile Remove="@(AdditionalFiles)"
+               Condition="$([System.String]::Copy('%(AdditionalFiles.Identity)').EndsWith('.parlot.cs', System.StringComparison.OrdinalIgnoreCase))" />
+    </ItemGroup>
+  </Target>
+</Project>

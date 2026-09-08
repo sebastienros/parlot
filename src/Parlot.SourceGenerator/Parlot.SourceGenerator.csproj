@@ -7,6 +7,10 @@
     <Description>Roslyn source generator for compiling Parlot parser combinators into optimized C# code.</Description>
     <PackageTags>parlot;parser;parser-combinator;source-generator;roslyn</PackageTags>
     <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- Analyzer-only packages have no lib assets for a separate symbols package. -->
+    <IncludeSymbols>false</IncludeSymbols>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <AssemblyOriginatorKeyFile>../Parlot/Parlot.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -19,8 +23,7 @@
     <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
     <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
-    <!-- Suppress experimental warning for interceptor APIs -->
-    <NoWarn>$(NoWarn);RSEXPERIMENTAL002;RS2007;RS2008</NoWarn>
+    <NoWarn>$(NoWarn);RS2007;RS2008</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +37,41 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="StandaloneRuntime/**/*.cs" />
+    <EmbeddedResource Include="../Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll" LogicalName="Parlot.GrammarAssembly" />
+    <EmbeddedResource Include="../../LICENSE" LogicalName="Parlot.StandaloneRuntime.License" />
+    <EmbeddedResource Include="../Parlot/Scanner.cs" LogicalName="Parlot.StandaloneRuntime.Scanner.cs" />
+    <EmbeddedResource Include="../Parlot/Cursor.cs" LogicalName="Parlot.StandaloneRuntime.Cursor.cs" />
+    <EmbeddedResource Include="../Parlot/TextPosition.cs" LogicalName="Parlot.StandaloneRuntime.TextPosition.cs" />
+    <EmbeddedResource Include="../Parlot/TextSpan.cs" LogicalName="Parlot.StandaloneRuntime.TextSpan.cs" />
+    <EmbeddedResource Include="../Parlot/ParseResult.cs" LogicalName="Parlot.StandaloneRuntime.ParseResult.cs" />
+    <EmbeddedResource Include="../Parlot/ParseException.cs" LogicalName="Parlot.StandaloneRuntime.ParseException.cs" />
+    <EmbeddedResource Include="../Parlot/ParseError.cs" LogicalName="Parlot.StandaloneRuntime.ParseError.cs" />
+    <EmbeddedResource Include="../Parlot/Option.cs" LogicalName="Parlot.StandaloneRuntime.Option.cs" />
+    <EmbeddedResource Include="../Parlot/Character.cs" LogicalName="Parlot.StandaloneRuntime.Character.cs" />
+    <EmbeddedResource Include="../Parlot/Character.Class.cs" LogicalName="Parlot.StandaloneRuntime.Character.Class.cs" />
+    <EmbeddedResource Include="../Parlot/Character.Generated.cs" LogicalName="Parlot.StandaloneRuntime.Character.Generated.cs" />
+    <EmbeddedResource Include="../Parlot/Character.Mask.cs" LogicalName="Parlot.StandaloneRuntime.Character.Mask.cs" />
+    <EmbeddedResource Include="../Parlot/Character.SearchValues.cs" LogicalName="Parlot.StandaloneRuntime.Character.SearchValues.cs" />
+    <EmbeddedResource Include="../Parlot/Numbers.cs" LogicalName="Parlot.StandaloneRuntime.Numbers.cs" />
+    <EmbeddedResource Include="../Parlot/HexConverter.cs" LogicalName="Parlot.StandaloneRuntime.HexConverter.cs" />
+    <EmbeddedResource Include="../Parlot/ThrowHelper.cs" LogicalName="Parlot.StandaloneRuntime.ThrowHelper.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/ParseContext.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ParseContext.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/HybridList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.HybridList.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/NumberOptions.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.NumberOptions.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/DelegateParser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.DelegateParser.cs" />
+    <EmbeddedResource Include="StandaloneRuntime/Parser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.Parser.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="LICENSE" Visible="false" />
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="../Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Update="build/Parlot.SourceGenerator.props" Pack="true" PackagePath="build/Parlot.SourceGenerator.props" />
+    <None Update="build/Parlot.SourceGenerator.targets" Pack="true" PackagePath="build/Parlot.SourceGenerator.targets" />
   </ItemGroup>
 
 </Project>
