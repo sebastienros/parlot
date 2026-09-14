@@ -12,9 +12,9 @@
     <PackageVersion Include="Superpower" Version="3.2.2-dev-00214" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.5-beta1" />
     <!-- Global Package References -->
-    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
+    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
     <GlobalPackageReference Include="PolySharp" Version="1.16.0" />
     <!-- Testing -->
-    <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.0" />
+    <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.1" />
   </ItemGroup>
 </Project>
