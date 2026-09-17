@@ -12,4 +12,13 @@ Latest installed TFM: net11.0, .NET 11 RC1, ARM64. BenchmarkDotNet runs serially
 
 Workloads: `SepCursorBenchmarks; SepGrammarBenchmarks`. SQL/JSON compare runtime and generated grammars at token lengths 8/256, with and without escapes. Allocation modes use the same sample grammar and include per-document state creation.
 
-Results and validation are recorded below after execution.
+
+## Decision and results
+
+Draft: strong long-token benefit with a small-token cost. Long JSON improves 31–40% and long SQL 14–19%, with unchanged allocations. Short runtime SQL regresses about 2.9%; isolated one-character Advance(count) is about 24% slower. Keep this candidate for review, but do not treat it as an unconditional improvement.
+
+See [all benchmark deltas](comparison.md), the CSV/Markdown reports, and [retained statistics](measurements.json). Source revision measured: `f4af0bad360428fb61ebd3b050b6ae4218de0b1a`.
+
+## Validation
+
+Full Release solution build across supported TFMs; 867 runtime tests on .NET 10; 243 source-generator tests; 38 standalone tests on .NET 8/10. All pass. Benchmarks run only on net11.0.
