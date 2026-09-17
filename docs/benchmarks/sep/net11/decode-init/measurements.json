@@ -1,0 +1,1231 @@
+{
+  "SourceRevision": "d7bb4a5652fde0c26d87f7cabeed751a10ccaa5b",
+  "HostEnvironmentInfo": {
+    "BenchmarkDotNetCaption": "BenchmarkDotNet",
+    "BenchmarkDotNetVersion": "0.16.0-preview.1",
+    "OsVersion": "macOS Sequoia 15.7.9 (24G830) [Darwin 24.6.0]",
+    "ProcessorName": "Apple M4 Pro",
+    "PhysicalProcessorCount": 1,
+    "PhysicalCoreCount": 14,
+    "LogicalCoreCount": 14,
+    "RuntimeVersion": ".NET 11.0.0 (11.0.0-rc.1.26413.103, 11.0.26.41403)",
+    "Architecture": "Arm64",
+    "HasAttachedDebugger": false,
+    "HasRyuJit": true,
+    "Configuration": "RELEASE",
+    "DotNetCliVersion": "11.0.100-rc.1.26413.103",
+    "ChronometerFrequency": {
+      "Hertz": 1000000000
+    },
+    "HardwareTimerKind": "Unknown"
+  },
+  "Benchmarks": [
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonRuntime(TokenLength: 8, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonRuntime",
+      "Parameters": "TokenLength=8&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          7332.672368421053,
+          7320.306359649123,
+          7297.36235380117,
+          7261.915204678363,
+          7310.684722222222
+        ],
+        "N": 5,
+        "Min": 7261.915204678363,
+        "LowerFence": 7262.946345029241,
+        "Q1": 7297.36235380117,
+        "Median": 7310.684722222222,
+        "Mean": 7304.588201754386,
+        "Q3": 7320.306359649123,
+        "UpperFence": 7354.722368421053,
+        "Max": 7332.672368421053,
+        "InterquartileRange": 22.94400584795312,
+        "LowerOutliers": [
+          7261.915204678363
+        ],
+        "UpperOutliers": [],
+        "AllOutliers": [
+          7261.915204678363
+        ],
+        "StandardError": 12.137021926471549,
+        "Variance": 736.5365062182558,
+        "StandardDeviation": 27.13920607199584,
+        "Skewness": -0.5185214915810255,
+        "Kurtosis": 1.4758763957081105,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 7304.588201754386,
+          "StandardError": 12.137021926471549,
+          "Level": 12,
+          "Margin": 104.50341885752977,
+          "Lower": 7200.084782896856,
+          "Upper": 7409.091620611916
+        },
+        "Percentiles": {
+          "P0": 7261.915204678363,
+          "P25": 7297.36235380117,
+          "P50": 7310.684722222222,
+          "P67": 7317.227435672514,
+          "P80": 7322.7795614035085,
+          "P85": 7325.252763157894,
+          "P90": 7327.725964912281,
+          "P95": 7330.199166666667,
+          "P100": 7332.672368421053
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 29,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 13680,
+        "BytesAllocatedPerOperation": 17872
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonGenerated(TokenLength: 8, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonGenerated",
+      "Parameters": "TokenLength=8&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          6171.82998474059,
+          6169.239000508647,
+          6151.783443540183,
+          6119.089649033571,
+          6140.4183621566635
+        ],
+        "N": 5,
+        "Min": 6119.089649033571,
+        "LowerFence": 6097.1874046286885,
+        "Q1": 6140.4183621566635,
+        "Median": 6151.783443540183,
+        "Mean": 6150.47208799593,
+        "Q3": 6169.239000508647,
+        "UpperFence": 6212.469958036623,
+        "Max": 6171.82998474059,
+        "InterquartileRange": 28.82063835198369,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 9.736558145608496,
+        "Variance": 474.0028226140758,
+        "StandardDeviation": 21.771605880459894,
+        "Skewness": -0.3017289433416701,
+        "Kurtosis": 1.1681467244883983,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 6150.47208799593,
+          "StandardError": 9.736558145608496,
+          "Level": 12,
+          "Margin": 83.83470181445281,
+          "Lower": 6066.637386181477,
+          "Upper": 6234.306789810384
+        },
+        "Percentiles": {
+          "P0": 6119.089649033571,
+          "P25": 6140.4183621566635,
+          "P50": 6151.783443540183,
+          "P67": 6163.653222278738,
+          "P80": 6169.757197355037,
+          "P85": 6170.275394201424,
+          "P90": 6170.793591047813,
+          "P95": 6171.311787894201,
+          "P100": 6171.82998474059
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 36,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 15728,
+        "BytesAllocatedPerOperation": 19264
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlRuntime(TokenLength: 8, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlRuntime",
+      "Parameters": "TokenLength=8&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          2697.1789035467127,
+          2716.6549524221455,
+          2771.7163981401386,
+          2731.3912467560554,
+          2691.5132731401386
+        ],
+        "N": 5,
+        "Min": 2691.5132731401386,
+        "LowerFence": 2645.860388732699,
+        "Q1": 2697.1789035467127,
+        "Median": 2716.6549524221455,
+        "Mean": 2721.690954801038,
+        "Q3": 2731.3912467560554,
+        "UpperFence": 2782.7097615700695,
+        "Max": 2771.7163981401386,
+        "InterquartileRange": 34.212343209342635,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 14.376256627452788,
+        "Variance": 1033.3837730919008,
+        "StandardDeviation": 32.1462870809663,
+        "Skewness": 0.5043161753467154,
+        "Kurtosis": 1.3976448122732288,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 2721.690954801038,
+          "StandardError": 14.376256627452788,
+          "Level": 12,
+          "Margin": 123.78390490218075,
+          "Lower": 2597.907049898857,
+          "Upper": 2845.474859703219
+        },
+        "Percentiles": {
+          "P0": 2691.5132731401386,
+          "P25": 2697.1789035467127,
+          "P50": 2716.6549524221455,
+          "P67": 2726.675632569204,
+          "P80": 2739.456277032872,
+          "P85": 2747.5213073096884,
+          "P90": 2755.5863375865056,
+          "P95": 2763.651367863322,
+          "P100": 2771.7163981401386
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 23,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 36992,
+        "BytesAllocatedPerOperation": 5312
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlGenerated(TokenLength: 8, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlGenerated",
+      "Parameters": "TokenLength=8&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          2459.9464986269127,
+          2455.4931836014125,
+          2550.696964495881,
+          2476.7423009023146,
+          2534.6265202040017
+        ],
+        "N": 5,
+        "Min": 2455.4931836014125,
+        "LowerFence": 2347.926466261279,
+        "Q1": 2459.9464986269127,
+        "Median": 2476.7423009023146,
+        "Mean": 2495.5010935661044,
+        "Q3": 2534.6265202040017,
+        "UpperFence": 2646.6465525696353,
+        "Max": 2550.696964495881,
+        "InterquartileRange": 74.68002157708906,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 19.74086821865995,
+        "Variance": 1948.5093901324924,
+        "StandardDeviation": 44.14192327178883,
+        "Skewness": 0.2615187385967813,
+        "Kurtosis": 0.8380406078476715,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 2495.5010935661044,
+          "StandardError": 19.74086821865995,
+          "Level": 12,
+          "Margin": 169.9748284681287,
+          "Lower": 2325.5262650979757,
+          "Upper": 2665.475922034233
+        },
+        "Percentiles": {
+          "P0": 2455.4931836014125,
+          "P25": 2459.9464986269127,
+          "P50": 2476.7423009023146,
+          "P67": 2516.103570027462,
+          "P80": 2537.8406090623776,
+          "P85": 2541.0546979207534,
+          "P90": 2544.268786779129,
+          "P95": 2547.482875637505,
+          "P100": 2550.696964495881
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 12,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 40784,
+        "BytesAllocatedPerOperation": 2624
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonRuntime(TokenLength: 8, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonRuntime",
+      "Parameters": "TokenLength=8&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          8120.792286545925,
+          8157.870472186287,
+          8120.778783958603,
+          8157.189925614489
+        ],
+        "N": 4,
+        "Min": 8120.778783958603,
+        "LowerFence": 8065.932183861578,
+        "Q1": 8120.788910899094,
+        "Median": 8138.991106080207,
+        "Mean": 8139.157867076326,
+        "Q3": 8157.360062257438,
+        "UpperFence": 8212.216789294953,
+        "Max": 8157.870472186287,
+        "InterquartileRange": 36.57115135834374,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 10.608180685960775,
+        "Variance": 450.1339898639649,
+        "StandardDeviation": 21.21636137192155,
+        "Skewness": 0.0003339854449939061,
+        "Kurtosis": 0.5628859403441674,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 8139.157867076326,
+          "StandardError": 10.608180685960775,
+          "Level": 12,
+          "Margin": 137.09990078715035,
+          "Lower": 8002.057966289175,
+          "Upper": 8276.257767863475
+        },
+        "Percentiles": {
+          "P0": 8120.778783958603,
+          "P25": 8120.788910899094,
+          "P50": 8138.991106080207,
+          "P67": 8157.1967310802065,
+          "P80": 8157.462144243208,
+          "P85": 8157.564226228978,
+          "P90": 8157.666308214748,
+          "P95": 8157.768390200517,
+          "P100": 8157.870472186287
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 27,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 12368,
+        "BytesAllocatedPerOperation": 18384
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonGenerated(TokenLength: 8, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonGenerated",
+      "Parameters": "TokenLength=8&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          7310.65438646789,
+          7212.072319380734,
+          7508.2634747706425,
+          7331.613173738532,
+          7171.20907396789
+        ],
+        "N": 5,
+        "Min": 7171.20907396789,
+        "LowerFence": 7032.761037844038,
+        "Q1": 7212.072319380734,
+        "Median": 7310.65438646789,
+        "Mean": 7306.762485665138,
+        "Q3": 7331.613173738532,
+        "UpperFence": 7510.924455275229,
+        "Max": 7508.2634747706425,
+        "InterquartileRange": 119.5408543577978,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 58.55608730687525,
+        "Variance": 17144.076803451982,
+        "StandardDeviation": 130.93539171458565,
+        "Skewness": 0.43274960958582925,
+        "Kurtosis": 1.4064949369509534,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 7306.762485665138,
+          "StandardError": 58.55608730687525,
+          "Level": 12,
+          "Margin": 504.1855700319609,
+          "Lower": 6802.576915633177,
+          "Upper": 7810.948055697099
+        },
+        "Percentiles": {
+          "P0": 7171.20907396789,
+          "P25": 7212.072319380734,
+          "P50": 7310.65438646789,
+          "P67": 7324.906361811926,
+          "P80": 7366.943233944954,
+          "P85": 7402.273294151377,
+          "P90": 7437.603354357798,
+          "P95": 7472.933414564221,
+          "P100": 7508.2634747706425
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 32,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 13952,
+        "BytesAllocatedPerOperation": 19776
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlRuntime(TokenLength: 8, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlRuntime",
+      "Parameters": "TokenLength=8&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          2904.5022205372616,
+          2927.8844508232237,
+          2886.5291919410747,
+          2884.824306759099,
+          2871.0982723136917
+        ],
+        "N": 5,
+        "Min": 2871.0982723136917,
+        "LowerFence": 2855.3074360918545,
+        "Q1": 2884.824306759099,
+        "Median": 2886.5291919410747,
+        "Mean": 2894.9676884748706,
+        "Q3": 2904.5022205372616,
+        "UpperFence": 2934.0190912045055,
+        "Max": 2927.8844508232237,
+        "InterquartileRange": 19.677913778162747,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 9.793533553843073,
+        "Variance": 479.56649735125063,
+        "StandardDeviation": 21.89900676631821,
+        "Skewness": 0.4054150552760714,
+        "Kurtosis": 1.3240359889163822,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 2894.9676884748706,
+          "StandardError": 9.793533553843073,
+          "Level": 12,
+          "Margin": 84.32527726099876,
+          "Lower": 2810.6424112138716,
+          "Upper": 2979.2929657358695
+        },
+        "Percentiles": {
+          "P0": 2871.0982723136917,
+          "P25": 2884.824306759099,
+          "P50": 2886.5291919410747,
+          "P67": 2898.750851386482,
+          "P80": 2909.1786665944537,
+          "P85": 2913.855112651647,
+          "P90": 2918.531558708839,
+          "P95": 2923.208004766031,
+          "P100": 2927.8844508232237
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 23,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 36928,
+        "BytesAllocatedPerOperation": 5360
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlGenerated(TokenLength: 8, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlGenerated",
+      "Parameters": "TokenLength=8&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          2591.400741267262,
+          2556.2360377741675,
+          2616.4777619821284,
+          2761.6182727457353,
+          2696.8060266043867
+        ],
+        "N": 5,
+        "Min": 2556.2360377741675,
+        "LowerFence": 2433.2928132615752,
+        "Q1": 2591.400741267262,
+        "Median": 2616.4777619821284,
+        "Mean": 2644.507768074736,
+        "Q3": 2696.8060266043867,
+        "UpperFence": 2854.9139546100732,
+        "Max": 2761.6182727457353,
+        "InterquartileRange": 105.4052853371245,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 37.314818810807594,
+        "Variance": 6961.978514417003,
+        "StandardDeviation": 83.43847142905365,
+        "Skewness": 0.30628123675870694,
+        "Kurtosis": 1.0929174350125002,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 2644.507768074736,
+          "StandardError": 37.314818810807594,
+          "Level": 12,
+          "Margin": 321.2918427109012,
+          "Lower": 2323.2159253638347,
+          "Upper": 2965.799610785637
+        },
+        "Percentiles": {
+          "P0": 2556.2360377741675,
+          "P25": 2591.400741267262,
+          "P50": 2616.4777619821284,
+          "P67": 2671.100981925264,
+          "P80": 2709.768475832657,
+          "P85": 2722.730925060926,
+          "P90": 2735.693374289196,
+          "P95": 2748.6558235174653,
+          "P100": 2761.6182727457353
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 12,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 39392,
+        "BytesAllocatedPerOperation": 2672
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonRuntime(TokenLength: 256, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonRuntime",
+      "Parameters": "TokenLength=256&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          14096.52942825112,
+          14077.12654147982,
+          14017.049607623318,
+          14078.603839686099
+        ],
+        "N": 4,
+        "Min": 14017.049607623318,
+        "LowerFence": 14030.640414798203,
+        "Q1": 14062.107308015695,
+        "Median": 14077.86519058296,
+        "Mean": 14067.32735426009,
+        "Q3": 14083.085236827355,
+        "UpperFence": 14114.552130044845,
+        "Max": 14096.52942825112,
+        "InterquartileRange": 20.977928811660604,
+        "LowerOutliers": [
+          14017.049607623318
+        ],
+        "UpperOutliers": [],
+        "AllOutliers": [
+          14017.049607623318
+        ],
+        "StandardError": 17.329637729381897,
+        "Variance": 1201.265375326466,
+        "StandardDeviation": 34.659275458763794,
+        "Skewness": -0.5993602931578335,
+        "Kurtosis": 1.2374282372789187,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 14067.32735426009,
+          "StandardError": 17.329637729381897,
+          "Level": 12,
+          "Margin": 223.96786816799332,
+          "Lower": 13843.359486092097,
+          "Upper": 14291.295222428082
+        },
+        "Percentiles": {
+          "P0": 14017.049607623318,
+          "P25": 14062.107308015695,
+          "P50": 14077.86519058296,
+          "P67": 14078.783095571749,
+          "P80": 14085.774075112107,
+          "P85": 14088.46291339686,
+          "P90": 14091.151751681613,
+          "P95": 14093.840589966368,
+          "P100": 14096.52942825112
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 28,
+        "Gen1Collections": 2,
+        "Gen2Collections": 0,
+        "TotalOperations": 7136,
+        "BytesAllocatedPerOperation": 33744
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonGenerated(TokenLength: 256, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonGenerated",
+      "Parameters": "TokenLength=256&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          13103.287735849057,
+          13113.780791404612,
+          13076.579926624738,
+          13067.260613207547,
+          13085.156839622641
+        ],
+        "N": 5,
+        "Min": 13067.260613207547,
+        "LowerFence": 13036.518212788258,
+        "Q1": 13076.579926624738,
+        "Median": 13085.156839622641,
+        "Mean": 13089.213181341718,
+        "Q3": 13103.287735849057,
+        "UpperFence": 13143.349449685535,
+        "Max": 13113.780791404612,
+        "InterquartileRange": 26.707809224319135,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 8.54291762032705,
+        "Variance": 364.9072073384719,
+        "StandardDeviation": 19.102544525232023,
+        "Skewness": 0.14213886094686495,
+        "Kurtosis": 0.9935912201071899,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 13089.213181341718,
+          "StandardError": 8.54291762032705,
+          "Level": 12,
+          "Margin": 73.55709693456504,
+          "Lower": 13015.656084407154,
+          "Upper": 13162.770278276283
+        },
+        "Percentiles": {
+          "P0": 13067.260613207547,
+          "P25": 13076.579926624738,
+          "P50": 13085.156839622641,
+          "P67": 13097.485849056604,
+          "P80": 13105.386346960167,
+          "P85": 13107.48495807128,
+          "P90": 13109.583569182389,
+          "P95": 13111.682180293501,
+          "P100": 13113.780791404612
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 32,
+        "Gen1Collections": 3,
+        "Gen2Collections": 0,
+        "TotalOperations": 7632,
+        "BytesAllocatedPerOperation": 35136
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlRuntime(TokenLength: 256, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlRuntime",
+      "Parameters": "TokenLength=256&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          3330.2994860305744,
+          3302.558315761729,
+          3359.965307063785,
+          3371.1658210332102,
+          3311.6282946758038
+        ],
+        "N": 5,
+        "Min": 3302.558315761729,
+        "LowerFence": 3239.122776093832,
+        "Q1": 3311.6282946758038,
+        "Median": 3330.2994860305744,
+        "Mean": 3335.1234449130206,
+        "Q3": 3359.965307063785,
+        "UpperFence": 3432.470825645757,
+        "Max": 3371.1658210332102,
+        "InterquartileRange": 48.337012387981304,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 13.326573625872545,
+        "Variance": 887.9878230290086,
+        "StandardDeviation": 29.79912453460686,
+        "Skewness": 0.10985342865223212,
+        "Kurtosis": 0.8872993814699918,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 3335.1234449130206,
+          "StandardError": 13.326573625872545,
+          "Level": 12,
+          "Margin": 114.74581771355031,
+          "Lower": 3220.37762719947,
+          "Upper": 3449.869262626571
+        },
+        "Percentiles": {
+          "P0": 3302.558315761729,
+          "P25": 3311.6282946758038,
+          "P50": 3330.2994860305744,
+          "P67": 3350.4722443331575,
+          "P80": 3362.20540985767,
+          "P85": 3364.445512651555,
+          "P90": 3366.68561544544,
+          "P95": 3368.925718239325,
+          "P100": 3371.1658210332102
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 28,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 30352,
+        "BytesAllocatedPerOperation": 7792
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlGenerated(TokenLength: 256, Escaped: False)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlGenerated",
+      "Parameters": "TokenLength=256&Escaped=False",
+      "Statistics": {
+        "OriginalValues": [
+          3640.552452118398,
+          3628.190583284968,
+          3640.965068195009,
+          3647.7724898432966
+        ],
+        "N": 4,
+        "Min": 3628.190583284968,
+        "LowerFence": 3629.654576864479,
+        "Q1": 3637.4619849100404,
+        "Median": 3640.7587601567034,
+        "Mean": 3639.370148360418,
+        "Q3": 3642.666923607081,
+        "UpperFence": 3650.474331652642,
+        "Max": 3647.7724898432966,
+        "InterquartileRange": 5.204938697040689,
+        "LowerOutliers": [
+          3628.190583284968
+        ],
+        "UpperOutliers": [],
+        "AllOutliers": [
+          3628.190583284968
+        ],
+        "StandardError": 4.0776180662043195,
+        "Variance": 66.50787637534343,
+        "StandardDeviation": 8.155236132408639,
+        "Skewness": -0.36797606858921356,
+        "Kurtosis": 1.1650448806383897,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 3639.370148360418,
+          "StandardError": 4.0776180662043195,
+          "Level": 12,
+          "Margin": 52.6990488637093,
+          "Lower": 3586.671099496709,
+          "Upper": 3692.0691972241275
+        },
+        "Percentiles": {
+          "P0": 3628.190583284968,
+          "P25": 3637.4619849100404,
+          "P50": 3640.7587601567034,
+          "P67": 3641.0331424114916,
+          "P80": 3643.688036854324,
+          "P85": 3644.709150101567,
+          "P90": 3645.7302633488102,
+          "P95": 3646.751376596054,
+          "P100": 3647.7724898432966
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 16,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 27568,
+        "BytesAllocatedPerOperation": 5104
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonRuntime(TokenLength: 256, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonRuntime",
+      "Parameters": "TokenLength=256&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          33699.07252673797,
+          33730.851604278076,
+          33600.92179144385,
+          33542.404745989305,
+          33585.40842245989
+        ],
+        "N": 5,
+        "Min": 33542.404745989305,
+        "LowerFence": 33414.91226604278,
+        "Q1": 33585.40842245989,
+        "Median": 33600.92179144385,
+        "Mean": 33631.73181818183,
+        "Q3": 33699.07252673797,
+        "UpperFence": 33869.568683155085,
+        "Max": 33730.851604278076,
+        "InterquartileRange": 113.66410427807568,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 35.66086341488609,
+        "Variance": 6358.485897475806,
+        "StandardDeviation": 79.74011473202059,
+        "Skewness": 0.17268535883836167,
+        "Kurtosis": 0.9214116270942172,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 33631.73181818183,
+          "StandardError": 35.66086341488609,
+          "Level": 12,
+          "Margin": 307.05078798110185,
+          "Lower": 33324.68103020072,
+          "Upper": 33938.78260616293
+        },
+        "Percentiles": {
+          "P0": 33542.404745989305,
+          "P25": 33585.40842245989,
+          "P50": 33600.92179144385,
+          "P67": 33667.66429144385,
+          "P80": 33705.428342245985,
+          "P85": 33711.78415775401,
+          "P90": 33718.139973262034,
+          "P95": 33724.49578877005,
+          "P100": 33730.851604278076
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 17,
+        "Gen1Collections": 2,
+        "Gen2Collections": 0,
+        "TotalOperations": 2992,
+        "BytesAllocatedPerOperation": 50128
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.JsonGenerated(TokenLength: 256, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "JsonGenerated",
+      "Parameters": "TokenLength=256&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          33634.394306282724,
+          33230.83017015707,
+          32577.607002617802,
+          33139.24803664922,
+          33922.76112565445
+        ],
+        "N": 5,
+        "Min": 32577.607002617802,
+        "LowerFence": 32396.528632198955,
+        "Q1": 33139.24803664922,
+        "Median": 33230.83017015707,
+        "Mean": 33300.96812827225,
+        "Q3": 33634.394306282724,
+        "UpperFence": 34377.113710732985,
+        "Max": 33922.76112565445,
+        "InterquartileRange": 495.1462696335075,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 229.3603700606765,
+        "Variance": 263030.8967718524,
+        "StandardDeviation": 512.8653788001802,
+        "Skewness": -0.15656782345508885,
+        "Kurtosis": 1.261366083524417,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 33300.96812827225,
+          "StandardError": 229.3603700606765,
+          "Level": 12,
+          "Margin": 1974.861952707793,
+          "Lower": 31326.10617556446,
+          "Upper": 35275.83008098004
+        },
+        "Percentiles": {
+          "P0": 32577.607002617802,
+          "P25": 33139.24803664922,
+          "P50": 33230.83017015707,
+          "P67": 33505.25378272252,
+          "P80": 33692.06767015707,
+          "P85": 33749.74103403141,
+          "P90": 33807.414397905755,
+          "P95": 33865.0877617801,
+          "P100": 33922.76112565445
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 18,
+        "Gen1Collections": 2,
+        "Gen2Collections": 0,
+        "TotalOperations": 3056,
+        "BytesAllocatedPerOperation": 51520
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlRuntime(TokenLength: 256, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlRuntime",
+      "Parameters": "TokenLength=256&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          5153.318708949097,
+          5153.216081691297,
+          5165.356013957307,
+          5140.1674363711,
+          5127.7709359605915
+        ],
+        "N": 5,
+        "Min": 5127.7709359605915,
+        "LowerFence": 5120.4405275041045,
+        "Q1": 5140.1674363711,
+        "Median": 5153.216081691297,
+        "Mean": 5147.965835385879,
+        "Q3": 5153.318708949097,
+        "UpperFence": 5173.045617816091,
+        "Max": 5165.356013957307,
+        "InterquartileRange": 13.151272577996679,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 6.4315069866583565,
+        "Variance": 206.82141059717628,
+        "StandardDeviation": 14.38128681993292,
+        "Skewness": -0.2120266967496541,
+        "Kurtosis": 1.2299899323316572,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 5147.965835385879,
+          "StandardError": 6.4315069866583565,
+          "Level": 12,
+          "Margin": 55.37721465641968,
+          "Lower": 5092.588620729459,
+          "Upper": 5203.343050042298
+        },
+        "Percentiles": {
+          "P0": 5127.7709359605915,
+          "P25": 5140.1674363711,
+          "P50": 5153.216081691297,
+          "P67": 5153.285868226601,
+          "P80": 5155.726169950739,
+          "P85": 5158.133630952381,
+          "P90": 5160.541091954023,
+          "P95": 5162.948552955665,
+          "P100": 5165.356013957307
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 21,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 19488,
+        "BytesAllocatedPerOperation": 9328
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepGrammarBenchmarks.SqlGenerated(TokenLength: 256, Escaped: True)",
+      "Type": "SepGrammarBenchmarks",
+      "Method": "SqlGenerated",
+      "Parameters": "TokenLength=256&Escaped=True",
+      "Statistics": {
+        "OriginalValues": [
+          5397.099283854167,
+          5385.247124565973,
+          5418.667263454861,
+          5405.4814453125
+        ],
+        "N": 4,
+        "Min": 5385.247124565973,
+        "LowerFence": 5372.17376030816,
+        "Q1": 5394.136244032118,
+        "Median": 5401.290364583334,
+        "Mean": 5401.623779296875,
+        "Q3": 5408.77789984809,
+        "UpperFence": 5430.740383572047,
+        "Max": 5418.667263454861,
+        "InterquartileRange": 14.641655815971717,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 7.035788385804817,
+        "Variance": 198.00927283930378,
+        "StandardDeviation": 14.071576771609633,
+        "Skewness": 0.04696638789172085,
+        "Kurtosis": 1.0007468817444325,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 5401.623779296875,
+          "StandardError": 7.035788385804817,
+          "Level": 12,
+          "Margin": 90.9303789413973,
+          "Lower": 5310.693400355478,
+          "Upper": 5492.554158238272
+        },
+        "Percentiles": {
+          "P0": 5385.247124565973,
+          "P25": 5394.136244032118,
+          "P50": 5401.290364583334,
+          "P67": 5405.613303493924,
+          "P80": 5410.755772569444,
+          "P85": 5412.733645290798,
+          "P90": 5414.711518012153,
+          "P95": 5416.689390733507,
+          "P100": 5418.667263454861
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 14,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 18432,
+        "BytesAllocatedPerOperation": 6640
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepDecodeBenchmarks.Current(Length: 32, EscapeInterval: 4)",
+      "Type": "SepDecodeBenchmarks",
+      "Method": "Current",
+      "Parameters": "Length=32&EscapeInterval=4",
+      "Statistics": {
+        "OriginalValues": [
+          31.368547829693117,
+          30.878765363058285,
+          31.547103011033755,
+          30.35079768517355,
+          31.176640611254932
+        ],
+        "N": 5,
+        "Min": 30.35079768517355,
+        "LowerFence": 30.14409166310604,
+        "Q1": 30.878765363058285,
+        "Median": 31.176640611254932,
+        "Mean": 31.06437090004273,
+        "Q3": 31.368547829693117,
+        "UpperFence": 32.10322152964537,
+        "Max": 31.547103011033755,
+        "InterquartileRange": 0.48978246663483205,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 0.20997553808802114,
+        "Variance": 0.2204486329767701,
+        "StandardDeviation": 0.4695195767769115,
+        "Skewness": -0.4399522270223639,
+        "Kurtosis": 1.3312612134979978,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 31.06437090004273,
+          "StandardError": 0.20997553808802114,
+          "Level": 12,
+          "Margin": 1.8079527036849425,
+          "Lower": 29.256418196357785,
+          "Upper": 32.87232360372767
+        },
+        "Percentiles": {
+          "P0": 30.35079768517355,
+          "P25": 30.878765363058285,
+          "P50": 31.176640611254932,
+          "P67": 31.307137519792896,
+          "P80": 31.404258865961246,
+          "P85": 31.43996990222937,
+          "P90": 31.475680938497497,
+          "P95": 31.511391974765626,
+          "P100": 31.547103011033755
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 33,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 3182960,
+        "BytesAllocatedPerOperation": 88
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepDecodeBenchmarks.Current(Length: 32, EscapeInterval: 128)",
+      "Type": "SepDecodeBenchmarks",
+      "Method": "Current",
+      "Parameters": "Length=32&EscapeInterval=128",
+      "Statistics": {
+        "OriginalValues": [
+          28.7443474666926,
+          28.300239583425423,
+          28.321754296588367,
+          28.817709392377534,
+          29.07870613899375
+        ],
+        "N": 5,
+        "Min": 28.300239583425423,
+        "LowerFence": 27.577821652904618,
+        "Q1": 28.321754296588367,
+        "Median": 28.7443474666926,
+        "Mean": 28.652551375615538,
+        "Q3": 28.817709392377534,
+        "UpperFence": 29.561642036061286,
+        "Max": 29.07870613899375,
+        "InterquartileRange": 0.4959550957891672,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 0.15014357821712548,
+        "Variance": 0.11271547039921043,
+        "StandardDeviation": 0.3357312472785493,
+        "Skewness": 0.014499122065174806,
+        "Kurtosis": 0.963060494085018,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 28.652551375615538,
+          "StandardError": 0.15014357821712548,
+          "Level": 12,
+          "Margin": 1.2927814861214526,
+          "Lower": 27.359769889494086,
+          "Upper": 29.94533286173699
+        },
+        "Percentiles": {
+          "P0": 28.300239583425423,
+          "P25": 28.321754296588367,
+          "P50": 28.7443474666926,
+          "P67": 28.794233576158355,
+          "P80": 28.869908741700776,
+          "P85": 28.922108091024022,
+          "P90": 28.97430744034726,
+          "P95": 29.026506789670506,
+          "P100": 29.07870613899375
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 38,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 3619616,
+        "BytesAllocatedPerOperation": 88
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepDecodeBenchmarks.Current(Length: 1024, EscapeInterval: 4)",
+      "Type": "SepDecodeBenchmarks",
+      "Method": "Current",
+      "Parameters": "Length=1024&EscapeInterval=4",
+      "Statistics": {
+        "OriginalValues": [
+          862.5015267308765,
+          900.638173506421,
+          869.9483354271357,
+          880.8491938860972,
+          907.8825115159129
+        ],
+        "N": 5,
+        "Min": 862.5015267308765,
+        "LowerFence": 823.9135783082077,
+        "Q1": 869.9483354271357,
+        "Median": 880.8491938860972,
+        "Mean": 884.3639482132887,
+        "Q3": 900.638173506421,
+        "UpperFence": 946.672930625349,
+        "Max": 907.8825115159129,
+        "InterquartileRange": 30.689838079285323,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 8.706612693139098,
+        "Variance": 379.0255229416543,
+        "StandardDeviation": 19.46857783562154,
+        "Skewness": 0.1038144620773038,
+        "Kurtosis": 0.9019596009835579,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 884.3639482132887,
+          "StandardError": 8.706612693139098,
+          "Level": 12,
+          "Margin": 74.9665608757713,
+          "Lower": 809.3973873375174,
+          "Upper": 959.33050908906
+        },
+        "Percentiles": {
+          "P0": 862.5015267308765,
+          "P25": 869.9483354271357,
+          "P50": 880.8491938860972,
+          "P67": 894.3057000279174,
+          "P80": 902.0870411083195,
+          "P85": 903.5359087102178,
+          "P90": 904.9847763121162,
+          "P95": 906.4336439140145,
+          "P100": 907.8825115159129
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 28,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 114624,
+        "BytesAllocatedPerOperation": 2072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.SepDecodeBenchmarks.Current(Length: 1024, EscapeInterval: 128)",
+      "Type": "SepDecodeBenchmarks",
+      "Method": "Current",
+      "Parameters": "Length=1024&EscapeInterval=128",
+      "Statistics": {
+        "OriginalValues": [
+          854.8777359781121,
+          856.3315834473324,
+          851.4224948700411,
+          856.3696990424077
+        ],
+        "N": 4,
+        "Min": 851.4224948700411,
+        "LowerFence": 850.5231457335842,
+        "Q1": 854.0139257010944,
+        "Median": 855.6046597127222,
+        "Mean": 854.7503783344733,
+        "Q3": 856.3411123461012,
+        "UpperFence": 859.8318923136114,
+        "Max": 856.3696990424077,
+        "InterquartileRange": 2.3271866450068046,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 1.1623767850942084,
+        "Variance": 5.40447916210379,
+        "StandardDeviation": 2.3247535701884168,
+        "Skewness": -0.5701586291242342,
+        "Kurtosis": 1.1621540799476315,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 854.7503783344733,
+          "StandardError": 1.1623767850942084,
+          "Level": 12,
+          "Margin": 15.02253276328593,
+          "Lower": 839.7278455711875,
+          "Upper": 869.7729110977592
+        },
+        "Percentiles": {
+          "P0": 851.4224948700411,
+          "P25": 854.0139257010944,
+          "P50": 855.6046597127222,
+          "P67": 856.3319646032832,
+          "P80": 856.3468296853625,
+          "P85": 856.3525470246238,
+          "P90": 856.358264363885,
+          "P95": 856.3639817031464,
+          "P100": 856.3696990424077
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 28,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 116960,
+        "BytesAllocatedPerOperation": 2072
+      }
+    }
+  ]
+}

@@ -12,4 +12,13 @@ Latest installed TFM: net11.0, .NET 11 RC1, ARM64. BenchmarkDotNet runs serially
 
 Workloads: `SepDecodeBenchmarks.Current; SepGrammarBenchmarks`. SQL/JSON compare runtime and generated grammars at token lengths 8/256, with and without escapes. Allocation modes use the same sample grammar and include per-document state creation.
 
-Results and validation are recorded below after execution.
+
+## Decision and results
+
+Draft / do not keep: the four direct decoder cases show no convincing benefit (means range from 0.8% faster to 4.6% slower), with unchanged allocations. The extra source-generation handling is not justified by these measurements. Generated grammar rows are controls: generated decoders intentionally retain initialization, so their small timing differences are not evidence of this optimization.
+
+See [all benchmark deltas](comparison.md), the CSV/Markdown reports, and [retained statistics](measurements.json). Source revision measured: `d7bb4a5652fde0c26d87f7cabeed751a10ccaa5b`.
+
+## Validation
+
+Full Release solution build across supported TFMs; 867 runtime tests on .NET 10; 243 source-generator tests; 38 standalone tests on .NET 8/10. All pass. Benchmarks run only on net11.0.
