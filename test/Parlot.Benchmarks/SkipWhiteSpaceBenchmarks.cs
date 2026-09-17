@@ -16,6 +16,17 @@ public class SkipWhiteSpaceBenchmarks
     [GlobalSetup]
     public void Setup()
     {
+#if NET8_0_OR_GREATER
+        for (var code = 0; code <= char.MaxValue; code++)
+        {
+            var c = (char)code;
+            if (SearchValuesHelper._whiteSpaces.Contains(c) != Character.IsWhiteSpace(c) ||
+                SearchValuesHelper._whiteSpaceOrNewLines.Contains(c) != Character.IsWhiteSpaceOrNewLine(c))
+            {
+                throw new InvalidOperationException("Benchmark whitespace sets do not match Parlot.");
+            }
+        }
+#endif
         _source = new string(' ', Length) + "a";
         _scanner = new Scanner(_source);
     }
