@@ -33,9 +33,10 @@ public class CharMaskGeneratorTest
     [Fact]
     public void CanGenerateMasks()
     {
-        var masks = new List<CharacterMask>(char.MaxValue);
-        for (var c = char.MinValue; c < char.MaxValue; ++c)
+        var masks = new List<CharacterMask>(char.MaxValue + 1);
+        for (var code = 0; code <= char.MaxValue; code++)
         {
+            var c = (char)code;
             var mask = CharacterMask.None;
             if (IsWhiteSpace(c))
             {
@@ -69,19 +70,28 @@ public class CharMaskGeneratorTest
                 sb.Append(", ");
             }
 
+            sb.Length--; // Remove the last separator space to keep generated diffs small.
             sb.AppendLine();
         }
 
+        sb.AppendLine();
         sb.AppendLine("    };");
 
-        // because xunit if what is it, take it from debugger...
-        var result = sb.ToString();
+        // Optional destination makes regeneration reproducible without a debugger.
+        var outputPath = Environment.GetEnvironmentVariable("PARLOT_CHARACTER_MASK_OUTPUT");
+        if (!string.IsNullOrEmpty(outputPath))
+        {
+            System.IO.File.WriteAllText(outputPath, "using System;\n\nnamespace Parlot;\n\npublic static partial class Character\n{\n" + sb + "}\n");
+        }
+
+        Assert.Equal(char.MaxValue + 1, masks.Count);
     }
 
     public static bool IsWhiteSpace(char ch)
     {
         return (ch <= 32 &&
                 ((ch == 32) || // space
+                 (ch == '\f') ||
                  (ch == '\t')))  // horizontal tab
                || (ch == 0xA0) // non-breaking space
                || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
