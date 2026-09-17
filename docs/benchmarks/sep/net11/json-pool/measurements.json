@@ -1,0 +1,1466 @@
+{
+  "SourceRevision": "427227de24e312f28e9080ead945e4a657c8dab6",
+  "HostEnvironmentInfo": {
+    "BenchmarkDotNetCaption": "BenchmarkDotNet",
+    "BenchmarkDotNetVersion": "0.16.0-preview.1",
+    "OsVersion": "macOS Sequoia 15.7.9 (24G830) [Darwin 24.6.0]",
+    "ProcessorName": "Apple M4 Pro",
+    "PhysicalProcessorCount": 1,
+    "PhysicalCoreCount": 14,
+    "LogicalCoreCount": 14,
+    "RuntimeVersion": ".NET 11.0.0 (11.0.0-rc.1.26413.103, 11.0.26.41403)",
+    "Architecture": "Arm64",
+    "HasAttachedDebugger": false,
+    "HasRyuJit": true,
+    "Configuration": "RELEASE",
+    "DotNetCliVersion": "11.0.100-rc.1.26413.103",
+    "ChronometerFrequency": {
+      "Hertz": 1000000000
+    },
+    "HardwareTimerKind": "Unknown"
+  },
+  "Benchmarks": [
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: False, Escaped: False, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=False&Escaped=False&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          9949.396527777777,
+          9914.934722222222,
+          9898.524305555555,
+          9901.219444444445
+        ],
+        "N": 4,
+        "Min": 9898.524305555555,
+        "LowerFence": 9866.038888888888,
+        "Q1": 9900.545659722222,
+        "Median": 9908.077083333334,
+        "Mean": 9916.01875,
+        "Q3": 9923.550173611111,
+        "UpperFence": 9958.056944444445,
+        "Max": 9949.396527777777,
+        "InterquartileRange": 23.00451388888905,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 11.691614505533884,
+        "Variance": 546.7753989840413,
+        "StandardDeviation": 23.38322901106777,
+        "Skewness": 0.55900789393531,
+        "Kurtosis": 1.1563344005000846,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 9916.01875,
+          "StandardError": 11.691614505533884,
+          "Level": 12,
+          "Margin": 151.10217634883057,
+          "Lower": 9764.91657365117,
+          "Upper": 10067.120926348829
+        },
+        "Percentiles": {
+          "P0": 9898.524305555555,
+          "P25": 9900.545659722222,
+          "P50": 9908.077083333334,
+          "P67": 9915.279340277777,
+          "P80": 9928.719444444445,
+          "P85": 9933.888715277777,
+          "P90": 9939.057986111111,
+          "P95": 9944.227256944443,
+          "P100": 9949.396527777777
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 27,
+        "Gen1Collections": 2,
+        "Gen2Collections": 0,
+        "TotalOperations": 10080,
+        "BytesAllocatedPerOperation": 23072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: False, Escaped: False, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=False&Escaped=False&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          11293.26171875,
+          11170.54966517857,
+          11226.288169642858,
+          11145.126450892858,
+          11305.32924107143
+        ],
+        "N": 5,
+        "Min": 11145.126450892858,
+        "LowerFence": 10986.481584821428,
+        "Q1": 11170.54966517857,
+        "Median": 11226.288169642858,
+        "Mean": 11228.111049107143,
+        "Q3": 11293.26171875,
+        "UpperFence": 11477.329799107145,
+        "Max": 11305.32924107143,
+        "InterquartileRange": 122.71205357142935,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 31.945530419173043,
+        "Variance": 5102.584568811551,
+        "StandardDeviation": 71.43237759455828,
+        "Skewness": -0.013843752067887518,
+        "Kurtosis": 0.8601126683442892,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 11228.111049107143,
+          "StandardError": 31.945530419173043,
+          "Level": 12,
+          "Margin": 275.0606504829259,
+          "Lower": 10953.050398624217,
+          "Upper": 11503.17169959007
+        },
+        "Percentiles": {
+          "P0": 11145.126450892858,
+          "P25": 11170.54966517857,
+          "P50": 11226.288169642858,
+          "P67": 11271.830183035714,
+          "P80": 11295.675223214286,
+          "P85": 11298.088727678572,
+          "P90": 11300.502232142857,
+          "P95": 11302.915736607143,
+          "P100": 11305.32924107143
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 11,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 8960,
+        "BytesAllocatedPerOperation": 11072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: False, Escaped: True, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=False&Escaped=True&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          20097.3195,
+          17399.666666666668,
+          13873.868,
+          13828.354166666666,
+          13985.854166666666
+        ],
+        "N": 5,
+        "Min": 13828.354166666666,
+        "LowerFence": 8585.169999999998,
+        "Q1": 13873.868,
+        "Median": 13985.854166666666,
+        "Mean": 15837.0125,
+        "Q3": 17399.666666666668,
+        "UpperFence": 22688.36466666667,
+        "Max": 20097.3195,
+        "InterquartileRange": 3525.7986666666675,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 1263.0822534947765,
+        "Variance": 7976883.895467214,
+        "StandardDeviation": 2824.3377799879418,
+        "Skewness": 0.5248925358715812,
+        "Kurtosis": 1.1889476421669924,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 15837.0125,
+          "StandardError": 1263.0822534947765,
+          "Level": 12,
+          "Margin": 10875.519100825333,
+          "Lower": 4961.4933991746675,
+          "Upper": 26712.531600825336
+        },
+        "Percentiles": {
+          "P0": 13828.354166666666,
+          "P25": 13873.868,
+          "P50": 13985.854166666666,
+          "P67": 16307.246666666666,
+          "P80": 17939.197233333336,
+          "P85": 18478.7278,
+          "P90": 19018.258366666665,
+          "P95": 19557.788933333333,
+          "P100": 20097.3195
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 16,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 6000,
+        "BytesAllocatedPerOperation": 23072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: False, Escaped: True, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=False&Escaped=True&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          16415.538877952757,
+          16413.379101049868,
+          16434.512959317584,
+          16434.99835958005
+        ],
+        "N": 4,
+        "Min": 16413.379101049868,
+        "LowerFence": 16385.54587024278,
+        "Q1": 16414.998933727034,
+        "Median": 16425.02591863517,
+        "Mean": 16424.607324475066,
+        "Q3": 16434.634309383204,
+        "UpperFence": 16464.087372867456,
+        "Max": 16434.99835958005,
+        "InterquartileRange": 19.635375656169344,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 5.87654189554041,
+        "Variance": 138.1349786001667,
+        "StandardDeviation": 11.75308379108082,
+        "Skewness": -0.010381939312945102,
+        "Kurtosis": 0.575740295444833,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 16424.607324475066,
+          "StandardError": 5.87654189554041,
+          "Level": 12,
+          "Margin": 75.94830204168544,
+          "Lower": 16348.659022433381,
+          "Upper": 16500.55562651675
+        },
+        "Percentiles": {
+          "P0": 16413.379101049868,
+          "P25": 16414.998933727034,
+          "P50": 16425.02591863517,
+          "P67": 16434.51781332021,
+          "P80": 16434.707119422572,
+          "P85": 16434.77992946194,
+          "P90": 16434.85273950131,
+          "P95": 16434.92554954068,
+          "P100": 16434.99835958005
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 16,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 6096,
+        "BytesAllocatedPerOperation": 23312
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: True, Escaped: False, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=True&Escaped=False&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          36466.45377218935,
+          37103.627588757394,
+          35961.61538461538,
+          35927.206730769234,
+          35949.827292899405
+        ],
+        "N": 5,
+        "Min": 35927.206730769234,
+        "LowerFence": 35174.88757396449,
+        "Q1": 35949.827292899405,
+        "Median": 35961.61538461538,
+        "Mean": 36281.74615384616,
+        "Q3": 36466.45377218935,
+        "UpperFence": 37241.39349112427,
+        "Max": 37103.627588757394,
+        "InterquartileRange": 516.6264792899456,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 228.90588016715103,
+        "Variance": 261989.50987549056,
+        "StandardDeviation": 511.84910850317067,
+        "Skewness": 0.6674659351399337,
+        "Kurtosis": 1.4449321027327453,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 36281.74615384616,
+          "StandardError": 228.90588016715103,
+          "Level": 12,
+          "Margin": 1970.9486576674326,
+          "Lower": 34310.797496178726,
+          "Upper": 38252.69481151359
+        },
+        "Percentiles": {
+          "P0": 35927.206730769234,
+          "P25": 35949.827292899405,
+          "P50": 35961.61538461538,
+          "P67": 36304.90548816568,
+          "P80": 36593.88853550296,
+          "P85": 36721.32329881657,
+          "P90": 36848.758062130175,
+          "P95": 36976.19282544379,
+          "P100": 37103.627588757394
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 45,
+        "Gen1Collections": 11,
+        "Gen2Collections": 0,
+        "TotalOperations": 2704,
+        "BytesAllocatedPerOperation": 139808
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: True, Escaped: False, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=True&Escaped=False&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          42346.51266891892,
+          41288.4995777027,
+          41110.13175675676,
+          42312.25380067567,
+          42167.33530405405
+        ],
+        "N": 5,
+        "Min": 41110.13175675676,
+        "LowerFence": 39752.86824324324,
+        "Q1": 41288.4995777027,
+        "Median": 42167.33530405405,
+        "Mean": 41844.946621621624,
+        "Q3": 42312.25380067567,
+        "UpperFence": 43847.88513513513,
+        "Max": 42346.51266891892,
+        "InterquartileRange": 1023.7542229729734,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 266.78316666066854,
+        "Variance": 355866.29006747034,
+        "StandardDeviation": 596.5452959059105,
+        "Skewness": -0.28953341213564715,
+        "Kurtosis": 0.8041626408765695,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 41844.946621621624,
+          "StandardError": 266.78316666066854,
+          "Level": 12,
+          "Margin": 2297.083516745624,
+          "Lower": 39547.863104876,
+          "Upper": 44142.03013836725
+        },
+        "Percentiles": {
+          "P0": 41110.13175675676,
+          "P25": 41288.4995777027,
+          "P50": 42167.33530405405,
+          "P67": 42265.87988175676,
+          "P80": 42319.10557432432,
+          "P85": 42325.95734797297,
+          "P90": 42332.80912162162,
+          "P95": 42339.66089527027,
+          "P100": 42346.51266891892
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 33,
+        "Gen1Collections": 6,
+        "Gen2Collections": 0,
+        "TotalOperations": 2368,
+        "BytesAllocatedPerOperation": 119648
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: True, Escaped: True, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=True&Escaped=True&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          36774.77709537572,
+          36494.92702312139,
+          37263.8186416185,
+          39182.15606936416
+        ],
+        "N": 4,
+        "Min": 36494.92702312139,
+        "LowerFence": 35146.93194544797,
+        "Q1": 36704.814577312136,
+        "Median": 37019.29786849711,
+        "Mean": 37428.91970736995,
+        "Q3": 37743.40299855491,
+        "UpperFence": 39301.28563041908,
+        "Max": 39182.15606936416,
+        "InterquartileRange": 1038.5884212427773,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 605.6223379017804,
+        "Variance": 1467113.664662473,
+        "StandardDeviation": 1211.2446758035608,
+        "Skewness": 0.6035329077043016,
+        "Kurtosis": 1.2071634632954382,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 37428.91970736995,
+          "StandardError": 605.6223379017804,
+          "Level": 12,
+          "Margin": 7827.050169941191,
+          "Lower": 29601.869537428756,
+          "Upper": 45255.96987731114
+        },
+        "Percentiles": {
+          "P0": 36494.92702312139,
+          "P25": 36704.814577312136,
+          "P50": 37019.29786849711,
+          "P67": 37283.00201589595,
+          "P80": 38031.153612716764,
+          "P85": 38318.904226878614,
+          "P90": 38606.654841040465,
+          "P95": 38894.405455202315,
+          "P100": 39182.15606936416
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 46,
+        "Gen1Collections": 11,
+        "Gen2Collections": 0,
+        "TotalOperations": 2768,
+        "BytesAllocatedPerOperation": 139808
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 1, Objects: True, Escaped: True, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=1&Objects=True&Escaped=True&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          43003.97677364865,
+          43065.12162162162,
+          42383.19974662162,
+          42484.99070945946,
+          42950.39738175676
+        ],
+        "N": 5,
+        "Min": 42383.19974662162,
+        "LowerFence": 41706.51161317568,
+        "Q1": 42484.99070945946,
+        "Median": 42950.39738175676,
+        "Mean": 42777.53724662162,
+        "Q3": 43003.97677364865,
+        "UpperFence": 43782.455869932426,
+        "Max": 43065.12162162162,
+        "InterquartileRange": 518.9860641891864,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 142.29297220437908,
+        "Variance": 101236.44969378103,
+        "StandardDeviation": 318.1767585694798,
+        "Skewness": -0.28435564841213357,
+        "Kurtosis": 0.8170203185032371,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 42777.53724662162,
+          "StandardError": 142.29297220437908,
+          "Level": 12,
+          "Margin": 1225.1854009033725,
+          "Lower": 41552.35184571825,
+          "Upper": 44002.72264752499
+        },
+        "Percentiles": {
+          "P0": 42383.19974662162,
+          "P25": 42484.99070945946,
+          "P50": 42950.39738175676,
+          "P67": 42986.83136824324,
+          "P80": 43016.20574324324,
+          "P85": 43028.434712837836,
+          "P90": 43040.66368243243,
+          "P95": 43052.892652027025,
+          "P100": 43065.12162162162
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 37,
+        "Gen1Collections": 7,
+        "Gen2Collections": 0,
+        "TotalOperations": 2368,
+        "BytesAllocatedPerOperation": 131888
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: False, Escaped: False, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=False&Escaped=False&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          10036.231552419355,
+          9957.21189516129,
+          10108.917137096774,
+          10083.602217741936,
+          9985.794657258064
+        ],
+        "N": 5,
+        "Min": 9957.21189516129,
+        "LowerFence": 9839.083316532255,
+        "Q1": 9985.794657258064,
+        "Median": 10036.231552419355,
+        "Mean": 10034.351491935482,
+        "Q3": 10083.602217741936,
+        "UpperFence": 10230.313558467744,
+        "Max": 10108.917137096774,
+        "InterquartileRange": 97.8075604838723,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 28.546004661406048,
+        "Variance": 4074.37191064508,
+        "StandardDeviation": 63.830806908929794,
+        "Skewness": -0.030336138783677233,
+        "Kurtosis": 0.9369042520714912,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 10034.351491935482,
+          "StandardError": 28.546004661406048,
+          "Level": 12,
+          "Margin": 245.78970853908396,
+          "Lower": 9788.561783396399,
+          "Upper": 10280.141200474565
+        },
+        "Percentiles": {
+          "P0": 9957.21189516129,
+          "P25": 9985.794657258064,
+          "P50": 10036.231552419355,
+          "P67": 10068.44360483871,
+          "P80": 10088.665201612905,
+          "P85": 10093.728185483871,
+          "P90": 10098.79116935484,
+          "P95": 10103.854153225806,
+          "P100": 10108.917137096774
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 27,
+        "Gen1Collections": 2,
+        "Gen2Collections": 0,
+        "TotalOperations": 9920,
+        "BytesAllocatedPerOperation": 23072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: False, Escaped: False, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=False&Escaped=False&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          12503.938137755102,
+          12522.486096938776,
+          12456.175510204082,
+          12576.780357142858,
+          12445.487882653062
+        ],
+        "N": 5,
+        "Min": 12445.487882653062,
+        "LowerFence": 12356.709630102043,
+        "Q1": 12456.175510204082,
+        "Median": 12503.938137755102,
+        "Mean": 12500.973596938777,
+        "Q3": 12522.486096938776,
+        "UpperFence": 12621.951977040815,
+        "Max": 12576.780357142858,
+        "InterquartileRange": 66.31058673469306,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 23.77369777298619,
+        "Variance": 2825.943529006443,
+        "StandardDeviation": 53.159604296932486,
+        "Skewness": 0.24615179944841273,
+        "Kurtosis": 1.1706575569936486,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 12500.973596938777,
+          "StandardError": 23.77369777298619,
+          "Level": 12,
+          "Margin": 204.69870708101848,
+          "Lower": 12296.274889857757,
+          "Upper": 12705.672304019796
+        },
+        "Percentiles": {
+          "P0": 12445.487882653062,
+          "P25": 12456.175510204082,
+          "P50": 12503.938137755102,
+          "P67": 12516.55075,
+          "P80": 12533.344948979593,
+          "P85": 12544.203801020409,
+          "P90": 12555.062653061224,
+          "P95": 12565.92150510204,
+          "P100": 12576.780357142858
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 10,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 7840,
+        "BytesAllocatedPerOperation": 11520
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: False, Escaped: True, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=False&Escaped=True&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          13295.989720394737,
+          13254.694353070176,
+          13286.526864035088,
+          13285.104851973685
+        ],
+        "N": 4,
+        "Min": 13254.694353070176,
+        "LowerFence": 13260.416700932019,
+        "Q1": 13277.502227247807,
+        "Median": 13285.815858004386,
+        "Mean": 13280.578947368422,
+        "Q3": 13288.892578125,
+        "UpperFence": 13305.97810444079,
+        "Max": 13295.989720394737,
+        "InterquartileRange": 11.390350877192759,
+        "LowerOutliers": [
+          13254.694353070176
+        ],
+        "UpperOutliers": [],
+        "AllOutliers": [
+          13254.694353070176
+        ],
+        "StandardError": 8.959937092519777,
+        "Variance": 321.12189080764705,
+        "StandardDeviation": 17.919874185039554,
+        "Skewness": -0.5812847726916869,
+        "Kurtosis": 1.2291348828932456,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 13280.578947368422,
+          "StandardError": 8.959937092519777,
+          "Level": 12,
+          "Margin": 115.79803576208732,
+          "Lower": 13164.780911606334,
+          "Upper": 13396.376983130509
+        },
+        "Percentiles": {
+          "P0": 13254.694353070176,
+          "P25": 13277.502227247807,
+          "P50": 13285.815858004386,
+          "P67": 13286.621492598684,
+          "P80": 13290.312006578948,
+          "P85": 13291.731435032894,
+          "P90": 13293.15086348684,
+          "P95": 13294.570291940789,
+          "P100": 13295.989720394737
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 20,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 7296,
+        "BytesAllocatedPerOperation": 23072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: False, Escaped: True, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=False&Escaped=True&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          17502.340765449437,
+          17659.161341292136,
+          17521.498946629214,
+          17453.205407303372
+        ],
+        "N": 4,
+        "Min": 17453.205407303372,
+        "LowerFence": 17391.27049683988,
+        "Q1": 17490.05692591292,
+        "Median": 17511.919856039327,
+        "Mean": 17534.051615168537,
+        "Q3": 17555.914545294945,
+        "UpperFence": 17654.700974367985,
+        "Max": 17659.161341292136,
+        "InterquartileRange": 65.85761938202631,
+        "LowerOutliers": [],
+        "UpperOutliers": [
+          17659.161341292136
+        ],
+        "AllOutliers": [
+          17659.161341292136
+        ],
+        "StandardError": 44.11320699279002,
+        "Variance": 7783.900124754952,
+        "StandardDeviation": 88.22641398558004,
+        "Skewness": 0.5081895084326314,
+        "Kurtosis": 1.19145079149787,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 17534.051615168537,
+          "StandardError": 44.11320699279002,
+          "Level": 12,
+          "Margin": 570.1181457173477,
+          "Lower": 16963.93346945119,
+          "Upper": 18104.169760885885
+        },
+        "Percentiles": {
+          "P0": 17453.205407303372,
+          "P25": 17490.05692591292,
+          "P50": 17511.919856039327,
+          "P67": 17522.87557057584,
+          "P80": 17576.563904494382,
+          "P85": 17597.21326369382,
+          "P90": 17617.86262289326,
+          "P95": 17638.5119820927,
+          "P100": 17659.161341292136
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 16,
+        "Gen1Collections": 0,
+        "Gen2Collections": 0,
+        "TotalOperations": 5696,
+        "BytesAllocatedPerOperation": 23616
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: True, Escaped: False, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=True&Escaped=False&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          32282.23341836735,
+          32571.09661989796,
+          32167.357461734693,
+          32415.444196428572
+        ],
+        "N": 4,
+        "Min": 32167.357461734693,
+        "LowerFence": 31952.250119579083,
+        "Q1": 32253.514429209183,
+        "Median": 32348.83880739796,
+        "Mean": 32359.032924107145,
+        "Q3": 32454.357302295917,
+        "UpperFence": 32755.62161192602,
+        "Max": 32571.09661989796,
+        "InterquartileRange": 200.84287308673447,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 86.98222504001956,
+        "Variance": 30263.62989165042,
+        "StandardDeviation": 173.96445008003911,
+        "Skewness": 0.10547413455673503,
+        "Kurtosis": 0.9327284039751458,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 32359.032924107145,
+          "StandardError": 86.98222504001956,
+          "Level": 12,
+          "Margin": 1124.1564200555663,
+          "Lower": 31234.87650405158,
+          "Upper": 33483.18934416271
+        },
+        "Percentiles": {
+          "P0": 32167.357461734693,
+          "P25": 32253.514429209183,
+          "P50": 32348.83880739796,
+          "P67": 32417.000720663265,
+          "P80": 32477.70516581633,
+          "P85": 32501.053029336734,
+          "P90": 32524.400892857142,
+          "P95": 32547.74875637755,
+          "P100": 32571.09661989796
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 52,
+        "Gen1Collections": 13,
+        "Gen2Collections": 0,
+        "TotalOperations": 3136,
+        "BytesAllocatedPerOperation": 139808
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: True, Escaped: False, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=True&Escaped=False&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          39480.18199685535,
+          39365.893867924526,
+          39378.21029874214,
+          39474.35141509434
+        ],
+        "N": 4,
+        "Min": 39365.893867924526,
+        "LowerFence": 39224.11438679244,
+        "Q1": 39375.13119103773,
+        "Median": 39426.28085691824,
+        "Mean": 39424.65939465409,
+        "Q3": 39475.80906053459,
+        "UpperFence": 39626.82586477988,
+        "Max": 39480.18199685535,
+        "InterquartileRange": 100.67786949685978,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 30.499947941859574,
+        "Variance": 3720.9872978245767,
+        "StandardDeviation": 60.99989588371915,
+        "Skewness": -0.010229680511054086,
+        "Kurtosis": 0.5810737845705879,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 39424.65939465409,
+          "StandardError": 30.499947941859574,
+          "Level": 12,
+          "Margin": 394.18067627526267,
+          "Lower": 39030.47871837883,
+          "Upper": 39818.84007092935
+        },
+        "Percentiles": {
+          "P0": 39365.893867924526,
+          "P25": 39375.13119103773,
+          "P50": 39426.28085691824,
+          "P67": 39474.40972091194,
+          "P80": 39476.68364779874,
+          "P85": 39477.55823506289,
+          "P90": 39478.43282232704,
+          "P95": 39479.307409591194,
+          "P100": 39480.18199685535
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 36,
+        "Gen1Collections": 7,
+        "Gen2Collections": 0,
+        "TotalOperations": 2544,
+        "BytesAllocatedPerOperation": 120096
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: True, Escaped: True, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=True&Escaped=True&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          38470.93023255814,
+          38117.94476744186,
+          36455.123546511626,
+          36587.98146802326,
+          37659.64135174418
+        ],
+        "N": 5,
+        "Min": 36455.123546511626,
+        "LowerFence": 34293.03651889536,
+        "Q1": 36587.98146802326,
+        "Median": 37659.64135174418,
+        "Mean": 37458.324273255814,
+        "Q3": 38117.94476744186,
+        "UpperFence": 40412.88971656977,
+        "Max": 38470.93023255814,
+        "InterquartileRange": 1529.9632994186031,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 404.0363156955113,
+        "Variance": 816226.7220040143,
+        "StandardDeviation": 903.4526672737285,
+        "Skewness": -0.09098142319235346,
+        "Kurtosis": 0.8492627285448325,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 37458.324273255814,
+          "StandardError": 404.0363156955113,
+          "Level": 12,
+          "Margin": 3478.874520337641,
+          "Lower": 33979.449752918175,
+          "Upper": 40937.19879359345
+        },
+        "Percentiles": {
+          "P0": 36455.123546511626,
+          "P25": 36587.98146802326,
+          "P50": 37659.64135174418,
+          "P67": 37971.28767441861,
+          "P80": 38188.54186046512,
+          "P85": 38259.13895348837,
+          "P90": 38329.73604651162,
+          "P95": 38400.33313953488,
+          "P100": 38470.93023255814
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 46,
+        "Gen1Collections": 11,
+        "Gen2Collections": 0,
+        "TotalOperations": 2752,
+        "BytesAllocatedPerOperation": 139808
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 4, Objects: True, Escaped: True, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=4&Objects=True&Escaped=True&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          44213.81120689655,
+          43001.724137931036,
+          44160.72198275862,
+          42820.13275862069,
+          44400.987931034484
+        ],
+        "N": 5,
+        "Min": 42820.13275862069,
+        "LowerFence": 41183.59353448277,
+        "Q1": 43001.724137931036,
+        "Median": 44160.72198275862,
+        "Mean": 43719.47560344827,
+        "Q3": 44213.81120689655,
+        "UpperFence": 46031.94181034482,
+        "Max": 44400.987931034484,
+        "InterquartileRange": 1212.087068965513,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 333.7296681101151,
+        "Variance": 556877.4568844378,
+        "StandardDeviation": 746.2422240026611,
+        "Skewness": -0.27621260062088204,
+        "Kurtosis": 0.795149029941282,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 43719.47560344827,
+          "StandardError": 333.7296681101151,
+          "Level": 12,
+          "Margin": 2873.5130827793437,
+          "Lower": 40845.96252066892,
+          "Upper": 46592.98868622762
+        },
+        "Percentiles": {
+          "P0": 42820.13275862069,
+          "P25": 43001.724137931036,
+          "P50": 44160.72198275862,
+          "P67": 44196.822655172415,
+          "P80": 44251.246551724136,
+          "P85": 44288.68189655172,
+          "P90": 44326.11724137931,
+          "P95": 44363.552586206904,
+          "P100": 44400.987931034484
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 36,
+        "Gen1Collections": 7,
+        "Gen2Collections": 0,
+        "TotalOperations": 2320,
+        "BytesAllocatedPerOperation": 132192
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: False, Escaped: False, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=False&Escaped=False&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          10568.868172268907,
+          10379.722478991596,
+          10257.7993697479,
+          10185.990021008403,
+          10217.642647058823
+        ],
+        "N": 5,
+        "Min": 10185.990021008403,
+        "LowerFence": 9974.522899159663,
+        "Q1": 10217.642647058823,
+        "Median": 10257.7993697479,
+        "Mean": 10322.004537815126,
+        "Q3": 10379.722478991596,
+        "UpperFence": 10622.842226890756,
+        "Max": 10568.868172268907,
+        "InterquartileRange": 162.07983193277323,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 69.92376969969442,
+        "Variance": 24446.66784507952,
+        "StandardDeviation": 156.3543022915568,
+        "Skewness": 0.5922534434651919,
+        "Kurtosis": 1.406482286905239,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 10322.004537815126,
+          "StandardError": 69.92376969969442,
+          "Level": 12,
+          "Margin": 602.0647435007946,
+          "Lower": 9719.939794314332,
+          "Upper": 10924.06928131592
+        },
+        "Percentiles": {
+          "P0": 10185.990021008403,
+          "P25": 10217.642647058823,
+          "P50": 10257.7993697479,
+          "P67": 10340.707084033613,
+          "P80": 10417.55161764706,
+          "P85": 10455.380756302522,
+          "P90": 10493.209894957981,
+          "P95": 10531.039033613446,
+          "P100": 10568.868172268907
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 26,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 9520,
+        "BytesAllocatedPerOperation": 23072
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: False, Escaped: False, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=False&Escaped=False&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          19434.4400390625,
+          19449.66640625,
+          19444.4986328125,
+          19601.22890625,
+          19654.0201171875
+        ],
+        "N": 5,
+        "Min": 19434.4400390625,
+        "LowerFence": 19209.403222656256,
+        "Q1": 19444.4986328125,
+        "Median": 19449.66640625,
+        "Mean": 19516.7708203125,
+        "Q3": 19601.22890625,
+        "UpperFence": 19836.324316406244,
+        "Max": 19654.0201171875,
+        "InterquartileRange": 156.7302734374971,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 46.084252617813966,
+        "Variance": 10618.79169671247,
+        "StandardDeviation": 103.04752154570467,
+        "Skewness": 0.35643611455482715,
+        "Kurtosis": 0.8854910818654019,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 19516.7708203125,
+          "StandardError": 46.084252617813966,
+          "Level": 12,
+          "Margin": 396.79931232156156,
+          "Lower": 19119.97150799094,
+          "Upper": 19913.57013263406
+        },
+        "Percentiles": {
+          "P0": 19434.4400390625,
+          "P25": 19444.4986328125,
+          "P50": 19449.66640625,
+          "P67": 19552.72890625,
+          "P80": 19611.7871484375,
+          "P85": 19622.345390625,
+          "P90": 19632.9036328125,
+          "P95": 19643.461875,
+          "P100": 19654.0201171875
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 31,
+        "Gen1Collections": 4,
+        "Gen2Collections": 0,
+        "TotalOperations": 5120,
+        "BytesAllocatedPerOperation": 51632
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: False, Escaped: True, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=False&Escaped=True&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          14299.773755656108,
+          14516.278987556561,
+          14492.664734162896,
+          13978.406674208145,
+          14380.50890837104
+        ],
+        "N": 5,
+        "Min": 13978.406674208145,
+        "LowerFence": 14010.437287895926,
+        "Q1": 14299.773755656108,
+        "Median": 14380.50890837104,
+        "Mean": 14333.526611990954,
+        "Q3": 14492.664734162896,
+        "UpperFence": 14782.001201923078,
+        "Max": 14516.278987556561,
+        "InterquartileRange": 192.8909785067881,
+        "LowerOutliers": [
+          13978.406674208145
+        ],
+        "UpperOutliers": [],
+        "AllOutliers": [
+          13978.406674208145
+        ],
+        "StandardError": 97.00003463866854,
+        "Variance": 47045.033599514485,
+        "StandardDeviation": 216.89867127189711,
+        "Skewness": -0.6778745402334928,
+        "Kurtosis": 1.5964641477673063,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 14333.526611990954,
+          "StandardError": 97.00003463866854,
+          "Level": 12,
+          "Margin": 835.1995498113625,
+          "Lower": 13498.327062179591,
+          "Upper": 15168.726161802317
+        },
+        "Percentiles": {
+          "P0": 13978.406674208145,
+          "P25": 14299.773755656108,
+          "P50": 14380.50890837104,
+          "P67": 14456.774869909503,
+          "P80": 14497.387584841628,
+          "P85": 14502.110435520362,
+          "P90": 14506.833286199095,
+          "P95": 14511.556136877829,
+          "P100": 14516.278987556561
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 20,
+        "Gen1Collections": 1,
+        "Gen2Collections": 0,
+        "TotalOperations": 7072,
+        "BytesAllocatedPerOperation": 24320
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: False, Escaped: True, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=False&Escaped=True&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          24409.110482283464,
+          24401.677411417324,
+          24813.545767716536,
+          24822.93725393701
+        ],
+        "N": 4,
+        "Min": 24401.677411417324,
+        "LowerFence": 23794.29007750984,
+        "Q1": 24407.252214566928,
+        "Median": 24611.328125,
+        "Mean": 24611.817728838585,
+        "Q3": 24815.893639271653,
+        "UpperFence": 25428.85577632874,
+        "Max": 24822.93725393701,
+        "InterquartileRange": 408.64142470472507,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 119.2038996702691,
+        "Variance": 56838.278786398325,
+        "StandardDeviation": 238.4077993405382,
+        "Skewness": 0.0001882253299376933,
+        "Kurtosis": 0.5634460460487278,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 24611.817728838585,
+          "StandardError": 119.2038996702691,
+          "Level": 12,
+          "Margin": 1540.5886553067473,
+          "Lower": 23071.22907353184,
+          "Upper": 26152.40638414533
+        },
+        "Percentiles": {
+          "P0": 24401.677411417324,
+          "P25": 24407.252214566928,
+          "P50": 24611.328125,
+          "P67": 24813.63968257874,
+          "P80": 24817.302362204726,
+          "P85": 24818.711085137795,
+          "P90": 24820.119808070867,
+          "P95": 24821.528531003936,
+          "P100": 24822.93725393701
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 25,
+        "Gen1Collections": 3,
+        "Gen2Collections": 0,
+        "TotalOperations": 4064,
+        "BytesAllocatedPerOperation": 52880
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: True, Escaped: False, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=True&Escaped=False&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          37462.41678994083,
+          37194.341715976334,
+          37126.75665680473,
+          36951.86168639053
+        ],
+        "N": 4,
+        "Min": 36951.86168639053,
+        "LowerFence": 36815.54155880178,
+        "Q1": 37083.03291420118,
+        "Median": 37160.54918639053,
+        "Mean": 37183.844212278105,
+        "Q3": 37261.360484467456,
+        "UpperFence": 37528.85183986687,
+        "Max": 37462.41678994083,
+        "InterquartileRange": 178.32757026627223,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 105.9826086034288,
+        "Variance": 44929.25330555032,
+        "StandardDeviation": 211.9652172068576,
+        "Skewness": 0.23491360104508816,
+        "Kurtosis": 1.1058149596638966,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 37183.844212278105,
+          "StandardError": 105.9826086034288,
+          "Level": 12,
+          "Margin": 1369.7169717257211,
+          "Lower": 35814.127240552385,
+          "Upper": 38553.561184003825
+        },
+        "Percentiles": {
+          "P0": 36951.86168639053,
+          "P25": 37083.03291420118,
+          "P50": 37160.54918639053,
+          "P67": 37197.02246671598,
+          "P80": 37301.571745562134,
+          "P85": 37341.783006656806,
+          "P90": 37381.99426775148,
+          "P95": 37422.205528846156,
+          "P100": 37462.41678994083
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 45,
+        "Gen1Collections": 11,
+        "Gen2Collections": 0,
+        "TotalOperations": 2704,
+        "BytesAllocatedPerOperation": 139808
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: True, Escaped: False, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=True&Escaped=False&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          50369.65067829457,
+          49706.09253875969,
+          49003.29069767442,
+          48325.11676356589,
+          52302.50726744186
+        ],
+        "N": 5,
+        "Min": 48325.11676356589,
+        "LowerFence": 46953.75072674419,
+        "Q1": 49003.29069767442,
+        "Median": 49706.09253875969,
+        "Mean": 49941.33158914729,
+        "Q3": 50369.65067829457,
+        "UpperFence": 52419.1906492248,
+        "Max": 52302.50726744186,
+        "InterquartileRange": 1366.3599806201528,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 682.1296179330353,
+        "Variance": 2326504.078307344,
+        "StandardDeviation": 1525.2881951642266,
+        "Skewness": 0.46115638921055874,
+        "Kurtosis": 1.4306049206152005,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 49941.33158914729,
+          "StandardError": 682.1296179330353,
+          "Level": 12,
+          "Margin": 5873.34171511269,
+          "Lower": 44067.989874034596,
+          "Upper": 55814.67330425998
+        },
+        "Percentiles": {
+          "P0": 48325.11676356589,
+          "P25": 49003.29069767442,
+          "P50": 49706.09253875969,
+          "P67": 50157.31207364341,
+          "P80": 50756.22199612403,
+          "P85": 51142.79331395349,
+          "P90": 51529.36463178295,
+          "P95": 51915.93594961241,
+          "P100": 52302.50726744186
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 39,
+        "Gen1Collections": 10,
+        "Gen2Collections": 0,
+        "TotalOperations": 2064,
+        "BytesAllocatedPerOperation": 160208
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: True, Escaped: True, Optimize: False)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=True&Escaped=True&Optimize=False",
+      "Statistics": {
+        "OriginalValues": [
+          37400.49888392857,
+          37089.64211309524,
+          37324.59077380953,
+          37265.904017857145
+        ],
+        "N": 4,
+        "Min": 37089.64211309524,
+        "LowerFence": 37039.244652157744,
+        "Q1": 37221.83854166667,
+        "Median": 37295.247395833336,
+        "Mean": 37270.15894717262,
+        "Q3": 37343.56780133929,
+        "UpperFence": 37526.16169084822,
+        "Max": 37400.49888392857,
+        "InterquartileRange": 121.72925967261835,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 66.17889559958998,
+        "Variance": 17518.58489112572,
+        "StandardDeviation": 132.35779119917996,
+        "Skewness": -0.3781077557252639,
+        "Kurtosis": 1.1072441107013244,
+        "ConfidenceInterval": {
+          "N": 4,
+          "Mean": 37270.15894717262,
+          "StandardError": 66.17889559958998,
+          "Level": 12,
+          "Margin": 855.2946343490021,
+          "Lower": 36414.864312823614,
+          "Upper": 38125.45358152162
+        },
+        "Percentiles": {
+          "P0": 37089.64211309524,
+          "P25": 37221.83854166667,
+          "P50": 37295.247395833336,
+          "P67": 37325.34985491072,
+          "P80": 37354.95401785715,
+          "P85": 37366.340234375006,
+          "P90": 37377.726450892864,
+          "P95": 37389.112667410714,
+          "P100": 37400.49888392857
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 45,
+        "Gen1Collections": 12,
+        "Gen2Collections": 0,
+        "TotalOperations": 2688,
+        "BytesAllocatedPerOperation": 141056
+      }
+    },
+    {
+      "FullName": "Parlot.Benchmarks.JsonDocumentPoolParserBenchmarks.Parse(Distinct: 256, Objects: True, Escaped: True, Optimize: True)",
+      "Type": "JsonDocumentPoolParserBenchmarks",
+      "Method": "Parse",
+      "Parameters": "Distinct=256&Objects=True&Escaped=True&Optimize=True",
+      "Statistics": {
+        "OriginalValues": [
+          53095.05243644068,
+          52218.904131355936,
+          51398.4375,
+          51838.45338983051,
+          53468.904661016946
+        ],
+        "N": 5,
+        "Min": 51398.4375,
+        "LowerFence": 49953.554819915254,
+        "Q1": 51838.45338983051,
+        "Median": 52218.904131355936,
+        "Mean": 52403.95042372881,
+        "Q3": 53095.05243644068,
+        "UpperFence": 54979.95100635594,
+        "Max": 53468.904661016946,
+        "InterquartileRange": 1256.599046610172,
+        "LowerOutliers": [],
+        "UpperOutliers": [],
+        "AllOutliers": [],
+        "StandardError": 385.80012862535034,
+        "Variance": 744208.6962366846,
+        "StandardDeviation": 862.675313334446,
+        "Skewness": 0.10407132461101118,
+        "Kurtosis": 0.9533466473274087,
+        "ConfidenceInterval": {
+          "N": 5,
+          "Mean": 52403.95042372881,
+          "StandardError": 385.80012862535034,
+          "Level": 12,
+          "Margin": 3321.8554503134897,
+          "Lower": 49082.094973415326,
+          "Upper": 55725.8058740423
+        },
+        "Percentiles": {
+          "P0": 51398.4375,
+          "P25": 51838.45338983051,
+          "P50": 52218.904131355936,
+          "P67": 52814.68497881356,
+          "P80": 53169.82288135594,
+          "P85": 53244.59332627119,
+          "P90": 53319.36377118644,
+          "P95": 53394.134216101695,
+          "P100": 53468.904661016946
+        }
+      },
+      "Memory": {
+        "Gen0Collections": 36,
+        "Gen1Collections": 9,
+        "Gen2Collections": 0,
+        "TotalOperations": 1888,
+        "BytesAllocatedPerOperation": 161456
+      }
+    }
+  ]
+}
