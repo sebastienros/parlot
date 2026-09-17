@@ -12,9 +12,9 @@ public static partial class Character
     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);
     internal static readonly SearchValues<char> _newLines = SearchValues.Create(NewLines);
 
-    private const string WhiteSpaceCharacters = " \t\u00a0\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\ufeff";
+    private const string WhiteSpaceCharacters = " \t\f\u00a0\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\ufeff";
     internal static readonly SearchValues<char> _whiteSpaces = SearchValues.Create(WhiteSpaceCharacters);
-    internal static readonly SearchValues<char> _whiteSpaceOrNewLines = SearchValues.Create(WhiteSpaceCharacters + "\n\r\v\f");
+    internal static readonly SearchValues<char> _whiteSpaceOrNewLines = SearchValues.Create(WhiteSpaceCharacters + "\n\r\v");
 
     // _decimalDigits and _hexDigits are still used for span-wide IndexOfAnyExcept scans in Scanner,
     // which is what SearchValues is good at. The single-char predicates live in Character.cs and use
