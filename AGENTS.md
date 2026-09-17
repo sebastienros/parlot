@@ -71,8 +71,7 @@ Two layers, plus a compile-time path that mirrors the runtime one.
 buffer + offset + length so no substring is ever allocated. `Character` is a partial class split by
 technique: `Character.SearchValues.cs` for net8.0+, `Character.Mask.cs` plus the byte table in
 `Character.Generated.cs` for everything below. That table is **generated** — don't hand-edit it; rerun
-`CanGenerateMasks` in `test/Parlot.Tests/CharMaskGeneratorTest.cs` and take the string it builds from the
-debugger.
+`CanGenerateMasks` in `test/Parlot.Tests/CharMaskGeneratorTest.cs` with `PARLOT_CHARACTER_MASK_OUTPUT` set to the absolute path of `src/Parlot/Character.Generated.cs`.
 
 **Combinator layer** (`src/Parlot/Fluent`): `Parser<T>` is the abstract base; the whole library is
 instances of it composed into a graph. `Parsers` is the static entry point exposing the `Literals` and
