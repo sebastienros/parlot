@@ -3,7 +3,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(ParlotBenchmarkTargetFramework)' != ''">$(ParlotBenchmarkTargetFramework)</TargetFrameworks>
     <LangVersion>12</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>False</SignAssembly>
@@ -34,14 +36,14 @@
     <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
     
     <!-- Make Samples.dll available to the source generator at compile time -->
-    <Analyzer Include="..\..\src\Samples\bin\$(Configuration)\net10.0\Samples.dll" />
+    <Analyzer Include="..\..\src\Samples\bin\$(Configuration)\$(TargetFramework)\Samples.dll" />
   </ItemGroup>
 
-  <!-- BenchmarkDotNet flattens project-reference outputs, so netstandard2.0 can overwrite the net10.0 Parlot assembly. -->
-  <Target Name="CopyNet10ParlotForBenchmarkDotNet"
+  <!-- BenchmarkDotNet flattens project-reference outputs, so netstandard2.0 can overwrite the selected Parlot assembly. -->
+  <Target Name="CopyCurrentParlotForBenchmarkDotNet"
           AfterTargets="Build"
           Condition="'$(ArtifactsPath)' != ''">
-    <Copy SourceFiles="..\..\src\Parlot\bin\$(Configuration)\net10.0\Parlot.dll"
+    <Copy SourceFiles="..\..\src\Parlot\bin\$(Configuration)\$(TargetFramework)\Parlot.dll"
           DestinationFiles="$(OutDir)Parlot.dll" />
   </Target>
 
