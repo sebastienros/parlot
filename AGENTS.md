@@ -204,3 +204,5 @@ Full reference: `docs/source-generation.md`.
 Branch as `feature/…`, `fix/…` or `perf/…`, keep logical changes in separate commits, and before opening:
 a full `dotnet build` (all TFMs) plus both test projects must be green, benchmarks included for
 performance-sensitive work, and `docs/` updated when behaviour or the public API changes.
+
+The opt-in net11.0 benchmark mode uses BenchmarkDotNet 0.16.0-preview.1, which recognizes .NET 11. Normal builds retain 0.15.8.
