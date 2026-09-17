@@ -57,6 +57,9 @@ public static partial class Character
         return DecodeStringInternal(span).AsSpan();
     }
 
+#if NET8_0_OR_GREATER
+    [SkipLocalsInit]
+#endif
     public static string DecodeStringInternal(ReadOnlySpan<char> span)
     {
         // This method always allocates a new string. It is invoked when we know for sure that the string contains escape sequences.

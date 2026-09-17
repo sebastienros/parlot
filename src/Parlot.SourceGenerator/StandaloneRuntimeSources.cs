@@ -179,15 +179,11 @@ internal static class StandaloneRuntimeSources
 
         public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
         {
-            if (!_downlevel)
-            {
-                return base.VisitAttributeList(node);
-            }
-
-            // These annotations have no runtime behavior, and the generated helpers are internal.
-            // Avoid requiring PolySharp or declaring BCL-shaped attributes in the application.
-            var attributes = node.Attributes.Where(static attribute =>
-                attribute.Name.ToString() is not ("NotNull" or "DoesNotReturn" or "CallerArgumentExpression")).ToArray();
+            // Generated consumers need not enable unsafe compilation. This optimization
+            // changes initialization only, so retaining zeroing is always correct.
+            var attributes = node.Attributes.Where(attribute =>
+                attribute.Name.ToString() != "SkipLocalsInit" &&
+                (!_downlevel || attribute.Name.ToString() is not ("NotNull" or "DoesNotReturn" or "CallerArgumentExpression"))).ToArray();
             return attributes.Length == 0 ? null : node.WithAttributes(SyntaxFactory.SeparatedList(attributes));
         }
 
