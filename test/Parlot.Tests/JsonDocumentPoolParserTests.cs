@@ -42,5 +42,25 @@ public class JsonDocumentPoolParserTests
         });
     }
 
+    [Fact]
+    public void PoolCapacityDoesNotChangeUniqueOrRepeatedValues()
+    {
+        var input = new System.Text.StringBuilder("[");
+        for (var i = 0; i < 300; i++)
+        {
+            if (i != 0) input.Append(',');
+            input.Append('"').Append("value").Append(i).Append('"');
+        }
+        input.Append(",\"value0\",\"value299\"]");
+        var array = Assert.IsType<JsonArray>(JsonDocumentPoolParser.Parse(input.ToString()));
+        Assert.Equal(302, array.Elements.Count);
+        for (var i = 0; i < 300; i++)
+        {
+            Assert.Equal("value" + i, Text(array.Elements[i]));
+        }
+        Assert.Same(((JsonString)array.Elements[0]).Value, ((JsonString)array.Elements[300]).Value);
+        Assert.Equal("value299", Text(array.Elements[301]));
+    }
+
     private static string Text(IJson value) => ((JsonString)value).Value;
 }
