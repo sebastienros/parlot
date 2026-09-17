@@ -12,4 +12,13 @@ Latest installed TFM: net11.0, .NET 11 RC1, ARM64. BenchmarkDotNet runs serially
 
 Workloads: `SepDecodeBenchmarks.Current; SepGrammarBenchmarks`. SQL/JSON compare runtime and generated grammars at token lengths 8/256, with and without escapes. Allocation modes use the same sample grammar and include per-document state creation.
 
-Results and validation are recorded below after execution.
+
+## Decision and results
+
+Draft: retain as a workload-specific candidate. Long escaped JSON improves 29.6–32.0% and long escaped SQL 16.7–17.4%, with unchanged allocations. The 1024-character sparse decoder improves 71.7%, but dense decoding regresses 8.9–15.1%. Do not merge as a general improvement until the dense-input tradeoff is accepted or removed.
+
+See [all benchmark deltas](comparison.md), the CSV/Markdown reports, and [retained statistics](measurements.json). Source revision measured: `cec9493cb930cb71526398087c40e6a189a5dbc6`.
+
+## Validation
+
+Full Release solution build across supported TFMs; 867 runtime tests on .NET 10; 243 source-generator tests; 38 standalone tests on .NET 8/10. All pass. Benchmarks run only on net11.0.
