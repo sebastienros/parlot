@@ -25,6 +25,10 @@ SOFTWARE.*/
 
 using System;
 using System.Threading;
+#if NET8_0_OR_GREATER
+using System.IO.Hashing;
+using System.Runtime.InteropServices;
+#endif
 
 namespace Parlot;
 
@@ -79,18 +83,18 @@ internal sealed class StringCache
         }
 
 #if NET8_0_OR_GREATER
-        // Randomized ordinal span hashing needs no additional runtime/consumer dependency.
-        var hash = string.GetHashCode(value);
+        // Hash UTF-16 bytes directly; no encoding or temporary buffer is needed.
+        var hash = XxHash3.HashToUInt64(MemoryMarshal.AsBytes(value));
 #else
         // Downlevel span hashing must not allocate the very string we are trying to avoid.
-        var hash = unchecked((int)2166136261);
+        var hash = 14695981039346656037UL;
         foreach (var c in value)
         {
-            hash = unchecked((hash ^ c) * 16777619);
+            hash = unchecked((hash ^ c) * 1099511628211UL);
         }
 #endif
         hash = hash == 0 ? 1 : hash;
-        var index = hash & (table.Entries.Length - 1);
+        var index = unchecked((int)hash) & (table.Entries.Length - 1);
         var entry = Volatile.Read(ref table.Entries[index]);
         if (entry is not null && entry.Hash == hash && value.SequenceEqual(entry.Value.AsSpan()))
         {
@@ -98,7 +102,7 @@ internal sealed class StringCache
         }
 
         var result = value.ToString();
-        if (Volatile.Read(ref table.CandidateHashes[index]) == hash)
+        if (unchecked((ulong)Volatile.Read(ref table.CandidateHashes[index])) == hash)
         {
             // Publish one immutable object: readers never see a mismatched hash and string.
             Volatile.Write(ref table.Entries[index], new Entry(hash, result));
@@ -106,7 +110,7 @@ internal sealed class StringCache
         }
         else
         {
-            Volatile.Write(ref table.CandidateHashes[index], hash);
+            Volatile.Write(ref table.CandidateHashes[index], unchecked((long)hash));
         }
 
         return result;
@@ -116,10 +120,10 @@ internal sealed class StringCache
 
     private sealed class Entry
     {
-        internal readonly int Hash;
+        internal readonly ulong Hash;
         internal readonly string Value;
 
-        internal Entry(int hash, string value)
+        internal Entry(ulong hash, string value)
         {
             Hash = hash;
             Value = value;
@@ -129,12 +133,12 @@ internal sealed class StringCache
     private sealed class Table
     {
         internal readonly Entry?[] Entries;
-        internal readonly int[] CandidateHashes;
+        internal readonly long[] CandidateHashes;
 
         internal Table(int capacity)
         {
             Entries = new Entry?[capacity];
-            CandidateHashes = new int[capacity];
+            CandidateHashes = new long[capacity];
         }
     }
 }

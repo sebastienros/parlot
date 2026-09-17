@@ -19,7 +19,9 @@
       <group targetFramework=".NETStandard2.0">
         <dependency id="System.Memory" version="$memoryVersion$" />
       </group>
-      <group targetFramework="net8.0" />
+      <group targetFramework="net8.0">
+        <dependency id="System.IO.Hashing" version="$hashingVersion$" />
+      </group>
     </dependencies>
   </metadata>
   <files>

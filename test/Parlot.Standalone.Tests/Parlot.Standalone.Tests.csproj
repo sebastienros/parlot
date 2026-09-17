@@ -13,6 +13,7 @@
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.IO.Hashing" Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
     <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'net472'" />
     <PackageReference Include="xunit.v3.mtp-v2" />
     <ProjectReference Include="../../src/Parlot.SourceGenerator/Parlot.SourceGenerator.csproj"

@@ -19,6 +19,7 @@ public class StandalonePackageTests
     [InlineData("netstandard2.0", true)]
     [InlineData("net8.0", false)]
     [InlineData("net10.0", false)]
+    [InlineData("net10.0", true)]
     [InlineData("net472;netstandard2.0;net8.0;net10.0", false)]
     public async Task Packaged_Generator_Produces_A_Dependency_Free_Library_And_Downstream_Application(
         string targetFramework, bool centralPackageManagement)
@@ -54,9 +55,10 @@ public class StandalonePackageTests
                 Assert.DoesNotContain(package.Entries, static entry => entry.FullName.StartsWith("lib/", StringComparison.Ordinal));
                 using var manifest = package.Entries.Single(static entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal)).Open();
                 var dependencies = XDocument.Load(manifest).Descendants().Where(static element => element.Name.LocalName == "dependency").ToArray();
-                Assert.Equal(2, dependencies.Length);
-                Assert.All(dependencies, static dependency => Assert.Equal("System.Memory", dependency.Attribute("id").Value));
-                Assert.Equal([".NETFramework4.7.2", ".NETStandard2.0"],
+                Assert.Equal(3, dependencies.Length);
+                Assert.Equal(["System.Memory", "System.Memory", "System.IO.Hashing"],
+                    dependencies.Select(static dependency => dependency.Attribute("id").Value));
+                Assert.Equal([".NETFramework4.7.2", ".NETStandard2.0", "net8.0"],
                     dependencies.Select(static dependency => dependency.Parent.Attribute("targetFramework").Value));
             }
 
@@ -72,6 +74,7 @@ public class StandalonePackageTests
                   </PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="Parlot.SourceGenerator" Version="{{version}}" PrivateAssets="all" />
+                    <PackageReference Include="System.IO.Hashing" Version="10.0.12" Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net10.0'" />
                   </ItemGroup>
                 </Project>
                 """);
@@ -80,12 +83,13 @@ public class StandalonePackageTests
                 File.WriteAllText(Path.Combine(author, "Directory.Packages.props"), $$"""
                     <Project>
                       <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>
-                      <ItemGroup><PackageVersion Include="Parlot.SourceGenerator" Version="{{version}}" /></ItemGroup>
+                      <ItemGroup><PackageVersion Include="Parlot.SourceGenerator" Version="{{version}}" /><PackageVersion Include="System.IO.Hashing" Version="10.0.12" /></ItemGroup>
                     </Project>
                     """);
                 var project = Path.Combine(author, "Author.csproj");
                 File.WriteAllText(project, File.ReadAllText(project).Replace(
-                    $"Include=\"Parlot.SourceGenerator\" Version=\"{version}\"", "Include=\"Parlot.SourceGenerator\"", StringComparison.Ordinal));
+                    $"Include=\"Parlot.SourceGenerator\" Version=\"{version}\"", "Include=\"Parlot.SourceGenerator\"", StringComparison.Ordinal)
+                    .Replace("Include=\"System.IO.Hashing\" Version=\"10.0.12\"", "Include=\"System.IO.Hashing\"", StringComparison.Ordinal));
             }
             File.WriteAllText(Path.Combine(author, "Grammar.cs"), """
                 namespace Standalone.Author;
@@ -95,6 +99,7 @@ public class StandalonePackageTests
                     public static partial bool TryParseLong(string text, System.Threading.CancellationToken cancellationToken, out long value);
                     public static partial bool TryParseDecimal(string text, out decimal value);
                     public static partial bool TryParseDouble(string text, out double value);
+                    public static partial bool TryParseString(string text, out string value);
                 }
                 """);
             File.WriteAllText(Path.Combine(author, "Grammar.parlot.cs"), """
@@ -106,6 +111,9 @@ public class StandalonePackageTests
                 {
                     [GenerateParser(nameof(TryParse))]
                     private static Parser<int> Build() => Terms.Number<int>(NumberOptions.Integer).Eof();
+
+                    [GenerateParser(nameof(TryParseString))]
+                    private static Parser<string> BuildString() => Terms.String().Then(static value => value.ToString()).Eof();
 
                     [GenerateParser(nameof(TryParseLong))]
                     private static Parser<long> BuildLong() => Terms.Number<long>(NumberOptions.Integer).Eof();
@@ -193,6 +201,11 @@ public class StandalonePackageTests
                     throw new System.InvalidOperationException("Generated custom-culture decimal parser failed.");
                 if (!Standalone.Author.Grammar.TryParseDouble("-1.25e2", out var floating) || floating != -125d)
                     throw new System.InvalidOperationException("Generated double parser failed.");
+                if (!Standalone.Author.Grammar.TryParseString("\"cached\\nvalue\"", out _) ||
+                    !Standalone.Author.Grammar.TryParseString("\"cached\\nvalue\"", out var admitted) ||
+                    !Standalone.Author.Grammar.TryParseString("\"cached\\nvalue\"", out var cached) ||
+                    cached != "cached\nvalue" || !object.ReferenceEquals(admitted, cached))
+                    throw new System.InvalidOperationException("Generated string cache failed.");
                 using (var source = new System.Threading.CancellationTokenSource())
                 {
                     source.Cancel();
@@ -266,7 +279,9 @@ public class StandalonePackageTests
             }
             else
             {
-                Assert.Empty(dependencies);
+                var dependency = Assert.Single(dependencies);
+                Assert.Equal("System.IO.Hashing", dependency.Attribute("id").Value);
+                Assert.Equal("10.0.12", dependency.Attribute("version").Value);
             }
         }
     }

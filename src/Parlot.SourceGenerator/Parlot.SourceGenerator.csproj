@@ -75,7 +75,7 @@
 
   <Target Name="SetParlotNuspecProperties" BeforeTargets="_GetOutputItemsFromPack">
     <PropertyGroup>
-      <NuspecProperties>$(NuspecProperties);version=$(PackageVersion);configuration=$(Configuration);authors=$(Authors);description=$(Description);copyright=$(Copyright);memoryVersion=@(PackageVersion->WithMetadataValue('Identity', 'System.Memory')->Metadata('Version'))</NuspecProperties>
+      <NuspecProperties>$(NuspecProperties);version=$(PackageVersion);configuration=$(Configuration);authors=$(Authors);description=$(Description);copyright=$(Copyright);memoryVersion=@(PackageVersion->WithMetadataValue('Identity', 'System.Memory')->Metadata('Version'));hashingVersion=@(PackageVersion->WithMetadataValue('Identity', 'System.IO.Hashing')->Metadata('Version'))</NuspecProperties>
     </PropertyGroup>
   </Target>
   <Target Name="SetParlotNuspecRepository" BeforeTargets="GenerateNuspec" DependsOnTargets="SetParlotNuspecProperties">

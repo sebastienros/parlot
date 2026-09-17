@@ -5,7 +5,7 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <PropertyGroup>
-    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);ValidateParlotRuntimePackageDependency</TargetsForTfmSpecificContentInPackage>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);ValidateParlotRuntimePackageDependency;ValidateParlotHashingPackageDependency</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
   <Target Name="ValidateParlotRuntimePackageDependency"
           Condition="'$(TargetFramework)' != '' and ($([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETFramework' or $([MSBuild]::GetTargetFrameworkIdentifier('$(TargetFramework)')) == '.NETStandard')">
@@ -15,6 +15,14 @@
            Text="Packaging generated Parlot parsers for $(TargetFramework) requires an explicit non-private PackageReference to System.Memory 4.6.3 or later, so downstream applications restore the runtime dependency." />
     <Error Condition="'%(PackageReference.Identity)' == 'System.Memory' and ('%(PackageReference.PrivateAssets)' == 'all' or '%(PackageReference.PrivateAssets)' == 'All')"
            Text="The System.Memory PackageReference must not use PrivateAssets=all when packaging generated Parlot parsers for $(TargetFramework)." />
+  </Target>
+
+  <Target Name="ValidateParlotHashingPackageDependency"
+          Condition="'$(TargetFramework)' != '' and $([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">
+    <Error Condition="'@(PackageReference->WithMetadataValue('Identity', 'System.IO.Hashing'))' == ''"
+           Text="Packaging generated Parlot parsers for $(TargetFramework) requires an explicit non-private PackageReference to System.IO.Hashing 10.0.12 or later, so downstream applications restore the string-cache dependency." />
+    <Error Condition="'%(PackageReference.Identity)' == 'System.IO.Hashing' and ('%(PackageReference.PrivateAssets)' == 'all' or '%(PackageReference.PrivateAssets)' == 'All')"
+           Text="The System.IO.Hashing PackageReference must not use PrivateAssets=all when packaging generated Parlot parsers for $(TargetFramework)." />
   </Target>
 
   <Target Name="CollectParlotGrammarFiles"
