@@ -2,7 +2,7 @@
 
 Nine independent optimization PRs use dedicated worktrees and branches. Each PR body contains every before/after timing delta, error interval and allocation result for its selected workloads. All nine are drafts: measured regressions, workload-specific benefits or explicit result-ownership choices prevent treating them as unconditional default improvements.
 
-Merge/review the separate prerequisites in order: [#344](https://github.com/sebastienros/parlot/pull/344) (decimal test expectations), [#346](https://github.com/sebastienros/parlot/pull/346) (complete UTF-16 character table), then [#345](https://github.com/sebastienros/parlot/pull/345) (study and benchmark infrastructure). Every optimization PR targets the infrastructure branch and includes no other candidate.
+The separate correctness prerequisites are already merged: [#344](https://github.com/sebastienros/parlot/pull/344) (decimal test expectations) and [#346](https://github.com/sebastienros/parlot/pull/346) (complete UTF-16 character table). [#345](https://github.com/sebastienros/parlot/pull/345) contains the study and benchmark infrastructure and now targets main. Every optimization PR targets the infrastructure branch and includes no other candidate.
 
 | Candidate | PR | Measured cases | Decision |
 |---|---|---:|---|
