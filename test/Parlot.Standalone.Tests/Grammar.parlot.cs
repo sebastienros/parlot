@@ -6,6 +6,9 @@ namespace Parlot.Standalone.Tests;
 
 public static partial class Grammar
 {
+    [GenerateParser(nameof(TryParseMatchedText))]
+    private static Parser<string> MatchedText() => Literals.Text("matched", caseInsensitive: true, returnMatchedText: true);
+
     [GenerateParser(nameof(TryParseNumber))]
     private static Parser<int> Number() => Terms.Number<int>(NumberOptions.Integer).Eof();
 

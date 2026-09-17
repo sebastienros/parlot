@@ -29,7 +29,18 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
 
     public override string ToString()
     {
-        return Buffer?.Substring(Offset, Length) ?? "";
+        if (Buffer is null)
+        {
+            return string.Empty;
+        }
+
+        // Preserve the existing whole-buffer reuse path, including decoded strings.
+        if (Offset == 0 && Length == Buffer.Length)
+        {
+            return Buffer;
+        }
+
+        return StringCache.Shared.GetString(Buffer.AsSpan(Offset, Length));
     }
 
     public bool Equals(string? other)

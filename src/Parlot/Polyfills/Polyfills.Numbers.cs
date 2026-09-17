@@ -25,84 +25,84 @@ internal static class NumberPolyfills
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out byte result)
-            => byte.TryParse(s.ToString(), style, provider, out result);
+            => byte.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(sbyte)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out sbyte result)
-            => sbyte.TryParse(s.ToString(), style, provider, out result);
+            => sbyte.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(short)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out short result)
-            => short.TryParse(s.ToString(), style, provider, out result);
+            => short.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(ushort)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out ushort result)
-            => ushort.TryParse(s.ToString(), style, provider, out result);
+            => ushort.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(int)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out int result)
-            => int.TryParse(s.ToString(), style, provider, out result);
+            => int.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(uint)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out uint result)
-            => uint.TryParse(s.ToString(), style, provider, out result);
+            => uint.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(long)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out long result)
-            => long.TryParse(s.ToString(), style, provider, out result);
+            => long.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(ulong)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out ulong result)
-            => ulong.TryParse(s.ToString(), style, provider, out result);
+            => ulong.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(float)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out float result)
-            => float.TryParse(s.ToString(), style, provider, out result);
+            => float.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(double)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out double result)
-            => double.TryParse(s.ToString(), style, provider, out result);
+            => double.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(decimal)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out decimal result)
-            => decimal.TryParse(s.ToString(), style, provider, out result);
+            => decimal.TryParse(StringCache.Shared.GetString(s), style, provider, out result);
     }
 
     extension(BigInteger)
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse(ReadOnlySpan<char> value, NumberStyles style, IFormatProvider? provider, out BigInteger result)
-            => BigInteger.TryParse(value.ToString(), style, provider, out result);
+            => BigInteger.TryParse(StringCache.Shared.GetString(value), style, provider, out result);
     }
 }
 #endif

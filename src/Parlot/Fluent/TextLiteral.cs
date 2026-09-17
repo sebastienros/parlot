@@ -95,7 +95,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
                 // Prevent an allocation if the text matches exactly
                 result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
                     ? Text
-                    : parsedText.ToString());
+                    : StringCache.Shared.GetString(parsedText));
             }
 
             context.ExitParser(this);
@@ -146,7 +146,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
         if (shouldReturnMatchedText)
         {
-            result.Body.Add($"    {result.ValueVariable} = {scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}).ToString();");
+            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {lengthLiteral}).ToString();");
         }
         else
         {

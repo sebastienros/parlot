@@ -59,7 +59,7 @@ public static partial class Character
 
     public static string DecodeStringInternal(ReadOnlySpan<char> span)
     {
-        // This method always allocates a new string. It is invoked when we know for sure that the string contains escape sequences.
+        // Decode into scratch space, then reuse a cached string when the decoded value is already present.
 
         // The assumption is that the new string will be shorter since escapes results are smaller than their source
         char[]? rentedBuffer = null;
@@ -107,7 +107,7 @@ public static partial class Character
                 buffer[dataIndex++] = c;
             }
 
-            return buffer.Slice(0, dataIndex).ToString();
+            return StringCache.Shared.GetString(buffer.Slice(0, dataIndex));
         }
         finally
         {

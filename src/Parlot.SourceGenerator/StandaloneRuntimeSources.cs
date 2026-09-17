@@ -19,6 +19,7 @@ internal static class StandaloneRuntimeSources
         "Cursor.cs",
         "TextPosition.cs",
         "TextSpan.cs",
+        "StringCache.cs",
         "ParseResult.cs",
         "ParseException.cs",
         "ParseError.cs",

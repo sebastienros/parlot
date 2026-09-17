@@ -49,6 +49,7 @@
     <EmbeddedResource Include="../Parlot/Cursor.cs" LogicalName="Parlot.StandaloneRuntime.Cursor.cs" />
     <EmbeddedResource Include="../Parlot/TextPosition.cs" LogicalName="Parlot.StandaloneRuntime.TextPosition.cs" />
     <EmbeddedResource Include="../Parlot/TextSpan.cs" LogicalName="Parlot.StandaloneRuntime.TextSpan.cs" />
+    <EmbeddedResource Include="../Parlot/StringCache.cs" LogicalName="Parlot.StandaloneRuntime.StringCache.cs" />
     <EmbeddedResource Include="../Parlot/ParseResult.cs" LogicalName="Parlot.StandaloneRuntime.ParseResult.cs" />
     <EmbeddedResource Include="../Parlot/ParseException.cs" LogicalName="Parlot.StandaloneRuntime.ParseException.cs" />
     <EmbeddedResource Include="../Parlot/ParseError.cs" LogicalName="Parlot.StandaloneRuntime.ParseError.cs" />
