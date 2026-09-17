@@ -177,13 +177,26 @@ internal static class StandaloneRuntimeSources
             return IsRuntimeDeclaration(node) ? rewritten.WithModifiers(Internalize(node.Modifiers)) : rewritten;
         }
 
+        public override SyntaxNode? VisitMethodDeclaration(MethodDeclarationSyntax node)
+        {
+            // Generated consumers need not enable unsafe compilation. Preserve the
+            // surrounding preprocessor directives when removing this runtime-only hint.
+            var attributes = node.AttributeLists.Where(static list =>
+                list.Attributes.Count == 1 && list.Attributes[0].Name.ToString() == "SkipLocalsInit");
+            return base.VisitMethodDeclaration(node.RemoveNodes(attributes, SyntaxRemoveOptions.KeepExteriorTrivia)!);
+        }
+
         public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
         {
-            // Generated consumers need not enable unsafe compilation. This optimization
-            // changes initialization only, so retaining zeroing is always correct.
-            var attributes = node.Attributes.Where(attribute =>
-                attribute.Name.ToString() != "SkipLocalsInit" &&
-                (!_downlevel || attribute.Name.ToString() is not ("NotNull" or "DoesNotReturn" or "CallerArgumentExpression"))).ToArray();
+            if (!_downlevel)
+            {
+                return base.VisitAttributeList(node);
+            }
+
+            // These annotations have no runtime behavior, and the generated helpers are internal.
+            // Avoid requiring PolySharp or declaring BCL-shaped attributes in the application.
+            var attributes = node.Attributes.Where(static attribute =>
+                attribute.Name.ToString() is not ("NotNull" or "DoesNotReturn" or "CallerArgumentExpression")).ToArray();
             return attributes.Length == 0 ? null : node.WithAttributes(SyntaxFactory.SeparatedList(attributes));
         }
 
