@@ -40,9 +40,9 @@ public static class JsonLastStringParser
             _optimize = optimize;
         }
 
-        public IJson CreateString(TextSpan token) => new JsonString(Materialize(token));
+        public JsonString CreateString(TextSpan token) => new JsonString(Materialize(token));
 
-        public IJson CreateObject(IReadOnlyList<(TextSpan, IJson)> members)
+        public JsonObject CreateObject(IReadOnlyList<(TextSpan, IJson)> members)
         {
             var values = new Dictionary<string, IJson>(members.Count, StringComparer.Ordinal);
             foreach (var (key, value) in members)

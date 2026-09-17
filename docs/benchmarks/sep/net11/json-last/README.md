@@ -1,6 +1,6 @@
 # Reuse the last short JSON string within a document
 
-Only consecutive equal short tokens can hit. Arrays with repeated values benefit more than objects whose keys and values alternate. Cache state belongs to one parse and never mutates the shared parser graph.
+Only matches to the last eligible short token hit; longer tokens bypass the cache. Arrays with repeated values benefit more than objects whose keys and values alternate. Cache state belongs to one parse and never mutates the shared parser graph.
 
 This independent sample uses the existing string/array/object grammar subset. The existing JsonParser is unchanged. Benchmark both modes of the same new parser with Optimize=false/true, including document state creation, arrays and objects, and 1/4/256 distinct values. The parser graph is built once.
 
