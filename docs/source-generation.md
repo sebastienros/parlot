@@ -11,11 +11,11 @@ Generated consumers support the same target frameworks as Parlot: .NET Framework
 Downlevel targets use compatibility packages such as `System.Memory`, but never require the Parlot
 runtime package or assembly.
 
-## Downlevel package dependencies
+## Runtime package dependencies
 
 The analyzer package automatically restores `System.Memory` 4.6.3 for downlevel applications. Shared
 polyfills are emitted as C# 12-compatible internal helpers, so consuming projects do not need PolySharp.
-Modern targets do not acquire these compatibility dependencies.
+Modern targets use `System.IO.Hashing` 10.0.12 for the experimental bounded string cache. The analyzer package restores it for applications.
 
 When publishing a library that contains generated parsers for downlevel targets, explicitly reference
 `System.Memory` so it is included in your library's package dependencies:
@@ -30,6 +30,18 @@ Do not mark that reference `PrivateAssets="all"`. The analyzer itself should rem
 private transitive dependencies are not propagated to consumers of your library. Packing reports an
 error if the explicit compatibility reference is missing. With central package management, put the
 version in `Directory.Packages.props` and omit `Version` on the `PackageReference`.
+
+For a library targeting net8.0 or newer, also expose the hashing dependency to its consumers:
+
+```xml
+<ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">
+  <PackageReference Include="System.IO.Hashing" Version="10.0.12" />
+</ItemGroup>
+```
+
+This reference must also be non-private; packing validates its presence. Projects that consume the
+generator through a project/analyzer reference instead of its NuGet package must add the hashing
+reference themselves. This dependency is part of the [string interning investigation](benchmarks/apex-string-interning/net11/README.md).
 
 ## Getting started
 
@@ -433,7 +445,8 @@ context support into the consuming assembly. These support types are internal an
 Every generated shared-support source file retains Parlot's original BSD-3-Clause license notice, and the
 `Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a Parlot runtime
 package dependency, but binary distributions containing the generated support should retain the Parlot BSD
-notice in their third-party notices or equivalent distribution materials.
+notice in their third-party notices or equivalent distribution materials. The embedded `StringCache`
+source additionally retains the MIT notice from the Apex cache adaptation; retain that notice as well.
 
 The support layer is an implementation detail:
 
