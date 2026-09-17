@@ -50,7 +50,18 @@ public class Scanner
 
         var i = 0;
 
-        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i])) ;
+        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i]))
+        {
+#if NET8_0_OR_GREATER
+            // Ordinary one- or two-character prefixes never enter the vector path.
+            if (i == 8)
+            {
+                var next = span.Slice(i).IndexOfAnyExcept(Character._whiteSpaceOrNewLines);
+                i = next < 0 ? length : i + next;
+                break;
+            }
+#endif
+        }
 
         Cursor.Advance(i);
     }
@@ -75,7 +86,18 @@ public class Scanner
 
         var i = 0;
 
-        while (++i < length && Character.IsWhiteSpace(span[i])) ;
+        while (++i < length && Character.IsWhiteSpace(span[i]))
+        {
+#if NET8_0_OR_GREATER
+            // Ordinary one- or two-character prefixes never enter the vector path.
+            if (i == 8)
+            {
+                var next = span.Slice(i).IndexOfAnyExcept(Character._whiteSpaces);
+                i = next < 0 ? length : i + next;
+                break;
+            }
+#endif
+        }
 
         Cursor.AdvanceNoNewLines(i);
     }
