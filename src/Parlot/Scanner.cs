@@ -4,6 +4,9 @@ using System.Linq;
 
 #if NET8_0_OR_GREATER
 using System.Buffers;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 #endif
 using System.Runtime.CompilerServices;
 
@@ -548,6 +551,28 @@ public class Scanner
         return ReadQuotedString(startChar, out result);
     }
 
+    private static int FindQuoteOrEscape(ReadOnlySpan<char> span, char quote)
+    {
+#if NET8_0_OR_GREATER
+        if (Vector128.IsHardwareAccelerated && span.Length >= Vector128<ushort>.Count)
+        {
+            var values = MemoryMarshal.Cast<char, ushort>(span);
+            var vector = Vector128.LoadUnsafe(ref MemoryMarshal.GetReference(values));
+            var matches = Vector128.Equals(vector, Vector128.Create((ushort)quote)) |
+                Vector128.Equals(vector, Vector128.Create((ushort)'\\'));
+            var mask = matches.ExtractMostSignificantBits();
+            if (mask != 0)
+            {
+                return BitOperations.TrailingZeroCount(mask);
+            }
+
+            var tail = span.Slice(Vector128<ushort>.Count).IndexOfAny(quote, '\\');
+            return tail < 0 ? -1 : tail + Vector128<ushort>.Count;
+        }
+#endif
+        return span.IndexOfAny(quote, '\\');
+    }
+
     private static readonly char[] _singleOrDoubleQuotes = ['\'', '\"'];
 
     public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(_singleOrDoubleQuotes, out result);
@@ -575,7 +600,7 @@ public class Scanner
         // Look for the end quote and the first escape sequence in a single pass. Searching for '\\'
         // on its own would scan the rest of the buffer whenever the string has no escape sequence,
         // making a document containing many strings quadratic to parse.
-        var next = span.Slice(1).IndexOfAny(startChar, '\\');
+        var next = FindQuoteOrEscape(span.Slice(1), startChar);
 
         if (next == -1)
         {
