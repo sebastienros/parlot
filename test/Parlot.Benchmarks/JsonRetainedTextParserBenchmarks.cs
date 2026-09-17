@@ -11,6 +11,7 @@ public class JsonRetainedTextParserBenchmarks
     private string _input;
     [Params(1, 4, 256)] public int Distinct { get; set; }
     [Params(false, true)] public bool Objects { get; set; }
+    [Params(false, true)] public bool Escaped { get; set; }
     [Params(false, true)] public bool Optimize { get; set; }
 
     [GlobalSetup]
@@ -21,7 +22,9 @@ public class JsonRetainedTextParserBenchmarks
         {
             if (i != 0) builder.Append(',');
             if (Objects) builder.Append("{\"name\":");
-            builder.Append("\"identifier").Append(i % Distinct).Append('"');
+            builder.Append("\"identifier").Append(i % Distinct);
+            if (Escaped) builder.Append("\\n");
+            builder.Append('"');
             if (Objects) builder.Append('}');
         }
         _input = builder.Append(']').ToString();
