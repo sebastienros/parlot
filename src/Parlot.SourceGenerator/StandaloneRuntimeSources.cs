@@ -182,8 +182,10 @@ internal static class StandaloneRuntimeSources
             // Generated consumers need not enable unsafe compilation. Preserve the
             // surrounding preprocessor directives when removing this runtime-only hint.
             var attributes = node.AttributeLists.Where(static list =>
-                list.Attributes.Count == 1 && list.Attributes[0].Name.ToString() == "SkipLocalsInit");
-            return base.VisitMethodDeclaration(node.RemoveNodes(attributes, SyntaxRemoveOptions.KeepExteriorTrivia)!);
+                list.Attributes.Count == 1 && list.Attributes[0].Name.ToString() == "SkipLocalsInit").ToArray();
+            return base.VisitMethodDeclaration(attributes.Length == 0
+                ? node
+                : node.RemoveNodes(attributes, SyntaxRemoveOptions.KeepExteriorTrivia)!);
         }
 
         public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
