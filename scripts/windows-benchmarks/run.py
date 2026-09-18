@@ -93,7 +93,9 @@ def main():
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip()
     worktrees = Path(os.environ.get('RUNNER_TEMP', str(output.parent))) / ('parlot-variants-' + revision[:12])
     worktrees.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, ParlotBenchmarkTargetFramework='net11.0')
+    correctness_env = dict(os.environ)
+    correctness_env.pop('ParlotBenchmarkTargetFramework', None)
+    env = dict(correctness_env, ParlotBenchmarkTargetFramework='net11.0')
     manifest = {'mainRevision': '2961dca01eed79242d0cba36e8d67cf8976b7651', 'harnessRevision': revision,
                 'sdk': '11.0.100-rc.1.26425.128', 'variants': {}}
     for variant, (filters, expected) in VARIANTS.items():
@@ -113,10 +115,14 @@ def main():
         global_file.write_text(json.dumps(global_settings, indent=2), encoding='utf-8')
         command(['dotnet', '--info'], tree, log, env)
         # Complete all builds and correctness checks for this variant before timing it.
-        command(['dotnet', 'build', '-c', 'Release', '--disable-build-servers', '-m:1'], tree, log, env)
+        command(['dotnet', 'build', '-c', 'Release', '--disable-build-servers', '-m:1'], tree, log, correctness_env)
         for project in ['Parlot.Tests', 'Parlot.Standalone.Tests']:
             command(['dotnet', 'test', '--project', str(tree / 'test' / project / (project + '.csproj')),
-                     '-c', 'Release', '-f', 'net10.0', '--no-build'], tree, log, env)
+                     '-c', 'Release', '-f', 'net10.0', '--no-build'], tree, log, correctness_env)
+        for project in ['src/Parlot/Parlot.csproj', 'src/Samples/Samples.csproj',
+                        'test/Parlot.Benchmarks/Parlot.Benchmarks.csproj']:
+            command(['dotnet', 'build', str(tree / project), '-c', 'Release',
+                     '--disable-build-servers', '-m:1'], tree, log, env)
         command(['dotnet', 'run', '--project', str(tree / 'test/Parlot.Benchmarks/Parlot.Benchmarks.csproj'),
                  '-c', 'Release', '-f', 'net11.0', '--no-build', '--', '--filter', *filters,
                  '--launchCount', '1', '--warmupCount', '3', '--iterationCount', '5', '--iterationTime', '100',
