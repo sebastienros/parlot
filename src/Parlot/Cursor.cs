@@ -76,6 +76,14 @@ public class Cursor
             return;
         }
 
+#if NET8_0_OR_GREATER
+        // Keep vector setup off the common short-token path.
+        if (count >= 64 && TryAdvanceWithoutNewLines(count))
+        {
+            return;
+        }
+#endif
+
         var maxOffset = Offset + count;
 
         // Detect if the cursor will be over Eof
@@ -113,6 +121,35 @@ public class Cursor
             _column++;
         }
     }
+
+#if NET8_0_OR_GREATER
+    private bool TryAdvanceWithoutNewLines(int count)
+    {
+        var offset = Offset;
+        var end = Math.Min(offset + count, _textLength - 1);
+
+        // Include both endpoints: LF affects the following position, while CR
+        // affects the position at which it is encountered. Guard overflow too.
+        if (end < offset || Buffer.AsSpan(offset, end - offset + 1).ContainsAny('\r', '\n'))
+        {
+            return false;
+        }
+
+        _column += end - offset;
+        Offset = end;
+        Current = Buffer[end];
+
+        if (count > end - offset)
+        {
+            Eof = true;
+            Current = NullChar;
+            Offset = _textLength;
+            _column++;
+        }
+
+        return true;
+    }
+#endif
 
     /// <summary>
     /// Advances the cursor and tracks its current location (line and column) with the knowledge there are no new lines (\r or \n).
