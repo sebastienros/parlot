@@ -1,0 +1,56 @@
+name: Windows vectorization benchmarks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ perf/windows-vector-benchmarks ]
+    paths:
+    - '.github/workflows/windows-vector-benchmarks.yml'
+    - 'scripts/windows-benchmarks/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-vector-benchmarks
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      PYTHONUTF8: 1
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+          11.0.100-rc.1.26425.128
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      with:
+        python-version: '3.12'
+    - name: Record runner environment
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force benchmark-results | Out-Null
+        dotnet --info | Out-File benchmark-results/dotnet-info.txt
+        Get-CimInstance Win32_Processor | Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors | Format-List | Out-File benchmark-results/cpu.txt
+        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsBuildNumber, CsTotalPhysicalMemory | Format-List | Out-File benchmark-results/os.txt
+    - name: Compare variants serially
+      run: python scripts/windows-benchmarks/run.py --output benchmark-results
+    - name: Upload reports and logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: windows-vector-benchmarks
+        path: benchmark-results/
+        if-no-files-found: error
+        retention-days: 30

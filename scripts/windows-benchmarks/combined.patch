@@ -1,0 +1,147 @@
+diff --git a/src/Parlot/Character.cs b/src/Parlot/Character.cs
+index 0e92ae3..1375115 100644
+--- a/src/Parlot/Character.cs
++++ b/src/Parlot/Character.cs
+@@ -70,6 +70,9 @@ public static partial class Character
+         try
+         {
+             var dataIndex = 0;
++#if NET8_0_OR_GREATER
++            var plainRunLength = 0;
++#endif
+ 
+             for (var i = 0; i < span.Length; i++)
+             {
+@@ -77,6 +80,9 @@ public static partial class Character
+ 
+                 if (c == '\\')
+                 {
++#if NET8_0_OR_GREATER
++                    plainRunLength = 0;
++#endif
+                     i++;
+                     c = span[i];
+ 
+@@ -104,6 +110,20 @@ public static partial class Character
+                     }
+                 }
+ 
++#if NET8_0_OR_GREATER
++                else if (++plainRunLength == 16)
++                {
++                    var remaining = span.Slice(i);
++                    var nextEscape = remaining.IndexOf('\\');
++                    var count = nextEscape < 0 ? remaining.Length : nextEscape;
++                    remaining.Slice(0, count).CopyTo(buffer.Slice(dataIndex));
++                    dataIndex += count;
++                    i += count - 1;
++                    plainRunLength = 0;
++                    continue;
++                }
++#endif
++
+                 buffer[dataIndex++] = c;
+             }
+ 
+diff --git a/src/Parlot/Cursor.cs b/src/Parlot/Cursor.cs
+index d596b38..aedbc43 100644
+--- a/src/Parlot/Cursor.cs
++++ b/src/Parlot/Cursor.cs
+@@ -76,6 +76,14 @@ public class Cursor
+             return;
+         }
+ 
++#if NET8_0_OR_GREATER
++        // Keep vector setup off the common short-token path.
++        if (count >= 64 && TryAdvanceWithoutNewLines(count))
++        {
++            return;
++        }
++#endif
++
+         var maxOffset = Offset + count;
+ 
+         // Detect if the cursor will be over Eof
+@@ -85,27 +93,35 @@ public class Cursor
+             maxOffset = _textLength - 1;
+         }
+ 
+-        while (Offset < maxOffset)
+-        {
+-            Offset++;
++        // Keep the loop state in locals and publish it once, as in Sep's block parsers.
++        var offset = Offset;
++        var current = Current;
++        var line = _line;
++        var column = _column;
++        var buffer = Buffer;
+ 
+-            var next = Buffer[Offset];
++        while (offset < maxOffset)
++        {
++            var next = buffer[++offset];
+ 
+-            if (Current == '\n')
++            if (current == '\n')
+             {
+-                _line++;
+-                _column = 1;
++                line++;
++                column = 1;
+             }
+             else if (next != '\r')
+             {
+-                _column++;
++                column++;
+             }
+ 
+-            // if c == '\r', don't increase the column count
+-
+-            Current = next;
++            current = next;
+         }
+ 
++        Offset = offset;
++        Current = current;
++        _line = line;
++        _column = column;
++
+         if (Eof)
+         {
+             Current = NullChar;
+@@ -114,6 +130,35 @@ public class Cursor
+         }
+     }
+ 
++#if NET8_0_OR_GREATER
++    private bool TryAdvanceWithoutNewLines(int count)
++    {
++        var offset = Offset;
++        var end = Math.Min(offset + count, _textLength - 1);
++
++        // Include both endpoints: LF affects the following position, while CR
++        // affects the position at which it is encountered. Guard overflow too.
++        if (end < offset || Buffer.AsSpan(offset, end - offset + 1).ContainsAny('\r', '\n'))
++        {
++            return false;
++        }
++
++        _column += end - offset;
++        Offset = end;
++        Current = Buffer[end];
++
++        if (count > end - offset)
++        {
++            Eof = true;
++            Current = NullChar;
++            Offset = _textLength;
++            _column++;
++        }
++
++        return true;
++    }
++#endif
++
+     /// <summary>
+     /// Advances the cursor and tracks its current location (line and column) with the knowledge there are no new lines (\r or \n).
+     /// </summary>

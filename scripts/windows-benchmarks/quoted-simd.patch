@@ -1,0 +1,90 @@
+diff --git a/src/Parlot/Scanner.cs b/src/Parlot/Scanner.cs
+index 371f082..82d244e 100644
+--- a/src/Parlot/Scanner.cs
++++ b/src/Parlot/Scanner.cs
+@@ -4,6 +4,9 @@ using System.Linq;
+ 
+ #if NET8_0_OR_GREATER
+ using System.Buffers;
++using System.Numerics;
++using System.Runtime.InteropServices;
++using System.Runtime.Intrinsics;
+ #endif
+ using System.Runtime.CompilerServices;
+ 
+@@ -548,6 +551,28 @@ public class Scanner
+         return ReadQuotedString(startChar, out result);
+     }
+ 
++    private static int FindQuoteOrEscape(ReadOnlySpan<char> span, char quote)
++    {
++#if NET8_0_OR_GREATER
++        if (Vector128.IsHardwareAccelerated && span.Length >= Vector128<ushort>.Count)
++        {
++            var values = MemoryMarshal.Cast<char, ushort>(span);
++            var vector = Vector128.LoadUnsafe(ref MemoryMarshal.GetReference(values));
++            var matches = Vector128.Equals(vector, Vector128.Create((ushort)quote)) |
++                Vector128.Equals(vector, Vector128.Create((ushort)'\\'));
++            var mask = matches.ExtractMostSignificantBits();
++            if (mask != 0)
++            {
++                return BitOperations.TrailingZeroCount(mask);
++            }
++
++            var tail = span.Slice(Vector128<ushort>.Count).IndexOfAny(quote, '\\');
++            return tail < 0 ? -1 : tail + Vector128<ushort>.Count;
++        }
++#endif
++        return span.IndexOfAny(quote, '\\');
++    }
++
+     private static readonly char[] _singleOrDoubleQuotes = ['\'', '\"'];
+ 
+     public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(_singleOrDoubleQuotes, out result);
+@@ -575,7 +600,7 @@ public class Scanner
+         // Look for the end quote and the first escape sequence in a single pass. Searching for '\\'
+         // on its own would scan the rest of the buffer whenever the string has no escape sequence,
+         // making a document containing many strings quadratic to parse.
+-        var next = span.Slice(1).IndexOfAny(startChar, '\\');
++        var next = FindQuoteOrEscape(span.Slice(1), startChar);
+ 
+         if (next == -1)
+         {
+diff --git a/test/Parlot.Tests/QuotedVectorTests.cs b/test/Parlot.Tests/QuotedVectorTests.cs
+new file mode 100644
+index 0000000..8d242dc
+--- /dev/null
++++ b/test/Parlot.Tests/QuotedVectorTests.cs
+@@ -0,0 +1,32 @@
++using System;
++using Xunit;
++
++namespace Parlot.Tests;
++
++public class QuotedVectorTests
++{
++    [Fact]
++    public void PreservesShortTailsCustomQuotesUnicodeAndFailurePosition()
++    {
++        foreach (var quote in new[] { '\'', '"', '`', '\u0122' })
++        {
++            for (var length = 0; length <= 65; length++)
++            {
++                var text = quote + new string('\u0422', length) + quote;
++                var scanner = new Scanner("a\n" + text + "!");
++                scanner.Cursor.Advance(2);
++                Assert.True(scanner.ReadQuotedString(quote, out var value));
++                Assert.Equal(text, value.ToString());
++                Assert.Equal('!', scanner.Cursor.Current);
++                scanner = new Scanner("a\n" + quote + new string('\u0422', length) + "\\q" + quote);
++                scanner.Cursor.Advance(2);
++                var start = scanner.Cursor.Position;
++                Assert.False(scanner.ReadQuotedString(quote, out _));
++                Assert.Equal(start, scanner.Cursor.Position);
++                scanner = new Scanner(quote + new string('\u0422', length));
++                Assert.False(scanner.ReadQuotedString(quote, out _));
++                Assert.Equal(TextPosition.Start, scanner.Cursor.Position);
++            }
++        }
++    }
++}

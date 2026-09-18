@@ -1,0 +1,108 @@
+diff --git a/src/Parlot/Character.SearchValues.cs b/src/Parlot/Character.SearchValues.cs
+index bb093d7..09ec619 100644
+--- a/src/Parlot/Character.SearchValues.cs
++++ b/src/Parlot/Character.SearchValues.cs
+@@ -12,6 +12,10 @@ public static partial class Character
+     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);
+     internal static readonly SearchValues<char> _newLines = SearchValues.Create(NewLines);
+ 
++    private const string WhiteSpaceCharacters = " \t\f\u00a0\u1680\u180e\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\ufeff";
++    internal static readonly SearchValues<char> _whiteSpaces = SearchValues.Create(WhiteSpaceCharacters);
++    internal static readonly SearchValues<char> _whiteSpaceOrNewLines = SearchValues.Create(WhiteSpaceCharacters + "\n\r\v");
++
+     // _decimalDigits and _hexDigits are still used for span-wide IndexOfAnyExcept scans in Scanner,
+     // which is what SearchValues is good at. The single-char predicates live in Character.cs and use
+     // the BCL's char.IsAscii* instead -- see the comment there.
+diff --git a/src/Parlot/Scanner.cs b/src/Parlot/Scanner.cs
+index 371f082..e0c90d8 100644
+--- a/src/Parlot/Scanner.cs
++++ b/src/Parlot/Scanner.cs
+@@ -50,7 +50,18 @@ public class Scanner
+ 
+         var i = 0;
+ 
+-        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i])) ;
++        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i]))
++        {
++#if NET8_0_OR_GREATER
++            // Ordinary one- or two-character prefixes never enter the vector path.
++            if (i == 8)
++            {
++                var next = span.Slice(i).IndexOfAnyExcept(Character._whiteSpaceOrNewLines);
++                i = next < 0 ? length : i + next;
++                break;
++            }
++#endif
++        }
+ 
+         Cursor.Advance(i);
+     }
+@@ -75,7 +86,18 @@ public class Scanner
+ 
+         var i = 0;
+ 
+-        while (++i < length && Character.IsWhiteSpace(span[i])) ;
++        while (++i < length && Character.IsWhiteSpace(span[i]))
++        {
++#if NET8_0_OR_GREATER
++            // Ordinary one- or two-character prefixes never enter the vector path.
++            if (i == 8)
++            {
++                var next = span.Slice(i).IndexOfAnyExcept(Character._whiteSpaces);
++                i = next < 0 ? length : i + next;
++                break;
++            }
++#endif
++        }
+ 
+         Cursor.AdvanceNoNewLines(i);
+     }
+diff --git a/test/Parlot.Tests/WhitespaceVectorTests.cs b/test/Parlot.Tests/WhitespaceVectorTests.cs
+new file mode 100644
+index 0000000..5622af8
+--- /dev/null
++++ b/test/Parlot.Tests/WhitespaceVectorTests.cs
+@@ -0,0 +1,43 @@
++using System;
++using Xunit;
++
++namespace Parlot.Tests;
++
++public class WhitespaceVectorTests
++{
++    [Fact]
++    public void PreservesEveryCharacterClassificationAfterVectorThreshold()
++    {
++        for (var code = 0; code <= char.MaxValue; code++)
++        {
++            var c = (char)code;
++            var text = new string(' ', 17) + c + "x";
++            var spaces = new Scanner(text);
++            var lines = new Scanner(text);
++            Assert.True(spaces.SkipWhiteSpace());
++            Assert.True(lines.SkipWhiteSpaceOrNewLine());
++            Assert.Equal(17 + (Character.IsWhiteSpace(c) ? 1 : 0), spaces.Cursor.Offset);
++            var consumed = 17 + (Character.IsWhiteSpaceOrNewLine(c) ? 1 : 0);
++            var expected = new Cursor(text);
++            for (var i = 0; i < consumed; i++) expected.Advance();
++            Assert.Equal(expected.Position, lines.Cursor.Position);
++        }
++    }
++
++    [Fact]
++    public void HandlesEmptyShortLongAndEntirelyWhitespaceInputs()
++    {
++        foreach (var count in new[] { 0, 1, 2, 7, 8, 9, 16, 256 })
++        {
++            var scanner = new Scanner(new string(' ', count));
++            Assert.Equal(count != 0, scanner.SkipWhiteSpace());
++            Assert.Equal(count, scanner.Cursor.Offset);
++            Assert.True(scanner.Cursor.Eof);
++            scanner = new Scanner(new string(' ', count) + "x");
++            Assert.Equal(count != 0, scanner.SkipWhiteSpaceOrNewLine());
++            var position = scanner.Cursor.Position;
++            Assert.False(scanner.SkipWhiteSpaceOrNewLine());
++            Assert.Equal(position, scanner.Cursor.Position);
++        }
++    }
++}
