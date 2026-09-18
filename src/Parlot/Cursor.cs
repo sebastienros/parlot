@@ -93,26 +93,34 @@ public class Cursor
             maxOffset = _textLength - 1;
         }
 
-        while (Offset < maxOffset)
+        // Keep the loop state in locals and publish it once, as in Sep's block parsers.
+        var offset = Offset;
+        var current = Current;
+        var line = _line;
+        var column = _column;
+        var buffer = Buffer;
+
+        while (offset < maxOffset)
         {
-            Offset++;
+            var next = buffer[++offset];
 
-            var next = Buffer[Offset];
-
-            if (Current == '\n')
+            if (current == '\n')
             {
-                _line++;
-                _column = 1;
+                line++;
+                column = 1;
             }
             else if (next != '\r')
             {
-                _column++;
+                column++;
             }
 
-            // if c == '\r', don't increase the column count
-
-            Current = next;
+            current = next;
         }
+
+        Offset = offset;
+        Current = current;
+        _line = line;
+        _column = column;
 
         if (Eof)
         {
