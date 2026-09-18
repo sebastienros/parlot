@@ -53,6 +53,14 @@ dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release 
 
 `-p` no longer resolves a project directory; pass `--project` with the full `.csproj` path.
 
+### Latest-TFM performance investigations
+
+Use `scripts/benchmark-latest.sh --filter "*Sep*Benchmarks*"` for the Sep-inspired work.
+It benchmarks **net11.0 only**, including net11.0 runtime and sample assemblies, and passes
+`ParlotBenchmarkTargetFramework` through the environment to BenchmarkDotNet child builds.
+The property is opt-in; ordinary builds/tests and shipping package targets are unchanged.
+Run `dotnet build` and correctness tests without this environment property.
+
 ### Two things that will waste your time
 
 - `TreatWarningsAsErrors` is on repo-wide (`Directory.Build.props`) with `AnalysisLevel=latest-Recommended`
@@ -196,3 +204,5 @@ Full reference: `docs/source-generation.md`.
 Branch as `feature/…`, `fix/…` or `perf/…`, keep logical changes in separate commits, and before opening:
 a full `dotnet build` (all TFMs) plus both test projects must be green, benchmarks included for
 performance-sensitive work, and `docs/` updated when behaviour or the public API changes.
+
+The opt-in net11.0 benchmark mode uses BenchmarkDotNet 0.16.0-preview.1, which recognizes .NET 11. Normal builds retain 0.15.8.
