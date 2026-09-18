@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <TargetFrameworks>net472;netstandard2.0;net8.0;net10.0</TargetFrameworks>
-    <!-- Opt-in target for performance work; keep the shipping target matrix unchanged. -->
-    <TargetFrameworks Condition="'$(ParlotBenchmarkTargetFramework)' == 'net11.0'">$(TargetFrameworks);net11.0</TargetFrameworks>
     <Title>Parser combinator for .NET</Title>
     <Description>Parlot is a fast, lightweight and simple to use .NET parser combinator.</Description>
     <PackageTags>parser;interpreter;</PackageTags>
