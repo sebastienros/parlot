@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net10.0</TargetFrameworks>
-    <LangVersion>12</LangVersion>
+    <LangVersion>13</LangVersion>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>False</SignAssembly>
@@ -21,6 +21,7 @@
   </ItemGroup>
   
   <ItemGroup>
+    <Compile Include="../../src/Parlot/SourceGeneration/KnownStringLookup.cs" Link="KnownStringLookup.cs" />
     <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
     <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
     

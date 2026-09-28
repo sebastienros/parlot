@@ -9,6 +9,82 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Theory]
+    [InlineData("int", "int")]
+    [InlineData("interface", "interface")]
+    [InlineData(" \r\ninternal!", "internal")]
+    [InlineData("if1", "if")]
+    [InlineData("if_", "if")]
+    [InlineData("if\u00e9", "if")]
+    [InlineData("if\0", "if")]
+    [InlineData("class!", "class")]
+    [InlineData("IF", null)]
+    [InlineData("ifx", null)]
+    [InlineData("", null)]
+    [InlineData(" \r\nunknown", null)]
+    public void Keyword_Choices_Preserve_Boundaries_And_Canonical_Values(string input, string expected)
+    {
+        Assert.Equal(expected != null, Grammar.TryParseKeyword(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Fact]
+    public void Keyword_Choices_Preserve_Backtracking_Capture_And_Custom_Whitespace()
+    {
+        Assert.True(Grammar.TryParseKeywordFallback(" \r\nunknown!", out var value));
+        Assert.Equal(" \r\nunknown!", value);
+        Assert.True(Grammar.TryParseKeywordCapture("! \r\ninterface1", out value));
+        Assert.Equal(" \r\ninterface", value);
+        Assert.True(Grammar.TryParseKeywordCustomWhitespace("___return!", out value));
+        Assert.Equal("return", value);
+        Assert.False(Grammar.TryParseKeywordCustomWhitespace(" return!", out _));
+        Assert.False(Grammar.TryParseKeyword(new string('a', 100_000), out _));
+    }
+
+    [Fact]
+    public void Keyword_Choices_Agree_With_An_Ordered_Reference()
+    {
+        string[] words = ["if", "else", "while", "return", "int", "interface", "internal", "yield", "case", "catch", "const", "class"];
+        foreach (var word in words)
+        {
+            Check(word);
+            Check(word[..^1]);
+            Check(word[1..]);
+            Check(word + "x");
+            Check(word + "9");
+            Check(word + "\u00e9");
+            for (var offset = 0; offset < word.Length; offset++)
+            {
+                for (var c = 0; c < 128; c++)
+                {
+                    Check(word[..offset] + (char)c + word[(offset + 1)..]);
+                }
+            }
+        }
+
+        var random = new Random(923);
+        for (var i = 0; i < 5000; i++)
+        {
+            var input = new char[random.Next(0, 24)];
+            for (var j = 0; j < input.Length; j++)
+            {
+                input[j] = (char)random.Next(0, 65536);
+            }
+
+            Check(new string(input));
+        }
+
+        void Check(string input)
+        {
+            input = " \r\n" + input;
+            var text = input.TrimStart();
+            var expected = words.FirstOrDefault(word => text.StartsWith(word, StringComparison.Ordinal)
+                && (text.Length == word.Length || text[word.Length] is not (>= 'a' and <= 'z' or >= 'A' and <= 'Z')));
+            Assert.Equal(expected != null, Grammar.TryParseKeyword(input, out var value));
+            Assert.Equal(expected, value);
+        }
+    }
+
+    [Theory]
     [InlineData(" 42", true, 42)]
     [InlineData("-17", true, -17)]
     [InlineData("42x", false, 0)]

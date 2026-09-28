@@ -11,6 +11,48 @@ public class BenchmarksTests
     const decimal _expected2 = (decimal)-64.5;
 
     [Theory]
+    [InlineData(8, "Valid")]
+    [InlineData(128, "Valid")]
+    [InlineData(8, "UnknownType")]
+    [InlineData(128, "UnknownType")]
+    [InlineData(8, "InvalidExpression")]
+    [InlineData(128, "InvalidExpression")]
+    public void KeywordSourceGrammar(int declarationCount, string scenario)
+    {
+        var benchmark = new KeywordSourceBenchmarks { DeclarationCount = declarationCount, Scenario = scenario };
+        benchmark.Setup();
+        if (scenario == "Valid")
+        {
+            var before = benchmark.Before();
+            var after = benchmark.After();
+            Assert.Equal(declarationCount, before.Count);
+            Assert.Equal(before, after);
+        }
+        else
+        {
+            Assert.Null(benchmark.Before());
+            Assert.Null(benchmark.After());
+        }
+    }
+
+    [Fact]
+    public void KeywordSourceGrammarPreservesBoundariesAndExpressions()
+    {
+        const string input = " public static int integer = (10 + 2) * 3 - 1;\r\nbyte internalValue = 4 + 5 * 6; \r\n";
+        Assert.True(KeywordSourceBenchmarks.TryParseBefore(input, out var before));
+        Assert.True(KeywordSourceBenchmarks.TryParseAfter(input, out var after));
+        Assert.Equal(
+            [new KeywordSourceDeclaration("int", "integer", 2, 35), new KeywordSourceDeclaration("byte", "internalValue", 0, 34)],
+            before);
+        Assert.Equal(before, after);
+        foreach (var invalid in new[] { "", "integer x = 1;", "INT x = 1;", "int x = (1 + );", "int x = 1; trailing" })
+        {
+            Assert.False(KeywordSourceBenchmarks.TryParseBefore(invalid, out _));
+            Assert.False(KeywordSourceBenchmarks.TryParseAfter(invalid, out _));
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void CancellationParsing(bool canBeCanceled)
