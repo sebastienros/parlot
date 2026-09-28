@@ -33,6 +33,43 @@ public class StandaloneGeneratorTests
         """;
 
     [Fact]
+    public void Keyword_Lookup_Works_In_Checked_Standalone_Consumers()
+    {
+        var declaration = Declaration.Replace("out int", "out string", StringComparison.Ordinal);
+        var grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => OneOf(
+                    Literals.Keyword("if"), Literals.Keyword("else"), Literals.Keyword("while"), Literals.Keyword("return"),
+                    Literals.Keyword("int"), Literals.Keyword("internal"), Literals.Keyword("interface"), Literals.Keyword("class"));
+            }
+            """;
+        var (result, compilation) = Generate(declaration, grammar, warningsAsErrors: true, checkOverflow: true);
+        AssertNoErrors(result, compilation);
+        Assert.Contains(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.SourceText.ToString().Contains("MatchKeyword", StringComparison.Ordinal));
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var assembly = Assembly.Load(stream.ToArray());
+        Assert.DoesNotContain(assembly.GetReferencedAssemblies(), static name => name.Name.StartsWith("Parlot", StringComparison.Ordinal));
+        var parse = assembly.GetType("Grammar").GetMethod("TryParse");
+        foreach (var (input, expected) in new (string, string)[]
+        {
+            ("if!", "if"), ("int9", "int"), ("interface", "interface"), ("if\u00e9", "if"),
+            ("", null), ("!", null), ("\0", null), ("\uffff", null), ("ifx", null),
+        })
+        {
+            object[] arguments = [input, null];
+            Assert.Equal(expected != null, (bool)parse.Invoke(null, arguments));
+            Assert.Equal(expected, arguments[1]);
+        }
+    }
+
+    [Fact]
     public void Generated_Assembly_Has_No_Parlot_References_Or_Factories()
     {
         var (result, compilation) = Generate(Declaration, Grammar);
@@ -381,7 +418,7 @@ public class StandaloneGeneratorTests
 
     private static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) Generate(
         string source, string grammar, bool designTime = false, bool referenceParlot = false,
-        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary, bool warningsAsErrors = false)
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary, bool warningsAsErrors = false, bool checkOverflow = false)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12,
             preprocessorSymbols: ["NET", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
@@ -394,7 +431,7 @@ public class StandaloneGeneratorTests
         }
         var compilation = CSharpCompilation.Create("StandaloneTest" + Guid.NewGuid().ToString("N"),
             [CSharpSyntaxTree.ParseText(source, parseOptions, "Grammar.cs")], references,
-            new CSharpCompilationOptions(outputKind, allowUnsafe: true,
+            new CSharpCompilationOptions(outputKind, allowUnsafe: true, checkOverflow: checkOverflow,
                 generalDiagnosticOption: warningsAsErrors ? ReportDiagnostic.Error : ReportDiagnostic.Default));
         var options = new Dictionary<string, string>
         {

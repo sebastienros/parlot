@@ -92,4 +92,24 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParseTokenConfiguration))]
     private static Parser<bool> TokenConfiguration(System.Threading.CancellationToken applicationToken) =>
         Literals.Char('x').Then(_ => applicationToken.IsCancellationRequested).Eof();
+
+    [GenerateParser(nameof(TryParseKeyword))]
+    private static Parser<string> Keyword() =>
+        OneOf(Terms.Keyword("if"), Terms.Keyword("else"), Terms.Keyword("while"), Terms.Keyword("return"),
+            Terms.Keyword("int"), Terms.Keyword("interface"), Terms.Keyword("internal"), Terms.Keyword("yield"))
+        .Or(OneOf(Terms.Keyword("case"), Terms.Keyword("catch"), Terms.Keyword("const"), Terms.Keyword("class"), Terms.Keyword("if")));
+
+    [GenerateParser(nameof(TryParseKeywordFallback))]
+    private static Parser<string> KeywordFallback() =>
+        Keyword().AndSkip(Literals.Char('!')).Or(Literals.Text(" \r\nunknown!")).Eof();
+
+    [GenerateParser(nameof(TryParseKeywordCapture))]
+    private static Parser<string> KeywordCapture() =>
+        Literals.Char('!').SkipAnd(Capture(Keyword())).AndSkip(Literals.Char('1'))
+            .Then(static span => span.ToString()).Eof();
+
+    [GenerateParser(nameof(TryParseKeywordCustomWhitespace))]
+    private static Parser<string> KeywordCustomWhitespace() =>
+        Keyword().AndSkip(Literals.Char('!')).Eof()
+            .WithWhiteSpaceParser(Capture(OneOrMany(Literals.Char('_'))));
 }

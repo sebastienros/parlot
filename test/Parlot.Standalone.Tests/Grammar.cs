@@ -23,6 +23,10 @@ public static partial class Grammar
     public static partial bool TryParseCancelableSequence(string text, CancellationOptions options, CancellationToken cancellationToken, out int value);
     public static partial bool TryParseCancelableWhitespace(string text, CancellationOptions options, CancellationToken cancellationToken, out string value);
     public static partial bool TryParseTokenConfiguration(string text, CancellationToken applicationToken, out bool value);
+    public static partial bool TryParseKeyword(string text, out string value);
+    public static partial bool TryParseKeywordFallback(string text, out string value);
+    public static partial bool TryParseKeywordCapture(string text, out string value);
+    public static partial bool TryParseKeywordCustomWhitespace(string text, out string value);
 }
 
 public sealed class CancellationOptions

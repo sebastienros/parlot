@@ -153,6 +153,13 @@ private static Parser<string> BuildIdentifier() =>
 
 ## Parse behavior
 
+Compatible keyword-only `OneOf`/`Or` choices can use generated length/discriminator
+lookup instead of first-character dispatch. The specialization is limited to bounded
+sets of ordinal ASCII-letter keywords and preserves keyword boundaries and whitespace
+behavior; small, mixed, case-insensitive, and other unsupported choices keep the existing
+path. See [Keyword lookup investigation](keyword-lookups.md) for eligibility, benchmarks,
+and why this does not change choices into general longest-token matching.
+
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
 allocation. The scanner, cursor, and context use the shared runtime implementations.
