@@ -47,8 +47,8 @@ public class GeneratedParserTests
         foreach (var word in words)
         {
             Check(word);
-            Check(word[..^1]);
-            Check(word[1..]);
+            Check(word.Substring(0, word.Length - 1));
+            Check(word.Substring(1));
             Check(word + "x");
             Check(word + "9");
             Check(word + "\u00e9");
@@ -56,7 +56,7 @@ public class GeneratedParserTests
             {
                 for (var c = 0; c < 128; c++)
                 {
-                    Check(word[..offset] + (char)c + word[(offset + 1)..]);
+                    Check(word.Substring(0, offset) + (char)c + word.Substring(offset + 1));
                 }
             }
         }
