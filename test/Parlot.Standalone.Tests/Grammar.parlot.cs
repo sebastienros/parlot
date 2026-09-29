@@ -12,6 +12,14 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParsePrefix))]
     private static Parser<string> Prefix() => Literals.Text("hello");
 
+    [GenerateParser(nameof(TryParseMatchedText))]
+    private static Parser<string> MatchedText() =>
+        Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseIdentifier))]
+    private static Parser<string> Identifier() =>
+        Literals.Identifier().Then(static value => value.ToString());
+
     [GenerateParser(nameof(TryParseAlternative))]
     private static Parser<char> Alternative() =>
         Terms.Char('a').SkipAnd(Literals.Char('b'))

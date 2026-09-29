@@ -81,6 +81,9 @@ var intOrHello = integer.Or(hello);
 ```
 
 Note: when `caseInsensitive: true`, `Text("Hello")` returns the canonical requested text ("Hello") by default to avoid allocating a new string. If you need the matched input text (e.g. "HELLO"), use `returnMatchedText: true`.
+Matched text reuses the requested string if its casing is exact, or the input string if
+the match covers the entire input; only a differently cased substring is materialized.
+Similarly, `TextSpan.ToString()` reuses its buffer when the span covers it entirely.
 
 Both **integer** and **hello** have well-known characters that can be at the start of their potential values: 
 - **integers** can start with `[0-9\.\-]`.

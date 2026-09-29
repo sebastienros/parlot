@@ -7,6 +7,8 @@ public static partial class Grammar
 {
     public static partial bool TryParseNumber(string text, out int value);
     public static partial bool TryParsePrefix(string text, out string value);
+    public static partial bool TryParseMatchedText(string text, out string value);
+    public static partial bool TryParseIdentifier(string text, out string value);
     public static partial bool TryParseAlternative(string text, out char value);
     public static partial bool TryParseString(string text, out string value);
     public static partial bool TryParseNumbers(string text, out IReadOnlyList<int> value);

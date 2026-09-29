@@ -22,6 +22,11 @@ public static partial class Grammars
     public static partial bool TryParseTermsDecimal(string text, out decimal value);
     public static partial bool TryParseTermsKeyword(string text, out string value);
     public static partial bool TryParseLiteralsText(string text, out string value);
+    public static partial bool TryParseMatchedText(string text, out string value);
+    public static partial bool TryParseMatchedTerm(string text, out string value);
+    public static partial bool TryParseCanonicalText(string text, out string value);
+    public static partial bool TryParseMatchedKeyword(string text, out string value);
+    public static partial bool TryParseEmptyText(string text, out string value);
     public static partial bool TryParseLiteralsChar(string text, out char value);
     public static partial bool TryParseLiteralsQuote(string text, out char value);
     public static partial bool TryParseLiteralsBackslash(string text, out char value);
