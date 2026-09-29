@@ -1272,6 +1272,103 @@ public class FluentTests
     }
 
     [Theory]
+    [InlineData(false, "10 - 4 - 2", 4)]
+    [InlineData(true, "10 - 4 - 2", 8)]
+    [InlineData(false, "10 + 4 - 2", 12)]
+    [InlineData(true, "10 + 4 - 2", 12)]
+    [InlineData(false, "10", 10)]
+    [InlineData(true, "10", 10)]
+    public void AssociativeFactoryReceivesOperatorValue(bool rightAssociative, string input, double expected)
+    {
+        var number = Terms.Number<double>(NumberOptions.Float);
+        Parser<char>[] operators = [Terms.Char('+'), Terms.Char('-')];
+        var parser = rightAssociative
+            ? number.RightAssociative(operators, static (left, right, op) => op == '+' ? left + right : left - right)
+            : number.LeftAssociative(operators, static (left, right, op) => op == '+' ? left + right : left - right);
+
+        Assert.Equal(expected, parser.Parse(input));
+    }
+
+    [Theory]
+    [InlineData(false, 4)]
+    [InlineData(true, 6)]
+    public void AssociativeFactoryReceivesContext(bool rightAssociative, double expected)
+    {
+        var context = new ParseContext(new Scanner("8 - 3 - 1"));
+        var number = Terms.Number<double>(NumberOptions.Float);
+        Parser<char>[] operators = [Terms.Char('-')];
+        double Combine(ParseContext actual, double left, double right, char op)
+        {
+            Assert.Same(context, actual);
+            Assert.Equal('-', op);
+            return left - right;
+        }
+
+        var parser = rightAssociative
+            ? number.RightAssociative(operators, Combine)
+            : number.LeftAssociative(operators, Combine);
+        var result = new ParseResult<double>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(expected, result.Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AssociativeFactoryRestoresCursorOnIncompletePair(bool rightAssociative)
+    {
+        var number = Terms.Decimal();
+        Parser<char>[] operators = [Terms.Char('+')];
+        var parser = rightAssociative
+            ? number.RightAssociative(operators, static (left, right, _) => left + right)
+            : number.LeftAssociative(operators, static (left, right, _) => left + right);
+        var context = new ParseContext(new Scanner("1+2+"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(3m, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(3, result.End);
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+
+        context = new ParseContext(new Scanner("x"));
+        result = new ParseResult<decimal>();
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void AssociativeFactoryRequiresOperators()
+    {
+        var number = Terms.Decimal();
+        Assert.Throws<ArgumentException>(() => number.LeftAssociative([], static (decimal left, decimal right, char _) => left + right));
+        Assert.Throws<ArgumentException>(() => number.RightAssociative([], static (decimal left, decimal right, char _) => left + right));
+        Assert.Throws<ArgumentNullException>(() => number.LeftAssociative((Parser<char>[])null!, static (decimal left, decimal right, char _) => left + right));
+        Assert.Throws<ArgumentNullException>(() => number.RightAssociative((Parser<char>[])null!, static (decimal left, decimal right, char _) => left + right));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AssociativeFactoryStopsWhenPairConsumesNoInput(bool rightAssociative)
+    {
+        var calls = 0;
+        int Combine(int left, int right, char _)
+        {
+            calls++;
+            return left + right;
+        }
+
+        var parser = rightAssociative
+            ? Always(1).RightAssociative([Always('+')], Combine)
+            : Always(1).LeftAssociative([Always('+')], Combine);
+
+        Assert.Equal(1, parser.Parse(""));
+        Assert.Equal(0, calls);
+    }
+
+    [Theory]
     [InlineData("2", 2)]
     [InlineData("-2", -2)]
     [InlineData("--2", 2)]

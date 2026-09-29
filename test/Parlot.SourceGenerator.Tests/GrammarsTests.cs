@@ -105,6 +105,36 @@ public class GrammarsTests
         Assert.Equal(1m, value);
     }
 
+    [Theory]
+    [InlineData("10 - 4 - 2", 4.0, 8.0)]
+    [InlineData("10 + 4 - 2", 12.0, 12.0)]
+    [InlineData("10", 10.0, 10.0)]
+    public void Value_Associative_Parsers_Receive_Operator_Values(string input, double leftExpected, double rightExpected)
+    {
+        Assert.True(Grammars.TryParseValueLeftAssociative(input, out var left));
+        Assert.Equal(leftExpected, left);
+        Assert.True(Grammars.TryParseValueRightAssociative(input, out var right));
+        Assert.Equal(rightExpected, right);
+        Assert.True(Grammars.TryParseValueLeftAssociativeContext(input, out var leftContext));
+        Assert.Equal(leftExpected, leftContext);
+        Assert.True(Grammars.TryParseValueRightAssociativeContext(input, out var rightContext));
+        Assert.Equal(rightExpected, rightContext);
+    }
+
+    [Fact]
+    public void Value_Right_Associative_Rolls_Back_An_Operator_With_No_Right_Operand()
+    {
+        Assert.True(Grammars.TryParseValueRightAssociativeThenPlus("1+", out var value));
+        Assert.Equal(1.0, value);
+    }
+
+    [Fact]
+    public void Value_Right_Associative_Stops_When_A_Pair_Consumes_No_Input()
+    {
+        Assert.True(Grammars.TryParseValueRightAssociativeEmpty("", out var value));
+        Assert.Equal(1, value);
+    }
+
     [Fact]
     public void Unary_Rolls_Back_An_Operator_With_No_Operand()
     {

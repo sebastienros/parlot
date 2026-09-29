@@ -42,6 +42,42 @@ public static partial class Grammars
             (Terms.Char('+'), static (left, right) => left + right),
             (Terms.Char('-'), static (left, right) => left - right));
 
+    [GenerateParser(nameof(TryParseValueLeftAssociative))]
+    private static Parser<double> BuildValueLeftAssociative() =>
+        Terms.Decimal().Then(static value => (double)value).LeftAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (left, right, operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueRightAssociative))]
+    private static Parser<double> BuildValueRightAssociative() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (left, right, operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueLeftAssociativeContext))]
+    private static Parser<double> BuildValueLeftAssociativeContext() =>
+        Terms.Decimal().Then(static value => (double)value).LeftAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (ParseContext _, double left, double right, int operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueRightAssociativeContext))]
+    private static Parser<double> BuildValueRightAssociativeContext() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (ParseContext _, double left, double right, int operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueRightAssociativeThenPlus))]
+    private static Parser<double> BuildValueRightAssociativeThenPlus() =>
+        Terms.Decimal().Then(static value => (double)value)
+            .RightAssociative([Literals.Char('+').Then(static _ => 1)],
+                static (left, right, _) => left + right)
+            .AndSkip(Literals.Char('+'))
+            .Eof();
+
+    [GenerateParser(nameof(TryParseValueRightAssociativeEmpty))]
+    private static Parser<int> BuildValueRightAssociativeEmpty() =>
+        Always(1).RightAssociative([Always('+')], static (left, right, _) => left + right);
+
     [GenerateParser(nameof(TryParseNestedLeftAssociative))]
     private static Parser<double> BuildNestedLeftAssociative()
     {

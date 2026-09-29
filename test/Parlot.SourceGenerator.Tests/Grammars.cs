@@ -11,6 +11,12 @@ public static partial class Grammars
     public static partial bool TryParseHello(string text, out string value);
     public static partial bool TryParseExpression(string text, out double value);
     public static partial bool TryParseLeftAssociative(string text, out double value);
+    public static partial bool TryParseValueLeftAssociative(string text, out double value);
+    public static partial bool TryParseValueRightAssociative(string text, out double value);
+    public static partial bool TryParseValueLeftAssociativeContext(string text, out double value);
+    public static partial bool TryParseValueRightAssociativeContext(string text, out double value);
+    public static partial bool TryParseValueRightAssociativeThenPlus(string text, out double value);
+    public static partial bool TryParseValueRightAssociativeEmpty(string text, out int value);
     public static partial bool TryParseNestedLeftAssociative(string text, out double value);
     public static partial bool TryParseCalculator(string text, out Expression value);
     public static partial bool TryParseTermsChar(string text, out char value);

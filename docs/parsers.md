@@ -26,6 +26,24 @@ if (!parser.TryParse(context, out var result, out var error))
 }
 ```
 
+## Associative operators
+
+`LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:
+
+```csharp
+var add = Terms.Char('+').Then(static _ => 1);
+var subtract = Terms.Char('-').Then(static _ => -1);
+var number = Terms.Decimal();
+
+var expression = number.LeftAssociative(
+    [add, subtract],
+    static (left, right, operation) => operation == 1 ? left + right : left - right);
+
+expression.Parse("10 - 4 - 2"); // 4
+```
+
+Replace `LeftAssociative` with `RightAssociative` to obtain `8` for the same input. The factory can also receive `ParseContext` as its first argument: `(context, left, right, operation)`. Existing overloads accepting `(operatorParser, factory)` tuples remain available when each operator needs a distinct factory. If an operator matches but the next operand does not, the operator is rolled back and the expression parsed so far is returned.
+
 ## Terms and Literals
 
 These are lowest level elements of a grammar, like a `'.'` (dot), predefined strings like `"hello"`, numbers, and more.
