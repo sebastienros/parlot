@@ -29,14 +29,7 @@ public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
 
     public override string ToString()
     {
-        if (Buffer == null)
-        {
-            return "";
-        }
-
-        return Offset == 0 && Length == Buffer.Length
-            ? Buffer
-            : Buffer.Substring(Offset, Length);
+        return Buffer?.Substring(Offset, Length) ?? "";
     }
 
     public bool Equals(string? other)
