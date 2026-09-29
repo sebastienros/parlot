@@ -11,6 +11,8 @@ public static partial class Grammar
     public static partial bool TryParseString(string text, out string value);
     public static partial bool TryParseNumbers(string text, out IReadOnlyList<int> value);
     public static partial bool TryParseOptional(string text, out int value);
+    public static partial bool TryParseZeroOrOne(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseZeroOrOneDiscarded(string text, out char value);
     public static partial bool TryParseRecursive(string text, out int value);
     public static partial bool TryParseCustomWhitespace(string text, out string value);
     public static partial bool TryParseConfigured(string text, GrammarOptions options, out string value);

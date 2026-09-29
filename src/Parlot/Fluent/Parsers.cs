@@ -33,14 +33,9 @@ public static partial class Parsers
     public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
 
     /// <summary>
-    /// Builds a parser that looks for zero or one time the specified parser.
+    /// Builds a parser that returns an empty list or a list containing one match.
     /// </summary>
-    public static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue) => new ZeroOrOne<T>(parser, defaultValue);
-
-    /// <summary>
-    /// Builds a parser that looks for zero or one time the specified parser.
-    /// </summary>
-    public static Parser<T> ZeroOrOne<T>(Parser<T> parser) where T : notnull => new ZeroOrOne<T>(parser, default!);
+    public static Parser<IReadOnlyList<T>> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
 
     /// <summary>
     /// Builds a parser that looks for zero or many times the specified parser.

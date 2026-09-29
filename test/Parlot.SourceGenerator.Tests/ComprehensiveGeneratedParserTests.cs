@@ -133,8 +133,12 @@ public class ComprehensiveGeneratedParserTests
     {
         Assert.True(Grammars.TryParseZeroOrManyChars("aaab", out var values));
         Assert.Equal(new[] { 'a', 'a', 'a' }, values);
-        Assert.True(Grammars.TryParseZeroOrOneChar("b", out var defaultValue));
-        Assert.Equal('x', defaultValue);
+        Assert.True(Grammars.TryParseZeroOrOneChar("a", out var one));
+        Assert.Equal(['a'], one);
+        Assert.True(Grammars.TryParseZeroOrOneChar("b", out var none));
+        Assert.Empty(none);
+        Assert.True(Grammars.TryParseZeroOrOneEmpty("", out var emptyMatch));
+        Assert.Equal(['x'], emptyMatch);
         Assert.True(Grammars.TryParseOneOfChar("b", out var choice));
         Assert.Equal('b', choice);
         Assert.False(Grammars.TryParseOneOfChar("c", out _));
