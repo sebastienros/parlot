@@ -18,5 +18,6 @@ public static partial class GeneratedParsers
     public static partial bool TryParseLiteralOneOf(string input, out string value);
     public static partial bool TryParseAnd(string input, out (string, decimal) value);
     public static partial bool TryParseZeroOrMany(string input, out IReadOnlyList<decimal> value);
+    public static partial bool TryParseZeroOrOne(string input, out IReadOnlyList<decimal> value);
     public static partial bool TryParseSkipWhiteSpace(string input, out decimal value);
 }

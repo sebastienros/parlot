@@ -147,11 +147,14 @@ public class GrammarsTests
     {
         Assert.True(Grammars.TryParseZeroOrManyOptional("aaa", out var zeroOrMany));
         Assert.Equal(3, zeroOrMany.Count);
+        Assert.Equal(['a'], zeroOrMany[0]);
         Assert.True(Grammars.TryParseOneOrManyOptional("aaa", out var oneOrMany));
         Assert.Equal(3, oneOrMany.Count);
+        Assert.Equal(['a'], oneOrMany[0]);
         Assert.False(Grammars.TryParseOneOrManyOptional("", out _));
         Assert.True(Grammars.TryParseSeparatedOptional("aaa", out var separated));
         Assert.Equal(3, separated.Count);
+        Assert.Equal(['a'], separated[0]);
         Assert.False(Grammars.TryParseSeparatedOptional("", out _));
     }
 

@@ -28,6 +28,14 @@ public static partial class Grammar
     private static Parser<int> OptionalNumber() =>
         Terms.Number<int>(NumberOptions.Integer).Optional().Then(static value => value.OrSome(-1)).Eof();
 
+    [GenerateParser(nameof(TryParseZeroOrOne))]
+    private static Parser<System.Collections.Generic.IReadOnlyList<char>> ZeroOrOneChar() =>
+        ZeroOrOne(Literals.Char('a'));
+
+    [GenerateParser(nameof(TryParseZeroOrOneDiscarded))]
+    private static Parser<char> ZeroOrOneDiscarded() =>
+        ZeroOrOne(Literals.Char('a')).SkipAnd(Literals.Char('b')).Eof();
+
     [GenerateParser(nameof(TryParseRecursive))]
     private static Parser<int> Recursive()
     {

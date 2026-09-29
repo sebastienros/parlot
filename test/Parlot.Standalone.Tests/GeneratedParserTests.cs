@@ -8,6 +8,20 @@ namespace Parlot.Standalone.Tests;
 
 public class GeneratedParserTests
 {
+    [Fact]
+    public void ZeroOrOne_Returns_Zero_Or_One_Items()
+    {
+        Assert.True(Grammar.TryParseZeroOrOne("a", out var matched));
+        Assert.Equal(['a'], matched);
+        Assert.True(Grammar.TryParseZeroOrOne("b", out var missing));
+        Assert.Empty(missing);
+        Assert.True(Grammar.TryParseZeroOrOneDiscarded("ab", out var afterMatch));
+        Assert.Equal('b', afterMatch);
+        Assert.True(Grammar.TryParseZeroOrOneDiscarded("b", out var afterMiss));
+        Assert.Equal('b', afterMiss);
+        Assert.False(Grammar.TryParseZeroOrOneDiscarded("c", out _));
+    }
+
     [Theory]
     [InlineData("int", "int")]
     [InlineData("interface", "interface")]

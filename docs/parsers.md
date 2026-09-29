@@ -568,10 +568,10 @@ Assert.Equal(12, result.Item2);
 
 ### ZeroOrOne
 
-Makes an existing parser optional. The method can also be be post-fixed.
+Matches zero or one occurrence and returns an empty list or a single-item list. The method can also be post-fixed.
 
 ```c#
-Parser<T> ZeroOrOne<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> ZeroOrOne<T>(Parser<T> parser)
 ```
 
 Usage:
@@ -579,16 +579,25 @@ Usage:
 ```c#
 var parser = ZeroOrOne(Terms.Text("hello"));
 // or Terms.Text("hello").ZeroOrOne()
-parser.Parse("hello");
-parser.Parse(""); // returns null but with a successful state
+parser.Parse("hello"); // ["hello"]
+parser.Parse(""); // [] with a successful state
 ```
 
 Result:
 
 ```
-"hello"
-null
+["hello"]
+[]
 ```
+
+`ZeroOrOne(parser, defaultValue)` is no longer available. For a scalar value with a fallback, use
+`Optional()` and project its `Option<T>` result:
+
+```c#
+var scalar = Terms.Text("hello").Optional().Then(static option => option.OrSome("world"));
+```
+
+For any number of matches, use `ZeroOrMany(parser)`.
 
 ### Optional
 

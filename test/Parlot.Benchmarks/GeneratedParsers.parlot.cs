@@ -101,6 +101,10 @@ public static partial class GeneratedParsers
     private static Parser<IReadOnlyList<decimal>> BuildZeroOrMany() =>
         ZeroOrMany(Terms.Decimal());
 
+    [GenerateParser(nameof(TryParseZeroOrOne))]
+    private static Parser<IReadOnlyList<decimal>> BuildZeroOrOne() =>
+        ZeroOrOne(Terms.Decimal());
+
     [GenerateParser(nameof(TryParseSkipWhiteSpace))]
     private static Parser<decimal> BuildSkipWhiteSpace() =>
         SkipWhiteSpace(Literals.Decimal());
