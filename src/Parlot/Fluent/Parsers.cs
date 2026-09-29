@@ -23,9 +23,20 @@ public static partial class Parsers
     public static TermBuilder Terms => new();
 
     /// <summary>
-    /// Builds a parser that looks for zero or many times a parser separated by another one.
+    /// Builds a parser that matches one or more values separated by another parser.
     /// </summary>
-    public static Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
+    /// <param name="separator">The separator between values.</param>
+    /// <param name="parser">The parser for each value.</param>
+    /// <param name="removeEmptyEntries">Whether to skip successive separators.</param>
+    /// <param name="allowLeadingSeparator">Whether to accept a separator before the first value.</param>
+    /// <param name="allowTrailingSeparator">Whether to consume a separator after the last value.</param>
+    public static Parser<IReadOnlyList<T>> Separated<U, T>(
+        Parser<U> separator,
+        Parser<T> parser,
+        bool removeEmptyEntries = false,
+        bool allowLeadingSeparator = false,
+        bool allowTrailingSeparator = false) =>
+        new Separated<U, T>(separator, parser, removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator);
 
     /// <summary>
     /// Builds a parser that skips white spaces before another one.

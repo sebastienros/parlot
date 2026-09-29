@@ -15,7 +15,7 @@ public partial class CollectionBenchmarks
     [Params(0, 1, 4, 5, 32)]
     public int Count { get; set; }
 
-    [Params("ZeroOrMany", "OneOrMany", "Separated")]
+    [Params("ZeroOrMany", "OneOrMany", "Separated", "SeparatedOptions")]
     public string Combinator { get; set; }
 
     [GlobalSetup]
@@ -25,6 +25,7 @@ public partial class CollectionBenchmarks
         {
             "ZeroOrMany" => CreateZero,
             "OneOrMany" => CreateOne,
+            "SeparatedOptions" => CreateSeparatedOptions,
             _ => CreateSeparated
         };
         _runtime = factory();
@@ -32,6 +33,10 @@ public partial class CollectionBenchmarks
         if (Combinator == "Separated")
         {
             _input = string.Join(",", _input.ToCharArray());
+        }
+        else if (Combinator == "SeparatedOptions")
+        {
+            _input = Count == 0 ? "" : "," + string.Join(",,", _input.ToCharArray()) + ",";
         }
 
         var expectedSuccess = Count > 0 || Combinator == "ZeroOrMany";
@@ -49,6 +54,7 @@ public partial class CollectionBenchmarks
     {
         "ZeroOrMany" => TryParseZero(_input, out _),
         "OneOrMany" => TryParseOne(_input, out _),
+        "SeparatedOptions" => TryParseSeparatedOptions(_input, out _),
         _ => TryParseSeparated(_input, out _)
     };
 
@@ -66,7 +72,12 @@ public partial class CollectionBenchmarks
     private static Parser<IReadOnlyList<(int, string)>> CreateSeparated() =>
         Separated(Literals.Char(','), Literals.Text("x").Then(static text => (1, text)));
 
+    private static Parser<IReadOnlyList<(int, string)>> CreateSeparatedOptions() =>
+        Separated(Literals.Char(','), Literals.Text("x").Then(static text => (1, text)),
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true);
+
     private static partial bool TryParseZero(string input, out IReadOnlyList<(int, string)> value);
     private static partial bool TryParseOne(string input, out IReadOnlyList<(int, string)> value);
     private static partial bool TryParseSeparated(string input, out IReadOnlyList<(int, string)> value);
+    private static partial bool TryParseSeparatedOptions(string input, out IReadOnlyList<(int, string)> value);
 }

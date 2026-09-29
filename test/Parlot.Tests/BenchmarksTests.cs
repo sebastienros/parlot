@@ -345,11 +345,14 @@ public class BenchmarksTests
     [Fact]
     public void GeneratedCollections()
     {
-        foreach (var combinator in new[] { "ZeroOrMany", "OneOrMany", "Separated" })
+        foreach (var combinator in new[] { "ZeroOrMany", "OneOrMany", "Separated", "SeparatedOptions" })
         {
-            var benchmarks = new CollectionBenchmarks { Count = 4, Combinator = combinator };
-            benchmarks.Setup();
-            Assert.True(benchmarks.Generated());
+            foreach (var count in new[] { 0, 1, 4, 5, 32 })
+            {
+                var benchmarks = new CollectionBenchmarks { Count = count, Combinator = combinator };
+                benchmarks.Setup();
+                Assert.Equal(count > 0 || combinator == "ZeroOrMany", benchmarks.Generated());
+            }
         }
     }
 

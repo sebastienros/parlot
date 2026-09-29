@@ -692,10 +692,16 @@ null // success
 
 ### Separated
 
-Matches all occurrences of a parser that are separated by another one. If a separator is not followed by a value, it is not consumed.
+Matches one or more values separated by another parser. By default, a separator
+not followed by a value is not consumed.
 
-```
-Parser<IReadOnlyList<T> Separated<U, T>(Parser<U> separator, Parser<T> parser)
+```c#
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator,
+    Parser<T> parser,
+    bool removeEmptyEntries = false,
+    bool allowLeadingSeparator = false,
+    bool allowTrailingSeparator = false)
 ```
 
 Usage:
@@ -712,6 +718,26 @@ Result:
 [1, 2, 3]
 [1, 2]
 ```
+
+Set `removeEmptyEntries: true` to skip successive separators **between**
+values, so `1,,2` returns `[1, 2]`. It does not permit a leading or trailing
+separator on its own. Enable `allowLeadingSeparator` to accept `,1,2`, or
+`allowTrailingSeparator` to consume `1,2,`. Each boundary accepts only one
+separator unless `removeEmptyEntries` is also set, in which case it accepts
+a run:
+
+```c#
+var parser = Separated(Terms.Char(','), Terms.Integer(),
+    removeEmptyEntries: true,
+    allowLeadingSeparator: true,
+    allowTrailingSeparator: true);
+
+parser.Eof().Parse(",,1,,2,,"); // [1, 2]
+```
+
+At least one value must match: empty input and input containing only separators
+fail. Without `allowTrailingSeparator`, a run of separators not followed by
+another value is left untouched for the next parser.
 
 ### Between
 
