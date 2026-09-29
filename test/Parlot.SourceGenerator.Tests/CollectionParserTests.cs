@@ -173,6 +173,74 @@ public class CollectionParserTests
         Assert.True(CollectionGrammars.TryParseCapturedZero(input, out var value));
         Assert.Equal(expected, value);
     }
+
+    [Fact]
+    public void BoundedManyLeavesNextItemUnconsumed()
+    {
+        Assert.True(CollectionGrammars.TryParseBoundedZero("xxx", out var zeroCount));
+        Assert.Equal(2, zeroCount);
+        Assert.True(CollectionGrammars.TryParseBoundedOne("xxx", out var oneCount));
+        Assert.Equal(2, oneCount);
+        Assert.False(CollectionGrammars.TryParseBoundedZero("xx", out _));
+        Assert.False(CollectionGrammars.TryParseBoundedOne("x", out _));
+    }
+
+    [Fact]
+    public void BoundedSeparatedLeavesNextItemUnconsumed()
+    {
+        Assert.True(CollectionGrammars.TryParseBoundedSeparated("x,x,x,x", out var count));
+        Assert.Equal(3, count);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("x")]
+    [InlineData("x,x")]
+    public void OptionalSeparatedAcceptsUpToMaximum(string input)
+    {
+        Assert.True(CollectionGrammars.TryParseOptionalSeparated(input, out var values));
+        Assert.Equal(input.Length == 0 ? 0 : (input.Length + 1) / 2, values.Count);
+        Assert.False(CollectionGrammars.TryParseOptionalSeparated("x,x,x", out _));
+        Assert.True(CollectionGrammars.TryParseOptionalSeparatedChoice("z", out var choice));
+        Assert.Equal('x', choice);
+    }
+
+    [Fact]
+    public void BoundedCollectionsWorkWhenValuesAreDiscarded()
+    {
+        Assert.True(CollectionGrammars.TryParseCapturedBoundedZero("xxx", out var zero));
+        Assert.Equal("xx", zero);
+        Assert.True(CollectionGrammars.TryParseCapturedBoundedOne("xxx", out var one));
+        Assert.Equal("xx", one);
+        Assert.True(CollectionGrammars.TryParseCapturedBoundedSeparated("x,x,x,x", out var separated));
+        Assert.Equal("x,x,x", separated);
+        Assert.False(CollectionGrammars.TryParseCapturedBoundedSeparated("x,x", out _));
+    }
+
+    [Fact]
+    public void BoundedSeparatedRejectsTooFewItemsAndRollsBackTrailingSeparator()
+    {
+        Assert.False(CollectionGrammars.TryParseBoundedSeparated("x,x", out _));
+        Assert.False(CollectionGrammars.TryParseBoundedSeparated("x,x,", out _));
+        Assert.False(CollectionGrammars.TryParseBoundedSeparated("x,x,x,", out _));
+        Assert.True(CollectionGrammars.TryParseSeparatedMinimumFallback("x,x", out var fallbackCount));
+        Assert.Equal(1, fallbackCount);
+    }
+
+    [Fact]
+    public void BoundedSeparatedOptionsMatchRuntimeAndDiscardResults()
+    {
+        Assert.True(CollectionGrammars.TryParseBoundedSeparatedOptions(",,x,,x,,x", out var count));
+        Assert.Equal(2, count);
+        Assert.True(CollectionGrammars.TryParseDiscardedBoundedSeparatedOptions(",,x,,x,,x", out var discarded));
+        Assert.Equal('x', discarded);
+        Assert.False(CollectionGrammars.TryParseBoundedSeparatedOptions(",,x,,x", out _));
+        Assert.True(CollectionGrammars.TryParseOptionalSeparatedOptions(",,,", out var emptyCount));
+        Assert.Equal(0, emptyCount);
+        Assert.False(CollectionGrammars.TryParseOptionalSeparatedOptions(",,x,,x,,x", out _));
+        Assert.True(CollectionGrammars.TryParseBoundedSeparatedOptionsFallback(",", out var fallback));
+        Assert.Equal(',', fallback);
+    }
 }
 
 public static partial class CollectionGrammars
@@ -191,4 +259,17 @@ public static partial class CollectionGrammars
     public static partial bool TryParseTuples(string text, out IReadOnlyList<(int Number, string Text)> value);
     public static partial bool TryParseSeparatedThenQuestion(string text, out int value);
     public static partial bool TryParseCapturedZero(string text, out string value);
+    public static partial bool TryParseBoundedZero(string text, out int value);
+    public static partial bool TryParseBoundedOne(string text, out int value);
+    public static partial bool TryParseBoundedSeparated(string text, out int value);
+    public static partial bool TryParseOptionalSeparated(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseCapturedBoundedZero(string text, out string value);
+    public static partial bool TryParseCapturedBoundedOne(string text, out string value);
+    public static partial bool TryParseCapturedBoundedSeparated(string text, out string value);
+    public static partial bool TryParseSeparatedMinimumFallback(string text, out int value);
+    public static partial bool TryParseOptionalSeparatedChoice(string text, out char value);
+    public static partial bool TryParseBoundedSeparatedOptions(string text, out int value);
+    public static partial bool TryParseBoundedSeparatedOptionsFallback(string text, out char value);
+    public static partial bool TryParseOptionalSeparatedOptions(string text, out int value);
+    public static partial bool TryParseDiscardedBoundedSeparatedOptions(string text, out char value);
 }

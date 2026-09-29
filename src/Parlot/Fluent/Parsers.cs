@@ -39,6 +39,34 @@ public static partial class Parsers
         new Separated<U, T>(separator, parser, removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator);
 
     /// <summary>
+    /// Builds a parser for separated values with a minimum number of matches and an optional maximum.
+    /// A maximum of zero means unlimited. An explicit minimum of zero allows an empty list.
+    /// </summary>
+    /// <param name="separator">The separator between values.</param>
+    /// <param name="parser">The value parser.</param>
+    public static Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
+
+    /// <summary>Builds a parser for separated values with configurable minimum and maximum counts.</summary>
+    /// <param name="separator">The separator between values.</param>
+    /// <param name="parser">The value parser.</param>
+    /// <param name="min">The minimum number of values.</param>
+    /// <param name="max">The maximum number of values, or zero for unlimited.</param>
+    public static Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser, int min = 1, int max = 0) => new Separated<U, T>(separator, parser, min, max);
+
+    /// <summary>Builds a bounded parser for separated values with configurable separator handling.</summary>
+    /// <param name="separator">The separator between values.</param>
+    /// <param name="parser">The value parser.</param>
+    /// <param name="min">The minimum number of values.</param>
+    /// <param name="max">The maximum number of values, or zero for unlimited.</param>
+    /// <param name="removeEmptyEntries">Whether to skip successive separators.</param>
+    /// <param name="allowLeadingSeparator">Whether to accept a separator before the first value.</param>
+    /// <param name="allowTrailingSeparator">Whether to consume a separator after the last value.</param>
+    public static Parser<IReadOnlyList<T>> Separated<U, T>(
+        Parser<U> separator, Parser<T> parser, int min, int max,
+        bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator) =>
+        new Separated<U, T>(separator, parser, min, max, removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator);
+
+    /// <summary>
     /// Builds a parser that skips white spaces before another one.
     /// </summary>
     public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
@@ -53,10 +81,20 @@ public static partial class Parsers
     /// </summary>
     public static Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
 
+    /// <summary>Builds a parser that matches up to <paramref name="max"/> times. Zero means unlimited.</summary>
+    /// <param name="parser">The parser to repeat.</param>
+    /// <param name="max">The maximum number of matches, or zero for unlimited.</param>
+    public static Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser, int max) => new ZeroOrMany<T>(parser, max);
+
     /// <summary>
     /// Builds a parser that looks for one or many times the specified parser.
     /// </summary>
     public static Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
+
+    /// <summary>Builds a parser that matches at least once, up to <paramref name="max"/> times. Zero means unlimited.</summary>
+    /// <param name="parser">The parser to repeat.</param>
+    /// <param name="max">The maximum number of matches, or zero for unlimited.</param>
+    public static Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser, int max) => new OneOrMany<T>(parser, max);
 
     /// <summary>
     /// Builds a parser that succeeds when the specified parser fails to match.
