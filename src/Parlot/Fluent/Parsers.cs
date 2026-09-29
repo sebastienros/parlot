@@ -23,9 +23,19 @@ public static partial class Parsers
     public static TermBuilder Terms => new();
 
     /// <summary>
-    /// Builds a parser that looks for zero or many times a parser separated by another one.
+    /// Builds a parser that looks for one or many values separated by another parser.
     /// </summary>
     public static Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser) => new Separated<U, T>(separator, parser);
+
+    /// <summary>
+    /// Builds a parser for separated values with a minimum number of matches and an optional maximum.
+    /// A maximum of zero means unlimited. An explicit minimum of zero allows an empty list.
+    /// </summary>
+    /// <param name="separator">The separator between values.</param>
+    /// <param name="parser">The value parser.</param>
+    /// <param name="min">The minimum number of values.</param>
+    /// <param name="max">The maximum number of values, or zero for unlimited.</param>
+    public static Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser, int min = 1, int max = 0) => new Separated<U, T>(separator, parser, min, max);
 
     /// <summary>
     /// Builds a parser that skips white spaces before another one.
@@ -47,10 +57,20 @@ public static partial class Parsers
     /// </summary>
     public static Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser) => new ZeroOrMany<T>(parser);
 
+    /// <summary>Builds a parser that matches up to <paramref name="max"/> times. Zero means unlimited.</summary>
+    /// <param name="parser">The parser to repeat.</param>
+    /// <param name="max">The maximum number of matches, or zero for unlimited.</param>
+    public static Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser, int max) => new ZeroOrMany<T>(parser, max);
+
     /// <summary>
     /// Builds a parser that looks for one or many times the specified parser.
     /// </summary>
     public static Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser) => new OneOrMany<T>(parser);
+
+    /// <summary>Builds a parser that matches at least once, up to <paramref name="max"/> times. Zero means unlimited.</summary>
+    /// <param name="parser">The parser to repeat.</param>
+    /// <param name="max">The maximum number of matches, or zero for unlimited.</param>
+    public static Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser, int max) => new OneOrMany<T>(parser, max);
 
     /// <summary>
     /// Builds a parser that succeeds when the specified parser fails to match.

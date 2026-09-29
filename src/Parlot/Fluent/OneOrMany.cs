@@ -8,10 +8,18 @@ namespace Parlot.Fluent;
 public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourceable
 {
     private readonly Parser<T> _parser;
+    private readonly int _max;
 
-    public OneOrMany(Parser<T> parser)
+    public OneOrMany(Parser<T> parser) : this(parser, 0)
+    {
+    }
+
+    /// <summary>Creates a parser that matches at least once and at most <paramref name="max"/> times. Zero means unlimited.</summary>
+    public OneOrMany(Parser<T> parser, int max)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        ThrowHelper.ThrowIfNegative(max, nameof(max));
+        _max = max;
 
         if (_parser is ISeekable seekable)
         {
@@ -47,7 +55,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             parsed.Value
         };
 
-        while (true)
+        while (_max == 0 || results.Count < _max)
         {
             previousOffset = context.Scanner.Cursor.Offset;
             if (!_parser.Parse(context, ref parsed)
@@ -107,8 +115,13 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             .MethodName;
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var itemValueName = $"itemValue{context.NextNumber()}";
+        var countName = $"count{context.NextNumber()}";
 
-        result.Body.Add("while (true)");
+        if (_max > 0)
+        {
+            result.Body.Add($"int {countName} = 0;");
+        }
+        result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
         result.Body.Add($"    if (!{helperName}({context.ParseContextName}, out var {itemValueName}) || {context.CursorName}.Offset == {previousOffsetName})");
@@ -124,6 +137,10 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             result.Body.Add($"    {listName}!.Add({itemValueName});");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
+        if (_max > 0)
+        {
+            result.Body.Add($"    {countName}++;");
+        }
         result.Body.Add("}");
         if (!context.DiscardResult)
         {

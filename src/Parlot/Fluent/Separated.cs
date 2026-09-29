@@ -9,13 +9,28 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 {
     private readonly Parser<U> _separator;
     private readonly Parser<T> _parser;
+    private readonly int _min;
+    private readonly int _max;
 
-    public Separated(Parser<U> separator, Parser<T> parser)
+    public Separated(Parser<U> separator, Parser<T> parser) : this(separator, parser, 1, 0)
+    {
+    }
+
+    /// <summary>Creates a parser for between <paramref name="min"/> and <paramref name="max"/> separated values. Zero maximum means unlimited.</summary>
+    public Separated(Parser<U> separator, Parser<T> parser, int min = 1, int max = 0)
     {
         _separator = separator ?? throw new ArgumentNullException(nameof(separator));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        ThrowHelper.ThrowIfNegative(min, nameof(min));
+        ThrowHelper.ThrowIfNegative(max, nameof(max));
+        if (max != 0 && max < min)
+        {
+            throw new ArgumentOutOfRangeException(nameof(max));
+        }
+        _min = min;
+        _max = max;
 
-        if (_parser is ISeekable seekable)
+        if (min > 0 && _parser is ISeekable seekable)
         {
             CanSeek = seekable.CanSeek;
             ExpectedChars = seekable.ExpectedChars;
@@ -37,12 +52,13 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 
         var start = 0;
         var end = context.Scanner.Cursor.Position;
+        var initialPosition = end;
 
         var first = true;
         var parsed = new ParseResult<T>();
         var separatorResult = new ParseResult<U>();
 
-        while (true)
+        while (_max == 0 || (results?.Count ?? 0) < _max)
         {
             var previousOffset = context.Scanner.Cursor.Offset;
 
@@ -64,8 +80,12 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
                     break;
                 }
 
-                context.ExitParser(this);
-                return false;
+                if (_min > 0)
+                {
+                    context.ExitParser(this);
+                    return false;
+                }
+                break;
             }
             else
             {
@@ -76,8 +96,12 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             {
                 if (first)
                 {
-                    context.ExitParser(this);
-                    return false;
+                    if (_min > 0)
+                    {
+                        context.ExitParser(this);
+                        return false;
+                    }
+                    break;
                 }
 
                 break;
@@ -91,6 +115,13 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             }
 
             results!.Add(parsed.Value);
+        }
+
+        if (_min > 1 && results!.Count < _min)
+        {
+            context.Scanner.Cursor.ResetPosition(initialPosition);
+            context.ExitParser(this);
+            return false;
         }
 
         result.Set(start, end.Offset, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
@@ -118,6 +149,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         var endName = $"end{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
+        var countName = $"count{context.NextNumber()}";
+        var initialPositionName = $"initialPosition{context.NextNumber()}";
+        var needsCount = _max > 0 || _min > 1;
 
         if (!context.DiscardResult)
         {
@@ -125,6 +159,14 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         }
         result.Body.Add($"bool {firstName} = true;");
         result.Body.Add($"var {endName} = {cursorName}.Position;");
+        if (_min > 1)
+        {
+            result.Body.Add($"var {initialPositionName} = {endName};");
+        }
+        if (needsCount)
+        {
+            result.Body.Add($"int {countName} = 0;");
+        }
         if (!context.DiscardResult)
         {
             result.Body.Add($"int {startName} = 0;");
@@ -142,7 +184,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
             .MethodName;
 
-        result.Body.Add("while (true)");
+        result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {cursorName}.Offset;");
         
@@ -190,20 +232,32 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         {
             result.Body.Add($"    {listName}!.Add(item{context.NextNumber() - 1});");
         }
+        if (needsCount)
+        {
+            result.Body.Add($"    {countName}++;");
+        }
         result.Body.Add("}");
+
+        if (_min > 1)
+        {
+            result.Body.Add($"if ({countName} < {_min})");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({initialPositionName});");
+            result.Body.Add("}");
+        }
 
         if (!context.DiscardResult)
         {
             result.Body.Add($"if ({listName} != null)");
             result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = {listName}.AsReadOnlyList();");
-            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{countName} >= {_min}" : "true")};");
             result.Body.Add("}");
             result.Body.Add("else");
             result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
             // No items parsed - Separated requires at least one element
-            result.Body.Add($"    {result.SuccessVariable} = false;");
+            result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
             result.Body.Add("}");
         }
         else
@@ -211,12 +265,12 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             // When discarding result, success depends on whether we parsed at least one item
             result.Body.Add($"if (!{firstName})");
             result.Body.Add("{");
-            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{countName} >= {_min}" : "true")};");
             result.Body.Add("}");
             result.Body.Add("else");
             result.Body.Add("{");
             // No items parsed - Separated requires at least one element
-            result.Body.Add($"    {result.SuccessVariable} = false;");
+            result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
             result.Body.Add("}");
         }
 

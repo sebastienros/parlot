@@ -18,4 +18,16 @@ public partial class CollectionBenchmarks
     [GenerateParser(nameof(TryParseSeparated))]
     private static Parser<IReadOnlyList<(int, string)>> BuildSeparated() =>
         Separated(Literals.Char(','), Literals.Text("x").Then(static text => (1, text)));
+
+    [GenerateParser(nameof(TryParseBoundedZero))]
+    private static Parser<IReadOnlyList<(int, string)>> BuildBoundedZero() =>
+        ZeroOrMany(Literals.Text("x").Then(static text => (1, text)), max: 2);
+
+    [GenerateParser(nameof(TryParseBoundedOne))]
+    private static Parser<IReadOnlyList<(int, string)>> BuildBoundedOne() =>
+        OneOrMany(Literals.Text("x").Then(static text => (1, text)), max: 2);
+
+    [GenerateParser(nameof(TryParseBoundedSeparated))]
+    private static Parser<IReadOnlyList<(int, string)>> BuildBoundedSeparated() =>
+        Separated(Literals.Char(','), Literals.Text("x").Then(static text => (1, text)), min: 1, max: 2);
 }
