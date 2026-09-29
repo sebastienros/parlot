@@ -338,7 +338,7 @@ public sealed partial class ParserSourceGenerator
     {
         error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
             + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, an out result, "
-            + "and optionally an out IReadOnlyList<(string Message, int Offset, int Line, int Column)>.";
+            + "and optionally an out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)>.";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -397,13 +397,14 @@ public sealed partial class ParserSourceGenerator
             || parameter.Type is not INamedTypeSymbol { Name: "IReadOnlyList", Arity: 1 } list
             || list.ContainingNamespace.ToDisplayString() != "System.Collections.Generic"
             || list.TypeArguments[0] is not INamedTypeSymbol { IsTupleType: true } tuple
-            || tuple.TupleElements.Length != 4
-            || tuple.TupleElements[0].Type.SpecialType != SpecialType.System_String)
+            || tuple.TupleElements.Length != 5
+            || tuple.TupleElements[0].Type.SpecialType != SpecialType.System_String
+            || tuple.TupleElements[1].Type.SpecialType != SpecialType.System_Boolean)
         {
             return false;
         }
 
-        return tuple.TupleElements.Skip(1).All(element => element.Type.SpecialType == SpecialType.System_Int32);
+        return tuple.TupleElements.Skip(2).All(element => element.Type.SpecialType == SpecialType.System_Int32);
     }
 
     private static bool UsesParlotType(ITypeSymbol type)
@@ -440,8 +441,8 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine($"            var {context} = {contextCreation};");
         if (standalone.ErrorsParameter is not null)
         {
-            source.AppendLine($"            {context}.ContinueOnError = true;");
-            source.AppendLine($"            {EscapeIdentifier(standalone.ErrorsParameter.Name)} = global::System.Array.Empty<(string Message, int Offset, int Line, int Column)>();");
+            source.AppendLine($"            {context}.CollectDiagnostics = true;");
+            source.AppendLine($"            {EscapeIdentifier(standalone.ErrorsParameter.Name)} = global::System.Array.Empty<(string Message, bool IsWarning, int Offset, int Line, int Column)>();");
         }
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");
@@ -469,14 +470,14 @@ public sealed partial class ParserSourceGenerator
             var item = prefix + "_item";
             source.AppendLine("            finally");
             source.AppendLine("            {");
-            source.AppendLine($"                var {collected} = {context}.Errors;");
+            source.AppendLine($"                var {collected} = {context}.Diagnostics;");
             source.AppendLine($"                var {diagnostics} = {collected}.Count == 0");
-            source.AppendLine("                    ? global::System.Array.Empty<(string Message, int Offset, int Line, int Column)>()");
-            source.AppendLine($"                    : new (string Message, int Offset, int Line, int Column)[{collected}.Count];");
+            source.AppendLine("                    ? global::System.Array.Empty<(string Message, bool IsWarning, int Offset, int Line, int Column)>()");
+            source.AppendLine($"                    : new (string Message, bool IsWarning, int Offset, int Line, int Column)[{collected}.Count];");
             source.AppendLine($"                for (var {index} = 0; {index} < {diagnostics}.Length; {index}++)");
             source.AppendLine("                {");
             source.AppendLine($"                    var {item} = {collected}[{index}];");
-            source.AppendLine($"                    {diagnostics}[{index}] = ({item}.Message!, {item}.Position.Offset, {item}.Position.Line, {item}.Position.Column);");
+            source.AppendLine($"                    {diagnostics}[{index}] = ({item}.Message, {item}.IsWarning, {item}.Position.Offset, {item}.Position.Line, {item}.Position.Column);");
             source.AppendLine("                }");
             source.AppendLine($"                {errors} = {diagnostics};");
             source.AppendLine("            }");

@@ -37,79 +37,99 @@ public class ParseContext
     public readonly Scanner Scanner;
 
     /// <summary>
-    /// When enabled, explicit grammar errors are collected instead of throwing. Defaults to <c>false</c>.
+    /// When enabled, explicit grammar errors and warnings are recorded in <see cref="Diagnostics"/>, and an error
+    /// fails the parser that reported it instead of throwing a <see cref="ParseException"/>. Defaults to <c>false</c>.
     /// </summary>
-    public bool ContinueOnError { get; set; }
+    /// <remarks>
+    /// When disabled, errors throw and warnings are ignored.
+    /// </remarks>
+    public bool CollectDiagnostics { get; set; }
 
     /// <summary>
-    /// Explicit grammar errors recorded during this parsing session.
+    /// When enabled, grammar warnings are reported as errors: the parser that reported the warning fails, and
+    /// the error is either recorded or thrown depending on <see cref="CollectDiagnostics"/>. Defaults to <c>false</c>.
     /// </summary>
-    public IReadOnlyList<ParseError> Errors => _errors ?? (IReadOnlyList<ParseError>)Array.Empty<ParseError>();
-
-    private List<ParseError>? _errors;
+    public bool TreatWarningsAsErrors { get; set; }
 
     /// <summary>
-    /// Records an explicit grammar error without allocating until an error occurs.
+    /// Grammar errors and warnings recorded during this parsing session, in the order they were reported.
     /// </summary>
-    internal void AddError(string message, TextPosition position)
+    /// <remarks>
+    /// Only populated when <see cref="CollectDiagnostics"/> is enabled. Diagnostics reported by an alternative
+    /// of a choice are discarded when another alternative is used.
+    /// </remarks>
+    public IReadOnlyList<ParseDiagnostic> Diagnostics => _diagnostics ?? (IReadOnlyList<ParseDiagnostic>)Array.Empty<ParseDiagnostic>();
+
+    private List<ParseDiagnostic>? _diagnostics;
+
+    /// <summary>
+    /// Records a diagnostic without allocating until one occurs.
+    /// </summary>
+    internal void AddDiagnostic(string message, TextPosition position, ParseDiagnosticSeverity severity)
     {
-        (_errors ??= []).Add(new ParseError { Message = message, Position = position });
+        (_diagnostics ??= []).Add(new ParseDiagnostic(message, position, severity));
     }
 
     /// <summary>
     /// Tracks the best failed branch of a choice while other branches are tried.
     /// </summary>
-    internal struct AlternativeErrors
+    internal struct AlternativeDiagnostics
     {
         internal int Checkpoint;
         internal int FarthestOffset;
-        internal ParseError[]? Best;
+        internal ParseDiagnostic[]? Best;
     }
 
     /// <summary>
     /// Starts an ordered choice's diagnostic checkpoint.
     /// </summary>
-    internal AlternativeErrors BeginAlternatives() => new()
+    internal AlternativeDiagnostics BeginAlternatives() => new()
     {
-        Checkpoint = _errors?.Count ?? 0,
+        Checkpoint = _diagnostics?.Count ?? 0,
         FarthestOffset = -1
     };
 
     /// <summary>
-    /// Drops a failed branch's errors, saving the furthest-reaching branch for total failure.
+    /// Drops a failed branch's diagnostics, saving the branch whose errors reach furthest for total failure.
     /// </summary>
-    internal void RejectAlternative(ref AlternativeErrors alternatives)
+    /// <remarks>
+    /// A failed branch that only reported warnings is not retained, since none of its input is used.
+    /// </remarks>
+    internal void RejectAlternative(ref AlternativeDiagnostics alternatives)
     {
-        if (_errors is not { } errors || errors.Count == alternatives.Checkpoint)
+        if (_diagnostics is not { } diagnostics || diagnostics.Count == alternatives.Checkpoint)
         {
             return;
         }
 
         var farthest = -1;
-        for (var i = alternatives.Checkpoint; i < errors.Count; i++)
+        for (var i = alternatives.Checkpoint; i < diagnostics.Count; i++)
         {
-            farthest = Math.Max(farthest, errors[i].Position.Offset);
+            if (diagnostics[i].Severity == ParseDiagnosticSeverity.Error)
+            {
+                farthest = Math.Max(farthest, diagnostics[i].Position.Offset);
+            }
         }
 
         if (farthest > alternatives.FarthestOffset)
         {
             alternatives.FarthestOffset = farthest;
-            var best = new ParseError[errors.Count - alternatives.Checkpoint];
-            errors.CopyTo(alternatives.Checkpoint, best, 0, best.Length);
+            var best = new ParseDiagnostic[diagnostics.Count - alternatives.Checkpoint];
+            diagnostics.CopyTo(alternatives.Checkpoint, best, 0, best.Length);
             alternatives.Best = best;
         }
 
-        errors.RemoveRange(alternatives.Checkpoint, errors.Count - alternatives.Checkpoint);
+        diagnostics.RemoveRange(alternatives.Checkpoint, diagnostics.Count - alternatives.Checkpoint);
     }
 
     /// <summary>
     /// Restores the best failed branch when none of the alternatives matched.
     /// </summary>
-    internal void RestoreAlternatives(in AlternativeErrors alternatives)
+    internal void RestoreAlternatives(in AlternativeDiagnostics alternatives)
     {
         if (alternatives.Best is { } best)
         {
-            (_errors ??= []).AddRange(best);
+            (_diagnostics ??= []).AddRange(best);
         }
     }
 

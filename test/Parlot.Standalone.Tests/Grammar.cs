@@ -17,7 +17,9 @@ public static partial class Grammar
     public static partial bool TryParseConfiguredWhitespace(string text, GrammarOptions options, out string value);
     public static partial bool TryParseError(string text, out char value);
     public static partial bool TryParseError(string text, out char value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
+    public static partial bool TryParseWarning(string text, out char value,
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
     public static partial bool TryParseThrowingCallback(string text, out char value);
     public static partial bool TryParseExplicitLambda(string text, out string value);
     public static partial bool TryParseCancelableNumber(string text, CancellationToken cancellationToken, out int value);

@@ -26,33 +26,47 @@ if (!parser.TryParse(context, out var result, out var error))
 }
 ```
 
-## Collecting explicit errors without stopping
+## Collecting diagnostics without stopping
 
 By default, `Error(...)` and `ElseError(...)` throw `ParseException`; `TryParse(..., out error)`
-converts it to a single `ParseError`. To collect explicit grammar errors instead, enable
-`ContinueOnError` on the per-parse `ParseContext` and inspect its `Errors` list:
+converts it to a single `ParseError`. `Warning(...)` does nothing. To collect grammar errors
+and warnings instead, enable `CollectDiagnostics` on the per-parse `ParseContext` and inspect
+its `Diagnostics` list:
 
 ```csharp
 var parser = Literals.Char('a').ElseError("Expected a").Optional()
     .And(Literals.Char('b').ElseError("Expected b").Optional());
-var context = new ParseContext(new Scanner(input)) { ContinueOnError = true };
+var context = new ParseContext(new Scanner(input)) { CollectDiagnostics = true };
 var success = parser.TryParse(context, out var value, out var fatalError);
-var errors = context.Errors;
+foreach (var diagnostic in context.Diagnostics)
+{
+    Console.WriteLine($"{diagnostic.Severity} {diagnostic.Position}: {diagnostic.Message}");
+}
 ```
 
-In this mode an explicit error records its message and `TextPosition`, then returns `false`
-from that parser with the cursor restored to its starting position. The enclosing grammar
-can try another alternative or absorb the failed token with an optional/repetition parser.
-No input is skipped and no replacement value is synthesized. Ordinary mismatches do not
-produce errors; recursion limits and cancellation retain their existing handling and are not collected.
-`TryParse` can therefore return `true` even when `context.Errors` is nonempty. Use a fresh
-context for each parse if errors should not accumulate across calls.
+Each `ParseDiagnostic` has a `Message`, a `TextPosition`, and a `Severity` (`Error` or `Warning`),
+listed in the order they were reported.
+
+In this mode an error records its diagnostic, then returns `false` from the parser that
+reported it with the cursor restored to its starting position. The enclosing grammar can try
+another alternative or absorb the failed token with an optional/repetition parser. No input is
+skipped and no replacement value is synthesized. A warning records its diagnostic and keeps the
+successful result. Ordinary mismatches do not produce diagnostics; recursion limits and cancellation
+retain their existing handling and are not collected. `TryParse` can therefore return `true` even
+when `context.Diagnostics` contains errors. Use a fresh context for each parse if diagnostics
+should not accumulate across calls.
 
 In ordered choices, diagnostics from a failed alternative are discarded if a later
-alternative succeeds. When every alternative fails, only errors from the branch whose
-error reaches the greatest input offset are kept; ties favor the earlier branch.
-Errors absorbed by optional or repetition parsers remain in the list when their
-surrounding branch is retained.
+alternative succeeds. When every alternative fails, only diagnostics from the branch whose
+error reaches the greatest input offset are kept; ties favor the earlier branch, and a branch
+that only reported warnings is not kept. Diagnostics absorbed by optional or repetition parsers
+remain in the list when their surrounding branch is retained. Put `Warning` on the whole
+construct it describes, for instance `(a + b).Warning(...)` rather than `a.Warning(...) + b`,
+so that it is only reported once that construct matched.
+
+Set `TreatWarningsAsErrors` to report warnings as errors. A promoted warning fails its parser like
+`Error(...)`: it throws when `CollectDiagnostics` is disabled, and is otherwise recorded with the `Error`
+severity so that the grammar can try another alternative.
 
 ## Terms and Literals
 
@@ -1098,6 +1112,34 @@ Result:
 
 ```
 failure: "Unexpected char c"
+```
+
+### Warning
+
+Reports a warning when the inner parser matched, keeping its result. Warnings are only recorded when
+`ParseContext.CollectDiagnostics` is enabled, and are located where the matched input starts, after
+any whitespace skipped by the inner parser. With `ParseContext.TreatWarningsAsErrors` the warning is
+reported as an error and the parser fails.
+
+```c#
+Parser<T> Warning(string message)
+```
+
+Usage:
+
+```c#
+var parser = Terms.Text("var").Warning("'var' is deprecated, use 'let'")
+    .Or(Terms.Text("let"));
+
+var context = new ParseContext(new Scanner(" var")) { CollectDiagnostics = true };
+parser.TryParse(context, out var value, out _);
+```
+
+Result:
+
+```
+"var"
+context.Diagnostics: Warning (1:2): 'var' is deprecated, use 'let'
 ```
 
 ### When

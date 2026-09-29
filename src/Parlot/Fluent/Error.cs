@@ -22,9 +22,9 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         if (!_parser.Parse(context, ref result))
         {
             context.ExitParser(this);
-            if (context.ContinueOnError)
+            if (context.CollectDiagnostics)
             {
-                context.AddError(_message, context.Scanner.Cursor.Position);
+                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
                 return false;
             }
             throw new ParseException(_message, context.Scanner.Cursor.Position);
@@ -75,9 +75,9 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    if ({context.ParseContextName}.ContinueOnError)");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics)");
         result.Body.Add("    {");
-        result.Body.Add($"        {context.ParseContextName}.AddError(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"        {context.ParseContextName}.AddDiagnostic(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
@@ -105,15 +105,15 @@ public sealed class Error<T> : Parser<T>, ISourceable
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
-        var start = context.ContinueOnError ? context.Scanner.Cursor.Position : default;
+        var start = context.CollectDiagnostics ? context.Scanner.Cursor.Position : default;
 
         if (_parser.Parse(context, ref result))
         {
             context.ExitParser(this);
-            if (context.ContinueOnError)
+            if (context.CollectDiagnostics)
             {
                 var position = context.Scanner.Cursor.Position;
-                context.AddError(_message, position);
+                context.AddDiagnostic(_message, position, ParseDiagnosticSeverity.Error);
                 context.Scanner.Cursor.ResetPosition(start);
                 return false;
             }
@@ -150,12 +150,12 @@ public sealed class Error<T> : Parser<T>, ISourceable
         // }
         // success = false;
         
-        result.Body.Add($"var {startName} = {context.ParseContextName}.ContinueOnError ? {cursorName}.Position : default;");
+        result.Body.Add($"var {startName} = {context.ParseContextName}.CollectDiagnostics ? {cursorName}.Position : default;");
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    if ({context.ParseContextName}.ContinueOnError)");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics)");
         result.Body.Add("    {");
-        result.Body.Add($"        {context.ParseContextName}.AddError(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"        {context.ParseContextName}.AddDiagnostic(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
         result.Body.Add("    else");
@@ -199,14 +199,14 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         context.EnterParser(this);
 
         var parsed = new ParseResult<T>();
-        var start = context.ContinueOnError ? context.Scanner.Cursor.Position : default;
+        var start = context.CollectDiagnostics ? context.Scanner.Cursor.Position : default;
 
         if (_parser.Parse(context, ref parsed))
         {
             context.ExitParser(this);
-            if (context.ContinueOnError)
+            if (context.CollectDiagnostics)
             {
-                context.AddError(_message, context.Scanner.Cursor.Position);
+                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
                 context.Scanner.Cursor.ResetPosition(start);
                 return false;
             }
@@ -243,12 +243,12 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         // }
         // success = false;
         
-        result.Body.Add($"var {startName} = {context.ParseContextName}.ContinueOnError ? {cursorName}.Position : default;");
+        result.Body.Add($"var {startName} = {context.ParseContextName}.CollectDiagnostics ? {cursorName}.Position : default;");
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    if ({context.ParseContextName}.ContinueOnError)");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics)");
         result.Body.Add("    {");
-        result.Body.Add($"        {context.ParseContextName}.AddError(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"        {context.ParseContextName}.AddDiagnostic(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
         result.Body.Add("    else");

@@ -20,7 +20,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
     {
         context.EnterParser(this);
 
-        var alternatives = context.ContinueOnError ? context.BeginAlternatives() : default;
+        var alternatives = context.CollectDiagnostics ? context.BeginAlternatives() : default;
         var resultA = new ParseResult<A>();
 
         if (_parserA.Parse(context, ref resultA))
@@ -31,7 +31,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
             return true;
         }
 
-        if (context.ContinueOnError)
+        if (context.CollectDiagnostics)
         {
             context.RejectAlternative(ref alternatives);
         }
@@ -46,7 +46,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
             return true;
         }
 
-        if (context.ContinueOnError)
+        if (context.CollectDiagnostics)
         {
             context.RejectAlternative(ref alternatives);
             context.RestoreAlternatives(in alternatives);
@@ -84,7 +84,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         var valueBName = $"valueB{context.NextNumber()}";
         var alternativesName = $"alternatives{context.NextNumber()}";
 
-        result.Body.Add($"var {alternativesName} = {context.ParseContextName}.ContinueOnError ? {context.ParseContextName}.BeginAlternatives() : default;");
+        result.Body.Add($"var {alternativesName} = {context.ParseContextName}.CollectDiagnostics ? {context.ParseContextName}.BeginAlternatives() : default;");
         result.Body.Add($"if ({helperNameA}({context.ParseContextName}, out var {valueAName}))");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
@@ -95,7 +95,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    if ({context.ParseContextName}.ContinueOnError) {context.ParseContextName}.RejectAlternative(ref {alternativesName});");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics) {context.ParseContextName}.RejectAlternative(ref {alternativesName});");
         result.Body.Add($"    if ({helperNameB}({context.ParseContextName}, out var {valueBName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
@@ -106,7 +106,7 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
-        result.Body.Add($"        if ({context.ParseContextName}.ContinueOnError)");
+        result.Body.Add($"        if ({context.ParseContextName}.CollectDiagnostics)");
         result.Body.Add("        {");
         result.Body.Add($"            {context.ParseContextName}.RejectAlternative(ref {alternativesName});");
         result.Body.Add($"            {context.ParseContextName}.RestoreAlternatives(in {alternativesName});");

@@ -102,6 +102,13 @@ public static partial class ParameterizedGrammars
     private static Parser<int> BuildTypedError() =>
         Literals.Text("ab").Error<int>("unexpected ab");
 
+    [GenerateParser(nameof(TryParseWarning))]
+    private static Parser<string> BuildWarning() =>
+        OneOf(
+            Terms.Text("a").Warning("abandoned").AndSkip(Terms.Char('!')),
+            Terms.Text("var").Warning("'var' is deprecated"),
+            Terms.Identifier().Then(static x => x.ToString()!));
+
     [GenerateParser(nameof(TryParseOverloadedDefault))]
     private static Parser<string> BuildOverloaded() => Literals.Text("default").Eof();
 

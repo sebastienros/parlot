@@ -144,7 +144,7 @@ public class ParameterizedParserTests
         Assert.False(ParameterizedGrammars.TryParseRequiredBang("x", out var value, out var errors));
         Assert.Null(value);
         var error = Assert.Single(errors);
-        Assert.Equal(("Expected '!'.", 1, 1, 2), error);
+        Assert.Equal(("Expected '!'.", false, 1, 1, 2), error);
 
         Assert.True(ParameterizedGrammars.TryParseRequiredBang("x!", out value, out errors));
         Assert.Equal("x", value);
@@ -158,7 +158,7 @@ public class ParameterizedParserTests
             "ab", "fallback", CancellationToken.None, out _));
         Assert.True(ParameterizedGrammars.TryParseDiagnostics("ab", "fallback", out var value, out var errors));
         Assert.Equal("fallback", value);
-        Assert.Equal(("far", 2, 1, 3), Assert.Single(errors));
+        Assert.Equal(("far", false, 2, 1, 3), Assert.Single(errors));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class ParameterizedParserTests
     {
         Assert.True(ParameterizedGrammars.TryParseOptionalDiagnostic("?", out var value, out var errors));
         Assert.Equal("ok", value);
-        Assert.Equal(("missing x", 0, 1, 1), Assert.Single(errors));
+        Assert.Equal(("missing x", false, 0, 1, 1), Assert.Single(errors));
     }
 
     [Fact]
@@ -175,8 +175,8 @@ public class ParameterizedParserTests
         Assert.True(ParameterizedGrammars.TryParseMultipleDiagnostics("?", out var value, out var errors));
         Assert.Equal("ok", value);
         Assert.Equal(2, errors.Count);
-        Assert.Equal(("missing a", 0, 1, 1), errors[0]);
-        Assert.Equal(("missing b", 0, 1, 1), errors[1]);
+        Assert.Equal(("missing a", false, 0, 1, 1), errors[0]);
+        Assert.Equal(("missing b", false, 0, 1, 1), errors[1]);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class ParameterizedParserTests
     {
         Assert.False(ParameterizedGrammars.TryParseCancellableDiagnostics(
             "?", CancellationToken.None, out _, out var errors));
-        Assert.Equal(("missing x", 0, 1, 1), Assert.Single(errors));
+        Assert.Equal(("missing x", false, 0, 1, 1), Assert.Single(errors));
         using var source = new CancellationTokenSource();
         source.Cancel();
         Assert.Throws<OperationCanceledException>(() => ParameterizedGrammars.TryParseCancellableDiagnostics(
@@ -203,7 +203,22 @@ public class ParameterizedParserTests
     public void Opt_In_Generated_Typed_Error_Restores_Cursor_And_Reports_End_Position()
     {
         Assert.False(ParameterizedGrammars.TryParseTypedError("ab", out _, out var errors));
-        Assert.Equal(("unexpected ab", 2, 1, 3), Assert.Single(errors));
+        Assert.Equal(("unexpected ab", false, 2, 1, 3), Assert.Single(errors));
+    }
+
+    [Fact]
+    public void Opt_In_Generated_Overload_Reports_Warnings()
+    {
+        Assert.True(ParameterizedGrammars.TryParseWarning(" var", out var original));
+        Assert.Equal("var", original);
+
+        Assert.True(ParameterizedGrammars.TryParseWarning(" var", out var value, out var diagnostics));
+        Assert.Equal("var", value);
+        Assert.Equal(("'var' is deprecated", true, 1, 1, 2), Assert.Single(diagnostics));
+
+        Assert.True(ParameterizedGrammars.TryParseWarning(" a", out value, out diagnostics));
+        Assert.Equal("a", value);
+        Assert.Empty(diagnostics);
     }
 
     [Fact]
@@ -288,20 +303,23 @@ public static partial class ParameterizedGrammars
     public static partial bool TryParseCallback(string text, CallbackOptions options, out string value);
     public static partial bool TryParseRequiredBang(string text, out string value);
     public static partial bool TryParseRequiredBang(string text, out string value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseDiagnostics(string text, string prefix, out string value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseDiagnostics(string text, string prefix, CancellationToken cancellationToken, out string value);
     public static partial bool TryParseOptionalDiagnostic(string text, out string value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseMultipleDiagnostics(string text, out string value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseCancellableDiagnostics(string text, CancellationToken cancellationToken, out string value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseCovariantDiagnostics(string text, out object value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseTypedError(string text, out int value,
-        out IReadOnlyList<(string Message, int Offset, int Line, int Column)> errors);
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
+    public static partial bool TryParseWarning(string text, out string value);
+    public static partial bool TryParseWarning(string text, out string value,
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
     public static partial bool TryParseOverloadedDefault(string text, out string value);
     public static partial bool TryParseOverloadedBoolean(string text, bool enabled, out string value);
     public static partial bool TryParseOverloadedInteger(string text, int number, out string value);

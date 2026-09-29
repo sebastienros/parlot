@@ -210,7 +210,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             context.SkipWhiteSpace();
         }
 
-        var alternatives = context.ContinueOnError ? context.BeginAlternatives() : default;
+        var alternatives = context.CollectDiagnostics ? context.BeginAlternatives() : default;
 
         if (_map != null)
         {
@@ -229,7 +229,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                         return true;
                     }
 
-                    if (context.ContinueOnError)
+                    if (context.CollectDiagnostics)
                     {
                         context.RejectAlternative(ref alternatives);
                     }
@@ -249,14 +249,14 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                     return true;
                 }
 
-                if (context.ContinueOnError)
+                if (context.CollectDiagnostics)
                 {
                     context.RejectAlternative(ref alternatives);
                 }
             }
         }
 
-        if (context.ContinueOnError)
+        if (context.CollectDiagnostics)
         {
             context.RestoreAlternatives(in alternatives);
         }
@@ -452,7 +452,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         }
 
         var alternativeName = $"alternatives{context.NextNumber()}";
-        outerResult.Body.Add($"{indent}if ({contextVariableName}.ContinueOnError)");
+        outerResult.Body.Add($"{indent}if ({contextVariableName}.CollectDiagnostics)");
         outerResult.Body.Add($"{indent}{{");
         outerResult.Body.Add($"{indent}    var {alternativeName} = {contextVariableName}.BeginAlternatives();");
         for (var i = 0; i < parsers.Count; i++)
