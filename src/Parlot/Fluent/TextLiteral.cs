@@ -90,12 +90,14 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             }
             else
             {
-                var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
+                var buffer = context.Scanner.Buffer;
+                var parsedText = buffer.AsSpan(start, end - start);
 
-                // Prevent an allocation if the text matches exactly
                 result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
                     ? Text
-                    : parsedText.ToString());
+                    : start == 0 && end == buffer.Length
+                        ? buffer
+                        : parsedText.ToString());
             }
 
             context.ExitParser(this);
@@ -146,7 +148,13 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
         if (shouldReturnMatchedText)
         {
-            result.Body.Add($"    {result.ValueVariable} = {scannerName}.Buffer.AsSpan({startName}, {lengthLiteral}).ToString();");
+            var bufferName = $"buffer{context.NextNumber()}";
+            var parsedTextName = $"parsedText{context.NextNumber()}";
+            result.Body.Add($"    var {bufferName} = {scannerName}.Buffer;");
+            result.Body.Add($"    var {parsedTextName} = {bufferName}.AsSpan({startName}, {lengthLiteral});");
+            result.Body.Add($"    {result.ValueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
+            result.Body.Add($"        ? {textLiteral}");
+            result.Body.Add($"        : {startName} == 0 && {lengthLiteral} == {bufferName}.Length ? {bufferName} : {parsedTextName}.ToString();");
         }
         else
         {

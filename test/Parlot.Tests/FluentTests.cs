@@ -1090,6 +1090,25 @@ public class FluentTests
     }
 
     [Fact]
+    public void ShouldReuseTextReferencesWhenReturningMatchedText()
+    {
+        var literal = new string(['h', 'e', 'l', 'l', 'o']);
+        var parser = new TextLiteral(literal, StringComparison.OrdinalIgnoreCase, returnMatchedText: true);
+        var exactInput = new string(['h', 'e', 'l', 'l', 'o']);
+        var differentCaseInput = new string(['H', 'E', 'L', 'L', 'O']);
+
+        Assert.Same(literal, parser.Parse(exactInput));
+        Assert.Same(differentCaseInput, parser.Parse(differentCaseInput));
+        Assert.Equal("HELLO", parser.Parse("HELLO world"));
+        Assert.NotSame(differentCaseInput, parser.Parse("HELLO world"));
+        Assert.Equal("HELLO", Terms.Text(literal, caseInsensitive: true, returnMatchedText: true).Parse(" HELLO"));
+        Assert.False(parser.TryParse("world", out _));
+        Assert.Same(literal, new TextLiteral(literal, StringComparison.Ordinal).Parse(exactInput));
+        Assert.Same(literal, Literals.Text(literal, caseInsensitive: true).Parse(differentCaseInput));
+        Assert.Same(string.Empty, new TextLiteral(string.Empty, StringComparison.OrdinalIgnoreCase, returnMatchedText: true).Parse(""));
+    }
+
+    [Fact]
     public void ShouldBuildCaseInsensitiveLookupTable()
     {
         var parser = OneOf(
@@ -1944,6 +1963,19 @@ public class FluentTests
         var parser2 = Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true);
         Assert.True(parser2.TryParse("IF", out var result2));
         Assert.Equal("IF", result2);
+    }
+
+    [Fact]
+    public void KeywordShouldReuseMatchedTextOnlyAfterBoundary()
+    {
+        var literal = new string(['i', 'f']);
+        var parser = new KeywordLiteral(literal, StringComparison.OrdinalIgnoreCase, returnMatchedText: true);
+        var input = new string(['I', 'F']);
+
+        Assert.Same(literal, parser.Parse("if"));
+        Assert.Same(input, parser.Parse(input));
+        Assert.Equal("IF", parser.Parse("IF("));
+        Assert.False(parser.TryParse("IFoo", out _));
     }
 
     [Fact]

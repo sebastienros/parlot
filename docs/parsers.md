@@ -133,6 +133,9 @@ Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatche
 When `caseInsensitive` is `true`, the default behavior is to return the **requested** text (the canonical literal you passed in), not the input slice. This avoids allocating a new string for case-insensitive matches.
 
 If you need to preserve the original casing from the input, set `returnMatchedText: true`.
+An exact-case match returns the requested text without allocating; if the matched text
+has different casing but covers the entire input, the input string itself is returned.
+Only a differently cased substring needs a new string.
 
 Usage:
 
@@ -192,7 +195,7 @@ Matches a keyword string, ensuring the following character is not a letter. This
 Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false)
 ```
 
-Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to return the matched input slice instead.
+Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to preserve the matched input casing; exact-case matches reuse the keyword, and whole-input matches can reuse the input string.
 
 This is useful when parsing programming language constructs like `if`, `while`, `return`, etc., where you want to match the exact keyword but not as part of a longer identifier.
 

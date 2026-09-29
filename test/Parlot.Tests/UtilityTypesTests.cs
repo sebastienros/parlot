@@ -90,12 +90,24 @@ public class UtilityTypesTests
     [Fact]
     public void TextSpanShouldCreateFromString()
     {
-        var span = new TextSpan("hello");
+        var buffer = new string(['h', 'e', 'l', 'l', 'o']);
+        var span = new TextSpan(buffer);
 
         Assert.Equal(5, span.Length);
         Assert.Equal(0, span.Offset);
         Assert.Equal("hello", span.Buffer);
         Assert.Equal("hello", span.ToString());
+        Assert.Same(buffer, span.ToString());
+    }
+
+    [Fact]
+    public void TextSpanShouldReuseEntireBufferAndEmptyBuffer()
+    {
+        var buffer = new string(['h', 'e', 'l', 'l', 'o']);
+
+        Assert.Same(buffer, new TextSpan(buffer, 0, buffer.Length).ToString());
+        Assert.Same(string.Empty, new TextSpan(string.Empty, 0, 0).ToString());
+        Assert.Equal(string.Empty, new TextSpan(buffer, 2, 0).ToString());
     }
 
     [Fact]

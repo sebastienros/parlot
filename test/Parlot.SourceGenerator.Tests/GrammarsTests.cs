@@ -28,6 +28,46 @@ public class GrammarsTests
             static method => method.Name.StartsWith("Build", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Matched_Text_Reuses_Existing_Strings()
+    {
+        var exactInput = new string(['h', 'e', 'l', 'l', 'o']);
+        var differentCaseInput = new string(['H', 'E', 'L', 'L', 'O']);
+
+        Assert.True(Grammars.TryParseMatchedText(exactInput, out var exact));
+        Assert.Same("hello", exact);
+        Assert.NotSame(exactInput, exact);
+        Assert.True(Grammars.TryParseMatchedText(differentCaseInput, out var differentCase));
+        Assert.Same(differentCaseInput, differentCase);
+        var slicedInput = "HELLO world";
+        Assert.True(Grammars.TryParseMatchedText(slicedInput, out var sliced));
+        Assert.Equal("HELLO", sliced);
+        Assert.NotSame(slicedInput, sliced);
+        var prefixedInput = " HELLO";
+        Assert.True(Grammars.TryParseMatchedTerm(prefixedInput, out var prefixed));
+        Assert.Equal("HELLO", prefixed);
+        Assert.NotSame(prefixedInput, prefixed);
+        Assert.False(Grammars.TryParseMatchedText("world", out _));
+        Assert.True(Grammars.TryParseEmptyText("", out var empty));
+        Assert.Same(string.Empty, empty);
+        Assert.True(Grammars.TryParseCanonicalText(differentCaseInput, out var canonical));
+        Assert.Same("hello", canonical);
+        Assert.True(Grammars.TryParseLiteralsText(exactInput, out var ordinal));
+        Assert.Same("hello", ordinal);
+    }
+
+    [Fact]
+    public void Matched_Keyword_Respects_Boundary_And_Reuses_Strings()
+    {
+        var input = new string(['I', 'F']);
+
+        Assert.True(Grammars.TryParseMatchedKeyword(input, out var matched));
+        Assert.Same(input, matched);
+        Assert.True(Grammars.TryParseMatchedKeyword("IF(", out var sliced));
+        Assert.Equal("IF", sliced);
+        Assert.False(Grammars.TryParseMatchedKeyword("IFoo", out _));
+    }
+
     [Theory]
     [InlineData("one", 1.0)]
     [InlineData("two + three", 5.0)]

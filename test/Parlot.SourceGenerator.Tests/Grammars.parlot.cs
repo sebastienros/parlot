@@ -102,6 +102,26 @@ public static partial class Grammars
     [GenerateParser(nameof(TryParseLiteralsText))]
     private static Parser<string> BuildLiteralsText() => Literals.Text("hello");
 
+    [GenerateParser(nameof(TryParseMatchedText))]
+    private static Parser<string> BuildMatchedText() =>
+        Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseMatchedTerm))]
+    private static Parser<string> BuildMatchedTerm() =>
+        Terms.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseCanonicalText))]
+    private static Parser<string> BuildCanonicalText() =>
+        Literals.Text("hello", caseInsensitive: true);
+
+    [GenerateParser(nameof(TryParseMatchedKeyword))]
+    private static Parser<string> BuildMatchedKeyword() =>
+        Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseEmptyText))]
+    private static Parser<string> BuildEmptyText() =>
+        Literals.Text("", caseInsensitive: true, returnMatchedText: true);
+
     [GenerateParser(nameof(TryParseLiteralsChar))]
     private static Parser<char> BuildLiteralsChar() => Literals.Char('h');
 

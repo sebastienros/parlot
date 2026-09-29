@@ -106,6 +106,24 @@ public class GeneratedParserTests
     }
 
     [Fact]
+    public void Matched_Text_And_Full_Buffer_Span_Reuse_Existing_Strings()
+    {
+        var exact = new string(['h', 'e', 'l', 'l', 'o']);
+        var differentCase = new string(['H', 'E', 'L', 'L', 'O']);
+
+        Assert.True(Grammar.TryParseMatchedText(exact, out var value));
+        Assert.Same("hello", value);
+        Assert.True(Grammar.TryParseMatchedText(differentCase, out value));
+        Assert.Same(differentCase, value);
+        Assert.True(Grammar.TryParseMatchedText("HELLO!", out value));
+        Assert.Equal("HELLO", value);
+        Assert.True(Grammar.TryParseIdentifier(differentCase, out value));
+        Assert.Same(differentCase, value);
+        Assert.True(Grammar.TryParseIdentifier("HELLO!", out value));
+        Assert.Equal("HELLO", value);
+    }
+
+    [Fact]
     public void Failed_Sequence_Restores_Input_And_Whitespace_For_Next_Alternative()
     {
         Assert.True(Grammar.TryParseAlternative("  ac", out var value));
