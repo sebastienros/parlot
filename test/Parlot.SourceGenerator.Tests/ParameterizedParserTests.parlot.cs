@@ -71,6 +71,37 @@ public static partial class ParameterizedGrammars
     private static Parser<string> BuildRequiredBang() =>
         Literals.Text("x").AndSkip(Literals.Char('!').ElseError("Expected '!'.")).Eof();
 
+    [GenerateParser(nameof(TryParseDiagnostics))]
+    private static Parser<string> BuildDiagnostics(string prefix) =>
+        OneOf(
+            Literals.Text("ab").AndSkip(Literals.Char('!').ElseError("far")),
+            Literals.Text("a").AndSkip(Literals.Char('!').ElseError("near")))
+        .Else(context => prefix);
+
+    [GenerateParser(nameof(TryParseOptionalDiagnostic))]
+    private static Parser<string> BuildOptionalDiagnostic() =>
+        Literals.Char('x').ElseError("missing x").Optional().Then("ok");
+
+    [GenerateParser(nameof(TryParseMultipleDiagnostics))]
+    private static Parser<string> BuildMultipleDiagnostics() =>
+        Literals.Char('a').ElseError("missing a").Optional()
+            .And(Literals.Char('b').ElseError("missing b").Optional())
+            .Then("ok");
+
+    [GenerateParser(nameof(TryParseCancellableDiagnostics))]
+    private static Parser<string> BuildCancellableDiagnostics() =>
+        Literals.Char('x').ElseError("missing x").Then("ok");
+
+    [GenerateParser(nameof(TryParseCovariantDiagnostics))]
+    private static Parser<object> BuildCovariantDiagnostics() =>
+        new OneOf<string, object, object>(
+            Literals.Text("a").Error("abandoned"),
+            Literals.Char('a').Then<object>(static value => value));
+
+    [GenerateParser(nameof(TryParseTypedError))]
+    private static Parser<int> BuildTypedError() =>
+        Literals.Text("ab").Error<int>("unexpected ab");
+
     [GenerateParser(nameof(TryParseOverloadedDefault))]
     private static Parser<string> BuildOverloaded() => Literals.Text("default").Eof();
 

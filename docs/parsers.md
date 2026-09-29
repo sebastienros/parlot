@@ -26,6 +26,34 @@ if (!parser.TryParse(context, out var result, out var error))
 }
 ```
 
+## Collecting explicit errors without stopping
+
+By default, `Error(...)` and `ElseError(...)` throw `ParseException`; `TryParse(..., out error)`
+converts it to a single `ParseError`. To collect explicit grammar errors instead, enable
+`ContinueOnError` on the per-parse `ParseContext` and inspect its `Errors` list:
+
+```csharp
+var parser = Literals.Char('a').ElseError("Expected a").Optional()
+    .And(Literals.Char('b').ElseError("Expected b").Optional());
+var context = new ParseContext(new Scanner(input)) { ContinueOnError = true };
+var success = parser.TryParse(context, out var value, out var fatalError);
+var errors = context.Errors;
+```
+
+In this mode an explicit error records its message and `TextPosition`, then returns `false`
+from that parser with the cursor restored to its starting position. The enclosing grammar
+can try another alternative or absorb the failed token with an optional/repetition parser.
+No input is skipped and no replacement value is synthesized. Ordinary mismatches do not
+produce errors; recursion limits and cancellation retain their existing handling and are not collected.
+`TryParse` can therefore return `true` even when `context.Errors` is nonempty. Use a fresh
+context for each parse if errors should not accumulate across calls.
+
+In ordered choices, diagnostics from a failed alternative are discarded if a later
+alternative succeeds. When every alternative fails, only errors from the branch whose
+error reaches the greatest input offset are kept; ties favor the earlier branch.
+Errors absorbed by optional or repetition parsers remain in the list when their
+surrounding branch is retained.
+
 ## Terms and Literals
 
 These are lowest level elements of a grammar, like a `'.'` (dot), predefined strings like `"hello"`, numbers, and more.

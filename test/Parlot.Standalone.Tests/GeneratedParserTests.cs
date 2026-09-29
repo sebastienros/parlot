@@ -115,6 +115,17 @@ public class GeneratedParserTests
     }
 
     [Fact]
+    public void Generated_Errors_Are_Exposed_Without_A_Runtime_Reference()
+    {
+        Assert.False(Grammar.TryParseError("?", out _));
+        Assert.False(Grammar.TryParseError("?", out _, out var errors));
+        Assert.Equal(("Expected x", 0, 1, 1), Assert.Single(errors));
+        Assert.True(Grammar.TryParseError("x", out var value, out errors));
+        Assert.Equal('x', value);
+        Assert.Empty(errors);
+    }
+
+    [Fact]
     public void String_Escapes_And_Collection_Storage_Work()
     {
         Assert.True(Grammar.TryParseString("\"line\\nquote\\\"\"", out var value));

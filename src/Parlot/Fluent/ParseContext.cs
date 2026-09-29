@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -34,6 +35,83 @@ public class ParseContext
     /// The scanner used for the parsing session.
     /// </summary>
     public readonly Scanner Scanner;
+
+    /// <summary>
+    /// When enabled, explicit grammar errors are collected instead of throwing. Defaults to <c>false</c>.
+    /// </summary>
+    public bool ContinueOnError { get; set; }
+
+    /// <summary>
+    /// Explicit grammar errors recorded during this parsing session.
+    /// </summary>
+    public IReadOnlyList<ParseError> Errors => _errors ?? (IReadOnlyList<ParseError>)Array.Empty<ParseError>();
+
+    private List<ParseError>? _errors;
+
+    /// <summary>
+    /// Records an explicit grammar error without allocating until an error occurs.
+    /// </summary>
+    internal void AddError(string message, TextPosition position)
+    {
+        (_errors ??= []).Add(new ParseError { Message = message, Position = position });
+    }
+
+    /// <summary>
+    /// Tracks the best failed branch of a choice while other branches are tried.
+    /// </summary>
+    internal struct AlternativeErrors
+    {
+        internal int Checkpoint;
+        internal int FarthestOffset;
+        internal ParseError[]? Best;
+    }
+
+    /// <summary>
+    /// Starts an ordered choice's diagnostic checkpoint.
+    /// </summary>
+    internal AlternativeErrors BeginAlternatives() => new()
+    {
+        Checkpoint = _errors?.Count ?? 0,
+        FarthestOffset = -1
+    };
+
+    /// <summary>
+    /// Drops a failed branch's errors, saving the furthest-reaching branch for total failure.
+    /// </summary>
+    internal void RejectAlternative(ref AlternativeErrors alternatives)
+    {
+        if (_errors is not { } errors || errors.Count == alternatives.Checkpoint)
+        {
+            return;
+        }
+
+        var farthest = -1;
+        for (var i = alternatives.Checkpoint; i < errors.Count; i++)
+        {
+            farthest = Math.Max(farthest, errors[i].Position.Offset);
+        }
+
+        if (farthest > alternatives.FarthestOffset)
+        {
+            alternatives.FarthestOffset = farthest;
+            var best = new ParseError[errors.Count - alternatives.Checkpoint];
+            errors.CopyTo(alternatives.Checkpoint, best, 0, best.Length);
+            alternatives.Best = best;
+        }
+
+        errors.RemoveRange(alternatives.Checkpoint, errors.Count - alternatives.Checkpoint);
+    }
+
+    /// <summary>
+    /// Restores the best failed branch when none of the alternatives matched.
+    /// </summary>
+    internal void RestoreAlternatives(in AlternativeErrors alternatives)
+    {
+        if (alternatives.Best is { } best)
+        {
+            (_errors ??= []).AddRange(best);
+        }
+    }
 
     /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.

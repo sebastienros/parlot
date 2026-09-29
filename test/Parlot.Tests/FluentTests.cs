@@ -815,6 +815,85 @@ public class FluentTests
     }
 
     [Fact]
+    public void ContinuingErrorsShouldCollectFailuresAbsorbedByOptionalParsers()
+    {
+        var parser = Literals.Char('a').ElseError("expected a").Optional()
+            .And(Literals.Char('b').ElseError("expected b").Optional());
+        var context = new ParseContext(new Scanner("x")) { ContinueOnError = true };
+
+        Assert.True(parser.TryParse(context, out _, out var error));
+        Assert.Null(error);
+        Assert.Collection(context.Errors,
+            item => { Assert.Equal("expected a", item.Message); Assert.Equal(0, item.Position.Offset); },
+            item => { Assert.Equal("expected b", item.Message); Assert.Equal(0, item.Position.Offset); });
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ContinuingErrorShouldResetCursorForBothErrorVariants()
+    {
+        Assert.Throws<ParseException>(() => Literals.Text("ab").Error("unexpected").Parse("ab"));
+
+        var context = new ParseContext(new Scanner("ab")) { ContinueOnError = true };
+        var parser = Literals.Text("ab").Error("unexpected");
+        Assert.False(parser.TryParse(context, out _, out var error));
+        Assert.Null(error);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(2, Assert.Single(context.Errors).Position.Offset);
+
+        var typedContext = new ParseContext(new Scanner("ab")) { ContinueOnError = true };
+        Assert.False(Literals.Text("ab").Error<int>("unexpected").TryParse(typedContext, out _, out _));
+        Assert.Equal(0, typedContext.Scanner.Cursor.Offset);
+        Assert.Equal(2, Assert.Single(typedContext.Errors).Position.Offset);
+    }
+
+    [Fact]
+    public void ContinuingErrorsShouldDiscardAbandonedAlternativesAndKeepFurthestFailure()
+    {
+        var successful = OneOf(Literals.Char('a').Error("abandoned"), Literals.Char('a'));
+        var context = new ParseContext(new Scanner("a")) { ContinueOnError = true };
+        Assert.True(successful.TryParse(context, out var value, out _));
+        Assert.Equal('a', value);
+        Assert.Empty(context.Errors);
+
+        var failed = OneOf(
+            Literals.Text("ab").AndSkip(Literals.Char('!').ElseError("far")),
+            Literals.Text("a").AndSkip(Literals.Char('!').ElseError("near")));
+        context = new ParseContext(new Scanner("ab")) { ContinueOnError = true };
+        Assert.False(failed.TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        var diagnostic = Assert.Single(context.Errors);
+        Assert.Equal("far", diagnostic.Message);
+        Assert.Equal(2, diagnostic.Position.Offset);
+    }
+
+    [Fact]
+    public void ContinuingErrorsShouldRetainRepetitionTerminalFailure()
+    {
+        var parser = ZeroOrMany(Literals.Char('a').ElseError("expected a"));
+        var context = new ParseContext(new Scanner("aa!")) { ContinueOnError = true };
+
+        Assert.True(parser.TryParse(context, out var values, out _));
+        Assert.Equal(2, values.Count);
+        Assert.Equal(2, context.Scanner.Cursor.Offset);
+        Assert.Equal(2, Assert.Single(context.Errors).Position.Offset);
+    }
+
+    [Fact]
+    public void ContinuingErrorsShouldHandleCovariantAlternatives()
+    {
+        var parser = new OneOf<string, object, object>(
+            Literals.Text("a").Error("abandoned"),
+            Literals.Char('a').Then<object>(static value => value));
+        var context = new ParseContext(new Scanner("a")) { ContinueOnError = true };
+
+        Assert.True(parser.TryParse(context, out var value, out _));
+        Assert.Equal('a', value);
+        Assert.Empty(context.Errors);
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void TextBeforeShouldReturnAllCharBeforeDelimiter()
     {
         Assert.False(AnyCharBefore(Literals.Char('a')).TryParse("", out _));
