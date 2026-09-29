@@ -568,10 +568,10 @@ Assert.Equal(12, result.Item2);
 
 ### ZeroOrOne
 
-Makes an existing parser optional. The method can also be be post-fixed.
+Matches zero or one occurrence and returns an empty list or a single-item list. The method can also be post-fixed.
 
 ```c#
-Parser<T> ZeroOrOne<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> ZeroOrOne<T>(Parser<T> parser)
 ```
 
 Usage:
@@ -579,16 +579,25 @@ Usage:
 ```c#
 var parser = ZeroOrOne(Terms.Text("hello"));
 // or Terms.Text("hello").ZeroOrOne()
-parser.Parse("hello");
-parser.Parse(""); // returns null but with a successful state
+parser.Parse("hello"); // ["hello"]
+parser.Parse(""); // [] with a successful state
 ```
 
 Result:
 
 ```
-"hello"
-null
+["hello"]
+[]
 ```
+
+`ZeroOrOne(parser, defaultValue)` is no longer available. For a scalar value with a fallback, use
+`Optional()` and project its `Option<T>` result:
+
+```c#
+var scalar = Terms.Text("hello").Optional().Then(static option => option.OrSome("world"));
+```
+
+For any number of matches, use `ZeroOrMany(parser)`.
 
 ### Optional
 
@@ -686,11 +695,22 @@ null // success
 
 ### Separated
 
-Matches all occurrences of a parser that are separated by another one. If a separator is not followed by a value, it is not consumed. By default at least one value is required. An explicit `min: 0` accepts an empty list, and `max: 0` means unlimited. When the maximum is reached, neither the next separator nor the next value is consumed.
+Matches one or more values separated by another parser. By default, a separator
+not followed by a value is not consumed. An explicit `min: 0` accepts an empty
+list, and `max: 0` means unlimited. At the maximum, the next separator and
+value remain unconsumed.
 
-```
-Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser)
+```c#
 Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser, int min = 1, int max = 0)
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator,
+    Parser<T> parser,
+    bool removeEmptyEntries = false,
+    bool allowLeadingSeparator = false,
+    bool allowTrailingSeparator = false)
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator, Parser<T> parser, int min, int max,
+    bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator)
 ```
 
 Usage:
@@ -709,7 +729,28 @@ Result:
 [1, 2]
 ```
 
-Negative bounds or a positive `max` less than `min` throw `ArgumentOutOfRangeException` when the parser is built. Attach `.Eof()` if extra input beyond a bound should make the whole parse fail.
+Set `removeEmptyEntries: true` to skip successive separators **between**
+values, so `1,,2` returns `[1, 2]`. It does not permit a leading or trailing
+separator on its own. Enable `allowLeadingSeparator` to accept `,1,2`, or
+`allowTrailingSeparator` to consume `1,2,`. Each boundary accepts only one
+separator unless `removeEmptyEntries` is also set, in which case it accepts
+a run:
+
+```c#
+var parser = Separated(Terms.Char(','), Terms.Integer(),
+    removeEmptyEntries: true,
+    allowLeadingSeparator: true,
+    allowTrailingSeparator: true);
+
+parser.Eof().Parse(",,1,,2,,"); // [1, 2]
+```
+
+At least one value must match by default: empty input and input containing only
+separators fail. With explicit `min: 0`, an empty list succeeds without consuming
+leading separators if no value matches. Without `allowTrailingSeparator`, a run
+of separators not followed by another value is left untouched for the next parser.
+Negative bounds or a positive `max` less than `min` throw `ArgumentOutOfRangeException`
+when the parser is built. Attach `.Eof()` to reject any extra input.
 
 ### Between
 

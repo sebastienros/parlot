@@ -96,6 +96,36 @@ public class BoundedCardinalityTests
     }
 
     [Fact]
+    public void BoundedSeparatedWorksWithSeparatorOptions()
+    {
+        var parser = Separated(Literals.Char(','), Literals.Char('x'),
+            min: 2, max: 2, removeEmptyEntries: true,
+            allowLeadingSeparator: true, allowTrailingSeparator: true);
+        var context = new ParseContext(new Scanner(",,x,,x,,x"));
+        var result = new ParseResult<System.Collections.Generic.IReadOnlyList<char>>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(2, result.Value.Count);
+        Assert.Equal(6, context.Scanner.Cursor.Offset);
+        Assert.True(parser.AndSkip(Literals.Text(",,x")).Eof().TryParse(",,x,,x,,x", out _));
+
+        var tooFew = Separated(Literals.Char(','), Literals.Char('x'),
+            min: 3, max: 4, removeEmptyEntries: true,
+            allowLeadingSeparator: true, allowTrailingSeparator: true);
+        context = new ParseContext(new Scanner(",,x,,x"));
+        Assert.False(tooFew.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        var optional = Separated(Literals.Char(','), Literals.Char('x'),
+            min: 0, max: 2, removeEmptyEntries: true,
+            allowLeadingSeparator: true, allowTrailingSeparator: true);
+        context = new ParseContext(new Scanner(",,,"));
+        Assert.True(optional.Parse(context, ref result));
+        Assert.Empty(result.Value);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void InvalidBoundsThrowAtConstruction()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => ZeroOrMany(Literals.Char('x'), -1));

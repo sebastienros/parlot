@@ -44,6 +44,7 @@ public class FluentTests
         var evenIntegers = ZeroOrOne(Literals.Integer().When((c, x) => x % 2 == 0)).And(Literals.Integer());
 
         Assert.True(evenIntegers.TryParse("1235", out var result1));
+        Assert.Empty(result1.Item1);
         Assert.Equal(1235, result1.Item2);
     }
 
@@ -883,6 +884,87 @@ public class FluentTests
         Assert.True(parser.Parse("1,x"));
     }
 
+    [Theory]
+    [InlineData("a,b", false, false, false, 2)]
+    [InlineData("a,,b", true, false, false, 2)]
+    [InlineData(",a", false, true, false, 1)]
+    [InlineData("a,", false, false, true, 1)]
+    [InlineData(",,a", true, true, false, 1)]
+    [InlineData("a,,", true, false, true, 1)]
+    [InlineData(",a,", false, true, true, 1)]
+    [InlineData(",,a,,b", true, true, false, 2)]
+    [InlineData("a,,b,,", true, false, true, 2)]
+    [InlineData(",,a,,b,,", true, true, true, 2)]
+    public void SeparatedOptionsAcceptConfiguredSeparators(
+        string input, bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator, int count)
+    {
+        var parser = Separated(Literals.Char(','), Literals.Char('a').Or(Literals.Char('b')),
+            removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator).Eof();
+
+        Assert.True(parser.TryParse(input, out var values));
+        Assert.Equal(count, values.Count);
+    }
+
+    [Theory]
+    [InlineData("", true, true, true)]
+    [InlineData(",,", true, true, true)]
+    [InlineData(",a", true, false, false)]
+    [InlineData("a,", true, false, false)]
+    [InlineData("a,,b", false, true, true)]
+    [InlineData(",,a", false, true, false)]
+    [InlineData("a,,", false, false, true)]
+    public void SeparatedOptionsRejectUnconfiguredOrValueLessInput(
+        string input, bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator)
+    {
+        var parser = Separated(Literals.Char(','), Literals.Char('a').Or(Literals.Char('b')),
+            removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator).Eof();
+
+        Assert.False(parser.TryParse(input, out _));
+    }
+
+    [Fact]
+    public void SeparatedOptionsRestoreCursorWhenNoValueIsFound()
+    {
+        var parser = Separated(Literals.Char(','), Literals.Char('a'),
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true);
+        var context = new ParseContext(new Scanner(",,,"));
+        var result = new ParseResult<IReadOnlyList<char>>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void SeparatedOptionsDoNotTreatEmptyMatchesAsValues()
+    {
+        var parser = Separated(ZeroOrOne(Literals.Char(',')), ZeroOrOne(Literals.Char('a')),
+            removeEmptyEntries: true, allowLeadingSeparator: true).Eof();
+
+        Assert.Equal(3, parser.Parse("aaa")!.Count);
+        Assert.Null(parser.Parse(","));
+        Assert.Null(parser.Parse(""));
+    }
+
+    [Fact]
+    public void SeparatedOptionsLeaveUnmatchedRunsForTheNextParser()
+    {
+        var parser = Separated(Literals.Char(','), Literals.Char('a'), removeEmptyEntries: true)
+            .AndSkip(Literals.Text(",,?"));
+
+        Assert.True(parser.TryParse("a,,?", out var values));
+        Assert.Single(values);
+        Assert.False(parser.TryParse("a,?", out _));
+    }
+
+    [Fact]
+    public void SeparatedOptionsCaptureLeadingAndTrailingSeparators()
+    {
+        var parser = Capture(Separated(Literals.Char(','), Literals.Char('a'),
+            allowLeadingSeparator: true, allowTrailingSeparator: true)).Eof();
+
+        Assert.Equal(",a,", parser.Parse(",a,").ToString());
+    }
+
     [Fact]
     public void ShouldSkipWhiteSpace()
     {
@@ -1214,8 +1296,42 @@ public class FluentTests
     {
         var parser = ZeroOrOne(Terms.Text("hello"));
 
-        Assert.Equal("hello", parser.Parse(" hello world hello"));
-        Assert.Null(parser.Parse(" foo"));
+        Assert.Equal(["hello"], parser.Parse(" hello world hello"));
+        Assert.Empty(parser.Parse(" foo")!);
+        Assert.Equal(["hello"], Terms.Text("hello").ZeroOrOne().Parse("hello"));
+    }
+
+    [Fact]
+    public void ZeroOrOneShouldRestoreCursorWhenInnerParserFails()
+    {
+        var parser = ZeroOrOne(Literals.Char('a').And(Literals.Char('b')));
+        var context = new ParseContext(new Scanner("ac"));
+        var result = new ParseResult<IReadOnlyList<(char, char)>>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Empty(result.Value);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ZeroOrOneShouldIncludeMatchWithoutConsumingInput()
+    {
+        var parser = ZeroOrOne(new Always<char>('x'));
+        var context = new ParseContext(new Scanner("other"));
+        var result = new ParseResult<IReadOnlyList<char>>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(['x'], result.Value);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ZeroOrOneShouldIncludeNullWhenInnerParserMatches()
+    {
+        var parser = ZeroOrOne(new Always<string>(null));
+
+        Assert.Single(parser.Parse("")!);
+        Assert.Null(parser.Parse("")![0]);
     }
 
     [Fact]
@@ -1234,7 +1350,7 @@ public class FluentTests
         var b = Literals.Char('b');
         var c = Literals.Char('c');
 
-        var oneOf = OneOf(ZeroOrOne(a), b);
+        var oneOf = OneOf(ZeroOrOne(a), ZeroOrOne(b));
 
         // This should succeed, the ZeroOrOne(a) should always return true 
         Assert.True(oneOf.TryParse("c", out _));
@@ -1254,9 +1370,9 @@ public class FluentTests
     }
 
     [Fact]
-    public void ShouldZeroOrOneWithDefault()
+    public void OptionalShouldProvideScalarFallback()
     {
-        var parser = ZeroOrOne(Terms.Text("hello"), "world");
+        var parser = Terms.Text("hello").Optional().Then(static option => option.OrSome("world"));
 
         Assert.Equal("world", parser.Parse(" this is an apple"));
         Assert.Equal("hello", parser.Parse(" hello world"));

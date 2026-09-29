@@ -151,6 +151,27 @@ public class SimpleParsersBenchmarks
         return result;
     }
 
+    // ==================== ZeroOrOne ====================
+
+    private static readonly Parser<IReadOnlyList<decimal>> _zeroOrOneFluent = ZeroOrOne(Terms.Decimal());
+
+    [Params("123", "word")]
+    public string ZeroOrOneInput { get; set; } = "123";
+
+    [Benchmark(Baseline = true), BenchmarkCategory("ZeroOrOne")]
+    public IReadOnlyList<decimal> ZeroOrOne_Fluent()
+    {
+        _zeroOrOneFluent.TryParse(ZeroOrOneInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("ZeroOrOne")]
+    public IReadOnlyList<decimal> ZeroOrOne_Generated()
+    {
+        GeneratedParsers.TryParseZeroOrOne(ZeroOrOneInput, out var result);
+        return result;
+    }
+
     // ==================== SkipWhiteSpace ====================
 
     private static readonly Parser<decimal> _skipWhiteSpaceFluent = SkipWhiteSpace(Literals.Decimal());

@@ -131,8 +131,12 @@ public static partial class Grammars
     private static Parser<IReadOnlyList<char>> BuildZeroOrManyChars() => ZeroOrMany(Terms.Char('a'));
 
     [GenerateParser(nameof(TryParseZeroOrOneChar))]
-    private static Parser<char> BuildZeroOrOneChar() =>
-        Terms.Char('a').Optional().Then(static option => option.HasValue ? option.Value : 'x');
+    private static Parser<IReadOnlyList<char>> BuildZeroOrOneChar() =>
+        ZeroOrOne(Terms.Char('a'));
+
+    [GenerateParser(nameof(TryParseZeroOrOneEmpty))]
+    private static Parser<IReadOnlyList<char>> BuildZeroOrOneEmpty() =>
+        ZeroOrOne(new Always<char>('x')).Eof();
 
     [GenerateParser(nameof(TryParseEofText))]
     private static Parser<string> BuildEofText() => Terms.Text("end").Eof();
@@ -224,15 +228,15 @@ public static partial class Grammars
     }
 
     [GenerateParser(nameof(TryParseZeroOrManyOptional))]
-    private static Parser<IReadOnlyList<char>> BuildZeroOrManyOptional() =>
+    private static Parser<IReadOnlyList<IReadOnlyList<char>>> BuildZeroOrManyOptional() =>
         ZeroOrMany(ZeroOrOne(Literals.Char('a'))).Eof();
 
     [GenerateParser(nameof(TryParseOneOrManyOptional))]
-    private static Parser<IReadOnlyList<char>> BuildOneOrManyOptional() =>
+    private static Parser<IReadOnlyList<IReadOnlyList<char>>> BuildOneOrManyOptional() =>
         OneOrMany(ZeroOrOne(Literals.Char('a'))).Eof();
 
     [GenerateParser(nameof(TryParseSeparatedOptional))]
-    private static Parser<IReadOnlyList<char>> BuildSeparatedOptional() =>
+    private static Parser<IReadOnlyList<IReadOnlyList<char>>> BuildSeparatedOptional() =>
         Separated(ZeroOrOne(Literals.Char(',')), ZeroOrOne(Literals.Char('a'))).Eof();
 
     private static readonly Parser<long> Long = Terms.Number<long>(NumberOptions.Integer);

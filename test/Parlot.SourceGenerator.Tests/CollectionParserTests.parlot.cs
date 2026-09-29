@@ -19,6 +19,47 @@ public static partial class CollectionGrammars
     private static Parser<IReadOnlyList<string>> BuildSeparatedStrings() =>
         Separated(Literals.Char(','), Literals.Text("x")).Eof();
 
+    [GenerateParser(nameof(TryParseSeparatedInterior))]
+    private static Parser<IReadOnlyList<string>> BuildSeparatedInterior() =>
+        Separated(Literals.Char(','), Literals.Text("x"), removeEmptyEntries: true).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedLeading))]
+    private static Parser<IReadOnlyList<string>> BuildSeparatedLeading() =>
+        Separated(Literals.Char(','), Literals.Text("x"), allowLeadingSeparator: true).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedTrailing))]
+    private static Parser<IReadOnlyList<string>> BuildSeparatedTrailing() =>
+        Separated(Literals.Char(','), Literals.Text("x"), allowTrailingSeparator: true).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedAllOptions))]
+    private static Parser<IReadOnlyList<string>> BuildSeparatedAllOptions() =>
+        Separated(Literals.Char(','), Literals.Text("x"),
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedDiscarded))]
+    private static Parser<char> BuildSeparatedDiscarded() =>
+        Separated(Literals.Char(','), Literals.Text("x"),
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true)
+            .SkipAnd(Literals.Char('?')).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedUnmatchedRun))]
+    private static Parser<int> BuildSeparatedUnmatchedRun() =>
+        Separated(Literals.Char(','), Literals.Text("x"), removeEmptyEntries: true)
+            .AndSkip(Literals.Text(",,?"))
+            .Then(static values => values.Count).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedLeadingFallback))]
+    private static Parser<int> BuildSeparatedLeadingFallback() =>
+        Separated(Literals.Char(','), Literals.Text("x"), allowLeadingSeparator: true)
+            .Then(static values => values.Count)
+            .Or(Literals.Char(',').Then(static _ => -1)).Eof();
+
+    [GenerateParser(nameof(TryParseSeparatedOptionalOptions))]
+    private static Parser<IReadOnlyList<char>> BuildSeparatedOptionalOptions() =>
+        Separated(ZeroOrOne(Literals.Char(',')),
+            ZeroOrOne(Literals.Char('a')).Then(static values => values.Count == 0 ? '\0' : values[0]),
+            removeEmptyEntries: true, allowLeadingSeparator: true).Eof();
+
     [GenerateParser(nameof(TryParseTuples))]
     private static Parser<IReadOnlyList<(int Number, string Text)>> BuildTuples() =>
         ZeroOrMany(Literals.Text("x").Then(static text => (1, text))).Eof();
@@ -80,4 +121,28 @@ public static partial class CollectionGrammars
     [GenerateParser(nameof(TryParseOptionalSeparatedChoice))]
     private static Parser<char> BuildOptionalSeparatedChoice() =>
         OneOf(Separated(Literals.Char(','), Literals.Char('x'), min: 0).Then('x'), Literals.Char('y'));
+
+    [GenerateParser(nameof(TryParseBoundedSeparatedOptions))]
+    private static Parser<int> BuildBoundedSeparatedOptions() =>
+        Separated(Literals.Char(','), Literals.Char('x'), min: 2, max: 2,
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true)
+            .AndSkip(Literals.Text(",,x")).Then(static values => values.Count).Eof();
+
+    [GenerateParser(nameof(TryParseBoundedSeparatedOptionsFallback))]
+    private static Parser<char> BuildBoundedSeparatedOptionsFallback() =>
+        Separated(Literals.Char(','), Literals.Char('x'), min: 3, max: 4,
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true)
+            .Then('x').Or(Literals.Char(',')).Eof();
+
+    [GenerateParser(nameof(TryParseOptionalSeparatedOptions))]
+    private static Parser<int> BuildOptionalSeparatedOptions() =>
+        Separated(Literals.Char(','), Literals.Char('x'), min: 0, max: 2,
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true)
+            .AndSkip(Literals.Text(",,,")).Then(static values => values.Count).Eof();
+
+    [GenerateParser(nameof(TryParseDiscardedBoundedSeparatedOptions))]
+    private static Parser<char> BuildDiscardedBoundedSeparatedOptions() =>
+        Separated(Literals.Char(','), Literals.Char('x'), min: 2, max: 2,
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true)
+            .SkipAnd(Literals.Text(",,x")).Then('x').Eof();
 }

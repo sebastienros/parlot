@@ -18,11 +18,11 @@ public static partial class ParserExtensions
     public static Parser<IReadOnlyList<T>> ZeroOrMany<T>(this Parser<T> parser, int max)
         => new ZeroOrMany<T>(parser, max);
 
-    public static Parser<T> ZeroOrOne<T>(this Parser<T> parser, T defaultValue)
-        => new ZeroOrOne<T>(parser, defaultValue);
-
-    public static Parser<T> ZeroOrOne<T>(this Parser<T> parser)
-        => new ZeroOrOne<T>(parser, default!);
+    /// <summary>
+    /// Builds a parser that returns an empty list or a list containing one match.
+    /// </summary>
+    public static Parser<IReadOnlyList<T>> ZeroOrOne<T>(this Parser<T> parser)
+        => new ZeroOrOne<T>(parser);
 
     public static Parser<Option<T>> Optional<T>(this Parser<T> parser)
         => new Optional<T>(parser);

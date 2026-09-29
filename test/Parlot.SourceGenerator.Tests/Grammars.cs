@@ -31,7 +31,8 @@ public static partial class Grammars
     public static partial bool TryParseAndSkip(string text, out char value);
     public static partial bool TryParseOptionalText(string text, out string? value);
     public static partial bool TryParseZeroOrManyChars(string text, out IReadOnlyList<char> value);
-    public static partial bool TryParseZeroOrOneChar(string text, out char value);
+    public static partial bool TryParseZeroOrOneChar(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseZeroOrOneEmpty(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseEofText(string text, out string value);
     public static partial bool TryParseCaptureChar(string text, out string value);
     public static partial bool TryParseOneOfChar(string text, out char value);
@@ -51,9 +52,9 @@ public static partial class Grammars
     public static partial bool TryParseCountingOneOf(string text, out char value);
     public static partial bool TryParseCustomSwitch(string text, out char value);
     public static partial bool TryParseCustomSelect(string text, bool preferX, out char value);
-    public static partial bool TryParseZeroOrManyOptional(string text, out IReadOnlyList<char> value);
-    public static partial bool TryParseOneOrManyOptional(string text, out IReadOnlyList<char> value);
-    public static partial bool TryParseSeparatedOptional(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseZeroOrManyOptional(string text, out IReadOnlyList<IReadOnlyList<char>> value);
+    public static partial bool TryParseOneOrManyOptional(string text, out IReadOnlyList<IReadOnlyList<char>> value);
+    public static partial bool TryParseSeparatedOptional(string text, out IReadOnlyList<IReadOnlyList<char>> value);
     public static partial bool TryParseGenericProperty(string text, out NodeBase value);
 
     public static partial bool TryParseInteger(string text, out long value);
