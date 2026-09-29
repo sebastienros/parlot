@@ -18,4 +18,9 @@ public partial class CollectionBenchmarks
     [GenerateParser(nameof(TryParseSeparated))]
     private static Parser<IReadOnlyList<(int, string)>> BuildSeparated() =>
         Separated(Literals.Char(','), Literals.Text("x").Then(static text => (1, text)));
+
+    [GenerateParser(nameof(TryParseSeparatedOptions))]
+    private static Parser<IReadOnlyList<(int, string)>> BuildSeparatedOptions() =>
+        Separated(Literals.Char(','), Literals.Text("x").Then(static text => (1, text)),
+            removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true);
 }
