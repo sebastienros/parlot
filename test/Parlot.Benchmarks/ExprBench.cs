@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using Parlot.Benchmarks.FarkleParsers;
 using Parlot.Benchmarks.PidginParsers;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
@@ -15,6 +16,12 @@ public class ExprBench
     private const string _expression1 = "3 - 1 / 2 + 1";
     private const string _expression2 = "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2";
     private const string _unaryExpression = "-(3 + 2) * -4 + --6";
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _ = FarkleExpressionParser.Parser;
+    }
 
     [Benchmark, BenchmarkCategory("Expression1")]
     public Expression ParlotRawSmall()
@@ -40,6 +47,12 @@ public class ExprBench
     public Expression PidginSmall()
     {
         return ExprParser.ParseOrThrow(_expression1);
+    }
+
+    [Benchmark, BenchmarkCategory("Expression1")]
+    public Expression FarkleSmall()
+    {
+        return FarkleExpressionParser.Parse(_expression1);
     }
 
     [Benchmark, BenchmarkCategory("Expression2")]
@@ -68,6 +81,12 @@ public class ExprBench
         return ExprParser.ParseOrThrow(_expression2);
     }
 
+    [Benchmark, BenchmarkCategory("Expression2")]
+    public Expression FarkleBig()
+    {
+        return FarkleExpressionParser.Parse(_expression2);
+    }
+
     [Benchmark(Baseline = true), BenchmarkCategory("Unary")]
     public Expression ParlotFluentUnary()
     {
@@ -80,5 +99,11 @@ public class ExprBench
     {
         _ = GeneratedParsers.TryParseExpression(_unaryExpression, out var result);
         return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Unary")]
+    public Expression FarkleUnary()
+    {
+        return FarkleExpressionParser.Parse(_unaryExpression);
     }
 }

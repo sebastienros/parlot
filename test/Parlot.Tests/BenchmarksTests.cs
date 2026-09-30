@@ -1,5 +1,9 @@
 #if NET10_0_OR_GREATER
 using Parlot.Benchmarks;
+using Parlot.Benchmarks.FarkleParsers;
+using Parlot.Tests.Calc;
+using Parlot.Tests.Json;
+using System;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
 
@@ -238,6 +242,121 @@ public class BenchmarksTests
         var result = benchmarks.ParlotGeneratedUnary();
         Assert.NotNull(result);
         Assert.Equal(26m, result.Evaluate());
+    }
+
+    [Fact]
+    public void ExpressionFarkle()
+    {
+        var benchmarks = new ExprBench();
+        benchmarks.Setup();
+
+        Assert.Equal(_expected1, benchmarks.FarkleSmall().Evaluate());
+        Assert.Equal(_expected2, benchmarks.FarkleBig().Evaluate());
+        Assert.Equal(26m, benchmarks.FarkleUnary().Evaluate());
+        AssertExpressionEqual(benchmarks.ParlotFluentSmall(), benchmarks.FarkleSmall());
+        AssertExpressionEqual(benchmarks.ParlotFluentBig(), benchmarks.FarkleBig());
+        AssertExpressionEqual(benchmarks.ParlotFluentUnary(), benchmarks.FarkleUnary());
+    }
+
+    [Theory]
+    [InlineData("1 + 2 * 3", 7)]
+    [InlineData("(1 + 2) * 3", 9)]
+    [InlineData("10 - 3 - 2", 5)]
+    [InlineData("8 / 2 / 2", 2)]
+    [InlineData("---2", -2)]
+    [InlineData(" \t2.5 * (4 - 1)\r\n", 7.5)]
+    [InlineData("-2.5e-2 + .5", 0.475)]
+    [InlineData("1.", 1)]
+    public void FarkleExpressionGrammar(string input, double expected)
+    {
+        var result = FarkleExpressionParser.Parse(input);
+
+        Assert.Equal((decimal)expected, result.Evaluate());
+        AssertExpressionEqual(FluentParser.Expression.Parse(input), result);
+    }
+
+    private static void AssertExpressionEqual(Expression expected, Expression actual)
+    {
+        Assert.Equal(expected.GetType(), actual.GetType());
+
+        switch (expected)
+        {
+            case Number number:
+                Assert.Equal(number.Value, Assert.IsType<Number>(actual).Value);
+                break;
+            case BinaryExpression binary:
+                var actualBinary = Assert.IsAssignableFrom<BinaryExpression>(actual);
+                AssertExpressionEqual(binary.Left, actualBinary.Left);
+                AssertExpressionEqual(binary.Right, actualBinary.Right);
+                break;
+            case UnaryExpression unary:
+                AssertExpressionEqual(unary.Inner, Assert.IsAssignableFrom<UnaryExpression>(actual).Inner);
+                break;
+            default:
+                Assert.Fail($"Unexpected expression type: {expected.GetType()}");
+                break;
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1 +")]
+    [InlineData("(1 + 2")]
+    [InlineData("1 2")]
+    [InlineData("1 + 2 trailing")]
+    public void FarkleExpressionRejectsInvalidInput(string input)
+    {
+        Assert.Throws<InvalidOperationException>(() => FarkleExpressionParser.Parse(input));
+    }
+
+    [Fact]
+    public void JsonFarkle()
+    {
+        var benchmarks = new JsonBench();
+        benchmarks.Setup();
+
+        Assert.Equal(benchmarks.BigJson_Parlot().ToString(), benchmarks.BigJson_Farkle().ToString());
+        Assert.Equal(benchmarks.LongJson_Parlot().ToString(), benchmarks.LongJson_Farkle().ToString());
+        Assert.Equal(benchmarks.DeepJson_Parlot().ToString(), benchmarks.DeepJson_Farkle().ToString());
+        Assert.Equal(benchmarks.WideJson_Parlot().ToString(), benchmarks.WideJson_Farkle().ToString());
+    }
+
+    [Fact]
+    public void FarkleJsonGrammar()
+    {
+        var result = Assert.IsType<JsonObject>(FarkleJsonParser.Parse(
+            " \r\n{ \"items\": [\"hello\", {}, [], {\"nested\": \"value\"}], \"empty\": \"\" }\t"));
+        var array = Assert.IsType<JsonArray>(result.Members["items"]);
+
+        Assert.Equal(4, array.Elements.Count);
+        Assert.Equal("hello", Assert.IsType<JsonString>(array.Elements[0]).Value);
+        Assert.Empty(Assert.IsType<JsonObject>(array.Elements[1]).Members);
+        Assert.Empty(Assert.IsType<JsonArray>(array.Elements[2]).Elements);
+        Assert.Equal("value", Assert.IsType<JsonString>(
+            Assert.IsType<JsonObject>(array.Elements[3]).Members["nested"]).Value);
+        Assert.Equal("", Assert.IsType<JsonString>(result.Members["empty"]).Value);
+    }
+
+    [Theory]
+    [InlineData("\"hello\"", "hello")]
+    [InlineData("\"hello\\nworld\"", "hello\nworld")]
+    [InlineData("\"quote: \\\" slash: \\\\\"", "quote: \" slash: \\")]
+    [InlineData("\"\\u0041\"", "A")]
+    public void FarkleJsonStrings(string input, string expected)
+    {
+        Assert.Equal(expected, Assert.IsType<JsonString>(FarkleJsonParser.Parse(input)).Value);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("[\"value\",]")]
+    [InlineData("{\"key\" \"value\"}")]
+    [InlineData("{\"key\":}")]
+    [InlineData("\"unterminated")]
+    [InlineData("[] trailing")]
+    public void FarkleJsonRejectsInvalidInput(string input)
+    {
+        Assert.Throws<InvalidOperationException>(() => FarkleJsonParser.Parse(input));
     }
 
     [Fact]

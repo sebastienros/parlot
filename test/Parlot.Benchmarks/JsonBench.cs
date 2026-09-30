@@ -4,6 +4,7 @@ using System.Linq;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Tests.Json;
+using Parlot.Benchmarks.FarkleParsers;
 using Parlot.Benchmarks.SpracheParsers;
 using Parlot.Benchmarks.SuperpowerParsers;
 using Parlot.Benchmarks.PidginParsers;
@@ -30,6 +31,7 @@ public class JsonBench
     [GlobalSetup]
     public void Setup()
     {
+        _ = FarkleJsonParser.Parser;
         _bigJson = BuildJson(4, 4, 3).ToString()!;
         _longJson = BuildJson(256, 1, 1).ToString()!;
         _wideJson = BuildJson(1, 1, 256).ToString()!;
@@ -53,6 +55,12 @@ public class JsonBench
     public IJson BigJson_Pidgin()
     {
         return PidginJsonParser.Parse(_bigJson).Value;
+    }
+
+    [Benchmark, BenchmarkCategory("Big")]
+    public IJson BigJson_Farkle()
+    {
+        return FarkleJsonParser.Parse(_bigJson);
     }
 
     [Benchmark, BenchmarkCategory("Big")]
@@ -96,6 +104,12 @@ public class JsonBench
     public IJson LongJson_Pidgin()
     {
         return PidginJsonParser.Parse(_longJson).Value;
+    }
+
+    [Benchmark, BenchmarkCategory("Long")]
+    public IJson LongJson_Farkle()
+    {
+        return FarkleJsonParser.Parse(_longJson);
     }
 
     [Benchmark, BenchmarkCategory("Long")]
@@ -143,6 +157,12 @@ public class JsonBench
     }
 
     [Benchmark, BenchmarkCategory("Deep")]
+    public IJson DeepJson_Farkle()
+    {
+        return FarkleJsonParser.Parse(_deepJson);
+    }
+
+    [Benchmark, BenchmarkCategory("Deep")]
     public JToken DeepJson_Newtonsoft()
     {
         return JsonConvert.DeserializeObject<JToken>(_deepJson, _jsonSerializerSettings);
@@ -184,6 +204,12 @@ public class JsonBench
     public IJson WideJson_Pidgin()
     {
         return PidginJsonParser.Parse(_wideJson).Value;
+    }
+
+    [Benchmark, BenchmarkCategory("Wide")]
+    public IJson WideJson_Farkle()
+    {
+        return FarkleJsonParser.Parse(_wideJson);
     }
 
     [Benchmark, BenchmarkCategory("Wide")]
