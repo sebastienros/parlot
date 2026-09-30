@@ -1,6 +1,7 @@
 #if NET10_0_OR_GREATER
 using Parlot.Benchmarks;
 using Parlot.Benchmarks.FarkleParsers;
+using Parlot.Benchmarks.PidginParsers;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
 using System;
@@ -472,6 +473,54 @@ public class BenchmarksTests
         var benchmarks = new RegexBenchmarks();
         var result = benchmarks.ParlotEmailGenerated();
         Assert.Equal(RegexBenchmarks.Email, result);
+    }
+
+    [Fact]
+    public void RegexLibraryComparisons()
+    {
+        var benchmarks = new RegexBenchmarks();
+        benchmarks.Setup();
+
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.RegexEmail());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.RegexEmailCompiled());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.RegexEmailGenerated());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.ParlotEmail());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.ParlotEmailGenerated());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.PidginEmail());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.FarkleEmail());
+    }
+
+    [Theory]
+    [InlineData("a@b.c")]
+    [InlineData("user.name+tag@sub-domain.example.com")]
+    [InlineData("User9+tag-1@Domain-2.Example9")]
+    [InlineData("\u00e9@\u4e2d.\u03b1")]
+    [InlineData("\u0661@\u0662.\u0663")]
+    public void EmailRecognizersMatchParlot(string input)
+    {
+        Assert.Equal(input, RegexBenchmarks.EmailRegex.Match(input).Value);
+        Assert.Equal(input, EmailParser.Parser.Parse(input).ToString());
+        Assert.True(EmailParser.TryParseGenerated(input, out var generated));
+        Assert.Equal(input, generated);
+        Assert.Same(input, PidginEmailParser.Parse(input));
+        Assert.Same(input, FarkleEmailParser.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("user.example.com")]
+    [InlineData("user@")]
+    [InlineData("@domain.com")]
+    [InlineData("user@domain")]
+    [InlineData("user@.com")]
+    [InlineData("user@domain.")]
+    [InlineData("user name@domain.com")]
+    [InlineData(" user@domain.com")]
+    [InlineData("user@domain.com ")]
+    public void EmailRecognizersRejectInvalidInput(string input)
+    {
+        Assert.Throws<Pidgin.ParseException<char>>(() => PidginEmailParser.Parse(input));
+        Assert.Throws<InvalidOperationException>(() => FarkleEmailParser.Parse(input));
     }
 
     [Fact]
