@@ -1,5 +1,6 @@
 using Farkle;
 using Farkle.Builder;
+using Farkle.Builder.OperatorPrecedence;
 using Farkle.Parser;
 using Parlot.Tests.Calc;
 using System;
@@ -13,37 +14,40 @@ public static class FarkleExpressionParser
 
     private static CharParser<Expression> CreateParser()
     {
+        // Farkle 7's built-in float terminals require digits on both sides of the decimal point.
+        var digit = Regex.OneOf(('0', '9'));
+        var digits = digit.AtLeast(1);
+        var significand = Regex.Choice(
+            digits + (Regex.Literal('.') + digit.ZeroOrMore()).Optional(),
+            Regex.Literal('.') + digits);
+        var exponent = Regex.Join(
+            Regex.OneOf('e', 'E'),
+            Regex.OneOf('+', '-').Optional(),
+            digits).Optional();
         var number = Terminal.Create<Expression>("Number",
-            Regex.FromRegexString(@"([0-9]+(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?"),
+            (significand + exponent).CaseSensitive(),
             static (ref ParserState _, ReadOnlySpan<char> text) =>
                 new Number(decimal.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture)));
 
         var expression = Nonterminal.Create<Expression>("Expression");
-        var primary = Nonterminal.Create<Expression>("Primary",
+        expression.SetProductions(
             number.AsProduction(),
+            expression.Extended().Append("+").Extend(expression)
+                .Finish<Expression>(static (left, right) => new Addition(left, right)),
+            expression.Extended().Append("-").Extend(expression)
+                .Finish<Expression>(static (left, right) => new Subtraction(left, right)),
+            expression.Extended().Append("*").Extend(expression)
+                .Finish<Expression>(static (left, right) => new Multiplication(left, right)),
+            expression.Extended().Append("/").Extend(expression)
+                .Finish<Expression>(static (left, right) => new Division(left, right)),
+            "-".Appended().Extend(expression).WithPrecedence(out var negation)
+                .Finish<Expression>(static inner => new NegateExpression(inner)),
             "(".Appended().Extend(expression).Append(")").AsProduction());
 
-        var unary = Nonterminal.Create<Expression>("Unary");
-        unary.SetProductions(
-            "-".Appended().Extend(unary).Finish<Expression>(static inner => new NegateExpression(inner)),
-            primary.AsProduction());
-
-        var multiplicative = Nonterminal.Create<Expression>("Multiplicative");
-        multiplicative.SetProductions(
-            multiplicative.Extended().Append("*").Extend(unary)
-                .Finish<Expression>(static (left, right) => new Multiplication(left, right)),
-            multiplicative.Extended().Append("/").Extend(unary)
-                .Finish<Expression>(static (left, right) => new Division(left, right)),
-            unary.AsProduction());
-
-        expression.SetProductions(
-            expression.Extended().Append("+").Extend(multiplicative)
-                .Finish<Expression>(static (left, right) => new Addition(left, right)),
-            expression.Extended().Append("-").Extend(multiplicative)
-                .Finish<Expression>(static (left, right) => new Subtraction(left, right)),
-            multiplicative.AsProduction());
-
-        return expression.Build();
+        return expression.WithOperatorScope(new OperatorScope(
+            new LeftAssociative("+", "-"),
+            new LeftAssociative("*", "/"),
+            new PrecedenceOnly(negation))).Build();
     }
 
     public static Expression Parse(string input) => Parser.Parse(input).Value;

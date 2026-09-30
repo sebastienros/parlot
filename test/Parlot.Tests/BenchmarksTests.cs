@@ -267,12 +267,24 @@ public class BenchmarksTests
     [InlineData(" \t2.5 * (4 - 1)\r\n", 7.5)]
     [InlineData("-2.5e-2 + .5", 0.475)]
     [InlineData("1.", 1)]
+    [InlineData("1-2*3", -5)]
+    [InlineData("8/-2+--6", 2)]
+    [InlineData("-(1+2)*-3", 9)]
+    [InlineData("12.5e+1 / 5", 25)]
     public void FarkleExpressionGrammar(string input, double expected)
     {
         var result = FarkleExpressionParser.Parse(input);
 
         Assert.Equal((decimal)expected, result.Evaluate());
         AssertExpressionEqual(FluentParser.Expression.Parse(input), result);
+    }
+
+    [Fact]
+    public void FarkleExpressionPreservesDecimalPrecision()
+    {
+        var result = Assert.IsType<Number>(FarkleExpressionParser.Parse("0.1234567890123456789012345678"));
+
+        Assert.Equal(0.1234567890123456789012345678m, result.Value);
     }
 
     private static void AssertExpressionEqual(Expression expected, Expression actual)
@@ -338,6 +350,19 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("{}", 0)]
+    [InlineData("{\"key\":\"value\"}", 1)]
+    public void FarkleJsonBuildsIndependentObjects(string input, int count)
+    {
+        var first = Assert.IsType<JsonObject>(FarkleJsonParser.Parse(input));
+        var second = Assert.IsType<JsonObject>(FarkleJsonParser.Parse(input));
+        first.Members.Add("new", new JsonString("item"));
+
+        Assert.Equal(count, second.Members.Count);
+        Assert.False(second.Members.ContainsKey("new"));
+    }
+
+    [Theory]
     [InlineData("\"hello\"", "hello")]
     [InlineData("\"hello\\nworld\"", "hello\nworld")]
     [InlineData("\"quote: \\\" slash: \\\\\"", "quote: \" slash: \\")]
@@ -354,6 +379,9 @@ public class BenchmarksTests
     [InlineData("{\"key\":}")]
     [InlineData("\"unterminated")]
     [InlineData("[] trailing")]
+    [InlineData("[,]")]
+    [InlineData("[,\"value\"]")]
+    [InlineData("{\"key\":\"value\",}")]
     public void FarkleJsonRejectsInvalidInput(string input)
     {
         Assert.Throws<InvalidOperationException>(() => FarkleJsonParser.Parse(input));
