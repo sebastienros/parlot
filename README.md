@@ -205,16 +205,6 @@ It was originally created to provide a more efficient alternative to projects li
 
 Finally, even though [Pidgin](https://github.com/benjamin-hodgson/Pidgin) showed some very good performance, Parlot is still faster.
 
-The current suite also includes [Farkle](https://github.com/teo-tsirpanis/Farkle) 7.1.0, an LR parser,
-for all three expression cases and all four JSON shapes. Its grammars are built once during setup,
-outside the timed methods, and produce the same AST models as the other parser libraries.
-
-Farkle uses native LR operator precedence and a typed regex number terminal that creates `Number`
-nodes directly, without boxing intermediate decimals. Its built-in float terminals require digits on
-both sides of the decimal point, so a composed terminal preserves the integer, `.5`, `1.`, and exponent
-syntax supported by `Terms.Decimal()`. JSON uses the built-in string terminal and left-recursive
-collection accumulation, without intermediate key/value-pair lists or array copies.
-
 To reproduce:
 
 ```bash
