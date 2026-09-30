@@ -14,18 +14,11 @@ public static class FarkleExpressionParser
 
     private static CharParser<Expression> CreateParser()
     {
-        // Farkle 7's built-in float terminals require digits on both sides of the decimal point.
-        var digit = Regex.OneOf(('0', '9'));
-        var digits = digit.AtLeast(1);
-        var significand = Regex.Choice(
-            digits + (Regex.Literal('.') + digit.ZeroOrMore()).Optional(),
-            Regex.Literal('.') + digits);
-        var exponent = Regex.Join(
-            Regex.OneOf('e', 'E'),
-            Regex.OneOf('+', '-').Optional(),
-            digits).Optional();
+        var significand = Regex.FromRegexString(@"\d+(\.\d*)?|\.\d+");
+        var exponent = Regex.FromRegexString(@"[eE][+-]?\d+").Optional();
+        var numberRegex = (significand + exponent).CaseSensitive();
         var number = Terminal.Create<Expression>("Number",
-            (significand + exponent).CaseSensitive(),
+            numberRegex,
             static (ref ParserState _, ReadOnlySpan<char> text) =>
                 new Number(decimal.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture)));
 
