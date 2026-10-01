@@ -31,6 +31,12 @@ internal sealed class StreamingDriver : IDisposable
     private int _line = 1;
     private int _column = 1;
 
+    // Current frame when the text is split by a delimiter, see NextFrameAsync
+    private int _frameStart;
+    private int _frameLength = -1;
+    private bool _frameDelimited;
+    private bool _pendingDelimiter;
+
     public StreamingDriver(TextReader reader, StreamParseOptions? options, CancellationToken cancellationToken)
     {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -48,7 +54,7 @@ internal sealed class StreamingDriver : IDisposable
         }
 
         _chars = [];
-        Context = CreateContext("");
+        Context = CreateContext("", isFinal: false);
     }
 
     public StreamParseOptions Options => _options;
@@ -135,7 +141,156 @@ internal sealed class StreamingDriver : IDisposable
             _length += read;
         }
 
-        Context = CreateContext(new string(_chars, 0, _length));
+        Context = CreateContext(new string(_chars, 0, _length), IsFinal);
+    }
+
+    /// <summary>
+    /// Starts a window on the next non-empty text ending before <paramref name="delimiter"/> or at the end of the input.
+    /// The window is final. The cursor of the previous window must be at its end.
+    /// </summary>
+    /// <returns><see langword="false"/> when there is no more text.</returns>
+    public async ValueTask<bool> NextFrameAsync(char delimiter)
+    {
+        while (true)
+        {
+            if (_frameLength >= 0)
+            {
+                // The previous frame is consumed, its end is the position of the delimiter
+                var end = Cursor.Position;
+                _line = end.Line;
+                _column = end.Column;
+
+                // The cursor doesn't count a column for the character before a '\r'
+                if (_frameDelimited && delimiter == '\r' && _frameLength > 0)
+                {
+                    _column--;
+                }
+
+                var consumed = _frameLength + (_frameDelimited ? 1 : 0);
+                _offset += consumed;
+                _frameStart += consumed;
+                _pendingDelimiter = _frameDelimited;
+                _frameLength = -1;
+            }
+
+            var scanned = _frameStart;
+
+            while (true)
+            {
+                var index = _chars.AsSpan(scanned, _length - scanned).IndexOf(delimiter);
+
+                if (index >= 0)
+                {
+                    _frameLength = scanned + index - _frameStart;
+                    _frameDelimited = true;
+                    break;
+                }
+
+                if (IsFinal)
+                {
+                    if (_length == _frameStart)
+                    {
+                        return false;
+                    }
+
+                    _frameLength = _length - _frameStart;
+                    _frameDelimited = false;
+                    break;
+                }
+
+                scanned = _length - _frameStart;
+                await ReadFrameAsync(delimiter).ConfigureAwait(false);
+            }
+
+            ApplyPendingDelimiter(delimiter);
+
+            if (_frameLength > 0)
+            {
+                Context = CreateContext(new string(_chars, _frameStart, _frameLength), isFinal: true);
+                return true;
+            }
+
+            // Skip empty frames, the window is empty
+            Context = CreateContext("", isFinal: true);
+        }
+    }
+
+    /// <summary>
+    /// Moves the text of the current frame to the start of the buffer and reads more text once.
+    /// </summary>
+    private async ValueTask ReadFrameAsync(char delimiter)
+    {
+        var available = _length - _frameStart;
+
+        if (available >= _options.MaxBufferedCharacters)
+        {
+            ApplyPendingDelimiter(delimiter);
+            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(new TextPosition(0, _line, _column)));
+        }
+
+        if (_frameStart > 0)
+        {
+            Array.Copy(_chars, _frameStart, _chars, 0, available);
+            _length = available;
+            _frameStart = 0;
+        }
+
+        if (_length == _chars.Length)
+        {
+            var size = Math.Max(_options.BufferSize, _length * 2);
+
+            if (size < 0 || size > _options.MaxBufferedCharacters)
+            {
+                size = _options.MaxBufferedCharacters;
+            }
+
+            var chars = ArrayPool<char>.Shared.Rent(size);
+            Array.Copy(_chars, chars, _length);
+            ReturnChars();
+            _chars = chars;
+        }
+
+        _cancellationToken.ThrowIfCancellationRequested();
+
+        var capacity = Math.Min(_chars.Length, _options.MaxBufferedCharacters);
+
+#if NET8_0_OR_GREATER
+        var read = await _reader.ReadAsync(_chars.AsMemory(_length, capacity - _length), _cancellationToken).ConfigureAwait(false);
+#else
+        var read = await _reader.ReadAsync(_chars, _length, capacity - _length).ConfigureAwait(false);
+#endif
+
+        if (read == 0)
+        {
+            IsFinal = true;
+        }
+        else
+        {
+            _length += read;
+        }
+    }
+
+    /// <summary>
+    /// Moves the position past a delimiter once the character which follows it is known.
+    /// </summary>
+    private void ApplyPendingDelimiter(char delimiter)
+    {
+        if (!_pendingDelimiter)
+        {
+            return;
+        }
+
+        _pendingDelimiter = false;
+
+        if (delimiter == '\n')
+        {
+            _line++;
+            _column = 1;
+        }
+        else if (_frameStart >= _length || _chars[_frameStart] != '\r')
+        {
+            _column++;
+        }
     }
 
     /// <summary>
@@ -153,9 +308,9 @@ internal sealed class StreamingDriver : IDisposable
         return exception;
     }
 
-    private ParseContext CreateContext(string text)
+    private ParseContext CreateContext(string text, bool isFinal)
     {
-        var scanner = new Scanner(text, new TextPosition(0, _line, _column), IsFinal);
+        var scanner = new Scanner(text, new TextPosition(0, _line, _column), isFinal);
         var context = _options.ContextFactory?.Invoke(scanner, _cancellationToken) ?? new ParseContext(scanner, _cancellationToken);
 
         if (context.Scanner != scanner)

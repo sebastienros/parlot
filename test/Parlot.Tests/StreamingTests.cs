@@ -439,6 +439,121 @@ public class StreamingTests
         Assert.Equal(["alpha", "beta", "gamma", "delta"], spans.Select(static s => s.ToString()));
     }
 
+    [Theory]
+    [MemberData(nameof(ChunkSizes))]
+    public async Task ParseManyAsyncParsesDelimitedValues(int chunk, int bufferSize)
+    {
+        var text = "{\"a\": \"1\"}\n\n  \r\n[\"b\", \"c\"]\r\n\"d\"\n \"e\" ";
+        var items = new List<string>();
+        var reader = new ChunkedReader(text, () => chunk, yield: chunk == 3);
+
+        var count = await JsonParser.Json.ParseManyAsync(reader, '\n', json => items.Add(json.ToString()!), new StreamParseOptions { BufferSize = bufferSize });
+
+        Assert.Equal(4, count);
+        Assert.Equal(["{\"a\":\"1\"}", "[\"b\",\"c\"]", "\"d\"", "\"e\""], items);
+    }
+
+    [Theory]
+    [InlineData("1\n2\nx", '\n')]
+    [InlineData("1\r\n2\r\n x", '\n')]
+    [InlineData("1\n\n\n2\n\n x\n", '\n')]
+    [InlineData("1, 2,\n 3,\r\n x", ',')]
+    [InlineData("1,\r,\r 2, x", ',')]
+    [InlineData("1\r2\r\r x", '\r')]
+    [InlineData("1\r\n2\r\n x", '\r')]
+    [InlineData("1;2;;x", ';')]
+    [InlineData("x", ';')]
+    public async Task ParseManyAsyncReportsAbsolutePositionsOfDelimitedValues(string text, char delimiter)
+    {
+        var expected = new Cursor(text);
+
+        while (expected.Current != 'x')
+        {
+            expected.Advance();
+        }
+
+        foreach (var chunk in new[] { 1, 2, 4096 })
+        {
+            var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => chunk, yield: false), delimiter, static _ => { }, new StreamParseOptions { BufferSize = 1 }));
+
+            Assert.Equal(expected.Position, exception.Position);
+        }
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncRequiresDelimitedValuesToBeMatchedEntirely()
+    {
+        var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader("1\n2 3\n", () => 1, false), '\n', static _ => { }));
+
+        Assert.Equal(4, exception.Position.Offset);
+        Assert.Equal(2, exception.Position.Line);
+        Assert.Equal(3, exception.Position.Column);
+
+        var values = new List<long>();
+        var options = new StreamParseOptions { SkipWhiteSpace = false };
+
+        await Literals.Integer().ParseManyAsync(new ChunkedReader("1\n\n2", () => 1, false), '\n', values.Add, options);
+        Assert.Equal([1L, 2], values);
+
+        await Assert.ThrowsAsync<ParseException>(async () => await Literals.Integer().ParseManyAsync(new ChunkedReader("1 \n2", () => 1, false), '\n', values.Add, options));
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncLimitsDelimitedValueSize()
+    {
+        var items = 0;
+
+        var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader("1\n22\n" + new string('3', 20) + "\n4", () => 3, false), '\n', _ => items++, new StreamParseOptions { BufferSize = 2, MaxBufferedCharacters = 8 }));
+
+        Assert.Equal(2, items);
+        Assert.Equal(5, exception.Position.Offset);
+        Assert.Equal(3, exception.Position.Line);
+        Assert.Equal(1, exception.Position.Column);
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncParsesDelimitedValuesAsSoonAsTheyAreReceived()
+    {
+        var reader = new InteractiveReader();
+        var values = new List<long>();
+
+        reader.Write("1\n2");
+
+        var task = Terms.Integer().ParseManyAsync(reader, '\n', value =>
+        {
+            values.Add(value);
+
+            // More text is only available once a value is parsed, waiting for a full buffer would never end
+            if (value == 1)
+            {
+                reader.Write("\n3");
+            }
+            else if (value == 2)
+            {
+                reader.Write("\n");
+            }
+            else
+            {
+                reader.Complete();
+            }
+        }).AsTask();
+
+        Assert.Same(task, await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(30))));
+        Assert.Equal(3, await task);
+        Assert.Equal([1L, 2, 3], values);
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncParsesDelimitedStreams()
+    {
+        using var stream = new NonSeekableStream(Encoding.UTF8.GetBytes("'é'\r\n'日本'\r\n"));
+        var items = new List<string>();
+
+        await Terms.String().ParseManyAsync(stream, '\n', (span, _) => { items.Add(span.ToString()); return default; }, new StreamParseOptions { BufferSize = 1 });
+
+        Assert.Equal(["é", "日本"], items);
+    }
+
 #if NET8_0_OR_GREATER
     [Fact]
     public async Task ParseManyAsyncEnumeratesValues()
@@ -477,6 +592,29 @@ public class StreamingTests
         }
 
         Assert.True(reader.Position < 9);
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncEnumeratesDelimitedValues()
+    {
+        var values = new List<long>();
+
+        await foreach (var value in Terms.Integer().ParseManyAsync(new ChunkedReader("1\n2\n\n3\n", () => 1, false), '\n', new StreamParseOptions { BufferSize = 1 }))
+        {
+            values.Add(value);
+        }
+
+        Assert.Equal([1L, 2, 3], values);
+
+        values.Clear();
+        using var stream = new NonSeekableStream(Encoding.UTF8.GetBytes("4;5"));
+
+        await foreach (var value in Terms.Integer().ParseManyAsync(stream, ';'))
+        {
+            values.Add(value);
+        }
+
+        Assert.Equal([4L, 5], values);
     }
 #endif
 
@@ -737,6 +875,76 @@ public class StreamingTests
         }
 
         public override bool CanSeek => false;
+    }
+
+    /// <summary>
+    /// Returns the text written so far, waiting for more until it is completed.
+    /// </summary>
+    private sealed class InteractiveReader : TextReader
+    {
+        private readonly object _lock = new();
+        private readonly System.Text.StringBuilder _pending = new();
+        private TaskCompletionSource<bool> _available = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private bool _completed;
+
+        public void Write(string text)
+        {
+            lock (_lock)
+            {
+                _pending.Append(text);
+                _available.TrySetResult(true);
+            }
+        }
+
+        public void Complete()
+        {
+            lock (_lock)
+            {
+                _completed = true;
+                _available.TrySetResult(true);
+            }
+        }
+
+        public override int Read(char[] buffer, int index, int count) => throw new NotSupportedException();
+
+        public override async Task<int> ReadAsync(char[] buffer, int index, int count)
+        {
+            while (true)
+            {
+                Task wait;
+
+                lock (_lock)
+                {
+                    if (_pending.Length > 0)
+                    {
+                        var length = Math.Min(count, _pending.Length);
+                        _pending.CopyTo(0, buffer, index, length);
+                        _pending.Remove(0, length);
+                        return length;
+                    }
+
+                    if (_completed)
+                    {
+                        return 0;
+                    }
+
+                    _available = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    wait = _available.Task;
+                }
+
+                await wait.ConfigureAwait(false);
+            }
+        }
+
+#if NET8_0_OR_GREATER
+        public override async ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken = default)
+        {
+            var chars = new char[buffer.Length];
+            var read = await ReadAsync(chars, 0, chars.Length).ConfigureAwait(false);
+            chars.AsSpan(0, read).CopyTo(buffer.Span);
+            return read;
+        }
+#endif
     }
 
     /// <summary>

@@ -169,6 +169,49 @@ public abstract partial class Parser<T>
         return await ParseManyAsync(reader, separator, onItem, options, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Parses each text delimited by <paramref name="delimiter"/> in a <see cref="TextReader"/> as a value and invokes
+    /// <paramref name="onItem"/> for each of them, for instance one value per line with <c>'\n'</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The text is read until a delimiter is found, so a value is parsed as soon as its delimiter is received. This suits
+    /// interactive sources, while the other overloads may wait for more text than the value needs.
+    /// Each delimited text is parsed on its own and must be entirely matched by the parser, except for white space when
+    /// <see cref="StreamParseOptions.SkipWhiteSpace"/> is enabled. Empty texts are ignored, and white space only texts too
+    /// when <see cref="StreamParseOptions.SkipWhiteSpace"/> is enabled.
+    /// </para>
+    /// <para>
+    /// A text which doesn't match throws a <see cref="ParseException"/> with the position in the whole text. A text longer
+    /// than <see cref="StreamParseOptions.MaxBufferedCharacters"/> throws a <see cref="ParseException"/>.
+    /// The <see cref="TextSpan"/> values of results remain valid, but their offsets are relative to their <see cref="TextSpan.Buffer"/>,
+    /// not to the whole text. Lines and columns are relative to the whole text.
+    /// </para>
+    /// </remarks>
+    /// <returns>The number of parsed values.</returns>
+    public ValueTask<long> ParseManyAsync(TextReader reader, char delimiter, Func<T, CancellationToken, ValueTask> onItem, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ThrowHelper.ThrowIfNull(reader, nameof(reader));
+        ThrowHelper.ThrowIfNull(onItem, nameof(onItem));
+        return ParseFramesCoreAsync(reader, delimiter, onItem, null, options, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ParseManyAsync(TextReader, char, Func{T, CancellationToken, ValueTask}, StreamParseOptions?, CancellationToken)"/>
+    public ValueTask<long> ParseManyAsync(TextReader reader, char delimiter, Action<T> onItem, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ThrowHelper.ThrowIfNull(reader, nameof(reader));
+        ThrowHelper.ThrowIfNull(onItem, nameof(onItem));
+        return ParseFramesCoreAsync(reader, delimiter, null, onItem, options, cancellationToken);
+    }
+
+    /// <inheritdoc cref="ParseManyAsync(TextReader, char, Func{T, CancellationToken, ValueTask}, StreamParseOptions?, CancellationToken)"/>
+    /// <remarks>The stream is decoded with <see cref="StreamParseOptions.Encoding"/> and is not closed.</remarks>
+    public async ValueTask<long> ParseManyAsync(Stream stream, char delimiter, Func<T, CancellationToken, ValueTask> onItem, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        using var reader = StreamingDriver.CreateReader(stream, options);
+        return await ParseManyAsync(reader, delimiter, onItem, options, cancellationToken).ConfigureAwait(false);
+    }
+
 #if NET8_0_OR_GREATER
     /// <summary>
     /// Parses successive values from a <see cref="TextReader"/>, retaining only the text of the value being parsed.
@@ -216,6 +259,44 @@ public abstract partial class Parser<T>
         ThrowHelper.ThrowIfNull(stream, nameof(stream));
         ThrowHelper.ThrowIfNull(separator, nameof(separator));
         return EnumerateAsync(null, stream, separator, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Parses each text delimited by <paramref name="delimiter"/> in a <see cref="TextReader"/> as a value.
+    /// </summary>
+    /// <remarks>See <see cref="ParseManyAsync(TextReader, char, Func{T, CancellationToken, ValueTask}, StreamParseOptions?, CancellationToken)"/>.</remarks>
+    public IAsyncEnumerable<T> ParseManyAsync(TextReader reader, char delimiter, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ThrowHelper.ThrowIfNull(reader, nameof(reader));
+        return EnumerateFramesAsync(reader, null, delimiter, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Parses each text delimited by <paramref name="delimiter"/> in a <see cref="Stream"/> as a value.
+    /// </summary>
+    /// <remarks>
+    /// The stream is decoded with <see cref="StreamParseOptions.Encoding"/> and is not closed.
+    /// See <see cref="ParseManyAsync(TextReader, char, Func{T, CancellationToken, ValueTask}, StreamParseOptions?, CancellationToken)"/>.
+    /// </remarks>
+    public IAsyncEnumerable<T> ParseManyAsync(Stream stream, char delimiter, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ThrowHelper.ThrowIfNull(stream, nameof(stream));
+        return EnumerateFramesAsync(null, stream, delimiter, options, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<T> EnumerateFramesAsync(TextReader? reader, Stream? stream, char delimiter, StreamParseOptions? options, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var ownedReader = stream is null ? null : StreamingDriver.CreateReader(stream, options);
+        using var driver = new StreamingDriver(reader ?? ownedReader!, options, cancellationToken);
+
+        while (await driver.NextFrameAsync(delimiter).ConfigureAwait(false))
+        {
+            if (TryParseFrame(driver, out var value))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return value;
+            }
+        }
     }
 
     private async IAsyncEnumerable<T> EnumerateAsync<TSeparator>(TextReader? reader, Stream? stream, Parser<TSeparator>? separator, StreamParseOptions? options, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -271,6 +352,88 @@ public abstract partial class Parser<T>
                     break;
             }
         }
+    }
+
+    private async ValueTask<long> ParseFramesCoreAsync(TextReader reader, char delimiter, Func<T, CancellationToken, ValueTask>? onItemAsync, Action<T>? onItem, StreamParseOptions? options, CancellationToken cancellationToken)
+    {
+        using var driver = new StreamingDriver(reader, options, cancellationToken);
+        long count = 0;
+
+        while (await driver.NextFrameAsync(delimiter).ConfigureAwait(false))
+        {
+            if (!TryParseFrame(driver, out var value))
+            {
+                continue;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            count++;
+
+            if (onItem != null)
+            {
+                onItem(value);
+            }
+            else
+            {
+                await onItemAsync!(value, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Parses the current frame entirely, leaving the cursor at its end.
+    /// </summary>
+    /// <returns><see langword="false"/> if the frame only contains white space.</returns>
+    private bool TryParseFrame(StreamingDriver driver, out T value)
+    {
+        var context = driver.Context;
+        var cursor = context.Scanner.Cursor;
+        var skipWhiteSpace = driver.Options.SkipWhiteSpace;
+
+        value = default!;
+
+        if (skipWhiteSpace)
+        {
+            context.SkipWhiteSpace();
+
+            if (cursor.Eof)
+            {
+                return false;
+            }
+        }
+
+        var start = cursor.Position;
+        var result = new ParseResult<T>();
+        bool success;
+
+        try
+        {
+            success = Parse(context, ref result);
+        }
+        catch (ParseException e)
+        {
+            throw driver.ToAbsolute(e);
+        }
+
+        if (!success)
+        {
+            throw new ParseException("The input could not be parsed.", driver.ToAbsolute(start));
+        }
+
+        if (skipWhiteSpace)
+        {
+            context.SkipWhiteSpace();
+        }
+
+        if (!cursor.Eof)
+        {
+            throw new ParseException("Expected the end of the delimited text.", driver.ToAbsolute(cursor.Position));
+        }
+
+        value = result.Value;
+        return true;
     }
 
     private async ValueTask<(bool Success, T? Value)> ParseStreamAsync(TextReader reader, StreamParseOptions? options, CancellationToken cancellationToken)
