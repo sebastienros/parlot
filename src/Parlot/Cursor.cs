@@ -11,12 +11,28 @@ public class Cursor
     private int _line;
     private int _column;
 
+    // Set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
+    private bool _hitEnd;
+
     /// <summary>
     /// Creates a cursor over <paramref name="buffer"/> starting at <paramref name="position"/>.
     /// </summary>
     /// <param name="buffer">The text to read.</param>
     /// <param name="position">The initial position. Its offset indexes into <paramref name="buffer"/>, its line and column are reported as-is.</param>
-    public Cursor(string buffer, in TextPosition position)
+    public Cursor(string buffer, in TextPosition position) : this(buffer, position, isFinal: true)
+    {
+    }
+
+    /// <summary>
+    /// Creates a cursor over <paramref name="buffer"/> starting at <paramref name="position"/>.
+    /// </summary>
+    /// <param name="buffer">The text to read.</param>
+    /// <param name="position">The initial position. Its offset indexes into <paramref name="buffer"/>, its line and column are reported as-is.</param>
+    /// <param name="isFinal">
+    /// <see langword="false"/> when more text may follow <paramref name="buffer"/>, as when parsing a stream.
+    /// The cursor then records in <see cref="HitEnd"/> whether a decision depended on the end of the buffer.
+    /// </param>
+    public Cursor(string buffer, in TextPosition position, bool isFinal)
     {
         Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _textLength = Buffer.Length;
@@ -29,8 +45,57 @@ public class Cursor
         Offset = position.Offset;
         _line = position.Line;
         _column = position.Column;
+        IsFinal = isFinal;
         Eof = Offset == _textLength;
+        _hitEnd = Eof;
         Current = Eof ? NullChar : Buffer[Offset];
+    }
+
+    /// <summary>
+    /// Whether <see cref="Buffer"/> holds the end of the input. <see langword="true"/> unless the cursor was created
+    /// for a window of a larger input, as when parsing a stream.
+    /// </summary>
+    public bool IsFinal { get; }
+
+    /// <summary>
+    /// Whether, since the cursor was created, a read reached or looked past the end of a non-final <see cref="Buffer"/>.
+    /// A parse result obtained while this is <see langword="true"/> may change once more text is available.
+    /// Always <see langword="false"/> when <see cref="IsFinal"/> is <see langword="true"/>.
+    /// </summary>
+    /// <remarks>The flag is sticky: moving the cursor back with <see cref="ResetPosition(in TextPosition)"/> does not clear it.</remarks>
+    public bool HitEnd => _hitEnd && !IsFinal;
+
+    /// <summary>
+    /// Records that the current decision depended on text beyond the end of <see cref="Buffer"/>.
+    /// Custom parsers that inspect <see cref="Span"/> or <see cref="Buffer"/> directly must call this when they stop,
+    /// or fail, because the buffer ended rather than because of its content.
+    /// Moving the cursor to the end, <see cref="PeekNext(int)"/> past it and the <c>Match</c> methods already do it.
+    /// </summary>
+    public void MarkHitEnd()
+    {
+        _hitEnd = true;
+    }
+
+    internal void ResetHitEnd()
+    {
+        _hitEnd = Eof;
+    }
+
+    /// <summary>
+    /// Gets the remaining text when at least <paramref name="minLength"/> characters are available.
+    /// Otherwise records <see cref="HitEnd"/> and returns <see langword="false"/>.
+    /// </summary>
+    public bool TryGetSpan(int minLength, out ReadOnlySpan<char> span)
+    {
+        span = Span;
+
+        if (span.Length < minLength)
+        {
+            _hitEnd = true;
+            return false;
+        }
+
+        return true;
     }
 
     public Cursor(string buffer) : this(buffer, TextPosition.Start)
@@ -55,6 +120,7 @@ public class Cursor
         if (Offset >= _textLength)
         {
             Eof = true;
+            _hitEnd = true;
             _column++;
             Current = NullChar;
             return;
@@ -101,6 +167,7 @@ public class Cursor
         if (maxOffset > _textLength - 1)
         {
             Eof = true;
+            _hitEnd = true;
             maxOffset = _textLength - 1;
         }
 
@@ -161,6 +228,7 @@ public class Cursor
         if (count > end - offset)
         {
             Eof = true;
+            _hitEnd = true;
             Current = NullChar;
             Offset = _textLength;
             _column++;
@@ -182,6 +250,7 @@ public class Cursor
         if (newOffset > length)
         {
             Eof = true;
+            _hitEnd = true;
             _column += newOffset - length;
             Offset = _textLength;
             Current = NullChar;
@@ -216,6 +285,7 @@ public class Cursor
         {
             Current = NullChar;
             Eof = true;
+            _hitEnd = true;
         }
         else
         {
@@ -243,6 +313,11 @@ public class Cursor
 
         if (nextIndex >= _textLength || nextIndex < 0)
         {
+            if (nextIndex >= _textLength)
+            {
+                _hitEnd = true;
+            }
+
             return NullChar;
         }
 
@@ -262,6 +337,7 @@ public class Cursor
         if (Offset >= Buffer.Length)
         {
             Eof = true;
+            _hitEnd = true;
             Offset = Buffer.Length;
             Current = NullChar;
         }
@@ -317,6 +393,7 @@ public class Cursor
 
         if (_textLength < Offset + s.Length)
         {
+            MarkHitEndIfPrefix(s, StringComparison.Ordinal);
             return false;
         }
 
@@ -331,9 +408,27 @@ public class Cursor
     {
         if (_textLength < Offset + s.Length)
         {
+            MarkHitEndIfPrefix(s, comparisonType);
             return false;
         }
 
         return Span.StartsWith(s, comparisonType);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void MarkHitEndIfPrefix(ReadOnlySpan<char> s, StringComparison comparisonType)
+    {
+        if (IsFinal)
+        {
+            return;
+        }
+
+        // A shorter remainder only proves a mismatch when it already differs from the pattern.
+        // Culture-sensitive comparisons are not prefix-stable, so they always depend on more text.
+        if ((comparisonType != StringComparison.Ordinal && comparisonType != StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith(Span, comparisonType))
+        {
+            _hitEnd = true;
+        }
     }
 }
