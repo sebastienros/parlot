@@ -456,8 +456,9 @@ public abstract partial class Parser<T>
                 return (success, value);
             }
 
-            // The window always starts at the beginning of the text
-            await driver.GrowAsync(TextPosition.Start).ConfigureAwait(false);
+            // The window always starts at the beginning of the text. Each failed attempt parses the whole window,
+            // a larger growth factor than for items reduces the wasted work since a single value is buffered anyway.
+            await driver.GrowAsync(TextPosition.Start, growthFactor: 4).ConfigureAwait(false);
         }
     }
 

@@ -84,7 +84,9 @@ internal sealed class StreamingDriver : IDisposable
     /// <summary>
     /// Drops the text before <paramref name="start"/>, reads more text and starts a new window at <paramref name="start"/>.
     /// </summary>
-    public async ValueTask GrowAsync(TextPosition start)
+    /// <param name="start">The position of the text to keep.</param>
+    /// <param name="growthFactor">How many times larger than the kept text the new window should be, at least 2.</param>
+    public async ValueTask GrowAsync(TextPosition start, int growthFactor = 2)
     {
         var available = _length - start.Offset;
 
@@ -104,7 +106,7 @@ internal sealed class StreamingDriver : IDisposable
         _column = start.Column;
 
         // Grow geometrically so that the retries cost a bounded multiple of a single parse
-        var target = available + Math.Max(available, _options.BufferSize);
+        var target = available + Math.Max(available * (growthFactor - 1), _options.BufferSize);
 
         if (target < 0 || target > _options.MaxBufferedCharacters)
         {
