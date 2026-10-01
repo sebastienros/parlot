@@ -99,6 +99,11 @@ length and discriminating characters. This does not replace the runtime lookup t
 or alter ordered-choice semantics. See [Keyword lookup investigation](keyword-lookups.md)
 for the measured tradeoffs and eligibility restrictions.
 
+Compatible ordinal `Text`-only choices use a separate packed-prefix recognizer. It
+preserves ordered alternatives even when texts overlap: `Text("if1").Or(Text("if"))`
+still returns `"if1"` for `"if12"`, while reversing the alternatives returns `"if"`.
+Unlike keywords, these text choices have no boundary requirement.
+
 ## Parser factories
 
 Parsers should not allow other parsers to be created dynamically as parser constructors can be expensive (`OneOf` creates lookup tables).
