@@ -28,6 +28,46 @@ public class GrammarsTests
             static method => method.Name.StartsWith("Build", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Matched_Text_Reuses_Existing_Strings()
+    {
+        var exactInput = new string(['h', 'e', 'l', 'l', 'o']);
+        var differentCaseInput = new string(['H', 'E', 'L', 'L', 'O']);
+
+        Assert.True(Grammars.TryParseMatchedText(exactInput, out var exact));
+        Assert.Same("hello", exact);
+        Assert.NotSame(exactInput, exact);
+        Assert.True(Grammars.TryParseMatchedText(differentCaseInput, out var differentCase));
+        Assert.Same(differentCaseInput, differentCase);
+        var slicedInput = "HELLO world";
+        Assert.True(Grammars.TryParseMatchedText(slicedInput, out var sliced));
+        Assert.Equal("HELLO", sliced);
+        Assert.NotSame(slicedInput, sliced);
+        var prefixedInput = " HELLO";
+        Assert.True(Grammars.TryParseMatchedTerm(prefixedInput, out var prefixed));
+        Assert.Equal("HELLO", prefixed);
+        Assert.NotSame(prefixedInput, prefixed);
+        Assert.False(Grammars.TryParseMatchedText("world", out _));
+        Assert.True(Grammars.TryParseEmptyText("", out var empty));
+        Assert.Same(string.Empty, empty);
+        Assert.True(Grammars.TryParseCanonicalText(differentCaseInput, out var canonical));
+        Assert.Same("hello", canonical);
+        Assert.True(Grammars.TryParseLiteralsText(exactInput, out var ordinal));
+        Assert.Same("hello", ordinal);
+    }
+
+    [Fact]
+    public void Matched_Keyword_Respects_Boundary_And_Reuses_Strings()
+    {
+        var input = new string(['I', 'F']);
+
+        Assert.True(Grammars.TryParseMatchedKeyword(input, out var matched));
+        Assert.Same(input, matched);
+        Assert.True(Grammars.TryParseMatchedKeyword("IF(", out var sliced));
+        Assert.Equal("IF", sliced);
+        Assert.False(Grammars.TryParseMatchedKeyword("IFoo", out _));
+    }
+
     [Theory]
     [InlineData("one", 1.0)]
     [InlineData("two + three", 5.0)]
@@ -63,6 +103,36 @@ public class GrammarsTests
     {
         Assert.True(Grammars.TryParseLeftAssociativeThenPlus("1+", out var value));
         Assert.Equal(1m, value);
+    }
+
+    [Theory]
+    [InlineData("10 - 4 - 2", 4.0, 8.0)]
+    [InlineData("10 + 4 - 2", 12.0, 12.0)]
+    [InlineData("10", 10.0, 10.0)]
+    public void Value_Associative_Parsers_Receive_Operator_Values(string input, double leftExpected, double rightExpected)
+    {
+        Assert.True(Grammars.TryParseValueLeftAssociative(input, out var left));
+        Assert.Equal(leftExpected, left);
+        Assert.True(Grammars.TryParseValueRightAssociative(input, out var right));
+        Assert.Equal(rightExpected, right);
+        Assert.True(Grammars.TryParseValueLeftAssociativeContext(input, out var leftContext));
+        Assert.Equal(leftExpected, leftContext);
+        Assert.True(Grammars.TryParseValueRightAssociativeContext(input, out var rightContext));
+        Assert.Equal(rightExpected, rightContext);
+    }
+
+    [Fact]
+    public void Value_Right_Associative_Rolls_Back_An_Operator_With_No_Right_Operand()
+    {
+        Assert.True(Grammars.TryParseValueRightAssociativeThenPlus("1+", out var value));
+        Assert.Equal(1.0, value);
+    }
+
+    [Fact]
+    public void Value_Right_Associative_Stops_When_A_Pair_Consumes_No_Input()
+    {
+        Assert.True(Grammars.TryParseValueRightAssociativeEmpty("", out var value));
+        Assert.Equal(1, value);
     }
 
     [Fact]
@@ -147,11 +217,14 @@ public class GrammarsTests
     {
         Assert.True(Grammars.TryParseZeroOrManyOptional("aaa", out var zeroOrMany));
         Assert.Equal(3, zeroOrMany.Count);
+        Assert.Equal(['a'], zeroOrMany[0]);
         Assert.True(Grammars.TryParseOneOrManyOptional("aaa", out var oneOrMany));
         Assert.Equal(3, oneOrMany.Count);
+        Assert.Equal(['a'], oneOrMany[0]);
         Assert.False(Grammars.TryParseOneOrManyOptional("", out _));
         Assert.True(Grammars.TryParseSeparatedOptional("aaa", out var separated));
         Assert.Equal(3, separated.Count);
+        Assert.Equal(['a'], separated[0]);
         Assert.False(Grammars.TryParseSeparatedOptional("", out _));
     }
 

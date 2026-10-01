@@ -7,10 +7,14 @@ public static partial class Grammar
 {
     public static partial bool TryParseNumber(string text, out int value);
     public static partial bool TryParsePrefix(string text, out string value);
+    public static partial bool TryParseMatchedText(string text, out string value);
+    public static partial bool TryParseIdentifier(string text, out string value);
     public static partial bool TryParseAlternative(string text, out char value);
     public static partial bool TryParseString(string text, out string value);
     public static partial bool TryParseNumbers(string text, out IReadOnlyList<int> value);
     public static partial bool TryParseOptional(string text, out int value);
+    public static partial bool TryParseZeroOrOne(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseZeroOrOneDiscarded(string text, out char value);
     public static partial bool TryParseRecursive(string text, out int value);
     public static partial bool TryParseCustomWhitespace(string text, out string value);
     public static partial bool TryParseConfigured(string text, GrammarOptions options, out string value);
@@ -31,6 +35,12 @@ public static partial class Grammar
     public static partial bool TryParseKeywordFallback(string text, out string value);
     public static partial bool TryParseKeywordCapture(string text, out string value);
     public static partial bool TryParseKeywordCustomWhitespace(string text, out string value);
+    public static partial bool TryParseTextChoice(string text, out string value);
+    public static partial bool TryParseTextChoiceFallback(string text, out string value);
+    public static partial bool TryParseTextChoiceCapture(string text, out string value);
+    public static partial bool TryParseTextChoiceCustomWhitespace(string text, out string value);
+    public static partial bool TryParseTextChoiceDiscarded(string text, out char value);
+    public static partial bool TryParseTextChoicePosition(string text, out (int Offset, int Line, int Column) value);
 }
 
 public sealed class CancellationOptions

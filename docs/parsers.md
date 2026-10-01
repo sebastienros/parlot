@@ -68,6 +68,24 @@ Set `TreatWarningsAsErrors` to report warnings as errors. A promoted warning fai
 `Error(...)`: it throws when `CollectDiagnostics` is disabled, and is otherwise recorded with the `Error`
 severity so that the grammar can try another alternative.
 
+## Associative operators
+
+`LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:
+
+```csharp
+var add = Terms.Char('+').Then(static _ => 1);
+var subtract = Terms.Char('-').Then(static _ => -1);
+var number = Terms.Decimal();
+
+var expression = number.LeftAssociative(
+    [add, subtract],
+    static (left, right, operation) => operation == 1 ? left + right : left - right);
+
+expression.Parse("10 - 4 - 2"); // 4
+```
+
+Replace `LeftAssociative` with `RightAssociative` to obtain `8` for the same input. The factory can also receive `ParseContext` as its first argument: `(context, left, right, operation)`. Existing overloads accepting `(operatorParser, factory)` tuples remain available when each operator needs a distinct factory. If an operator matches but the next operand does not, the operator is rolled back and the expression parsed so far is returned.
+
 ## Terms and Literals
 
 These are lowest level elements of a grammar, like a `'.'` (dot), predefined strings like `"hello"`, numbers, and more.
@@ -175,6 +193,9 @@ Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatche
 When `caseInsensitive` is `true`, the default behavior is to return the **requested** text (the canonical literal you passed in), not the input slice. This avoids allocating a new string for case-insensitive matches.
 
 If you need to preserve the original casing from the input, set `returnMatchedText: true`.
+An exact-case match returns the requested text without allocating; if the matched text
+has different casing but covers the entire input, the input string itself is returned.
+Only a differently cased substring needs a new string.
 
 Usage:
 
@@ -234,7 +255,7 @@ Matches a keyword string, ensuring the following character is not a letter. This
 Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false)
 ```
 
-Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to return the matched input slice instead.
+Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to preserve the matched input casing; exact-case matches reuse the keyword, and whole-input matches can reuse the input string.
 
 This is useful when parsing programming language constructs like `if`, `while`, `return`, etc., where you want to match the exact keyword but not as part of a longer identifier.
 
@@ -610,10 +631,10 @@ Assert.Equal(12, result.Item2);
 
 ### ZeroOrOne
 
-Makes an existing parser optional. The method can also be be post-fixed.
+Matches zero or one occurrence and returns an empty list or a single-item list. The method can also be post-fixed.
 
 ```c#
-Parser<T> ZeroOrOne<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> ZeroOrOne<T>(Parser<T> parser)
 ```
 
 Usage:
@@ -621,16 +642,25 @@ Usage:
 ```c#
 var parser = ZeroOrOne(Terms.Text("hello"));
 // or Terms.Text("hello").ZeroOrOne()
-parser.Parse("hello");
-parser.Parse(""); // returns null but with a successful state
+parser.Parse("hello"); // ["hello"]
+parser.Parse(""); // [] with a successful state
 ```
 
 Result:
 
 ```
-"hello"
-null
+["hello"]
+[]
 ```
+
+`ZeroOrOne(parser, defaultValue)` is no longer available. For a scalar value with a fallback, use
+`Optional()` and project its `Option<T>` result:
+
+```c#
+var scalar = Terms.Text("hello").Optional().Then(static option => option.OrSome("world"));
+```
+
+For any number of matches, use `ZeroOrMany(parser)`.
 
 ### Optional
 
@@ -652,10 +682,11 @@ Use the `OrSome<T>()` method to provide a default value if the `Option<T>` insta
 
 ### ZeroOrMany
 
-Executes a parser as long as it's successful. The result is a list of all individual results. The method can also be post-fixed.
+Executes a parser as long as it's successful. The result is a list of all individual results. The method can also be post-fixed. An optional `max` limits the number of matches; `0` (the default) means unlimited.
 
 ```c#
-Parser<IReadOnlyList<T> ZeroOrMany<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> ZeroOrMany<T>(Parser<T> parser, int max)
 ```
 
 Usage:
@@ -665,6 +696,7 @@ var parser = ZeroOrMany(Terms.Text("hello"));
 // or Terms.Text("hello").ZeroOrMany()
 parser.Parse("hello hello");
 parser.Parse("");
+ZeroOrMany(Literals.Char('x'), max: 2).Parse("xxx"); // Returns two items; leaves the last x unconsumed
 ```
 
 Result:
@@ -676,10 +708,11 @@ Result:
 
 ### OneOrMany
 
-Executes a parser as long as it's successful, and is successful if at least one occurrence is found. The result is a list of all individual results. The method can also be post-fixed.
+Executes a parser as long as it's successful, and is successful if at least one occurrence is found. The result is a list of all individual results. The method can also be post-fixed. An optional `max` limits the number of matches; `0` (the default) means unlimited.
 
 ```c#
-Parser<IReadOnlyList<T> OneOrMany<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser)
+Parser<IReadOnlyList<T>> OneOrMany<T>(Parser<T> parser, int max)
 ```
 
 Usage:
@@ -725,10 +758,22 @@ null // success
 
 ### Separated
 
-Matches all occurrences of a parser that are separated by another one. If a separator is not followed by a value, it is not consumed.
+Matches one or more values separated by another parser. By default, a separator
+not followed by a value is not consumed. An explicit `min: 0` accepts an empty
+list, and `max: 0` means unlimited. At the maximum, the next separator and
+value remain unconsumed.
 
-```
-Parser<IReadOnlyList<T> Separated<U, T>(Parser<U> separator, Parser<T> parser)
+```c#
+Parser<IReadOnlyList<T>> Separated<U, T>(Parser<U> separator, Parser<T> parser, int min = 1, int max = 0)
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator,
+    Parser<T> parser,
+    bool removeEmptyEntries = false,
+    bool allowLeadingSeparator = false,
+    bool allowTrailingSeparator = false)
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator, Parser<T> parser, int min, int max,
+    bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator)
 ```
 
 Usage:
@@ -737,6 +782,7 @@ Usage:
 var parser = Separated(Terms.Text(","), Terms.Integer());
 parser.Parse("1, 2, 3");
 parser.Parse("1,2;3");
+Separated(Literals.Char(','), Literals.Char('x'), min: 0, max: 2).Parse("x,x,x"); // Returns two items; leaves ",x"
 ```
 
 Result:
@@ -745,6 +791,29 @@ Result:
 [1, 2, 3]
 [1, 2]
 ```
+
+Set `removeEmptyEntries: true` to skip successive separators **between**
+values, so `1,,2` returns `[1, 2]`. It does not permit a leading or trailing
+separator on its own. Enable `allowLeadingSeparator` to accept `,1,2`, or
+`allowTrailingSeparator` to consume `1,2,`. Each boundary accepts only one
+separator unless `removeEmptyEntries` is also set, in which case it accepts
+a run:
+
+```c#
+var parser = Separated(Terms.Char(','), Terms.Integer(),
+    removeEmptyEntries: true,
+    allowLeadingSeparator: true,
+    allowTrailingSeparator: true);
+
+parser.Eof().Parse(",,1,,2,,"); // [1, 2]
+```
+
+At least one value must match by default: empty input and input containing only
+separators fail. With explicit `min: 0`, an empty list succeeds without consuming
+leading separators if no value matches. Without `allowTrailingSeparator`, a run
+of separators not followed by another value is left untouched for the next parser.
+Negative bounds or a positive `max` less than `min` throw `ArgumentOutOfRangeException`
+when the parser is built. Attach `.Eof()` to reject any extra input.
 
 ### Between
 

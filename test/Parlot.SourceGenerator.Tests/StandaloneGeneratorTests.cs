@@ -69,6 +69,51 @@ public class StandaloneGeneratorTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Large_Keyword_Lookups_Split_Helpers_Without_Losing_Checked_Standalone_Behavior(bool manyLengths)
+    {
+        var declaration = Declaration.Replace("out int", "out string", StringComparison.Ordinal);
+        var vocabulary = manyLengths
+            ? """System.Linq.Enumerable.Range(0, 80).Select(static index => new string('a', index % 40) + (char)('b' + index / 40))"""
+            : """System.Linq.Enumerable.Range(0, 200).Select(static index => "keyword" + new string('x', index % 20) + (char)('a' + index / 26) + (char)('a' + index % 26))""";
+        var grammar = $$"""
+            using System.Linq;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => OneOf(
+                    {{vocabulary}}.Select(static word => Literals.Keyword(word)).ToArray());
+            }
+            """;
+        var (result, compilation) = Generate(declaration, grammar, warningsAsErrors: true, checkOverflow: true);
+        AssertNoErrors(result, compilation);
+        Assert.Contains(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.SourceText.ToString().Contains("MatchLength", StringComparison.Ordinal));
+        using var stream = new MemoryStream();
+        var emitted = compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+        var assembly = Assembly.Load(stream.ToArray());
+        Assert.DoesNotContain(assembly.GetReferencedAssemblies(), static name => name.Name.StartsWith("Parlot", StringComparison.Ordinal));
+        var parse = assembly.GetType("Grammar").GetMethod("TryParse");
+        var words = manyLengths
+            ? Enumerable.Range(0, 80).Select(static index => new string('a', index % 40) + (char)('b' + index / 40))
+            : Enumerable.Range(0, 200).Select(static index => "keyword" + new string('x', index % 20) + (char)('a' + index / 26) + (char)('a' + index % 26));
+        foreach (var word in words)
+        {
+            object[] arguments = [word + "!", null];
+            Assert.True((bool)parse.Invoke(null, arguments));
+            Assert.Equal(word, arguments[1]);
+            arguments = [word + "x", null];
+            Assert.False((bool)parse.Invoke(null, arguments));
+            Assert.Null(arguments[1]);
+        }
+    }
+
     [Fact]
     public void Generated_Assembly_Has_No_Parlot_References_Or_Factories()
     {

@@ -12,6 +12,14 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParsePrefix))]
     private static Parser<string> Prefix() => Literals.Text("hello");
 
+    [GenerateParser(nameof(TryParseMatchedText))]
+    private static Parser<string> MatchedText() =>
+        Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseIdentifier))]
+    private static Parser<string> Identifier() =>
+        Literals.Identifier().Then(static value => value.ToString());
+
     [GenerateParser(nameof(TryParseAlternative))]
     private static Parser<char> Alternative() =>
         Terms.Char('a').SkipAnd(Literals.Char('b'))
@@ -27,6 +35,14 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParseOptional))]
     private static Parser<int> OptionalNumber() =>
         Terms.Number<int>(NumberOptions.Integer).Optional().Then(static value => value.OrSome(-1)).Eof();
+
+    [GenerateParser(nameof(TryParseZeroOrOne))]
+    private static Parser<System.Collections.Generic.IReadOnlyList<char>> ZeroOrOneChar() =>
+        ZeroOrOne(Literals.Char('a'));
+
+    [GenerateParser(nameof(TryParseZeroOrOneDiscarded))]
+    private static Parser<char> ZeroOrOneDiscarded() =>
+        ZeroOrOne(Literals.Char('a')).SkipAnd(Literals.Char('b')).Eof();
 
     [GenerateParser(nameof(TryParseRecursive))]
     private static Parser<int> Recursive()
@@ -115,4 +131,32 @@ public static partial class Grammar
     private static Parser<string> KeywordCustomWhitespace() =>
         Keyword().AndSkip(Literals.Char('!')).Eof()
             .WithWhiteSpaceParser(Capture(OneOrMany(Literals.Char('_'))));
+
+    [GenerateParser(nameof(TryParseTextChoice))]
+    private static Parser<string> TextChoice() =>
+        OneOf(Terms.Text("if1"), Terms.Text("if"), Terms.Text("if12"), Terms.Text("Content-Encoding"),
+            Terms.Text("Content-Type"), Terms.Text("Content"), Terms.Text("\u00e9\0x"), Terms.Text("\ud800\udc00"))
+        .Or(OneOf(Terms.Text("line\r\nend"), Terms.Text("line\r\n"), Terms.Text("if")));
+
+    [GenerateParser(nameof(TryParseTextChoiceFallback))]
+    private static Parser<string> TextChoiceFallback() =>
+        TextChoice().AndSkip(Literals.Char('!')).Or(Literals.Text(" \r\nunknown!")).Eof();
+
+    [GenerateParser(nameof(TryParseTextChoiceCapture))]
+    private static Parser<string> TextChoiceCapture() =>
+        Literals.Char('!').SkipAnd(Capture(TextChoice())).AndSkip(Literals.Char('!'))
+            .Then(static span => span.ToString()).Eof();
+
+    [GenerateParser(nameof(TryParseTextChoiceCustomWhitespace))]
+    private static Parser<string> TextChoiceCustomWhitespace() =>
+        TextChoice().AndSkip(Literals.Char('!')).Eof()
+            .WithWhiteSpaceParser(Capture(OneOrMany(Literals.Char('_'))));
+
+    [GenerateParser(nameof(TryParseTextChoiceDiscarded))]
+    private static Parser<char> TextChoiceDiscarded() => TextChoice().SkipAnd(Literals.Char('!')).Eof();
+
+    [GenerateParser(nameof(TryParseTextChoicePosition))]
+    private static Parser<(int Offset, int Line, int Column)> TextChoicePosition() =>
+        TextChoice().Then(static (context, _) =>
+            (context.Scanner.Cursor.Offset, context.Scanner.Cursor.Position.Line, context.Scanner.Cursor.Position.Column));
 }

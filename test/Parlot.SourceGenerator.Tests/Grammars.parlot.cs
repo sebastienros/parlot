@@ -42,6 +42,42 @@ public static partial class Grammars
             (Terms.Char('+'), static (left, right) => left + right),
             (Terms.Char('-'), static (left, right) => left - right));
 
+    [GenerateParser(nameof(TryParseValueLeftAssociative))]
+    private static Parser<double> BuildValueLeftAssociative() =>
+        Terms.Decimal().Then(static value => (double)value).LeftAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (left, right, operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueRightAssociative))]
+    private static Parser<double> BuildValueRightAssociative() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (left, right, operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueLeftAssociativeContext))]
+    private static Parser<double> BuildValueLeftAssociativeContext() =>
+        Terms.Decimal().Then(static value => (double)value).LeftAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (ParseContext _, double left, double right, int operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueRightAssociativeContext))]
+    private static Parser<double> BuildValueRightAssociativeContext() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            [Terms.Char('+').Then(static _ => 1), Terms.Char('-').Then(static _ => -1)],
+            static (ParseContext _, double left, double right, int operation) => operation == 1 ? left + right : left - right);
+
+    [GenerateParser(nameof(TryParseValueRightAssociativeThenPlus))]
+    private static Parser<double> BuildValueRightAssociativeThenPlus() =>
+        Terms.Decimal().Then(static value => (double)value)
+            .RightAssociative([Literals.Char('+').Then(static _ => 1)],
+                static (left, right, _) => left + right)
+            .AndSkip(Literals.Char('+'))
+            .Eof();
+
+    [GenerateParser(nameof(TryParseValueRightAssociativeEmpty))]
+    private static Parser<int> BuildValueRightAssociativeEmpty() =>
+        Always(1).RightAssociative([Always('+')], static (left, right, _) => left + right);
+
     [GenerateParser(nameof(TryParseNestedLeftAssociative))]
     private static Parser<double> BuildNestedLeftAssociative()
     {
@@ -102,6 +138,26 @@ public static partial class Grammars
     [GenerateParser(nameof(TryParseLiteralsText))]
     private static Parser<string> BuildLiteralsText() => Literals.Text("hello");
 
+    [GenerateParser(nameof(TryParseMatchedText))]
+    private static Parser<string> BuildMatchedText() =>
+        Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseMatchedTerm))]
+    private static Parser<string> BuildMatchedTerm() =>
+        Terms.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseCanonicalText))]
+    private static Parser<string> BuildCanonicalText() =>
+        Literals.Text("hello", caseInsensitive: true);
+
+    [GenerateParser(nameof(TryParseMatchedKeyword))]
+    private static Parser<string> BuildMatchedKeyword() =>
+        Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true);
+
+    [GenerateParser(nameof(TryParseEmptyText))]
+    private static Parser<string> BuildEmptyText() =>
+        Literals.Text("", caseInsensitive: true, returnMatchedText: true);
+
     [GenerateParser(nameof(TryParseLiteralsChar))]
     private static Parser<char> BuildLiteralsChar() => Literals.Char('h');
 
@@ -131,8 +187,12 @@ public static partial class Grammars
     private static Parser<IReadOnlyList<char>> BuildZeroOrManyChars() => ZeroOrMany(Terms.Char('a'));
 
     [GenerateParser(nameof(TryParseZeroOrOneChar))]
-    private static Parser<char> BuildZeroOrOneChar() =>
-        Terms.Char('a').Optional().Then(static option => option.HasValue ? option.Value : 'x');
+    private static Parser<IReadOnlyList<char>> BuildZeroOrOneChar() =>
+        ZeroOrOne(Terms.Char('a'));
+
+    [GenerateParser(nameof(TryParseZeroOrOneEmpty))]
+    private static Parser<IReadOnlyList<char>> BuildZeroOrOneEmpty() =>
+        ZeroOrOne(new Always<char>('x')).Eof();
 
     [GenerateParser(nameof(TryParseEofText))]
     private static Parser<string> BuildEofText() => Terms.Text("end").Eof();
@@ -224,15 +284,15 @@ public static partial class Grammars
     }
 
     [GenerateParser(nameof(TryParseZeroOrManyOptional))]
-    private static Parser<IReadOnlyList<char>> BuildZeroOrManyOptional() =>
+    private static Parser<IReadOnlyList<IReadOnlyList<char>>> BuildZeroOrManyOptional() =>
         ZeroOrMany(ZeroOrOne(Literals.Char('a'))).Eof();
 
     [GenerateParser(nameof(TryParseOneOrManyOptional))]
-    private static Parser<IReadOnlyList<char>> BuildOneOrManyOptional() =>
+    private static Parser<IReadOnlyList<IReadOnlyList<char>>> BuildOneOrManyOptional() =>
         OneOrMany(ZeroOrOne(Literals.Char('a'))).Eof();
 
     [GenerateParser(nameof(TryParseSeparatedOptional))]
-    private static Parser<IReadOnlyList<char>> BuildSeparatedOptional() =>
+    private static Parser<IReadOnlyList<IReadOnlyList<char>>> BuildSeparatedOptional() =>
         Separated(ZeroOrOne(Literals.Char(',')), ZeroOrOne(Literals.Char('a'))).Eof();
 
     private static readonly Parser<long> Long = Terms.Number<long>(NumberOptions.Integer);

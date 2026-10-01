@@ -33,6 +33,55 @@ public class SimpleParsersBenchmarks
         return result;
     }
 
+    private static readonly Parser<string> _matchedTextFluent =
+        Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
+    private const string ExactTextInput = "hello";
+    private const string DifferentCaseTextInput = "HELLO";
+    private const string SlicedTextInput = "HELLO world";
+
+    [Benchmark(Baseline = true), BenchmarkCategory("MatchedTextExact")]
+    public string MatchedTextExact_Fluent()
+    {
+        _matchedTextFluent.TryParse(ExactTextInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("MatchedTextExact")]
+    public string MatchedTextExact_Generated()
+    {
+        GeneratedParsers.TryParseMatchedText(ExactTextInput, out var result);
+        return result;
+    }
+
+    [Benchmark(Baseline = true), BenchmarkCategory("MatchedTextDifferentCase")]
+    public string MatchedTextDifferentCase_Fluent()
+    {
+        _matchedTextFluent.TryParse(DifferentCaseTextInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("MatchedTextDifferentCase")]
+    public string MatchedTextDifferentCase_Generated()
+    {
+        GeneratedParsers.TryParseMatchedText(DifferentCaseTextInput, out var result);
+        return result;
+    }
+
+    [Benchmark(Baseline = true), BenchmarkCategory("MatchedTextSliced")]
+    public string MatchedTextSliced_Fluent()
+    {
+        _matchedTextFluent.TryParse(SlicedTextInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("MatchedTextSliced")]
+    public string MatchedTextSliced_Generated()
+    {
+        GeneratedParsers.TryParseMatchedText(SlicedTextInput, out var result);
+        return result;
+    }
+
     // ==================== Decimal ====================
 
     private static readonly Parser<decimal> _decimalFluent = Terms.Decimal();
@@ -148,6 +197,27 @@ public class SimpleParsersBenchmarks
     public IReadOnlyList<decimal> ZeroOrMany_Generated()
     {
         GeneratedParsers.TryParseZeroOrMany(ZeroOrManyInput, out var result);
+        return result;
+    }
+
+    // ==================== ZeroOrOne ====================
+
+    private static readonly Parser<IReadOnlyList<decimal>> _zeroOrOneFluent = ZeroOrOne(Terms.Decimal());
+
+    [Params("123", "word")]
+    public string ZeroOrOneInput { get; set; } = "123";
+
+    [Benchmark(Baseline = true), BenchmarkCategory("ZeroOrOne")]
+    public IReadOnlyList<decimal> ZeroOrOne_Fluent()
+    {
+        _zeroOrOneFluent.TryParse(ZeroOrOneInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("ZeroOrOne")]
+    public IReadOnlyList<decimal> ZeroOrOne_Generated()
+    {
+        GeneratedParsers.TryParseZeroOrOne(ZeroOrOneInput, out var result);
         return result;
     }
 

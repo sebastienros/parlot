@@ -81,6 +81,9 @@ var intOrHello = integer.Or(hello);
 ```
 
 Note: when `caseInsensitive: true`, `Text("Hello")` returns the canonical requested text ("Hello") by default to avoid allocating a new string. If you need the matched input text (e.g. "HELLO"), use `returnMatchedText: true`.
+Matched text reuses the requested string if its casing is exact, or the input string if
+the match covers the entire input; only a differently cased substring is materialized.
+Similarly, `TextSpan.ToString()` reuses its buffer when the span covers it entirely.
 
 Both **integer** and **hello** have well-known characters that can be at the start of their potential values: 
 - **integers** can start with `[0-9\.\-]`.
@@ -95,6 +98,11 @@ Source generation can additionally specialize compatible keyword-only choices us
 length and discriminating characters. This does not replace the runtime lookup table
 or alter ordered-choice semantics. See [Keyword lookup investigation](keyword-lookups.md)
 for the measured tradeoffs and eligibility restrictions.
+
+Compatible ordinal `Text`-only choices use a separate packed-prefix recognizer. It
+preserves ordered alternatives even when texts overlap: `Text("if1").Or(Text("if"))`
+still returns `"if1"` for `"if12"`, while reversing the alternatives returns `"if"`.
+Unlike keywords, these text choices have no boundary requirement.
 
 ## Parser factories
 

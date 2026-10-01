@@ -11,7 +11,8 @@ namespace Parlot.SourceGeneration;
 internal static class KnownStringLookup
 {
     internal static string Generate(IReadOnlyList<string> words, bool bytes, bool ignoreCase, bool? wide = null,
-        Func<int, string>? matchExpression = null, string failureExpression = "-1")
+        Func<int, string>? matchExpression = null, string failureExpression = "-1",
+        bool splitByLength = true, string resultType = "int")
     {
         if ((bytes || ignoreCase) && words.Any(static word => word.Any(static c => c > 127)))
         {
@@ -23,10 +24,33 @@ internal static class KnownStringLookup
         var candidates = words.Select((text, index) => new Candidate(text, index))
             .GroupBy(static candidate => candidate.Text, ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
             .Select(static group => group.First()).ToArray();
+        var helpers = new StringBuilder();
+        var inlineCandidates = 0;
+        var lengthGroups = candidates.GroupBy(static candidate => candidate.Text.Length).OrderBy(static group => group.Key).ToArray();
+        var useLengthHelpers = splitByLength && candidates.Length > 32 && lengthGroups.Length > 1
+            && candidates.Sum(static candidate => candidate.Text.Length) > 1024;
         output.AppendLine("switch (input.Length) {");
-        foreach (var group in candidates.GroupBy(static candidate => candidate.Text.Length).OrderBy(static group => group.Key))
+        foreach (var group in lengthGroups)
         {
             output.AppendLine(FormattableString.Invariant($"case {group.Key}: {{"));
+            if (useLengthHelpers && (group.Count() > 4 || inlineCandidates + group.Count() > 32))
+            {
+                output.AppendLine(FormattableString.Invariant($"return MatchLength{group.Key}(input);"));
+                output.AppendLine("}");
+                var dispatch = output;
+                output = helpers;
+                output.AppendLine(FormattableString.Invariant($"static {resultType} MatchLength{group.Key}(System.ReadOnlySpan<{(bytes ? "byte" : "char")}> input) {{"));
+                if (!Emit(group.ToArray(), new bool[group.Key]))
+                {
+                    output.AppendLine(FormattableString.Invariant($"return {failureExpression};"));
+                }
+
+                output.AppendLine("}");
+                output = dispatch;
+                continue;
+            }
+
+            inlineCandidates += group.Count();
             if (!Emit(group.ToArray(), new bool[group.Key]))
             {
                 output.AppendLine("break;");
@@ -36,6 +60,7 @@ internal static class KnownStringLookup
         }
 
         output.AppendLine(FormattableString.Invariant($"}} return {failureExpression};"));
+        output.Append(helpers);
         return output.ToString();
 
         bool Emit(Candidate[] remaining, bool[] proven)
@@ -217,6 +242,55 @@ internal static class KnownStringLookup
         }
 
         int Shift(int index) => index * (bytes ? 8 : 16);
+    }
+
+    internal static string GeneratePrefixes(IReadOnlyList<string> words)
+    {
+        var helpers = new StringBuilder();
+        var number = 0;
+        var body = Emit(words.Select((text, index) => new Candidate(text, index)).ToArray(), "null");
+        return body + helpers;
+
+        string Emit(Candidate[] candidates, string failure)
+        {
+            // An earlier complete prefix wins over every longer candidate after it.
+            var terminal = Array.FindIndex(candidates, static candidate => candidate.Text.Length == 0);
+            if (terminal >= 0)
+            {
+                failure = LiteralHelper.StringToLiteral(words[candidates[terminal].Index]);
+                candidates = candidates.Take(terminal).ToArray();
+            }
+
+            if (candidates.Length == 0)
+            {
+                return $"return {failure};";
+            }
+
+            var length = candidates.Min(static candidate => candidate.Text.Length);
+            var groups = candidates.GroupBy(candidate => candidate.Text.Substring(0, length), StringComparer.Ordinal).ToArray();
+            var matches = new string[groups.Length];
+            for (var i = 0; i < groups.Length; i++)
+            {
+                var suffixes = groups[i].Select(candidate => new Candidate(candidate.Text.Substring(length), candidate.Index)).ToArray();
+                if (suffixes[0].Text.Length == 0)
+                {
+                    matches[i] = LiteralHelper.StringToLiteral(words[suffixes[0].Index]);
+                }
+                else
+                {
+                    var name = $"MatchPrefix{number++}";
+                    matches[i] = $"{name}(text.Slice({length}))";
+                    var helper = Emit(suffixes, failure);
+                    helpers.AppendLine(FormattableString.Invariant($"static string {name}(System.ReadOnlySpan<char> text) {{"));
+                    helpers.AppendLine(helper);
+                    helpers.AppendLine("}");
+                }
+            }
+
+            return $"if (text.Length < {length}) return {failure};\nvar input = text.Slice(0, {length});\n"
+                + Generate(groups.Select(static group => group.Key).ToArray(), bytes: false, ignoreCase: false,
+                    matchExpression: index => matches[index], failureExpression: failure, splitByLength: false);
+        }
     }
 
     private static void Prove(bool[] proven, int offset, int width)

@@ -79,6 +79,10 @@ public static partial class GeneratedParsers
     [GenerateParser(nameof(TryParseText))]
     private static Parser<string> BuildText() => Terms.Text("hello");
 
+    [GenerateParser(nameof(TryParseMatchedText))]
+    private static Parser<string> BuildMatchedText() =>
+        Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
+
     [GenerateParser(nameof(TryParseDecimal))]
     private static Parser<decimal> BuildDecimal() => Terms.Decimal();
 
@@ -100,6 +104,10 @@ public static partial class GeneratedParsers
     [GenerateParser(nameof(TryParseZeroOrMany))]
     private static Parser<IReadOnlyList<decimal>> BuildZeroOrMany() =>
         ZeroOrMany(Terms.Decimal());
+
+    [GenerateParser(nameof(TryParseZeroOrOne))]
+    private static Parser<IReadOnlyList<decimal>> BuildZeroOrOne() =>
+        ZeroOrOne(Terms.Decimal());
 
     [GenerateParser(nameof(TryParseSkipWhiteSpace))]
     private static Parser<decimal> BuildSkipWhiteSpace() =>

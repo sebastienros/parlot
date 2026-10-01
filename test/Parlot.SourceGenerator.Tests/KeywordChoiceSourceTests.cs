@@ -63,4 +63,21 @@ public class KeywordChoiceSourceTests
         var source = ((ISourceable)parser).GenerateSource(new SourceGenerationContext());
         Assert.Equal(expected, string.Join("\n", source.Body).IndexOf("MatchKeyword", StringComparison.Ordinal) >= 0);
     }
+
+    [Fact]
+    public void ModerateAndSingleLengthVocabulariesKeepTheirDirectPackedDispatch()
+    {
+        foreach (var words in new[]
+        {
+            Enumerable.Range(0, 77).Select(static index => "key" + new string('x', index % 5) + (char)('a' + index / 26) + (char)('a' + index % 26)),
+            Enumerable.Range(0, 128).Select(static index => "commonprefix" + (char)('a' + index / 26) + (char)('a' + index % 26)),
+        })
+        {
+            var parser = OneOf(words.Select(static word => Literals.Keyword(word)).ToArray());
+            var source = ((ISourceable)parser).GenerateSource(new SourceGenerationContext());
+            var body = string.Join("\n", source.Body);
+            Assert.Contains("MatchKeyword", body, StringComparison.Ordinal);
+            Assert.DoesNotContain("MatchLength", body, StringComparison.Ordinal);
+        }
+    }
 }

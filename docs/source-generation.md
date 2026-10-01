@@ -161,6 +161,15 @@ behavior; small, mixed, case-insensitive, and other unsupported choices keep the
 path. See [Keyword lookup investigation](keyword-lookups.md) for eligibility, benchmarks,
 and why this does not change choices into general longest-token matching.
 
+Compatible ordinal `Text`-only choices can also use packed prefix lookup. Unlike keyword
+recognition, this matches prefixes and retains the **first** successful alternative, not
+the longest text. Unicode, punctuation, duplicate spellings, and newlines are supported.
+Both specializations accept 8-256 nonempty literals of at most 64 characters each, with
+at most 4096 characters in the vocabulary, and require consistent whitespace behavior.
+Callbacks, mixed parser kinds, other comparisons, and choices outside those bounds retain
+the existing dispatch. Larger keyword recognizers separate length buckets into helpers
+to keep the length dispatcher small; helper inlining remains a JIT decision.
+
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
 allocation. The scanner, cursor, and context use the shared runtime implementations.

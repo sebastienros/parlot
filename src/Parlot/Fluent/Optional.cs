@@ -5,10 +5,10 @@ using System.Reflection;
 namespace Parlot.Fluent;
 
 /// <summary>
-/// Returns a list containing zero or one element.
+/// Returns an option containing a value when the inner parser matches.
 /// </summary>
 /// <remarks>
-/// This parser will always succeed. If the previous parser fails, it will return an empty list.
+/// This parser will always succeed. If the inner parser fails, it will return an option without a value.
 /// </remarks>
 public sealed class Optional<T> : Parser<Option<T>>, ISourceable
 {

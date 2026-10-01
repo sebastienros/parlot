@@ -1,5 +1,10 @@
 #if NET10_0_OR_GREATER
 using Parlot.Benchmarks;
+using Parlot.Benchmarks.FarkleParsers;
+using Parlot.Benchmarks.PidginParsers;
+using Parlot.Tests.Calc;
+using Parlot.Tests.Json;
+using System;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
 
@@ -9,6 +14,25 @@ public class BenchmarksTests
 {
     const decimal _expected1 = (decimal)3.5;
     const decimal _expected2 = (decimal)-64.5;
+
+    [Theory]
+    [InlineData("Language", "Hit")]
+    [InlineData("Language", "Miss")]
+    [InlineData("Language", "Mixed")]
+    [InlineData("Headers", "Hit")]
+    [InlineData("Headers", "Miss")]
+    [InlineData("Headers", "Mixed")]
+    [InlineData("SharedPrefix", "Hit")]
+    [InlineData("SharedPrefix", "Miss")]
+    [InlineData("SharedPrefix", "Mixed")]
+    public void TextChoiceGrammar(string vocabulary, string scenario)
+    {
+        var benchmark = new TextParserBenchmarks { Vocabulary = vocabulary, Scenario = scenario };
+        benchmark.Setup();
+        var expected = scenario switch { "Hit" => 64, "Mixed" => 16, _ => 0 };
+        Assert.Equal(expected, benchmark.GeneratedFirstCharacterLookup());
+        Assert.Equal(expected, benchmark.GeneratedPackedPrefixes());
+    }
 
     [Theory]
     [InlineData(8, "Valid")]
@@ -241,6 +265,149 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void ExpressionFarkle()
+    {
+        var benchmarks = new ExprBench();
+        benchmarks.Setup();
+
+        Assert.Equal(_expected1, benchmarks.FarkleSmall().Evaluate());
+        Assert.Equal(_expected2, benchmarks.FarkleBig().Evaluate());
+        Assert.Equal(26m, benchmarks.FarkleUnary().Evaluate());
+        AssertExpressionEqual(benchmarks.ParlotFluentSmall(), benchmarks.FarkleSmall());
+        AssertExpressionEqual(benchmarks.ParlotFluentBig(), benchmarks.FarkleBig());
+        AssertExpressionEqual(benchmarks.ParlotFluentUnary(), benchmarks.FarkleUnary());
+    }
+
+    [Theory]
+    [InlineData("1 + 2 * 3", 7)]
+    [InlineData("(1 + 2) * 3", 9)]
+    [InlineData("10 - 3 - 2", 5)]
+    [InlineData("8 / 2 / 2", 2)]
+    [InlineData("---2", -2)]
+    [InlineData(" \t2.5 * (4 - 1)\r\n", 7.5)]
+    [InlineData("-2.5e-2 + .5", 0.475)]
+    [InlineData("1.", 1)]
+    [InlineData("1-2*3", -5)]
+    [InlineData("8/-2+--6", 2)]
+    [InlineData("-(1+2)*-3", 9)]
+    [InlineData("12.5e+1 / 5", 25)]
+    public void FarkleExpressionGrammar(string input, double expected)
+    {
+        var result = FarkleExpressionParser.Parse(input);
+
+        Assert.Equal((decimal)expected, result.Evaluate());
+        AssertExpressionEqual(FluentParser.Expression.Parse(input), result);
+    }
+
+    [Fact]
+    public void FarkleExpressionPreservesDecimalPrecision()
+    {
+        var result = Assert.IsType<Number>(FarkleExpressionParser.Parse("0.1234567890123456789012345678"));
+
+        Assert.Equal(0.1234567890123456789012345678m, result.Value);
+    }
+
+    private static void AssertExpressionEqual(Expression expected, Expression actual)
+    {
+        Assert.Equal(expected.GetType(), actual.GetType());
+
+        switch (expected)
+        {
+            case Number number:
+                Assert.Equal(number.Value, Assert.IsType<Number>(actual).Value);
+                break;
+            case BinaryExpression binary:
+                var actualBinary = Assert.IsAssignableFrom<BinaryExpression>(actual);
+                AssertExpressionEqual(binary.Left, actualBinary.Left);
+                AssertExpressionEqual(binary.Right, actualBinary.Right);
+                break;
+            case UnaryExpression unary:
+                AssertExpressionEqual(unary.Inner, Assert.IsAssignableFrom<UnaryExpression>(actual).Inner);
+                break;
+            default:
+                Assert.Fail($"Unexpected expression type: {expected.GetType()}");
+                break;
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1 +")]
+    [InlineData("(1 + 2")]
+    [InlineData("1 2")]
+    [InlineData("1 + 2 trailing")]
+    public void FarkleExpressionRejectsInvalidInput(string input)
+    {
+        Assert.Throws<InvalidOperationException>(() => FarkleExpressionParser.Parse(input));
+    }
+
+    [Fact]
+    public void JsonFarkle()
+    {
+        var benchmarks = new JsonBench();
+        benchmarks.Setup();
+
+        Assert.Equal(benchmarks.BigJson_Parlot().ToString(), benchmarks.BigJson_Farkle().ToString());
+        Assert.Equal(benchmarks.LongJson_Parlot().ToString(), benchmarks.LongJson_Farkle().ToString());
+        Assert.Equal(benchmarks.DeepJson_Parlot().ToString(), benchmarks.DeepJson_Farkle().ToString());
+        Assert.Equal(benchmarks.WideJson_Parlot().ToString(), benchmarks.WideJson_Farkle().ToString());
+    }
+
+    [Fact]
+    public void FarkleJsonGrammar()
+    {
+        var result = Assert.IsType<JsonObject>(FarkleJsonParser.Parse(
+            " \r\n{ \"items\": [\"hello\", {}, [], {\"nested\": \"value\"}], \"empty\": \"\" }\t"));
+        var array = Assert.IsType<JsonArray>(result.Members["items"]);
+
+        Assert.Equal(4, array.Elements.Count);
+        Assert.Equal("hello", Assert.IsType<JsonString>(array.Elements[0]).Value);
+        Assert.Empty(Assert.IsType<JsonObject>(array.Elements[1]).Members);
+        Assert.Empty(Assert.IsType<JsonArray>(array.Elements[2]).Elements);
+        Assert.Equal("value", Assert.IsType<JsonString>(
+            Assert.IsType<JsonObject>(array.Elements[3]).Members["nested"]).Value);
+        Assert.Equal("", Assert.IsType<JsonString>(result.Members["empty"]).Value);
+    }
+
+    [Theory]
+    [InlineData("{}", 0)]
+    [InlineData("{\"key\":\"value\"}", 1)]
+    public void FarkleJsonBuildsIndependentObjects(string input, int count)
+    {
+        var first = Assert.IsType<JsonObject>(FarkleJsonParser.Parse(input));
+        var second = Assert.IsType<JsonObject>(FarkleJsonParser.Parse(input));
+        first.Members.Add("new", new JsonString("item"));
+
+        Assert.Equal(count, second.Members.Count);
+        Assert.False(second.Members.ContainsKey("new"));
+    }
+
+    [Theory]
+    [InlineData("\"hello\"", "hello")]
+    [InlineData("\"hello\\nworld\"", "hello\nworld")]
+    [InlineData("\"quote: \\\" slash: \\\\\"", "quote: \" slash: \\")]
+    [InlineData("\"\\u0041\"", "A")]
+    public void FarkleJsonStrings(string input, string expected)
+    {
+        Assert.Equal(expected, Assert.IsType<JsonString>(FarkleJsonParser.Parse(input)).Value);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("[\"value\",]")]
+    [InlineData("{\"key\" \"value\"}")]
+    [InlineData("{\"key\":}")]
+    [InlineData("\"unterminated")]
+    [InlineData("[] trailing")]
+    [InlineData("[,]")]
+    [InlineData("[,\"value\"]")]
+    [InlineData("{\"key\":\"value\",}")]
+    public void FarkleJsonRejectsInvalidInput(string input)
+    {
+        Assert.Throws<InvalidOperationException>(() => FarkleJsonParser.Parse(input));
+    }
+
+    [Fact]
     public void BigJson()
     {
         var benchmarks = new JsonBench();
@@ -328,6 +495,54 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void RegexLibraryComparisons()
+    {
+        var benchmarks = new RegexBenchmarks();
+        benchmarks.Setup();
+
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.RegexEmail());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.RegexEmailCompiled());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.RegexEmailGenerated());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.ParlotEmail());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.ParlotEmailGenerated());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.PidginEmail());
+        Assert.Equal(RegexBenchmarks.Email, benchmarks.FarkleEmail());
+    }
+
+    [Theory]
+    [InlineData("a@b.c")]
+    [InlineData("user.name+tag@sub-domain.example.com")]
+    [InlineData("User9+tag-1@Domain-2.Example9")]
+    [InlineData("\u00e9@\u4e2d.\u03b1")]
+    [InlineData("\u0661@\u0662.\u0663")]
+    public void EmailRecognizersMatchParlot(string input)
+    {
+        Assert.Equal(input, RegexBenchmarks.EmailRegex.Match(input).Value);
+        Assert.Equal(input, EmailParser.Parser.Parse(input).ToString());
+        Assert.True(EmailParser.TryParseGenerated(input, out var generated));
+        Assert.Equal(input, generated);
+        Assert.Same(input, PidginEmailParser.Parse(input));
+        Assert.Same(input, FarkleEmailParser.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("user.example.com")]
+    [InlineData("user@")]
+    [InlineData("@domain.com")]
+    [InlineData("user@domain")]
+    [InlineData("user@.com")]
+    [InlineData("user@domain.")]
+    [InlineData("user name@domain.com")]
+    [InlineData(" user@domain.com")]
+    [InlineData("user@domain.com ")]
+    public void EmailRecognizersRejectInvalidInput(string input)
+    {
+        Assert.Throws<Pidgin.ParseException<char>>(() => PidginEmailParser.Parse(input));
+        Assert.Throws<InvalidOperationException>(() => FarkleEmailParser.Parse(input));
+    }
+
+    [Fact]
     public void SimpleGeneratedParsers()
     {
         var benchmarks = new SimpleParsersBenchmarks();
@@ -345,11 +560,14 @@ public class BenchmarksTests
     [Fact]
     public void GeneratedCollections()
     {
-        foreach (var combinator in new[] { "ZeroOrMany", "OneOrMany", "Separated" })
+        foreach (var combinator in new[] { "ZeroOrMany", "OneOrMany", "Separated", "SeparatedOptions" })
         {
-            var benchmarks = new CollectionBenchmarks { Count = 4, Combinator = combinator };
-            benchmarks.Setup();
-            Assert.True(benchmarks.Generated());
+            foreach (var count in new[] { 0, 1, 4, 5, 32 })
+            {
+                var benchmarks = new CollectionBenchmarks { Count = count, Combinator = combinator };
+                benchmarks.Setup();
+                Assert.Equal(count > 0 || combinator == "ZeroOrMany", benchmarks.Generated());
+            }
         }
     }
 

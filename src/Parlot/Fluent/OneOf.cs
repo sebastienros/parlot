@@ -285,6 +285,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             return keywordResult;
         }
 
+        var textResult = TextChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
+        if (textResult != null)
+        {
+            return textResult;
+        }
+
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
         var cursorName = context.CursorName;
