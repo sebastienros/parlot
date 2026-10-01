@@ -86,6 +86,14 @@ concern. `Deferred<T>` closes recursive grammars.
   advanced it, but not when a sub-parser failed (that one already reset itself);
 - write a test that asserts the cursor position is restored on failure.
 
+**Streaming** (`StreamingDriver.cs`, `Parser.Streaming.cs`) reuses that same synchronous `Parse`: an async
+driver reads a `TextReader`/`Stream` into a string window, parses it with a non-final `Cursor`, and retries on
+a larger window when `Cursor.HitEnd` is set. Invariant: a result that depended on text past the window end sets
+`HitEnd`. Reaching the end through any `Advance*` sets it centrally; a parser (or `ISourceable` emitter) that
+fails or stops by *looking* at the end of `Cursor.Span`/`Buffer` without advancing must call `MarkHitEnd()`.
+Keep these marks on cold end-of-buffer paths only. `test/Parlot.Tests/StreamingTests.cs` is a differential
+harness (1-char reads vs `Parse(string)`); add grammars there when touching scanning. See `docs/streaming.md`.
+
 ### The optimization surface — three opt-in interfaces
 
 Most of Parlot's speed comes from parsers advertising capabilities rather than from the `Parse` bodies.

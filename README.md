@@ -128,7 +128,21 @@ static FluentParser()
 - [Existing parsers and usage examples](docs/parsers.md)
 - [Best practices for custom parsers](docs/writing.md)
 - [Source generation guide](docs/source-generation.md)
+- [Parsing streams](docs/streaming.md)
 - [Security guidance](docs/security.md)
+
+## Parsing streams
+
+`TryParseAsync`, `ParseAsync` and `ParseManyAsync` parse a `TextReader` or a `Stream` with the same parsers,
+reading only as much text as needed. `ParseManyAsync` parses successive values, such as NDJSON records,
+with memory bounded by the largest value:
+
+```csharp
+await using var input = File.OpenRead("records.ndjson");
+var count = await record.ParseManyAsync(input, '\n', item => Console.WriteLine(item));
+```
+
+See [Parsing streams](docs/streaming.md).
 
 ## Source-generated parsers
 

@@ -16,7 +16,7 @@ public sealed class StreamParseOptions
     /// </summary>
     /// <remarks>
     /// When a parse depends on text that is not yet read, the buffered text grows by at least this amount,
-    /// and at least doubles, before the parse is retried.
+    /// and at least doubles (quadruples for a single value), before the parse is retried.
     /// Reads continue until that amount is available, so interactive sources should use a small value.
     /// </remarks>
     public int BufferSize { get; set; } = 4096;

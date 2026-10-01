@@ -68,6 +68,15 @@ In this case it is never necessary to invoke `ResetPosition` since as soon as a 
 
 > ✔️ DO: Create a unit test to ensure that the parser resets the position when it's failing.
 
+## Reading the text directly
+
+When parsing a stream, the parser runs on a window of the text which more text may follow (see [Parsing streams](streaming.md)).
+The `Cursor` methods record when a result depends on that text. A parser which reads `Cursor.Span` or `Cursor.Buffer` directly,
+and fails or stops because the text is too short without advancing to its end, must call `Cursor.MarkHitEnd()`, or use
+`Cursor.TryGetSpan(minLength, out span)`. Both do nothing when parsing a `string`.
+
+> ✔️ DO: Test the parser with `TryParseAsync` over a reader returning one character at a time, and compare with `Parse(string)`.
+
 ## Lookup tables
 
 The `OneOf` parser, which can also be created using `a.Or(b)`, is able to create a lookup table to optimize parsing.
