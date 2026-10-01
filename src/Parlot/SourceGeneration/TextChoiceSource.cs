@@ -24,7 +24,10 @@ internal static class TextChoiceSource
             body.Add($"{context.ParseContextName}.SkipWhiteSpace();");
         }
 
-        body.Add($"var text = MatchText({cursor}.Span);");
+        // A shorter remainder could still be the prefix of a text, or of a longer alternative.
+        body.Add($"var textSpan = {cursor}.Span;");
+        body.Add($"if (textSpan.Length < {texts.Max(static text => text.Length)}) {cursor}.MarkHitEnd();");
+        body.Add("var text = MatchText(textSpan);");
         body.Add("if (text != null)");
         body.Add("{");
         var newLineGroups = texts.Distinct(StringComparer.Ordinal)
