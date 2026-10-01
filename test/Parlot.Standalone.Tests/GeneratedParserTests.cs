@@ -9,6 +9,76 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Fact]
+    public void Text_Choices_Preserve_Order_Backtracking_Capture_And_Custom_Whitespace()
+    {
+        Assert.True(Grammar.TryParseTextChoice("if12", out var value));
+        Assert.Same("if1", value);
+        Assert.True(Grammar.TryParseTextChoice("ifx", out value));
+        Assert.Same("if", value);
+        Assert.True(Grammar.TryParseTextChoice("Content-Unknown", out value));
+        Assert.Same("Content", value);
+        Assert.True(Grammar.TryParseTextChoice("Content-Encoding-tail", out value));
+        Assert.Same("Content-Encoding", value);
+        Assert.True(Grammar.TryParseTextChoiceFallback(" \r\nunknown!", out value));
+        Assert.Equal(" \r\nunknown!", value);
+        Assert.True(Grammar.TryParseTextChoiceCapture("! \r\nline\r\nend!", out value));
+        Assert.Equal(" \r\nline\r\nend", value);
+        Assert.True(Grammar.TryParseTextChoiceCustomWhitespace("___Content-Type!", out value));
+        Assert.Equal("Content-Type", value);
+        Assert.False(Grammar.TryParseTextChoiceCustomWhitespace(" Content-Type!", out _));
+        Assert.True(Grammar.TryParseTextChoiceDiscarded(" \r\nif1!", out var discarded));
+        Assert.Equal('!', discarded);
+        Assert.False(Grammar.TryParseTextChoiceDiscarded(" \r\nif12!", out _));
+        Assert.False(Grammar.TryParseTextChoice(new string('a', 100_000), out _));
+        Assert.True(Grammar.TryParseTextChoicePosition(" \r\nline\r\nend!", out var position));
+        Assert.Equal((12, 4, 4), position);
+    }
+
+    [Fact]
+    public void Text_Choices_Agree_With_An_Ordered_Unicode_Prefix_Reference()
+    {
+        string[] words = ["if1", "if", "if12", "Content-Encoding", "Content-Type", "Content", "\u00e9\0x", "\ud800\udc00", "line\r\nend", "line\r\n", "if"];
+        foreach (var word in words)
+        {
+            Check(word);
+            Check(word + "tail");
+            for (var offset = 0; offset < word.Length; offset++)
+            {
+                Check(word.Substring(0, offset));
+                for (var c = 0; c < 256; c++)
+                {
+                    Check(word.Substring(0, offset) + (char)c + word.Substring(offset + 1));
+                }
+
+                foreach (var c in new[] { '\u017f', '\u212a', '\ud800', '\udc00', '\uffff' })
+                {
+                    Check(word.Substring(0, offset) + c + word.Substring(offset + 1));
+                }
+            }
+        }
+
+        var random = new Random(217);
+        for (var i = 0; i < 2000; i++)
+        {
+            var input = new char[random.Next(0, 32)];
+            for (var j = 0; j < input.Length; j++)
+            {
+                input[j] = (char)random.Next(0, 65536);
+            }
+
+            Check(new string(input));
+        }
+
+        void Check(string input)
+        {
+            input = " \r\n" + input;
+            var expected = words.FirstOrDefault(word => input.TrimStart().StartsWith(word, StringComparison.Ordinal));
+            Assert.Equal(expected != null, Grammar.TryParseTextChoice(input, out var value));
+            Assert.Equal(expected, value);
+        }
+    }
+
+    [Fact]
     public void ZeroOrOne_Returns_Zero_Or_One_Items()
     {
         Assert.True(Grammar.TryParseZeroOrOne("a", out var matched));

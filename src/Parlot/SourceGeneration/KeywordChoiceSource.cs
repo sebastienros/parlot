@@ -48,7 +48,7 @@ internal static class KeywordChoiceSource
         body.Add("static string MatchKeyword(System.ReadOnlySpan<char> input)");
         body.Add("{");
         body.Add(KnownStringLookup.Generate(keywords, bytes: false, ignoreCase: false,
-            matchExpression: index => LiteralHelper.StringToLiteral(keywords[index]), failureExpression: "null"));
+            matchExpression: index => LiteralHelper.StringToLiteral(keywords[index]), failureExpression: "null", resultType: "string"));
         body.Add("}");
         return result;
 

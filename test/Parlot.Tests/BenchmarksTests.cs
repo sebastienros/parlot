@@ -16,6 +16,25 @@ public class BenchmarksTests
     const decimal _expected2 = (decimal)-64.5;
 
     [Theory]
+    [InlineData("Language", "Hit")]
+    [InlineData("Language", "Miss")]
+    [InlineData("Language", "Mixed")]
+    [InlineData("Headers", "Hit")]
+    [InlineData("Headers", "Miss")]
+    [InlineData("Headers", "Mixed")]
+    [InlineData("SharedPrefix", "Hit")]
+    [InlineData("SharedPrefix", "Miss")]
+    [InlineData("SharedPrefix", "Mixed")]
+    public void TextChoiceGrammar(string vocabulary, string scenario)
+    {
+        var benchmark = new TextParserBenchmarks { Vocabulary = vocabulary, Scenario = scenario };
+        benchmark.Setup();
+        var expected = scenario switch { "Hit" => 64, "Mixed" => 16, _ => 0 };
+        Assert.Equal(expected, benchmark.GeneratedFirstCharacterLookup());
+        Assert.Equal(expected, benchmark.GeneratedPackedPrefixes());
+    }
+
+    [Theory]
     [InlineData(8, "Valid")]
     [InlineData(128, "Valid")]
     [InlineData(8, "UnknownType")]

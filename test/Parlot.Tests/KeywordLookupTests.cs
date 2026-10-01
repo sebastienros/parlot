@@ -31,6 +31,7 @@ public class KeywordLookupTests
 
         Assert.Equal(0, recognizers.Tree(""));
         Assert.Equal(-1, recognizers.Tree("ifx"));
+        Assert.Equal("", recognizers.Prefixes("anything"));
     }
 
     [Theory]
@@ -42,10 +43,12 @@ public class KeywordLookupTests
     [InlineData("Headers", true)]
     [InlineData("SharedPrefix", false)]
     [InlineData("SharedPrefix", true)]
+    [InlineData("Large", false)]
+    [InlineData("Large", true)]
     public void ExperimentalRecognizersAgreeWithReference(string vocabulary, bool ignoreCase)
     {
         var words = KeywordLookupBenchmarks.Words(vocabulary);
-        var (tree, chain, byteTree, byteChain, narrow, hash) = KeywordLookupBenchmarks.Compile(words, ignoreCase);
+        var (tree, chain, byteTree, byteChain, narrow, hash, split, spanSwitch, prefixes) = KeywordLookupBenchmarks.Compile(words, ignoreCase);
         var bigEndian = KeywordLookupBenchmarks.Compile(words, ignoreCase, simulateBigEndian: true);
         foreach (var word in words)
         {
@@ -93,16 +96,23 @@ public class KeywordLookupTests
             Assert.Equal(expected, tree(input));
             Assert.Equal(expected, narrow(input));
             Assert.Equal(expected, hash(input));
+            Assert.Equal(expected, split(input));
+            var prefix = words.FirstOrDefault(word => input.StartsWith(word, StringComparison.Ordinal));
+            Assert.Equal(prefix, prefixes(input));
+            Assert.Equal(prefix, bigEndian.Prefixes(input));
             Assert.Equal(expected, bigEndian.Tree(input));
             Assert.Equal(expected, bigEndian.Narrow(input));
+            Assert.Equal(expected, bigEndian.Split(input));
             // OrdinalIgnoreCase is deliberately not the reference for the ASCII-only experiment.
             if (input.All(static c => c < 128))
             {
                 Assert.Equal(expected, chain(input));
+                Assert.Equal(expected, spanSwitch(input));
                 Assert.Equal(expected, byteTree(Encoding.ASCII.GetBytes(input)));
                 Assert.Equal(expected, byteChain(Encoding.ASCII.GetBytes(input)));
                 Assert.Equal(expected, bigEndian.ByteTree(Encoding.ASCII.GetBytes(input)));
             }
+
         }
 
         int Reference(string input)
@@ -143,6 +153,28 @@ public class KeywordLookupTests
 
             return true;
         }
+    }
+    [Fact]
+    public void PackedPrefixesPreserveOrderUnicodeAndEveryCodeUnit()
+    {
+        string[] words = ["if1", "if", "if12", "Content-Encoding", "Content-Type", "Content", "\u00e9\0x", "\ud800\udc00", "line\r\nend"];
+        var recognizer = KeywordLookupBenchmarks.CompilePrefixes(words);
+        foreach (var word in words)
+        {
+            Check(word);
+            Check(word + "tail");
+            for (var offset = 0; offset < word.Length; offset++)
+            {
+                Check(word[..offset]);
+                foreach (var c in new[] { '\0', '!', '\u00e9', '\u017f', '\u212a', '\ud800', '\udc00', '\uffff' })
+                {
+                    Check(word[..offset] + c + word[(offset + 1)..]);
+                }
+            }
+        }
+
+        void Check(string input) => Assert.Equal(
+            words.FirstOrDefault(word => input.StartsWith(word, StringComparison.Ordinal)), recognizer(input));
     }
 }
 #endif

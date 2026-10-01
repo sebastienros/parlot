@@ -31,6 +31,12 @@ public static partial class Grammar
     public static partial bool TryParseKeywordFallback(string text, out string value);
     public static partial bool TryParseKeywordCapture(string text, out string value);
     public static partial bool TryParseKeywordCustomWhitespace(string text, out string value);
+    public static partial bool TryParseTextChoice(string text, out string value);
+    public static partial bool TryParseTextChoiceFallback(string text, out string value);
+    public static partial bool TryParseTextChoiceCapture(string text, out string value);
+    public static partial bool TryParseTextChoiceCustomWhitespace(string text, out string value);
+    public static partial bool TryParseTextChoiceDiscarded(string text, out char value);
+    public static partial bool TryParseTextChoicePosition(string text, out (int Offset, int Line, int Column) value);
 }
 
 public sealed class CancellationOptions

@@ -50,6 +50,8 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
     public string Text { get; }
 
+    internal StringComparison Comparison => _comparisonType;
+
     public bool CanSeek { get; }
 
     public char[] ExpectedChars { get; } = [];
@@ -170,7 +172,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
 public override string ToString() => $"Text(\"{Text}\")";
 
-    private static int CountNewLines(string value)
+    internal static int CountNewLines(string value)
     {
         var count = 0;
 
@@ -185,7 +187,7 @@ public override string ToString() => $"Text(\"{Text}\")";
         return count;
     }
 
-    private static int TrailingSegmentLength(string value)
+    internal static int TrailingSegmentLength(string value)
     {
         var lastNewLine = value.LastIndexOf('\n');
 

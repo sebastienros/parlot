@@ -17,6 +17,7 @@ public class KeywordLookupBenchmarks
 {
     public delegate int CharMatcher(ReadOnlySpan<char> input);
     public delegate int ByteMatcher(ReadOnlySpan<byte> input);
+    public delegate string TextMatcher(ReadOnlySpan<char> input);
 
     private string[] _inputs;
     private byte[][] _bytes;
@@ -24,12 +25,14 @@ public class KeywordLookupBenchmarks
     private CharMatcher _chain;
     private CharMatcher _narrow;
     private CharMatcher _hash;
+    private CharMatcher _split;
+    private CharMatcher _spanSwitch;
     private ByteMatcher _byteTree;
     private ByteMatcher _byteChain;
     private Dictionary<string, int> _dictionary;
     private FrozenDictionary<string, int> _frozen;
 
-    [Params("Small", "Language", "SharedPrefix", "Headers")]
+    [Params("Small", "Language", "SharedPrefix", "Headers", "Large")]
     public string Vocabulary { get; set; }
 
     [Params(false, true)]
@@ -42,7 +45,8 @@ public class KeywordLookupBenchmarks
         var comparer = IgnoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         _dictionary = words.Select((word, index) => (word, index)).ToDictionary(static item => item.word, static item => item.index, comparer);
         _frozen = _dictionary.ToFrozenDictionary(comparer);
-        (_tree, _chain, _byteTree, _byteChain, _narrow, _hash) = Compile(words, IgnoreCase);
+        var recognizers = Compile(words, IgnoreCase);
+        (_tree, _chain, _byteTree, _byteChain, _narrow, _hash, _split, _spanSwitch, _) = recognizers;
         _inputs = Enumerable.Range(0, 64).Select(index =>
         {
             var word = words[(index * 17 + index / 4) % words.Length];
@@ -64,6 +68,7 @@ public class KeywordLookupBenchmarks
         {
             var expected = _dictionary.TryGetValue(_inputs[i], out var index) ? index : -1;
             if (_tree(_inputs[i]) != expected || _chain(_inputs[i]) != expected || _narrow(_inputs[i]) != expected || _hash(_inputs[i]) != expected
+                || _split(_inputs[i]) != expected || _spanSwitch(_inputs[i]) != expected
                 || _byteTree(_bytes[i]) != expected || _byteChain(_bytes[i]) != expected)
             {
                 throw new InvalidOperationException($"Incorrect recognition of '{_inputs[i]}'.");
@@ -102,6 +107,30 @@ public class KeywordLookupBenchmarks
         foreach (var input in _inputs)
         {
             sum += _narrow(input);
+        }
+
+        return sum;
+    }
+
+    [Benchmark(OperationsPerInvoke = 64)]
+    public int CharLengthHelpers()
+    {
+        var sum = 0;
+        foreach (var input in _inputs)
+        {
+            sum += _split(input);
+        }
+
+        return sum;
+    }
+
+    [Benchmark(OperationsPerInvoke = 64)]
+    public int CharSpanSwitch()
+    {
+        var sum = 0;
+        foreach (var input in _inputs)
+        {
+            sum += _spanSwitch(input);
         }
 
         return sum;
@@ -185,10 +214,13 @@ public class KeywordLookupBenchmarks
             "Host", "User-Agent", "Accept", "Accept-Encoding", "Accept-Language", "Authorization",
             "Cache-Control", "Connection", "Cookie", "Date", "ETag", "Expires", "Last-Modified", "Location",
             "Origin", "Referer", "Server", "Set-Cookie", "Transfer-Encoding", "Vary", "Via", "Warning"],
+        "Large" => Enumerable.Range(0, 200).Select(static index =>
+            "keyword" + new string('x', index % 20) + (char)('a' + index / 26) + (char)('a' + index % 26)).ToArray(),
         _ => throw new ArgumentOutOfRangeException(nameof(vocabulary)),
     };
 
-    public static (CharMatcher Tree, CharMatcher Chain, ByteMatcher ByteTree, ByteMatcher ByteChain, CharMatcher Narrow, CharMatcher Hash) Compile(
+    public static (CharMatcher Tree, CharMatcher Chain, ByteMatcher ByteTree, ByteMatcher ByteChain, CharMatcher Narrow,
+        CharMatcher Hash, CharMatcher Split, CharMatcher SpanSwitch, TextMatcher Prefixes) Compile(
         string[] words, bool ignoreCase, bool simulateBigEndian = false)
     {
         var source = new StringBuilder("using System; public static class Recognizer {");
@@ -203,6 +235,10 @@ public class KeywordLookupBenchmarks
         source.Append("public static int ByteChain(ReadOnlySpan<byte> input) {")
             .Append(ComparisonChain(words, bytes: true, ignoreCase)).Append('}');
         source.Append("public static int Hash(ReadOnlySpan<char> input) {").Append(HashSource(words, ignoreCase)).Append('}');
+        source.Append("public static int Split(ReadOnlySpan<char> input) {").Append(TreeSource(bytes: false, split: true)).Append('}');
+        source.Append("public static int SpanSwitch(ReadOnlySpan<char> input) {").Append(SpanSwitchSource(words, ignoreCase)).Append('}');
+        source.Append("public static string Prefixes(ReadOnlySpan<char> text) {")
+            .Append(AdjustEndianness(KnownStringLookup.GeneratePrefixes(words), bytes: false)).Append('}');
         source.Append("""
             private static ushort BigByte16(ReadOnlySpan<byte> input) =>
                 System.Buffers.Binary.BinaryPrimitives.ReadUInt16BigEndian(input);
@@ -222,29 +258,25 @@ public class KeywordLookupBenchmarks
             }
             }
             """);
-        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")).Split(Path.PathSeparator)
-            .Select(static path => MetadataReference.CreateFromFile(path));
-        var compilation = CSharpCompilation.Create("KeywordRecognizer" + Guid.NewGuid().ToString("N"),
-            [CSharpSyntaxTree.ParseText(source.ToString())], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, checkOverflow: true));
-        using var stream = new MemoryStream();
-        var emit = compilation.Emit(stream);
-        if (!emit.Success)
-        {
-            throw new InvalidOperationException(string.Join(Environment.NewLine, emit.Diagnostics));
-        }
-
-        var type = Assembly.Load(stream.ToArray()).GetType("Recognizer", throwOnError: true);
+        var type = CompileRecognizer(source.ToString());
         return (type.GetMethod("Tree").CreateDelegate<CharMatcher>(),
             type.GetMethod("Chain").CreateDelegate<CharMatcher>(),
             type.GetMethod("ByteTree").CreateDelegate<ByteMatcher>(),
             type.GetMethod("ByteChain").CreateDelegate<ByteMatcher>(),
             type.GetMethod("Narrow").CreateDelegate<CharMatcher>(),
-            type.GetMethod("Hash").CreateDelegate<CharMatcher>());
+            type.GetMethod("Hash").CreateDelegate<CharMatcher>(),
+            type.GetMethod("Split").CreateDelegate<CharMatcher>(),
+            type.GetMethod("SpanSwitch").CreateDelegate<CharMatcher>(),
+            type.GetMethod("Prefixes").CreateDelegate<TextMatcher>());
 
-        string TreeSource(bool bytes, bool wide = true)
+        string TreeSource(bool bytes, bool? wide = null, bool split = false)
         {
-            var tree = KnownStringLookup.Generate(words, bytes, ignoreCase, wide);
+            var tree = KnownStringLookup.Generate(words, bytes, ignoreCase, wide, splitByLength: split);
+            return AdjustEndianness(tree, bytes);
+        }
+
+        string AdjustEndianness(string tree, bool bytes)
+        {
             if (!simulateBigEndian)
             {
                 return tree;
@@ -255,6 +287,68 @@ public class KeywordLookupBenchmarks
                 .Replace("System.Runtime.InteropServices.MemoryMarshal.Read<uint>", bytes ? "BigByte32" : "BigChar32", StringComparison.Ordinal)
                 .Replace("System.Runtime.InteropServices.MemoryMarshal.Read<ulong>", bytes ? "BigByte64" : "BigChar64", StringComparison.Ordinal);
         }
+    }
+
+    public static TextMatcher CompilePrefixes(string[] words) =>
+        CompileRecognizer("using System; public static class Recognizer { public static string Prefixes(ReadOnlySpan<char> text) {"
+            + KnownStringLookup.GeneratePrefixes(words) + "}}").GetMethod("Prefixes").CreateDelegate<TextMatcher>();
+
+    private static Type CompileRecognizer(string source)
+    {
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")).Split(Path.PathSeparator)
+            .Select(static path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create("KeywordRecognizer" + Guid.NewGuid().ToString("N"),
+            [CSharpSyntaxTree.ParseText(source)], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, checkOverflow: true));
+        using var stream = new MemoryStream();
+        var emit = compilation.Emit(stream);
+        if (!emit.Success)
+        {
+            throw new InvalidOperationException(string.Join(Environment.NewLine, emit.Diagnostics));
+        }
+
+        return Assembly.Load(stream.ToArray()).GetType("Recognizer", throwOnError: true);
+    }
+
+    private static string SpanSwitchSource(string[] words, bool ignoreCase)
+    {
+        if (ignoreCase)
+        {
+            return ComparisonChain(words, bytes: false, ignoreCase: true);
+        }
+
+        var output = new StringBuilder("switch (input.Length) {");
+        var helpers = new StringBuilder();
+        var inlineCandidates = 0;
+        foreach (var group in words.Select((text, index) => (text, index))
+            .GroupBy(static item => item.text, StringComparer.Ordinal).Select(static group => group.First())
+            .GroupBy(static item => item.text.Length))
+        {
+            var split = group.Count() > 4 || inlineCandidates + group.Count() > 32;
+            output.AppendLine($"case {group.Key}:");
+            var target = output;
+            if (split)
+            {
+                output.AppendLine($"return MatchLength{group.Key}(input);");
+                target = helpers;
+                target.AppendLine($"static int MatchLength{group.Key}(ReadOnlySpan<char> input) {{");
+            }
+            else
+            {
+                inlineCandidates += group.Count();
+            }
+
+            target.AppendLine("switch (input) {");
+            foreach (var (text, index) in group)
+            {
+                target.AppendLine($"case {Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true)}: return {index};");
+            }
+
+            target.AppendLine("}");
+            target.AppendLine(split ? "return -1; }" : "break;");
+        }
+
+        return output.AppendLine("} return -1;").Append(helpers).ToString();
     }
 
     private static string HashSource(string[] words, bool ignoreCase)
