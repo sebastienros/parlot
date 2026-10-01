@@ -68,6 +68,12 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
 
         if (size < _minSize)
         {
+            if (size == span.Length)
+            {
+                // More matching chars could follow the end of the buffer
+                cursor.MarkHitEnd();
+            }
+
             context.ExitParser(this);
             return false;
         }
@@ -242,6 +248,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         // Common code for both paths
         result.Body.Add($"if ({sizeVar} < {_minSize})");
         result.Body.Add("{");
+        result.Body.Add($"    if ({sizeVar} == {spanVar}.Length) {cursorName}.MarkHitEnd();");
         result.Body.Add($"    {result.ValueVariable} = default;");
         result.Body.Add("    return false;");
         result.Body.Add("}");

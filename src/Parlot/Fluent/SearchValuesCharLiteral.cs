@@ -50,31 +50,23 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
         var span = context.Scanner.Cursor.Span;
 
-        if (_minSize > span.Length)
-        {
-            return false;
-        }
-
         // First char not matching the searched values
         var index = _negate ? span.IndexOfAny(_searchValues) : span.IndexOfAnyExcept(_searchValues);
 
-        var size = 0;
+        // If index == -1 the whole input is a match
+        var size = index == -1 ? span.Length : index;
 
-        if (index != -1)
+        // Too small?
+        if (size < _minSize)
         {
-            // Too small?
-            if (index < _minSize)
+            if (index == -1)
             {
-                context.ExitParser(this);
-                return false;
+                // More matching chars could follow the end of the buffer
+                context.Scanner.Cursor.MarkHitEnd();
             }
 
-            size = index;
-        }
-        else
-        {
-            // If index == -1 the whole input is a match
-            size = span.Length;
+            context.ExitParser(this);
+            return false;
         }
 
         // Too large? Take only the request size
@@ -188,6 +180,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         // Common code for both paths
         result.Body.Add($"if ({sizeVar} < {_minSize})");
         result.Body.Add("{");
+        result.Body.Add($"    if ({sizeVar} == {spanVar}.Length) {cursorName}.MarkHitEnd();");
         result.Body.Add($"    {result.ValueVariable} = default;");
         result.Body.Add("    return false;");
         result.Body.Add("}");
