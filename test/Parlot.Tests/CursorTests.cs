@@ -16,6 +16,35 @@ public class CursorTests
     }
 
     [Fact]
+    public void ShouldStartAtGivenPosition()
+    {
+        var c = new Cursor("ab\ncd", new TextPosition(3, 7, 1));
+
+        Assert.Equal(3, c.Offset);
+        Assert.Equal('c', c.Current);
+        Assert.False(c.Eof);
+        Assert.Equal(7, c.Position.Line);
+        Assert.Equal(1, c.Position.Column);
+
+        c.Advance();
+
+        Assert.Equal(new TextPosition(4, 7, 2).ToString(), c.Position.ToString());
+        Assert.Equal(4, c.Position.Offset);
+        Assert.Equal('d', c.Current);
+    }
+
+    [Fact]
+    public void ShouldStartAtEndPosition()
+    {
+        var c = new Cursor("ab", new TextPosition(2, 1, 3));
+
+        Assert.True(c.Eof);
+        Assert.Equal(Cursor.NullChar, c.Current);
+        Assert.Equal(2, c.Offset);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Cursor("ab", new TextPosition(3, 1, 1)));
+    }
+
+    [Fact]
     public void ShouldMatchEmptyString()
     {
         var c = new Cursor("Lorem ipsum", TextPosition.Start);

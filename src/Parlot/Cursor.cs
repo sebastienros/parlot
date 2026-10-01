@@ -11,15 +11,26 @@ public class Cursor
     private int _line;
     private int _column;
 
+    /// <summary>
+    /// Creates a cursor over <paramref name="buffer"/> starting at <paramref name="position"/>.
+    /// </summary>
+    /// <param name="buffer">The text to read.</param>
+    /// <param name="position">The initial position. Its offset indexes into <paramref name="buffer"/>, its line and column are reported as-is.</param>
     public Cursor(string buffer, in TextPosition position)
     {
-        Buffer = buffer;
+        Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
         _textLength = Buffer.Length;
-        Eof = _textLength == 0;
-        Current = _textLength == 0 ? NullChar : Buffer[position.Offset];
-        Offset = 0;
-        _line = 1;
-        _column = 1;
+
+        if ((uint)position.Offset > (uint)_textLength)
+        {
+            throw new ArgumentOutOfRangeException(nameof(position));
+        }
+
+        Offset = position.Offset;
+        _line = position.Line;
+        _column = position.Column;
+        Eof = Offset == _textLength;
+        Current = Eof ? NullChar : Buffer[Offset];
     }
 
     public Cursor(string buffer) : this(buffer, TextPosition.Start)
