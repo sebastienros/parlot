@@ -210,6 +210,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             context.SkipWhiteSpace();
         }
 
+        var alternatives = context.CollectDiagnostics ? context.BeginAlternatives() : default;
+
         if (_map != null)
         {
             // Each lookup entry also contains the non-seekable parsers
@@ -226,6 +228,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                         context.ExitParser(this);
                         return true;
                     }
+
+                    if (context.CollectDiagnostics)
+                    {
+                        context.RejectAlternative(ref alternatives);
+                    }
                 }
             }
         }
@@ -241,7 +248,17 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                     context.ExitParser(this);
                     return true;
                 }
+
+                if (context.CollectDiagnostics)
+                {
+                    context.RejectAlternative(ref alternatives);
+                }
             }
+        }
+
+        if (context.CollectDiagnostics)
+        {
+            context.RestoreAlternatives(in alternatives);
         }
 
         // We only need to reset the position if we are skipping whitespaces
@@ -440,6 +457,23 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             return;
         }
 
+        var alternativeName = $"alternatives{context.NextNumber()}";
+        outerResult.Body.Add($"{indent}if ({contextVariableName}.CollectDiagnostics)");
+        outerResult.Body.Add($"{indent}{{");
+        outerResult.Body.Add($"{indent}    var {alternativeName} = {contextVariableName}.BeginAlternatives();");
+        for (var i = 0; i < parsers.Count; i++)
+        {
+            var helperName = i == 0 ? firstHelper : getHelper(parsers[i]);
+            outerResult.Body.Add($"{indent}    if (!{successVar})");
+            outerResult.Body.Add($"{indent}    {{");
+            outerResult.Body.Add($"{indent}        {successVar} = {helperName}({contextVariableName}, out {outTarget});");
+            outerResult.Body.Add($"{indent}        if (!{successVar}) {contextVariableName}.RejectAlternative(ref {alternativeName});");
+            outerResult.Body.Add($"{indent}    }}");
+        }
+        outerResult.Body.Add($"{indent}    if (!{successVar}) {contextVariableName}.RestoreAlternatives(in {alternativeName});");
+        outerResult.Body.Add($"{indent}}}");
+        outerResult.Body.Add($"{indent}else");
+        outerResult.Body.Add($"{indent}{{");
         outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget})");
 
         for (var i = 1; i < parsers.Count; i++)
@@ -448,6 +482,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             var terminator = i == parsers.Count - 1 ? ";" : string.Empty;
             outerResult.Body.Add($"{indent}    || {helperName}({contextVariableName}, out {outTarget}){terminator}");
         }
+        outerResult.Body.Add($"{indent}}}");
     }
 
     private static string ToCharLiteral(char c)

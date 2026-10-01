@@ -136,7 +136,8 @@ The application-facing method:
 - takes the input `string` first;
 - takes the factory's configuration parameters next, in the same type and order;
 - may take one additional by-value `CancellationToken` after configuration and before the result;
-- takes `out T value` last, where `T` is the factory parser's result type.
+- takes `out T value` last, where `T` is the factory parser's result type, unless the
+  opt-in diagnostics overload adds its diagnostics-list output afterward (see below).
 
 Parameter names do not need to match. The entry point may be public, internal, or private as appropriate.
 Results and configuration values must be BCL or application-owned types. Do not expose source-generation
@@ -177,11 +178,37 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - An ordinary mismatch returns `false` and assigns `default` to `value`.
 - `Error` and `ElseError` throw `ParseException` internally; the direct entry point converts that exception
   to `false` and a default result.
+- An explicitly declared diagnostics overload instead collects grammar errors and warnings and returns
+  them, including when a failed token was absorbed by an optional or repetition parser.
+- `Warning` only reports anything through the diagnostics overload.
 - Exceptions thrown by application callbacks are not swallowed and propagate to the caller.
 - Cancellation throws `OperationCanceledException`; it is not reported as a parse mismatch.
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+
+### Non-breaking diagnostics
+
+Declare an additional partial overload (or only this overload) with an extra final
+`out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics` parameter.
+The source generator implements it from the same grammar as the ordinary entry point:
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value);
+public static partial bool TryParse(
+    string input, out MyValue value,
+    out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
+```
+
+The diagnostics overload enables collection in its per-call context; the ordinary overload
+retains the exception-to-`false` behavior. The returned list is empty when no grammar errors or
+warnings occur, and `IsWarning` distinguishes warnings reported by `Warning(...)` from errors. The boolean still reflects whether the grammar matched, so a successful
+parse can contain diagnostics from absorbed failures. Failed choices keep only the errors
+from the furthest-reaching failed alternative, while a successful later alternative discards
+diagnostics from earlier failed alternatives. Generated entry points do not expose
+`TreatWarningsAsErrors`; callers can reject results containing warnings instead. A `CancellationToken`, if declared, remains immediately
+before `out MyValue value`. The tuple result avoids exposing the generated parser's internal
+runtime support types or adding a dependency on the Parlot runtime package.
 
 ### Cancellation
 

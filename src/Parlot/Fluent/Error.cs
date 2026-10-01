@@ -12,7 +12,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
     public ElseError(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        _message = message;
+        _message = message ?? throw new ArgumentNullException(nameof(message));
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -22,6 +22,11 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         if (!_parser.Parse(context, ref result))
         {
             context.ExitParser(this);
+            if (context.CollectDiagnostics)
+            {
+                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
+                return false;
+            }
             throw new ParseException(_message, context.Scanner.Cursor.Position);
         }
 
@@ -39,7 +44,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
             throw new NotSupportedException("ElseError requires a source-generatable parser.");
         }
 
-        var result = context.CreateResult(typeof(T), defaultSuccess: true);
+        var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
@@ -70,7 +75,14 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics)");
+        result.Body.Add("    {");
+        result.Body.Add($"        {context.ParseContextName}.AddDiagnostic(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add("    }");
         result.Body.Add("}");
 
         return result;
@@ -87,16 +99,24 @@ public sealed class Error<T> : Parser<T>, ISourceable
     public Error(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        _message = message;
+        _message = message ?? throw new ArgumentNullException(nameof(message));
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
+        var start = context.CollectDiagnostics ? context.Scanner.Cursor.Position : default;
 
         if (_parser.Parse(context, ref result))
         {
             context.ExitParser(this);
+            if (context.CollectDiagnostics)
+            {
+                var position = context.Scanner.Cursor.Position;
+                context.AddDiagnostic(_message, position, ParseDiagnosticSeverity.Error);
+                context.Scanner.Cursor.ResetPosition(start);
+                return false;
+            }
             throw new ParseException(_message, context.Scanner.Cursor.Position);
         }
 
@@ -116,6 +136,7 @@ public sealed class Error<T> : Parser<T>, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         // Use helper instead of inlining
@@ -129,9 +150,18 @@ public sealed class Error<T> : Parser<T>, ISourceable
         // }
         // success = false;
         
+        result.Body.Add($"var {startName} = {context.ParseContextName}.CollectDiagnostics ? {cursorName}.Position : default;");
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics)");
+        result.Body.Add("    {");
+        result.Body.Add($"        {context.ParseContextName}.AddDiagnostic(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add("    }");
         result.Body.Add("}");
 
         return result;
@@ -154,7 +184,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
     public Error(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        _message = message;
+        _message = message ?? throw new ArgumentNullException(nameof(message));
 
         if (_parser is ISeekable seekable)
         {
@@ -169,10 +199,17 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         context.EnterParser(this);
 
         var parsed = new ParseResult<T>();
+        var start = context.CollectDiagnostics ? context.Scanner.Cursor.Position : default;
 
         if (_parser.Parse(context, ref parsed))
         {
             context.ExitParser(this);
+            if (context.CollectDiagnostics)
+            {
+                context.AddDiagnostic(_message, context.Scanner.Cursor.Position, ParseDiagnosticSeverity.Error);
+                context.Scanner.Cursor.ResetPosition(start);
+                return false;
+            }
             throw new ParseException(_message, context.Scanner.Cursor.Position);
         }
 
@@ -192,6 +229,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
 
         var result = context.CreateResult(typeof(U));
         var cursorName = context.CursorName;
+        var startName = $"start{context.NextNumber()}";
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         // Use helper instead of inlining
@@ -205,9 +243,18 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         // }
         // success = false;
         
+        result.Body.Add($"var {startName} = {context.ParseContextName}.CollectDiagnostics ? {cursorName}.Position : default;");
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"    if ({context.ParseContextName}.CollectDiagnostics)");
+        result.Body.Add("    {");
+        result.Body.Add($"        {context.ParseContextName}.AddDiagnostic(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add("    }");
         result.Body.Add("}");
 
         return result;

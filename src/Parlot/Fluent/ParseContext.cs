@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -34,6 +35,103 @@ public class ParseContext
     /// The scanner used for the parsing session.
     /// </summary>
     public readonly Scanner Scanner;
+
+    /// <summary>
+    /// When enabled, explicit grammar errors and warnings are recorded in <see cref="Diagnostics"/>, and an error
+    /// fails the parser that reported it instead of throwing a <see cref="ParseException"/>. Defaults to <c>false</c>.
+    /// </summary>
+    /// <remarks>
+    /// When disabled, errors throw and warnings are ignored.
+    /// </remarks>
+    public bool CollectDiagnostics { get; set; }
+
+    /// <summary>
+    /// When enabled, grammar warnings are reported as errors: the parser that reported the warning fails, and
+    /// the error is either recorded or thrown depending on <see cref="CollectDiagnostics"/>. Defaults to <c>false</c>.
+    /// </summary>
+    public bool TreatWarningsAsErrors { get; set; }
+
+    /// <summary>
+    /// Grammar errors and warnings recorded during this parsing session, in the order they were reported.
+    /// </summary>
+    /// <remarks>
+    /// Only populated when <see cref="CollectDiagnostics"/> is enabled. Diagnostics reported by an alternative
+    /// of a choice are discarded when another alternative is used.
+    /// </remarks>
+    public IReadOnlyList<ParseDiagnostic> Diagnostics => _diagnostics ?? (IReadOnlyList<ParseDiagnostic>)Array.Empty<ParseDiagnostic>();
+
+    private List<ParseDiagnostic>? _diagnostics;
+
+    /// <summary>
+    /// Records a diagnostic without allocating until one occurs.
+    /// </summary>
+    internal void AddDiagnostic(string message, TextPosition position, ParseDiagnosticSeverity severity)
+    {
+        (_diagnostics ??= []).Add(new ParseDiagnostic(message, position, severity));
+    }
+
+    /// <summary>
+    /// Tracks the best failed branch of a choice while other branches are tried.
+    /// </summary>
+    internal struct AlternativeDiagnostics
+    {
+        internal int Checkpoint;
+        internal int FarthestOffset;
+        internal ParseDiagnostic[]? Best;
+    }
+
+    /// <summary>
+    /// Starts an ordered choice's diagnostic checkpoint.
+    /// </summary>
+    internal AlternativeDiagnostics BeginAlternatives() => new()
+    {
+        Checkpoint = _diagnostics?.Count ?? 0,
+        FarthestOffset = -1
+    };
+
+    /// <summary>
+    /// Drops a failed branch's diagnostics, saving the branch whose errors reach furthest for total failure.
+    /// </summary>
+    /// <remarks>
+    /// A failed branch that only reported warnings is not retained, since none of its input is used.
+    /// </remarks>
+    internal void RejectAlternative(ref AlternativeDiagnostics alternatives)
+    {
+        if (_diagnostics is not { } diagnostics || diagnostics.Count == alternatives.Checkpoint)
+        {
+            return;
+        }
+
+        var farthest = -1;
+        for (var i = alternatives.Checkpoint; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Severity == ParseDiagnosticSeverity.Error)
+            {
+                farthest = Math.Max(farthest, diagnostics[i].Position.Offset);
+            }
+        }
+
+        if (farthest > alternatives.FarthestOffset)
+        {
+            alternatives.FarthestOffset = farthest;
+            var best = new ParseDiagnostic[diagnostics.Count - alternatives.Checkpoint];
+            diagnostics.CopyTo(alternatives.Checkpoint, best, 0, best.Length);
+            alternatives.Best = best;
+        }
+
+        diagnostics.RemoveRange(alternatives.Checkpoint, diagnostics.Count - alternatives.Checkpoint);
+    }
+
+    /// <summary>
+    /// Restores the best failed branch when none of the alternatives matched.
+    /// </summary>
+    internal void RestoreAlternatives(in AlternativeDiagnostics alternatives)
+    {
+        if (alternatives.Best is { } best)
+        {
+            (_diagnostics ??= []).AddRange(best);
+        }
+    }
 
     /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.

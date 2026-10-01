@@ -52,6 +52,7 @@
     <EmbeddedResource Include="../Parlot/ParseResult.cs" LogicalName="Parlot.StandaloneRuntime.ParseResult.cs" />
     <EmbeddedResource Include="../Parlot/ParseException.cs" LogicalName="Parlot.StandaloneRuntime.ParseException.cs" />
     <EmbeddedResource Include="../Parlot/ParseError.cs" LogicalName="Parlot.StandaloneRuntime.ParseError.cs" />
+    <EmbeddedResource Include="../Parlot/ParseDiagnostic.cs" LogicalName="Parlot.StandaloneRuntime.ParseDiagnostic.cs" />
     <EmbeddedResource Include="../Parlot/Option.cs" LogicalName="Parlot.StandaloneRuntime.Option.cs" />
     <EmbeddedResource Include="../Parlot/Character.cs" LogicalName="Parlot.StandaloneRuntime.Character.cs" />
     <EmbeddedResource Include="../Parlot/Character.Class.cs" LogicalName="Parlot.StandaloneRuntime.Character.Class.cs" />

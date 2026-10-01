@@ -41,13 +41,20 @@ public sealed partial class ParserSourceGenerator
         {
             Method = method;
             Factory = factory;
+            HasErrors = HasErrorOutput(method, factory.Method);
         }
 
         public IMethodSymbol Method { get; }
         public MethodToGenerate Factory { get; }
-        public IParameterSymbol? CancellationTokenParameter => Method.Parameters.Length == Factory.Method.Parameters.Length + 3
-            ? Method.Parameters[Method.Parameters.Length - 2]
+        public bool HasErrors { get; }
+        public IParameterSymbol? ErrorsParameter => HasErrors
+            ? Method.Parameters[Method.Parameters.Length - 1]
             : null;
+        public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - (HasErrors ? 2 : 1)];
+        public IParameterSymbol? CancellationTokenParameter => Method.Parameters.Length == Factory.Method.Parameters.Length + (HasErrors ? 4 : 3)
+            ? Method.Parameters[Method.Parameters.Length - (HasErrors ? 3 : 2)]
+            : null;
+        public bool WrapperHasCancellation { get; set; }
         public string? Source { get; set; }
     }
 
@@ -190,9 +197,9 @@ public sealed partial class ParserSourceGenerator
                     continue;
                 }
 
-                var entry = FindStandaloneEntryPoint(factory.Value, trees,
+                var found = FindStandaloneEntryPoints(factory.Value, trees,
                     compilation.GetTypeByMetadataName("System.Threading.CancellationToken"), out var error);
-                if (entry is null)
+                if (found.Length == 0)
                 {
                     if (!designTime)
                     {
@@ -202,7 +209,12 @@ public sealed partial class ParserSourceGenerator
                     continue;
                 }
 
-                entries.Add(entry);
+                entries.AddRange(found);
+                var hasCancellation = found.Any(static entry => entry.CancellationTokenParameter is not null);
+                foreach (var item in found)
+                {
+                    item.WrapperHasCancellation = hasCancellation;
+                }
             }
         }
 
@@ -217,6 +229,12 @@ public sealed partial class ParserSourceGenerator
         var entryPointKeys = new HashSet<string>(entries.Select(static entry => GetMethodKey(entry.Method)), StringComparer.Ordinal);
         foreach (var entry in entries)
         {
+            if (!designTime && !ReferenceEquals(entry,
+                entries.First(other => GetMethodKey(other.Factory.Method) == GetMethodKey(entry.Factory.Method))))
+            {
+                continue;
+            }
+
             if (entries.Count(other => SymbolEqualityComparer.Default.Equals(other.Method, entry.Method)) > 1)
             {
                 if (!designTime)
@@ -237,7 +255,9 @@ public sealed partial class ParserSourceGenerator
                 try
                 {
                     GenerateForMethod(output, compilation, target, entry.Factory,
-                        projectDirectory, isDesignTimeBuild: false, entry, entryPointKeys);
+                        projectDirectory, isDesignTimeBuild: false,
+                        entries.Where(other => GetMethodKey(other.Factory.Method) == GetMethodKey(entry.Factory.Method)).ToArray(),
+                        entryPointKeys);
                 }
                 catch (Exception exception) when (exception is NotSupportedException or InvalidOperationException or ArgumentException)
                 {
@@ -313,43 +333,78 @@ public sealed partial class ParserSourceGenerator
             : null;
     }
 
-    private static StandaloneEntryPoint? FindStandaloneEntryPoint(
+    private static StandaloneEntryPoint[] FindStandaloneEntryPoints(
         MethodToGenerate factory, List<SyntaxTree> grammarTrees, INamedTypeSymbol? cancellationTokenType, out string error)
     {
         error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
-            + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result.";
+            + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, an out result, "
+            + "and optionally an out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)>.";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
             || type.TypeKind != TypeKind.Class || type.IsRecord)
         {
-            return null;
+            return [];
         }
 
         var resultType = ((INamedTypeSymbol)factory.Method.ReturnType).TypeArguments[0];
         if (UsesParlotType(resultType) || factory.Method.Parameters.Any(static parameter => UsesParlotType(parameter.Type)))
         {
             error = "Entry point results and configuration arguments must use BCL or application-owned types, not Parlot types.";
-            return null;
+            return [];
         }
 
         var candidates = type.GetMembers(name!).OfType<IMethodSymbol>().Where(method =>
-            method.IsStatic && method.IsPartialDefinition && method.PartialImplementationPart is null
+        {
+            var hasErrors = HasErrorOutput(method, factory.Method);
+            var resultIndex = method.Parameters.Length - (hasErrors ? 2 : 1);
+            var tokenIndex = resultIndex - 1;
+            return method.IsStatic && method.IsPartialDefinition && method.PartialImplementationPart is null
             && !method.IsGenericMethod && !method.ReturnsByRef && method.ReturnType.SpecialType == SpecialType.System_Boolean
-            && (method.Parameters.Length == factory.Method.Parameters.Length + 2
-                || method.Parameters.Length == factory.Method.Parameters.Length + 3
-                    && method.Parameters[method.Parameters.Length - 2].RefKind == RefKind.None
-                    && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 2].Type, cancellationTokenType))
+            && (method.Parameters.Length == factory.Method.Parameters.Length + (hasErrors ? 3 : 2)
+                || method.Parameters.Length == factory.Method.Parameters.Length + (hasErrors ? 4 : 3)
+                    && method.Parameters[tokenIndex].RefKind == RefKind.None
+                    && SymbolEqualityComparer.Default.Equals(method.Parameters[tokenIndex].Type, cancellationTokenType))
             && method.Parameters[0].Type.SpecialType == SpecialType.System_String && method.Parameters[0].RefKind == RefKind.None
-            && method.Parameters[method.Parameters.Length - 1].RefKind == RefKind.Out
-            && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 1].Type, resultType)
+            && method.Parameters[resultIndex].RefKind == RefKind.Out
+            && SymbolEqualityComparer.Default.Equals(method.Parameters[resultIndex].Type, resultType)
             && method.DeclaringSyntaxReferences.All(reference => !grammarTrees.Contains(reference.SyntaxTree))
             && factory.Method.Parameters.Select((parameter, index) =>
                 method.Parameters[index + 1].RefKind == RefKind.None
-                && SymbolEqualityComparer.Default.Equals(parameter.Type, method.Parameters[index + 1].Type)).All(static matches => matches))
+                && SymbolEqualityComparer.Default.Equals(parameter.Type, method.Parameters[index + 1].Type)).All(static matches => matches);
+        })
             .ToArray();
 
-        return candidates.Length == 1 ? new StandaloneEntryPoint(candidates[0], factory) : null;
+        if (candidates.Length is < 1 or > 2 || candidates.Count(method =>
+            HasErrorOutput(method, factory.Method)) > 1)
+        {
+            return [];
+        }
+
+        return candidates.Select(method => new StandaloneEntryPoint(method, factory)).ToArray();
+    }
+
+    private static bool HasErrorOutput(IMethodSymbol method, IMethodSymbol factory)
+        => method.Parameters.Length >= factory.Parameters.Length + 3
+            && IsErrorsParameter(method.Parameters[method.Parameters.Length - 1])
+            && method.Parameters[method.Parameters.Length - 2].RefKind == RefKind.Out
+            && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 2].Type,
+                ((INamedTypeSymbol)factory.ReturnType).TypeArguments[0]);
+
+    private static bool IsErrorsParameter(IParameterSymbol parameter)
+    {
+        if (parameter.RefKind != RefKind.Out
+            || parameter.Type is not INamedTypeSymbol { Name: "IReadOnlyList", Arity: 1 } list
+            || list.ContainingNamespace.ToDisplayString() != "System.Collections.Generic"
+            || list.TypeArguments[0] is not INamedTypeSymbol { IsTupleType: true } tuple
+            || tuple.TupleElements.Length != 5
+            || tuple.TupleElements[0].Type.SpecialType != SpecialType.System_String
+            || tuple.TupleElements[1].Type.SpecialType != SpecialType.System_Boolean)
+        {
+            return false;
+        }
+
+        return tuple.TupleElements.Skip(2).All(element => element.Type.SpecialType == SpecialType.System_Int32);
     }
 
     private static bool UsesParlotType(ITypeSymbol type)
@@ -362,8 +417,8 @@ public sealed partial class ParserSourceGenerator
         var entry = standalone.Method;
         var factory = standalone.Factory.Method;
         var input = EscapeIdentifier(entry.Parameters[0].Name);
-        var value = EscapeIdentifier(entry.Parameters[entry.Parameters.Length - 1].Name);
-        var valueType = GetParameterTypeName(entry.Parameters[entry.Parameters.Length - 1]);
+        var value = EscapeIdentifier(standalone.ResultParameter.Name);
+        var valueType = GetParameterTypeName(standalone.ResultParameter);
         var arguments = string.Join(", ", entry.Parameters.Skip(1).Take(factory.Parameters.Length)
             .Select(static parameter => EscapeIdentifier(parameter.Name)));
         // Keep the common names "context" and "result" available to entry point parameters.
@@ -378,11 +433,17 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine("        {");
         var cancellationArgument = standalone.CancellationTokenParameter is { } token
             ? $", {EscapeIdentifier(token.Name)}"
-            : "";
+            : standalone.Factory.Method.Parameters.Length > 0 && standalone.WrapperHasCancellation
+                ? ", global::System.Threading.CancellationToken.None" : "";
         var contextCreation = factory.Parameters.Length > 0
             ? $"new {wrapper}(new global::Parlot.Scanner({input}){cancellationArgument}, {arguments})"
             : $"new global::Parlot.Fluent.ParseContext(new global::Parlot.Scanner({input}){cancellationArgument})";
         source.AppendLine($"            var {context} = {contextCreation};");
+        if (standalone.ErrorsParameter is not null)
+        {
+            source.AppendLine($"            {context}.CollectDiagnostics = true;");
+            source.AppendLine($"            {EscapeIdentifier(standalone.ErrorsParameter.Name)} = global::System.Array.Empty<(string Message, bool IsWarning, int Offset, int Line, int Column)>();");
+        }
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");
         source.AppendLine("            {");
@@ -392,14 +453,35 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine($"                    {value} = {result}.Value;");
         source.AppendLine("                    return true;");
         source.AppendLine("                }");
+        source.AppendLine($"                {value} = default!;");
+        source.AppendLine("                return false;");
         source.AppendLine("            }");
         source.AppendLine("            catch (global::Parlot.ParseException)");
         source.AppendLine("            {");
         source.AppendLine($"                {value} = default!;");
         source.AppendLine("                return false;");
         source.AppendLine("            }");
-        source.AppendLine($"            {value} = default!;");
-        source.AppendLine("            return false;");
+        if (standalone.ErrorsParameter is { } errorsParameter)
+        {
+            var errors = EscapeIdentifier(errorsParameter.Name);
+            var collected = prefix + "_collected";
+            var diagnostics = prefix + "_diagnostics";
+            var index = prefix + "_index";
+            var item = prefix + "_item";
+            source.AppendLine("            finally");
+            source.AppendLine("            {");
+            source.AppendLine($"                var {collected} = {context}.Diagnostics;");
+            source.AppendLine($"                var {diagnostics} = {collected}.Count == 0");
+            source.AppendLine("                    ? global::System.Array.Empty<(string Message, bool IsWarning, int Offset, int Line, int Column)>()");
+            source.AppendLine($"                    : new (string Message, bool IsWarning, int Offset, int Line, int Column)[{collected}.Count];");
+            source.AppendLine($"                for (var {index} = 0; {index} < {diagnostics}.Length; {index}++)");
+            source.AppendLine("                {");
+            source.AppendLine($"                    var {item} = {collected}[{index}];");
+            source.AppendLine($"                    {diagnostics}[{index}] = ({item}.Message, {item}.IsWarning, {item}.Position.Offset, {item}.Position.Line, {item}.Position.Column);");
+            source.AppendLine("                }");
+            source.AppendLine($"                {errors} = {diagnostics};");
+            source.AppendLine("            }");
+        }
         source.AppendLine("        }");
     }
 

@@ -72,6 +72,9 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParseError))]
     private static Parser<char> ErrorParser() => Literals.Char('x').ElseError("Expected x");
 
+    [GenerateParser(nameof(TryParseWarning))]
+    private static Parser<char> WarningParser() => Terms.Char('x').Warning("Deprecated x");
+
     [GenerateParser(nameof(TryParseThrowingCallback))]
     private static Parser<char> ThrowingCallback() =>
         Literals.Char('x').Then(static char (char value) => throw new System.InvalidOperationException("Callback failed"));

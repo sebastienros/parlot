@@ -438,9 +438,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         MethodToGenerate methodInfo,
         string projectDirectory,
         bool isDesignTimeBuild,
-        StandaloneEntryPoint standalone,
+        IReadOnlyList<StandaloneEntryPoint> standalones,
         ISet<string> entryPointKeys)
     {
+        var standalone = standalones[0];
         var methodSymbol = methodInfo.Method;
 
         // Get the syntax tree containing this method
@@ -965,7 +966,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             }
 
             // Generate C# code using the new pointer-based lambda system
-            var (sourceText, failedLambdas, capturedVariables) = GenerateParserCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, rewriter.Lambdas, methodInfo.AdditionalUsings, standalone);
+            var (sourceText, failedLambdas, capturedVariables) = GenerateParserCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, rewriter.Lambdas, methodInfo.AdditionalUsings, standalones);
 
             if (ReportEagerCapture(context, methodInfo))
             {
@@ -1013,8 +1014,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         Dictionary<int, string> lambdaSourceMap,
         IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> lambdaInfoMap,
         string[] additionalUsings,
-        StandaloneEntryPoint standalone)
+        IReadOnlyList<StandaloneEntryPoint> standalones)
     {
+        var standalone = standalones[0];
         var ns = methodSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : methodSymbol.ContainingNamespace.ToDisplayString();
@@ -1196,10 +1198,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             {
                 cancellationParameter += "_";
             }
-            var cancellationDeclaration = standalone.CancellationTokenParameter is not null
+            var cancellationDeclaration = standalone.WrapperHasCancellation
                 ? $", global::System.Threading.CancellationToken {cancellationParameter}"
                 : "";
-            var cancellationArgument = standalone.CancellationTokenParameter is not null ? $", {cancellationParameter}" : "";
+            var cancellationArgument = standalone.WrapperHasCancellation ? $", {cancellationParameter}" : "";
             sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner {scannerParameter}{cancellationDeclaration}, {parameterList}) : base({scannerParameter}{cancellationArgument})");
             sb.AppendLine("            {");
             foreach (var parameter in methodSymbol.Parameters)
@@ -1489,7 +1491,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName);
+        foreach (var entry in standalones)
+        {
+            AppendStandaloneEntryPoint(sb, entry, wrapperName, coreName);
+        }
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
         // Note: Currently no helper methods are needed since we use HashSet<char> and SearchValues<char>
