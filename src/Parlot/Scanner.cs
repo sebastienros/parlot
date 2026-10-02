@@ -14,8 +14,12 @@ namespace Parlot;
 /// </summary>
 public class Scanner
 {
-    public readonly string Buffer;
     public readonly Cursor Cursor;
+
+    /// <summary>
+    /// The buffered text, see <see cref="Cursor.Buffer"/>.
+    /// </summary>
+    public string Buffer => Cursor.Buffer;
 
     /// <summary>
     /// Scans some text.
@@ -42,8 +46,7 @@ public class Scanner
     /// <param name="isFinal"><see langword="false"/> when more text may follow <paramref name="buffer"/>. See <see cref="Cursor.HitEnd"/>.</param>
     public Scanner(string buffer, in TextPosition start, bool isFinal)
     {
-        Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        Cursor = new Cursor(Buffer, start, isFinal);
+        Cursor = new Cursor(buffer ?? throw new ArgumentNullException(nameof(buffer)), start, isFinal);
     }
 
     /// <summary>
@@ -121,7 +124,7 @@ public class Scanner
 
         ReadWhile(other, out _);
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -224,7 +227,7 @@ public class Scanner
                     return false;
                 }
 
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
                 return true;
             }
         }
@@ -244,12 +247,12 @@ public class Scanner
             if (!ReadInteger(out _))
             {
                 Cursor.ResetPosition(beforeExponent);
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
                 return true;
             }
         }
 
-        number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+        number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
         return true;
     }
 
@@ -301,7 +304,7 @@ public class Scanner
         }
 
         Cursor.AdvanceNoNewLines(next);
-        result = Buffer.AsSpan(Cursor.Offset - next, next);
+        result = Cursor.GetSpan(Cursor.Offset - next, next);
 
         return true;
     }
@@ -333,7 +336,7 @@ public class Scanner
             Cursor.Advance();
         }
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -384,7 +387,7 @@ public class Scanner
         var start = Cursor.Offset;
         Cursor.Advance();
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
         return true;
     }
 
@@ -407,7 +410,7 @@ public class Scanner
 
         var start = Cursor.Offset;
         Cursor.Advance(text.Length);
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -418,7 +421,7 @@ public class Scanner
     [Obsolete("Prefer bool ReadAnyOf(ReadOnlySpan<char>, out ReadOnlySpan<char>)")]
     public bool ReadAnyOf(ReadOnlySpan<char> chars, StringComparison comparisonType, out ReadOnlySpan<char> result)
     {
-        var current = Cursor.Buffer.AsSpan(Cursor.Offset, 1);
+        var current = Cursor.GetSpan(Cursor.Offset, 1);
 
         var index = chars.IndexOf(current, comparisonType);
 
@@ -430,7 +433,7 @@ public class Scanner
 
         var start = Cursor.Offset;
         Cursor.Advance(index + 1);
-        result = Cursor.Buffer.AsSpan(start, index + 1);
+        result = Cursor.GetSpan(start, index + 1);
 
         return true;
     }
@@ -457,7 +460,7 @@ public class Scanner
 
                 var length = Cursor.Offset - start;
 
-                result = Cursor.Buffer.AsSpan(start, length);
+                result = Cursor.GetSpan(start, length);
                 return true;
             }
 
@@ -618,7 +621,7 @@ public class Scanner
             {
                 Cursor.Advance(next + 2); // include start quote
 
-                result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
+                result = Cursor.GetSpan(startOffset, next + 2);
                 return true;
             }
 
@@ -807,7 +810,7 @@ public class Scanner
             }
         }
 
-        result = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+        result = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
 
         return true;
     }

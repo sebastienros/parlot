@@ -41,7 +41,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
             var end = context.Scanner.Cursor.Offset;
             var length = end - start.Offset;
 
-            result.Set(start.Offset, end, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+            result.Set(start.Offset, end, context.Scanner.Cursor.CreateSpan(start.Offset, length));
 
             context.ExitParser(this);
             return true;

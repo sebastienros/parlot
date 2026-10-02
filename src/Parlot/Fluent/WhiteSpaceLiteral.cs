@@ -56,7 +56,7 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
             return false;
         }
 
-        result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
+        result.Set(start, context.Scanner.Cursor.Offset, context.Scanner.Cursor.CreateSpan(start, end - start));
 
         context.ExitParser(this);
         return true;

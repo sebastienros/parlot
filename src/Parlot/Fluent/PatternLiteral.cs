@@ -43,7 +43,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         if (size >= _minSize)
         {
             var end = context.Scanner.Cursor.Offset;
-            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, end, context.Scanner.Cursor.CreateSpan(start, end - start));
 
             context.ExitParser(this);
             return true;

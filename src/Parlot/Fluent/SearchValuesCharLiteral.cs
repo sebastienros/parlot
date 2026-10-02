@@ -77,7 +77,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
         var start = context.Scanner.Cursor.Position.Offset;
         context.Scanner.Cursor.Advance(size);
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+        result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;

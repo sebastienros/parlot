@@ -41,7 +41,7 @@ public sealed class Identifier : Parser<TextSpan>, ISourceable
 
             var end = context.Scanner.Cursor.Offset;
 
-            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, end, context.Scanner.Cursor.CreateSpan(start, end - start));
 
             context.ExitParser(this);
             return true;

@@ -42,7 +42,7 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
 
         var start = context.Scanner.Cursor.Position.Offset;
         context.Scanner.Cursor.AdvanceNoNewLines(size);
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+        result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;

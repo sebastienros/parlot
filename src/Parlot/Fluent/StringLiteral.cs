@@ -83,7 +83,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         if (success)
         {
             // Remove quotes
-            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1, end - start - 2);
+            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1 - context.Scanner.Cursor.BufferStart, end - start - 2);
 
             result.Set(start, end, decoded);
 

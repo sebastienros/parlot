@@ -25,7 +25,7 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
             return false;
         }
 
-        result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+        result.Set(start, end, context.Scanner.Cursor.CreateSpan(start, end - start));
 
         context.ExitParser(this);
         return true;

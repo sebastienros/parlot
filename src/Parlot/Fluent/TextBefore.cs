@@ -80,7 +80,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
                     return false;
                 }
 
-                result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                result.Set(start.Offset, previous.Offset, context.Scanner.Cursor.CreateSpan(start.Offset, length));
 
                 context.ExitParser(this);
                 return true;
@@ -103,7 +103,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
                     return false;
                 }
 
-                result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                result.Set(start.Offset, previous.Offset, context.Scanner.Cursor.CreateSpan(start.Offset, length));
 
                 context.ExitParser(this);
                 return true;

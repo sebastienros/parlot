@@ -92,12 +92,12 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             }
             else
             {
-                var buffer = context.Scanner.Buffer;
-                var parsedText = buffer.AsSpan(start, end - start);
+                var buffer = cursor.Buffer;
+                var parsedText = cursor.GetSpan(start, end - start);
 
                 result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
                     ? Text
-                    : start == 0 && end == buffer.Length
+                    : start == cursor.BufferStart && end - start == buffer.Length
                         ? buffer
                         : parsedText.ToString());
             }
