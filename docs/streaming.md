@@ -175,7 +175,24 @@ of each group.
 | Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 374.3 us | 1.05 | 1202.1 KB |
 | Lines, `ParseManyAsync(Stream)` | 1000 | 339.8 us | 0.95 | 868.2 KB |
 
-A large single value costs up to about 1.5 times reading the text first, because of the inconclusive attempts.
+A large single value costs about 1.3 to 2 times reading the text first, because of the inconclusive attempts.
 Use `TryParseAsync` to avoid waiting for, or buffering, text which follows the value, and read the text first
 when the whole input is wanted anyway. `ParseManyAsync` is as fast as reading lines, with memory bounded by
 the largest value.
+
+The cost of a single value doesn't shrink with its size. The value references its text, so the whole value is
+buffered either way, and each inconclusive attempt discards its partial results. Depending on where the size
+falls between two window sizes, the waste is between a third and about one more parse of the whole value:
+
+| Method | Count | Mean | Ratio | Allocated | Alloc ratio |
+|---|---:|---:|---:|---:|---:|
+| Document, `ReadToEnd` + `Parse` | 10000 | 8.16 ms | 1.00 | 7.49 MB | 1.00 |
+| Document, `TryParseAsync(TextReader)` | 10000 | 10.74 ms | 1.32 | 13.84 MB | 1.85 |
+| Document, `ReadToEnd` + `Parse` | 100000 | 92.7 ms | 1.00 | 74.4 MB | 1.00 |
+| Document, `TryParseAsync(TextReader)` | 100000 | 176.8 ms | 1.91 | 168.5 MB | 2.26 |
+| Lines, `ReadLine` + `Parse` | 100000 | 35.6 ms | 1.00 | 117.8 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100000 | 35.1 ms | 0.98 | 83.9 MB | 0.71 |
+
+Reading the rest of the input after the first inconclusive attempt would remove that waste, but it would also
+read everything which follows the value, without end on a source which doesn't close. Streaming pays off for
+sequences of values: `ParseManyAsync` keeps its advantage at any size.
