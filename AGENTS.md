@@ -29,7 +29,10 @@ to an individual project, or build everything without `-f`.
 ### CI build pipeline
 
 CI restores once with `dotnet restore`, builds Release with `--no-restore`, and reuses the outputs
-for test and pack with `--no-build`. NuGet caches live under `.nuget/` in the workspace.
+for test and pack with `--no-build`. NuGet packages live at `/mnt/nuget/packages` on Linux, with
+the directory created and owned by the runner before restore, and under `.nuget/packages/` in the
+workspace on Windows. Other NuGet caches live under `.nuget/` in the workspace. No GitHub Actions
+cache is enabled.
 `setup-dotnet` keeps `check-latest: false` to prefer installed matching SDKs, but still installs an
 SDK if the runner has no match.
 
