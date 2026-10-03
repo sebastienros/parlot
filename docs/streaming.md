@@ -266,7 +266,11 @@ which isn't a `StringReader`, to avoid the fast path. `Document` parses an
 array of `Count` objects, `Lines` parses one object per line.
 
 Measured on Apple M-series (Arm64), .NET 10, BenchmarkDotNet `ShortRun`. Ratios are relative to `ReadToEnd` + `Parse`.
-`ReadToEnd` doesn't copy the text here, it returns the benchmark's string.
+`ReadToEnd` doesn't copy the text here, it returns the benchmark's string. To run them:
+
+```bash
+dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- --filter "*StreamingBenchmarks*"
+```
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
