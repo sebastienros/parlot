@@ -12,12 +12,19 @@ namespace Parlot.Fluent;
 public abstract partial class Parser<T>
 {
     /// <summary>
-    /// Parses the text of a <see cref="TextReader"/>, reading only as much as the parser needs.
+    /// Parses the text of a <see cref="TextReader"/>, buffering only the text the parser can still read.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The result is the one of <see cref="Parse(string)"/> on the whole text. The text which follows the result is not
     /// necessarily read. A <see cref="ParseException"/> thrown by the parser is propagated.
     /// Positions are the ones in the whole text.
+    /// </para>
+    /// <para>
+    /// The first block is read asynchronously. When the text doesn't fit in it, the parse runs on a thread pool thread,
+    /// through the compacting buffer of <see cref="Parse(TextReader, StreamParseOptions?, CancellationToken)"/>, and that thread
+    /// blocks on the asynchronous reads of the next blocks.
+    /// </para>
     /// </remarks>
     /// <returns>The parsed value, or <see langword="default"/> if the text doesn't match.</returns>
     public async ValueTask<T?> ParseAsync(TextReader reader, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
@@ -27,7 +34,7 @@ public abstract partial class Parser<T>
     }
 
     /// <summary>
-    /// Parses the text of a <see cref="Stream"/>, reading only as much as the parser needs.
+    /// Parses the text of a <see cref="Stream"/>, buffering only the text the parser can still read.
     /// </summary>
     /// <remarks>
     /// The stream is decoded with <see cref="StreamParseOptions.Encoding"/> and is not closed.
@@ -41,11 +48,12 @@ public abstract partial class Parser<T>
     }
 
     /// <summary>
-    /// Parses the text of a <see cref="TextReader"/>, reading only as much as the parser needs.
+    /// Parses the text of a <see cref="TextReader"/>, buffering only the text the parser can still read.
     /// </summary>
     /// <remarks>
     /// The result is the one of <see cref="TryParse(string, out T)"/> on the whole text, except that cancellation throws an
     /// <see cref="OperationCanceledException"/>. The text which follows the result is not necessarily read.
+    /// See <see cref="ParseAsync(TextReader, StreamParseOptions?, CancellationToken)"/>.
     /// </remarks>
     /// <returns>Whether the text matched, and the parsed value.</returns>
     public async ValueTask<(bool Success, T? Value)> TryParseAsync(TextReader reader, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
@@ -61,7 +69,7 @@ public abstract partial class Parser<T>
     }
 
     /// <summary>
-    /// Parses the text of a <see cref="Stream"/>, reading only as much as the parser needs.
+    /// Parses the text of a <see cref="Stream"/>, buffering only the text the parser can still read.
     /// </summary>
     /// <remarks>
     /// The stream is decoded with <see cref="StreamParseOptions.Encoding"/> and is not closed.
@@ -447,38 +455,7 @@ public abstract partial class Parser<T>
             return ParseText(reader.ReadToEnd(), options, cancellationToken);
         }
 
-        using var driver = new StreamingDriver(reader, options, cancellationToken);
-
-        while (true)
-        {
-            if (TryParseWindow(driver, out var success, out var value))
-            {
-                return (success, value);
-            }
-
-            // The window always starts at the beginning of the text. Each failed attempt parses the whole window,
-            // a larger growth factor than for items reduces the wasted work since a single value is buffered anyway.
-            await driver.GrowAsync(TextPosition.Start, growthFactor: 4).ConfigureAwait(false);
-        }
-    }
-
-    private bool TryParseWindow(StreamingDriver driver, out bool success, out T? value)
-    {
-        var context = driver.Context;
-        var cursor = context.Scanner.Cursor;
-        var result = new ParseResult<T>();
-
-        try
-        {
-            success = Parse(context, ref result);
-        }
-        catch (ParseException) when (cursor.HitEnd)
-        {
-            success = false;
-        }
-
-        value = success ? result.Value : default;
-        return !cursor.HitEnd;
+        return await ParseCompactingAsync(reader, options, cancellationToken).ConfigureAwait(false);
     }
 
     private (bool Success, T? Value) ParseText(string text, StreamParseOptions? options, CancellationToken cancellationToken)
