@@ -49,11 +49,15 @@ public class ReaderParserTests
         Check<string>(Grammar.TryParseString, Grammar.TryParseString, "'" + new string('a', 3 * BufferSize));
         Check<int>(Grammar.TryParseNumber, Grammar.TryParseNumber, new string('1', 9) + new string(' ', 3 * BufferSize));
 
-        foreach (var depth in new[] { 1000, 2047, 2048, 2500 })
+        // Nesting deep enough to cross the first read overflows the default stack of Debug builds.
+        RunWithLargeStack(static () =>
         {
-            Check<int>(Grammar.TryParseRecursive, Grammar.TryParseRecursive, new string('(', depth) + "x" + new string(')', depth));
-            Check<int>(Grammar.TryParseRecursive, Grammar.TryParseRecursive, new string('(', depth) + "x" + new string(')', depth - 1));
-        }
+            foreach (var depth in new[] { 1000, 2047, 2048, 2500 })
+            {
+                Check<int>(Grammar.TryParseRecursive, Grammar.TryParseRecursive, new string('(', depth) + "x" + new string(')', depth));
+                Check<int>(Grammar.TryParseRecursive, Grammar.TryParseRecursive, new string('(', depth) + "x" + new string(')', depth - 1));
+            }
+        });
 
         var capture = "!" + new string('_', 2 * BufferSize);
         Check<string>(Grammar.TryParseKeywordCapture, Grammar.TryParseKeywordCapture, capture + "class1");
@@ -94,6 +98,30 @@ public class ReaderParserTests
     public void Reader_Entry_Points_Reject_Null()
     {
         Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber((TextReader)null, out _));
+    }
+
+    private static void RunWithLargeStack(Action action)
+    {
+        Exception exception = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception e)
+            {
+                exception = e;
+            }
+        }, 16 * 1024 * 1024);
+
+        thread.Start();
+        thread.Join();
+
+        if (exception != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
+        }
     }
 
     private static void CheckPadded<T>(StringParser<T> parseString, ReaderParser<T> parseReader, char padding, params string[] inputs)
