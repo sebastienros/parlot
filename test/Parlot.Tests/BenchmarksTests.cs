@@ -602,5 +602,23 @@ public class BenchmarksTests
         var result = benchmarks.LookupMatchFluent();
     }
 
+    [Theory]
+    [InlineData(1000)]
+    [InlineData(10000)]
+    public async System.Threading.Tasks.Task StreamingGrammar(int count)
+    {
+        var benchmarks = new StreamingBenchmarks { Count = count };
+        benchmarks.Setup();
+        var expected = benchmarks.Expected;
+
+        Assert.True(expected > 0);
+        Assert.Equal(expected, benchmarks.Document_ReadToEnd());
+        Assert.Equal(expected, await benchmarks.Document_TryParseAsync());
+        Assert.Equal(expected, benchmarks.Document_Parse());
+        Assert.Equal(expected, benchmarks.Document_Generated_ReadToEnd());
+        Assert.Equal(expected, benchmarks.Lines_ReadLine());
+        Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync());
+        Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync_Delimited());
+    }
 }
 #endif

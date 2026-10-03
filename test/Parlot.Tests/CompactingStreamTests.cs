@@ -242,6 +242,23 @@ public class CompactingStreamTests
             Assert.Equal(expected, JsonParser.Json.Parse(new ChunkedReader(text, chunk), new StreamParseOptions { BufferSize = bufferSize })!.ToString());
         }
     }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(3, 16)]
+    [InlineData(7, 64)]
+    [InlineData(int.MaxValue, 4096)]
+    public void BenchmarkLogsKeepTheBufferBounded(int chunk, int bufferSize)
+    {
+        var (log, failed) = Parlot.Benchmarks.StreamingBenchmarks.CreateLog(10_000);
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = bufferSize });
+
+        Assert.Equal(failed, Parlot.Tests.AccessLog.LogParser.Log.Parse(new ChunkedReader(log, chunk), options));
+
+        // The longest record has 121 chars
+        Assert.InRange(peak(), 1, Math.Max(bufferSize, 128) * 2);
+    }
 #endif
 
     /// <summary>

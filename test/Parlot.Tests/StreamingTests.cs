@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Parlot.Fluent;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
+using Parlot.Tests.AccessLog;
 using Parlot.Tests.Sql;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -30,6 +31,8 @@ public class StreamingTests
         ["calc-eof"] = new Grammar<CalcExpression>(FluentParser.Expression.Eof()),
         ["json"] = new Grammar<IJson>(JsonParser.Json),
         ["json-eof"] = new Grammar<IJson>(JsonParser.Json.Eof()),
+        ["log-record"] = new Grammar<int>(LogParser.Record),
+        ["log"] = new Grammar<int>(LogParser.Log),
         ["sql"] = new Grammar<StatementList>(CreateSqlParser(), static scanner => new ParseContext(scanner, disableLoopDetection: true)),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
@@ -86,6 +89,25 @@ public class StreamingTests
         ];
         Add("json", json);
         Add("json-eof", json);
+
+        string[] log =
+        [
+            "",
+            "2026-10-02T12:34:56.789Z INFO [http.server] GET /api/items/1 200 15.25ms \"ok\"",
+            "2026-10-02T12:34:56.789Z ERROR [db] POST /api/users/3/orders?page=1 201 0.5ms \"said \\\"retry\\\"\"",
+            "2026-10-02T12:34:56.789Z WARN [cache.redis] PUT /health 503 999.99ms \"timeout\"\n",
+            "2026-10-02T12:34:56Z DEBUG [jobs.scheduler] DELETE /x 404 1ms \"a\"\n2026-10-02T12:34:57Z ERROR [auth] GET /y 200 2ms \"b\"\n",
+            "2026-10-02 INFO [http] GET / 500 1ms \"a\" 2026-10-03 INFO [http] GET / 200 1ms \"b\"",
+            "2026-10-02T12:34:56Z INFO [http.server] GET /api 200 15.25ms",
+            "2026-10-02T12:34:56Z INFO [http.server] GET /api 200 15.25 \"a\"",
+            "2026-10-02T12:34:56Z INFO [http.server] GET /api 200 15.25mx \"a\"",
+            "2026-10-02T12:34:56Z INF [http.server] GET /api 200 1ms \"a\"",
+            "2026-10-02T12:34:56Z INFO [http.server GET /api 200 1ms \"a\"",
+            "2026-10-02T12:34:56Z INFO [http.server] GET /api 200 1ms \"unterminated",
+            "2026-10-02T12:34:56Z INFO [http] GET / 200 1ms \"a\"\nnot a record",
+        ];
+        Add("log-record", log);
+        Add("log", log);
 
         Add("sql",
             "SELECT * FROM users",

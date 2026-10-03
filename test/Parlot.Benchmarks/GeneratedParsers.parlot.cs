@@ -76,6 +76,46 @@ public static partial class GeneratedParsers
         return json;
     }
 
+    [GenerateParser(nameof(TryParseLog))]
+    [IncludeUsings("System.Collections.Generic")]
+    private static Parser<int> BuildLog()
+    {
+        // Same grammar as Parlot.Tests.AccessLog.LogParser
+        var timestamp = Terms.Pattern(static c => Character.IsDecimalDigit(c) || c is '-' or ':' or '.' or 'T' or 'Z');
+        var level = OneOf(Terms.Text("DEBUG"), Terms.Text("INFO"), Terms.Text("WARN"), Terms.Text("ERROR"));
+        var component = Between(Terms.Char('['), Literals.Pattern(static c => Character.IsIdentifierPart(c) || c == '.'), Literals.Char(']'));
+        var method = Terms.Identifier();
+        var path = Terms.NonWhiteSpace();
+        var status = Terms.Integer();
+        var duration = Terms.Decimal().AndSkip(Literals.Text("ms"));
+        var message = Terms.String(StringLiteralQuotes.Double);
+
+        var record = timestamp
+            .SkipAnd(level)
+            .AndSkip(component)
+            .AndSkip(method)
+            .AndSkip(path)
+            .And(status)
+            .AndSkip(duration)
+            .AndSkip(message)
+            .Then(static record => record.Item1 == "ERROR" || record.Item2 >= 500 ? 1 : 0);
+
+        return ZeroOrMany(record)
+            .AndSkip(Terms.WhiteSpace().Optional())
+            .Eof()
+            .Then(static values =>
+            {
+                var sum = 0;
+
+                for (var i = 0; i < values.Count; i++)
+                {
+                    sum += values[i];
+                }
+
+                return sum;
+            });
+    }
+
     [GenerateParser(nameof(TryParseText))]
     private static Parser<string> BuildText() => Terms.Text("hello");
 
