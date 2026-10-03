@@ -53,9 +53,9 @@ public sealed class Not<T> : Parser<T>, ISourceable
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
         // Use helper instead of inlining
-        var helperName = context.Helpers
+        var helperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Not", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         // if (Helper(context, out _))
         // {

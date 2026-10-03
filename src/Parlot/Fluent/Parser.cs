@@ -134,12 +134,12 @@ public abstract partial class Parser<T> : IParser<T>
     /// <summary>
     /// Builds a parser that ensures the specified parser matches at the current position without consuming input (positive lookahead).
     /// </summary>
-    public Parser<T> WhenFollowedBy<U>(Parser<U> lookahead) => new WhenFollowedBy<T>(this, lookahead.Then<object>(_ => new object()));
+    public Parser<T> WhenFollowedBy<U>(Parser<U> lookahead) => new WhenFollowedBy<T>(this, lookahead.Then<object>(value: null!));
 
     /// <summary>
     /// Builds a parser that ensures the specified parser does NOT match at the current position without consuming input (negative lookahead).
     /// </summary>
-    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(_ => new object()));
+    public Parser<T> WhenNotFollowedBy<U>(Parser<U> lookahead) => new WhenNotFollowedBy<T>(this, lookahead.Then<object>(value: null!));
 
     /// <summary>
     /// Builds a parser that selects a target parser based on the previous result.

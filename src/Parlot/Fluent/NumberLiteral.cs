@@ -132,7 +132,10 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"var {startName} = 0;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+        }
 
         result.Body.Add($"{result.SuccessVariable} = false;");
         result.Body.Add($"{resetName} = {cursorName}.Position;");
@@ -160,18 +163,15 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
-        if (context.DiscardResult)
+        var outTarget = context.DiscardResult ? "_" : parsedValueName;
+        result.Body.Add($"    if (global::Parlot.Numbers.TryParseNumber<{valueTypeName}>({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.SuccessVariable} = true;");
-        }
-        else
-        {
-            result.Body.Add($"    if (global::Parlot.Numbers.TryParseNumber<{valueTypeName}>({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
-            result.Body.Add("    {");
-            result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
-            result.Body.Add("    }");
         }
+        result.Body.Add("    }");
         result.Body.Add("}");
 
         result.Body.Add($"if (!{result.SuccessVariable})");

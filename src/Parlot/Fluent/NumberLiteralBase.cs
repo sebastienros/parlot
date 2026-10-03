@@ -134,7 +134,10 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
 
         result.Body.Add($"var {resetName} = {cursorName}.Position;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+        }
 
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
         var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
@@ -165,26 +168,20 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
-        if (context.DiscardResult)
-        {
-            result.Body.Add("    return true;");
-        }
-        else
-        {
-            // The helper is available in Parlot's net8.0+ assets. A net7.0 consumer selects
-            // the netstandard2.0 asset, which cannot expose generic-math APIs.
-            var supportsFastNumberParsing =
-                context.TargetFramework.Identifier == TargetFrameworkIdentifier.NetCoreApp &&
-                context.TargetFramework.Version >= new Version(8, 0);
-            var tryParseMethod = supportsFastNumberParsing
-                ? $"global::Parlot.Numbers.TryParseNumber<{valueTypeName}>"
-                : "global::Parlot.Numbers.TryParse";
-            result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {parsedValueName}))");
-            result.Body.Add("    {");
-            result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
-            result.Body.Add("        return true;");
-            result.Body.Add("    }");
-        }
+        // The helper is available in Parlot's net8.0+ assets. A net7.0 consumer selects
+        // the netstandard2.0 asset, which cannot expose generic-math APIs.
+        var supportsFastNumberParsing =
+            context.TargetFramework.Identifier == TargetFrameworkIdentifier.NetCoreApp &&
+            context.TargetFramework.Version >= new Version(8, 0);
+        var tryParseMethod = supportsFastNumberParsing
+            ? $"global::Parlot.Numbers.TryParseNumber<{valueTypeName}>"
+            : "global::Parlot.Numbers.TryParse";
+        var outTarget = context.DiscardResult ? $"{valueTypeName} _" : parsedValueName;
+        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {outTarget}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.ValueVariable} = {(context.DiscardResult ? "default" : parsedValueName)};");
+        result.Body.Add("        return true;");
+        result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add($"{cursorName}.ResetPosition({resetName});");
         result.Body.Add($"{result.ValueVariable} = default;");

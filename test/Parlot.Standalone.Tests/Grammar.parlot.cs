@@ -16,6 +16,13 @@ public static partial class Grammar
     private static Parser<string> MatchedText() =>
         Literals.Text("hello", caseInsensitive: true, returnMatchedText: true);
 
+    [GenerateParser(nameof(TryParseSkippedValues))]
+    private static Parser<string> SkippedValues() =>
+        Literals.Number<byte>(NumberOptions.Integer).SkipAnd(Between(
+            Literals.Text("keyword", caseInsensitive: true, returnMatchedText: true),
+            Literals.Text("value", caseInsensitive: true, returnMatchedText: true),
+            Literals.Text("end", caseInsensitive: true, returnMatchedText: true))).Eof();
+
     [GenerateParser(nameof(TryParseIdentifier))]
     private static Parser<string> Identifier() =>
         Literals.Identifier().Then(static value => value.ToString());

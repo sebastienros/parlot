@@ -149,9 +149,9 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
 
             // Register helper for the operator parser
             var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
-            var opHelperName = context.Helpers
+            var opHelperName = context.WithDiscardResult(true, () => context.Helpers
                 .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Unary", opValueTypeName, () => opSourceable.GenerateSource(context))
-                .MethodName;
+                .MethodName);
 
             var opResultName = $"opResult{context.NextNumber()}";
             var opPositionName = $"unaryPos{context.NextNumber()}";
@@ -354,9 +354,9 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
             var factoryFieldName = context.RegisterLambda(factory);
 
             var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
-            var opHelperName = context.Helpers
+            var opHelperName = context.WithDiscardResult(true, () => context.Helpers
                 .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_UnaryCtx", opValueTypeName, () => opSourceable.GenerateSource(context))
-                .MethodName;
+                .MethodName);
 
             var opResultName = $"opResult{context.NextNumber()}";
             var opPositionName = $"unaryPos{context.NextNumber()}";

@@ -116,9 +116,9 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
                 .MethodName;
         }
 
-        var helperBefore = Helper(beforeSourceable, "Before");
+        var helperBefore = context.WithDiscardResult(true, () => Helper(beforeSourceable, "Before"));
         var helperParser = Helper(parserSourceable, "Parser");
-        var helperAfter = Helper(afterSourceable, "After");
+        var helperAfter = context.WithDiscardResult(true, () => Helper(afterSourceable, "After"));
 
         result.Body.Add($"if ({helperBefore}({context.ParseContextName}, out _))");
         result.Body.Add("{");

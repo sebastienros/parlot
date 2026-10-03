@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -8,6 +9,20 @@ namespace Parlot.Standalone.Tests;
 
 public class GeneratedParserTests
 {
+    [Theory]
+    [InlineData("255KeYwOrDVaLuEEnD", true)]
+    [InlineData("256KeYwOrDVaLuEEnD", false)]
+    [InlineData("-1KeYwOrDVaLuEEnD", false)]
+    [InlineData("255KeYwOrDVaLuE?", false)]
+    public void Skipped_Values_Preserve_Numeric_Validation_And_Retained_Casing(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseSkippedValues(input, out var value));
+        Assert.Equal(success ? "VaLuE" : null, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseSkippedValues(reader, out value));
+        Assert.Equal(success ? "VaLuE" : null, value);
+    }
+
     [Fact]
     public void Text_Choices_Preserve_Order_Backtracking_Capture_And_Custom_Whitespace()
     {
