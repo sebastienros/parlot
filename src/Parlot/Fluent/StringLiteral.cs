@@ -141,7 +141,9 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         if (!context.DiscardResult)
         {
             result.Body.Add($"    var {endName} = {cursorName}.Offset;");
-            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({cursorName}.CreateSpan({startName} + 1, {endName} - {startName} - 2));");
+            // Buffer windows are immutable strings, so the decoded span can reference the current one. BufferStart is a
+            // constant 0 in assemblies without TextReader entry points.
+            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1 - {cursorName}.BufferStart, {endName} - {startName} - 2);");
         }
         result.Body.Add("}");
 
