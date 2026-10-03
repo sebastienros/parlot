@@ -135,6 +135,11 @@ public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Gene
 compatibility packages do not introduce a Parlot dependency. Factory files must be excluded from
 `Compile`; the analyzer package's build targets do this.
 The analyzer requires a Roslyn 5.9+ compiler host regardless of the consumer's runtime target.
+An entry point may take a `TextReader` instead of the `string`; it is emitted as a separate parser with
+`SourceGenerationContext.IsCompacting` set (token loops, `CreateSpan`, pins). Emitters gate that code on
+`IsCompacting` so `string` output is unchanged. Assemblies without reader entry points embed the runtime with
+`PARLOT_STRING_ONLY`, which fixes the cursor's buffer base to 0; any reader entry point embeds the streaming runtime
+and `TextReaderRefillSource` for the whole assembly.
 
 - `ParserSourceGenerator.cs` drives it; `LambdaRewriter.cs` lifts lambdas into generated methods
   with `#line` mappings so breakpoints still land in the original source.

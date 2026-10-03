@@ -11,6 +11,9 @@ public static partial class GeneratedParsers
 {
     public static partial bool TryParseExpression(string input, out Expression value);
     public static partial bool TryParseJson(string input, out IJson value);
+#if GENERATED_READER
+    public static partial bool TryParseJson(System.IO.TextReader input, out IJson value);
+#endif
     public static partial bool TryParseText(string input, out string value);
     public static partial bool TryParseMatchedText(string input, out string value);
     public static partial bool TryParseDecimal(string input, out decimal value);

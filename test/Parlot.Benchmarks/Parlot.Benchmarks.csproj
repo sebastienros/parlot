@@ -11,6 +11,12 @@
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)\GeneratedFiles</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
+  <!-- A TextReader entry point embeds the streaming runtime in the whole assembly, so it is opt-in:
+       set the GeneratedReader environment variable to true to benchmark it. -->
+  <PropertyGroup Condition="'$(GeneratedReader)' == 'true'">
+    <DefineConstants>$(DefineConstants);GENERATED_READER</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Farkle" />

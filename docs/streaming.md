@@ -118,6 +118,18 @@ input fits in them, it is parsed as a `string` on the calling thread. Otherwise 
 whose refills block on `TextReader.ReadAsync`, so a stream which doesn't allow synchronous reads, like an ASP.NET Core
 request body, can be parsed. Use `Parse(TextReader)` on a thread which can block to avoid the thread pool hop.
 
+### Generated parsers
+
+A source-generated entry point whose input is a `TextReader` uses the same compacting buffer:
+
+```csharp
+public static partial bool TryParse(TextReader reader, out IJson value);
+```
+
+The emitters generate the token loops and pins described above in the reader variant only, so
+the `string` variant of the same factory is unchanged. See
+[TextReader entry points](source-generation.md#textreader-entry-points).
+
 ## Window driver
 
 `ParseManyAsync` reads text into a contiguous window and parses the window with the regular synchronous parser.
@@ -239,13 +251,15 @@ other overloads could wait for more text than the next value needs before parsin
 - The compacting buffer supports inputs up to `int.MaxValue` characters, since offsets are `int`.
 - To fill a window, the readers read until the target size or the end of the input. With interactive sources, use
   the delimited overload or a small `BufferSize`.
-- Generated parsers only parse strings. Their code embeds the same `Cursor` and sets `HitEnd` the same way, but
-  compiles it with `PARLOT_STANDALONE`, which fixes the window to the whole text.
+- Generated parsers support the compacting buffer through `TextReader` entry points, without options: the buffer
+  starts at 4096 characters and `MaxBufferedCharacters` isn't limited. They don't support `ParseManyAsync` or
+  asynchronous reads.
 
 ## Performance
 
 Parsing a `string` is unchanged: the compacting checks share a byte of `ParseContext` with the parser hooks,
-`HitEnd` is only set on the paths that reach the end of the text, and generated parsers compile the compacting code out.
+`HitEnd` is only set on the paths that reach the end of the text, and generated parsers compile the compacting code out
+unless their assembly declares a `TextReader` entry point.
 
 The benchmarks below (`StreamingBenchmarks`) parse JSON objects with the sample grammar, from a `TextReader`
 which isn't a `StringReader`, to avoid the fast path. `Document` parses an
@@ -293,3 +307,23 @@ larger window. That cost grew with the value, and buffered all of it:
 | `TryParseAsync(TextReader)` time ratio | 100000 | 1.93 | 1.27 |
 | `TryParseAsync(TextReader)` alloc ratio | 100000 | 2.26 | 1.15 |
 | Peak buffered characters | 100000 | 16,777,216 (window) | 4,169 |
+
+Generated parsers, with the same grammar and documents. Ratios are relative to `ReadToEnd` + the runtime `Parse`, from
+the same run:
+
+| Method | Count | Mean | Ratio | Allocated | Alloc ratio |
+|---|---:|---:|---:|---:|---:|
+| `ReadToEnd` + generated `TryParse(string)` | 1000 | 322.3 us | 0.91 | 804.5 KB | 1.06 |
+| Generated `TryParse(TextReader)` | 1000 | 413.0 us | 1.16 | 915.9 KB | 1.21 |
+| `ReadToEnd` + generated `TryParse(string)` | 10000 | 7.82 ms | 0.99 | 7.95 MB | 1.06 |
+| Generated `TryParse(TextReader)` | 10000 | 8.02 ms | 1.01 | 9.06 MB | 1.21 |
+| `ReadToEnd` + generated `TryParse(string)` | 100000 | 87.0 ms | 0.98 | 79.0 MB | 1.06 |
+| Generated `TryParse(TextReader)` | 100000 | 110.6 ms | 1.24 | 90.2 MB | 1.21 |
+
+The generated reader uses the same buffer algorithm, so it buffers the same peak characters. These benchmarks are
+opt-in, because a `TextReader` entry point compiles the streaming runtime into the whole assembly, which would also
+measure the benchmarks' other generated parsers in streaming mode:
+
+```bash
+GeneratedReader=true dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- --filter "*StreamingBenchmarks.Document*"
+```

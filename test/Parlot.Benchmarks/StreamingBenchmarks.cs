@@ -55,6 +55,24 @@ public class StreamingBenchmarks
         return JsonParser.Json.Parse(reader);
     }
 
+#if GENERATED_READER
+    [Benchmark, BenchmarkCategory("Document")]
+    public IJson? Document_Generated_ReadToEnd()
+    {
+        using var reader = new ForwardOnlyReader(_document);
+        _ = GeneratedParsers.TryParseJson(reader.ReadToEnd(), out var value);
+        return value;
+    }
+
+    [Benchmark, BenchmarkCategory("Document")]
+    public IJson? Document_Generated_Parse()
+    {
+        using var reader = new ForwardOnlyReader(_document);
+        _ = GeneratedParsers.TryParseJson(reader, out var value);
+        return value;
+    }
+#endif
+
     [Benchmark(Baseline = true), BenchmarkCategory("Lines")]
     public int Lines_ReadLine()
     {
