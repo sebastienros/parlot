@@ -72,7 +72,11 @@ public class StreamingTests
             }
         }
 
-        string[] calc = ["", " ", "1", "1+2*3", " 1 + 2 ", "-(3.5*2)", "1.", "1e", "1e5", "12.5e-3", "(1+2", "1+", "1+2)x", "((1))/(2-3)*4", "1 +\n 2"];
+        string[] calc =
+        [
+            "", " ", "1", "1+2*3", " 1 + 2 ", "-(3.5*2)", "1.", "1e", "1e5", "12.5e-3", "(1+2", "1+", "1+2)x", "((1))/(2-3)*4", "1 +\n 2",
+            "3 - 1 / 2 + 1", "1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2 + 1 - ( 3 + 2.5 ) * 4 - 1 / 2", "-(3 + 2) * -4 + --6",
+        ];
         Add("calc", calc);
         Add("calc-eof", calc);
 
@@ -190,6 +194,43 @@ public class StreamingTests
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void CompactingStreamsMatchTheWholeText(string grammar, string input)
+    {
+        var g = Grammars[grammar];
+        var expected = g.Parse(input, isFinal: true);
+        var random = new Random(input.Length * 17 + grammar.Length);
+
+        (Func<int> Chunk, int BufferSize)[] configurations =
+        [
+            (() => 1, 1),
+            (() => 1, 4096),
+            (() => 3, 2),
+            (() => 7, 5),
+            (() => random.Next(1, 6), 1),
+            (() => random.Next(1, 6), 3),
+            (() => int.MaxValue, 1),
+        ];
+
+        foreach (var (chunk, bufferSize) in configurations)
+        {
+            var options = new StreamParseOptions { BufferSize = bufferSize, ContextFactory = g.ContextFactory };
+            var actual = g.ParseCompacting(() => new ChunkedReader(input, chunk, yield: false), options);
+
+            Assert.True(expected == actual, $"'{input}' with buffer size {bufferSize}: expected {expected}, actual {actual}");
+        }
+
+        // Splits the first token at every position
+        for (var split = 1; split <= input.Length; split++)
+        {
+            var options = new StreamParseOptions { BufferSize = split, ContextFactory = g.ContextFactory };
+            var actual = g.ParseCompacting(() => new ChunkedReader(input, () => int.MaxValue, yield: false), options);
+
+            Assert.True(expected == actual, $"'{input}' split at {split}: expected {expected}, actual {actual}");
+        }
+    }
+
     [Fact]
     public async Task ParseAsyncReadsOnlyWhatIsNeeded()
     {
@@ -239,7 +280,8 @@ public class StreamingTests
         Assert.Equal("[\"abcdefghij\"]", (await JsonParser.Json.ParseAsync(new ChunkedReader("[\"abcdefghij\"]", () => 1, false), options))!.ToString());
 
         var exception = await Assert.ThrowsAsync<ParseException>(async () => await JsonParser.Json.ParseAsync(new ChunkedReader("[\"abcdefghijklmnopqrstuvwxyz\"]", () => 1, false), options));
-        Assert.Equal(0, exception.Position.Offset);
+        // The start of the token which doesn't fit
+        Assert.Equal(1, exception.Position.Offset);
     }
 
     [Fact]
@@ -634,6 +676,8 @@ public class StreamingTests
         string? Parse(string text, bool isFinal);
 
         Task<string> ParseAsync(Func<TextReader> reader, StreamParseOptions options);
+
+        string ParseCompacting(Func<TextReader> reader, StreamParseOptions options);
     }
 
     private sealed class Grammar<T> : IGrammar
@@ -691,6 +735,30 @@ public class StreamingTests
             {
                 return Error(e);
             }
+        }
+
+        public string ParseCompacting(Func<TextReader> reader, StreamParseOptions options)
+        {
+            var success = _parser.TryParse(reader(), out var value, out var error, options);
+
+            if (success)
+            {
+                return "OK " + Dump(value);
+            }
+
+            try
+            {
+                _parser.Parse(reader(), options);
+            }
+            catch (ParseException e)
+            {
+                var message = Error(e);
+                Assert.Equal(message, $"ERROR {error!.Message} at {error.Position.Offset}{error.Position}");
+                return message;
+            }
+
+            Assert.Null(error);
+            return "FAIL";
         }
 
         private static string Error(ParseException e) => $"ERROR {e.Message} at {e.Position.Offset}{e.Position}";
@@ -954,6 +1022,12 @@ public class StreamingTests
     {
         public override bool Parse(ParseContext context, ref ParseResult<char> result)
         {
+            // A token is parsed again on a larger buffer when it reads the end of the buffer
+            if (context.IsCompacting)
+            {
+                return context.ParseToken(this, ref result);
+            }
+
             context.EnterParser(this);
 
             var cursor = context.Scanner.Cursor;
