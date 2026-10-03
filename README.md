@@ -360,37 +360,41 @@ WarmupCount=3
 
 ### Streaming Benchmarks
 
-This benchmark parses JSON with the sample grammar from a `TextReader`, compared to reading the whole text first and
-parsing the `string`. `Document` is a single array of `Count` objects, `Lines` is one object per line. The reader isn't a
-`StringReader`, which would be parsed as a string directly. Ratios are relative to the non-streaming method of the
-same group. The generated `TextReader` overload is benchmarked in an assembly that also declares reader entry points.
+This benchmark counts the failed records of an access log with a grammar of patterns, keywords, numbers and quoted
+strings (`src/Samples/AccessLog`). It doesn't allocate its results, so it measures the parsers rather than a model. The log
+is read from a `TextReader`, compared to reading the whole text first and parsing the `string`. `Document` parses the
+log of `Count` records as a single value, `Lines` parses one record per line. The reader isn't a `StringReader`, which
+would be parsed as a string directly. Ratios are relative to the non-streaming method of the same group. The generated
+`TextReader` overload is benchmarked in an assembly that also declares reader entry points.
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| Document, `ReadToEnd` + `Parse(string)` | 1,000 | 355.6 us | 1.00 | 757.8 KB | 1.00 |
-| Document, `Parse(TextReader)` | 1,000 | 483.3 us | 1.36 | 869.1 KB | 1.15 |
-| Document, `ReadToEnd` + generated `TryParse(string)` | 1,000 | 322.3 us | 1.00 | 804.5 KB | 1.00 |
-| Document, generated `TryParse(TextReader)` | 1,000 | 413.0 us | 1.28 | 915.9 KB | 1.14 |
-| Document, `ReadToEnd` + `Parse(string)` | 10,000 | 7.91 ms | 1.00 | 7.49 MB | 1.00 |
-| Document, `Parse(TextReader)` | 10,000 | 8.85 ms | 1.12 | 8.60 MB | 1.15 |
-| Document, `ReadToEnd` + generated `TryParse(string)` | 10,000 | 7.82 ms | 1.00 | 7.95 MB | 1.00 |
-| Document, generated `TryParse(TextReader)` | 10,000 | 8.02 ms | 1.03 | 9.06 MB | 1.14 |
-| Document, `ReadToEnd` + `Parse(string)` | 100,000 | 89.2 ms | 1.00 | 74.4 MB | 1.00 |
-| Document, `Parse(TextReader)` | 100,000 | 108.6 ms | 1.22 | 85.7 MB | 1.15 |
-| Document, `ReadToEnd` + generated `TryParse(string)` | 100,000 | 87.0 ms | 1.00 | 79.0 MB | 1.00 |
-| Document, generated `TryParse(TextReader)` | 100,000 | 110.6 ms | 1.27 | 90.2 MB | 1.14 |
-| Lines, `ReadLine` + `Parse(string)` | 100,000 | 36.2 ms | 1.00 | 116.3 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 100,000 | 33.9 ms | 0.94 | 83.9 MB | 0.72 |
+| Document, `ReadToEnd` + `Parse(string)` | 1,000 | 281.8 us | 1.00 | 12.88 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1,000 | 364.9 us | 1.30 | 212.55 KB | 16.50 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 1,000 | 247.4 us | 1.00 | 12.88 KB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 1,000 | 329.7 us | 1.33 | 212.55 KB | 16.50 |
+| Document, `ReadToEnd` + `Parse(string)` | 10,000 | 2.87 ms | 1.00 | 172.49 KB | 1.00 |
+| Document, `Parse(TextReader)` | 10,000 | 3.71 ms | 1.29 | 2.15 MB | 12.76 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 10,000 | 2.51 ms | 1.00 | 172.49 KB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 10,000 | 3.26 ms | 1.30 | 2.15 MB | 12.76 |
+| Document, `ReadToEnd` + `Parse(string)` | 100,000 | 28.6 ms | 1.00 | 1.43 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100,000 | 36.6 ms | 1.28 | 21.49 MB | 15.03 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 100,000 | 25.2 ms | 1.00 | 1.43 MB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 100,000 | 32.4 ms | 1.29 | 21.49 MB | 15.03 |
+| Lines, `ReadLine` + `Parse(string)` | 100,000 | 33.1 ms | 1.00 | 39.20 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100,000 | 31.7 ms | 0.96 | 20.61 MB | 0.53 |
 
-Streaming costs 3% to 36% more time and about 15% more allocations, but the memory it retains doesn't grow with the
-document. The non-streaming methods hold the whole document in memory; the streaming ones hold about 4,169 characters
-(the default 4,096-character buffer plus the token in progress):
+Streaming a single value costs about 30% more time. The `string` methods only allocate the list of record results,
+because `ReadToEnd` returns the benchmark's string here; streaming allocates the window strings, about the size of the
+text, which reading it into a `string` would allocate too. The memory it retains doesn't grow with the document: the
+non-streaming methods hold the whole document in memory, the streaming ones about 4,218 characters (the default
+4,096-character buffer plus the record in progress):
 
 | Count | Document characters | Peak buffered characters |
 |---:|---:|---:|
-| 1,000 | 56,295 | 4,163 |
-| 10,000 | 573,763 | 4,167 |
-| 100,000 | 5,838,891 | 4,169 |
+| 1,000 | 100,854 | 4,165 |
+| 10,000 | 1,021,903 | 4,214 |
+| 100,000 | 10,352,412 | 4,218 |
 
 See [Parsing streams](docs/streaming.md#performance) for the details and the command to run them.
 

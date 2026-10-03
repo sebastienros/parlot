@@ -261,9 +261,10 @@ Parsing a `string` is unchanged: the compacting checks share a byte of `ParseCon
 `HitEnd` is only set on the paths that reach the end of the text, and generated parsers compile the compacting code out
 unless their assembly declares a `TextReader` entry point.
 
-The benchmarks below (`StreamingBenchmarks`) parse JSON objects with the sample grammar, from a `TextReader`
-which isn't a `StringReader`, to avoid the fast path. `Document` parses an
-array of `Count` objects, `Lines` parses one object per line.
+The benchmarks below (`StreamingBenchmarks`) count the failed records of an access log with the sample grammar in
+`src/Samples/AccessLog`, which matches patterns, keywords, numbers and quoted strings without allocating its results, so they
+measure the parsers rather than a model. The log is read from a `TextReader` which isn't a `StringReader`, to avoid the
+fast path. `Document` parses the log of `Count` records as a single value, `Lines` parses one record per line.
 
 Measured on Apple M-series (Arm64), .NET 10, BenchmarkDotNet `ShortRun`. Ratios are relative to `ReadToEnd` + `Parse`.
 `ReadToEnd` doesn't copy the text here, it returns the benchmark's string. To run them:
@@ -274,35 +275,44 @@ dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release 
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| Document, `ReadToEnd` + `Parse` | 1000 | 386.0 us | 1.00 | 757.8 KB | 1.00 |
-| Document, `Parse(TextReader)` | 1000 | 549.7 us | 1.42 | 869.1 KB | 1.15 |
-| Document, `TryParseAsync(TextReader)` | 1000 | 547.8 us | 1.42 | 870.1 KB | 1.15 |
-| Document, `ReadToEnd` + `Parse` | 10000 | 8.00 ms | 1.00 | 7.49 MB | 1.00 |
-| Document, `Parse(TextReader)` | 10000 | 10.27 ms | 1.28 | 8.60 MB | 1.15 |
-| Document, `TryParseAsync(TextReader)` | 10000 | 10.26 ms | 1.28 | 8.60 MB | 1.15 |
-| Document, `ReadToEnd` + `Parse` | 100000 | 92.9 ms | 1.00 | 74.4 MB | 1.00 |
-| Document, `Parse(TextReader)` | 100000 | 117.7 ms | 1.27 | 85.7 MB | 1.15 |
-| Document, `TryParseAsync(TextReader)` | 100000 | 117.6 ms | 1.27 | 85.7 MB | 1.15 |
-| Lines, `ReadLine` + `Parse` | 100000 | 36.2 ms | 1.00 | 116.3 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 100000 | 33.9 ms | 0.94 | 83.9 MB | 0.72 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 40.6 ms | 1.12 | 116.3 MB | 1.00 |
+| Document, `ReadToEnd` + `Parse` | 1000 | 281.8 us | 1.00 | 12.88 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1000 | 364.9 us | 1.30 | 212.55 KB | 16.50 |
+| Document, `TryParseAsync(TextReader)` | 1000 | 383.2 us | 1.36 | 213.38 KB | 16.56 |
+| Document, `ReadToEnd` + `Parse` | 10000 | 2.87 ms | 1.00 | 172.49 KB | 1.00 |
+| Document, `Parse(TextReader)` | 10000 | 3.71 ms | 1.29 | 2.15 MB | 12.76 |
+| Document, `TryParseAsync(TextReader)` | 10000 | 3.66 ms | 1.28 | 2.15 MB | 12.76 |
+| Document, `ReadToEnd` + `Parse` | 100000 | 28.6 ms | 1.00 | 1.43 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100000 | 36.6 ms | 1.28 | 21.49 MB | 15.03 |
+| Document, `TryParseAsync(TextReader)` | 100000 | 39.4 ms | 1.38 | 21.49 MB | 15.03 |
+| Lines, `ReadLine` + `Parse` | 1000 | 329.2 us | 1.00 | 395.49 KB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 1000 | 314.6 us | 0.96 | 207.02 KB | 0.52 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 352.5 us | 1.07 | 395.99 KB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 10000 | 3.26 ms | 1.00 | 3.89 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 10000 | 3.13 ms | 0.96 | 2.03 MB | 0.52 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 10000 | 3.58 ms | 1.10 | 3.89 MB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 100000 | 33.1 ms | 1.00 | 39.20 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100000 | 31.7 ms | 0.96 | 20.61 MB | 0.53 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 35.6 ms | 1.08 | 39.20 MB | 1.00 |
 
 The cost of a single value is a constant ratio of reading the text first, whatever its size, and the buffer stays flat.
-Peak buffered characters for the same documents:
+Peak buffered characters for the same logs, whose longest record has 122 characters:
 
 | Count | Document | `BufferSize` 4096 (default) | `BufferSize` 64 |
 |---:|---:|---:|---:|
-| 1000 | 56,295 | 4,163 | 142 |
-| 10000 | 573,763 | 4,167 | 142 |
-| 100000 | 5,838,891 | 4,169 | 142 |
+| 1000 | 100,854 | 4,165 | 234 |
+| 10000 | 1,021,903 | 4,214 | 238 |
+| 100000 | 10,352,412 | 4,218 | 246 |
 
 The extra time is the per-token bookkeeping and the window strings: each refill allocates a new window, about the size of
-the text in total, which the `TextSpan`s of the tokens reference. Read the text first when it's small or wanted anyway,
-and stream it when it's large, or when it isn't needed after the parse. `ParseManyAsync` is as fast as reading lines,
-with memory bounded by the largest value.
+the text in total, which the `TextSpan`s of the tokens reference. The `string` methods only allocate the list of record
+results, since `ReadToEnd` returns the benchmark's string, so the allocations are those of the windows: reading a file
+into a `string` allocates at least as much. Read the text first when it's small or wanted anyway, and stream it when
+it's large, or when it isn't needed after the parse. `ParseManyAsync` is as fast as reading lines, with half the
+allocations and memory bounded by the largest value.
 
 Before the compacting buffer, single values were parsed by the window driver, which retries the whole value on a
-larger window. That cost grew with the value, and buffered all of it:
+larger window. That cost grew with the value, and buffered all of it. Measured with the JSON sample grammar, before
+the benchmarks used the log grammar:
 
 | Method | Count | Window driver | Compacting buffer |
 |---|---:|---:|---:|
@@ -312,21 +322,21 @@ larger window. That cost grew with the value, and buffered all of it:
 | `TryParseAsync(TextReader)` alloc ratio | 100000 | 2.26 | 1.15 |
 | Peak buffered characters | 100000 | 16,777,216 (window) | 4,169 |
 
-Generated parsers, with the same grammar and documents. Ratios are relative to `ReadToEnd` + the runtime `Parse`, from
+Generated parsers, with the same grammar and logs. Ratios are relative to `ReadToEnd` + the runtime `Parse`, from
 the same run:
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| `ReadToEnd` + generated `TryParse(string)` | 1000 | 322.3 us | 0.91 | 804.5 KB | 1.06 |
-| Generated `TryParse(TextReader)` | 1000 | 413.0 us | 1.16 | 915.9 KB | 1.21 |
-| `ReadToEnd` + generated `TryParse(string)` | 10000 | 7.82 ms | 0.99 | 7.95 MB | 1.06 |
-| Generated `TryParse(TextReader)` | 10000 | 8.02 ms | 1.01 | 9.06 MB | 1.21 |
-| `ReadToEnd` + generated `TryParse(string)` | 100000 | 87.0 ms | 0.98 | 79.0 MB | 1.06 |
-| Generated `TryParse(TextReader)` | 100000 | 110.6 ms | 1.24 | 90.2 MB | 1.21 |
+| `ReadToEnd` + generated `TryParse(string)` | 1000 | 247.4 us | 0.88 | 12.88 KB | 1.00 |
+| Generated `TryParse(TextReader)` | 1000 | 329.7 us | 1.17 | 212.55 KB | 16.50 |
+| `ReadToEnd` + generated `TryParse(string)` | 10000 | 2.51 ms | 0.87 | 172.49 KB | 1.00 |
+| Generated `TryParse(TextReader)` | 10000 | 3.26 ms | 1.14 | 2.15 MB | 12.76 |
+| `ReadToEnd` + generated `TryParse(string)` | 100000 | 25.2 ms | 0.88 | 1.43 MB | 1.00 |
+| Generated `TryParse(TextReader)` | 100000 | 32.4 ms | 1.13 | 21.49 MB | 15.03 |
 
-The generated reader uses the same buffer algorithm, so it buffers the same peak characters. These benchmarks are
-opt-in, because a `TextReader` entry point compiles the streaming runtime into the whole assembly, which would also
-measure the benchmarks' other generated parsers in streaming mode:
+The generated reader uses the same buffer algorithm, so it buffers the same peak characters. The generated
+`TryParse(TextReader)` benchmark is opt-in, because a `TextReader` entry point compiles the streaming runtime into the
+whole assembly, which would also measure the benchmarks' other generated parsers in streaming mode:
 
 ```bash
 GeneratedReader=true dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- --filter "*StreamingBenchmarks.Document*"
