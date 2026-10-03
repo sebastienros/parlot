@@ -15,6 +15,16 @@ public class BenchmarksTests
     const decimal _expected1 = (decimal)3.5;
     const decimal _expected2 = (decimal)-64.5;
 
+    [Fact]
+    public void DiscardedTextGrammar()
+    {
+        var benchmark = new DiscardResultBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("value", benchmark.SkippedText());
+        Assert.Equal("value", benchmark.BetweenText());
+        Assert.Equal("KeYwOrD", benchmark.RetainedText());
+    }
+
     [Theory]
     [InlineData("Language", "Hit")]
     [InlineData("Language", "Miss")]

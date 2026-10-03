@@ -256,9 +256,25 @@ and unbounded lookaheads retain their text until they complete, see [Limitations
 
 The reader overload is generated as a separate parser with the token refill and backtrack pin code. The `string`
 overload of the same factory keeps its own code, but an assembly which declares any `TextReader` entry point embeds a
-streaming-capable `Cursor`, whose movable buffer base costs some throughput to every generated `string` parser of
-that assembly: between 0% and 6% on the JSON benchmarks, about 10% on the expression benchmark. Keep latency-critical `string` parsers and reader parsers in separate assemblies when that matters.
+streaming-capable `Cursor`, whose movable buffer base can cost some throughput to generated `string` parsers of
+that assembly. The 2026-10-02 `ShortRun` comparison measured roughly 1-3% higher expression means and JSON
+means ranging from 3% lower to 5% higher. Most confidence intervals overlap, so this run does not establish
+a consistent overhead. Keep latency-critical `string` parsers and reader parsers in separate assemblies when that matters.
 Assemblies without reader entry points compile the compacting code out.
+
+The paired generated-parser means below use the same Apple M4 Pro, .NET 10.0.11,
+SDK 11.0.100-rc.1.26425.128, and deterministic JSON inputs; only the reader-enabled build changes.
+Allocations were unchanged between the two builds.
+
+| Generated parser | String-only assembly | Reader-enabled assembly | Mean change |
+|---|---:|---:|---:|
+| Expression small | 178.3 ns | 181.1 ns | +1.6% |
+| Expression big | 1,004.2 ns | 1,022.9 ns | +1.9% |
+| Expression unary | 238.6 ns | 245.2 ns | +2.8% |
+| JSON big | 32.070 us | 32.40 us | +1.0% |
+| JSON deep | 23.901 us | 25.14 us | +5.2% |
+| JSON long | 26.640 us | 26.93 us | +1.1% |
+| JSON wide | 13.593 us | 13.21 us | -2.8% |
 
 Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
 larger results grow into a list, and an empty `ZeroOrMany` result uses an empty array. Public results should
@@ -573,3 +589,17 @@ per token. When `Capture` discards a string parser's decoded value, the generate
 escape sequences but skips decoding and its string allocation. Callbacks and predicates that consume the
 value still receive decoded text and execute normally, even when their result is captured or discarded.
 Helpers are specialized by result mode so the same parser can be used both for capture and for its value.
+
+Generated parsers also use recognition-only helpers for fully skipped `AndSkip`/`SkipAnd` operands,
+`Between` delimiters, separators, lookaheads, operator tokens whose values are unused, and `AnyCharBefore`
+delimiters. Constant-result `Then(value)` parsers do not materialize their input value either. A skipped
+`Text` token still checks its comparison mode and advances the cursor, but does not materialize matched
+text, including when `returnMatchedText: true`. Retained tokens keep their normal casing and value
+semantics. This optimization applies to generated string and `TextReader` entry points, not runtime
+`Parse` methods.
+
+Recognition-only helpers still validate numeric conversion and range: skipping a number does not
+accept overflow or values its numeric type cannot represent. Skipping a callback's result does not
+skip its execution, required input values, or exceptions.
+Higher-arity `SkipAnd` keeps the preceding tuple value-producing when some of its members are returned;
+individual dropped tuple members are not independently optimized.

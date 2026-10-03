@@ -104,9 +104,9 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Main", mainValueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var lookaheadHelperName = context.Helpers
+        var lookaheadHelperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(lookaheadSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Lookahead", lookaheadValueTypeName, () => lookaheadSourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         if (context.DiscardResult)
         {

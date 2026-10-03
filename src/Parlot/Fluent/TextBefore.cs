@@ -190,9 +190,9 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         var delimiterValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         // Use helper instead of inlining
-        var delimiterHelperName = context.Helpers
+        var delimiterHelperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_TextBefore_Delimiter", delimiterValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         result.Body.Add("while (true)");
         result.Body.Add("{");

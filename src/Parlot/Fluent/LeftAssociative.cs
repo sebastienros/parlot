@@ -174,9 +174,9 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
 
             // Register helper for the operator parser with unique prefix
             var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
-            var opHelperName = context.Helpers
+            var opHelperName = context.WithDiscardResult(true, () => context.Helpers
                 .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_LeftAssoc{uniqueId}", opValueTypeName, () => opSourceable.GenerateSource(context))
-                .MethodName;
+                .MethodName);
 
             var opResultName = $"opResult{context.NextNumber()}";
 
@@ -381,9 +381,9 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
             var factoryFieldName = context.RegisterLambda(factory);
 
             var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
-            var opHelperName = context.Helpers
+            var opHelperName = context.WithDiscardResult(true, () => context.Helpers
                 .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_LeftAssocCtx{uniqueId}", opValueTypeName, () => opSourceable.GenerateSource(context))
-                .MethodName;
+                .MethodName);
 
             var opResultName = $"opResult{context.NextNumber()}";
 

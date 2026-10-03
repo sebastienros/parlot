@@ -9,6 +9,7 @@ public static partial class Grammar
     public static partial bool TryParseNumber(string text, out int value);
     public static partial bool TryParsePrefix(string text, out string value);
     public static partial bool TryParseMatchedText(string text, out string value);
+    public static partial bool TryParseSkippedValues(string text, out string value);
     public static partial bool TryParseIdentifier(string text, out string value);
     public static partial bool TryParseAlternative(string text, out char value);
     public static partial bool TryParseString(string text, out string value);
@@ -41,6 +42,7 @@ public static partial class Grammar
 
     // TextReader entry points parse with a compacting buffer.
     public static partial bool TryParseNumber(TextReader reader, out int value);
+    public static partial bool TryParseSkippedValues(TextReader reader, out string value);
     public static partial bool TryParseAlternative(TextReader reader, out char value);
     public static partial bool TryParseString(TextReader reader, out string value);
     public static partial bool TryParseNumbers(TextReader reader, out IReadOnlyList<int> value);

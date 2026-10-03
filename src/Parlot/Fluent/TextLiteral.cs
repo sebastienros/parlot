@@ -150,7 +150,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
         result.Body.Add($"if ({cursorName}.Match({textLiteral}.AsSpan(), {comparison}))");
         result.Body.Add("{");
-        var shouldReturnMatchedText = isNotOrdinal && (!ignoreCase || _returnMatchedText);
+        var shouldReturnMatchedText = !context.DiscardResult && isNotOrdinal && (!ignoreCase || _returnMatchedText);
         if (shouldReturnMatchedText)
         {
             result.Body.Add($"    var {startName} = {cursorName}.Offset;");
@@ -158,7 +158,11 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
         
         // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
-        if (shouldReturnMatchedText)
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"    {result.ValueVariable} = default;");
+        }
+        else if (shouldReturnMatchedText)
         {
             var bufferName = $"buffer{context.NextNumber()}";
             var parsedTextName = $"parsedText{context.NextNumber()}";

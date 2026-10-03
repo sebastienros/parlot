@@ -97,7 +97,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekable, ISourceable
         }
 
         var helper1 = Helper(parser1, "P1");
-        var helper2 = Helper(parser2, "P2");
+        var helper2 = context.WithDiscardResult(true, () => Helper(parser2, "P2"));
 
         var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
         result.Body.Add($"if ({helper1}({context.ParseContextName}, out {outTarget}))");
@@ -223,7 +223,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
         }
 
         var helperParser = Helper(parser, "Parser");
-        var helperLast = Helper(lastParser, "Last");
+        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, "Last"));
 
         result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
@@ -348,7 +348,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
         }
 
         var helperParser = Helper(parser, "Parser");
-        var helperLast = Helper(lastParser, "Last");
+        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, "Last"));
 
         result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
@@ -473,7 +473,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
         }
 
         var helperParser = Helper(parser, "Parser");
-        var helperLast = Helper(lastParser, "Last");
+        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, "Last"));
 
         result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
@@ -602,7 +602,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
         }
 
         var helperParser = Helper(parser, "Parser");
-        var helperLast = Helper(lastParser, "Last");
+        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, "Last"));
 
         result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
@@ -730,7 +730,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
         }
 
         var helperParser = Helper(parser, "Parser");
-        var helperLast = Helper(lastParser, "Last");
+        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, "Last"));
 
         result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");
@@ -860,7 +860,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
         }
 
         var helperParser = Helper(parser, "Parser");
-        var helperLast = Helper(lastParser, "Last");
+        var helperLast = context.WithDiscardResult(true, () => Helper(lastParser, "Last"));
 
         result.Body.Add($"if ({helperParser}({context.ParseContextName}, out var hpValue))");
         result.Body.Add("{");

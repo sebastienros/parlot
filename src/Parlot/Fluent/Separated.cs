@@ -342,9 +342,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", parserValueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var separatorHelperName = context.Helpers
+        var separatorHelperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         // The end of the last element is read again when a separator isn't followed by an element
         var pin = context.Pin(result);
@@ -458,9 +458,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         var parserHelper = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", elementTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
-        var separatorHelper = context.Helpers
+        var separatorHelper = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorTypeName, () => separatorSourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
         var initial = $"initial{context.NextNumber()}";
         var beforeSeparator = $"beforeSeparator{context.NextNumber()}";
         var beforeValue = $"beforeValue{context.NextNumber()}";

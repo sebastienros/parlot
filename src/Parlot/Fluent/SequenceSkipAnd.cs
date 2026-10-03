@@ -96,7 +96,7 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ISeekable, ISourceable
                 .MethodName;
         }
 
-        var helper1 = Helper(parser1, "P1");
+        var helper1 = context.WithDiscardResult(true, () => Helper(parser1, "P1"));
         var helper2 = Helper(parser2, "P2");
 
         result.Body.Add($"if ({helper1}({context.ParseContextName}, out _))");

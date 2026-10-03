@@ -265,25 +265,25 @@ All other grammar construction is shared. Setup checks every result record again
 independently calculated expected values, and verifies that invalid files fail without
 returning partial results.
 
-On the same Apple M4 Pro/.NET 10.0.11 environment, using normal runtime tiering, two
-launches, five warmups, and twelve 500 ms measurement iterations:
+Refreshed on 2026-10-02 on the same Apple M4 Pro/.NET 10.0.11 environment,
+SDK 11.0.100-rc.1.26425.128, using normal runtime tiering and BenchmarkDotNet `ShortRun`
+without command-line iteration or warmup overrides:
 
 | Declarations | Input | Before | After | Time reduction | Allocated, both |
 |---|---|---:|---:|---:|---:|
-| 8 | Valid | 1.805 us | 1.598 us | 11.5% | 1.43 KB |
-| 128 | Valid | 29.259 us | 26.237 us | 10.3% | 19.34 KB |
-| 8 | Unknown type in final declaration | 1.636 us | 1.448 us | 11.5% | 1.35 KB |
-| 128 | Unknown type in final declaration | 28.952 us | 25.899 us | 10.5% | 19.26 KB |
-| 8 | Invalid expression in final declaration | 1.682 us | 1.519 us | 9.7% | 1.39 KB |
-| 128 | Invalid expression in final declaration | 28.622 us | 25.887 us | 9.6% | 19.30 KB |
+| 8 | Valid | 1.774 us | 1.595 us | 10.1% | 1.41 KB |
+| 128 | Valid | 29.155 us | 26.597 us | 8.8% | 19.32 KB |
+| 8 | Unknown type in final declaration | 1.582 us | 1.415 us | 10.6% | 1.34 KB |
+| 128 | Unknown type in final declaration | 29.703 us | 26.223 us | 11.7% | 19.24 KB |
+| 8 | Invalid expression in final declaration | 1.673 us | 1.492 us | 10.8% | 1.38 KB |
+| 128 | Invalid expression in final declaration | 28.975 us | 26.399 us | 8.9% | 19.28 KB |
 
-The 99.9% confidence intervals for valid files are 1.805 +/- 0.0146 us versus
-1.598 +/- 0.0039 us (eight declarations), and 29.259 +/- 0.1516 us versus
-26.237 +/- 0.0564 us (128 declarations). An earlier, shorter run showed 8-9% lower
-valid-file parsing times, but its long-input failure cases were noisy; the table above
-uses the longer confirmation run rather than drawing conclusions from that noise.
+The 99.9% confidence intervals for valid files are 1.774 +/- 0.0471 us versus
+1.595 +/- 0.0199 us (eight declarations), and 29.155 +/- 3.2016 us versus
+26.597 +/- 1.9845 us (128 declarations). The longer-input intervals overlap:
+the mean reductions are indicative, not a precise speedup guarantee.
 
-The application-shaped gain is approximately **10-11% lower total parsing time**, not
+The valid-file means show approximately **9-10% lower total parsing time**, not
 the larger isolated-token speedup. Expression parsing and object construction account
 for the unaffected work. Allocations are unchanged. These results do not extend to the
 existing SQL sample: its case-insensitive keywords are ineligible for this optimization.
@@ -293,8 +293,7 @@ Reproduce this comparison with:
 ```bash
 dotnet build -c Release
 dotnet run --no-build --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- \
-  --filter '*KeywordSourceBenchmarks*' --job short \
-  --warmupCount 5 --iterationCount 12 --launchCount 2 --iterationTime 500
+  --filter '*KeywordSourceBenchmarks*' --job short
 ```
 
 ## Article-driven measurements

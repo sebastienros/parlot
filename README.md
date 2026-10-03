@@ -234,6 +234,10 @@ dotnet build -c Release
 dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release --no-build -- --filter "*ExprBench*" "*JsonBench*" "*RegexBenchmarks*"
 ```
 
+The tables below were refreshed on 2026-10-02 using the existing BenchmarkDotNet `ShortRun` jobs,
+without command-line iteration or warmup overrides. Short runs are indicative; use the reported
+errors when comparing close timings.
+
 ### Expression Benchmarks
 
 This benchmark creates an expression tree (AST) representing mathematical expressions with operator precedence and grouping. It exercises three expressions:
@@ -252,84 +256,89 @@ large parser chains into oversized native methods.
 ```
 BenchmarkDotNet v0.15.8, macOS Sequoia 15.8.1 (24H32) [Darwin 24.6.0]
 Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 11.0.100-rc.1.26413.103
+.NET SDK 11.0.100-rc.1.26425.128
   [Host]   : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
   ShortRun : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-| Method               | Mean        | Error       | StdDev    | Gen0   | Allocated |
-|--------------------- |------------:|------------:|----------:|-------:|----------:|
-| ParlotRawSmall       |    138.4 ns |    55.61 ns |   3.05 ns | 0.0362 |     304 B |
-| ParlotFluentSmall    |    266.6 ns |   110.47 ns |   6.06 ns | 0.0668 |     560 B |
-| ParlotGeneratedSmall |    207.8 ns |    36.11 ns |   1.98 ns | 0.0496 |     416 B |
-| PidginSmall          |  3,994.6 ns | 1,064.23 ns |  58.33 ns | 0.0992 |     832 B |
-| FarkleSmall          |    458.5 ns |    27.57 ns |   1.51 ns | 0.0267 |     224 B |
-|                      |             |             |           |        |           |
-| ParlotRawBig         |    687.3 ns |    83.89 ns |   4.60 ns | 0.1431 |    1200 B |
-| ParlotFluentBig      |  1,472.6 ns |   558.48 ns |  30.61 ns | 0.1736 |    1456 B |
-| ParlotGeneratedBig   |  1,171.2 ns |   400.43 ns |  21.95 ns | 0.1564 |    1312 B |
-| PidginBig            | 17,323.0 ns | 1,966.10 ns | 107.77 ns | 0.4883 |    4152 B |
-| FarkleBig            |  2,261.7 ns |    28.11 ns |   1.54 ns | 0.1335 |    1120 B |
-|                      |             |             |           |        |           |
-| ParlotFluentUnary    |    317.5 ns |    34.05 ns |   1.87 ns | 0.0782 |     656 B |
-| ParlotGeneratedUnary |    269.1 ns |    73.87 ns |   4.05 ns | 0.0610 |     512 B |
-| FarkleUnary          |    697.9 ns |   125.15 ns |   6.86 ns | 0.0381 |     320 B |
+| Method               | Mean        | Error       | StdDev   | Ratio | Gen0   | Allocated | Alloc Ratio |
+|--------------------- |------------:|------------:|---------:|------:|-------:|----------:|------------:|
+| ParlotRawSmall       |    128.3 ns |     8.18 ns |  0.45 ns |  0.58 | 0.0353 |     296 B |        0.54 |
+| ParlotFluentSmall    |    222.8 ns |    14.18 ns |  0.78 ns |  1.00 | 0.0648 |     544 B |        1.00 |
+| ParlotGeneratedSmall |    178.3 ns |    40.40 ns |  2.21 ns |  0.80 | 0.0477 |     400 B |        0.74 |
+| PidginSmall          |  3,215.2 ns |   267.80 ns | 14.68 ns | 14.43 | 0.0992 |     832 B |        1.53 |
+| FarkleSmall          |    405.8 ns |    65.94 ns |  3.61 ns |  1.82 | 0.0267 |     224 B |        0.41 |
+|                      |             |             |          |       |        |           |             |
+| ParlotRawBig         |    705.2 ns |   124.69 ns |  6.83 ns |  0.54 | 0.1421 |    1192 B |        0.83 |
+| ParlotFluentBig      |  1,302.8 ns |   438.88 ns | 24.06 ns |  1.00 | 0.1717 |    1440 B |        1.00 |
+| ParlotGeneratedBig   |  1,004.2 ns |    57.74 ns |  3.17 ns |  0.77 | 0.1545 |    1296 B |        0.90 |
+| PidginBig            | 15,682.8 ns | 1,410.23 ns | 77.30 ns | 12.04 | 0.4883 |    4152 B |        2.88 |
+| FarkleBig            |  2,188.4 ns |   479.76 ns | 26.30 ns |  1.68 | 0.1335 |    1120 B |        0.78 |
+|                      |             |             |          |       |        |           |             |
+| ParlotFluentUnary    |    296.4 ns |    93.76 ns |  5.14 ns |  1.00 | 0.0763 |     640 B |        1.00 |
+| ParlotGeneratedUnary |    238.6 ns |    20.52 ns |  1.12 ns |  0.81 | 0.0591 |     496 B |        0.78 |
+| FarkleUnary          |    590.3 ns |   256.37 ns | 14.05 ns |  1.99 | 0.0381 |     320 B |        0.50 |
 ```
+
+Ratios are relative to Fluent for the same expression.
 
 ### JSON Benchmarks
 
 This benchmark was taken from the Pidgin repository and demonstrates how to perform simple JSON document parsing. It exercises the parsers with different kinds of documents. Pidgin, Sprache, Superpower and Parlot use parser combinators; Farkle uses an LR grammar. These grammars parse the same subset of JSON: strings, arrays, and objects.
 For reference, Newtonsoft.Json is also added to show the differences with a dedicated parser.
 The benchmark compares Fluent and source-generated Parlot parsers with Pidgin, Sprache, Superpower, Farkle, Newtonsoft.Json, and System.Text.Json. For most documents, the best JSON parser is System.Text.Json; don't build your own!
+The generated documents use a fixed random seed so every parser receives the same input in its benchmark process.
 
 ```
 BenchmarkDotNet v0.15.8, macOS Sequoia 15.8.1 (24H32) [Darwin 24.6.0]
 Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 11.0.100-rc.1.26413.103
+.NET SDK 11.0.100-rc.1.26425.128
   [Host]   : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
   ShortRun : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
 
 Job=ShortRun  IterationCount=3  LaunchCount=1
 WarmupCount=3
 
-| Method                   | Mean      | Error      | StdDev    | Gen0     | Gen1     | Allocated  |
-|------------------------- |----------:|-----------:|----------:|---------:|---------:|-----------:|
-| BigJson_Parlot           |  39.47 us |  37.518 us |  2.056 us |  10.7422 |   1.8311 |   88.16 KB |
-| BigJson_ParlotGenerated  |  35.37 us |  12.636 us |  0.693 us |  11.6577 |   2.1362 |   95.52 KB |
-| BigJson_Pidgin           |  88.95 us |  27.215 us |  1.492 us |  11.1084 |   1.7090 |    91.7 KB |
-| BigJson_Farkle           |  91.37 us |  14.225 us |  0.780 us |   8.9111 |   1.3428 |   72.86 KB |
-| BigJson_Newtonsoft       |  58.93 us |  24.566 us |  1.347 us |  24.8413 |   8.2397 |   203.1 KB |
-| BigJson_SystemTextJson   |  17.19 us |   5.495 us |  0.301 us |   2.9297 |   0.3052 |   24.12 KB |
-| BigJson_Sprache          | 929.96 us |  17.024 us |  0.933 us | 628.9063 | 128.9063 | 5141.74 KB |
-| BigJson_Superpower       | 404.71 us | 249.793 us | 13.692 us | 103.5156 |  18.0664 |  845.93 KB |
-|                          |           |            |           |          |          |            |
-| DeepJson_Parlot          |  33.62 us |   2.377 us |  0.130 us |  12.7563 |   1.4038 |  104.57 KB |
-| DeepJson_ParlotGenerated |  27.03 us |   1.500 us |  0.082 us |  12.7563 |   1.3733 |  104.34 KB |
-| DeepJson_Pidgin          | 111.01 us |  71.918 us |  3.942 us |  14.1602 |   3.5400 |  116.29 KB |
-| DeepJson_Farkle          |  42.77 us |   2.944 us |  0.161 us |   8.3008 |   1.0376 |   68.17 KB |
-| DeepJson_Newtonsoft      |  35.87 us |   8.218 us |  0.450 us |  21.9116 |   8.7280 |  179.13 KB |
-| DeepJson_SystemTextJson  |  65.61 us |  26.508 us |  1.453 us |   2.4414 |   0.1221 |   20.24 KB |
-| DeepJson_Sprache         | 712.99 us | 261.026 us | 14.308 us | 346.6797 | 141.6016 | 2834.27 KB |
-|                          |           |            |           |          |          |            |
-| LongJson_Parlot          |  34.16 us |   3.810 us |  0.209 us |  13.7329 |   2.7466 |  112.52 KB |
-| LongJson_ParlotGenerated |  29.84 us |   6.279 us |  0.344 us |  15.1978 |   3.7231 |  124.38 KB |
-| LongJson_Pidgin          |  81.29 us |   7.422 us |  0.407 us |  14.6484 |   3.0518 |  120.25 KB |
-| LongJson_Farkle          |  71.96 us |  29.272 us |  1.605 us |  10.7422 |   2.1973 |   88.19 KB |
-| LongJson_Newtonsoft      |  44.43 us |   7.706 us |  0.422 us |  24.7803 |   9.6436 |  202.68 KB |
-| LongJson_SystemTextJson  |  11.02 us |   2.154 us |  0.118 us |   2.9297 |   0.3204 |   24.12 KB |
-| LongJson_Sprache         | 774.45 us | 183.814 us | 10.075 us | 513.6719 | 131.8359 |  4197.2 KB |
-| LongJson_Superpower      | 337.19 us |  53.184 us |  2.915 us |  83.0078 |  20.0195 |  678.79 KB |
-|                          |           |            |           |          |          |            |
-| WideJson_Parlot          |  18.20 us |   4.637 us |  0.254 us |   4.9744 |   0.4883 |   40.72 KB |
-| WideJson_ParlotGenerated |  13.56 us |   4.098 us |  0.225 us |   4.9591 |   0.5493 |   40.58 KB |
-| WideJson_Pidgin          |  32.08 us |   1.495 us |  0.082 us |   4.9438 |   0.4883 |   40.48 KB |
-| WideJson_Farkle          |  43.51 us |   0.632 us |  0.035 us |   5.6152 |   0.5493 |   45.92 KB |
-| WideJson_Newtonsoft      |  24.78 us |   2.257 us |  0.124 us |  13.0615 |   3.2349 |  106.72 KB |
-| WideJson_Sprache         | 369.76 us |  28.221 us |  1.547 us | 324.7070 |  44.4336 | 2654.69 KB |
-| WideJson_Superpower      | 177.94 us |   4.054 us |  0.222 us |  49.3164 |   4.6387 |  403.81 KB |
+| Method                   | Mean       | Error       | StdDev     | Ratio | Gen0     | Gen1     | Allocated  | Alloc Ratio |
+|------------------------- |-----------:|------------:|-----------:|------:|---------:|---------:|-----------:|------------:|
+| BigJson_Parlot           |  34.885 us |   7.4518 us |  0.4085 us |  1.00 |  10.7422 |   1.7700 |   88.15 KB |        1.00 |
+| BigJson_ParlotGenerated  |  32.070 us |   1.9522 us |  0.1070 us |  0.92 |  11.6577 |   2.0142 |   95.51 KB |        1.08 |
+| BigJson_Pidgin           |  77.520 us |   5.0888 us |  0.2789 us |  2.22 |  11.1084 |   1.7090 |    91.7 KB |        1.04 |
+| BigJson_Farkle           |  78.567 us |   4.5833 us |  0.2512 us |  2.25 |   8.9111 |   1.3428 |   72.86 KB |        0.83 |
+| BigJson_Newtonsoft       |  49.532 us |   6.7218 us |  0.3684 us |  1.42 |  24.8413 |   8.2397 |   203.1 KB |        2.30 |
+| BigJson_SystemTextJson   |  15.439 us |   0.7737 us |  0.0424 us |  0.44 |   2.9297 |   0.3052 |   24.12 KB |        0.27 |
+| BigJson_Sprache          | 811.027 us |  49.5139 us |  2.7140 us | 23.25 | 623.0469 | 125.0000 | 5091.43 KB |       57.76 |
+| BigJson_Superpower       | 375.518 us |  45.5568 us |  2.4971 us | 10.77 | 103.5156 |  18.0664 |  845.93 KB |        9.60 |
+|                          |            |             |            |       |          |          |            |             |
+| DeepJson_Parlot          |  28.128 us |   2.1797 us |  0.1195 us |  1.00 |  12.7869 |   1.5869 |  104.55 KB |        1.00 |
+| DeepJson_ParlotGenerated |  23.901 us |   2.3720 us |  0.1300 us |  0.85 |  12.7563 |   1.3123 |  104.32 KB |        1.00 |
+| DeepJson_Pidgin          | 104.012 us |   3.5108 us |  0.1924 us |  3.70 |  14.1602 |   3.5400 |  116.29 KB |        1.11 |
+| DeepJson_Farkle          |  37.255 us |   2.0543 us |  0.1126 us |  1.32 |   8.3008 |   1.0376 |   68.17 KB |        0.65 |
+| DeepJson_Newtonsoft      |  33.949 us |   5.5867 us |  0.3062 us |  1.21 |  21.9116 |   8.7280 |  179.13 KB |        1.71 |
+| DeepJson_SystemTextJson  |  83.354 us |   1.2695 us |  0.0696 us |  2.96 |   2.4414 |   0.1221 |   20.24 KB |        0.19 |
+| DeepJson_Sprache         | 637.307 us |  32.5709 us |  1.7853 us | 22.66 | 348.6328 | 145.5078 | 2850.33 KB |       27.26 |
+|                          |            |             |            |       |          |          |            |             |
+| LongJson_Parlot          |  30.259 us |   1.7757 us |  0.0973 us |  1.00 |  13.7634 |   2.7466 |  112.51 KB |        1.00 |
+| LongJson_ParlotGenerated |  26.640 us |   2.2033 us |  0.1208 us |  0.88 |  15.1978 |   3.7537 |  124.37 KB |        1.11 |
+| LongJson_Pidgin          |  80.427 us |   5.0746 us |  0.2782 us |  2.66 |  14.6484 |   3.0518 |  120.25 KB |        1.07 |
+| LongJson_Farkle          |  63.803 us |   0.8305 us |  0.0455 us |  2.11 |  10.7422 |   2.1973 |   88.19 KB |        0.78 |
+| LongJson_Newtonsoft      |  38.303 us |   0.6839 us |  0.0375 us |  1.27 |  24.7803 |   9.6436 |  202.68 KB |        1.80 |
+| LongJson_SystemTextJson  |   9.625 us |   0.3114 us |  0.0171 us |  0.32 |   2.9297 |   0.3204 |   24.12 KB |        0.21 |
+| LongJson_Sprache         | 691.664 us | 569.9542 us | 31.2411 us | 22.86 | 509.7656 | 129.8828 |  4165.2 KB |       37.02 |
+| LongJson_Superpower      | 309.774 us |  17.6229 us |  0.9660 us | 10.24 |  83.0078 |  20.0195 |  678.79 KB |        6.03 |
+|                          |            |             |            |       |          |          |            |             |
+| WideJson_Parlot          |  16.840 us |   0.7818 us |  0.0429 us |  1.00 |   4.9744 |   0.4578 |    40.7 KB |        1.00 |
+| WideJson_ParlotGenerated |  13.593 us |   0.2554 us |  0.0140 us |  0.81 |   4.9591 |   0.4883 |   40.56 KB |        1.00 |
+| WideJson_Pidgin          |  33.476 us |   1.9246 us |  0.1055 us |  1.99 |   4.9438 |   0.4883 |   40.48 KB |        0.99 |
+| WideJson_Farkle          |  44.814 us |   1.4430 us |  0.0791 us |  2.66 |   5.6152 |   0.5493 |   45.92 KB |        1.13 |
+| WideJson_Newtonsoft      |  25.334 us |   2.7433 us |  0.1504 us |  1.50 |  13.0310 |   3.2349 |  106.72 KB |        2.62 |
+| WideJson_Sprache         | 360.265 us |  10.3194 us |  0.5656 us | 21.39 | 316.8945 |  44.9219 | 2590.25 KB |       63.64 |
+| WideJson_Superpower      | 178.036 us |   0.7385 us |  0.0405 us | 10.57 |  51.2695 |   5.1270 |  419.63 KB |       10.31 |
 ```
+
+Ratios are relative to Parlot Fluent for the same document.
 
 ### Regular Expressions
 
@@ -340,7 +349,7 @@ The benchmark compares regular, compiled, and source-generated .NET regular expr
 ```
 BenchmarkDotNet v0.15.8, macOS Sequoia 15.8.1 (24H32) [Darwin 24.6.0]
 Apple M4 Pro, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 11.0.100-rc.1.26413.103
+.NET SDK 11.0.100-rc.1.26425.128
   [Host]   : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
   ShortRun : .NET 10.0.11 (10.0.11, 10.0.1126.37416), Arm64 RyuJIT armv8.0-a
 
@@ -349,14 +358,31 @@ WarmupCount=3
 
 | Method               | Mean      | Error     | StdDev   | Ratio | Gen0   | Allocated | Alloc Ratio |
 |--------------------- |----------:|----------:|---------:|------:|-------:|----------:|------------:|
-| RegexEmailCompiled   |  39.99 ns |  1.476 ns | 0.081 ns |  1.00 | 0.0249 |     208 B |        1.00 |
-| RegexEmail           |  93.35 ns |  7.820 ns | 0.429 ns |  2.33 | 0.0248 |     208 B |        1.00 |
-| RegexEmailGenerated  |  39.36 ns |  1.362 ns | 0.075 ns |  0.98 | 0.0249 |     208 B |        1.00 |
-| ParlotEmail          | 142.58 ns | 21.224 ns | 1.163 ns |  3.57 | 0.0372 |     312 B |        1.50 |
-| ParlotEmailGenerated |  73.58 ns | 22.321 ns | 1.224 ns |  1.84 | 0.0229 |     192 B |        0.92 |
-| PidginEmail          |  97.80 ns |  6.875 ns | 0.377 ns |  2.45 | 0.0048 |      40 B |        0.19 |
-| FarkleEmail          | 106.33 ns | 12.799 ns | 0.702 ns |  2.66 |      - |         - |        0.00 |
+| RegexEmailCompiled   |  40.63 ns |  9.302 ns | 0.510 ns |  1.00 | 0.0249 |     208 B |        1.00 |
+| RegexEmail           |  95.85 ns | 50.626 ns | 2.775 ns |  2.36 | 0.0248 |     208 B |        1.00 |
+| RegexEmailGenerated  |  39.57 ns | 13.281 ns | 0.728 ns |  0.97 | 0.0249 |     208 B |        1.00 |
+| ParlotEmail          | 149.88 ns |  7.895 ns | 0.433 ns |  3.69 | 0.0353 |     296 B |        1.42 |
+| ParlotEmailGenerated |  75.41 ns | 10.186 ns | 0.558 ns |  1.86 | 0.0210 |     176 B |        0.85 |
+| PidginEmail          |  99.69 ns |  2.514 ns | 0.138 ns |  2.45 | 0.0048 |      40 B |        0.19 |
+| FarkleEmail          | 110.78 ns |  3.036 ns | 0.166 ns |  2.73 |      - |         - |        0.00 |
 ```
+
+### Discarded Text Benchmarks
+
+These generated grammars parse `KeYwOrDvalueEnD`, requesting matched text from case-insensitive tokens.
+`SkippedText` drops the first and last tokens with `SkipAnd`/`AndSkip`; `BetweenText` drops them with
+`Between`. The retained control returns the first token's actual casing. The before column is the
+pre-change run; the after column is the refreshed `ShortRun` on the same machine and runtime.
+
+| Method | Before | After | Before allocated | After allocated |
+|---|---:|---:|---:|---:|
+| SkippedText | 29.86 ns | 20.58 ns | 248 B | 176 B |
+| BetweenText | 29.27 ns | 19.85 ns | 248 B | 176 B |
+| RetainedText | 20.97 ns | 21.60 ns | 216 B | 216 B |
+
+Discarding unused token values removes 72 B per parse. The remaining 176 B are parse infrastructure
+allocations. The retained control's allocations are unchanged; its small timing difference is not
+evidence of a regression. Run this group with `--filter "*DiscardResultBenchmarks*"`.
 
 ### Streaming Benchmarks
 
@@ -369,22 +395,22 @@ would be parsed as a string directly. Ratios are relative to the non-streaming m
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| Document, `ReadToEnd` + `Parse(string)` | 1,000 | 310.4 us | 1.00 | 422.44 KB | 1.00 |
-| Document, `Parse(TextReader)` | 1,000 | 364.3 us | 1.17 | 212.55 KB | 0.50 |
-| Document, `ReadToEnd` + generated `TryParse(string)` | 1,000 | 283.1 us | 1.00 | 422.44 KB | 1.00 |
-| Document, generated `TryParse(TextReader)` | 1,000 | 322.6 us | 1.14 | 212.55 KB | 0.50 |
-| Document, `ReadToEnd` + `Parse(string)` | 10,000 | 3.18 ms | 1.00 | 4.09 MB | 1.00 |
-| Document, `Parse(TextReader)` | 10,000 | 3.73 ms | 1.17 | 2.15 MB | 0.53 |
-| Document, `ReadToEnd` + generated `TryParse(string)` | 10,000 | 3.07 ms | 1.00 | 4.09 MB | 1.00 |
-| Document, generated `TryParse(TextReader)` | 10,000 | 3.24 ms | 1.05 | 2.15 MB | 0.53 |
-| Document, `ReadToEnd` + `Parse(string)` | 100,000 | 33.7 ms | 1.00 | 41.04 MB | 1.00 |
-| Document, `Parse(TextReader)` | 100,000 | 36.6 ms | 1.08 | 21.49 MB | 0.52 |
-| Document, `ReadToEnd` + generated `TryParse(string)` | 100,000 | 30.8 ms | 1.00 | 41.04 MB | 1.00 |
-| Document, generated `TryParse(TextReader)` | 100,000 | 32.8 ms | 1.06 | 21.49 MB | 0.52 |
-| Lines, `ReadLine` + `Parse(string)` | 100,000 | 33.1 ms | 1.00 | 39.20 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 100,000 | 31.7 ms | 0.96 | 20.61 MB | 0.53 |
+| Document, `ReadToEnd` + `Parse(string)` | 1,000 | 311.5 us | 1.00 | 422.44 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1,000 | 364.2 us | 1.17 | 212.55 KB | 0.50 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 1,000 | 272.3 us | 1.00 | 418.02 KB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 1,000 | 309.7 us | 1.14 | 208.13 KB | 0.50 |
+| Document, `ReadToEnd` + `Parse(string)` | 10,000 | 3.20 ms | 1.00 | 4.09 MB | 1.00 |
+| Document, `Parse(TextReader)` | 10,000 | 3.69 ms | 1.15 | 2.15 MB | 0.53 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 10,000 | 2.80 ms | 1.00 | 4.05 MB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 10,000 | 3.07 ms | 1.09 | 2.11 MB | 0.52 |
+| Document, `ReadToEnd` + `Parse(string)` | 100,000 | 34.3 ms | 1.00 | 41.04 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100,000 | 36.7 ms | 1.07 | 21.49 MB | 0.52 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 100,000 | 29.7 ms | 1.00 | 40.61 MB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 100,000 | 30.8 ms | 1.04 | 21.06 MB | 0.52 |
+| Lines, `ReadLine` + `Parse(string)` | 100,000 | 33.7 ms | 1.00 | 39.20 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100,000 | 31.4 ms | 0.93 | 20.61 MB | 0.53 |
 
-Streaming a single value costs 5 to 17% more time and allocates half as much: `ReadToEnd` builds the text in a
+Streaming a single value costs 4 to 17% more time and allocates about half as much: `ReadToEnd` builds the text in a
 `StringBuilder` and copies it into a `string`, while streaming copies it once into small window strings, which never
 survive to Gen2. The memory it retains doesn't grow with the document: the non-streaming methods hold the whole document
 in memory, the streaming ones about 4,218 characters (the default 4,096-character buffer plus the record in progress):
