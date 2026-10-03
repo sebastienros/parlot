@@ -55,6 +55,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             parsed.Value
         };
 
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
         while (_max == 0 || results.Count < _max)
         {
             previousOffset = context.Scanner.Cursor.Offset;
@@ -64,9 +67,13 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
                 break;
             }
 
+            context.MovePin(pin);
+
             end = parsed.End;
             results.Add(parsed.Value);
         }
+
+        context.Unpin(pin);
 
         result.Set(start, end, results.AsReadOnlyList());
 
@@ -121,6 +128,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         {
             result.Body.Add($"int {countName} = 0;");
         }
+        // Each element is read again from its start when it fails
+        var pin = context.Pin(result);
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
@@ -128,6 +137,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
+        context.MovePin(result, pin, "    ");
         if (!context.DiscardResult)
         {
             result.Body.Add($"    if ({listName} == null)");
@@ -142,6 +152,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             result.Body.Add($"    {countName}++;");
         }
         result.Body.Add("}");
+        context.Unpin(result, pin);
         if (!context.DiscardResult)
         {
             result.Body.Add($"if ({listName} != null)");

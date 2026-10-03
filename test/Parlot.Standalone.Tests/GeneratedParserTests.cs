@@ -285,7 +285,7 @@ public class GeneratedParserTests
         Assert.Equal(default, value);
         var exception = Assert.Throws<InvalidOperationException>(() => Grammar.TryParseThrowingCallback("x", out _));
         Assert.Equal("Callback failed", exception.Message);
-        Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber(null, out _));
+        Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber((string)null, out _));
     }
 
     [Fact]

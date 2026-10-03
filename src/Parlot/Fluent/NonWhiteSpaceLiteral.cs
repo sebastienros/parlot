@@ -15,6 +15,11 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         if (context.Scanner.Cursor.Eof)
@@ -42,7 +47,7 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
             return false;
         }
 
-        result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+        result.Set(start, end, context.Scanner.Cursor.CreateSpan(start, end - start));
 
         context.ExitParser(this);
         return true;
@@ -52,6 +57,11 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
@@ -78,7 +88,7 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add("    {");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {endName} - {startName});");
+            result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {endName} - {startName});");
         }
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");

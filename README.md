@@ -128,7 +128,28 @@ static FluentParser()
 - [Existing parsers and usage examples](docs/parsers.md)
 - [Best practices for custom parsers](docs/writing.md)
 - [Source generation guide](docs/source-generation.md)
+- [Parsing streams](docs/streaming.md)
 - [Security guidance](docs/security.md)
+
+## Parsing streams
+
+`Parse`, `TryParse`, `ParseAsync` and `TryParseAsync` parse a `TextReader` with the same parsers,
+through a compacting buffer which only retains the text the parser can still read: a document of any size is parsed
+in a single pass, with memory bounded by its largest token. `ParseManyAsync` parses successive values, such as NDJSON
+records, with memory bounded by the largest value:
+
+```csharp
+using var document = File.OpenText("document.json");
+var value = JsonParser.Json.Parse(document);
+
+using var input = File.OpenText("records.ndjson");
+await foreach (var item in record.ParseManyAsync(input, '\n'))
+{
+    Console.WriteLine(item);
+}
+```
+
+See [Parsing streams](docs/streaming.md).
 
 ## Source-generated parsers
 
@@ -173,6 +194,7 @@ public static partial class MyGrammar
 
 - Use a compiler host with Roslyn 5.9 or later and C# 12 or later. Generated code supports `net472`, `netstandard2.0`, `net8.0`, and `net10.0`; older targets use compatibility packages such as `System.Memory`, not Parlot.
 - Add an extra `CancellationToken` before the `out` result to enable cooperative cancellation, without adding it to the grammar factory.
+- Declare an overload taking a `TextReader` instead of the `string` to parse large inputs with the [compacting buffer](docs/streaming.md#generated-parsers).
 - No interceptors configuration is needed.
 - Methods must be static and non-generic. By-value parameters may only be read in supported parse-time callbacks, not during graph construction.
 - The containing class must be `partial`.
@@ -335,6 +357,45 @@ WarmupCount=3
 | PidginEmail          |  97.80 ns |  6.875 ns | 0.377 ns |  2.45 | 0.0048 |      40 B |        0.19 |
 | FarkleEmail          | 106.33 ns | 12.799 ns | 0.702 ns |  2.66 |      - |         - |        0.00 |
 ```
+
+### Streaming Benchmarks
+
+This benchmark counts the failed records of an access log with a grammar of patterns, keywords, numbers and quoted
+strings (`src/Samples/AccessLog`). It doesn't allocate its results, so it measures the parsers rather than a model. The log
+is read from a `TextReader`, compared to reading the whole text first and parsing the `string`. `Document` parses the
+log of `Count` records as a single value, `Lines` parses one record per line. The reader isn't a `StringReader`, which
+would be parsed as a string directly. Ratios are relative to the non-streaming method of the same group. The generated
+`TextReader` overload is benchmarked in an assembly that also declares reader entry points.
+
+| Method | Count | Mean | Ratio | Allocated | Alloc ratio |
+|---|---:|---:|---:|---:|---:|
+| Document, `ReadToEnd` + `Parse(string)` | 1,000 | 310.4 us | 1.00 | 422.44 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1,000 | 364.3 us | 1.17 | 212.55 KB | 0.50 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 1,000 | 283.1 us | 1.00 | 422.44 KB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 1,000 | 322.6 us | 1.14 | 212.55 KB | 0.50 |
+| Document, `ReadToEnd` + `Parse(string)` | 10,000 | 3.18 ms | 1.00 | 4.09 MB | 1.00 |
+| Document, `Parse(TextReader)` | 10,000 | 3.73 ms | 1.17 | 2.15 MB | 0.53 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 10,000 | 3.07 ms | 1.00 | 4.09 MB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 10,000 | 3.24 ms | 1.05 | 2.15 MB | 0.53 |
+| Document, `ReadToEnd` + `Parse(string)` | 100,000 | 33.7 ms | 1.00 | 41.04 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100,000 | 36.6 ms | 1.08 | 21.49 MB | 0.52 |
+| Document, `ReadToEnd` + generated `TryParse(string)` | 100,000 | 30.8 ms | 1.00 | 41.04 MB | 1.00 |
+| Document, generated `TryParse(TextReader)` | 100,000 | 32.8 ms | 1.06 | 21.49 MB | 0.52 |
+| Lines, `ReadLine` + `Parse(string)` | 100,000 | 33.1 ms | 1.00 | 39.20 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100,000 | 31.7 ms | 0.96 | 20.61 MB | 0.53 |
+
+Streaming a single value costs 5 to 17% more time and allocates half as much: `ReadToEnd` builds the text in a
+`StringBuilder` and copies it into a `string`, while streaming copies it once into small window strings, which never
+survive to Gen2. The memory it retains doesn't grow with the document: the non-streaming methods hold the whole document
+in memory, the streaming ones about 4,218 characters (the default 4,096-character buffer plus the record in progress):
+
+| Count | Document characters | Peak buffered characters |
+|---:|---:|---:|
+| 1,000 | 100,854 | 4,165 |
+| 10,000 | 1,021,903 | 4,214 |
+| 100,000 | 10,352,412 | 4,218 |
+
+See [Parsing streams](docs/streaming.md#performance) for the details and the command to run them.
 
 ### Versions
 

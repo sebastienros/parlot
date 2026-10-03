@@ -21,6 +21,11 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<char> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -45,6 +50,11 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(char), () => GenerateSource(context));
+        }
 
         var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(char));

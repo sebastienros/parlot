@@ -127,6 +127,177 @@ public sealed class SourceGenerationContext
     /// </remarks>
     public bool DiscardResult { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the generated code reads a compacting stream buffer, for a <c>TextReader</c> entry point.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The cursor then only holds a window of the input. Parsers reading the cursor directly (tokens) must generate their
+    /// code through <see cref="GenerateToken(object, Type, Func{SourceResult})"/>, and parsers moving the cursor back to
+    /// read it again must keep their position buffered with <see cref="Pin(SourceResult)"/>, see <c>docs/streaming.md</c>.
+    /// </para>
+    /// <para>It is <see langword="false"/> while the code of a token is generated, and for <c>string</c> entry points.</para>
+    /// </remarks>
+    public bool IsCompacting { get; set; }
+
+    /// <summary>
+    /// Generates the code of a token, a parser that reads the cursor directly, when <see cref="IsCompacting"/> is set.
+    /// </summary>
+    /// <remarks>
+    /// The code from <paramref name="generateBody"/> becomes a helper method, generated with <see cref="IsCompacting"/>
+    /// unset. The returned code calls it, and when the input is streamed calls it again from the same position with
+    /// more text when it read to the end of the buffer, like <c>ParseContext.ParseToken</c>.
+    /// </remarks>
+    /// <param name="parser">The token parser.</param>
+    /// <param name="valueType">The type of the parser's value.</param>
+    /// <param name="generateBody">Generates the code of the token for a string.</param>
+    /// <returns>The code invoking the token.</returns>
+    public SourceResult GenerateToken(object parser, Type valueType, Func<SourceResult> generateBody)
+    {
+        ThrowHelper.ThrowIfNull(parser, nameof(parser));
+        ThrowHelper.ThrowIfNull(valueType, nameof(valueType));
+        ThrowHelper.ThrowIfNull(generateBody, nameof(generateBody));
+
+        var valueTypeName = GetTypeName(valueType);
+        var helperName = Helpers.GetOrCreate(
+            new TokenKey(parser),
+            $"{MethodNamePrefix}_Token",
+            valueTypeName,
+            () =>
+            {
+                IsCompacting = false;
+
+                try
+                {
+                    return generateBody();
+                }
+                finally
+                {
+                    IsCompacting = true;
+                }
+            }).MethodName;
+
+        var result = CreateResult(valueType);
+        var ctx = ParseContextName;
+        var outTarget = DiscardResult ? "_" : result.ValueVariable;
+        var startName = $"tokenStart{NextNumber()}";
+
+        result.Body.Add($"if ({ctx}.IsCompacting)");
+        result.Body.Add("{");
+        result.Body.Add($"    var {startName} = {ctx}.BeginToken();");
+        result.Body.Add("    try");
+        result.Body.Add("    {");
+        result.Body.Add("        while (true)");
+        result.Body.Add("        {");
+        result.Body.Add("            try");
+        result.Body.Add("            {");
+        result.Body.Add($"                {result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
+        result.Body.Add("            }");
+        result.Body.Add($"            catch (global::Parlot.ParseException) when ({ctx}.Scanner.Cursor.HitEnd)");
+        result.Body.Add("            {");
+        result.Body.Add($"                {result.SuccessVariable} = false;");
+        result.Body.Add("            }");
+        result.Body.Add($"            if (!{ctx}.RetryToken({startName}))");
+        result.Body.Add("            {");
+        result.Body.Add("                break;");
+        result.Body.Add("            }");
+        result.Body.Add("        }");
+        result.Body.Add("    }");
+        result.Body.Add("    finally");
+        result.Body.Add("    {");
+        result.Body.Add($"        {ctx}.EndToken();");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+    /// <summary>
+    /// Keeps the current position buffered when <see cref="IsCompacting"/> is set, such that the generated code can move the
+    /// cursor back to it and read it again. Emits nothing otherwise.
+    /// </summary>
+    /// <param name="result">The result to emit the code in.</param>
+    /// <returns>The variable to pass to <see cref="Unpin(SourceResult, string?, string)"/> and <see cref="MovePin(SourceResult, string?, string)"/>, or <see langword="null"/>.</returns>
+    public string? Pin(SourceResult result)
+    {
+        ThrowHelper.ThrowIfNull(result, nameof(result));
+
+        if (!IsCompacting)
+        {
+            return null;
+        }
+
+        var pinName = $"pin{NextNumber()}";
+        result.Body.Add($"var {pinName} = {ParseContextName}.Pin();");
+        return pinName;
+    }
+
+    /// <summary>
+    /// Releases a position kept by <see cref="Pin(SourceResult)"/>.
+    /// </summary>
+    /// <param name="result">The result to emit the code in.</param>
+    /// <param name="pinName">The value returned by <see cref="Pin(SourceResult)"/>.</param>
+    /// <param name="indent">The indentation of the emitted statement.</param>
+    public void Unpin(SourceResult result, string? pinName, string indent = "")
+    {
+        ThrowHelper.ThrowIfNull(result, nameof(result));
+
+        if (pinName is not null)
+        {
+            result.Body.Add($"{indent}{ParseContextName}.Unpin({pinName});");
+        }
+    }
+
+    /// <summary>
+    /// Moves a position kept by <see cref="Pin(SourceResult)"/> to the current position, releasing the text before it.
+    /// </summary>
+    /// <param name="result">The result to emit the code in.</param>
+    /// <param name="pinName">The value returned by <see cref="Pin(SourceResult)"/>.</param>
+    /// <param name="indent">The indentation of the emitted statement.</param>
+    public void MovePin(SourceResult result, string? pinName, string indent = "")
+    {
+        ThrowHelper.ThrowIfNull(result, nameof(result));
+
+        if (pinName is not null)
+        {
+            result.Body.Add($"{indent}{ParseContextName}.MovePin({pinName});");
+        }
+    }
+
+    // Emits a call whose position stays buffered while it runs, and returns the expression of its result
+    internal string PinnedCall(SourceResult result, string call, string indent = "")
+    {
+        if (!IsCompacting)
+        {
+            return call;
+        }
+
+        var pinName = $"pin{NextNumber()}";
+        var successName = $"pinned{NextNumber()}";
+        result.Body.Add($"{indent}var {pinName} = {ParseContextName}.Pin();");
+        result.Body.Add($"{indent}var {successName} = {call};");
+        result.Body.Add($"{indent}{ParseContextName}.Unpin({pinName});");
+        return successName;
+    }
+
+    private sealed class TokenKey
+    {
+        private readonly object _parser;
+
+        public TokenKey(object parser)
+        {
+            _parser = parser;
+        }
+
+        public override bool Equals(object? obj) => obj is TokenKey other && ReferenceEquals(other._parser, _parser);
+
+        public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(_parser);
+    }
+
     internal TResult WithDiscardResult<TResult>(bool discardResult, Func<TResult> action)
     {
         var previous = DiscardResult;

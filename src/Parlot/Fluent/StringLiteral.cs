@@ -64,6 +64,11 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var start = context.Scanner.Cursor.Offset;
@@ -83,7 +88,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         if (success)
         {
             // Remove quotes
-            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1, end - start - 2);
+            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1 - context.Scanner.Cursor.BufferStart, end - start - 2);
 
             result.Set(start, end, decoded);
 
@@ -101,6 +106,11 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
@@ -131,7 +141,9 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         if (!context.DiscardResult)
         {
             result.Body.Add($"    var {endName} = {cursorName}.Offset;");
-            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1, {endName} - {startName} - 2);");
+            // Buffer windows are immutable strings, so the decoded span can reference the current one. BufferStart is a
+            // constant 0 in assemblies without TextReader entry points.
+            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1 - {cursorName}.BufferStart, {endName} - {startName} - 2);");
         }
         result.Body.Add("}");
 

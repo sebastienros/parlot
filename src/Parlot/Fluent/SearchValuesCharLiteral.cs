@@ -46,35 +46,32 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var span = context.Scanner.Cursor.Span;
 
-        if (_minSize > span.Length)
-        {
-            return false;
-        }
-
         // First char not matching the searched values
         var index = _negate ? span.IndexOfAny(_searchValues) : span.IndexOfAnyExcept(_searchValues);
 
-        var size = 0;
+        // If index == -1 the whole input is a match
+        var size = index == -1 ? span.Length : index;
 
-        if (index != -1)
+        // Too small?
+        if (size < _minSize)
         {
-            // Too small?
-            if (index < _minSize)
+            if (index == -1)
             {
-                context.ExitParser(this);
-                return false;
+                // More matching chars could follow the end of the buffer
+                context.Scanner.Cursor.MarkHitEnd();
             }
 
-            size = index;
-        }
-        else
-        {
-            // If index == -1 the whole input is a match
-            size = span.Length;
+            context.ExitParser(this);
+            return false;
         }
 
         // Too large? Take only the request size
@@ -85,7 +82,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
         var start = context.Scanner.Cursor.Position.Offset;
         context.Scanner.Cursor.Advance(size);
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+        result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;
@@ -96,6 +93,11 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         // We can only generate source if we have the original values string
         if (_valuesString == null)
@@ -188,12 +190,13 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         // Common code for both paths
         result.Body.Add($"if ({sizeVar} < {_minSize})");
         result.Body.Add("{");
+        result.Body.Add($"    if ({sizeVar} == {spanVar}.Length) {cursorName}.MarkHitEnd();");
         result.Body.Add($"    {result.ValueVariable} = default;");
         result.Body.Add("    return false;");
         result.Body.Add("}");
 
         result.Body.Add($"{cursorName}.Advance({sizeVar});");
-        result.Body.Add($"{result.ValueVariable} = new Parlot.TextSpan({scannerName}.Buffer, {startVar}, {sizeVar});");
+        result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
         result.Body.Add("return true;");
 
         return result;

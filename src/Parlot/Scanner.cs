@@ -14,17 +14,39 @@ namespace Parlot;
 /// </summary>
 public class Scanner
 {
-    public readonly string Buffer;
     public readonly Cursor Cursor;
+
+    /// <summary>
+    /// The buffered text, see <see cref="Cursor.Buffer"/>.
+    /// </summary>
+    public string Buffer => Cursor.Buffer;
 
     /// <summary>
     /// Scans some text.
     /// </summary>
     /// <param name="buffer">The string containing the text to scan.</param>
-    public Scanner(string buffer)
+    public Scanner(string buffer) : this(buffer, TextPosition.Start, isFinal: true)
     {
-        Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        Cursor = new Cursor(Buffer, TextPosition.Start);
+    }
+
+    /// <summary>
+    /// Scans some text which may be followed by more input.
+    /// </summary>
+    /// <param name="buffer">The string containing the text to scan.</param>
+    /// <param name="isFinal"><see langword="false"/> when more text may follow <paramref name="buffer"/>. See <see cref="Cursor.HitEnd"/>.</param>
+    public Scanner(string buffer, bool isFinal) : this(buffer, TextPosition.Start, isFinal)
+    {
+    }
+
+    /// <summary>
+    /// Scans some text from a given position, which may be followed by more input.
+    /// </summary>
+    /// <param name="buffer">The string containing the text to scan.</param>
+    /// <param name="start">The initial position. Its offset indexes into <paramref name="buffer"/>, its line and column are reported as-is.</param>
+    /// <param name="isFinal"><see langword="false"/> when more text may follow <paramref name="buffer"/>. See <see cref="Cursor.HitEnd"/>.</param>
+    public Scanner(string buffer, in TextPosition start, bool isFinal)
+    {
+        Cursor = new Cursor(buffer ?? throw new ArgumentNullException(nameof(buffer)), start, isFinal);
     }
 
     /// <summary>
@@ -102,7 +124,7 @@ public class Scanner
 
         ReadWhile(other, out _);
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -187,10 +209,10 @@ public class Scanner
             }
         }
 
-        var beforeDecimalSeparator = Cursor.Position;
-
         if (allowDecimalSeparator && Cursor.Current == decimalSeparator)
         {
+            var beforeDecimalSeparator = Cursor.Position;
+
             Cursor.AdvanceNoNewLines(1);
 
             var numberIsEmpty = number.IsEmpty;
@@ -205,15 +227,15 @@ public class Scanner
                     return false;
                 }
 
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
                 return true;
             }
         }
 
-        var beforeExponent = Cursor.Position;
-
         if (allowExponent && (Cursor.Current is 'e' or 'E'))
         {
+            var beforeExponent = Cursor.Position;
+
             Cursor.AdvanceNoNewLines(1);
 
             if (Cursor.Current is '-' or '+')
@@ -225,12 +247,12 @@ public class Scanner
             if (!ReadInteger(out _))
             {
                 Cursor.ResetPosition(beforeExponent);
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+                number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
                 return true;
             }
         }
 
-        number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+        number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
         return true;
     }
 
@@ -282,7 +304,7 @@ public class Scanner
         }
 
         Cursor.AdvanceNoNewLines(next);
-        result = Buffer.AsSpan(Cursor.Offset - next, next);
+        result = Cursor.GetSpan(Cursor.Offset - next, next);
 
         return true;
     }
@@ -314,7 +336,7 @@ public class Scanner
             Cursor.Advance();
         }
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -365,7 +387,7 @@ public class Scanner
         var start = Cursor.Offset;
         Cursor.Advance();
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
         return true;
     }
 
@@ -388,7 +410,7 @@ public class Scanner
 
         var start = Cursor.Offset;
         Cursor.Advance(text.Length);
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -399,7 +421,7 @@ public class Scanner
     [Obsolete("Prefer bool ReadAnyOf(ReadOnlySpan<char>, out ReadOnlySpan<char>)")]
     public bool ReadAnyOf(ReadOnlySpan<char> chars, StringComparison comparisonType, out ReadOnlySpan<char> result)
     {
-        var current = Cursor.Buffer.AsSpan(Cursor.Offset, 1);
+        var current = Cursor.GetSpan(Cursor.Offset, 1);
 
         var index = chars.IndexOf(current, comparisonType);
 
@@ -411,7 +433,7 @@ public class Scanner
 
         var start = Cursor.Offset;
         Cursor.Advance(index + 1);
-        result = Cursor.Buffer.AsSpan(start, index + 1);
+        result = Cursor.GetSpan(start, index + 1);
 
         return true;
     }
@@ -438,7 +460,7 @@ public class Scanner
 
                 var length = Cursor.Offset - start;
 
-                result = Cursor.Buffer.AsSpan(start, length);
+                result = Cursor.GetSpan(start, length);
                 return true;
             }
 
@@ -580,6 +602,7 @@ public class Scanner
         if (next == -1)
         {
             // There is no end quote nor an escape sequence, not a string
+            Cursor.MarkHitEnd();
             result = [];
             return false;
         }
@@ -598,7 +621,7 @@ public class Scanner
             {
                 Cursor.Advance(next + 2); // include start quote
 
-                result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
+                result = Cursor.GetSpan(startOffset, next + 2);
                 return true;
             }
 
@@ -606,6 +629,7 @@ public class Scanner
             // decoding them one by one, as reaching the end of the buffer that way is far more costly.
             if (span.Slice(next + 2).IndexOf(startChar) == -1)
             {
+                Cursor.MarkHitEnd();
                 result = [];
                 return false;
             }
@@ -657,6 +681,11 @@ public class Scanner
 
                         if (!isValidUnicode)
                         {
+                            if (Cursor.Span.Length <= 4)
+                            {
+                                Cursor.MarkHitEnd();
+                            }
+
                             Cursor.ResetPosition(start);
 
                             result = [];
@@ -705,6 +734,12 @@ public class Scanner
 
                         if (!isValidHex)
                         {
+                            if (firstNonHexDigit == -1)
+                            {
+                                // The hex digits run to the end of the buffer
+                                Cursor.MarkHitEnd();
+                            }
+
                             Cursor.ResetPosition(start);
 
                             result = [];
@@ -766,6 +801,8 @@ public class Scanner
             }
             else if (nextEscape == -1)
             {
+                // No end quote before the end of the buffer
+                Cursor.MarkHitEnd();
                 Cursor.ResetPosition(start);
 
                 result = [];
@@ -773,7 +810,7 @@ public class Scanner
             }
         }
 
-        result = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+        result = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
 
         return true;
     }

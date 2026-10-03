@@ -69,6 +69,7 @@
     <EmbeddedResource Include="../Parlot/Fluent/HybridList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.HybridList.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/NumberOptions.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.NumberOptions.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/DelegateParser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.DelegateParser.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/TextReaderRefillSource.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.TextReaderRefillSource.cs" />
     <EmbeddedResource Include="StandaloneRuntime/Parser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.Parser.cs" />
   </ItemGroup>
 

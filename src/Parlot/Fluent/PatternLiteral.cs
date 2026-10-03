@@ -20,6 +20,11 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         if (context.Scanner.Cursor.Eof || !_predicate(context.Scanner.Cursor.Current))
@@ -43,7 +48,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         if (size >= _minSize)
         {
             var end = context.Scanner.Cursor.Offset;
-            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, end, context.Scanner.Cursor.CreateSpan(start, end - start));
 
             context.ExitParser(this);
             return true;
@@ -60,6 +65,11 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
@@ -95,7 +105,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add($"    var end{context.NextNumber()} = {cursorName}.Offset;");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
+            result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");

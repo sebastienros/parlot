@@ -26,7 +26,10 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
 
         var parsed = new ParseResult<T>();
 
+        // The text is read again when the parser fails
+        var pin = context.Pin();
         var success = _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
 
         result.Set(parsed.Start, parsed.End, success ? new Option<T>(parsed.Value) : new Option<T>());
 
@@ -64,7 +67,8 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
         // }
         // success = true; (always succeeds)
         var innerValueName = $"innerValue{context.NextNumber()}";
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out var {innerValueName})");
+        result.Body.Add($"if ({success})");
         result.Body.Add("{");
         if (!context.DiscardResult)
         {

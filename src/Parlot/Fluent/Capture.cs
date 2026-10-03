@@ -35,13 +35,17 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
 
         ParseResult<T> _ = new();
 
-        // Did parser succeed.
-        if (_parser.Parse(context, ref _))
+        // The captured text must still be buffered once the parser is done
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref _);
+        context.Unpin(pin);
+
+        if (success)
         {
             var end = context.Scanner.Cursor.Offset;
             var length = end - start.Offset;
 
-            result.Set(start.Offset, end, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+            result.Set(start.Offset, end, context.Scanner.Cursor.CreateSpan(start.Offset, length));
 
             context.ExitParser(this);
             return true;
@@ -84,11 +88,12 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
         //     value = new TextSpan(scanner.Buffer, start.Offset, length);
         //     success = true;
         // }
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out _)");
+        result.Body.Add($"if ({success})");
         result.Body.Add("{");
         result.Body.Add($"    var {endName} = {cursorName}.Offset;");
         result.Body.Add($"    var {lengthName} = {endName} - {startName}.Offset;");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+        result.Body.Add($"    {result.ValueVariable} = {cursorName}.CreateSpan({startName}.Offset, {lengthName});");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

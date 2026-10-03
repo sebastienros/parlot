@@ -47,6 +47,11 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -68,6 +73,12 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
 
         if (size < _minSize)
         {
+            if (size == span.Length)
+            {
+                // More matching chars could follow the end of the buffer
+                cursor.MarkHitEnd();
+            }
+
             context.ExitParser(this);
             return false;
         }
@@ -81,7 +92,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
             cursor.AdvanceNoNewLines(size);
         }
 
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+        result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;
@@ -92,6 +103,11 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
@@ -242,6 +258,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         // Common code for both paths
         result.Body.Add($"if ({sizeVar} < {_minSize})");
         result.Body.Add("{");
+        result.Body.Add($"    if ({sizeVar} == {spanVar}.Length) {cursorName}.MarkHitEnd();");
         result.Body.Add($"    {result.ValueVariable} = default;");
         result.Body.Add("    return false;");
         result.Body.Add("}");
@@ -256,7 +273,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
             result.Body.Add($"{cursorName}.AdvanceNoNewLines({sizeVar});");
         }
 
-        result.Body.Add($"{result.ValueVariable} = new Parlot.TextSpan({scannerName}.Buffer, {startVar}, {sizeVar});");
+        result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
         result.Body.Add("return true;");
 
         return result;

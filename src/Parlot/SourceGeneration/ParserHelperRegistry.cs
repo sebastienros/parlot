@@ -9,7 +9,7 @@ namespace Parlot.SourceGeneration;
 /// </summary>
 public sealed class ParserHelperRegistry
 {
-    private readonly Dictionary<(object Parser, bool DiscardResult), HelperEntry> _helpers = new();
+    private readonly Dictionary<(object Parser, bool DiscardResult, bool IsCompacting), HelperEntry> _helpers = new();
     private readonly SourceGenerationContext? _context;
     private int _nextId;
 
@@ -31,7 +31,7 @@ public sealed class ParserHelperRegistry
         string valueTypeName,
         Func<SourceResult> resultFactory)
     {
-        var key = (parser, _context?.DiscardResult ?? false);
+        var key = (parser, _context?.DiscardResult ?? false, _context?.IsCompacting ?? false);
         if (!_helpers.TryGetValue(key, out var entry))
         {
             var methodName = suggestedName + "_" + _nextId++;

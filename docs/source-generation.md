@@ -120,7 +120,8 @@ application and no `Parser<T>` object or combinator graph is created when `TryPa
 
 ## Entry point contract
 
-Each `[GenerateParser(nameof(...))]` factory must have exactly one matching partial method declaration.
+Each `[GenerateParser(nameof(...))]` factory must have one matching partial method declaration whose input is a
+`string`, one whose input is a `TextReader`, or both.
 
 The factory:
 
@@ -133,7 +134,7 @@ The factory:
 The application-facing method:
 
 - is a static, non-generic partial method returning `bool`;
-- takes the input `string` first;
+- takes the input first, as a `string` or a `System.IO.TextReader` (see [TextReader entry points](#textreader-entry-points));
 - takes the factory's configuration parameters next, in the same type and order;
 - may take one additional by-value `CancellationToken` after configuration and before the result;
 - takes `out T value` last, where `T` is the factory parser's result type.
@@ -221,10 +222,43 @@ the parsed value. They do not expose the internal execution context:
   caller cannot retrieve the position where parsing stopped. Use `.Eof()` for whole-input parsing.
 - No custom `ParseContext`, recursion-depth setting, or other execution-context option can be supplied.
   Factory parameters configure generated callbacks and branches; they do not configure the parsing engine.
-- The input is a `string`; `ReadOnlySpan<char>` entry points are not supported.
+- The input is a `string` or a `TextReader`; `ReadOnlySpan<char>` and `Stream` entry points are not supported.
+  Wrap a `Stream` in a `StreamReader`.
 
 Use the normal Parlot runtime API when consumed positions or custom parse contexts are
 required.
+
+### TextReader entry points
+
+An entry point whose input is a `System.IO.TextReader` parses a large document without reading it into a string
+first, using the [compacting buffer](streaming.md#compacting-buffer) of `Parser<T>.Parse(TextReader)`:
+
+```csharp
+public static partial bool TryParse(string input, out IJson value);
+public static partial bool TryParse(TextReader reader, out IJson value);
+public static partial bool TryParse(TextReader reader, CancellationToken cancellationToken, out IJson value);
+```
+
+Both overloads share the factory, and the configuration and cancellation rules above apply unchanged. A factory can
+have one `string` overload, one `TextReader` overload, or both; declare a second `TextReader` overload as a normal
+forwarding method. The generated reader method:
+
+- reads the first 4096 characters; when the input ends within them it is parsed like a `string`;
+- otherwise refills a pooled buffer synchronously with `TextReader.Read`, dropping the text no active parser can
+  return to, so the memory is bounded by the largest pending value, not by the document;
+- doesn't dispose the reader;
+- returns the same values and failures as the `string` overload for the same text.
+
+A `TextSpan` value references the buffer window it was read from. Windows are immutable strings, so the value stays
+valid after later refills, but it keeps its window alive: convert it with `ToString()` in the grammar to keep only the
+token. Choices which aren't exclusive
+and unbounded lookaheads retain their text until they complete, see [Limitations](streaming.md#limitations).
+
+The reader overload is generated as a separate parser with the token refill and backtrack pin code. The `string`
+overload of the same factory keeps its own code, but an assembly which declares any `TextReader` entry point embeds a
+streaming-capable `Cursor`, whose movable buffer base costs some throughput to every generated `string` parser of
+that assembly: between 0% and 6% on the JSON benchmarks, about 10% on the expression benchmark. Keep latency-critical `string` parsers and reader parsers in separate assemblies when that matters.
+Assemblies without reader entry points compile the compacting code out.
 
 Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
 larger results grow into a list, and an empty `ZeroOrMany` result uses an empty array. Public results should
@@ -503,7 +537,7 @@ Standalone-specific diagnostics are:
 
 | Diagnostic | Meaning |
 |---|---|
-| `PARLOT023` | The named direct entry point is missing, ambiguous, or has an invalid signature |
+| `PARLOT023` | The named direct entry point is missing, ambiguous (for instance two `TextReader` overloads), or has an invalid signature |
 | `PARLOT024` | Generated code requires unsupported runtime code |
 | `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
 | `PARLOT026` | The project targets an unsupported framework or C# language version |

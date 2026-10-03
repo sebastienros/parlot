@@ -60,6 +60,11 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -92,12 +97,12 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             }
             else
             {
-                var buffer = context.Scanner.Buffer;
-                var parsedText = buffer.AsSpan(start, end - start);
+                var buffer = cursor.Buffer;
+                var parsedText = cursor.GetSpan(start, end - start);
 
                 result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
                     ? Text
-                    : start == 0 && end == buffer.Length
+                    : start == cursor.BufferStart && end - start == buffer.Length
                         ? buffer
                         : parsedText.ToString());
             }
@@ -115,6 +120,11 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
     public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(string), () => GenerateSource(context));
+        }
 
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
@@ -153,10 +163,10 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             var bufferName = $"buffer{context.NextNumber()}";
             var parsedTextName = $"parsedText{context.NextNumber()}";
             result.Body.Add($"    var {bufferName} = {scannerName}.Buffer;");
-            result.Body.Add($"    var {parsedTextName} = {bufferName}.AsSpan({startName}, {lengthLiteral});");
+            result.Body.Add($"    var {parsedTextName} = {cursorName}.GetSpan({startName}, {lengthLiteral});");
             result.Body.Add($"    {result.ValueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
             result.Body.Add($"        ? {textLiteral}");
-            result.Body.Add($"        : {startName} == 0 && {lengthLiteral} == {bufferName}.Length ? {bufferName} : {parsedTextName}.ToString();");
+            result.Body.Add($"        : {lengthLiteral} == {bufferName}.Length ? {bufferName} : {parsedTextName}.ToString();");
         }
         else
         {

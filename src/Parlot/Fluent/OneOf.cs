@@ -195,6 +195,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return ParseCompacting(context, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -256,22 +261,69 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         return false;
     }
 
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+        var start = default(TextPosition);
+
+        if (SkipWhitespace)
+        {
+            start = cursor.Position;
+            context.SkipWhiteSpace();
+        }
+
+        // The lookup map releases the text as soon as a single alternative remains
+        IReadOnlyList<Parser<T>>? parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : Parsers;
+
+        if (parsers != null)
+        {
+            var length = parsers.Count;
+
+            // Each alternative is read from the same position
+            var pin = length > 1 ? context.Pin() : -1;
+
+            for (var i = 0; i < length; i++)
+            {
+                if (i == length - 1)
+                {
+                    context.Unpin(pin);
+                }
+
+                if (parsers[i].Parse(context, ref result))
+                {
+                    context.Unpin(pin);
+                    context.ExitParser(this);
+                    return true;
+                }
+            }
+        }
+
+        if (SkipWhitespace)
+        {
+            cursor.ResetPosition(start);
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
     public override string ToString() => $"{string.Join(" | ", Parsers)}) on [{string.Join(" ", ExpectedChars)}]";
 
     public Parlot.SourceGeneration.SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        var keywordResult = KeywordChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
-        if (keywordResult != null)
-        {
-            return keywordResult;
-        }
+        var choiceResult = KeywordChoiceSource.TryGenerate(Parsers, SkipWhitespace, context)
+            ?? TextChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
 
-        var textResult = TextChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
-        if (textResult != null)
+        if (choiceResult != null)
         {
-            return textResult;
+            // These read the cursor directly
+            return context.IsCompacting
+                ? context.GenerateToken(this, typeof(T), () => GenerateSource(context))
+                : choiceResult;
         }
 
         var result = context.CreateResult(typeof(T));
@@ -437,6 +489,27 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         if (parsers.Count == 1)
         {
             outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget});");
+            return;
+        }
+
+        if (context.IsCompacting)
+        {
+            // Each alternative is read from the same position, the text is released before the last one
+            var pinName = $"pin{context.NextNumber()}";
+            outerResult.Body.Add($"{indent}var {pinName} = {contextVariableName}.Pin();");
+            outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget})");
+
+            for (var i = 1; i < parsers.Count - 1; i++)
+            {
+                outerResult.Body.Add($"{indent}    || {getHelper(parsers[i])}({contextVariableName}, out {outTarget})");
+            }
+
+            outerResult.Body[outerResult.Body.Count - 1] += ";";
+            outerResult.Body.Add($"{indent}{contextVariableName}.Unpin({pinName});");
+            outerResult.Body.Add($"{indent}if (!{successVar})");
+            outerResult.Body.Add($"{indent}{{");
+            outerResult.Body.Add($"{indent}    {successVar} = {getHelper(parsers[parsers.Count - 1])}({contextVariableName}, out {outTarget});");
+            outerResult.Body.Add($"{indent}}}");
             return;
         }
 

@@ -22,7 +22,12 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
 
         var resultA = new ParseResult<A>();
 
-        if (_parserA.Parse(context, ref resultA))
+        // The second parser reads from the same position
+        var pin = context.Pin();
+        var successA = _parserA.Parse(context, ref resultA);
+        context.Unpin(pin);
+
+        if (successA)
         {
             result.Set(resultA.Start, resultA.End, resultA.Value);
 
@@ -71,7 +76,13 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         var valueAName = $"valueA{context.NextNumber()}";
         var valueBName = $"valueB{context.NextNumber()}";
 
-        result.Body.Add($"if ({helperNameA}({context.ParseContextName}, out var {valueAName}))");
+        var successAName = $"successA{context.NextNumber()}";
+
+        // The second parser reads from the same position
+        var pin = context.Pin(result);
+        result.Body.Add($"var {successAName} = {helperNameA}({context.ParseContextName}, out var {valueAName});");
+        context.Unpin(result, pin);
+        result.Body.Add($"if ({successAName})");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         if (!context.DiscardResult)

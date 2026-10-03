@@ -79,6 +79,11 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var reset = context.Scanner.Cursor.Position;
@@ -107,6 +112,11 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(T), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;

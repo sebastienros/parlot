@@ -85,6 +85,7 @@ public class ParseContext
         Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         UseNewLines = useNewLines;
         CancellationToken = cancellationToken;
+        _flags = cancellationToken.CanBeCanceled ? CancellableFlag : (byte)0;
         DisableLoopDetection = disableLoopDetection;
         MaxRecursionDepth = maxRecursionDepth;
     }
@@ -92,12 +93,67 @@ public class ParseContext
     /// <summary>
     /// Delegate that is executed whenever a parser is invoked.
     /// </summary>
-    public Action<object, ParseContext>? OnEnterParser { get; set; }
+    public Action<object, ParseContext>? OnEnterParser
+    {
+        get => _coldState?.OnEnterParser;
+        set
+        {
+            GetColdState().OnEnterParser = value;
+            SetFlag(EnterHookFlag, value is not null);
+        }
+    }
 
     /// <summary>
     /// Delegate that is executed whenever a parser is left.
     /// </summary>
-    public Action<object, ParseContext>? OnExitParser { get; set; }
+    public Action<object, ParseContext>? OnExitParser
+    {
+        get => _coldState?.OnExitParser;
+        set
+        {
+            GetColdState().OnExitParser = value;
+            SetFlag(ExitHookFlag, value is not null);
+        }
+    }
+
+    // The state that string parsing doesn't use is kept apart, the context is allocated for each parse
+    private ColdState? _coldState;
+
+    private sealed class ColdState
+    {
+        public Action<object, ParseContext>? OnEnterParser;
+        public Action<object, ParseContext>? OnExitParser;
+
+        public StreamRefillSource? RefillSource;
+
+        // Backtrack points of the active parsers, as absolute offsets. Pushed and popped in LIFO order.
+        public int[]? Pins;
+        public int PinCount;
+
+        // The offset of the last Commit(), no parser can read the text before it again
+        public int CommitOffset;
+    }
+
+    private ColdState GetColdState() => _coldState ??= new ColdState();
+
+    // What a parse does besides reading a string, so that EnterParser, ExitParser and the compacting checks of a
+    // string parse each test a single byte.
+    private byte _flags;
+    private const byte CancellableFlag = 1;
+    private const byte EnterHookFlag = 2;
+    private const byte ExitHookFlag = 4;
+    private const byte EnterParserMask = CancellableFlag | EnterHookFlag;
+
+    // Compacting stream state, see docs/streaming.md. CompactingFlag is set between tokens and InTokenFlag while a token is read.
+    // The rest of the compacting state is in _coldState.
+    private const byte CompactingFlag = 8;
+    private const byte InTokenFlag = 16;
+    private const byte CompactingMask = CompactingFlag | InTokenFlag;
+
+    private void SetFlag(byte flag, bool value)
+    {
+        _flags = value ? (byte)(_flags | flag) : (byte)(_flags & ~flag);
+    }
 
     /// <summary>
     /// The parser that is used to parse whitespaces and comments.
@@ -116,6 +172,14 @@ public class ParseContext
             Scanner.Cursor.ResetPosition(_cachePosition);
             return;
         }
+
+#if !PARLOT_STRING_ONLY
+        if ((_flags & CompactingFlag) != 0)
+        {
+            SkipWhiteSpaceCompacting(offset);
+            return;
+        }
+#endif
 
         if (WhiteSpaceParser is null)
         {
@@ -139,13 +203,334 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Whether the input is streamed through a compacting buffer and no token is being read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// In this mode <see cref="Cursor.Buffer"/> only holds the text that can still be read, and it's replaced when more is needed.
+    /// Parsers that read the cursor directly must then run through <see cref="ParseToken{T}(Parser{T}, ref ParseResult{T})"/>,
+    /// and parsers that move the cursor back to a position to read it again must keep it buffered with <see cref="Pin"/>.
+    /// </para>
+    /// <para>It is <see langword="false"/> while a token is read, and when the input is a <see cref="string"/>.</para>
+    /// </remarks>
+    public bool IsCompacting
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & CompactingFlag) != 0;
+    }
+
+    internal void StartCompacting(StreamRefillSource source)
+    {
+        var state = GetColdState();
+        state.RefillSource = source;
+        state.Pins ??= new int[InitialActiveParsersCapacity];
+        state.PinCount = 0;
+        state.CommitOffset = 0;
+        _flags = (byte)((_flags & ~CompactingMask) | CompactingFlag);
+    }
+
+    internal void StopCompacting()
+    {
+        _flags &= unchecked((byte)~CompactingMask);
+
+        if (_coldState is not null)
+        {
+            _coldState.RefillSource = null;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that a parse in compacting mode only read the end of the buffer through tokens.
+    /// </summary>
+    /// <param name="success">Whether the parse succeeded. A failed parse can leave the cursor at its discarded start.</param>
+    internal void CheckCompactingEnd(bool success)
+    {
+        if ((_flags & CompactingMask) != 0)
+        {
+            if (success)
+            {
+                ThrowIfDiscarded(Scanner.Cursor);
+            }
+
+            ThrowIfReadPastBuffer(Scanner.Cursor);
+        }
+    }
+
+    private static void ThrowIfReadPastBuffer(Cursor cursor)
+    {
+        if (cursor.HitEnd)
+        {
+            throw new InvalidOperationException(
+                "A parser read the end of the stream buffer outside of a token. Parsers reading the cursor must start with 'if (context.IsCompacting) return context.ParseToken(this, ref result);'.");
+        }
+    }
+
+    /// <summary>
+    /// Parses a token, a parser that reads the cursor directly, when the input is streamed through a compacting buffer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Parsers that read the cursor should start with
+    /// <c>if (context.IsCompacting) return context.ParseToken(this, ref result);</c>.
+    /// The token is then parsed from the current buffer, and parsed again from the same position with more text
+    /// when it read to the end of the buffer (<see cref="Cursor.HitEnd"/>). Its result is thus the same as when parsing a string.
+    /// </para>
+    /// <para>The text of the token is kept in the buffer while it's read, so a token should be small compared to the input.</para>
+    /// </remarks>
+    /// <param name="parser">The parser to invoke.</param>
+    /// <param name="result">The result of the parser.</param>
+    /// <returns>The value returned by <paramref name="parser"/>.</returns>
+    public bool ParseToken<T>(Parser<T> parser, ref ParseResult<T> result)
+    {
+        ThrowHelper.ThrowIfNull(parser, nameof(parser));
+
+        var cursor = Scanner.Cursor;
+        var start = BeginToken();
+
+        try
+        {
+            while (true)
+            {
+                bool success;
+
+                try
+                {
+                    success = parser.Parse(this, ref result);
+                }
+                catch (ParseException) when (cursor.HitEnd)
+                {
+                    // The error might be caused by the end of the buffer, the token is read again with more text
+                    success = false;
+                }
+
+                if (!RetryToken(start))
+                {
+                    return success;
+                }
+            }
+        }
+        finally
+        {
+            EndToken();
+        }
+    }
+
+    // A token is read between BeginToken and EndToken, and read again from its start while RetryToken returns true.
+    // Generated parsers use these directly, see SourceGenerationContext.GenerateToken.
+    internal TextPosition BeginToken()
+    {
+        var cursor = Scanner.Cursor;
+
+        ThrowIfDiscarded(cursor);
+        ThrowIfReadPastBuffer(cursor);
+
+        if (cursor.Remaining == 0 && !cursor.IsFinal)
+        {
+            Refill(cursor.Offset);
+        }
+
+        _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
+        cursor.ResetHitEnd();
+
+        return cursor.Position;
+    }
+
+    // Whether the token read to the end of the buffer, in which case it's moved back to its start with more text
+    internal bool RetryToken(in TextPosition start)
+    {
+        var cursor = Scanner.Cursor;
+
+        if (!cursor.HitEnd)
+        {
+            return false;
+        }
+
+        cursor.ResetPosition(start);
+        Refill(start.Offset);
+        cursor.ResetHitEnd();
+
+        return true;
+    }
+
+    internal void EndToken()
+    {
+        _flags = (byte)((_flags & ~InTokenFlag) | CompactingFlag);
+    }
+
+    private void SkipWhiteSpaceCompacting(int offset)
+    {
+        var cursor = Scanner.Cursor;
+
+        ThrowIfDiscarded(cursor);
+        ThrowIfReadPastBuffer(cursor);
+
+        if (WhiteSpaceParser is null)
+        {
+            // White spaces are read one char at a time so they are skipped from where the buffer ended
+            while (true)
+            {
+                cursor.ResetHitEnd();
+
+                if (UseNewLines)
+                {
+                    Scanner.SkipWhiteSpace();
+                }
+                else
+                {
+                    Scanner.SkipWhiteSpaceOrNewLine();
+                }
+
+                if (!cursor.HitEnd)
+                {
+                    break;
+                }
+
+                Refill(cursor.Offset);
+            }
+        }
+        else
+        {
+            // A custom parser, which can parse comments, is read as a token
+            ParseResult<TextSpan> _ = default;
+            ParseToken(WhiteSpaceParser, ref _);
+        }
+
+        _cacheOffset = offset;
+        _cachePosition = cursor.Position;
+    }
+
+    private void Refill(int floor)
+    {
+        var state = _coldState!;
+        var pins = state.Pins!;
+
+        for (var i = 0; i < state.PinCount; i++)
+        {
+            if (pins[i] < floor)
+            {
+                floor = pins[i];
+            }
+        }
+
+        state.RefillSource!.Refill(Scanner.Cursor, floor, CancellationToken);
+
+        // The skipped white spaces might continue in the new text
+        _cacheOffset = -1;
+    }
+
+    private void ThrowIfDiscarded(Cursor cursor)
+    {
+        if (cursor.IsDiscarded || cursor.Offset < _coldState!.CommitOffset)
+        {
+            ThrowDiscarded();
+        }
+    }
+
+    private void ThrowDiscarded()
+    {
+        throw new ParseException(
+            "The parser moved back to text which was discarded from the stream buffer. Backtracking parsers must keep their position with ParseContext.Pin(), and no parser can backtrack before a Commit().",
+            Scanner.Cursor.Position);
+    }
+
+    /// <summary>
+    /// Keeps the text from the current position buffered when the input is streamed through a compacting buffer,
+    /// such that the parser can move the cursor back to it and read it again.
+    /// </summary>
+    /// <remarks>
+    /// Pins follow the parsers' call stack: a parser releases its pin with <see cref="Unpin(int)"/> before it returns.
+    /// Parsers that only move back to report a failure don't need one, their caller pins the position it reads again from.
+    /// </remarks>
+    /// <returns>A value to pass to <see cref="Unpin(int)"/>, which is <c>-1</c> when the text doesn't need to be pinned.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int Pin()
+    {
+        if ((_flags & CompactingFlag) == 0)
+        {
+            return -1;
+        }
+
+        return PinNotInlined();
+    }
+
+    private int PinNotInlined()
+    {
+        var state = _coldState!;
+        var count = state.PinCount;
+
+        if (count == state.Pins!.Length)
+        {
+            Array.Resize(ref state.Pins, count * 2);
+        }
+
+        state.Pins![count] = Scanner.Cursor.Offset;
+        state.PinCount = count + 1;
+
+        return count;
+    }
+
+    // Moves a pin to the current position, releasing the text before it, like Unpin(pin) then Pin()
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void MovePin(int pin)
+    {
+        if (pin >= 0)
+        {
+            _coldState!.Pins![pin] = Scanner.Cursor.Offset;
+        }
+    }
+
+    /// <summary>
+    /// Releases a pin returned by <see cref="Pin"/>, and the pins created after it.
+    /// </summary>
+    /// <param name="pin">The value returned by <see cref="Pin"/>.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Unpin(int pin)
+    {
+        if (pin >= 0)
+        {
+            _coldState!.PinCount = pin;
+        }
+    }
+
+    // Releases the text before the current position when the input is streamed through a compacting buffer, see Commit<T>
+    internal void Commit()
+    {
+        if ((_flags & CompactingMask) == 0)
+        {
+            return;
+        }
+
+        var state = _coldState!;
+        var offset = Scanner.Cursor.Offset;
+        var pins = state.Pins!;
+
+        state.CommitOffset = offset;
+
+        for (var i = 0; i < state.PinCount; i++)
+        {
+            if (pins[i] < offset)
+            {
+                pins[i] = offset;
+            }
+        }
+    }
+
+    /// <summary>
     /// Called whenever a parser is invoked.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void EnterParser<T>(Parser<T> parser)
     {
+        if ((_flags & EnterParserMask) != 0)
+        {
+            EnterParserSlow(parser);
+        }
+    }
+
+    private void EnterParserSlow(object parser)
+    {
         CheckCancellation();
-        OnEnterParser?.Invoke(parser, this);
+        _coldState?.OnEnterParser?.Invoke(parser, this);
     }
 
     /// <summary>
@@ -180,7 +565,10 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ExitParser<T>(Parser<T> parser)
     {
-        OnExitParser?.Invoke(parser, this);
+        if ((_flags & ExitHookFlag) != 0)
+        {
+            _coldState!.OnExitParser!.Invoke(parser, this);
+        }
     }
 
     /// <summary>
@@ -366,4 +754,19 @@ public class ParseContext
         // Released so the context doesn't keep the parsers it is done with alive
         _activeParsers![_activeCount] = null!;
     }
+}
+
+/// <summary>
+/// Provides the text of a stream parsed through a compacting buffer, see <see cref="ParseContext.IsCompacting"/>.
+/// </summary>
+internal abstract class StreamRefillSource
+{
+    /// <summary>
+    /// Replaces the buffer of <paramref name="cursor"/> with the text from <paramref name="floor"/> followed by more text,
+    /// or marks it final when the input is exhausted.
+    /// </summary>
+    /// <param name="cursor">The cursor to refill.</param>
+    /// <param name="floor">The absolute offset of the first char to keep.</param>
+    /// <param name="cancellationToken">The token to observe while reading.</param>
+    public abstract void Refill(Cursor cursor, int floor, CancellationToken cancellationToken);
 }

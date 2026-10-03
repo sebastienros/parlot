@@ -22,7 +22,10 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
 
         var parsed = new ParseResult<T>();
 
+        // The text is read again when the parser fails
+        var pin = context.Pin();
         var success = _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
 
         result.Set(parsed.Start, parsed.End, success ? [parsed.Value] : Array.Empty<T>());
 
@@ -50,12 +53,17 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
 
         if (context.DiscardResult)
         {
-            result.Body.Add($"{helperName}({context.ParseContextName}, out _);");
+            var call = $"{helperName}({context.ParseContextName}, out _)";
+            if (context.PinnedCall(result, call) == call)
+            {
+                result.Body.Add($"{call};");
+            }
         }
         else
         {
             var itemValueName = $"itemValue{context.NextNumber()}";
-            result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {itemValueName}))");
+            var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out var {itemValueName})");
+            result.Body.Add($"if ({success})");
             result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = new {elementTypeName}[] {{ {itemValueName} }};");
             result.Body.Add("}");

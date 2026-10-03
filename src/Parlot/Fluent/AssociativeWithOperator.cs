@@ -53,9 +53,13 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         var end = result.End;
         HybridList<(TOperator Operator, T Operand)>? operations = null;
 
+        // The operator is read again by the caller when it isn't followed by an operand
+        var pin = context.Pin();
+
         while (true)
         {
             var operatorPosition = context.Scanner.Cursor.Position;
+            context.MovePin(pin);
             var operatorResult = new ParseResult<TOperator>();
             if (!_operators.Parse(context, ref operatorResult))
             {
@@ -86,6 +90,8 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
 
             end = rightResult.End;
         }
+
+        context.Unpin(pin);
 
         if (operations is { Count: > 0 })
         {
@@ -154,9 +160,12 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
             result.Body.Add($"    global::Parlot.Fluent.HybridList<({operatorType}, {valueType})>? {operations} = null;");
         }
 
+        // The operator is read again by the caller when it isn't followed by an operand
+        var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        var {position} = {cursor}.Position;");
+        context.MovePin(result, pin, "        ");
         result.Body.Add($"        if (!{operatorHelper}({ctx}, out var {operationValue})) break;");
         result.Body.Add($"        if (!{baseHelper}({ctx}, out var {rightValue}))");
         result.Body.Add("        {");
@@ -176,6 +185,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         }
 
         result.Body.Add("    }");
+        context.Unpin(result, pin, "    ");
 
         if (_rightAssociative)
         {

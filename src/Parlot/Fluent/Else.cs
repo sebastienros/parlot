@@ -28,7 +28,12 @@ public sealed class Else<T> : Parser<T>, ISourceable
     {
         context.EnterParser(this);
 
-        if (!_parser.Parse(context, ref result))
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref result);
+        context.Unpin(pin);
+
+        if (!success)
         {
             if (_func != null)
             {
@@ -73,7 +78,8 @@ public sealed class Else<T> : Parser<T>, ISourceable
         // }
         // success = true; (always succeeds)
         
-        result.Body.Add($"if (!{helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {result.ValueVariable})");
+        result.Body.Add($"if (!{success})");
         result.Body.Add("{");
         
         if (_func != null)

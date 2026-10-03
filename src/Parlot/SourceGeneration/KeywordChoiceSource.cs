@@ -31,6 +31,8 @@ internal static class KeywordChoiceSource
         body.Add("{");
         body.Add("    length++;");
         body.Add("}");
+        // The word could continue after the end of a partial buffer.
+        body.Add($"if (length == keywordInput.Length) {cursor}.MarkHitEnd();");
         body.Add("var keyword = MatchKeyword(keywordInput.Slice(0, length));");
         body.Add("if (keyword != null)");
         body.Add("{");
