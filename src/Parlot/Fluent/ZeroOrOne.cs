@@ -22,7 +22,10 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
 
         var parsed = new ParseResult<T>();
 
+        // The text is read again when the parser fails
+        var pin = context.Pin();
         var success = _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
 
         result.Set(parsed.Start, parsed.End, success ? [parsed.Value] : Array.Empty<T>());
 

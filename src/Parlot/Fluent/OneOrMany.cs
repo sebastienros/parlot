@@ -55,6 +55,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             parsed.Value
         };
 
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
         while (_max == 0 || results.Count < _max)
         {
             previousOffset = context.Scanner.Cursor.Offset;
@@ -64,9 +67,13 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
                 break;
             }
 
+            context.MovePin(pin);
+
             end = parsed.End;
             results.Add(parsed.Value);
         }
+
+        context.Unpin(pin);
 
         result.Set(start, end, results.AsReadOnlyList());
 

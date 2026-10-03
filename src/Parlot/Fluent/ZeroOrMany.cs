@@ -33,6 +33,9 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         var first = true;
         var parsed = new ParseResult<T>();
 
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
         while (_max == 0 || (results?.Count ?? 0) < _max)
         {
             var previousOffset = context.Scanner.Cursor.Offset;
@@ -41,6 +44,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
             {
                 break;
             }
+
+            context.MovePin(pin);
 
             if (first)
             {
@@ -53,6 +58,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
 
             results!.Add(parsed.Value);
         }
+
+        context.Unpin(pin);
 
         result.Set(start, end, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
 

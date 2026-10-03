@@ -51,6 +51,9 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
     {
         context.EnterParser(this);
 
+        // The operators are tried from the same position
+        var pin = context.Pin();
+
         // Try each unary operator
         foreach (var (op, factory) in _operators)
         {
@@ -58,6 +61,8 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             var operatorResult = new ParseResult<TInput>();
             if (op.Parse(context, ref operatorResult))
             {
+                context.Unpin(pin);
+
                 // Recursively parse the operand (which may have more unary operators)
                 if (Parse(context, ref result))
                 {
@@ -76,6 +81,8 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         }
 
         // No operator matched, try the base parser
+        context.Unpin(pin);
+
         var success = _parser.Parse(context, ref result);
 
         context.ExitParser(this);
@@ -256,6 +263,9 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
     {
         context.EnterParser(this);
 
+        // The operators are tried from the same position
+        var pin = context.Pin();
+
         foreach (var (op, factory) in _operators)
         {
             var operatorPosition = context.Scanner.Cursor.Position;
@@ -263,6 +273,8 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
             if (op.Parse(context, ref operatorResult))
             {
+                context.Unpin(pin);
+
                 if (Parse(context, ref result))
                 {
                     result = new ParseResult<T>(result.Start, result.End, factory(context, result.Value));
@@ -275,6 +287,8 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
                 return false;
             }
         }
+
+        context.Unpin(pin);
 
         var success = _parser.Parse(context, ref result);
 

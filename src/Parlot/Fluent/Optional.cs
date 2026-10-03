@@ -26,7 +26,10 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
 
         var parsed = new ParseResult<T>();
 
+        // The text is read again when the parser fails
+        var pin = context.Pin();
         var success = _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
 
         result.Set(parsed.Start, parsed.End, success ? new Option<T>(parsed.Value) : new Option<T>());
 

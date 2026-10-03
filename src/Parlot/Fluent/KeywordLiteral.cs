@@ -38,6 +38,11 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var start = context.Scanner.Cursor.Position;

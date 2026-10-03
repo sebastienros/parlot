@@ -54,7 +54,9 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekable, ISourceable
 
         // Now check if the lookahead parser matches at the current position
         var lookaheadResult = new ParseResult<object>();
+        var pin = context.Pin();
         var lookaheadSuccess = _lookahead.Parse(context, ref lookaheadResult);
+        context.Unpin(pin);
 
         // Reset position to before the lookahead (it shouldn't consume input)
         context.Scanner.Cursor.ResetPosition(beforeLookahead);

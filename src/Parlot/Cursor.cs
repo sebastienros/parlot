@@ -12,12 +12,20 @@ public class Cursor
     // Index of the current char in Buffer. Offset adds _base, the absolute offset of Buffer[0], which is 0 unless
     // the cursor reads a compacting window of a stream (see ReplaceBuffer).
     private int _offset;
+#if PARLOT_STANDALONE
+    // Generated parsers only parse strings: a constant base keeps the offset arithmetic out of their hot paths.
+    private const int _base = 0;
+#else
     private int _base;
+#endif
     private int _line;
     private int _column;
 
-    // Set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
-    private bool _hitEnd;
+    // HitEndFlag is set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
+    // IsFinal shares the byte so that the cursor, which is allocated for each parse, doesn't grow.
+    private byte _flags;
+    private const byte HitEndFlag = 1;
+    private const byte NotFinalFlag = 2;
 
     /// <summary>
     /// Creates a cursor over <paramref name="buffer"/> starting at <paramref name="position"/>.
@@ -50,9 +58,8 @@ public class Cursor
         _offset = position.Offset;
         _line = position.Line;
         _column = position.Column;
-        IsFinal = isFinal;
         Eof = _offset == _textLength;
-        _hitEnd = Eof;
+        _flags = (byte)((isFinal ? 0 : NotFinalFlag) | (Eof ? HitEndFlag : 0));
         Current = Eof ? NullChar : Buffer[_offset];
     }
 
@@ -60,7 +67,7 @@ public class Cursor
     /// Whether <see cref="Buffer"/> holds the end of the input. <see langword="true"/> unless the cursor was created
     /// for a window of a larger input, as when parsing a stream.
     /// </summary>
-    public bool IsFinal { get; private set; }
+    public bool IsFinal => (_flags & NotFinalFlag) == 0;
 
     /// <summary>
     /// Whether, since the cursor was created, a read reached or looked past the end of a non-final <see cref="Buffer"/>.
@@ -68,7 +75,7 @@ public class Cursor
     /// Always <see langword="false"/> when <see cref="IsFinal"/> is <see langword="true"/>.
     /// </summary>
     /// <remarks>The flag is sticky: moving the cursor back with <see cref="ResetPosition(in TextPosition)"/> does not clear it.</remarks>
-    public bool HitEnd => _hitEnd && !IsFinal;
+    public bool HitEnd => _flags == (HitEndFlag | NotFinalFlag);
 
     /// <summary>
     /// Records that the current decision depended on text beyond the end of <see cref="Buffer"/>.
@@ -78,12 +85,12 @@ public class Cursor
     /// </summary>
     public void MarkHitEnd()
     {
-        _hitEnd = true;
+        _flags |= HitEndFlag;
     }
 
     internal void ResetHitEnd()
     {
-        _hitEnd = Eof;
+        _flags = (byte)((_flags & NotFinalFlag) | (Eof ? HitEndFlag : 0));
     }
 
     /// <summary>
@@ -96,7 +103,7 @@ public class Cursor
 
         if (span.Length < minLength)
         {
-            _hitEnd = true;
+            _flags |= HitEndFlag;
             return false;
         }
 
@@ -153,6 +160,7 @@ public class Cursor
     /// </summary>
     internal int Remaining => _textLength - _offset;
 
+#if !PARLOT_STANDALONE
     /// <summary>
     /// Replaces <see cref="Buffer"/> with a window of the same input, keeping the absolute position.
     /// </summary>
@@ -167,7 +175,7 @@ public class Cursor
         _textLength = buffer.Length;
         _base = bufferStart;
         _offset = offset - bufferStart;
-        IsFinal = isFinal;
+        _flags = (byte)((_flags & HitEndFlag) | (isFinal ? 0 : NotFinalFlag));
 
         if (_offset >= _textLength)
         {
@@ -181,6 +189,7 @@ public class Cursor
             Current = Buffer[_offset];
         }
     }
+#endif
 
     /// <summary>
     /// Advances the cursor by one character.
@@ -193,7 +202,7 @@ public class Cursor
         if (_offset >= _textLength)
         {
             Eof = true;
-            _hitEnd = true;
+            _flags |= HitEndFlag;
             _column++;
             Current = NullChar;
             return;
@@ -240,7 +249,7 @@ public class Cursor
         if (maxOffset > _textLength - 1)
         {
             Eof = true;
-            _hitEnd = true;
+            _flags |= HitEndFlag;
             maxOffset = _textLength - 1;
         }
 
@@ -301,7 +310,7 @@ public class Cursor
         if (count > end - offset)
         {
             Eof = true;
-            _hitEnd = true;
+            _flags |= HitEndFlag;
             Current = NullChar;
             _offset = _textLength;
             _column++;
@@ -323,7 +332,7 @@ public class Cursor
         if (newOffset > length)
         {
             Eof = true;
-            _hitEnd = true;
+            _flags |= HitEndFlag;
             _column += newOffset - length;
             _offset = _textLength;
             Current = NullChar;
@@ -353,23 +362,32 @@ public class Cursor
         _line = position.Line;
         _column = position.Column;
 
-        // Eof might have been recorded
-        if (_offset >= Buffer.Length)
+        // A single unsigned compare covers both the end of the buffer and, in compacting mode, a discarded position.
+        if ((uint)_offset < (uint)Buffer.Length)
         {
-            Current = NullChar;
-            Eof = true;
-            _hitEnd = true;
-        }
-        else if (_offset < 0)
-        {
-            // The text was discarded by a compacting stream: nothing can be read until the cursor moves forward again.
-            Current = NullChar;
+            Current = Buffer[_offset];
             Eof = false;
         }
         else
         {
-            Current = Buffer[_offset];
+            ResetPositionOutsideBuffer();
+        }
+    }
+
+    private void ResetPositionOutsideBuffer()
+    {
+        Current = NullChar;
+
+        if (_offset < 0)
+        {
+            // The text was discarded by a compacting stream: nothing can be read until the cursor moves forward again.
             Eof = false;
+        }
+        else
+        {
+            // Eof might have been recorded
+            Eof = true;
+            _flags |= HitEndFlag;
         }
     }
 
@@ -398,7 +416,7 @@ public class Cursor
         {
             if (nextIndex >= _textLength)
             {
-                _hitEnd = true;
+                _flags |= HitEndFlag;
             }
 
             return NullChar;
@@ -420,7 +438,7 @@ public class Cursor
         if (_offset >= Buffer.Length)
         {
             Eof = true;
-            _hitEnd = true;
+            _flags |= HitEndFlag;
             _offset = Buffer.Length;
             Current = NullChar;
         }
@@ -514,7 +532,7 @@ public class Cursor
         if ((comparisonType != StringComparison.Ordinal && comparisonType != StringComparison.OrdinalIgnoreCase)
             || s.StartsWith(Span, comparisonType))
         {
-            _hitEnd = true;
+            _flags |= HitEndFlag;
         }
     }
 }

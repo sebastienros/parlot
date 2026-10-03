@@ -20,6 +20,11 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         if (context.Scanner.Cursor.Eof || !_predicate(context.Scanner.Cursor.Current))

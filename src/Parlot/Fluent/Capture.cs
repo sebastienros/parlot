@@ -35,8 +35,12 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
 
         ParseResult<T> _ = new();
 
-        // Did parser succeed.
-        if (_parser.Parse(context, ref _))
+        // The captured text must still be buffered once the parser is done
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref _);
+        context.Unpin(pin);
+
+        if (success)
         {
             var end = context.Scanner.Cursor.Offset;
             var length = end - start.Offset;

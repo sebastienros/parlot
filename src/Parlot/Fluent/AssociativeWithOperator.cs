@@ -53,9 +53,13 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         var end = result.End;
         HybridList<(TOperator Operator, T Operand)>? operations = null;
 
+        // The operator is read again by the caller when it isn't followed by an operand
+        var pin = context.Pin();
+
         while (true)
         {
             var operatorPosition = context.Scanner.Cursor.Position;
+            context.MovePin(pin);
             var operatorResult = new ParseResult<TOperator>();
             if (!_operators.Parse(context, ref operatorResult))
             {
@@ -86,6 +90,8 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
 
             end = rightResult.End;
         }
+
+        context.Unpin(pin);
 
         if (operations is { Count: > 0 })
         {

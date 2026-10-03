@@ -79,6 +79,11 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var reset = context.Scanner.Cursor.Position;

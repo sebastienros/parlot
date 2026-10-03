@@ -195,6 +195,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return ParseCompacting(context, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -246,6 +251,54 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
         // We only need to reset the position if we are skipping whitespaces
         // as the parsers would have reverted their own state
+
+        if (SkipWhitespace)
+        {
+            cursor.ResetPosition(start);
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+        var start = default(TextPosition);
+
+        if (SkipWhitespace)
+        {
+            start = cursor.Position;
+            context.SkipWhiteSpace();
+        }
+
+        // The lookup map releases the text as soon as a single alternative remains
+        IReadOnlyList<Parser<T>>? parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : Parsers;
+
+        if (parsers != null)
+        {
+            var length = parsers.Count;
+
+            // Each alternative is read from the same position
+            var pin = length > 1 ? context.Pin() : -1;
+
+            for (var i = 0; i < length; i++)
+            {
+                if (i == length - 1)
+                {
+                    context.Unpin(pin);
+                }
+
+                if (parsers[i].Parse(context, ref result))
+                {
+                    context.Unpin(pin);
+                    context.ExitParser(this);
+                    return true;
+                }
+            }
+        }
 
         if (SkipWhitespace)
         {

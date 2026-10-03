@@ -22,7 +22,12 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
 
         var resultA = new ParseResult<A>();
 
-        if (_parserA.Parse(context, ref resultA))
+        // The second parser reads from the same position
+        var pin = context.Pin();
+        var successA = _parserA.Parse(context, ref resultA);
+        context.Unpin(pin);
+
+        if (successA)
         {
             result.Set(resultA.Start, resultA.End, resultA.Value);
 

@@ -18,7 +18,12 @@ public sealed class Not<T> : Parser<T>, ISourceable
 
         var start = context.Scanner.Cursor.Position;
 
-        if (!_parser.Parse(context, ref result))
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref result);
+        context.Unpin(pin);
+
+        if (!success)
         {
             context.ExitParser(this);
             return true;

@@ -34,6 +34,11 @@ internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;

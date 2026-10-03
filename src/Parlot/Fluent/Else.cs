@@ -28,7 +28,12 @@ public sealed class Else<T> : Parser<T>, ISourceable
     {
         context.EnterParser(this);
 
-        if (!_parser.Parse(context, ref result))
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref result);
+        context.Unpin(pin);
+
+        if (!success)
         {
             if (_func != null)
             {

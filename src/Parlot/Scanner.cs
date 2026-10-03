@@ -209,10 +209,10 @@ public class Scanner
             }
         }
 
-        var beforeDecimalSeparator = Cursor.Position;
-
         if (allowDecimalSeparator && Cursor.Current == decimalSeparator)
         {
+            var beforeDecimalSeparator = Cursor.Position;
+
             Cursor.AdvanceNoNewLines(1);
 
             var numberIsEmpty = number.IsEmpty;
@@ -232,10 +232,10 @@ public class Scanner
             }
         }
 
-        var beforeExponent = Cursor.Position;
-
         if (allowExponent && (Cursor.Current is 'e' or 'E'))
         {
+            var beforeExponent = Cursor.Position;
+
             Cursor.AdvanceNoNewLines(1);
 
             if (Cursor.Current is '-' or '+')

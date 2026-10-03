@@ -41,10 +41,14 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         var value = result.Value;
         var end = result.End;
 
+        // The operator is read again by the caller when it isn't followed by an operand
+        var pin = context.Pin();
+
         // Parse zero or more (operator operand) pairs
         while (true)
         {
             var operatorPosition = context.Scanner.Cursor.Position;
+            context.MovePin(pin);
             var operatorResult = new ParseResult<TInput>();
             Func<T, T, T>? matchedFactory = null;
 
@@ -77,6 +81,8 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
             value = matchedFactory(value, rightResult.Value);
             end = rightResult.End;
         }
+
+        context.Unpin(pin);
 
         result = new ParseResult<T>(result.Start, end, value);
 
@@ -251,9 +257,13 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
         var value = result.Value;
         var end = result.End;
 
+        // The operator is read again by the caller when it isn't followed by an operand
+        var pin = context.Pin();
+
         while (true)
         {
             var operatorPosition = context.Scanner.Cursor.Position;
+            context.MovePin(pin);
             var operatorResult = new ParseResult<TInput>();
             Func<ParseContext, T, T, T>? matchedFactory = null;
 
@@ -281,6 +291,8 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
             value = matchedFactory(context, value, rightResult.Value);
             end = rightResult.End;
         }
+
+        context.Unpin(pin);
 
         result = new ParseResult<T>(result.Start, end, value);
 

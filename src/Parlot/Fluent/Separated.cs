@@ -92,6 +92,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         var parsed = new ParseResult<T>();
         var separatorResult = new ParseResult<U>();
 
+        // The end of the last element is read again when a separator isn't followed by an element
+        var pin = context.Pin();
+
         while (_max == 0 || (results?.Count ?? 0) < _max)
         {
             var previousOffset = context.Scanner.Cursor.Offset;
@@ -116,6 +119,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 
                 if (_min > 0)
                 {
+                    context.Unpin(pin);
                     context.ExitParser(this);
                     return false;
                 }
@@ -124,6 +128,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             else
             {
                 end = context.Scanner.Cursor.Position;
+                context.MovePin(pin);
             }
 
             if (context.Scanner.Cursor.Offset == previousOffset)
@@ -132,6 +137,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
                 {
                     if (_min > 0)
                     {
+                        context.Unpin(pin);
                         context.ExitParser(this);
                         return false;
                     }
@@ -150,6 +156,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 
             results!.Add(parsed.Value);
         }
+
+        context.Unpin(pin);
 
         if (_min > 1 && results!.Count < _min)
         {
@@ -170,6 +178,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         var initial = cursor.Position;
         var parsed = new ParseResult<T>();
         var separatorResult = new ParseResult<U>();
+
+        // The end of the last element is read again when a separator isn't followed by an element
+        var pin = context.Pin();
         var found = _parser.Parse(context, ref parsed) && cursor.Offset != initial.Offset;
 
         if (!found && _allowLeadingSeparator)
@@ -198,6 +209,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 
         if (!found)
         {
+            context.Unpin(pin);
             cursor.ResetPosition(initial);
             context.ExitParser(this);
             if (_min == 0)
@@ -211,6 +223,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         var start = parsed.Start;
         var end = cursor.Position;
         var results = new HybridList<T> { parsed.Value };
+        context.MovePin(pin);
 
         while (_max == 0 || results.Count < _max)
         {
@@ -256,8 +269,11 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             }
 
             end = cursor.Position;
+            context.MovePin(pin);
             results.Add(parsed.Value);
         }
+
+        context.Unpin(pin);
 
         if (results.Count < _min)
         {
