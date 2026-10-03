@@ -367,23 +367,6 @@ WarmupCount=3
 | FarkleEmail          | 110.78 ns |  3.036 ns | 0.166 ns |  2.73 |      - |         - |        0.00 |
 ```
 
-### Discarded Text Benchmarks
-
-These generated grammars parse `KeYwOrDvalueEnD`, requesting matched text from case-insensitive tokens.
-`SkippedText` drops the first and last tokens with `SkipAnd`/`AndSkip`; `BetweenText` drops them with
-`Between`. The retained control returns the first token's actual casing. The before column is the
-pre-change run; the after column is the refreshed `ShortRun` on the same machine and runtime.
-
-| Method | Before | After | Before allocated | After allocated |
-|---|---:|---:|---:|---:|
-| SkippedText | 29.86 ns | 20.58 ns | 248 B | 176 B |
-| BetweenText | 29.27 ns | 19.85 ns | 248 B | 176 B |
-| RetainedText | 20.97 ns | 21.60 ns | 216 B | 216 B |
-
-Discarding unused token values removes 72 B per parse. The remaining 176 B are parse infrastructure
-allocations. The retained control's allocations are unchanged; its small timing difference is not
-evidence of a regression. Run this group with `--filter "*DiscardResultBenchmarks*"`.
-
 ### Streaming Benchmarks
 
 This benchmark counts the failed records of an access log with a grammar of patterns, keywords, numbers and quoted
