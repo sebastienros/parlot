@@ -37,13 +37,17 @@ public sealed partial class ParserSourceGenerator
 
     private sealed class StandaloneEntryPoint
     {
-        public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory)
+        public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory, bool isReader)
         {
             Method = method;
             Factory = factory;
+            IsReader = isReader;
         }
 
         public IMethodSymbol Method { get; }
+
+        // Whether the entry point parses a TextReader with a compacting buffer instead of a string
+        public bool IsReader { get; }
         public MethodToGenerate Factory { get; }
         public IParameterSymbol? CancellationTokenParameter => Method.Parameters.Length == Factory.Method.Parameters.Length + 3
             ? Method.Parameters[Method.Parameters.Length - 2]
@@ -190,9 +194,10 @@ public sealed partial class ParserSourceGenerator
                     continue;
                 }
 
-                var entry = FindStandaloneEntryPoint(factory.Value, trees,
-                    compilation.GetTypeByMetadataName("System.Threading.CancellationToken"), out var error);
-                if (entry is null)
+                var found = FindStandaloneEntryPoints(factory.Value, trees,
+                    compilation.GetTypeByMetadataName("System.Threading.CancellationToken"),
+                    compilation.GetTypeByMetadataName("System.IO.TextReader"), out var error);
+                if (found is null)
                 {
                     if (!designTime)
                     {
@@ -202,7 +207,7 @@ public sealed partial class ParserSourceGenerator
                     continue;
                 }
 
-                entries.Add(entry);
+                entries.AddRange(found);
             }
         }
 
@@ -260,7 +265,7 @@ public sealed partial class ParserSourceGenerator
 
         if (!designTime)
         {
-            var runtime = StandaloneRuntimeSources.GetSources(options);
+            var runtime = StandaloneRuntimeSources.GetSources(options, streaming: entries.Any(static entry => entry.IsReader));
             generated.AddRange(runtime);
             var candidate = host.AddSyntaxTrees(generated.Select(static source => source.Tree));
             var generatedTrees = new HashSet<SyntaxTree>(generated.Select(static source => source.Tree));
@@ -313,11 +318,13 @@ public sealed partial class ParserSourceGenerator
             : null;
     }
 
-    private static StandaloneEntryPoint? FindStandaloneEntryPoint(
-        MethodToGenerate factory, List<SyntaxTree> grammarTrees, INamedTypeSymbol? cancellationTokenType, out string error)
+    private static StandaloneEntryPoint[]? FindStandaloneEntryPoints(
+        MethodToGenerate factory, List<SyntaxTree> grammarTrees, INamedTypeSymbol? cancellationTokenType,
+        INamedTypeSymbol? textReaderType, out string error)
     {
         error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
-            + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result.";
+            + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result. "
+            + "A second overload with the same name may take a TextReader instead of the string.";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -340,7 +347,9 @@ public sealed partial class ParserSourceGenerator
                 || method.Parameters.Length == factory.Method.Parameters.Length + 3
                     && method.Parameters[method.Parameters.Length - 2].RefKind == RefKind.None
                     && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 2].Type, cancellationTokenType))
-            && method.Parameters[0].Type.SpecialType == SpecialType.System_String && method.Parameters[0].RefKind == RefKind.None
+            && (method.Parameters[0].Type.SpecialType == SpecialType.System_String
+                || SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, textReaderType))
+            && method.Parameters[0].RefKind == RefKind.None
             && method.Parameters[method.Parameters.Length - 1].RefKind == RefKind.Out
             && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 1].Type, resultType)
             && method.DeclaringSyntaxReferences.All(reference => !grammarTrees.Contains(reference.SyntaxTree))
@@ -349,7 +358,14 @@ public sealed partial class ParserSourceGenerator
                 && SymbolEqualityComparer.Default.Equals(parameter.Type, method.Parameters[index + 1].Type)).All(static matches => matches))
             .ToArray();
 
-        return candidates.Length == 1 ? new StandaloneEntryPoint(candidates[0], factory) : null;
+        var strings = candidates.Count(static method => method.Parameters[0].Type.SpecialType == SpecialType.System_String);
+        if (candidates.Length == 0 || strings > 1 || candidates.Length - strings > 1)
+        {
+            return null;
+        }
+
+        return candidates.Select(method => new StandaloneEntryPoint(method, factory,
+            isReader: method.Parameters[0].Type.SpecialType != SpecialType.System_String)).ToArray();
     }
 
     private static bool UsesParlotType(ITypeSymbol type)
@@ -376,18 +392,38 @@ public sealed partial class ParserSourceGenerator
         var result = prefix + "_result";
         source.AppendLine($"        {StandaloneSignature(entry)}");
         source.AppendLine("        {");
-        var cancellationArgument = standalone.CancellationTokenParameter is { } token
-            ? $", {EscapeIdentifier(token.Name)}"
-            : "";
+        var token = standalone.CancellationTokenParameter is { } tokenParameter ? EscapeIdentifier(tokenParameter.Name) : null;
+        var cancellationArgument = token is not null ? $", {token}" : "";
+        var invocation = factory.Parameters.Length > 0 ? $"{context}.Parse" : $"{wrapper}.{core}";
+        var scanner = $"new global::Parlot.Scanner({input})";
+        if (standalone.IsReader)
+        {
+            var refill = prefix + "_source";
+            var isFinal = prefix + "_isFinal";
+            source.AppendLine($"            if ({input} is null) throw new global::System.ArgumentNullException(nameof({input}));");
+            source.AppendLine($"            using var {refill} = new global::Parlot.Fluent.TextReaderRefillSource({input});");
+            source.AppendLine($"            var {prefix}_text = {refill}.ReadFirst({token ?? "default"}, out var {isFinal});");
+            scanner = $"new global::Parlot.Scanner({prefix}_text, {isFinal})";
+        }
         var contextCreation = factory.Parameters.Length > 0
-            ? $"new {wrapper}(new global::Parlot.Scanner({input}){cancellationArgument}, {arguments})"
-            : $"new global::Parlot.Fluent.ParseContext(new global::Parlot.Scanner({input}){cancellationArgument})";
+            ? $"new {wrapper}({scanner}{cancellationArgument}, {arguments})"
+            : $"new global::Parlot.Fluent.ParseContext({scanner}{cancellationArgument})";
         source.AppendLine($"            var {context} = {contextCreation};");
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");
         source.AppendLine("            {");
-        var invocation = factory.Parameters.Length > 0 ? $"{context}.Parse" : $"{wrapper}.{core}";
-        source.AppendLine($"                if ({invocation}({context}, ref {result}))");
+        if (standalone.IsReader)
+        {
+            var success = prefix + "_success";
+            source.AppendLine($"                if (!{prefix}_isFinal) {context}.StartCompacting({prefix}_source);");
+            source.AppendLine($"                var {success} = {invocation}({context}, ref {result});");
+            source.AppendLine($"                {context}.CheckCompactingEnd({success});");
+            source.AppendLine($"                if ({success})");
+        }
+        else
+        {
+            source.AppendLine($"                if ({invocation}({context}, ref {result}))");
+        }
         source.AppendLine("                {");
         source.AppendLine($"                    {value} = {result}.Value;");
         source.AppendLine("                    return true;");
@@ -398,6 +434,13 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine($"                {value} = default!;");
         source.AppendLine("                return false;");
         source.AppendLine("            }");
+        if (standalone.IsReader)
+        {
+            source.AppendLine("            finally");
+            source.AppendLine("            {");
+            source.AppendLine($"                {context}.StopCompacting();");
+            source.AppendLine("            }");
+        }
         source.AppendLine($"            {value} = default!;");
         source.AppendLine("            return false;");
         source.AppendLine("        }");

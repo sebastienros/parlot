@@ -918,13 +918,16 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
             var sgContext = new SourceGenerationContext(
                 parseContextName: "context",
-                methodNamePrefix: GetGeneratedIdentifier(methodSymbol),
+                methodNamePrefix: GetEntryIdentifier(methodSymbol, standalone),
                 targetFramework: targetFramework,
                 csharpLanguageMajorVersion: GetCSharpLanguageMajorVersion(methodSymbol));
             
             // Set the lambda source map before invoking GenerateSource
             // This allows the LambdaRegistry to map runtime lambda pointers back to their original source
             sgContext.SetLambdaSourceMap(lambdaSourceMap);
+
+            // A TextReader entry point reads a compacting stream buffer
+            sgContext.IsCompacting = standalone.IsReader;
             
             // Invoke GenerateSource via reflection
             object? sourceResultObj;
@@ -1020,7 +1023,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             : methodSymbol.ContainingNamespace.ToDisplayString();
 
         var typeName = EscapeIdentifier(methodSymbol.ContainingType.Name);
-        var methodName = GetGeneratedIdentifier(methodSymbol);
+        var methodName = GetEntryIdentifier(methodSymbol, standalone);
         var valueTypeName = TypeNameHelper.GetTypeName(valueType);
         var coreName = methodName + "_Core";
         var wrapperName = "GeneratedParser_" + methodName;
@@ -1504,6 +1507,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
         return (sb.ToString(), failedLambdas, capturedVariables);
     }
+
+    // The string and TextReader entry points of a factory are generated separately
+    private static string GetEntryIdentifier(IMethodSymbol method, StandaloneEntryPoint standalone)
+        => standalone.IsReader ? GetGeneratedIdentifier(method) + "_Reader" : GetGeneratedIdentifier(method);
 
     private static string GetGeneratedIdentifier(IMethodSymbol method)
     {
