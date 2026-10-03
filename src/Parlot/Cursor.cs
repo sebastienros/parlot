@@ -12,8 +12,8 @@ public class Cursor
     // Index of the current char in Buffer. Offset adds _base, the absolute offset of Buffer[0], which is 0 unless
     // the cursor reads a compacting window of a stream (see ReplaceBuffer).
     private int _offset;
-#if PARLOT_STANDALONE
-    // Generated parsers only parse strings: a constant base keeps the offset arithmetic out of their hot paths.
+#if PARLOT_STRING_ONLY
+    // Generated parsers without a TextReader entry point only parse strings: a constant base keeps the offset arithmetic out of their hot paths.
     private const int _base = 0;
 #else
     private int _base;
@@ -135,7 +135,7 @@ public class Cursor
     /// </summary>
     internal int Remaining => _textLength - _offset;
 
-#if !PARLOT_STANDALONE
+#if !PARLOT_STRING_ONLY
     /// <summary>
     /// Replaces <see cref="Buffer"/> with a window of the same input, keeping the absolute position.
     /// </summary>

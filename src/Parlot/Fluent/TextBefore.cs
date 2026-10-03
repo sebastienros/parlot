@@ -167,6 +167,11 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
+
         if (_delimiter is not ISourceable sourceable)
         {
             throw new NotSupportedException("TextBefore requires a source-generatable delimiter parser.");
@@ -214,7 +219,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
             }
             if (!context.DiscardResult)
             {
-                result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+                result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, {lengthName});");
             }
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add("        break;");
@@ -243,7 +248,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, {lengthName});");
+            result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, {lengthName});");
         }
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("        break;");

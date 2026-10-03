@@ -149,11 +149,15 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
             result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         }
         result.Body.Add("{");
+
+        // The operator is read again by the caller when it isn\'t followed by an operand
+        var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        {operatorMatchedName} = false;");
         var operatorPositionName = $"opPos{context.NextNumber()}";
         result.Body.Add($"        var {operatorPositionName} = {cursorName}.Position;");
+        context.MovePin(result, pin, "        ");
 
         // Generate operator matching for each operator
         for (int i = 0; i < _operators.Length; i++)
@@ -218,6 +222,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
 
         result.Body.Add($"        if (!{operatorMatchedName}) break;");
         result.Body.Add("    }");
+        context.Unpin(result, pin, "    ");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 
@@ -353,12 +358,16 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
         }
 
         result.Body.Add("{");
+
+        // The operator is read again by the caller when it isn\'t followed by an operand
+        var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        {operatorMatchedName} = false;");
 
         var operatorPositionName = $"opPos{context.NextNumber()}";
         result.Body.Add($"        var {operatorPositionName} = {cursorName}.Position;");
+        context.MovePin(result, pin, "        ");
 
         for (int i = 0; i < _operators.Length; i++)
         {
@@ -421,6 +430,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
 
         result.Body.Add($"        if (!{operatorMatchedName}) break;");
         result.Body.Add("    }");
+        context.Unpin(result, pin, "    ");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

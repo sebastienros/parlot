@@ -66,6 +66,11 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
+
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
@@ -100,7 +105,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add($"    var end{context.NextNumber()} = {cursorName}.Offset;");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
+            result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");

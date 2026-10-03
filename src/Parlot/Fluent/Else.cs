@@ -78,7 +78,8 @@ public sealed class Else<T> : Parser<T>, ISourceable
         // }
         // success = true; (always succeeds)
         
-        result.Body.Add($"if (!{helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {result.ValueVariable})");
+        result.Body.Add($"if (!{success})");
         result.Body.Add("{");
         
         if (_func != null)

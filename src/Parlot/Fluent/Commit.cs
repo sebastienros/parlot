@@ -58,8 +58,15 @@ public sealed class Commit<T> : Parser<T>, ISeekable, ISourceable
             throw new NotSupportedException("Commit requires a source-generatable parser.");
         }
 
-        // Generated parsers only parse strings, which are never compacted
-        return sourceable.GenerateSource(context);
+        var result = sourceable.GenerateSource(context);
+
+        // Only compacting streams have backtrack positions to release
+        if (context.IsCompacting)
+        {
+            result.Body.Add($"if ({result.SuccessVariable}) {context.ParseContextName}.Commit();");
+        }
+
+        return result;
     }
 
     public override string ToString() => $"{_parser} (Commit)";

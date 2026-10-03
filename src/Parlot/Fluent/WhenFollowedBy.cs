@@ -122,7 +122,8 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add("else");
         result.Body.Add("{");
         result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Position;");
-        result.Body.Add($"    if (!{lookaheadHelperName}({context.ParseContextName}, out _))");
+        var lookahead = context.PinnedCall(result, $"{lookaheadHelperName}({context.ParseContextName}, out _)", "    ");
+        result.Body.Add($"    if (!{lookahead})");
         result.Body.Add("    {");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add($"        {result.SuccessVariable} = false;");

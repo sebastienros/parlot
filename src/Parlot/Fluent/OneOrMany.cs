@@ -128,6 +128,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         {
             result.Body.Add($"int {countName} = 0;");
         }
+        // Each element is read again from its start when it fails
+        var pin = context.Pin(result);
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
@@ -135,6 +137,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
+        context.MovePin(result, pin, "    ");
         if (!context.DiscardResult)
         {
             result.Body.Add($"    if ({listName} == null)");
@@ -149,6 +152,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             result.Body.Add($"    {countName}++;");
         }
         result.Body.Add("}");
+        context.Unpin(result, pin);
         if (!context.DiscardResult)
         {
             result.Body.Add($"if ({listName} != null)");

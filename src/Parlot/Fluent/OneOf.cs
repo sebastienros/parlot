@@ -315,16 +315,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
-        var keywordResult = KeywordChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
-        if (keywordResult != null)
-        {
-            return keywordResult;
-        }
+        var choiceResult = KeywordChoiceSource.TryGenerate(Parsers, SkipWhitespace, context)
+            ?? TextChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
 
-        var textResult = TextChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
-        if (textResult != null)
+        if (choiceResult != null)
         {
-            return textResult;
+            // These read the cursor directly
+            return context.IsCompacting
+                ? context.GenerateToken(this, typeof(T), () => GenerateSource(context))
+                : choiceResult;
         }
 
         var result = context.CreateResult(typeof(T));
@@ -490,6 +489,27 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         if (parsers.Count == 1)
         {
             outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget});");
+            return;
+        }
+
+        if (context.IsCompacting)
+        {
+            // Each alternative is read from the same position, the text is released before the last one
+            var pinName = $"pin{context.NextNumber()}";
+            outerResult.Body.Add($"{indent}var {pinName} = {contextVariableName}.Pin();");
+            outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget})");
+
+            for (var i = 1; i < parsers.Count - 1; i++)
+            {
+                outerResult.Body.Add($"{indent}    || {getHelper(parsers[i])}({contextVariableName}, out {outTarget})");
+            }
+
+            outerResult.Body[outerResult.Body.Count - 1] += ";";
+            outerResult.Body.Add($"{indent}{contextVariableName}.Unpin({pinName});");
+            outerResult.Body.Add($"{indent}if (!{successVar})");
+            outerResult.Body.Add($"{indent}{{");
+            outerResult.Body.Add($"{indent}    {successVar} = {getHelper(parsers[parsers.Count - 1])}({contextVariableName}, out {outTarget});");
+            outerResult.Body.Add($"{indent}}}");
             return;
         }
 

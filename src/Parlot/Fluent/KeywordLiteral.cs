@@ -70,6 +70,11 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(string), () => GenerateSource(context));
+        }
+
         if (_textLiteral is not ISourceable sourceable)
         {
             throw new NotSupportedException("KeywordLiteral requires a source-generatable text parser.");

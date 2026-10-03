@@ -113,6 +113,11 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(T), () => GenerateSource(context));
+        }
+
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));

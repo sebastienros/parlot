@@ -94,6 +94,11 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
+
         // We can only generate source if we have the original values string
         if (_valuesString == null)
         {
@@ -191,7 +196,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         result.Body.Add("}");
 
         result.Body.Add($"{cursorName}.Advance({sizeVar});");
-        result.Body.Add($"{result.ValueVariable} = new Parlot.TextSpan({scannerName}.Buffer, {startVar}, {sizeVar});");
+        result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
         result.Body.Add("return true;");
 
         return result;

@@ -173,7 +173,7 @@ public class ParseContext
             return;
         }
 
-#if !PARLOT_STANDALONE
+#if !PARLOT_STRING_ONLY
         if ((_flags & CompactingFlag) != 0)
         {
             SkipWhiteSpaceCompacting(offset);
@@ -285,25 +285,12 @@ public class ParseContext
         ThrowHelper.ThrowIfNull(parser, nameof(parser));
 
         var cursor = Scanner.Cursor;
-
-        ThrowIfDiscarded(cursor);
-        ThrowIfReadPastBuffer(cursor);
-
-        if (cursor.Remaining == 0 && !cursor.IsFinal)
-        {
-            Refill(cursor.Offset);
-        }
-
-        var start = cursor.Position;
-
-        _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
+        var start = BeginToken();
 
         try
         {
             while (true)
             {
-                cursor.ResetHitEnd();
-
                 bool success;
 
                 try
@@ -316,19 +303,58 @@ public class ParseContext
                     success = false;
                 }
 
-                if (!cursor.HitEnd)
+                if (!RetryToken(start))
                 {
                     return success;
                 }
-
-                cursor.ResetPosition(start);
-                Refill(start.Offset);
             }
         }
         finally
         {
-            _flags = (byte)((_flags & ~InTokenFlag) | CompactingFlag);
+            EndToken();
         }
+    }
+
+    // A token is read between BeginToken and EndToken, and read again from its start while RetryToken returns true.
+    // Generated parsers use these directly, see SourceGenerationContext.GenerateToken.
+    internal TextPosition BeginToken()
+    {
+        var cursor = Scanner.Cursor;
+
+        ThrowIfDiscarded(cursor);
+        ThrowIfReadPastBuffer(cursor);
+
+        if (cursor.Remaining == 0 && !cursor.IsFinal)
+        {
+            Refill(cursor.Offset);
+        }
+
+        _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
+        cursor.ResetHitEnd();
+
+        return cursor.Position;
+    }
+
+    // Whether the token read to the end of the buffer, in which case it's moved back to its start with more text
+    internal bool RetryToken(in TextPosition start)
+    {
+        var cursor = Scanner.Cursor;
+
+        if (!cursor.HitEnd)
+        {
+            return false;
+        }
+
+        cursor.ResetPosition(start);
+        Refill(start.Offset);
+        cursor.ResetHitEnd();
+
+        return true;
+    }
+
+    internal void EndToken()
+    {
+        _flags = (byte)((_flags & ~InTokenFlag) | CompactingFlag);
     }
 
     private void SkipWhiteSpaceCompacting(int offset)

@@ -76,7 +76,13 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         var valueAName = $"valueA{context.NextNumber()}";
         var valueBName = $"valueB{context.NextNumber()}";
 
-        result.Body.Add($"if ({helperNameA}({context.ParseContextName}, out var {valueAName}))");
+        var successAName = $"successA{context.NextNumber()}";
+
+        // The second parser reads from the same position
+        var pin = context.Pin(result);
+        result.Body.Add($"var {successAName} = {helperNameA}({context.ParseContextName}, out var {valueAName});");
+        context.Unpin(result, pin);
+        result.Body.Add($"if ({successAName})");
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         if (!context.DiscardResult)

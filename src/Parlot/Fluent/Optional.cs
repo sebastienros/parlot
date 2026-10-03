@@ -67,7 +67,8 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
         // }
         // success = true; (always succeeds)
         var innerValueName = $"innerValue{context.NextNumber()}";
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out var {innerValueName})");
+        result.Body.Add($"if ({success})");
         result.Body.Add("{");
         if (!context.DiscardResult)
         {

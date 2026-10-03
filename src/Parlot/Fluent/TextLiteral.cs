@@ -121,6 +121,11 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(string), () => GenerateSource(context));
+        }
+
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
@@ -158,10 +163,10 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             var bufferName = $"buffer{context.NextNumber()}";
             var parsedTextName = $"parsedText{context.NextNumber()}";
             result.Body.Add($"    var {bufferName} = {scannerName}.Buffer;");
-            result.Body.Add($"    var {parsedTextName} = {bufferName}.AsSpan({startName}, {lengthLiteral});");
+            result.Body.Add($"    var {parsedTextName} = {cursorName}.GetSpan({startName}, {lengthLiteral});");
             result.Body.Add($"    {result.ValueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
             result.Body.Add($"        ? {textLiteral}");
-            result.Body.Add($"        : {startName} == 0 && {lengthLiteral} == {bufferName}.Length ? {bufferName} : {parsedTextName}.ToString();");
+            result.Body.Add($"        : {lengthLiteral} == {bufferName}.Length ? {bufferName} : {parsedTextName}.ToString();");
         }
         else
         {

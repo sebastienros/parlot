@@ -2,7 +2,9 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Threading;
+#if !PARLOT_STANDALONE
 using System.Threading.Tasks;
+#endif
 
 namespace Parlot.Fluent;
 
@@ -19,10 +21,15 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
     private readonly TextReader _reader;
     private readonly int _bufferSize;
     private readonly int _maxBufferedCharacters;
+#if !PARLOT_STANDALONE
     private readonly bool _readAsynchronously;
+#endif
+
+    private const int DefaultBufferSize = 4096;
 
     private char[] _chars = [];
 
+#if !PARLOT_STANDALONE
     /// <param name="reader">The reader.</param>
     /// <param name="options">The options.</param>
     /// <param name="readAsynchronously">
@@ -30,20 +37,29 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
     /// for readers over streams which don't support synchronous reads.
     /// </param>
     public TextReaderRefillSource(TextReader reader, StreamParseOptions options, bool readAsynchronously = false)
+        : this(reader, options.BufferSize, options.MaxBufferedCharacters)
+    {
+        _readAsynchronously = readAsynchronously;
+    }
+#endif
+
+    /// <param name="reader">The reader.</param>
+    /// <param name="bufferSize">The number of chars to read at once.</param>
+    /// <param name="maxBufferedCharacters">The maximum number of chars to buffer.</param>
+    public TextReaderRefillSource(TextReader reader, int bufferSize = DefaultBufferSize, int maxBufferedCharacters = int.MaxValue)
     {
         _reader = reader;
-        _readAsynchronously = readAsynchronously;
-        _bufferSize = options.BufferSize;
-        _maxBufferedCharacters = options.MaxBufferedCharacters;
+        _bufferSize = bufferSize;
+        _maxBufferedCharacters = maxBufferedCharacters;
 
         if (_bufferSize <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(options), "BufferSize must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(bufferSize), "BufferSize must be positive.");
         }
 
         if (_maxBufferedCharacters <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(options), "MaxBufferedCharacters must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(maxBufferedCharacters), "MaxBufferedCharacters must be positive.");
         }
     }
 
@@ -56,6 +72,7 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
         return Read(null, 0, 0, cancellationToken, out isFinal);
     }
 
+#if !PARLOT_STANDALONE
     /// <summary>
     /// Reads the first window asynchronously.
     /// </summary>
@@ -91,6 +108,7 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
 
         return (new string(_chars, 0, length), isFinal);
     }
+#endif
 
     public override void Refill(Cursor cursor, int floor, CancellationToken cancellationToken)
     {
@@ -144,7 +162,11 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
 
         while (length < target)
         {
+#if PARLOT_STANDALONE
+            var read = _reader.Read(_chars, length, target - length);
+#else
             var read = _readAsynchronously ? ReadBlocking(length, target - length, cancellationToken) : _reader.Read(_chars, length, target - length);
+#endif
 
             if (read == 0)
             {
@@ -163,6 +185,7 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
         return new string(_chars, 0, length);
     }
 
+#if !PARLOT_STANDALONE
     private int ReadBlocking(int index, int count, CancellationToken cancellationToken)
     {
 #if NET8_0_OR_GREATER
@@ -173,6 +196,7 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
         return _reader.ReadAsync(_chars, index, count).GetAwaiter().GetResult();
 #endif
     }
+#endif
 
     private void ReturnChars()
     {

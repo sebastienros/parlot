@@ -346,6 +346,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
             .MethodName;
 
+        // The end of the last element is read again when a separator isn't followed by an element
+        var pin = context.Pin(result);
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {cursorName}.Offset;");
@@ -373,6 +375,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         result.Body.Add("    else");
         result.Body.Add("    {");
         result.Body.Add($"        {endName} = {cursorName}.Position;");
+        context.MovePin(result, pin, "        ");
         result.Body.Add("    }");
 
         result.Body.Add($"    if ({cursorName}.Offset == {previousOffsetName})");
@@ -399,6 +402,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             result.Body.Add($"    {countName}++;");
         }
         result.Body.Add("}");
+        context.Unpin(result, pin);
 
         if (_min > 1)
         {
@@ -473,6 +477,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         var nextValue = context.DiscardResult ? "_" : nextItem;
 
         result.Body.Add($"var {initial} = {cursor}.Position;");
+
+        // The end of the last element is read again when a separator isn't followed by an element
+        var pin = context.Pin(result);
         result.Body.Add($"bool {found} = {parserHelper}({parseContext}, out {firstValue}) && {cursor}.Offset != {initial}.Offset;");
 
         if (_allowLeadingSeparator)
@@ -523,6 +530,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         {
             result.Body.Add($"    var {end} = {cursor}.Position;");
         }
+        context.MovePin(result, pin, "    ");
         result.Body.Add(_max == 0 ? "    while (true)" : $"    while ({count} < {_max})");
         result.Body.Add("    {");
         result.Body.Add($"        if (!{separatorHelper}({parseContext}, out _))");
@@ -567,6 +575,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         {
             result.Body.Add($"        {end} = {cursor}.Position;");
         }
+        context.MovePin(result, pin, "        ");
         if (!context.DiscardResult)
         {
             result.Body.Add($"        {list}.Add({nextItem});");
@@ -589,6 +598,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
         }
         result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{count} >= {_min}" : "true")};");
         result.Body.Add("}");
+        context.Unpin(result, pin);
 
         return result;
     }

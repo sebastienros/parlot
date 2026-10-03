@@ -131,6 +131,9 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             throw new InvalidOperationException("Unable to determine parser value type.");
         }
 
+        // The operators are tried from the same position
+        var pin = context.Pin(result);
+
         // Generate operator matching for each operator
         for (int i = 0; i < _operators.Length; i++)
         {
@@ -170,6 +173,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             var innerIndent = i == 0 ? indent : $"{indent}    ";
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
+            context.Unpin(result, pin, $"{innerIndent}    ");
             
             // Recursive call via helper method
             result.Body.Add($"{innerIndent}    if ({helperMethodName}({ctx}, out var {opResultName}RecursiveValue))");
@@ -199,6 +203,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         // If no operator matched, try base parser using helper
         result.Body.Add($"if (!{operatorMatchedName})");
         result.Body.Add("{");
+        context.Unpin(result, pin, "    ");
 
         var baseHelperName = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Unary", valueTypeName, () => parserSourceable.GenerateSource(context))
@@ -334,6 +339,9 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
             throw new InvalidOperationException("Unable to determine parser value type.");
         }
 
+        // The operators are tried from the same position
+        var pin = context.Pin(result);
+
         for (int i = 0; i < _operators.Length; i++)
         {
             var (op, factory) = _operators[i];
@@ -370,6 +378,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
             var innerIndent = i == 0 ? indent : $"{indent}    ";
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
+            context.Unpin(result, pin, $"{innerIndent}    ");
 
             result.Body.Add($"{innerIndent}    if ({helperMethodName}({ctx}, out var {opResultName}RecursiveValue))");
             result.Body.Add($"{innerIndent}    {{");
@@ -399,6 +408,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
         result.Body.Add($"if (!{operatorMatchedName})");
         result.Body.Add("{");
+        context.Unpin(result, pin, "    ");
 
         var baseHelperName = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_UnaryCtx", valueTypeName, () => parserSourceable.GenerateSource(context))

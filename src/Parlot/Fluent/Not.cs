@@ -66,7 +66,8 @@ public sealed class Not<T> : Parser<T>, ISourceable
         // {
         //     success = true;
         // }
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out _)");
+        result.Body.Add($"if ({success})");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add($"    {result.SuccessVariable} = false;");

@@ -40,6 +40,11 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
+
         var result = context.CreateResult(typeof(TextSpan));
         var ctx = context.ParseContextName;
         var cursorName = context.CursorName;
@@ -54,7 +59,7 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
         
         result.Body.Add($"if ({startName} != {endName})");
         result.Body.Add("{");
-        result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {endName} - {startName});");
+        result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {endName} - {startName});");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

@@ -107,6 +107,11 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
+
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
@@ -136,7 +141,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         if (!context.DiscardResult)
         {
             result.Body.Add($"    var {endName} = {cursorName}.Offset;");
-            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1, {endName} - {startName} - 2);");
+            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({cursorName}.CreateSpan({startName} + 1, {endName} - {startName} - 2));");
         }
         result.Body.Add("}");
 

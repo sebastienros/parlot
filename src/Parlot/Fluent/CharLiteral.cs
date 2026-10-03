@@ -51,6 +51,11 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(char), () => GenerateSource(context));
+        }
+
         var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(char));
         

@@ -61,6 +61,11 @@ internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(T), () => GenerateSource(context));
+        }
+
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
