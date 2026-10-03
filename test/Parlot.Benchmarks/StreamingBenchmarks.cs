@@ -24,7 +24,7 @@ public class StreamingBenchmarks
     /// <summary>
     /// The number of values in the document, and the number of lines.
     /// </summary>
-    [Params(10, 1000)]
+    [Params(1000, 10000, 100000)]
     public int Count { get; set; }
 
     [GlobalSetup]
@@ -54,6 +54,13 @@ public class StreamingBenchmarks
     }
 
     [Benchmark, BenchmarkCategory("Document")]
+    public IJson? Document_Parse()
+    {
+        using var reader = new ForwardOnlyReader(_document);
+        return JsonParser.Json.Parse(reader);
+    }
+
+    [Benchmark, BenchmarkCategory("Document")]
     public async Task<IJson?> Document_Stream_ReadToEnd()
     {
         using var stream = new ForwardOnlyStream(_documentBytes);
@@ -67,6 +74,13 @@ public class StreamingBenchmarks
         using var stream = new ForwardOnlyStream(_documentBytes);
         var (_, value) = await JsonParser.Json.TryParseAsync(stream);
         return value;
+    }
+
+    [Benchmark, BenchmarkCategory("Document")]
+    public IJson? Document_Stream_Parse()
+    {
+        using var stream = new ForwardOnlyStream(_documentBytes);
+        return JsonParser.Json.Parse(stream);
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Lines")]

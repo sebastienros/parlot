@@ -75,7 +75,21 @@ The `Cursor` methods record when a result depends on that text. A parser which r
 and fails or stops because the text is too short without advancing to its end, must call `Cursor.MarkHitEnd()`, or use
 `Cursor.TryGetSpan(minLength, out span)`. Both do nothing when parsing a `string`.
 
-> ✔️ DO: Test the parser with `TryParseAsync` over a reader returning one character at a time, and compare with `Parse(string)`.
+A parser which reads the cursor is a *token* of the compacting buffer, which replaces the window while parsing a stream.
+It must start with:
+
+```c#
+if (context.IsCompacting)
+{
+    return context.ParseToken(this, ref result);
+}
+```
+
+`Cursor.Offset` is then an absolute offset: index `Cursor.Buffer` with `offset - Cursor.BufferStart`, or use `Cursor.GetSpan`
+and `Cursor.CreateSpan`. A parser which moves the cursor back to read the same text again, not only to report a failure,
+must keep that text buffered with `context.Pin()` and `context.Unpin(pin)`. Both cost a branch when parsing a `string`.
+
+> ✔️ DO: Test the parser with `Parse(TextReader)` over a reader returning one character at a time, with `BufferSize = 1`, and compare with `Parse(string)`.
 
 ## Lookup tables
 

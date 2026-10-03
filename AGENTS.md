@@ -86,13 +86,26 @@ concern. `Deferred<T>` closes recursive grammars.
   advanced it, but not when a sub-parser failed (that one already reset itself);
 - write a test that asserts the cursor position is restored on failure.
 
-**Streaming** (`StreamingDriver.cs`, `Parser.Streaming.cs`) reuses that same synchronous `Parse`: an async
-driver reads a `TextReader`/`Stream` into a string window, parses it with a non-final `Cursor`, and retries on
-a larger window when `Cursor.HitEnd` is set. Invariant: a result that depended on text past the window end sets
-`HitEnd`. Reaching the end through any `Advance*` sets it centrally; a parser (or `ISourceable` emitter) that
-fails or stops by *looking* at the end of `Cursor.Span`/`Buffer` without advancing must call `MarkHitEnd()`.
-Keep these marks on cold end-of-buffer paths only. `test/Parlot.Tests/StreamingTests.cs` is a differential
-harness (1-char reads vs `Parse(string)`); add grammars there when touching scanning. See `docs/streaming.md`.
+**Streaming** reuses that same synchronous `Parse` in two modes. Both rely on one invariant: a result that
+depended on text past the end of a non-final `Cursor` window sets `Cursor.HitEnd`. Reaching the end through any
+`Advance*` sets it centrally; a parser (or `ISourceable` emitter) that fails or stops by *looking* at the end of
+`Cursor.Span`/`Buffer` without advancing must call `MarkHitEnd()`. Keep these marks on cold end-of-buffer paths only.
+
+- *Compacting buffer* (`Parser.Compacting.cs`, `TextReaderRefillSource.cs`, the compacting part of `ParseContext`),
+  for single values (`Parse(TextReader)`, `ParseAsync`, `TryParseAsync`). The cursor reads an immutable string
+  window starting at the absolute offset `Cursor.BufferStart`; `Offset`/`Position` are absolute. Leaf parsers that
+  read the cursor are *tokens*: they start with `if (context.IsCompacting) return context.ParseToken(this, ref result);`,
+  and `ParseToken` refills the window and reruns the token when it set `HitEnd`. A refill drops the text below the
+  backtrack floor, the lowest `ParseContext.Pin()`. Parsers that reset the cursor *and read again* (choices,
+  optionals, loops per element, lookaheads, `Capture`) pin; sequences that reset only to report a failure don't.
+  `Commit()` is a cut. Index `Buffer` with `offset - BufferStart` (or `GetSpan`/`CreateSpan`), never with `Offset`.
+  New leaf parsers need the token line, new backtracking parsers a pin.
+- *Window driver* (`StreamingDriver.cs`, `Parser.Streaming.cs`), for `ParseManyAsync`: parses each value from a
+  window and retries it on a larger window when `HitEnd` is set.
+
+`test/Parlot.Tests/StreamingTests.cs` is a differential harness (1-char reads and `BufferSize = 1` vs
+`Parse(string)`) for both modes, and `CompactingStreamTests.cs` covers pins and memory bounds; add grammars there
+when touching scanning or backtracking. See `docs/streaming.md`.
 
 ### The optimization surface — three opt-in interfaces
 
@@ -145,7 +158,9 @@ The analyzer requires a Roslyn 5.9+ compiler host regardless of the consumer's r
   types. It lowers the shared downlevel polyfills' static extension syntax to C# 12 helpers; consumers
   do not need PolySharp. Library packages targeting older frameworks must reference System.Memory
   explicitly (not privately) to propagate that dependency. Do not fork algorithms into separately
-  maintained copies. Application models and runtime callback helpers belong in normal `.cs` files,
+  maintained copies. The embedded files are compiled with `#define PARLOT_STANDALONE`: generated parsers
+  only parse strings, so `Cursor` uses a constant `0` window base there and drops the compacting
+  window replacement. Application models and runtime callback helpers belong in normal `.cs` files,
   not solely in `.parlot.cs` files.
 - `Numbers.Reflection.cs` stays in the runtime library, not the embedded support. Generated numeric
   parsing uses static dispatch from `Numbers.cs`; do not reintroduce reflection-only helpers into
