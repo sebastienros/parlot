@@ -265,9 +265,9 @@ Measured on Apple M-series (Arm64), .NET 10, BenchmarkDotNet `ShortRun`. Ratios 
 | Document, `ReadToEnd` + `Parse` | 100000 | 92.9 ms | 1.00 | 74.4 MB | 1.00 |
 | Document, `Parse(TextReader)` | 100000 | 117.7 ms | 1.27 | 85.7 MB | 1.15 |
 | Document, `TryParseAsync(TextReader)` | 100000 | 117.6 ms | 1.27 | 85.7 MB | 1.15 |
-| Lines, `ReadLine` + `Parse` | 100000 | 36.9 ms | 1.00 | 116.3 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 100000 | 34.3 ms | 0.93 | 83.9 MB | 0.72 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 40.9 ms | 1.11 | 116.3 MB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 100000 | 36.2 ms | 1.00 | 116.3 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100000 | 33.9 ms | 0.94 | 83.9 MB | 0.72 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 40.6 ms | 1.12 | 116.3 MB | 1.00 |
 
 The cost of a single value is a constant ratio of reading the text first, whatever its size, and the buffer stays flat.
 Peak buffered characters for the same documents:
