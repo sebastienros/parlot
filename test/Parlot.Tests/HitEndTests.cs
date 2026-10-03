@@ -144,19 +144,6 @@ public class HitEndTests
         Assert.False(c.HitEnd);
     }
 
-    [Fact]
-    public void TryGetSpanHitsEndWhenTooShort()
-    {
-        var c = new Cursor("abc", TextPosition.Start, isFinal: false);
-
-        Assert.True(c.TryGetSpan(3, out var span));
-        Assert.Equal("abc", span.ToString());
-        Assert.False(c.HitEnd);
-
-        Assert.False(c.TryGetSpan(4, out _));
-        Assert.True(c.HitEnd);
-    }
-
     [Theory]
     [InlineData("123")]
     [InlineData("1.")]

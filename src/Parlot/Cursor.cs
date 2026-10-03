@@ -93,23 +93,6 @@ public class Cursor
         _flags = (byte)((_flags & NotFinalFlag) | (Eof ? HitEndFlag : 0));
     }
 
-    /// <summary>
-    /// Gets the remaining text when at least <paramref name="minLength"/> characters are available.
-    /// Otherwise records <see cref="HitEnd"/> and returns <see langword="false"/>.
-    /// </summary>
-    public bool TryGetSpan(int minLength, out ReadOnlySpan<char> span)
-    {
-        span = Span;
-
-        if (span.Length < minLength)
-        {
-            _flags |= HitEndFlag;
-            return false;
-        }
-
-        return true;
-    }
-
     public Cursor(string buffer) : this(buffer, TextPosition.Start)
     {
     }
@@ -121,16 +104,8 @@ public class Cursor
     /// </summary>
     public ReadOnlySpan<char> Span => Buffer.AsSpan(_offset);
 
-    /// <summary>
-    /// The absolute offset of the first char of <see cref="Buffer"/>.
-    /// </summary>
-    /// <remarks>
-    /// It is <c>0</c> unless the input is streamed in compacting mode, where <see cref="Buffer"/> only holds the text
-    /// the parser can still read and is replaced as more text is read.
-    /// Index <see cref="Buffer"/> with <c>offset - BufferStart</c>, or use <see cref="GetSpan(int, int)"/> and
-    /// <see cref="CreateSpan(int, int)"/> which take absolute offsets.
-    /// </remarks>
-    public int BufferStart => _base;
+    // The absolute offset of the first char of Buffer, 0 unless the input is streamed in compacting mode
+    internal int BufferStart => _base;
 
     /// <summary>
     /// Returns the buffered text between the absolute offset <paramref name="start"/> and <c>start + length</c>.
@@ -144,7 +119,7 @@ public class Cursor
     /// <remarks>
     /// The <see cref="TextSpan.Offset"/> of the result is relative to its <see cref="TextSpan.Buffer"/>, which is the
     /// current <see cref="Buffer"/>. Parsers must create their <see cref="TextSpan"/> results with this method rather than
-    /// from <see cref="Buffer"/> and an absolute offset, which are only equivalent when <see cref="BufferStart"/> is <c>0</c>.
+    /// from <see cref="Buffer"/> and an absolute offset, which are only equivalent when the input isn't streamed in compacting mode.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TextSpan CreateSpan(int start, int length) => new(Buffer, start - _base, length);
@@ -462,7 +437,9 @@ public class Cursor
     public bool Eof { get; private set; }
 
     /// <summary>
-    /// The buffered text. Index it with <c>offset - <see cref="BufferStart"/></c>.
+    /// The buffered text. When the input is streamed in compacting mode it only holds the text the parser can still read,
+    /// so read it with <see cref="Span"/>, <see cref="GetSpan(int, int)"/> or <see cref="CreateSpan(int, int)"/>, which take absolute offsets,
+    /// rather than by indexing it with an offset.
     /// </summary>
     public string Buffer { get; private set; }
 

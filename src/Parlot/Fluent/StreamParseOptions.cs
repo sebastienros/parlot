@@ -1,11 +1,10 @@
 using System;
-using System.Text;
 using System.Threading;
 
 namespace Parlot.Fluent;
 
 /// <summary>
-/// Options for parsing a <see cref="System.IO.TextReader"/> or a <see cref="System.IO.Stream"/>.
+/// Options for parsing a <see cref="System.IO.TextReader"/>.
 /// </summary>
 public sealed class StreamParseOptions
 {
@@ -29,16 +28,10 @@ public sealed class StreamParseOptions
     /// When a single value is parsed, this limits the text the compacting buffer retains, which is the largest token
     /// or region that parsers can move back to. A parse that needs more fails with a <see cref="ParseException"/> at the start
     /// of the token that doesn't fit.
-    /// For <see cref="Parser{T}.ParseManyAsync(System.IO.TextReader, Func{T, CancellationToken, System.Threading.Tasks.ValueTask}, StreamParseOptions?, CancellationToken)"/>
+    /// For <see cref="Parser{T}.ParseManyAsync(System.IO.TextReader, StreamParseOptions?, CancellationToken)"/>
     /// this limits the size of each item, and a value that needs more characters fails with a <see cref="ParseException"/>.
     /// </remarks>
     public int MaxBufferedCharacters { get; set; } = int.MaxValue;
-
-    /// <summary>
-    /// The encoding used to decode a <see cref="System.IO.Stream"/>. Default is UTF-8.
-    /// A byte order mark in the stream takes precedence.
-    /// </summary>
-    public Encoding? Encoding { get; set; }
 
     /// <summary>
     /// Whether <c>ParseManyAsync</c> skips white space, using <see cref="ParseContext.SkipWhiteSpace"/>, before each item,

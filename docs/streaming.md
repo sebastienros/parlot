@@ -1,6 +1,6 @@
 # Parsing streams
 
-Parlot parses a `TextReader` or a `Stream` with the same parsers as a `string`. The parser graph, the built-in
+Parlot parses a `TextReader` with the same parsers as a `string`. The parser graph, the built-in
 parsers and `ParseContext` callbacks work unchanged: streaming drives the synchronous `Parse` method, it isn't a
 second implementation of each parser.
 
@@ -8,21 +8,26 @@ second implementation of each parser.
 using Parlot.Fluent;
 
 // One value, of any size, retaining only the text the parser can still read
-using var file = File.OpenRead("document.json");
+using var file = File.OpenText("document.json");
 var value = JsonParser.Json.Parse(file);
 
 // The same, without blocking the caller
-await using var input = File.OpenRead("document.json");
+using var input = File.OpenText("document.json");
 var (success, result) = await JsonParser.Json.TryParseAsync(input, cancellationToken: cancellationToken);
 
 // Successive values, for instance NDJSON or log records
-await using var records = File.OpenRead("records.ndjson");
-var count = await record.ParseManyAsync(records, (item, ct) => store.AddAsync(item, ct), cancellationToken: cancellationToken);
+using var records = File.OpenText("records.ndjson");
+await foreach (var item in record.ParseManyAsync(records, cancellationToken: cancellationToken))
+{
+    await store.AddAsync(item, cancellationToken);
+}
 ```
+
+A `Stream` is parsed through a `StreamReader`, which decodes it.
 
 There are two modes:
 
-- **Compacting buffer**, for one value: `Parse`/`TryParse(TextReader | Stream)` and `ParseAsync`/`TryParseAsync`.
+- **Compacting buffer**, for one value: `Parse`/`TryParse(TextReader)` and `ParseAsync`/`TryParseAsync`.
   The parse runs once over a buffer which is refilled in place, and which only retains the text a parser can still
   move back to. Memory is bounded by the largest token or backtracking region, not by the size of the value.
 - **Window driver**, for successive values: `ParseManyAsync`. Each value is parsed from a window of text, and
@@ -30,7 +35,7 @@ There are two modes:
 
 ## Compacting buffer
 
-The cursor reads a window of the input, a `string` whose first char is at the absolute offset `Cursor.BufferStart`.
+The cursor reads a window of the input, a `string` which starts at an absolute offset of the input.
 `Cursor.Offset`, `Cursor.Position` and `ParseResult` offsets are absolute: they are the ones in the whole text, so
 positions saved by parsers stay valid when the window is replaced. Lines and columns are the ones of the whole text.
 
@@ -100,10 +105,9 @@ context.Unpin(pin);
 ```
 
 `Pin` returns `-1` and `Unpin(-1)` does nothing when the text doesn't need to be pinned, so this costs a branch when
-parsing a `string`. Pins are released in the reverse order. `MovePin` moves a pin forward, for instance to the next
-element of a loop.
+parsing a `string`. Pins are released in the reverse order.
 
-`Cursor.Buffer` is the current window: index it with `offset - Cursor.BufferStart`, or use `Cursor.GetSpan(start, length)`
+`Cursor.Buffer` is the current window, don't index it with an offset. Use `Cursor.Span`, `Cursor.GetSpan(start, length)`
 and `Cursor.CreateSpan(start, length)`, which take absolute offsets. A `TextSpan` created by `CreateSpan` references
 its window string, which remains valid after a refill; its `Offset` is relative to its `Buffer`.
 
@@ -112,7 +116,7 @@ its window string, which remains valid after a refill; its `Offset` is relative 
 The parse is synchronous. `ParseAsync` and `TryParseAsync` read the first `BufferSize` chars asynchronously. When the
 input fits in them, it is parsed as a `string` on the calling thread. Otherwise the parse runs on a thread pool thread
 whose refills block on `TextReader.ReadAsync`, so a stream which doesn't allow synchronous reads, like an ASP.NET Core
-request body, can be parsed. Use `Parse(Stream)` on a thread which can block to avoid the thread pool hop.
+request body, can be parsed. Use `Parse(TextReader)` on a thread which can block to avoid the thread pool hop.
 
 ## Window driver
 
@@ -140,8 +144,7 @@ Both modes rely on `HitEnd`: the window driver to retry a value, the compacting 
 
 - reaching the end of the window, by any `Advance*` method or `ResetPosition`, or when the window is empty;
 - `PeekNext` past the end of the window;
-- `Match` when the remaining text is a prefix of the expected text;
-- `TryGetSpan(minLength, out span)` when fewer characters are available.
+- `Match` when the remaining text is a prefix of the expected text.
 
 A parser which reads to the end of the window, for instance an identifier or a number, has reached the end
 and set `HitEnd`. Explicit marks are only needed where a parser fails or stops by *looking* at the end
@@ -162,26 +165,25 @@ if (span.Length < 4)
 }
 ```
 
-`MarkHitEnd` does nothing on a final window, so it costs nothing when parsing a `string`. `TryGetSpan`
-combines both. Forgetting it can only produce a wrong result when parsing a stream: compare `Parse(TextReader)`
+`MarkHitEnd` does nothing on a final window, so it costs nothing when parsing a `string`. Forgetting it can only produce a wrong result when parsing a stream: compare `Parse(TextReader)`
 and `ParseManyAsync` over a reader returning one character at a time with `Parse(string)` to test a parser.
 
 ## API
 
-All the methods are on `Parser<T>` and take an optional `StreamParseOptions` and `CancellationToken`.
-`Stream` overloads decode the stream with `StreamParseOptions.Encoding` (UTF-8 by default, a byte order
-mark takes precedence) and leave it open.
+All the methods are on `Parser<T>`, take a `TextReader`, an optional `StreamParseOptions` and `CancellationToken`,
+and leave the reader open.
 
 | Method | Description |
 |---|---|
-| `Parse(TextReader \| Stream)` | Parses one value through the compacting buffer, returns the value or `default`. A `ParseException` is propagated. |
-| `TryParse(TextReader \| Stream, out T value[, out ParseError? error])` | Same, returns whether the text matched. A `ParseException` or a cancellation returns `false` with the error. |
-| `TryParseAsync(TextReader \| Stream)` | Parses one value through the compacting buffer, returns `(bool Success, T? Value)`. A `ParseException` returns `false`. |
-| `ParseAsync(TextReader \| Stream)` | Same, returns the value or `default`. A `ParseException` is propagated. |
-| `ParseManyAsync(TextReader \| Stream, onItem)` | Parses successive values, invokes `onItem` (`Action<T>` or `Func<T, CancellationToken, ValueTask>`) for each and returns their count. |
-| `ParseManyAsync(TextReader \| Stream, separator, onItem)` | Same, with a separator parser between the values. A trailing separator is accepted. |
-| `ParseManyAsync(TextReader \| Stream, char delimiter, onItem)` | Parses each text delimited by `delimiter`, for instance each line, as a value. |
-| `ParseManyAsync(...)` without `onItem` | Returns an `IAsyncEnumerable<T>` (.NET 8 and later). |
+| `Parse(TextReader)` | Parses one value through the compacting buffer, returns the value or `default`. A `ParseException` is propagated. |
+| `TryParse(TextReader, out T value[, out ParseError? error])` | Same, returns whether the text matched. A `ParseException` or a cancellation returns `false` with the error. |
+| `TryParseAsync(TextReader)` | Parses one value through the compacting buffer, returns `(bool Success, T? Value)`. A `ParseException` returns `false`. |
+| `ParseAsync(TextReader)` | Same, returns the value or `default`. A `ParseException` is propagated. |
+| `ParseManyAsync(TextReader)` | Parses successive values, returns an `IAsyncEnumerable<T>`. |
+| `ParseManyAsync(TextReader, separator)` | Same, with a separator parser between the values. A trailing separator is accepted. |
+| `ParseManyAsync(TextReader, char delimiter)` | Parses each text delimited by `delimiter`, for instance each line, as a value. |
+
+On .NET Framework and .NET Standard, `IAsyncEnumerable<T>` comes from the `Microsoft.Bcl.AsyncInterfaces` package.
 
 `StreamParseOptions`:
 
@@ -189,7 +191,6 @@ mark takes precedence) and leave it open.
 |---|---|---|
 | `BufferSize` | 4096 | Number of characters read at once, and before parsing. A refill reads at least as many characters as it retains. |
 | `MaxBufferedCharacters` | `int.MaxValue` | Maximum characters buffered: the retained text of the compacting buffer, or the window of a value for `ParseManyAsync`. Exceeding it throws a `ParseException` at the start of the token or value which doesn't fit. Set it for untrusted input. |
-| `Encoding` | UTF-8 | Encoding of a `Stream`. |
 | `SkipWhiteSpace` | `true` | Whether `ParseManyAsync` skips white space before each item, separator and the end. |
 | `ContextFactory` | `null` | Creates the `ParseContext` of the parse (of each window for `ParseManyAsync`), for instance to set `WhiteSpaceParser` or use a derived context. It must use the provided scanner and pass the cancellation token. |
 
@@ -199,12 +200,12 @@ The single value methods return the result of `Parse`/`TryParse` on the whole te
 the result is complete: the text which follows the value is not necessarily read, like for `Parse(string)` which
 doesn't require the end of the text. Use `.Eof()` to reject trailing text.
 
-An input which fits in the first `BufferSize` chars, a `StringReader` in the asynchronous methods, and a seekable
-`Stream` whose remaining length is within `MaxBufferedCharacters` in `TryParseAsync`, are parsed as a `string`.
+An input which fits in the first `BufferSize` chars, and a `StringReader` in the asynchronous methods, are parsed as a
+`string`.
 
 ### Successive values
 
-`ParseManyAsync` parses a value, invokes the item callback, drops the text of the value and continues
+`ParseManyAsync` parses a value, returns it, drops the text of the value and continues
 with the next one, so memory is bounded by the largest value, not by the input. The text must only
 contain values (and separators and white space). A value which doesn't match throws a `ParseException`,
 and a value matching an empty text throws an `InvalidOperationException` to avoid an infinite loop.
@@ -222,8 +223,8 @@ other overloads could wait for more text than the next value needs before parsin
   its `Offset` is relative to that string. Call `ToString()` to keep only its text.
 - **Callbacks.** In compacting mode, callbacks invoked while parsing, such as `Then`, `When` or `ParseContext` hooks,
   run once, like for a `string`, except within custom tokens, which can be parsed again. With `ParseManyAsync` they can
-  run more than once for the same text when an attempt is retried: keep them free of side effects, or use the item
-  callback, which runs once per committed value.
+  run more than once for the same text when an attempt is retried: keep them free of side effects, or act on the
+  enumerated values, which are returned once.
 - **Contexts.** In compacting mode a single `ParseContext` parses the whole input. `ParseManyAsync` creates one for
   each window and shares it between the items of the same window.
 - **Cancellation.** The token is passed to the reads and to the `ParseContext`, and throws an
@@ -239,7 +240,7 @@ other overloads could wait for more text than the next value needs before parsin
 - To fill a window, the readers read until the target size or the end of the input. With interactive sources, use
   the delimited overload or a small `BufferSize`.
 - Generated parsers only parse strings. Their code embeds the same `Cursor` and sets `HitEnd` the same way, but
-  compiles it with `PARLOT_STANDALONE`, which fixes `BufferStart` to `0` and removes the window replacement.
+  compiles it with `PARLOT_STANDALONE`, which fixes the window to the whole text.
 
 ## Performance
 
@@ -247,7 +248,7 @@ Parsing a `string` is unchanged: the compacting checks share a byte of `ParseCon
 `HitEnd` is only set on the paths that reach the end of the text, and generated parsers compile the compacting code out.
 
 The benchmarks below (`StreamingBenchmarks`) parse JSON objects with the sample grammar, from a `TextReader`
-which isn't a `StringReader` and from a non-seekable stream, to avoid the fast paths. `Document` parses an
+which isn't a `StringReader`, to avoid the fast path. `Document` parses an
 array of `Count` objects, `Lines` parses one object per line.
 
 Measured on Apple M-series (Arm64), .NET 10, BenchmarkDotNet `ShortRun`. Ratios are relative to `ReadToEnd` + `Parse`.
@@ -258,22 +259,15 @@ Measured on Apple M-series (Arm64), .NET 10, BenchmarkDotNet `ShortRun`. Ratios 
 | Document, `ReadToEnd` + `Parse` | 1000 | 386.0 us | 1.00 | 757.8 KB | 1.00 |
 | Document, `Parse(TextReader)` | 1000 | 549.7 us | 1.42 | 869.1 KB | 1.15 |
 | Document, `TryParseAsync(TextReader)` | 1000 | 547.8 us | 1.42 | 870.1 KB | 1.15 |
-| Document, `Stream` `ReadToEndAsync` + `Parse` | 1000 | 461.7 us | 1.20 | 997.4 KB | 1.32 |
-| Document, `Parse(Stream)` | 1000 | 499.0 us | 1.29 | 881.5 KB | 1.16 |
 | Document, `ReadToEnd` + `Parse` | 10000 | 8.00 ms | 1.00 | 7.49 MB | 1.00 |
 | Document, `Parse(TextReader)` | 10000 | 10.27 ms | 1.28 | 8.60 MB | 1.15 |
 | Document, `TryParseAsync(TextReader)` | 10000 | 10.26 ms | 1.28 | 8.60 MB | 1.15 |
-| Document, `Stream` `ReadToEndAsync` + `Parse` | 10000 | 8.07 ms | 1.01 | 9.69 MB | 1.29 |
-| Document, `Parse(Stream)` | 10000 | 9.56 ms | 1.20 | 8.61 MB | 1.15 |
 | Document, `ReadToEnd` + `Parse` | 100000 | 92.9 ms | 1.00 | 74.4 MB | 1.00 |
 | Document, `Parse(TextReader)` | 100000 | 117.7 ms | 1.27 | 85.7 MB | 1.15 |
 | Document, `TryParseAsync(TextReader)` | 100000 | 117.6 ms | 1.27 | 85.7 MB | 1.15 |
-| Document, `Stream` `ReadToEndAsync` + `Parse` | 100000 | 93.5 ms | 1.01 | 96.7 MB | 1.30 |
-| Document, `Parse(Stream)` | 100000 | 118.0 ms | 1.27 | 85.7 MB | 1.15 |
 | Lines, `ReadLine` + `Parse` | 100000 | 36.9 ms | 1.00 | 116.3 MB | 1.00 |
 | Lines, `ParseManyAsync(TextReader)` | 100000 | 34.3 ms | 0.93 | 83.9 MB | 0.72 |
 | Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 40.9 ms | 1.11 | 116.3 MB | 1.00 |
-| Lines, `ParseManyAsync(Stream)` | 100000 | 33.7 ms | 0.91 | 83.9 MB | 0.72 |
 
 The cost of a single value is a constant ratio of reading the text first, whatever its size, and the buffer stays flat.
 Peak buffered characters for the same documents:

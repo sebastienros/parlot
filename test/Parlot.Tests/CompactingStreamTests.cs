@@ -179,20 +179,6 @@ public class CompactingStreamTests
     }
 
     [Fact]
-    public void StreamsAreDecoded()
-    {
-        var text = "{\"é\":[\"日本\"]}";
-        var options = new StreamParseOptions { BufferSize = 1 };
-
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
-        Assert.True(JsonParser.Json.TryParse(stream, out var value, options));
-        Assert.Equal(text, value.ToString());
-
-        using var unicode = new MemoryStream(Encoding.Unicode.GetBytes(text));
-        Assert.Equal(text, JsonParser.Json.Parse(unicode, new StreamParseOptions { Encoding = Encoding.Unicode, BufferSize = 1 })!.ToString());
-    }
-
-    [Fact]
     public void WholeTextsInTheFirstBufferAreParsedAsStrings()
     {
         ParseContext? context = null;

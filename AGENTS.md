@@ -93,7 +93,7 @@ depended on text past the end of a non-final `Cursor` window sets `Cursor.HitEnd
 
 - *Compacting buffer* (`Parser.Compacting.cs`, `TextReaderRefillSource.cs`, the compacting part of `ParseContext`),
   for single values (`Parse(TextReader)`, `ParseAsync`, `TryParseAsync`). The cursor reads an immutable string
-  window starting at the absolute offset `Cursor.BufferStart`; `Offset`/`Position` are absolute. Leaf parsers that
+  window starting at an absolute offset (`Cursor.BufferStart`, internal); `Offset`/`Position` are absolute. Leaf parsers that
   read the cursor are *tokens*: they start with `if (context.IsCompacting) return context.ParseToken(this, ref result);`,
   and `ParseToken` refills the window and reruns the token when it set `HitEnd`. A refill drops the text below the
   backtrack floor, the lowest `ParseContext.Pin()`. Parsers that reset the cursor *and read again* (choices,

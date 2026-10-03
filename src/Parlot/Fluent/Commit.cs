@@ -5,7 +5,7 @@ using System;
 namespace Parlot.Fluent;
 
 /// <summary>
-/// Prevents any parser from moving back before the end of the parser's match once it succeeds, see <see cref="ParseContext.Commit"/>.
+/// Prevents any parser from moving back before the end of the parser's match once it succeeds, like a PEG cut.
 /// </summary>
 /// <remarks>
 /// When the input is streamed through a compacting buffer, the text before the match is no longer buffered.

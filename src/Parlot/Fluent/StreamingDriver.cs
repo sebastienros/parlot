@@ -1,7 +1,6 @@
 using System;
 using System.Buffers;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -71,22 +70,11 @@ internal sealed class StreamingDriver : IDisposable
     /// </summary>
     public bool IsFinal { get; private set; }
 
-    public static StreamReader CreateReader(Stream stream, StreamParseOptions? options)
-    {
-        ThrowHelper.ThrowIfNull(stream, nameof(stream));
-
-        var bufferSize = options?.BufferSize ?? StreamParseOptions.Default.BufferSize;
-        bufferSize = bufferSize < 128 ? 128 : bufferSize > 81920 ? 81920 : bufferSize;
-
-        return new StreamReader(stream, options?.Encoding ?? new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true, bufferSize, leaveOpen: true);
-    }
-
     /// <summary>
     /// Drops the text before <paramref name="start"/>, reads more text and starts a new window at <paramref name="start"/>.
     /// </summary>
     /// <param name="start">The position of the text to keep.</param>
-    /// <param name="growthFactor">How many times larger than the kept text the new window should be, at least 2.</param>
-    public async ValueTask GrowAsync(TextPosition start, int growthFactor = 2)
+    public async ValueTask GrowAsync(TextPosition start)
     {
         var available = _length - start.Offset;
 
@@ -106,7 +94,7 @@ internal sealed class StreamingDriver : IDisposable
         _column = start.Column;
 
         // Grow geometrically so that the retries cost a bounded multiple of a single parse
-        var target = available + Math.Max(available * (growthFactor - 1), _options.BufferSize);
+        var target = available + Math.Max(available, _options.BufferSize);
 
         if (target < 0 || target > _options.MaxBufferedCharacters)
         {

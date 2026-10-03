@@ -415,7 +415,7 @@ public class ParseContext
     /// Pins follow the parsers' call stack: a parser releases its pin with <see cref="Unpin(int)"/> before it returns.
     /// Parsers that only move back to report a failure don't need one, their caller pins the position it reads again from.
     /// </remarks>
-    /// <returns>A value to pass to <see cref="MovePin(int)"/> and <see cref="Unpin(int)"/>, which is <c>-1</c> when the text doesn't need to be pinned.</returns>
+    /// <returns>A value to pass to <see cref="Unpin(int)"/>, which is <c>-1</c> when the text doesn't need to be pinned.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int Pin()
     {
@@ -443,12 +443,9 @@ public class ParseContext
         return count;
     }
 
-    /// <summary>
-    /// Moves a pin returned by <see cref="Pin"/> to the current position, releasing the text before it.
-    /// </summary>
-    /// <param name="pin">The value returned by <see cref="Pin"/>.</param>
+    // Moves a pin to the current position, releasing the text before it, like Unpin(pin) then Pin()
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void MovePin(int pin)
+    internal void MovePin(int pin)
     {
         if (pin >= 0)
         {
@@ -469,11 +466,8 @@ public class ParseContext
         }
     }
 
-    /// <summary>
-    /// Releases the text before the current position when the input is streamed through a compacting buffer.
-    /// No parser can move the cursor back before it and read again.
-    /// </summary>
-    public void Commit()
+    // Releases the text before the current position when the input is streamed through a compacting buffer, see Commit<T>
+    internal void Commit()
     {
         if ((_flags & CompactingMask) == 0)
         {

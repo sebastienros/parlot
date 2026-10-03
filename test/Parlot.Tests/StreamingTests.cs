@@ -7,7 +7,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Parlot.Fluent;
@@ -255,24 +254,6 @@ public class StreamingTests
     }
 
     [Fact]
-    public async Task StreamOverloadsDecodeTheStream()
-    {
-        var text = "{\"é\":[\"日本\"]}";
-        var options = new StreamParseOptions { BufferSize = 1 };
-
-        using var seekable = new MemoryStream(Encoding.UTF8.GetBytes(text));
-        var (success, value) = await JsonParser.Json.TryParseAsync(seekable, options);
-        Assert.True(success);
-        Assert.Equal(text, value!.ToString());
-
-        using var nonSeekable = new NonSeekableStream(Encoding.UTF8.GetBytes(text));
-        Assert.Equal(text, (await JsonParser.Json.ParseAsync(nonSeekable, options))!.ToString());
-
-        using var unicode = new NonSeekableStream(Encoding.Unicode.GetBytes(text));
-        Assert.Equal(text, (await JsonParser.Json.ParseAsync(unicode, new StreamParseOptions { Encoding = Encoding.Unicode }))!.ToString());
-    }
-
-    [Fact]
     public async Task ParseAsyncLimitsBufferedCharacters()
     {
         var options = new StreamParseOptions { BufferSize = 4, MaxBufferedCharacters = 16 };
@@ -320,25 +301,21 @@ public class StreamingTests
     {
         var lines = Enumerable.Range(0, 50).Select(static i => $"{{\"id\":\"{i}\",\"tags\":[\"{new string('x', i % 7)}\"]}}").ToArray();
         var text = string.Join("\n", lines) + "\n";
-        var items = new List<string>();
 
-        var count = await JsonParser.Json.ParseManyAsync(new ChunkedReader(text, () => chunk, yield: chunk == 3), json => items.Add(json.ToString()!), new StreamParseOptions { BufferSize = bufferSize });
+        var items = await ToListAsync(JsonParser.Json.ParseManyAsync(new ChunkedReader(text, () => chunk, yield: chunk == 3), new StreamParseOptions { BufferSize = bufferSize }));
 
-        Assert.Equal(lines.Length, count);
-        Assert.Equal(lines, items);
+        Assert.Equal(lines, items.Select(static json => json.ToString()));
     }
 
     [Theory]
-    [InlineData("", 0)]
-    [InlineData("  \n ", 0)]
-    [InlineData("1 2 3", 3)]
-    [InlineData(" 1\n22\n 333 \n", 3)]
-    public async Task ParseManyAsyncCountsValues(string text, long expected)
+    [InlineData("")]
+    [InlineData("  \n ")]
+    [InlineData("1 2 3")]
+    [InlineData(" 1\n22\n 333 \n")]
+    public async Task ParseManyAsyncParsesValuesSeparatedByWhiteSpace(string text)
     {
-        var values = new List<long>();
-        var count = await Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), (value, _) => { values.Add(value); return default; }, new StreamParseOptions { BufferSize = 1 });
+        var values = await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), new StreamParseOptions { BufferSize = 1 }));
 
-        Assert.Equal(expected, count);
         Assert.Equal(text.Split([' ', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(long.Parse), values);
     }
 
@@ -347,12 +324,12 @@ public class StreamingTests
     [InlineData("1 , 2 ,3 ,", 3)]
     [InlineData("", 0)]
     [InlineData("1", 1)]
-    public async Task ParseManyAsyncParsesSeparatedValues(string text, long expected)
+    public async Task ParseManyAsyncParsesSeparatedValues(string text, int expected)
     {
         foreach (var bufferSize in new[] { 1, 3, 4096 })
         {
-            var count = await Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), Terms.Char(','), static (_, _) => default, new StreamParseOptions { BufferSize = bufferSize });
-            Assert.Equal(expected, count);
+            var values = await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), Terms.Char(','), new StreamParseOptions { BufferSize = bufferSize }));
+            Assert.Equal(Enumerable.Range(1, expected).Select(static i => (long)i), values);
         }
     }
 
@@ -362,7 +339,7 @@ public class StreamingTests
     [InlineData("1,,2", 2)]
     public async Task ParseManyAsyncRequiresSeparators(string text, int offset)
     {
-        var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), Terms.Char(','), static (_, _) => default, new StreamParseOptions { BufferSize = 1 }));
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), Terms.Char(','), new StreamParseOptions { BufferSize = 1 })));
         Assert.Equal(offset, exception.Position.Offset);
     }
 
@@ -370,12 +347,12 @@ public class StreamingTests
     public async Task ParseManyAsyncReportsAbsolutePositions()
     {
         var text = "{\"a\":\"b\"}\n{\"c\":\"d\"}\n {\"e\" \"f\"}\n";
-        var items = new List<string>();
+        var items = new List<IJson>();
 
         foreach (var bufferSize in new[] { 1, 4096 })
         {
             items.Clear();
-            var exception = await Assert.ThrowsAsync<ParseException>(async () => await JsonParser.Json.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), json => items.Add(json.ToString()!), new StreamParseOptions { BufferSize = bufferSize }));
+            var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(JsonParser.Json.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), new StreamParseOptions { BufferSize = bufferSize }), items));
 
             Assert.Equal(2, items.Count);
             Assert.Equal(21, exception.Position.Offset);
@@ -389,7 +366,7 @@ public class StreamingTests
     {
         var parser = Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"));
 
-        var exception = await Assert.ThrowsAsync<ParseException>(async () => await parser.ParseManyAsync(new ChunkedReader("(1)\n(2)\n(3 x", () => 1, yield: false), static _ => { }, new StreamParseOptions { BufferSize = 1 }));
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(parser.ParseManyAsync(new ChunkedReader("(1)\n(2)\n(3 x", () => 1, yield: false), new StreamParseOptions { BufferSize = 1 })));
 
         Assert.Equal("Expected ')'", exception.Message);
         Assert.Equal(10, exception.Position.Offset);
@@ -400,7 +377,7 @@ public class StreamingTests
     [Fact]
     public async Task ParseManyAsyncRejectsEmptyValues()
     {
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Terms.Integer().Optional().ParseManyAsync(new ChunkedReader("1 x", () => 1, yield: false), static _ => { }));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ToListAsync(Terms.Integer().Optional().ParseManyAsync(new ChunkedReader("1 x", () => 1, yield: false))));
     }
 
     [Fact]
@@ -409,8 +386,12 @@ public class StreamingTests
         const int Count = 10_000;
         var reader = new GeneratedReader(Count);
         var options = new StreamParseOptions { BufferSize = 64, MaxBufferedCharacters = 256 };
+        var count = 0;
 
-        var count = await JsonParser.Json.ParseManyAsync(reader, static _ => { }, options);
+        await foreach (var _ in JsonParser.Json.ParseManyAsync(reader, options))
+        {
+            count++;
+        }
 
         Assert.Equal(Count, count);
     }
@@ -419,11 +400,11 @@ public class StreamingTests
     public async Task ParseManyAsyncLimitsValueSize()
     {
         var text = "[\"a\"]\n[\"" + new string('b', 100) + "\"]";
-        var items = 0;
+        var items = new List<IJson>();
 
-        var exception = await Assert.ThrowsAsync<ParseException>(async () => await JsonParser.Json.ParseManyAsync(new ChunkedReader(text, () => 5, false), _ => items++, new StreamParseOptions { BufferSize = 8, MaxBufferedCharacters = 32 }));
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(JsonParser.Json.ParseManyAsync(new ChunkedReader(text, () => 5, false), new StreamParseOptions { BufferSize = 8, MaxBufferedCharacters = 32 }), items));
 
-        Assert.Equal(1, items);
+        Assert.Single(items);
         Assert.Equal(6, exception.Position.Offset);
     }
 
@@ -433,15 +414,16 @@ public class StreamingTests
         using var cts = new CancellationTokenSource();
         var count = 0;
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader("1 2 3 4 5 6", () => 1, yield: true), (_, ct) =>
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            if (++count == 2)
+            await foreach (var _ in Terms.Integer().ParseManyAsync(new ChunkedReader("1 2 3 4 5 6", () => 1, yield: true), new StreamParseOptions { BufferSize = 1 }, cts.Token))
             {
-                cts.Cancel();
+                if (++count == 2)
+                {
+                    cts.Cancel();
+                }
             }
-
-            return default;
-        }, new StreamParseOptions { BufferSize = 1 }, cts.Token));
+        });
 
         Assert.Equal(2, count);
     }
@@ -455,28 +437,15 @@ public class StreamingTests
             ContextFactory = static (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = Capture(ZeroOrMany(Literals.Char('#').Or(Literals.Char(' ')))) },
         };
 
-        var values = new List<long>();
-        await Terms.Integer().ParseManyAsync(new ChunkedReader("1#2 ##3", () => 1, false), values.Add, options);
+        var values = await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader("1#2 ##3", () => 1, false), options));
 
         Assert.Equal([1L, 2, 3], values);
     }
 
     [Fact]
-    public async Task ParseManyAsyncParsesStreams()
-    {
-        using var stream = new NonSeekableStream(Encoding.UTF8.GetBytes("[\"é\"] [\"日本\"]"));
-        var items = new List<string>();
-
-        await JsonParser.Json.ParseManyAsync(stream, json => items.Add(json.ToString()!), new StreamParseOptions { BufferSize = 1 });
-
-        Assert.Equal(["[\"é\"]", "[\"日本\"]"], items);
-    }
-
-    [Fact]
     public async Task TextSpansRemainValid()
     {
-        var spans = new List<TextSpan>();
-        await Terms.Identifier().ParseManyAsync(new ChunkedReader("alpha beta gamma delta", () => 1, false), spans.Add, new StreamParseOptions { BufferSize = 1 });
+        var spans = await ToListAsync(Terms.Identifier().ParseManyAsync(new ChunkedReader("alpha beta gamma delta", () => 1, false), new StreamParseOptions { BufferSize = 1 }));
 
         Assert.Equal(["alpha", "beta", "gamma", "delta"], spans.Select(static s => s.ToString()));
     }
@@ -486,13 +455,11 @@ public class StreamingTests
     public async Task ParseManyAsyncParsesDelimitedValues(int chunk, int bufferSize)
     {
         var text = "{\"a\": \"1\"}\n\n  \r\n[\"b\", \"c\"]\r\n\"d\"\n \"e\" ";
-        var items = new List<string>();
         var reader = new ChunkedReader(text, () => chunk, yield: chunk == 3);
 
-        var count = await JsonParser.Json.ParseManyAsync(reader, '\n', json => items.Add(json.ToString()!), new StreamParseOptions { BufferSize = bufferSize });
+        var items = await ToListAsync(JsonParser.Json.ParseManyAsync(reader, '\n', new StreamParseOptions { BufferSize = bufferSize }));
 
-        Assert.Equal(4, count);
-        Assert.Equal(["{\"a\":\"1\"}", "[\"b\",\"c\"]", "\"d\"", "\"e\""], items);
+        Assert.Equal(["{\"a\":\"1\"}", "[\"b\",\"c\"]", "\"d\"", "\"e\""], items.Select(static json => json.ToString()));
     }
 
     [Theory]
@@ -516,7 +483,7 @@ public class StreamingTests
 
         foreach (var chunk in new[] { 1, 2, 4096 })
         {
-            var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => chunk, yield: false), delimiter, static _ => { }, new StreamParseOptions { BufferSize = 1 }));
+            var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => chunk, yield: false), delimiter, new StreamParseOptions { BufferSize = 1 })));
 
             Assert.Equal(expected.Position, exception.Position);
         }
@@ -525,29 +492,27 @@ public class StreamingTests
     [Fact]
     public async Task ParseManyAsyncRequiresDelimitedValuesToBeMatchedEntirely()
     {
-        var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader("1\n2 3\n", () => 1, false), '\n', static _ => { }));
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader("1\n2 3\n", () => 1, false), '\n')));
 
         Assert.Equal(4, exception.Position.Offset);
         Assert.Equal(2, exception.Position.Line);
         Assert.Equal(3, exception.Position.Column);
 
-        var values = new List<long>();
         var options = new StreamParseOptions { SkipWhiteSpace = false };
 
-        await Literals.Integer().ParseManyAsync(new ChunkedReader("1\n\n2", () => 1, false), '\n', values.Add, options);
-        Assert.Equal([1L, 2], values);
+        Assert.Equal([1L, 2], await ToListAsync(Literals.Integer().ParseManyAsync(new ChunkedReader("1\n\n2", () => 1, false), '\n', options)));
 
-        await Assert.ThrowsAsync<ParseException>(async () => await Literals.Integer().ParseManyAsync(new ChunkedReader("1 \n2", () => 1, false), '\n', values.Add, options));
+        await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Literals.Integer().ParseManyAsync(new ChunkedReader("1 \n2", () => 1, false), '\n', options)));
     }
 
     [Fact]
     public async Task ParseManyAsyncLimitsDelimitedValueSize()
     {
-        var items = 0;
+        var items = new List<long>();
 
-        var exception = await Assert.ThrowsAsync<ParseException>(async () => await Terms.Integer().ParseManyAsync(new ChunkedReader("1\n22\n" + new string('3', 20) + "\n4", () => 3, false), '\n', _ => items++, new StreamParseOptions { BufferSize = 2, MaxBufferedCharacters = 8 }));
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader("1\n22\n" + new string('3', 20) + "\n4", () => 3, false), '\n', new StreamParseOptions { BufferSize = 2, MaxBufferedCharacters = 8 }), items));
 
-        Assert.Equal(2, items);
+        Assert.Equal(2, items.Count);
         Assert.Equal(5, exception.Position.Offset);
         Assert.Equal(3, exception.Position.Line);
         Assert.Equal(1, exception.Position.Column);
@@ -561,63 +526,31 @@ public class StreamingTests
 
         reader.Write("1\n2");
 
-        var task = Terms.Integer().ParseManyAsync(reader, '\n', value =>
+        var task = Task.Run(async () =>
         {
-            values.Add(value);
+            await foreach (var value in Terms.Integer().ParseManyAsync(reader, '\n'))
+            {
+                values.Add(value);
 
-            // More text is only available once a value is parsed, waiting for a full buffer would never end
-            if (value == 1)
-            {
-                reader.Write("\n3");
+                // More text is only available once a value is parsed, waiting for a full buffer would never end
+                if (value == 1)
+                {
+                    reader.Write("\n3");
+                }
+                else if (value == 2)
+                {
+                    reader.Write("\n");
+                }
+                else
+                {
+                    reader.Complete();
+                }
             }
-            else if (value == 2)
-            {
-                reader.Write("\n");
-            }
-            else
-            {
-                reader.Complete();
-            }
-        }).AsTask();
+        });
 
         Assert.Same(task, await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(30))));
-        Assert.Equal(3, await task);
+        await task;
         Assert.Equal([1L, 2, 3], values);
-    }
-
-    [Fact]
-    public async Task ParseManyAsyncParsesDelimitedStreams()
-    {
-        using var stream = new NonSeekableStream(Encoding.UTF8.GetBytes("'é'\r\n'日本'\r\n"));
-        var items = new List<string>();
-
-        await Terms.String().ParseManyAsync(stream, '\n', (span, _) => { items.Add(span.ToString()); return default; }, new StreamParseOptions { BufferSize = 1 });
-
-        Assert.Equal(["é", "日本"], items);
-    }
-
-#if NET8_0_OR_GREATER
-    [Fact]
-    public async Task ParseManyAsyncEnumeratesValues()
-    {
-        var values = new List<long>();
-
-        await foreach (var value in Terms.Integer().ParseManyAsync(new ChunkedReader("1, 2 ,3", () => 1, false), Terms.Char(','), new StreamParseOptions { BufferSize = 1 }))
-        {
-            values.Add(value);
-        }
-
-        Assert.Equal([1L, 2, 3], values);
-
-        values.Clear();
-        using var stream = new NonSeekableStream(Encoding.UTF8.GetBytes("4 5"));
-
-        await foreach (var value in Terms.Integer().ParseManyAsync(stream))
-        {
-            values.Add(value);
-        }
-
-        Assert.Equal([4L, 5], values);
     }
 
     [Fact]
@@ -636,29 +569,17 @@ public class StreamingTests
         Assert.True(reader.Position < 9);
     }
 
-    [Fact]
-    public async Task ParseManyAsyncEnumeratesDelimitedValues()
+    private static async Task<List<TValue>> ToListAsync<TValue>(IAsyncEnumerable<TValue> source, List<TValue>? items = null)
     {
-        var values = new List<long>();
+        items ??= [];
 
-        await foreach (var value in Terms.Integer().ParseManyAsync(new ChunkedReader("1\n2\n\n3\n", () => 1, false), '\n', new StreamParseOptions { BufferSize = 1 }))
+        await foreach (var item in source)
         {
-            values.Add(value);
+            items.Add(item);
         }
 
-        Assert.Equal([1L, 2, 3], values);
-
-        values.Clear();
-        using var stream = new NonSeekableStream(Encoding.UTF8.GetBytes("4;5"));
-
-        await foreach (var value in Terms.Integer().ParseManyAsync(stream, ';'))
-        {
-            values.Add(value);
-        }
-
-        Assert.Equal([4L, 5], values);
+        return items;
     }
-#endif
 
     private static Parser<StatementList> CreateSqlParser()
     {
@@ -934,15 +855,6 @@ public class StreamingTests
             return new ValueTask<int>(read);
         }
 #endif
-    }
-
-    private sealed class NonSeekableStream : MemoryStream
-    {
-        public NonSeekableStream(byte[] buffer) : base(buffer)
-        {
-        }
-
-        public override bool CanSeek => false;
     }
 
     /// <summary>

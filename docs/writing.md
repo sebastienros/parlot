@@ -72,8 +72,8 @@ In this case it is never necessary to invoke `ResetPosition` since as soon as a 
 
 When parsing a stream, the parser runs on a window of the text which more text may follow (see [Parsing streams](streaming.md)).
 The `Cursor` methods record when a result depends on that text. A parser which reads `Cursor.Span` or `Cursor.Buffer` directly,
-and fails or stops because the text is too short without advancing to its end, must call `Cursor.MarkHitEnd()`, or use
-`Cursor.TryGetSpan(minLength, out span)`. Both do nothing when parsing a `string`.
+and fails or stops because the text is too short without advancing to its end, must call `Cursor.MarkHitEnd()`. It does
+nothing when parsing a `string`.
 
 A parser which reads the cursor is a *token* of the compacting buffer, which replaces the window while parsing a stream.
 It must start with:
@@ -85,7 +85,7 @@ if (context.IsCompacting)
 }
 ```
 
-`Cursor.Offset` is then an absolute offset: index `Cursor.Buffer` with `offset - Cursor.BufferStart`, or use `Cursor.GetSpan`
+`Cursor.Offset` is then an absolute offset: don't index `Cursor.Buffer` with it, use `Cursor.Span`, `Cursor.GetSpan`
 and `Cursor.CreateSpan`. A parser which moves the cursor back to read the same text again, not only to report a failure,
 must keep that text buffered with `context.Pin()` and `context.Unpin(pin)`. Both cost a branch when parsing a `string`.
 

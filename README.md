@@ -133,17 +133,20 @@ static FluentParser()
 
 ## Parsing streams
 
-`Parse`, `TryParse`, `ParseAsync` and `TryParseAsync` parse a `TextReader` or a `Stream` with the same parsers,
+`Parse`, `TryParse`, `ParseAsync` and `TryParseAsync` parse a `TextReader` with the same parsers,
 through a compacting buffer which only retains the text the parser can still read: a document of any size is parsed
 in a single pass, with memory bounded by its largest token. `ParseManyAsync` parses successive values, such as NDJSON
 records, with memory bounded by the largest value:
 
 ```csharp
-using var document = File.OpenRead("document.json");
+using var document = File.OpenText("document.json");
 var value = JsonParser.Json.Parse(document);
 
-await using var input = File.OpenRead("records.ndjson");
-var count = await record.ParseManyAsync(input, '\n', item => Console.WriteLine(item));
+using var input = File.OpenText("records.ndjson");
+await foreach (var item in record.ParseManyAsync(input, '\n'))
+{
+    Console.WriteLine(item);
+}
 ```
 
 See [Parsing streams](docs/streaming.md).

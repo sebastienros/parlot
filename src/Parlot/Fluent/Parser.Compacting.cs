@@ -36,20 +36,6 @@ public abstract partial class Parser<T>
     }
 
     /// <summary>
-    /// Parses the text of a <see cref="Stream"/>, buffering only the text the parser can still read.
-    /// </summary>
-    /// <remarks>
-    /// The stream is decoded with <see cref="StreamParseOptions.Encoding"/> and is not closed.
-    /// See <see cref="Parse(TextReader, StreamParseOptions?, CancellationToken)"/>.
-    /// </remarks>
-    /// <returns>The parsed value, or <see langword="default"/> if the text doesn't match.</returns>
-    public T? Parse(Stream stream, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        using var reader = StreamingDriver.CreateReader(stream, options);
-        return Parse(reader, options, cancellationToken);
-    }
-
-    /// <summary>
     /// Parses the text of a <see cref="TextReader"/>, buffering only the text the parser can still read.
     /// </summary>
     /// <remarks>
@@ -102,32 +88,6 @@ public abstract partial class Parser<T>
     public bool TryParse(TextReader reader, out T value, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
     {
         return TryParse(reader, out value, out _, options, cancellationToken);
-    }
-
-    /// <summary>
-    /// Parses the text of a <see cref="Stream"/>, buffering only the text the parser can still read.
-    /// </summary>
-    /// <remarks>
-    /// The stream is decoded with <see cref="StreamParseOptions.Encoding"/> and is not closed.
-    /// See <see cref="TryParse(TextReader, out T, out ParseError?, StreamParseOptions?, CancellationToken)"/>.
-    /// </remarks>
-    /// <returns>Whether the text matched.</returns>
-    public bool TryParse(Stream stream, out T value, out ParseError? error, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        using var reader = StreamingDriver.CreateReader(stream, options);
-        return TryParse(reader, out value, out error, options, cancellationToken);
-    }
-
-    /// <summary>
-    /// Parses the text of a <see cref="Stream"/>, buffering only the text the parser can still read.
-    /// </summary>
-    /// <remarks>
-    /// See <see cref="TryParse(Stream, out T, out ParseError?, StreamParseOptions?, CancellationToken)"/>.
-    /// </remarks>
-    /// <returns>Whether the text matched.</returns>
-    public bool TryParse(Stream stream, out T value, StreamParseOptions? options = null, CancellationToken cancellationToken = default)
-    {
-        return TryParse(stream, out value, out _, options, cancellationToken);
     }
 
     /// <summary>
