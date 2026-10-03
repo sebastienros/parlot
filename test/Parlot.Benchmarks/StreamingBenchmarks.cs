@@ -182,7 +182,7 @@ public class StreamingBenchmarks
 
         public override string? ReadLine() => _reader.ReadLine();
 
-        public override string ReadToEnd() => _reader.ReadToEnd();
+        // ReadToEnd isn't forwarded: StringReader would return the original string without reading it.
 
         public override Task<int> ReadAsync(char[] buffer, int index, int count) => _reader.ReadAsync(buffer, index, count);
 

@@ -267,7 +267,7 @@ measure the parsers rather than a model. The log is read from a `TextReader` whi
 fast path. `Document` parses the log of `Count` records as a single value, `Lines` parses one record per line.
 
 Measured on Apple M-series (Arm64), .NET 10, BenchmarkDotNet `ShortRun`. Ratios are relative to `ReadToEnd` + `Parse`.
-`ReadToEnd` doesn't copy the text here, it returns the benchmark's string. To run them:
+`ReadToEnd` reads the text into a `string` like `StreamReader` does, through a `StringBuilder`. To run them:
 
 ```bash
 dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- --filter "*StreamingBenchmarks*"
@@ -275,15 +275,15 @@ dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release 
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| Document, `ReadToEnd` + `Parse` | 1000 | 281.8 us | 1.00 | 12.88 KB | 1.00 |
-| Document, `Parse(TextReader)` | 1000 | 364.9 us | 1.30 | 212.55 KB | 16.50 |
-| Document, `TryParseAsync(TextReader)` | 1000 | 383.2 us | 1.36 | 213.38 KB | 16.56 |
-| Document, `ReadToEnd` + `Parse` | 10000 | 2.87 ms | 1.00 | 172.49 KB | 1.00 |
-| Document, `Parse(TextReader)` | 10000 | 3.71 ms | 1.29 | 2.15 MB | 12.76 |
-| Document, `TryParseAsync(TextReader)` | 10000 | 3.66 ms | 1.28 | 2.15 MB | 12.76 |
-| Document, `ReadToEnd` + `Parse` | 100000 | 28.6 ms | 1.00 | 1.43 MB | 1.00 |
-| Document, `Parse(TextReader)` | 100000 | 36.6 ms | 1.28 | 21.49 MB | 15.03 |
-| Document, `TryParseAsync(TextReader)` | 100000 | 39.4 ms | 1.38 | 21.49 MB | 15.03 |
+| Document, `ReadToEnd` + `Parse` | 1000 | 310.4 us | 1.00 | 422.44 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1000 | 364.3 us | 1.17 | 212.55 KB | 0.50 |
+| Document, `TryParseAsync(TextReader)` | 1000 | 381.6 us | 1.23 | 213.38 KB | 0.51 |
+| Document, `ReadToEnd` + `Parse` | 10000 | 3.18 ms | 1.00 | 4.09 MB | 1.00 |
+| Document, `Parse(TextReader)` | 10000 | 3.73 ms | 1.17 | 2.15 MB | 0.53 |
+| Document, `TryParseAsync(TextReader)` | 10000 | 3.67 ms | 1.15 | 2.15 MB | 0.53 |
+| Document, `ReadToEnd` + `Parse` | 100000 | 33.7 ms | 1.00 | 41.04 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100000 | 36.6 ms | 1.08 | 21.49 MB | 0.52 |
+| Document, `TryParseAsync(TextReader)` | 100000 | 37.0 ms | 1.10 | 21.49 MB | 0.52 |
 | Lines, `ReadLine` + `Parse` | 1000 | 329.2 us | 1.00 | 395.49 KB | 1.00 |
 | Lines, `ParseManyAsync(TextReader)` | 1000 | 314.6 us | 0.96 | 207.02 KB | 0.52 |
 | Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 352.5 us | 1.07 | 395.99 KB | 1.00 |
@@ -303,12 +303,11 @@ Peak buffered characters for the same logs, whose longest record has 122 charact
 | 10000 | 1,021,903 | 4,214 | 238 |
 | 100000 | 10,352,412 | 4,218 | 246 |
 
-The extra time is the per-token bookkeeping and the window strings: each refill allocates a new window, about the size of
-the text in total, which the `TextSpan`s of the tokens reference. The `string` methods only allocate the list of record
-results, since `ReadToEnd` returns the benchmark's string, so the allocations are those of the windows: reading a file
-into a `string` allocates at least as much. Read the text first when it's small or wanted anyway, and stream it when
-it's large, or when it isn't needed after the parse. `ParseManyAsync` is as fast as reading lines, with half the
-allocations and memory bounded by the largest value.
+The extra time is the per-token bookkeeping and the refills. Each refill copies the new text into a window string,
+which the `TextSpan`s of the tokens reference, so streaming copies the text once, in small strings that never survive to
+Gen2. `ReadToEnd` copies it twice, into a `StringBuilder` and then into a `string` on the large object heap. Read the
+text first when it's small or wanted anyway, and stream it when it's large, or when it isn't needed after the parse.
+`ParseManyAsync` is as fast as reading lines, with half the allocations and memory bounded by the largest value.
 
 Before the compacting buffer, single values were parsed by the window driver, which retries the whole value on a
 larger window. That cost grew with the value, and buffered all of it. Measured with the JSON sample grammar, before
@@ -327,12 +326,12 @@ the same run:
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| `ReadToEnd` + generated `TryParse(string)` | 1000 | 247.4 us | 0.88 | 12.88 KB | 1.00 |
-| Generated `TryParse(TextReader)` | 1000 | 329.7 us | 1.17 | 212.55 KB | 16.50 |
-| `ReadToEnd` + generated `TryParse(string)` | 10000 | 2.51 ms | 0.87 | 172.49 KB | 1.00 |
-| Generated `TryParse(TextReader)` | 10000 | 3.26 ms | 1.14 | 2.15 MB | 12.76 |
-| `ReadToEnd` + generated `TryParse(string)` | 100000 | 25.2 ms | 0.88 | 1.43 MB | 1.00 |
-| Generated `TryParse(TextReader)` | 100000 | 32.4 ms | 1.13 | 21.49 MB | 15.03 |
+| `ReadToEnd` + generated `TryParse(string)` | 1000 | 283.1 us | 0.91 | 422.44 KB | 1.00 |
+| Generated `TryParse(TextReader)` | 1000 | 322.6 us | 1.04 | 212.55 KB | 0.50 |
+| `ReadToEnd` + generated `TryParse(string)` | 10000 | 3.07 ms | 0.97 | 4.09 MB | 1.00 |
+| Generated `TryParse(TextReader)` | 10000 | 3.24 ms | 1.02 | 2.15 MB | 0.53 |
+| `ReadToEnd` + generated `TryParse(string)` | 100000 | 30.8 ms | 0.91 | 41.04 MB | 1.00 |
+| Generated `TryParse(TextReader)` | 100000 | 32.8 ms | 0.97 | 21.49 MB | 0.52 |
 
 The generated reader uses the same buffer algorithm, so it buffers the same peak characters. The generated
 `TryParse(TextReader)` benchmark is opt-in, because a `TextReader` entry point compiles the streaming runtime into the
