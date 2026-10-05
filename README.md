@@ -123,6 +123,14 @@ static FluentParser()
 }
 ```
 
+## Parser Explorer
+
+[Parlot Explorer](tools/Parlot.Explorer/README.md) is a local .NET tool for inspecting source-generated parsers.
+Edit the input, replay named parser calls and backtracking, inspect the buffer at each step, and view the
+returned object as a tree or JSON—all on your computer.
+
+![Parlot Explorer showing editable input, parser trace replay, and a structured result](docs/images/parser-explorer.jpg)
+
 ## Documentation
 
 - [Existing parsers and usage examples](docs/parsers.md)

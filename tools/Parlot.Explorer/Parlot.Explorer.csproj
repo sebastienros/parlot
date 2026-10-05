@@ -11,11 +11,11 @@
     <Description>Local parser diagnostics and replay explorer for Parlot generated parsers.</Description>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <IncludeSymbols>false</IncludeSymbols>
-    <PackageReadmeFile>explorer.md</PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <None Include="../../docs/explorer.md" Pack="true" PackagePath="/" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
     <Content Remove="Client/**/*" />
     <None Remove="Client/node_modules/**/*" />
   </ItemGroup>
