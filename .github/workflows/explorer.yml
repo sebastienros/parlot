@@ -47,7 +47,10 @@ jobs:
         run: python tools/Parlot.Explorer.Desktop/verify.py ${{ matrix.rid }}
       - name: Test native window lifetime (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a python3 tools/Parlot.Explorer.Desktop/verify.py ${{ matrix.rid }}
+        # Xvfb has no GPU; WebKitGTK accelerated compositing can otherwise leave the view blank.
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+        run: dbus-run-session -- xvfb-run -a python3 tools/Parlot.Explorer.Desktop/verify.py ${{ matrix.rid }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-${{ matrix.rid }}
