@@ -93,6 +93,11 @@ evidence needed to investigate those errors, including the backtracking informat
 [issue 173](https://github.com/sebastienros/parlot/issues/173) and
 [issue 274](https://github.com/sebastienros/parlot/issues/274).
 
+The trace statistics show **Parse** duration in milliseconds for the recorded invocation, including
+diagnostic instrumentation and JIT compilation. It excludes worker startup and result inspection;
+the diagnostic capture duration shown with the result also includes result inspection. Filtering and
+replaying leave these timings unchanged. This is not a benchmark of an uninstrumented parser.
+
 ## Assembly loading and limits
 
 Each discovery/capture copies the assembly's output directory to a temporary directory, preserving

@@ -87,7 +87,7 @@ try:
         (OUTPUT / f'{name}.capture.json').write_text(json.dumps(capture, separators=(',', ':')))
         result = {'case': name, 'inputUnits': len(source.encode('utf-16-le')) // 2, 'events': len(capture['events']),
                   'calls': sum(event['kind'] == 'enter' for event in capture['events']), 'depth': peak,
-                  'truncated': capture['truncated'], 'success': capture['success'], 'captureMs': round(capture['elapsedMs'], 2),
+                  'truncated': capture['truncated'], 'success': capture['success'], 'captureMs': round(capture['elapsedMs'], 2), 'parseMs': round(capture['parseElapsedMs'], 2),
                   'requestMs': round(duration, 2), 'responseBytes': size, 'buffers': len(capture['buffers']), 'openFrames': len(stack)}
         results.append(result)
         print(json.dumps(result), flush=True)

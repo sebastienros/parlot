@@ -77,6 +77,11 @@ configuration parameters can be supplied through the UI's configuration JSON fie
   one character in a whole-name pattern. Matching ignores case. Hidden parents' children remain visible,
   and filtering preserves all replay events. Clear filters restores the unfiltered view.
 
+The trace statistics show **Parse** duration in milliseconds for the recorded invocation, including
+diagnostic instrumentation and JIT compilation. It excludes worker startup and result inspection;
+the diagnostic capture duration shown with the result also includes result inspection. Filtering and
+replaying leave these timings unchanged. This is not a benchmark of an uninstrumented parser.
+
 ## Scope and limits
 
 The explorer traces source-generated parsers, not runtime `Parser<T>` graphs. It displays the actual

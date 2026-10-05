@@ -49,6 +49,7 @@ try:
         return request('capture', {'path': str(path), 'parser': parser['id'], 'input': source})
     choice = capture('Choice', 'ac')
     assert choice['success'] and choice['value'] == 'c', choice
+    assert 0 <= choice['parseElapsedMs'] <= choice['elapsedMs'], choice
     assert any(event['kind'] == 'reset' and event['offset'] == 1 and event['target'] == 0 for event in choice['events'])
     assert not capture('Choice', 'ax')['success']
     assert capture('Optional', 'a')['success']
@@ -56,6 +57,7 @@ try:
     throwing = capture('Throws', 'a')
     assert 'Sample callback exception' in throwing['error']
     assert throwing['events'][-1]['kind'] == 'exception'
+    assert 0 <= throwing['parseElapsedMs'] <= throwing['elapsedMs'], throwing
     assignment = capture('Assignment', 'answer = 42;')
     assert assignment['success'] and assignment['value']['Value'] == 42, assignment
     assert assignment['value']['Greeting'] == 'Bonjour', assignment
@@ -119,7 +121,12 @@ public static class ParserDiagnostics {
     public static void End() { Sink = null; }
 }
 }
+public sealed class SlowResult {
+    public int Value { get { System.Threading.Thread.Sleep(200); return 42; } }
+}
 public static class Grammar {
+    [Parlot.Generated.ParserDiagnostics(1)]
+    private static bool Inspect(string text, out SlowResult value) { value = new SlowResult(); return true; }
     [Parlot.Generated.ParserDiagnostics(1)]
     private static bool Parse(string text, int count, bool overflow, out int value) {
         var first = overflow ? new string('a', 1000001) : text;
@@ -134,7 +141,7 @@ public static class Grammar {
     }
 }""")
         subprocess.run([DOTNET, 'build', str(folder / 'Reload.csproj'), '--disable-build-servers', '-v:q'], cwd=ROOT, check=True)
-        entry = request('catalog', {'path': str(binary)})[0]
+        entry = next(item for item in request('catalog', {'path': str(binary)}) if item['name'].endswith('.Parse'))
         def boundary(count, overflow=False):
             return request('capture', {'path': str(binary), 'parser': entry['id'], 'input': 'a',
                 'configuration': {'count': count, 'overflow': overflow}})
@@ -145,6 +152,10 @@ public static class Grammar {
         windows = boundary(4, True)
         assert len(windows['events']) == 1 and windows['truncated'], 'No events may resume after a missing buffer window'
         print('PASS exact event cap, overflow, and contiguous prefix after buffer limit')
+        inspected = capture('Inspect', '', binary)
+        assert inspected['success'] and inspected['value']['Value'] == 42, inspected
+        assert inspected['elapsedMs'] - inspected['parseElapsedMs'] >= 150, inspected
+        print('PASS parse timing excludes slow result inspection and is recorded for exceptions')
     print('All explorer integration checks passed.')
 except urllib.error.HTTPError as error:
     print(error.read().decode(), flush=True)

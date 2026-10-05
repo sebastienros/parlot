@@ -161,7 +161,9 @@ function App() {
           h('label', {}, 'Include names', h('input', { 'aria-label': 'Filter rules', placeholder: 'All rule names', value: filter, onInput: e => setFilter(e.target.value) })),
           h('label', {}, 'Exclude patterns', h('input', { 'aria-label': 'Exclude rules', placeholder: 'SkipWS*, Then_*, Sequence_*', value: exclude, onInput: e => setExclude(e.target.value) }))),
         h('p', { class: 'filter-help hint' }, 'Exclusions: text contains, or whole-name patterns with * (any text) and ? (one character). Separate with commas; case-insensitive.'),
-        h('p', { class: 'trace-count hint' }, `${displayRows.length.toLocaleString()} shown / ${frames.size.toLocaleString()} calls · ${events.length.toLocaleString()} events${capture?.truncated ? ' · partial recording' : ''}`),
+        h('p', { class: 'trace-count hint' }, `${displayRows.length.toLocaleString()} shown / ${frames.size.toLocaleString()} calls · ${events.length.toLocaleString()} events`,
+          capture && h('span', { class: 'parse-time', title: 'Parser invocation including diagnostics and JIT; excludes result inspection and worker startup.' }, ` · Parse ${capture.parseElapsedMs.toFixed(2)} ms`),
+          capture?.truncated && ' · partial recording'),
         h('div', { class: 'trace-table', ref: table, onScroll: e => setScrollTop(e.currentTarget.scrollTop), tabIndex: 0, 'aria-label': 'Parser calls' }, h('div', { class: 'trace-table-head' }, h('span', {}, mode === 'Callers' ? 'SELECTED RULE → CALLERS' : 'RULE / OUTCOME'), h('span', {}, mode === 'Input' ? 'OBSERVED INPUT REACH' : 'EXECUTION ORDER')),
           !events.length ? h('div', { class: 'empty' }, h('h3', {}, 'A clear view into your grammar'), h('p', {}, 'Load a diagnostic assembly and run a parser to explore its calls, backtracking, and results.')) :
           [!displayRows.length && h('div', { class: 'empty', key: 'no-matches' }, 'No calls match these filters at this event.'),

@@ -77,15 +77,17 @@ internal static class Worker
         object? result = null;
         bridge.GetMethod("Begin")!.Invoke(null, [sink, Protocol.MaxEvents + 1]);
         var watch = Stopwatch.StartNew();
+        var parseWatch = Stopwatch.StartNew();
         try
         {
-            success = (bool)selected.Invoke(null, arguments)!;
+            try { success = (bool)selected.Invoke(null, arguments)!; }
+            finally { parseWatch.Stop(); }
             if (success.Value) result = new ResultSnapshot().Read(arguments[^1]);
         }
         catch (Exception exception) { error = (exception is TargetInvocationException invocation ? invocation.InnerException ?? exception : exception).ToString(); }
         finally { bridge.GetMethod("End")!.Invoke(null, null); }
         return new Capture(success, result, error, events, buffers, truncated,
-            assembly.ManifestModule.ModuleVersionId.ToString(), watch.Elapsed.TotalMilliseconds);
+            assembly.ManifestModule.ModuleVersionId.ToString(), watch.Elapsed.TotalMilliseconds, parseWatch.Elapsed.TotalMilliseconds);
     }
 
     private static int CancellationParameterIndex(MethodInfo method)
