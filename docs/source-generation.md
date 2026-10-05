@@ -5,7 +5,11 @@ The generated parser and its support code are emitted into the consuming assembl
 does not need a runtime reference to `Parlot`.
 
 Use an SDK or IDE with a Roslyn 5.0 or later compiler host, independently of the application's runtime
-target. For example, .NET SDK 10.0.112 supplies a compatible compiler.
+target. The minimum supported SDK is .NET SDK 10.0.100. The package compatibility test pins that SDK
+with roll-forward disabled in `test/Parlot.SourceGenerator.Tests/MinimumSdk/global.json`; CI installs it
+explicitly on both platforms. The test treats CS9057 as an error and compiles and runs a generated parser.
+When raising the minimum compiler requirement deliberately, update that manifest and this requirement
+together rather than only upgrading the Roslyn package.
 Generated consumers support the same target frameworks as Parlot: .NET Framework 4.7.2,
 .NET Standard 2.0, .NET 8, and .NET 10. C# 12 or later is required even when targeting an older runtime.
 Downlevel targets use compatibility packages such as `System.Memory`, but never require the Parlot
