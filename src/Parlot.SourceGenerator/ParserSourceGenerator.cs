@@ -703,7 +703,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             {
                 try
                 {
-                    var asm = Assembly.LoadFrom(path);
+                    var asm = Assembly.Load(File.ReadAllBytes(path));
                     loadedAssemblies[requestedName.Name] = asm;
                     return asm;
                 }

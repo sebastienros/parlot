@@ -202,7 +202,7 @@ public static partial class MyGrammar
 
 ### Requirements
 
-- Use a compiler host with Roslyn 5.9 or later and C# 12 or later. Generated code supports `net472`, `netstandard2.0`, `net8.0`, and `net10.0`; older targets use compatibility packages such as `System.Memory`, not Parlot.
+- Use a compiler host with Roslyn 5.0 or later and C# 12 or later. Generated code supports `net472`, `netstandard2.0`, `net8.0`, and `net10.0`; older targets use compatibility packages such as `System.Memory`, not Parlot.
 - Add an extra `CancellationToken` before the `out` result to enable cooperative cancellation, without adding it to the grammar factory.
 - Declare an overload taking a `TextReader` instead of the `string` to parse large inputs with the [compacting buffer](docs/streaming.md#generated-parsers).
 - No interceptors configuration is needed.

@@ -51,6 +51,11 @@ jobs:
           10.0.x
         global-json-file: global.json
         check-latest: false
+    - name: Install minimum supported compiler host
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        global-json-file: test/Parlot.SourceGenerator.Tests/MinimumSdk/global.json
+        check-latest: false
     - name: Restore
       run: dotnet restore -p:Configuration=Release -p:VersionSuffix=preview-${{ github.run_number }} -p:ContinuousIntegrationBuild=True
     - name: Build
