@@ -4,8 +4,8 @@ Parlot source generation compiles a build-only Fluent grammar into a direct part
 The generated parser and its support code are emitted into the consuming assembly, so application code
 does not need a runtime reference to `Parlot`.
 
-Use an SDK or IDE with a Roslyn 5.9 or later compiler host, independently of the application's runtime
-target. For example, .NET SDK 10.0.400 supplies a compatible compiler.
+Use an SDK or IDE with a Roslyn 5.0 or later compiler host, independently of the application's runtime
+target. For example, .NET SDK 10.0.112 supplies a compatible compiler.
 Generated consumers support the same target frameworks as Parlot: .NET Framework 4.7.2,
 .NET Standard 2.0, .NET 8, and .NET 10. C# 12 or later is required even when targeting an older runtime.
 Downlevel targets use compatibility packages such as `System.Memory`, but never require the Parlot
@@ -527,6 +527,11 @@ grammar still execute in the normal compiler host, not in the published applicat
 IDE/design-time analysis does not execute grammar factories. The generator emits throwing stubs so partial
 method declarations remain available to IntelliSense and other compiler features. A real command-line or
 explicit IDE build executes the factory and emits the parser implementation.
+
+Grammar files are registered during project evaluation so the IDE can discover them before a build.
+Design-time builds use a separate generated MSBuild editorconfig file: a real build must not replace the
+IDE's design-time flags and cause grammar factories to run during editor analysis. Referenced application
+assemblies are loaded from memory so compiler hosts do not lock their build outputs.
 
 Do not call a generated entry point while constructing another grammar. Entry points are parse-time APIs,
 not factory-composition APIs.

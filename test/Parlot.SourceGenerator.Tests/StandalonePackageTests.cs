@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
@@ -119,9 +121,34 @@ public class StandalonePackageTests
                 """);
 
             await BuildContextIntegrationTests.RunDotnet(author, "restore", "--packages", Path.Combine(directory, "packages"), "-p:NuGetAudit=false");
+            var designTimeConfigurations = new List<(string Path, string Content)>();
+            foreach (var framework in frameworks)
+            {
+                var evaluation = await BuildContextIntegrationTests.RunDotnet(author, "msbuild",
+                    "-p:TargetFramework=" + framework, "-getItem:AdditionalFiles,Compile");
+                using var document = JsonDocument.Parse(evaluation);
+                var items = document.RootElement.GetProperty("Items");
+                Assert.Single(items.GetProperty("AdditionalFiles").EnumerateArray(),
+                    item => item.GetProperty("Identity").GetString() == "Grammar.parlot.cs");
+                Assert.DoesNotContain(items.GetProperty("Compile").EnumerateArray(),
+                    item => item.GetProperty("Identity").GetString().EndsWith(".parlot.cs", StringComparison.OrdinalIgnoreCase));
+                var configPath = (await BuildContextIntegrationTests.RunDotnet(author, "msbuild",
+                    "-t:GenerateMSBuildEditorConfigFile", "-p:TargetFramework=" + framework,
+                    "-p:Configuration=" + configuration, "-p:DesignTimeBuild=true",
+                    "-p:BuildingInsideVisualStudio=true", "-p:BuildingProject=false",
+                    "-getProperty:GeneratedMSBuildEditorConfigFile")).Trim();
+                configPath = Path.GetFullPath(configPath, author);
+                var content = File.ReadAllText(configPath);
+                Assert.Contains("build_property.DesignTimeBuild = true", content, StringComparison.Ordinal);
+                designTimeConfigurations.Add((configPath, content));
+            }
             // The analyzer package restores the downlevel BCL support for a fresh application build.
             await BuildContextIntegrationTests.RunDotnet(author, "build", "--no-restore",
                 "--configuration", configuration, "-p:UseSharedCompilation=false");
+            foreach (var config in designTimeConfigurations)
+            {
+                Assert.Equal(config.Content, File.ReadAllText(config.Path));
+            }
             if (downlevel)
             {
                 var error = await Assert.ThrowsAsync<Xunit.Sdk.TrueException>(() =>
