@@ -603,3 +603,10 @@ accept overflow or values its numeric type cannot represent. Skipping a callback
 skip its execution, required input values, or exceptions.
 Higher-arity `SkipAnd` keeps the preceding tuple value-producing when some of its members are returned;
 individual dropped tuple members are not independently optimized.
+
+### Parser Explorer diagnostics
+
+Set `Diagnostics = true` on a factory's `GenerateParser` attribute to emit diagnostic entry/exit and
+cursor-reset events for the local [Parser Explorer](explorer.md). This mode is intended for debugging;
+ordinary generated parsers contain no tracing calls. The explorer supports private entry points,
+Monaco input editing, replay, rebuild detection, and result inspection without uploading assemblies.

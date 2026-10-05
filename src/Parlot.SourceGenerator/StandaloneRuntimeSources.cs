@@ -44,7 +44,7 @@ internal static class StandaloneRuntimeSources
     // Only embedded when an entry point reads a TextReader
     private const string StreamingSourceName = "Fluent.TextReaderRefillSource.cs";
 
-    internal static IReadOnlyList<(string HintName, SyntaxTree Tree)> GetSources(CSharpParseOptions options, bool streaming)
+    internal static IReadOnlyList<(string HintName, SyntaxTree Tree)> GetSources(CSharpParseOptions options, bool streaming, bool diagnostics = false)
     {
         var assembly = typeof(StandaloneRuntimeSources).Assembly;
         var sources = new List<(string HintName, SyntaxTree Tree)>(SourceNames.Length + 1);
@@ -62,7 +62,9 @@ internal static class StandaloneRuntimeSources
             .WithLanguageVersion(LanguageVersion.Latest)
             .WithPreprocessorSymbols(options.PreprocessorSymbolNames.Concat(symbols));
 
-        foreach (var name in streaming ? SourceNames.Append(StreamingSourceName) : SourceNames)
+        var names = streaming ? SourceNames.Append(StreamingSourceName) : SourceNames;
+        if (diagnostics) names = names.Append("ParserDiagnostics.cs");
+        foreach (var name in names)
         {
             using var stream = assembly.GetManifestResourceStream(ResourcePrefix + name)
                 ?? throw new InvalidOperationException($"Missing standalone runtime resource '{ResourcePrefix + name}'.");

@@ -48,6 +48,9 @@ public sealed partial class ParserSourceGenerator
 
         // Whether the entry point parses a TextReader with a compacting buffer instead of a string
         public bool IsReader { get; }
+        public bool Diagnostics => Factory.Method.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
+            attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
         public MethodToGenerate Factory { get; }
         public IParameterSymbol? CancellationTokenParameter => Method.Parameters.Length == Factory.Method.Parameters.Length + 3
             ? Method.Parameters[Method.Parameters.Length - 2]
@@ -265,7 +268,7 @@ public sealed partial class ParserSourceGenerator
 
         if (!designTime)
         {
-            var runtime = StandaloneRuntimeSources.GetSources(options, streaming: entries.Any(static entry => entry.IsReader));
+            var runtime = StandaloneRuntimeSources.GetSources(options, streaming: entries.Any(static entry => entry.IsReader), diagnostics: entries.Any(static entry => entry.Diagnostics));
             generated.AddRange(runtime);
             var candidate = host.AddSyntaxTrees(generated.Select(static source => source.Tree));
             var generatedTrees = new HashSet<SyntaxTree>(generated.Select(static source => source.Tree));
@@ -390,6 +393,11 @@ public sealed partial class ParserSourceGenerator
         }
         var context = prefix + "_context";
         var result = prefix + "_result";
+        if (standalone.Diagnostics)
+        {
+            var tokenIndex = standalone.CancellationTokenParameter?.Ordinal ?? -1;
+            source.AppendLine($"        [global::Parlot.Generated.ParserDiagnosticsAttribute(1, CancellationTokenIndex = {tokenIndex})]");
+        }
         source.AppendLine($"        {StandaloneSignature(entry)}");
         source.AppendLine("        {");
         var token = standalone.CancellationTokenParameter is { } tokenParameter ? EscapeIdentifier(tokenParameter.Name) : null;
