@@ -128,6 +128,7 @@ static FluentParser()
 - [Existing parsers and usage examples](docs/parsers.md)
 - [Best practices for custom parsers](docs/writing.md)
 - [Source generation guide](docs/source-generation.md)
+- [Parser Explorer](docs/explorer.md) — local generated-parser diagnostics and replay
 - [Parsing streams](docs/streaming.md)
 - [Security guidance](docs/security.md)
 

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackAsTool>true</PackAsTool>
+    <IsPackable>true</IsPackable>
+    <ToolCommandName>parlot-explorer</ToolCommandName>
+    <PackageId>Parlot.Explorer</PackageId>
+    <Description>Local parser diagnostics and replay explorer for Parlot generated parsers.</Description>
+    <AnalysisLevel>latest-Default</AnalysisLevel>
+    <IncludeSymbols>false</IncludeSymbols>
+    <PackageReadmeFile>explorer.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Include="../../docs/explorer.md" Pack="true" PackagePath="/" />
+    <Content Remove="Client/**/*" />
+    <None Remove="Client/node_modules/**/*" />
+  </ItemGroup>
+  <Target Name="BuildClient" BeforeTargets="PrepareForBuild" Condition="'$(SkipClientBuild)' != 'true'">
+    <Exec WorkingDirectory="Client" Command="npm ci --no-audit --no-fund" />
+    <Exec WorkingDirectory="Client" Command="npm run build" />
+  </Target>
+  <Target Name="BuildWindowsShell" BeforeTargets="PrepareForBuild" Condition="'$(IncludeWindowsShell)' == 'true'">
+    <Exec Command="dotnet publish ../Parlot.Explorer.Windows/Parlot.Explorer.Windows.csproj -c $(Configuration) -r win-x64 --self-contained false -o &quot;$(MSBuildProjectDirectory)/$(IntermediateOutputPath)windows&quot;" />
+    <ItemGroup>
+      <_WindowsShellFiles Include="$(IntermediateOutputPath)windows/**/*" />
+      <Content Include="@(_WindowsShellFiles)">
+        <Link>windows/%(_WindowsShellFiles.RecursiveDir)%(_WindowsShellFiles.Filename)%(_WindowsShellFiles.Extension)</Link>
+        <Pack>false</Pack>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+  <Target Name="IncludeClient" BeforeTargets="PrepareForBuild" DependsOnTargets="BuildClient">
+    <ItemGroup>
+      <Content Remove="wwwroot/**/*" />
+      <Content Include="wwwroot/**/*" Pack="false" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>
