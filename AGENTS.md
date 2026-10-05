@@ -144,7 +144,7 @@ public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Gene
 `net472`, `netstandard2.0`, `net8.0`, and `net10.0`, using C# 12+ even on older runtimes. Downlevel
 compatibility packages do not introduce a Parlot dependency. Factory files must be excluded from
 `Compile`; the analyzer package's build targets do this.
-The analyzer requires a Roslyn 5.9+ compiler host regardless of the consumer's runtime target.
+The analyzer requires a Roslyn 5.0+ compiler host regardless of the consumer's runtime target.
 An entry point may take a `TextReader` instead of the `string`; it is emitted as a separate parser with
 `SourceGenerationContext.IsCompacting` set (token loops, `CreateSpan`, pins). Emitters gate that code on
 `IsCompacting` so `string` output is unchanged. Assemblies without reader entry points embed the runtime with
