@@ -56,10 +56,19 @@ jobs:
   package:
     needs: desktop
     runs-on: ubuntu-22.04
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      NUGET_PACKAGES: /mnt/nuget/packages
+      NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
+      NUGET_SCRATCH: ${{ github.workspace }}/.nuget/scratch
+      NUGET_PLUGINS_CACHE_PATH: ${{ github.workspace }}/.nuget/plugins
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+      - name: Prepare NuGet package directory
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" "$NUGET_PACKAGES"
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
         with:
           dotnet-version: '10.0.x'

@@ -16,7 +16,11 @@ internal static class DesktopShell
         if (!File.Exists(executable))
             throw new InvalidOperationException($"The desktop shell for {rid} is missing. Install a complete Parlot.Explorer package, or use --browser explicitly.");
         // NuGet extraction does not preserve executable mode for packaged native assets.
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(executable, File.GetUnixFileMode(executable) | UnixFileMode.UserExecute);
+        if (!OperatingSystem.IsWindows())
+        {
+            var mode = File.GetUnixFileMode(executable);
+            if ((mode & UnixFileMode.UserExecute) == 0) File.SetUnixFileMode(executable, mode | UnixFileMode.UserExecute);
+        }
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardInput = true };
         start.ArgumentList.Add(url);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the desktop shell. Use --browser to open the browser UI.");
