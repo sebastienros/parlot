@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AnalysisLevel>latest-Default</AnalysisLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Parlot.Explorer.Sample.Models/Parlot.Explorer.Sample.Models.csproj" />
+    <ProjectReference Include="../../src/Parlot.SourceGenerator/Parlot.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <Analyzer Include="../../src/Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll" />
+  </ItemGroup>
+  <Import Project="../../src/Parlot.SourceGenerator/build/Parlot.SourceGenerator.props" />
+  <Import Project="../../src/Parlot.SourceGenerator/build/Parlot.SourceGenerator.targets" />
+</Project>

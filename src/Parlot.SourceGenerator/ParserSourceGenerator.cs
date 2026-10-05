@@ -1000,6 +1000,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 return;
             }
 
+            if (standalone.Diagnostics)
+            {
+                sourceText = DiagnosticsRewriter.Rewrite(sourceText, parseOptions, standalone.Method.Name);
+            }
             standalone.Source = StandaloneRuntimeSources.RewriteGeneratedSource(sourceText, parseOptions);
         }
         finally

@@ -34,4 +34,8 @@ sealed class GenerateParserAttribute : System.Attribute
     /// Gets the name of the application-facing partial parsing method.
     /// </summary>
     public string EntryPoint { get; }
+
+    /// <summary>Gets or sets whether to emit replay diagnostics for the parser explorer.</summary>
+    /// <remarks>Enable only in diagnostic builds. Disabled parsers contain no tracing calls.</remarks>
+    public bool Diagnostics { get; set; }
 }

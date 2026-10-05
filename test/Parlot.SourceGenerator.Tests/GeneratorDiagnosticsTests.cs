@@ -16,6 +16,27 @@ namespace Parlot.SourceGenerator.Tests;
 
 public class GeneratorDiagnosticsTests
 {
+    [Fact]
+    public void Replay_Support_Is_Only_Emitted_When_Requested()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                public static Parser<string> Build() => Parsers.Literals.Text("hello");
+            }
+            """;
+        var (normal, _) = RunStandalone(Declaration, grammar);
+        Assert.DoesNotContain(normal.Results.SelectMany(static result => result.GeneratedSources),
+            static source => source.SourceText.ToString().Contains("ParserDiagnostics", StringComparison.Ordinal));
+        var (diagnostic, compilation) = RunStandalone(Declaration, grammar.Replace("nameof(TryParse))", "nameof(TryParse), Diagnostics = true)", StringComparison.Ordinal));
+        Assert.Empty(compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        Assert.Contains(diagnostic.Results.SelectMany(static result => result.GeneratedSources),
+            static source => source.HintName.EndsWith("ParserDiagnostics.g.cs", StringComparison.Ordinal));
+    }
+
     private const string Declaration = """
         public static partial class Grammar
         {

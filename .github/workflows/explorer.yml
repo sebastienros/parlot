@@ -1,0 +1,99 @@
+name: Explorer
+
+on:
+  pull_request:
+    paths: ['tools/**', 'src/Parlot.SourceGenerator/**', 'src/Parlot/**', 'Directory.*', 'global.json', '.github/workflows/explorer.yml']
+  push:
+    branches: [main]
+    paths: ['tools/**', 'src/Parlot.SourceGenerator/**', 'src/Parlot/**', 'Directory.*', 'global.json', '.github/workflows/explorer.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-15-intel
+            rid: osx-x64
+          - os: macos-15
+            rid: osx-arm64
+          - os: ubuntu-22.04
+            rid: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Linux webview prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb
+      - name: Select Rust toolchain
+        run: rustup default stable
+      - name: Build native shell
+        run: node tools/Parlot.Explorer.Desktop/build.mjs
+      - name: Test native URL validation
+        run: cargo test --release --locked --manifest-path tools/Parlot.Explorer.Desktop/Cargo.toml
+      - name: Test native window lifetime (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: python tools/Parlot.Explorer.Desktop/verify.py ${{ matrix.rid }}
+      - name: Test native window lifetime (Linux)
+        if: runner.os == 'Linux'
+        # Xvfb has no GPU; WebKitGTK accelerated compositing can otherwise leave the view blank.
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+        run: dbus-run-session -- xvfb-run -a python3 tools/Parlot.Explorer.Desktop/verify.py ${{ matrix.rid }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-${{ matrix.rid }}
+          path: tools/Parlot.Explorer.Desktop/dist/
+
+  package:
+    needs: desktop
+    runs-on: ubuntu-22.04
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      NUGET_PACKAGES: /mnt/nuget/packages
+      NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
+      NUGET_SCRATCH: ${{ github.workspace }}/.nuget/scratch
+      NUGET_PLUGINS_CACHE_PATH: ${{ github.workspace }}/.nuget/plugins
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Prepare NuGet package directory
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" "$NUGET_PACKAGES"
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.x'
+          global-json-file: global.json
+          check-latest: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: tools/Parlot.Explorer.Desktop/dist/
+      - name: Build tool and samples
+        run: |
+          dotnet build --disable-build-servers
+          dotnet build tools/Parlot.Explorer.slnx -p:SkipDesktopBuild=true --disable-build-servers
+          npm test --prefix tools/Parlot.Explorer/Client
+          python3 tools/Parlot.Explorer/verify.py
+      - name: Pack all native shells
+        run: dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Debug -p:SkipDesktopBuild=true -p:PackageVersion=2.0.0-preview.${{ github.run_number }} -o artifacts/explorer --disable-build-servers
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: parlot-explorer-package
+          path: artifacts/explorer/*.nupkg
