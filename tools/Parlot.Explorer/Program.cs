@@ -25,7 +25,13 @@ if (args is ["--worker", var responsePath])
 }
 if (args.Contains("--help"))
 {
-    Console.WriteLine("parlot-explorer [assembly.dll] [--no-browser]\nOpens a local parser explorer. Enable Diagnostics = true on GenerateParser factories.\nOnly load assemblies you trust: parser code executes with your local user permissions.");
+    Console.WriteLine("parlot-explorer [assembly.dll] [--browser | --no-browser]\nOpens a standalone desktop window. --browser opens your browser; --no-browser only starts the server. Enable Diagnostics = true on GenerateParser factories.\nOnly load assemblies you trust: parser code executes with your local user permissions.");
+    return;
+}
+if (args.Contains("--browser") && args.Contains("--no-browser"))
+{
+    Console.Error.WriteLine("Choose either --browser or --no-browser.");
+    Environment.ExitCode = 1;
     return;
 }
 var initialPath = args.FirstOrDefault(static argument => !argument.StartsWith("--", StringComparison.Ordinal));
@@ -57,8 +63,13 @@ app.Use(async (context, next) =>
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapGet("/api/session", () => new { initialPath, directory = initialPath is null ? Environment.CurrentDirectory : Path.GetDirectoryName(initialPath) });
-app.MapPost("/api/catalog", (Request request, CancellationToken cancellation) => WorkerRunner.Run(request with { Parser = null }, cancellation));
-app.MapPost("/api/capture", (Request request, CancellationToken cancellation) => WorkerRunner.Run(request, cancellation));
+async Task<JsonElement> RunWorker(Request request, CancellationToken cancellation)
+{
+    using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation, app.Lifetime.ApplicationStopping);
+    return await WorkerRunner.Run(request, linked.Token);
+}
+app.MapPost("/api/catalog", (Request request, CancellationToken cancellation) => RunWorker(request with { Parser = null }, cancellation));
+app.MapPost("/api/capture", (Request request, CancellationToken cancellation) => RunWorker(request, cancellation));
 app.MapPost("/api/revision", (Request request) => new { revision = WorkerRunner.Revision(request.Path) });
 app.MapGet("/api/files", (string? path) =>
 {
@@ -77,19 +88,28 @@ await app.StartAsync();
 var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
 var url = address + "/#" + token;
 Console.WriteLine($"\nParlot Explorer: {url}\nPress Ctrl+C to stop.\n");
-if (!args.Contains("--no-browser"))
+try
 {
-    try
+    if (args.Contains("--no-browser")) await app.WaitForShutdownAsync();
+    else if (args.Contains("--browser"))
     {
-        var shell = Path.Combine(AppContext.BaseDirectory, "windows", "Parlot.Explorer.Windows.exe");
-        if (OperatingSystem.IsWindows() && System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64 && File.Exists(shell))
-        {
-            var start = new ProcessStartInfo(shell) { UseShellExecute = false };
-            start.ArgumentList.Add(url);
-            Process.Start(start);
-        }
-        else Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        await app.WaitForShutdownAsync();
     }
-    catch (Exception exception) { Console.WriteLine($"Open the URL above in your browser. {exception.Message}"); }
+    else
+    {
+        Environment.ExitCode = await DesktopShell.Run(url, app.Lifetime.ApplicationStopping);
+        if (Environment.ExitCode != 0) Console.Error.WriteLine("The desktop window could not stay open. Check the platform webview requirements, or use --browser.");
+    }
 }
-await app.WaitForShutdownAsync();
+catch (Exception exception)
+{
+    Console.Error.WriteLine(exception.Message);
+    Environment.ExitCode = 1;
+}
+finally
+{
+    app.Lifetime.StopApplication();
+    await app.StopAsync();
+    await app.DisposeAsync();
+}

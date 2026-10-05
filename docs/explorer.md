@@ -34,8 +34,9 @@ default token; the worker deadline also stops parsers without cooperative cancel
 
 ## Run from this repository
 
-Building requires the repository's .NET SDK and Node.js 22.12+ (or 24+). Node is only a build dependency.
-The installed tool requires the .NET 10 and ASP.NET Core 10 runtimes.
+Building requires the repository's .NET SDK, Node.js 22.12+ (or 24+), Rust, and the
+[Tauri native prerequisites](https://v2.tauri.app/start/prerequisites/). Node and Rust are build dependencies
+only. The installed tool requires the .NET 10 and ASP.NET Core 10 runtimes plus the platform webview.
 
 ```sh
 # Build the runtime first so the source generator uses the current analyzer dependency.
@@ -47,10 +48,12 @@ dotnet run --no-build --project tools/Parlot.Explorer/Parlot.Explorer.csproj -- 
   tools/Parlot.Explorer.Sample/bin/Debug/net10.0/Parlot.Explorer.Sample.dll
 ```
 
-The tool opens the browser on macOS/Linux and on Windows without the optional native shell.
-`--no-browser` prints the local session URL without opening it. The address uses an available loopback
-port, and the URL fragment carries a per-launch session token. Keep the terminal running; Ctrl+C stops
-the server. The UI can browse local directories or accept an absolute assembly path.
+The command opens a standalone desktop window on Windows, macOS, and Linux. Closing the window stops
+the server and cancels active parser workers; Ctrl+C stops the server and closes the window. Use
+`--browser` explicitly to open the system browser, or `--no-browser` to print the URL and run only the
+server. In these two modes, Ctrl+C ends the session. The address uses an available loopback port, and
+the URL fragment carries a per-launch session token. The UI can browse local directories or accept an
+absolute assembly path. Missing native assets cause a clear error; browser fallback is never implicit.
 
 Try these sample entry points:
 
@@ -137,31 +140,42 @@ permissions and may have side effects. Live mode reruns them after edits. The ho
 requires a random session token for filesystem/execution APIs, rejects foreign Host/Origin headers,
 and serves all UI assets locally.
 
-## Package and Windows shell
+## Desktop shell and packaging
+
+One shared [Tauri shell](../tools/Parlot.Explorer.Desktop/README.md) uses WKWebView on macOS, WebView2
+on Windows, and WebKitGTK 4.1 on Linux. It only hosts the local UI: no Tauri filesystem or shell IPC
+capabilities are granted to the page. Navigation stays on the current backend origin. A parent-owned
+stdin pipe closes the shell if the host exits unexpectedly.
+
+The packaged native targets are Windows x64, macOS x64/ARM64, and Linux x64. Windows requires the
+WebView2 Evergreen runtime; Linux requires WebKitGTK 4.1 and a graphical desktop (Ubuntu 22.04 or a
+compatible newer distribution). macOS uses its system WebKit framework. Other architectures can use
+`--browser` explicitly. Rust and a Windows Desktop .NET runtime are not required by installed tools.
+
+A normal tool build also builds the current platform's shell. For a local development package:
 
 ```sh
-dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Release -o artifacts/explorer
+dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Release \
+  -p:RequireAllDesktopRids=false -o artifacts/explorer
 dotnet tool install Parlot.Explorer --tool-path artifacts/explorer-tool \
   --source artifacts/explorer --prerelease
 artifacts/explorer-tool/parlot-explorer /absolute/path/to/Your.Parsers.dll
 ```
 
-The optional Windows x64 WinForms/WebView2 shell can be included in the same cross-platform tool package:
+The Explorer workflow builds shells on their respective native runners, combines their distribution
+folders, and produces one tool package. Release packing requires all four native targets by default:
 
 ```sh
 dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Release \
-  -p:IncludeWindowsShell=true -o artifacts/explorer
+  -p:SkipDesktopBuild=true -p:DesktopShellRoot=/absolute/path/to/combined/dist \
+  -o artifacts/explorer
 ```
 
-On Windows, the host launches the bundled shell when present; elsewhere it opens the default browser.
-The shell requires the .NET 10 Windows Desktop runtime and the WebView2 Evergreen runtime. If WebView2
-initialization fails it opens the same local URL in the browser. The server lifetime remains controlled
-by the terminal. This shell has been cross-compiled on macOS; interactive Windows validation is still
-required before distribution. The browser path also supports Windows ARM64 without the x64 shell.
-
-The UI bundles Monaco workers with Vite; it uses no CDN, Razor, Blazor, or browser-hosted .NET runtime.
-Use `-p:SkipClientBuild=true` only when a current `wwwroot` bundle is already present. The separate tools
-solution keeps Node and desktop tooling out of the library's ordinary build.
+macOS bundles are signed ad hoc for local execution. Distribution signing/notarization can be applied
+to the assembled bundles before packing. Use `SkipDesktopBuild=true` for headless development builds;
+use `SkipClientBuild=true` only with a current `wwwroot` bundle. The UI bundles Monaco workers with Vite
+and uses no CDN or browser-hosted .NET runtime. The separate tools solution keeps Node and Rust out of
+the library's ordinary build.
 
 ## Validation
 

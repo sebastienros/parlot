@@ -22,14 +22,19 @@ Keep its dependencies beside the assembly, including culture and native-runtime 
 Private diagnostic entry points are discovered too. Enable **Watch builds** to reload the assembly
 when you rebuild it.
 
-The tool opens a local browser UI on macOS and Linux. On Windows, packages built with the optional
-WebView2 shell open a standalone window; otherwise the browser is used. The shell requires the .NET 10
-Windows Desktop and WebView2 Evergreen runtimes. Use `--no-browser` to print the local URL without
-opening a window. Keep the terminal running and press Ctrl+C to stop the server.
+The command opens a standalone desktop window on Windows, macOS, and Linux. Closing it stops the
+server and active parser workers; Ctrl+C also closes the window. Native shells are included for
+Windows x64, macOS Intel/Apple Silicon, and Linux x64. Windows needs WebView2 Evergreen; Linux needs
+WebKitGTK 4.1 and a graphical desktop. macOS uses the system WebKit framework.
+
+Use `--browser` explicitly to open your browser, or `--no-browser` to run only the local server and
+print its URL. In these modes, keep the terminal running and press Ctrl+C to end the session.
+A missing or unsupported native shell reports an error instead of silently changing launch mode.
 
 For a development build that has not been published, see the
 [build and local-package instructions](https://github.com/sebastienros/parlot/blob/main/docs/explorer.md#run-from-this-repository).
-Node.js is needed to build the UI from source, not to run an installed package.
+Node.js, Rust, and the platform's native build prerequisites are needed to build from source, not to
+run an installed package. The shared Tauri shell uses the existing offline UI and local .NET backend.
 
 ## Enable diagnostics in your parser
 

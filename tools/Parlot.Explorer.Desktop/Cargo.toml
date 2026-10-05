@@ -1,0 +1,15 @@
+[package]
+name = "parlot-explorer-desktop"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "BSD-3-Clause"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.1", features = [] }
+
+[profile.release]
+strip = true
