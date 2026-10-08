@@ -12,6 +12,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
     private readonly bool _returnMatchedText;
+    private readonly bool _returnText;
 
     public TextLiteral(string text, StringComparison comparisonType, bool returnMatchedText = false)
     {
@@ -19,6 +20,11 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         _comparisonType = comparisonType;
         _returnMatchedText = returnMatchedText;
         _hasNewLines = text.Any(Character.IsNewLine);
+
+        // An ordinal match is the text itself, and case-insensitive matches return the canonical text by default.
+        _returnText = comparisonType == StringComparison.Ordinal || (!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
+            or StringComparison.CurrentCultureIgnoreCase
+            or StringComparison.InvariantCultureIgnoreCase);
 
         if (CanSeek = Text.Length > 0)
         {
@@ -86,13 +92,9 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
             var end = cursor.Offset;
 
-            var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
-                or StringComparison.CurrentCultureIgnoreCase
-                or StringComparison.InvariantCultureIgnoreCase;
-
-            if (ignoreCase && !_returnMatchedText)
+            if (_returnText)
             {
-                // Default behavior: return the canonical source text (avoids allocation).
+                // Return the canonical source text (avoids a second comparison and an allocation).
                 result.Set(start, end, Text);
             }
             else
