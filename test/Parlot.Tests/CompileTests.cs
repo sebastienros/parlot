@@ -608,7 +608,7 @@ public class CompileTests
         }).Compile();
 
         Assert.True(parser.TryParse("d:123.456", out var resultD));
-        Assert.Equal((decimal)123.456, resultD);
+        Assert.Equal(123.456m, resultD);
 
         Assert.True(parser.TryParse("i:123", out var resultI));
         Assert.Equal((long)123, resultI);
@@ -1140,7 +1140,7 @@ public class CompileTests
     [Fact]
     public void NumberParsesCustomDecimalSeparator()
     {
-        Assert.Equal((decimal)123.456, Literals.Number<decimal>(NumberOptions.Any, decimalSeparator: '|').Compile().Parse("123|456"));
+        Assert.Equal(123.456m, Literals.Number<decimal>(NumberOptions.Any, decimalSeparator: '|').Compile().Parse("123|456"));
     }
 
     [Fact]

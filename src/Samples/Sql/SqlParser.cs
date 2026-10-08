@@ -300,7 +300,7 @@ public class SqlParser
             .Then(result =>
             {
                 var (tables, joinList) = result;
-                return new FromClause(tables, joinList.Any() ? joinList : null);
+                return new FromClause(tables, joinList.Count > 0 ? joinList : null);
             });
 
         // WHERE clause
