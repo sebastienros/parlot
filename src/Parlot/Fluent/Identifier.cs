@@ -1,14 +1,10 @@
 using Parlot.SourceGeneration;
 using System;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
 public sealed class Identifier : Parser<TextSpan>, ISourceable
 {
-    private static readonly MethodInfo _isIdentifierStartMethodInfo = typeof(Character).GetMethod(nameof(Character.IsIdentifierStart))!;
-    private static readonly MethodInfo _isIdentifierPartMethodInfo = typeof(Character).GetMethod(nameof(Character.IsIdentifierPart))!;
-
     private readonly Func<char, bool>? _extraStart;
     private readonly Func<char, bool>? _extraPart;
 

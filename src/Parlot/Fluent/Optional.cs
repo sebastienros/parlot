@@ -1,6 +1,5 @@
 using Parlot.SourceGeneration;
 using System;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
@@ -12,8 +11,6 @@ namespace Parlot.Fluent;
 /// </remarks>
 public sealed class Optional<T> : Parser<Option<T>>, ISourceable
 {
-    private static readonly ConstructorInfo _optionConstructor = typeof(Option<T>).GetConstructor([typeof(T)])!;
-
     private readonly Parser<T> _parser;
     public Optional(Parser<T> parser)
     {
