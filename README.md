@@ -1,6 +1,6 @@
 # Parlot
 
-[![BSD 3-Clause](https://img.shields.io/github/license/sebastienros/parlot)](https://github.com/sebastienros/parlot/blob/main/LICENSE) [![Join the chat at https://gitter.im/sebastienros/parlot](https://badges.gitter.im/sebastienros/parlot.svg)](https://gitter.im/sebastienros/parlot?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![BSD 3-Clause](https://img.shields.io/github/license/sebastienros/parlot)](https://github.com/sebastienros/parlot/blob/main/LICENSE) [![GitHub Discussions](https://img.shields.io/github/discussions/sebastienros/parlot)](https://github.com/sebastienros/parlot/discussions)
 
 Parlot is a __fast__, __lightweight__ and simple to use .NET parser combinator.
 
@@ -13,18 +13,9 @@ Parlot provides a fluent API based on parser combinators that provide a more rea
 | [`release/1.x`](https://github.com/sebastienros/parlot/tree/release/1.x) | Maintenance of stable Parlot 1.x releases. | [![NuGet.org stable version](https://img.shields.io/nuget/v/Parlot.svg?label=nuget.org)](https://www.nuget.org/packages/Parlot) |
 | [`main`](https://github.com/sebastienros/parlot/tree/main) | Development of Parlot 2.0, including source-generated parsers. | [![Feedz preview version](https://img.shields.io/endpoint?url=https%3A%2F%2Ff.feedz.io%2Fsebastienros%2Fparlot%2Fshield%2FParlot%2Flatest)](https://f.feedz.io/sebastienros/parlot/nuget/index.json) |
 
-### Stable packages
-
-Tagged releases are published to [NuGet.org](https://www.nuget.org/packages/Parlot),
-using the feed `https://api.nuget.org/v3/index.json`. To install the latest stable version:
-
-```shell
-dotnet add package Parlot
-```
-
 ### Preview packages
 
-After a successful Ubuntu build triggered by a push to `main`, the workflow publishes preview packages to the
+Succefful build on `main`, publishes preview packages to the
 [Parlot feed on feedz.io](https://f.feedz.io/sebastienros/parlot/nuget/index.json).
 Versions follow `2.0.0-preview-<run number>`, using the GitHub Actions build run number.
 These packages contain the latest development changes and are intended for testing before release.
@@ -35,9 +26,6 @@ Add the preview feed alongside NuGet.org, then install the latest prerelease ver
 dotnet nuget add source https://f.feedz.io/sebastienros/parlot/nuget/index.json --name parlot-preview
 dotnet add package Parlot --prerelease
 ```
-
-Keep NuGet.org enabled so dependencies can be restored. If your `NuGet.config` uses package source
-mapping, also map `Parlot` to the `parlot-preview` source.
 
 ## Fluent API
 
@@ -123,15 +111,6 @@ static FluentParser()
 }
 ```
 
-## Parser Explorer
-
-[Parlot Explorer](tools/Parlot.Explorer/README.md) is a local .NET tool for inspecting source-generated parsers
-in a standalone window on Windows, macOS, and Linux.
-Edit the input, replay named parser calls and backtracking, inspect the buffer at each step, and view the
-returned object as a tree or JSON—all on your computer.
-
-![Parlot Explorer showing editable input, parser trace replay, and a structured result](docs/images/parser-explorer.jpg)
-
 ## Documentation
 
 - [Existing parsers and usage examples](docs/parsers.md)
@@ -140,6 +119,15 @@ returned object as a tree or JSON—all on your computer.
 - [Parser Explorer](docs/explorer.md) — local generated-parser diagnostics and replay
 - [Parsing streams](docs/streaming.md)
 - [Security guidance](docs/security.md)
+
+## Parser Explorer
+
+[Parlot Explorer](tools/Parlot.Explorer/README.md) is a local .NET tool for inspecting source-generated parsers
+in a standalone window on Windows, macOS, and Linux.
+Edit the input, replay named parser calls and backtracking, inspect the buffer at each step, and view the
+returned object as a tree or JSON—all on your computer.
+
+![Parlot Explorer showing editable input, parser trace replay, and a structured result](docs/images/parser-explorer.jpg)
 
 ## Parsing streams
 
@@ -227,7 +215,7 @@ For detailed documentation, see [Source Generation Guide](docs/source-generation
 
 ## Performance
 
-Parlot is faster and allocates less memory than all other known parser combinators for .NET.
+Parlot is faster and allocates less memory than all other known (to me) parser combinators for .NET.
 
 It was originally created to provide a more efficient alternative to projects like:
 
@@ -235,7 +223,10 @@ It was originally created to provide a more efficient alternative to projects li
 - [Sprache](https://github.com/sprache/Sprache)
 - [Irony](https://github.com/IronyProject/Irony)
 
-Finally, even though [Pidgin](https://github.com/benjamin-hodgson/Pidgin) showed some very good performance, Parlot is still faster.
+Other popular ones are: 
+
+- [Pidgin](https://github.com/benjamin-hodgson/Pidgin)
+- [Farkle](https://github.com/teo-tsirpanis/Farkle)
 
 To reproduce:
 
@@ -403,10 +394,8 @@ would be parsed as a string directly. Ratios are relative to the non-streaming m
 | Lines, `ReadLine` + `Parse(string)` | 100,000 | 33.7 ms | 1.00 | 39.20 MB | 1.00 |
 | Lines, `ParseManyAsync(TextReader)` | 100,000 | 31.4 ms | 0.93 | 20.61 MB | 0.53 |
 
-Streaming a single value costs 4 to 17% more time and allocates about half as much: `ReadToEnd` builds the text in a
-`StringBuilder` and copies it into a `string`, while streaming copies it once into small window strings, which never
-survive to Gen2. The memory it retains doesn't grow with the document: the non-streaming methods hold the whole document
-in memory, the streaming ones about 4,218 characters (the default 4,096-character buffer plus the record in progress):
+Streaming a single value costs 4 to 17% more time and allocates about half as much. The non-streaming methods hold the
+whole document in memory, while the streaming ones hold about 4,218 characters regardless of document size:
 
 | Count | Document characters | Peak buffered characters |
 |---:|---:|---:|
