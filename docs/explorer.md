@@ -4,6 +4,8 @@ Parlot Explorer is a local .NET tool with an offline JavaScript UI built with Pr
 It discovers diagnostic source-generated parsers in a local assembly, runs them in disposable worker
 processes, and replays their execution. No assembly or input is uploaded to a public service.
 
+![Parlot Explorer showing editable input, parser trace replay, and a structured result](../docs/images/parser-explorer.jpg)
+
 ## Enable diagnostics
 
 Opt in on the **factory in your `.parlot.cs` file**, then rebuild:
