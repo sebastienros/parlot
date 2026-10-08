@@ -22,7 +22,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         _hasNewLines = text.Any(Character.IsNewLine);
 
         // An ordinal match is the text itself, and case-insensitive matches return the canonical text by default.
-        _returnText = comparisonType == StringComparison.Ordinal ||(!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
+        _returnText = comparisonType == StringComparison.Ordinal || (!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
             or StringComparison.CurrentCultureIgnoreCase
             or StringComparison.InvariantCultureIgnoreCase);
 
