@@ -5,14 +5,10 @@ using System;
 using System.Buffers;
 #endif
 
-using System.Reflection;
-
 namespace Parlot.Fluent;
 
 public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 {
-    private static readonly MethodInfo _jumpToNextExpectedCharMethod = typeof(TextBefore<T>).GetMethod(nameof(JumpToNextExpectedChar), BindingFlags.NonPublic | BindingFlags.Static)!;
-
     private readonly Parser<T> _delimiter;
     private readonly bool _canBeEmpty;
     private readonly bool _failOnEof;
