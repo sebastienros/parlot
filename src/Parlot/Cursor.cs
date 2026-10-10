@@ -338,7 +338,9 @@ public class Cursor
         _column = position.Column;
 
         // A single unsigned compare covers both the end of the buffer and, in compacting mode, a discarded position.
-        if ((uint)_offset < (uint)Buffer.Length)
+        // Unchecked since the offset is negative for a discarded position, and generated parsers embed this file in
+        // assemblies which can check for arithmetic overflows.
+        if (unchecked((uint)_offset) < (uint)Buffer.Length)
         {
             Current = Buffer[_offset];
             Eof = false;
