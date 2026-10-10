@@ -25,24 +25,46 @@ public sealed class Identifier : Parser<TextSpan>, ICompilable
     {
         context.EnterParser(this);
 
-        var first = context.Scanner.Cursor.Current;
+        var cursor = context.Scanner.Cursor;
+        var first = cursor.Current;
 
         if (Character.IsIdentifierStart(first) || (_extraStart != null && _extraStart(first)))
         {
-            var start = context.Scanner.Cursor.Offset;
+            var start = cursor.Offset;
 
             // At this point we have an identifier, read while it's an identifier part.
+            // The chars are counted first such that the cursor only moves once.
 
-            context.Scanner.Cursor.AdvanceNoNewLines(1);
+            var span = cursor.Span;
 
-            while (!context.Scanner.Cursor.Eof && (Character.IsIdentifierPart(context.Scanner.Cursor.Current) || (_extraPart != null && _extraPart(context.Scanner.Cursor.Current))))
+            if (span.IsEmpty)
             {
-                context.Scanner.Cursor.AdvanceNoNewLines(1);
+                // A custom start predicate accepted the end of the text
+                cursor.AdvanceNoNewLines(1);
+            }
+            else
+            {
+                var extraPart = _extraPart;
+                var size = 1;
+
+                while (size < span.Length)
+                {
+                    var c = span[size];
+
+                    if (!Character.IsIdentifierPart(c) && (extraPart == null || !extraPart(c)))
+                    {
+                        break;
+                    }
+
+                    size++;
+                }
+
+                cursor.AdvanceNoNewLines(size);
             }
 
-            var end = context.Scanner.Cursor.Offset;
+            var end = cursor.Offset;
 
-            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+            result.Set(start, end, new TextSpan(cursor.Buffer, start, end - start));
 
             context.ExitParser(this);
             return true;

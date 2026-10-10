@@ -23,35 +23,55 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
     {
         context.EnterParser(this);
 
-        if (context.Scanner.Cursor.Eof || !_predicate(context.Scanner.Cursor.Current))
+        var cursor = context.Scanner.Cursor;
+        var predicate = _predicate;
+
+        if (cursor.Eof || !predicate(cursor.Current))
         {
             context.ExitParser(this);
             return false;
         }
 
-        var startPosition = context.Scanner.Cursor.Position;
-        var start = startPosition.Offset;
+        // The chars are counted first such that the cursor only moves once, and not at all when the size constraint is not met.
 
-        context.Scanner.Cursor.Advance();
+        var span = cursor.Span;
+        var limit = _maxSize > 0 && _maxSize < span.Length ? _maxSize : span.Length;
         var size = 1;
+        var newLines = span[0] is '\n' or '\r';
 
-        while (!context.Scanner.Cursor.Eof && (_maxSize <= 0 || size < _maxSize) && _predicate(context.Scanner.Cursor.Current))
+        while (size < limit)
         {
-            context.Scanner.Cursor.Advance();
+            var c = span[size];
+
+            if (!predicate(c))
+            {
+                break;
+            }
+
+            newLines |= c is '\n' or '\r';
             size++;
         }
 
         if (size >= _minSize)
         {
-            var end = context.Scanner.Cursor.Offset;
-            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start, end - start));
+            var start = cursor.Offset;
+
+            // The line and column only need to be tracked char by char when there are new lines,
+            // including the char the cursor moves to since a '\r' doesn't count as a column.
+            if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+            {
+                cursor.Advance(size);
+            }
+            else
+            {
+                cursor.AdvanceNoNewLines(size);
+            }
+
+            result.Set(start, start + size, new TextSpan(cursor.Buffer, start, size));
 
             context.ExitParser(this);
             return true;
         }
-
-        // When the size constraint has not been met the parser may still have advanced the cursor.
-        context.Scanner.Cursor.ResetPosition(startPosition);
 
         context.ExitParser(this);
         return false;
