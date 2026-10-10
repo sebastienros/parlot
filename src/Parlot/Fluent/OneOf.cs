@@ -21,13 +21,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
     internal readonly CharMap<List<Parser<T>>>? _map;
     internal readonly List<Parser<T>>? _otherParsers;
 
+    // Parsers as an array, to iterate over it without the interface calls of IReadOnlyList<T>
+    private readonly Parser<T>[] _parsers;
+
     // For compilation, ignored for now
     //private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
     //private Func<ParseContext, ValueTuple<bool, T>>? _lambdaOtherParsers;
 
     public OneOf(Parser<T>[] parsers)
     {
-        Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+        Parsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         OriginalParsers = parsers;
 
         static void AddUniqueRange(List<Parser<T>> target, IReadOnlyList<Parser<T>> items)
@@ -145,7 +148,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                 SkipWhitespace = true;
 
                 // Remove the SkipWhiteSpace parser if we can
-                Parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
+                Parsers = _parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
 
                 // The lookup groups are the ones invoked when there is a map, and they were built from the original parsers
                 foreach (var entry in lookupTable)
@@ -258,10 +261,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         }
         else
         {
-            var parsers = Parsers;
-            var length = parsers.Count;
+            var parsers = _parsers;
 
-            for (var i = 0; i < length; i++)
+            for (var i = 0; i < parsers.Length; i++)
             {
                 if (parsers[i].Parse(context, ref result))
                 {
