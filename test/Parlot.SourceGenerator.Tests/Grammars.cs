@@ -52,6 +52,8 @@ public static partial class Grammars
     public static partial bool TryParseUnaryDecimal(string text, out decimal value);
     public static partial bool TryParseLeftAssociativeDecimal(string text, out decimal value);
     public static partial bool TryParseLeftAssociativeThenPlus(string text, out decimal value);
+    public static partial bool TryParseLeftAssociativeEmpty(string text, out int value);
+    public static partial bool TryParseLeftAssociativeContextEmpty(string text, out int value);
     public static partial bool TryParseUnaryFallback(string text, out decimal value);
     public static partial bool TryParseAnyOfDigits(string text, out string value);
     public static partial bool TryParseAnyOfLetters(string text, out string value);

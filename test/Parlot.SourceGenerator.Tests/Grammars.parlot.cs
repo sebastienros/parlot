@@ -225,6 +225,16 @@ public static partial class Grammars
             .AndSkip(Literals.Char('+'))
             .Eof();
 
+    [GenerateParser(nameof(TryParseLeftAssociativeEmpty))]
+    private static Parser<int> BuildLeftAssociativeEmpty() =>
+        Literals.Text("x").Optional().Then(static _ => 1)
+            .LeftAssociative((Literals.Text("+").Optional(), static (left, right) => left + right));
+
+    [GenerateParser(nameof(TryParseLeftAssociativeContextEmpty))]
+    private static Parser<int> BuildLeftAssociativeContextEmpty() =>
+        Literals.Text("x").Optional().Then(static _ => 1)
+            .LeftAssociative((Literals.Text("+").Optional(), static (ParseContext _, int left, int right) => left + right));
+
     [GenerateParser(nameof(TryParseUnaryFallback))]
     private static Parser<decimal> BuildUnaryFallback()
     {

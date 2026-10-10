@@ -99,6 +99,16 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void Left_Associative_Stops_When_Operator_And_Operand_Are_Empty()
+    {
+        Assert.True(Grammars.TryParseLeftAssociativeEmpty("x+x+y", out var value));
+        Assert.Equal(3, value);
+
+        Assert.True(Grammars.TryParseLeftAssociativeContextEmpty("x+x+y", out value));
+        Assert.Equal(3, value);
+    }
+
+    [Fact]
     public void Left_Associative_Rolls_Back_An_Operator_With_No_Right_Operand()
     {
         Assert.True(Grammars.TryParseLeftAssociativeThenPlus("1+", out var value));
