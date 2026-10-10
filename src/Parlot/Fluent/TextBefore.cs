@@ -109,6 +109,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 
                 if (length == 0 && !_canBeEmpty)
                 {
+                    context.Scanner.Cursor.ResetPosition(start);
                     context.ExitParser(this);
                     return false;
                 }
@@ -287,7 +288,8 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
                             : context.ResetPosition(previous),
                             _canBeEmpty
                             ? Expression.Empty()
-                            : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)), Expression.Break(breakLabel)),
+                            : Expression.IfThen(Expression.Equal(length, Expression.Constant(0)),
+                                Expression.Block(context.ResetPosition(start), Expression.Break(breakLabel))),
                             Expression.Assign(result.Success, Expression.Constant(true)),
                             context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), context.Offset(start), length)),
                             Expression.Break(breakLabel)

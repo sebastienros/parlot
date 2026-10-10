@@ -27,6 +27,7 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
         context.EnterParser(this);
 
         var previousResult = new ParseResult<T>();
+        var start = context.Scanner.Cursor.Position;
 
         if (!_previousParser.Parse(context, ref previousResult))
         {
@@ -38,6 +39,7 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
 
         if (nextParser == null)
         {
+            context.Scanner.Cursor.ResetPosition(start);
             context.ExitParser(this);
             return false;
         }
@@ -52,6 +54,7 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
             return true;
         }
 
+        context.Scanner.Cursor.ResetPosition(start);
         context.ExitParser(this);
         return false;
     }
@@ -78,6 +81,7 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
         //    }
         // }
 
+        var start = context.DeclarePositionVariable(result);
         var previousParserCompileResult = _previousParser.Build(context, requireResult: true);
         var nextParser = Expression.Parameter(typeof(Parser<U>));
         var parseResult = Expression.Variable(typeof(ParseResult<U>), $"value{context.NextNumber}");
@@ -111,6 +115,7 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
                 );
 
         result.Body.Add(block);
+        result.Body.Add(Expression.IfThen(Expression.Not(result.Success), context.ResetPosition(start)));
 
         return result;
     }
