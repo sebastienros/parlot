@@ -136,28 +136,40 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 #else
     private static void JumpToNextExpectedChar(ParseContext context, char[] expectedChars)
     {
-        var indexOfAny = int.MaxValue;
         var span = context.Scanner.Cursor.Span;
 
-        foreach (var c in expectedChars)
+        // No expected char found, move to the end
+        var indexOfAny = span.Length;
+
+        if (expectedChars.Length == 1)
         {
-            var index = span.IndexOf(c);
+            var index = span.IndexOf(expectedChars[0]);
 
             if (index >= 0)
             {
-                indexOfAny = Math.Min(indexOfAny, index);
+                indexOfAny = index;
             }
-        }
-
-        if (indexOfAny < int.MaxValue)
-        {
-            context.Scanner.Cursor.Advance(indexOfAny);
         }
         else
         {
-            // No expected char found, move to the end
-            context.Scanner.Cursor.Advance(context.Scanner.Cursor.Span.Length);
+            // The text is read once and only up to the first expected char. Searching for each expected char
+            // in turn reads the whole text for the ones it doesn't contain, each time the delimiter doesn't match.
+            for (var i = 0; i < span.Length && indexOfAny == span.Length; i++)
+            {
+                var c = span[i];
+
+                foreach (var expected in expectedChars)
+                {
+                    if (c == expected)
+                    {
+                        indexOfAny = i;
+                        break;
+                    }
+                }
+            }
         }
+
+        context.Scanner.Cursor.Advance(indexOfAny);
     }
 #endif
 

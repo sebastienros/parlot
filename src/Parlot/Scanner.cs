@@ -327,16 +327,38 @@ public class Scanner
             return false;
         }
 
-        var start = Cursor.Offset;
+        // The chars are counted first such that the cursor only moves once
 
-        Cursor.Advance();
+        var span = Cursor.Span;
+        var size = 1;
+        var newLines = span[0] is '\n' or '\r';
 
-        while (!Cursor.Eof && predicate(Cursor.Current))
+        while (size < span.Length)
         {
-            Cursor.Advance();
+            var c = span[size];
+
+            if (!predicate(c))
+            {
+                break;
+            }
+
+            newLines |= c is '\n' or '\r';
+            size++;
         }
 
-        result = Cursor.GetSpan(start, Cursor.Offset - start);
+        // The line and column only need to be tracked char by char when there are new lines,
+        // including the char the cursor moves to since a '\r' doesn't count as a column.
+        if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+        {
+            Cursor.Advance(size);
+        }
+        else
+        {
+            Cursor.AdvanceBy(size, 0, size);
+        }
+
+        // The span was read before the cursor moved, the buffer is the same
+        result = span.Slice(0, size);
 
         return true;
     }
