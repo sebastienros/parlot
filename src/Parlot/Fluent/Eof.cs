@@ -19,10 +19,18 @@ public sealed class Eof<T> : Parser<T>, ICompilable
     {
         context.EnterParser(this);
 
-        if (_parser.Parse(context, ref result) && context.Scanner.Cursor.Eof)
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Position;
+
+        if (_parser.Parse(context, ref result))
         {
-            context.ExitParser(this);
-            return true;
+            if (cursor.Eof)
+            {
+                context.ExitParser(this);
+                return true;
+            }
+
+            cursor.ResetPosition(start);
         }
 
         context.ExitParser(this);
@@ -41,20 +49,22 @@ public sealed class Eof<T> : Parser<T>, ICompilable
         //    success = true;
         // }
 
+        var start = context.DeclarePositionVariable(result);
         var parserCompileResult = _parser.Build(context);
 
         result.Body.Add(
             Expression.Block(
                 parserCompileResult.Variables,
                 Expression.Block(parserCompileResult.Body),
-                Expression.IfThen(
+                Expression.IfThenElse(
                     Expression.AndAlso(parserCompileResult.Success, context.Eof()),
                     Expression.Block(
                         context.DiscardResult
                             ? Expression.Empty()
                             : Expression.Assign(result.Value, parserCompileResult.Value),
                         Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                        )
+                        ),
+                    context.ResetPosition(start)
                     )
                 )
             );
