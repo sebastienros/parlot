@@ -77,6 +77,12 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
                 break;
             }
 
+            // Neither the operator nor the operand read anything, so they would match forever
+            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            {
+                break;
+            }
+
             // Apply the operator
             value = matchedFactory(value, rightResult.Value);
             end = rightResult.End;
@@ -197,6 +203,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
             // Parse right operand using helper
             result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        if ({cursorName}.Offset == {operatorPositionName}.Offset) break;");
             result.Body.Add($"{innerIndent}        {operatorMatchedName} = true;");
             if (!context.DiscardResult)
             {
@@ -290,6 +297,12 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
             if (!_parser.Parse(context, ref rightResult))
             {
                 context.Scanner.Cursor.ResetPosition(operatorPosition);
+                break;
+            }
+
+            // Neither the operator nor the operand read anything, so they would match forever
+            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            {
                 break;
             }
 
@@ -403,6 +416,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    if ({baseHelperName}({ctx}, out var {opResultName}RightValue))");
             result.Body.Add($"{innerIndent}    {{");
+            result.Body.Add($"{innerIndent}        if ({cursorName}.Offset == {operatorPositionName}.Offset) break;");
             result.Body.Add($"{innerIndent}        {operatorMatchedName} = true;");
 
             if (!context.DiscardResult)

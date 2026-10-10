@@ -1271,6 +1271,34 @@ public class FluentTests
         Assert.Equal(1, context.Scanner.Cursor.Offset);
     }
 
+    [Fact]
+    public void LeftAssociativeShouldStopWhenOperatorAndOperandAreEmpty()
+    {
+        var operand = Literals.Text("x").Optional().Then(static _ => 1);
+        var parser = operand.LeftAssociative((Literals.Text("+").Optional(), static (a, b) => a + b));
+
+        var context = new ParseContext(new Scanner("x+x+y"));
+        var result = new ParseResult<int>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(3, result.Value);
+        Assert.Equal(4, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void LeftAssociativeWithContextShouldStopWhenOperatorAndOperandAreEmpty()
+    {
+        var operand = Literals.Text("x").Optional().Then(static _ => 1);
+        var parser = operand.LeftAssociative((Literals.Text("+").Optional(), static (ParseContext _, int a, int b) => a + b));
+
+        var context = new ParseContext(new Scanner("x+x+y"));
+        var result = new ParseResult<int>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(3, result.Value);
+        Assert.Equal(4, context.Scanner.Cursor.Offset);
+    }
+
     [Theory]
     [InlineData(false, "10 - 4 - 2", 4)]
     [InlineData(true, "10 - 4 - 2", 8)]
