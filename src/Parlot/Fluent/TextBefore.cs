@@ -34,7 +34,13 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
         _failOnEof = failOnEof;
         _consumeDelimiter = consumeDelimiter;
 
-        if (_delimiter is ISeekable seekable && seekable.CanSeek)
+        // The text is searched for the chars the delimiter can start with, unless it can start somewhere else:
+        // - with a white space, which is skipped before the expected chars
+        // - with any char, which a OneOf with parsers that are not seekable declares with OtherSeekableChar
+        if (_delimiter is ISeekable seekable
+            && seekable.CanSeek
+            && !seekable.SkipWhitespace
+            && Array.IndexOf(seekable.ExpectedChars, OneOf<T>.OtherSeekableChar) < 0)
         {
 #if NET8_0_OR_GREATER
             _expectedSearchValues = SearchValues.Create(seekable.ExpectedChars);
