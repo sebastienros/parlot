@@ -69,6 +69,17 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             target.Add(item);
         }
 
+        static void RemoveSkipWhiteSpace(List<Parser<T>> target)
+        {
+            for (var j = 0; j < target.Count; j++)
+            {
+                if (target[j] is SkipWhiteSpace<T> skip)
+                {
+                    target[j] = skip.Parser;
+                }
+            }
+        }
+
         // We can't build a lookup table if there is only one parser
         if (Parsers.Count <= 1)
         {
@@ -138,6 +149,17 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
                 // Remove the SkipWhiteSpace parser if we can
                 Parsers = _parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
+
+                // The lookup groups are the ones invoked when there is a map, and they were built from the original parsers
+                foreach (var entry in lookupTable)
+                {
+                    RemoveSkipWhiteSpace(entry.Value);
+                }
+
+                if (_otherParsers != null)
+                {
+                    RemoveSkipWhiteSpace(_otherParsers);
+                }
             }
             else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
