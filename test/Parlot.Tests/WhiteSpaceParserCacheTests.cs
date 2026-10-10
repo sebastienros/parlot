@@ -10,10 +10,13 @@ public class WhiteSpaceParserCacheTests
 {
     private static readonly Parser<TextSpan> _spacesOnly = Literals.WhiteSpace(includeNewLines: false);
 
-    [Fact]
-    public void CustomWhiteSpaceParserShouldNotReuseTheDefaultWhiteSpaces()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CustomWhiteSpaceParserShouldNotReuseTheDefaultWhiteSpaces(bool compiled)
     {
         var custom = Terms.Text("b").WithWhiteSpaceParser(_spacesOnly);
+        if (compiled) custom = custom.Compile();
 
         // The new line is not a white space for the custom parser
         Assert.False(custom.TryParse("\n b", out _));
@@ -21,14 +24,17 @@ public class WhiteSpaceParserCacheTests
         // 'a' skips the new line with the default white spaces, at the offset the custom parser then starts from.
         // The literal prevents the white spaces from being skipped once for all the alternatives.
         var parser = OneOf(Literals.Text("zzz"), Terms.Text("a"), custom);
+        if (compiled) parser = parser.Compile();
 
         Assert.False(parser.TryParse("\n b", out _));
         Assert.True(parser.TryParse("  b", out var value));
         Assert.Equal("b", value);
     }
 
-    [Fact]
-    public void DefaultWhiteSpacesShouldNotReuseTheCustomWhiteSpaceParser()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DefaultWhiteSpacesShouldNotReuseTheCustomWhiteSpaceParser(bool compiled)
     {
         const string text = " # comment\n b";
 
@@ -43,18 +49,22 @@ public class WhiteSpaceParserCacheTests
 
         // 'a' skips the comment with its own white space parser, at the offset 'b' then starts from
         var parser = OneOf(Literals.Text("zzz"), comments, Terms.Text("b"));
+        if (compiled) parser = parser.Compile();
 
         Assert.False(parser.TryParse(text, out _));
         Assert.True(parser.TryParse("  b", out var value));
         Assert.Equal("b", value);
     }
 
-    [Fact]
-    public void OneOfShouldNotSkipWhiteSpacesForACustomWhiteSpaceParser()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OneOfShouldNotSkipWhiteSpacesForACustomWhiteSpaceParser(bool compiled)
     {
         var parser = OneOf(
             Terms.Text("a").WithWhiteSpaceParser(_spacesOnly),
             Terms.Text("b").WithWhiteSpaceParser(_spacesOnly));
+        if (compiled) parser = parser.Compile();
 
         Assert.False(parser.TryParse("\n a", out _));
         Assert.False(parser.TryParse("\n b", out _));
