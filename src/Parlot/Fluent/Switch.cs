@@ -36,6 +36,8 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
 
         var previousResult = new ParseResult<T>();
 
+        var start = context.Scanner.Cursor.Position;
+
         if (!_previousParser.Parse(context, ref previousResult))
         {
             context.ExitParser(this);
@@ -46,6 +48,8 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
 
         if ((uint)index >= (uint)_parsers.Length)
         {
+            context.Scanner.Cursor.ResetPosition(start);
+
             context.ExitParser(this);
             return false;
         }
@@ -61,6 +65,9 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
             context.ExitParser(this);
             return true;
         }
+
+        // The previous parser matched, its text is read again by the next alternative
+        context.Scanner.Cursor.ResetPosition(start);
 
         context.ExitParser(this);
         return false;
@@ -100,6 +107,9 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
         var previousValueName = $"previousValue{context.NextNumber()}";
         var indexName = $"index{context.NextNumber()}";
 
+        var startName = $"start{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {context.CursorName}.Position;");
         result.Body.Add($"if ({helperName}({ctx}, out var {previousValueName}))");
         result.Body.Add("{");
         result.Body.Add($"    var {indexName} = {selectorLambda}({ctx}, {previousValueName});");
@@ -126,6 +136,10 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
             result.Body.Add("        }");
         }
 
+        result.Body.Add("    }");
+        result.Body.Add($"    if (!{result.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {context.CursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
         result.Body.Add("}");
 

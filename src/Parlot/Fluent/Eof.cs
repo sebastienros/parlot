@@ -19,10 +19,19 @@ public sealed class Eof<T> : Parser<T>, ISourceable
     {
         context.EnterParser(this);
 
-        if (_parser.Parse(context, ref result) && context.Scanner.Cursor.Eof)
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Position;
+
+        if (_parser.Parse(context, ref result))
         {
-            context.ExitParser(this);
-            return true;
+            if (cursor.Eof)
+            {
+                context.ExitParser(this);
+                return true;
+            }
+
+            // The parser matched but more text follows
+            cursor.ResetPosition(start);
         }
 
         context.ExitParser(this);
@@ -52,6 +61,9 @@ public sealed class Eof<T> : Parser<T>, ISourceable
         //     success = true;
         //     value = innerValue;
         // }
+        var startName = $"start{context.NextNumber()}";
+        result.Body.Add($"var {startName} = {context.CursorName}.Position;");
+
         if (context.DiscardResult)
         {
             result.Body.Add($"if ({helperName}({context.ParseContextName}, out _) && {context.CursorName}.Eof)");
@@ -62,6 +74,10 @@ public sealed class Eof<T> : Parser<T>, ISourceable
         }
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {context.CursorName}.ResetPosition({startName});");
         result.Body.Add("}");
 
         return result;

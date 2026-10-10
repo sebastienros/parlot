@@ -100,6 +100,9 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 
                 if (length == 0 && !_canBeEmpty)
                 {
+                    // The delimiter might have been consumed
+                    context.Scanner.Cursor.ResetPosition(start);
+
                     context.ExitParser(this);
                     return false;
                 }
@@ -249,6 +252,10 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         {
             result.Body.Add($"        if ({lengthName} == 0)");
             result.Body.Add("        {");
+            if (_consumeDelimiter)
+            {
+                result.Body.Add($"            {cursorName}.ResetPosition({startName});");
+            }
             result.Body.Add($"            {result.SuccessVariable} = false;");
             result.Body.Add("            break;");
             result.Body.Add("        }");
