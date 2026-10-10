@@ -17,11 +17,12 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _whiteSpaceParser = whiteSpaceParser ?? throw new ArgumentNullException(nameof(whiteSpaceParser));
 
-        if (parser is ISeekable seekable)
+        // A parser skipping white spaces does it with the custom parser, which a OneOf doesn't know about:
+        // it would skip them with its own before looking up the first char.
+        if (parser is ISeekable seekable && !seekable.SkipWhitespace)
         {
             CanSeek = seekable.CanSeek;
             ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
         }
     }
 

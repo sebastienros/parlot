@@ -158,7 +158,22 @@ public class ParseContext
     /// <summary>
     /// The parser that is used to parse whitespaces and comments.
     /// </summary>
-    public Parser<TextSpan>? WhiteSpaceParser { get; set; }
+    public Parser<TextSpan>? WhiteSpaceParser
+    {
+        get => _whiteSpaceParser;
+        set
+        {
+            if (!ReferenceEquals(_whiteSpaceParser, value))
+            {
+                _whiteSpaceParser = value;
+
+                // The white spaces skipped by the previous parser are not the ones this one skips
+                _cacheOffset = -1;
+            }
+        }
+    }
+
+    private Parser<TextSpan>? _whiteSpaceParser;
 
     private int _cacheOffset = -1;
     private TextPosition _cachePosition;
