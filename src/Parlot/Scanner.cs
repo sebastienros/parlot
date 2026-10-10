@@ -200,7 +200,7 @@ public class Scanner
                 // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
                 if (numberIsEmpty)
                 {
-                    Cursor.ResetPosition(beforeDecimalSeparator);
+                    Cursor.ResetPosition(start);
 
                     return false;
                 }
