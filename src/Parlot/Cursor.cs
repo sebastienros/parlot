@@ -126,7 +126,8 @@ public class Cursor
         if (newOffset > length)
         {
             Eof = true;
-            _column += newOffset - length;
+            // Only the chars up to the end are counted, like Advance(int) does
+            _column += _textLength - Offset;
             Offset = _textLength;
             Current = NullChar;
             return;

@@ -1,5 +1,7 @@
+using Parlot.Fluent;
 using System;
 using Xunit;
+using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests;
 
@@ -218,8 +220,46 @@ public class CursorTests
 
         Assert.Equal(Cursor.NullChar, c.Current);
         Assert.Equal(9, c.Position.Offset);
-        Assert.Equal(4, c.Position.Column);
+        Assert.Equal(5, c.Position.Column);
         Assert.Equal(2, c.Position.Line);
+    }
+
+    [Theory]
+    [InlineData("hello", 0, 5)]
+    [InlineData("hello", 0, 8)]
+    [InlineData("hello", 2, 3)]
+    [InlineData("hello", 4, 1)]
+    [InlineData("hello", 5, 1)]
+    [InlineData("h", 0, 1)]
+    [InlineData("", 0, 1)]
+    public void AdvanceNoNewLinesToEofShouldCountColumnsLikeAdvance(string text, int start, int count)
+    {
+        var expected = new Cursor(text);
+        expected.Advance(start);
+        expected.Advance(count);
+
+        var c = new Cursor(text);
+        c.Advance(start);
+        c.AdvanceNoNewLines(count);
+
+        Assert.True(c.Eof);
+        Assert.Equal(Cursor.NullChar, c.Current);
+        Assert.Equal(text.Length, c.Position.Offset);
+        Assert.Equal(expected.Position.Column, c.Position.Column);
+        Assert.Equal(text.Length + 1, c.Position.Column);
+        Assert.Equal(1, c.Position.Line);
+    }
+
+    [Fact]
+    public void ErrorAtEofShouldReportTheColumnAfterTheText()
+    {
+        var parser = Literals.Text("hello").And(Literals.Text("x").ElseError("expected x"));
+
+        Assert.False(parser.TryParse("hello", out _, out var error));
+        Assert.NotNull(error);
+        Assert.Equal(5, error.Position.Offset);
+        Assert.Equal(1, error.Position.Line);
+        Assert.Equal(6, error.Position.Column);
     }
 
     [Fact]
