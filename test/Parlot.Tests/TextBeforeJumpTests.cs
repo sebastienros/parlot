@@ -35,6 +35,9 @@ public class TextBeforeJumpTests
         Assert.True(AnyCharBefore(delimiter).TryParse(text, out var result));
         Assert.Equal(expected, result.ToString());
 
+        Assert.True(AnyCharBefore(delimiter).Compile().TryParse(text, out result));
+        Assert.Equal(expected, result.ToString());
+
         Assert.True(AnyCharBefore(NotSeekable(delimiter)).TryParse(text, out result));
         Assert.Equal(expected, result.ToString());
     }
@@ -51,6 +54,9 @@ public class TextBeforeJumpTests
         Assert.True(AnyCharBefore(delimiter).TryParse(text, out var result));
         Assert.Equal(expected, result.ToString());
 
+        Assert.True(AnyCharBefore(delimiter).Compile().TryParse(text, out result));
+        Assert.Equal(expected, result.ToString());
+
         Assert.True(AnyCharBefore(NotSeekable(delimiter)).TryParse(text, out result));
         Assert.Equal(expected, result.ToString());
     }
@@ -65,6 +71,9 @@ public class TextBeforeJumpTests
         var delimiter = Literals.Text("-->").Or(Literals.Text("==>"));
 
         Assert.True(AnyCharBefore(delimiter).TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+
+        Assert.True(AnyCharBefore(delimiter).Compile().TryParse(text, out result));
         Assert.Equal(expected, result.ToString());
 
         Assert.True(AnyCharBefore(NotSeekable(delimiter)).TryParse(text, out result));
