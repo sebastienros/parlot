@@ -74,6 +74,12 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable
                 break;
             }
 
+            // Stop when the operator and operand both match without consuming input.
+            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            {
+                break;
+            }
+
             // Apply the operator
             value = matchedFactory(value, rightResult.Value);
             end = rightResult.End;
@@ -169,6 +175,10 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ICompilable
                         Expression.Break(breakLabel)
                     )
                 ),
+                Expression.IfThen(
+                    Expression.Equal(context.Offset(), context.Offset(operatorPosition)),
+                    Expression.Break(breakLabel)
+                ),
                 Expression.Assign(currentValue,
                     Expression.Invoke(matchedFactory, currentValue, rightParserResult.Value))
             ])
@@ -253,6 +263,12 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ICompilab
             if (!_parser.Parse(context, ref rightResult))
             {
                 context.Scanner.Cursor.ResetPosition(operatorPosition);
+                break;
+            }
+
+            // Stop when the operator and operand both match without consuming input.
+            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            {
                 break;
             }
 
@@ -347,6 +363,10 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ICompilab
                         Expression.Call(cursor, resetPosition, operatorPosition),
                         Expression.Break(breakLabel)
                     )
+                ),
+                Expression.IfThen(
+                    Expression.Equal(context.Offset(), context.Offset(operatorPosition)),
+                    Expression.Break(breakLabel)
                 ),
                 Expression.Assign(currentValue,
                     Expression.Invoke(matchedFactory, context.ParseContext, currentValue, rightParserResult.Value))
