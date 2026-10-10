@@ -368,6 +368,21 @@ public class ScannerTests
     }
 
     [Theory]
+    [InlineData("-")]
+    [InlineData("-x")]
+    [InlineData("-.")]
+    [InlineData("-.x")]
+    [InlineData("+.x")]
+    [InlineData(".x")]
+    public void ShouldNotMoveWhenDecimalIsInvalid(string text)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.False(scanner.ReadDecimal(Fluent.NumberOptions.Any, out _));
+        Assert.Equal(TextPosition.Start, scanner.Cursor.Position);
+    }
+
+    [Theory]
     [InlineData("'a\nb' ", "'a\nb'")]
     [InlineData("'a\r\nb' ", "'a\r\nb'")]
     public void ShouldReadStringsWithLineBreaks(string text, string expected)
