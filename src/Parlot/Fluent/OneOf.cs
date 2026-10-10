@@ -19,13 +19,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
     internal readonly CharMap<List<Parser<T>>>? _map;
     internal readonly List<Parser<T>>? _otherParsers;
 
+    // Keep the array for sequential parsing without IReadOnlyList interface calls.
+    private readonly Parser<T>[] _parsers;
+
     // For compilation, ignored for now
     //private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
     //private Func<ParseContext, ValueTuple<bool, T>>? _lambdaOtherParsers;
 
     public OneOf(Parser<T>[] parsers)
     {
-        Parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+        Parsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         OriginalParsers = parsers;
 
         static void AddUniqueRange(List<Parser<T>> target, IReadOnlyList<Parser<T>> items)
@@ -132,7 +135,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
                 SkipWhitespace = true;
 
                 // Remove the SkipWhiteSpace parser if we can
-                Parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
+                Parsers = _parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
             }
             else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
@@ -229,10 +232,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
         }
         else
         {
-            var parsers = Parsers;
-            var length = parsers.Count;
+            var parsers = _parsers;
 
-            for (var i = 0; i < length; i++)
+            for (var i = 0; i < parsers.Length; i++)
             {
                 if (parsers[i].Parse(context, ref result))
                 {
