@@ -11,6 +11,9 @@ public class ParlotBenchmarks
 {
     private const string _stringWithEscapes = "This is a new line \\n \\t and a tab and some \\xa0";
     private const string _stringWithoutEscapes = "This is a new line \n \t and a tab and some \xa0";
+    private readonly Scanner _quotedString = new("\"hello world\"");
+    private readonly Scanner _escapedQuotedString = new("\"hello\\\"world\"");
+    private readonly Scanner _escapedBacktickString = new("`hello\\`world`");
     private readonly Parser<char> _lookupExpression = Parsers.OneOf(Parsers.Terms.Char('a'), Parsers.Terms.Char('b'), Parsers.Terms.Char('v'), Parsers.Terms.Char('d'));
     private readonly Parser<char> _whitespaceExpression = Parsers.Terms.Char('a');
 
@@ -90,6 +93,33 @@ public class ParlotBenchmarks
     public TextSpan DecodeStringWithEscapes()
     {
         return Character.DecodeString(_stringWithEscapes);
+    }
+
+    [Benchmark, BenchmarkCategory("DecodeString")]
+    public TextSpan DecodeStringWithTrailingBackslash()
+    {
+        return Character.DecodeString("hello\\nworld\\");
+    }
+
+    [Benchmark, BenchmarkCategory("ReadQuotedString")]
+    public bool ReadQuotedStringWithoutEscapes()
+    {
+        _quotedString.Cursor.ResetPosition(TextPosition.Start);
+        return _quotedString.ReadDoubleQuotedString();
+    }
+
+    [Benchmark, BenchmarkCategory("ReadQuotedString")]
+    public bool ReadQuotedStringWithEscapedQuote()
+    {
+        _escapedQuotedString.Cursor.ResetPosition(TextPosition.Start);
+        return _escapedQuotedString.ReadDoubleQuotedString();
+    }
+
+    [Benchmark, BenchmarkCategory("ReadQuotedString")]
+    public bool ReadQuotedStringWithEscapedBacktick()
+    {
+        _escapedBacktickString.Cursor.ResetPosition(TextPosition.Start);
+        return _escapedBacktickString.ReadBacktickString();
     }
 
     [Benchmark, BenchmarkCategory("Expressions - Small")]
