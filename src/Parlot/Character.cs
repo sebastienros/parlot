@@ -84,6 +84,14 @@ public static partial class Character
                     plainRunLength = 0;
 #endif
                     i++;
+
+                    // A backslash at the end doesn't escape anything, it is kept as-is
+                    if (i == span.Length)
+                    {
+                        buffer[dataIndex++] = '\\';
+                        break;
+                    }
+
                     c = span[i];
 
                     switch (c)
