@@ -386,6 +386,39 @@ public class FluentTests
         Assert.Equal(expected, Literals.String(StringLiteralQuotes.SingleOrDouble).Parse(text).ToString());
     }
 
+    [Theory]
+    [InlineData('`', @"`a\`b` c", "a`b")]
+    [InlineData('`', @"`\``", "`")]
+    [InlineData('`', @"`a\'b` c", "a'b")]
+    [InlineData('|', @"|a\|b| c", "a|b")]
+    [InlineData('|', @"|a\|\nb|", "a|\nb")]
+    [InlineData('"', @"""a\""b"" c", "a\"b")]
+    public void ShouldReadStringsWithAnEscapedQuote(char quote, string text, string expected)
+    {
+        var parser = new StringLiteral(quote);
+
+        Assert.True(parser.TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.True(parser.Compile().TryParse(text, out result));
+        Assert.Equal(expected, result.ToString());
+    }
+
+    [Theory]
+    [InlineData('`', @"`a\`b")]
+    [InlineData('|', @"|a\|")]
+    [InlineData('|', @"|a\`b|")]
+    public void ShouldNotReadInvalidStringsWithAnEscapedQuote(char quote, string text)
+    {
+        var context = new ParseContext(new Scanner(text));
+        var result = new ParseResult<TextSpan>();
+        var parser = new StringLiteral(quote);
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.False(parser.Compile().Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
     [Fact]
     public void OrShouldReturnOneOf()
     {

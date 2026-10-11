@@ -321,6 +321,9 @@ public class ScannerTests
         Assert.False(new Scanner("`abcd").ReadBacktickString());
         Assert.False(new Scanner("abcd`").ReadBacktickString());
         Assert.False(new Scanner("`ab\\`cd").ReadBacktickString());
+
+        new Scanner("`a\\`b` c").ReadBacktickString(out result);
+        Assert.Equal("`a\\`b`", result);
     }
 
     [Theory]

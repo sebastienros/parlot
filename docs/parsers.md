@@ -252,6 +252,13 @@ Result:
 
 Matches a quoted string literal with escape sequences. Use this parser to parse strings from a programming language.
 
+The opening quote character can be escaped, including backticks and custom quotes supplied to
+`new StringLiteral(quote)`. For example, `` `a\`b` `` produces `` a`b `` and `|a\|b|` produces `a|b`.
+An unterminated string or an unsupported escape still fails without consuming input.
+
+When decoding unquoted text directly, `Character.DecodeString` preserves a final lone backslash
+instead of throwing. This does not change the requirement for a closing quote when parsing string literals.
+
 ```c#
 Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble)
 ```
