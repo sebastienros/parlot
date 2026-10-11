@@ -806,6 +806,14 @@ public class Scanner
 
                         break;
                     default:
+
+                        // The quote char can be escaped, whichever it is
+                        if (Cursor.Current == startChar)
+                        {
+                            Cursor.Advance();
+                            break;
+                        }
+
                         Cursor.ResetPosition(start);
 
                         result = [];
