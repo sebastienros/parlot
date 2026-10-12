@@ -117,6 +117,8 @@ match is **hello** so only this parser will be invoked. If the char is `z` then 
 
 To be able to take advantage of this optimization, a parser type can implement `ISeekable`. Even when the parser may or may not be able to provide a list of "expected chars", the interface can be implemented and its `CanSeek` property can be set accordingly.
 
+The expected chars have to include every char the parser can start with, since a parser is not invoked for any other one. They are computed when the parser is built, so they can't depend on something that is only known when it parses, like the current culture. A parser which can't tell sets `CanSeek` to `false`: a text compared with `StringComparison.CurrentCultureIgnoreCase` does.
+
 Source generation can additionally specialize compatible keyword-only choices using
 length and discriminating characters. This does not replace the runtime lookup table
 or alter ordered-choice semantics. See [Keyword lookup investigation](keyword-lookups.md)

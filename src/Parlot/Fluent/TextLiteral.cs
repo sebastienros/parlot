@@ -1,6 +1,7 @@
 using Parlot;
 using Parlot.Rewriting;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
 using Parlot.SourceGeneration;
@@ -14,6 +15,10 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
     private readonly bool _returnMatchedText;
     private readonly bool _returnText;
 
+    // The invariant upper case of each char of the BMP, at the index of the char. It is only built for a
+    // case-insensitive text which doesn't start with an ASCII char.
+    private static string? _invariantUpperCase;
+
     public TextLiteral(string text, StringComparison comparisonType, bool returnMatchedText = false)
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
@@ -26,32 +31,94 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             or StringComparison.CurrentCultureIgnoreCase
             or StringComparison.InvariantCultureIgnoreCase);
 
-        if (CanSeek = Text.Length > 0)
+        // A CurrentCultureIgnoreCase text is compared with the culture that is current when it parses. This is not
+        // necessarily the one that is current now, so the chars it can start with are not known.
+        if (CanSeek = Text.Length > 0 && comparisonType != StringComparison.CurrentCultureIgnoreCase)
         {
-            var ignoreCase = comparisonType switch
+            ExpectedChars = comparisonType switch
             {
-                StringComparison.OrdinalIgnoreCase => true,
-                StringComparison.CurrentCultureIgnoreCase => true,
-                StringComparison.InvariantCultureIgnoreCase => true,
-                _ => false
+                StringComparison.OrdinalIgnoreCase => OrdinalIgnoreCaseChars(Text),
+                StringComparison.InvariantCultureIgnoreCase => [Text.ToUpperInvariant()[0], Text.ToLowerInvariant()[0]],
+                _ => [Text[0]]
             };
+        }
+    }
 
-            var invariant = comparisonType switch
-            {
-                StringComparison.InvariantCulture => true,
-                StringComparison.InvariantCultureIgnoreCase => true,
-                _ => false
-            };
+    // The chars an ordinal case-insensitive comparison takes for the first one of a text. These are not the upper
+    // and lower cases a culture gives: under a Turkish culture the upper case of 'i' is the dotted 'I' (U+0130),
+    // which the comparison doesn't take for 'i', while it takes 'I'.
+    private static char[] OrdinalIgnoreCaseChars(string text)
+    {
+        var first = text[0];
 
-            if (invariant)
+        if (first < 128)
+        {
+            // An ASCII letter only has its other case, on every runtime
+            if (Character.IsInRange(first, 'a', 'z'))
             {
-                ExpectedChars = ignoreCase ? [Text.ToUpperInvariant()[0], Text.ToLowerInvariant()[0]] : [Text[0]];
+                return [(char)(first - 32), first];
             }
-            else
+
+            if (Character.IsInRange(first, 'A', 'Z'))
             {
-                ExpectedChars = ignoreCase ? [Text.ToUpper(CultureInfo.CurrentCulture)[0], Text.ToLower(CultureInfo.CurrentCulture)[0]] : [Text[0]];
+                return [first, (char)(first + 32)];
+            }
+
+            return [first];
+        }
+
+        var chars = new List<char>();
+
+        if (char.IsSurrogate(first))
+        {
+            // A char beyond the BMP is compared as a whole. What is expected is the first half of each of its cases.
+            var cased = char.IsSurrogatePair(text, 0) ? text.Substring(0, 2) : text.Substring(0, 1);
+
+            chars.Add(first);
+
+            foreach (var other in new[] { cased.ToUpperInvariant()[0], cased.ToLowerInvariant()[0] })
+            {
+                if (!chars.Contains(other))
+                {
+                    chars.Add(other);
+                }
+            }
+
+            return [.. chars];
+        }
+
+        // Other chars can have more than one other case: the Greek sigma (U+03C3), final sigma (U+03C2) and capital
+        // sigma (U+03A3) are the same to the comparison, and so are the micro sign (U+00B5) and the Greek mu (U+03BC).
+        // The candidates are the chars with the same upper case, and the comparison decides.
+
+        var upperCase = _invariantUpperCase;
+
+        if (upperCase == null)
+        {
+            var all = new char[char.MaxValue + 1];
+
+            for (var i = 0; i < all.Length; i++)
+            {
+                // Two surrogates in a row would be read as a single char
+                all[i] = char.IsSurrogate((char)i) ? '\0' : (char)i;
+            }
+
+            // A single call for all the chars, since each call goes through the globalization library
+            _invariantUpperCase = upperCase = new string(all).ToUpperInvariant();
+        }
+
+        var expected = first.ToString();
+        var firstUpperCase = upperCase[first];
+
+        for (var i = 0; i < upperCase.Length; i++)
+        {
+            if (upperCase[i] == firstUpperCase && string.Equals(((char)i).ToString(), expected, StringComparison.OrdinalIgnoreCase))
+            {
+                chars.Add((char)i);
             }
         }
+
+        return [.. chars];
     }
 
     public string Text { get; }
