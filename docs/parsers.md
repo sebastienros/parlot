@@ -150,6 +150,8 @@ Parser<string> Text(string text, bool caseInsensitive = false, bool returnMatche
 
 When `caseInsensitive` is `true`, the default behavior is to return the **requested** text (the canonical literal you passed in), not the input slice. This avoids allocating a new string for case-insensitive matches.
 
+The case-insensitive comparison is ordinal. It doesn't depend on the current culture, neither when the parser is built nor when it parses: `Text("id", caseInsensitive: true)` matches `ID` under a Turkish culture too.
+
 If you need to preserve the original casing from the input, set `returnMatchedText: true`.
 An exact-case match returns the requested text without allocating; if the matched text
 has different casing but covers the entire input, the input string itself is returned.
