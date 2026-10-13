@@ -1109,11 +1109,32 @@ For performance reasons it is recommended to return a singleton (or static) Pars
 
 ### Eof
 
-Expects the end of the string.
+The extension `parser.Eof()` matches the parser followed by the end of the input, preserving its
+result. If trailing input remains, it restores the cursor to where the parser started so alternatives
+can retry.
 
 ```c#
 Parser<T> Eof()
 ```
+
+The standalone factory `Parsers.Eof()` checks only the current position. It returns `null` on success
+and never consumes input or skips whitespace.
+
+```c#
+Parser<object?> Parsers.Eof()
+```
+
+Attach an error to the standalone check to report the position of trailing input, rather than the
+start of the preceding parser:
+
+```c#
+var parser = Terms.Integer().AndSkip(Eof().ElseError("Unexpected trailing input"));
+parser.Parse("42a"); // Throws ParseException at (1:3).
+```
+
+In contrast, `Terms.Integer().Eof().ElseError("Unexpected trailing input")` reports (1:1) because
+the entire integer-and-EOF parser rolls back before `ElseError` reports the failure.
+Both forms support expression-tree compilation.
 
 ### Discard
 

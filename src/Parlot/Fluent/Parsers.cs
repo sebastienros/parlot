@@ -118,6 +118,12 @@ public static partial class Parsers
     public static Parser<TextSpan> Capture<T>(Parser<T> parser) => new Capture<T>(parser);
 
     /// <summary>
+    /// Builds a parser that succeeds only at the end of the input, returning <see langword="null"/>.
+    /// Does not consume text or skip whitespace.
+    /// </summary>
+    public static Parser<object?> Eof() => new Eof();
+
+    /// <summary>
     /// Builds a parser that always succeeds.
     /// </summary>
     public static Parser<object?> Always() => Always<object>();
