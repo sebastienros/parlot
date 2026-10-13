@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -31,6 +32,81 @@ public class StandaloneGeneratorTests
             private static Parser<int> Build() => Terms.Number<int>(NumberOptions.Integer).Eof();
         }
         """;
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Eof_ElseError_Reports_Trailing_Input_Without_Changing_Backtracking(bool reader, bool discard)
+    {
+        var grammar = Grammar.Replace("Terms.Number<int>(NumberOptions.Integer).Eof()",
+            """Terms.Number<int>(NumberOptions.Integer).Eof().ElseError("Invalid token in expression")""" + (discard ? ".Then(0)" : ""),
+            StringComparison.Ordinal);
+        var declaration = reader ? Declaration.Replace("string text", "System.IO.TextReader text", StringComparison.Ordinal) : Declaration;
+        var (result, compilation) = Generate(declaration, grammar);
+        AssertNoErrors(result, compilation);
+        using var stream = new MemoryStream();
+        var emitted = compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+        var assembly = Assembly.Load(stream.ToArray());
+        var parse = assembly.GetType("Grammar").GetMethod("TryParse");
+        using var validReader = reader ? new StringReader("42") : null;
+        object[] valid = [reader ? validReader : "42", null];
+        Assert.True((bool)parse.Invoke(null, valid));
+        Assert.Equal(discard ? 0 : 42, valid[1]);
+        using var invalidReader = reader ? new StringReader("42a") : null;
+        object[] invalid = [reader ? invalidReader : "42a", null];
+        Assert.False((bool)parse.Invoke(null, invalid));
+        Assert.Equal(0, invalid[1]);
+
+        // Direct entry points hide ParseException; invoke their core to inspect the diagnostic.
+        var core = assembly.GetType("Grammar").GetNestedTypes(BindingFlags.NonPublic)
+            .SelectMany(static type => type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+            .Single(static method => method.Name.EndsWith("_Core", StringComparison.Ordinal));
+        var invokeCore = new DynamicMethod("InvokeCore", typeof(bool), [typeof(object)],
+            typeof(StandaloneGeneratorTests).Module, skipVisibility: true);
+        var il = invokeCore.GetILGenerator();
+        var parseResult = il.DeclareLocal(core.GetParameters()[1].ParameterType.GetElementType());
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, core.GetParameters()[0].ParameterType);
+        il.Emit(OpCodes.Ldloca, parseResult);
+        il.Emit(OpCodes.Call, core);
+        il.Emit(OpCodes.Ret);
+        var invoke = (Func<object, bool>)invokeCore.CreateDelegate(typeof(Func<object, bool>));
+        foreach (var (text, offset, line, column) in new[]
+        {
+            ("42a", 2, 1, 3), (" 42a", 3, 1, 4), ("\n42a", 3, 2, 3), ("a", 0, 1, 1)
+        })
+        {
+            var scanner = Activator.CreateInstance(assembly.GetType("Parlot.Generated.Scanner"), [text]);
+            var context = Activator.CreateInstance(core.GetParameters()[0].ParameterType,
+                [scanner, false, false, CancellationToken.None]);
+            var exception = Assert.ThrowsAny<Exception>(() => invoke(context));
+            Assert.Equal("Parlot.Generated.ParseException", exception.GetType().FullName);
+            Assert.Equal("Invalid token in expression", exception.Message);
+            var position = exception.GetType().GetProperty("Position").GetValue(exception);
+            Assert.Equal(offset, position.GetType().GetField("Offset").GetValue(position));
+            Assert.Equal(line, position.GetType().GetField("Line").GetValue(position));
+            Assert.Equal(column, position.GetType().GetField("Column").GetValue(position));
+        }
+    }
+
+    [Fact]
+    public void Eof_Failure_Allows_A_Generated_Alternative_To_Read_The_Same_Input()
+    {
+        var grammar = Grammar.Replace("Terms.Number<int>(NumberOptions.Integer).Eof()",
+            "Terms.Number<int>(NumberOptions.Integer).Eof().Or(Terms.Number<int>(NumberOptions.Integer))",
+            StringComparison.Ordinal);
+        var (result, compilation) = Generate(Declaration, grammar);
+        AssertNoErrors(result, compilation);
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var parse = Assembly.Load(stream.ToArray()).GetType("Grammar").GetMethod("TryParse");
+        object[] arguments = ["42a", null];
+        Assert.True((bool)parse.Invoke(null, arguments));
+        Assert.Equal(42, arguments[1]);
+    }
 
     [Fact]
     public void Keyword_Lookup_Works_In_Checked_Standalone_Consumers()

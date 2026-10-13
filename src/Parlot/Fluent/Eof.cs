@@ -10,6 +10,8 @@ public sealed class Eof<T> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
 
+    internal Parser<T> InnerParser => _parser;
+
     public Eof(Parser<T> parser)
     {
         _parser = parser;

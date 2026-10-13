@@ -8,18 +8,26 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+    private readonly bool _requireEof;
 
     public ElseError(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
+
+        // Check EOF before its transactional rollback loses the error position.
+        if (parser is Eof<T> eof)
+        {
+            _parser = eof.InnerParser;
+            _requireEof = true;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        if (!_parser.Parse(context, ref result))
+        if (!_parser.Parse(context, ref result) || (_requireEof && !context.Scanner.Cursor.Eof))
         {
             context.ExitParser(this);
             throw new ParseException(_message, context.Scanner.Cursor.Position);
@@ -42,6 +50,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         var result = context.CreateResult(typeof(T), defaultSuccess: true);
         var cursorName = context.CursorName;
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var eofCondition = _requireEof ? $" && {cursorName}.Eof" : "";
 
         // Use helper instead of inlining
         var helperName = context.Helpers
@@ -59,11 +68,11 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         
         if (context.DiscardResult)
         {
-            result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out _){eofCondition})");
         }
         else
         {
-            result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+            result.Body.Add($"if ({helperName}({context.ParseContextName}, out {result.ValueVariable}){eofCondition})");
         }
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
@@ -76,7 +85,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         return result;
     }
 
-    public override string ToString() => $"{_parser} (ElseError)";
+    public override string ToString() => _requireEof ? $"{_parser} (Eof) (ElseError)" : $"{_parser} (ElseError)";
 }
 
 public sealed class Error<T> : Parser<T>, ISourceable

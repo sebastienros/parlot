@@ -1254,6 +1254,12 @@ Expects the end of the string.
 Parser<T> Eof()
 ```
 
+On failure, `Eof()` restores the cursor so another alternative can match the same input.
+Attach `ElseError(message)` directly to `Eof()` to report trailing input at its actual position:
+`Terms.Integer().Eof().ElseError("Invalid token in expression")` reports `(1:3)` for `"42a"`,
+not the beginning of the integer. This combination stops parsing with an error rather than trying
+another alternative.
+
 ### Discard
 
 > This parser has been obsoleted. Use `Then` instead as it provides the same behavior
