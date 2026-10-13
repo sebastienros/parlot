@@ -204,8 +204,8 @@ public class Cursor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Match(char c)
     {
-        // Ordinal comparison
-        return Current == c;
+        // Ordinal comparison. Current is also the null char at the end of the text, where there is no char to match.
+        return Current == c && (c != NullChar || !Eof);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
