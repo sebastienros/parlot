@@ -36,6 +36,9 @@ public class StreamingTests
         ["sql"] = new Grammar<StatementList>(CreateSqlParser(), static scanner => new ParseContext(scanner, disableLoopDetection: true)),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
+        ["standalone-eof"] = new Grammar<object?>(Eof()),
+        ["integer-standalone-eof"] = new Grammar<long>(Terms.Integer().AndSkip(Eof())),
+        ["integer-eof-error"] = new Grammar<long>(Terms.Integer().AndSkip(Eof().ElseError("Unexpected trailing input"))),
         ["decimal"] = new Grammar<decimal>(Terms.Decimal()),
         ["double"] = new Grammar<double>(Terms.Number<double>(NumberOptions.Float)),
         ["text"] = new Grammar<string>(Terms.Text("hello")),
@@ -128,6 +131,9 @@ public class StreamingTests
 
         Add("identifier", "", "a", "abc", " abc def", "1a", "a1_b ");
         Add("integer", "", "1", "123", " 42x", "-5", "+", "123456789012");
+        Add("standalone-eof", "", " ", "a");
+        Add("integer-standalone-eof", "", "42", "42a", "42 ", " 42");
+        Add("integer-eof-error", "", "42", "42a", "42 ", " 42");
         Add("decimal", "", "1", "1.5", "1.", "1.e", "12.5e-3", "1e", "1e+", ".5", "-0.25 ");
         Add("double", "", "1", "1.5e10", "1e", "2.", "-3.25e-2x");
         Add("text", "", "h", "hel", "hello", "hello!", " hello", "help");

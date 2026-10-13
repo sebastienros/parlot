@@ -9,6 +9,20 @@ public static partial class Grammar
     [GenerateParser(nameof(TryParseNumber))]
     private static Parser<int> Number() => Terms.Number<int>(NumberOptions.Integer).Eof();
 
+    [GenerateParser(nameof(TryParseEof))]
+    private static Parser<object> StandaloneEof() => Eof();
+
+    [GenerateParser(nameof(TryParseNumberWithStandaloneEof))]
+    private static Parser<long> NumberWithStandaloneEof() => Terms.Integer().AndSkip(Eof());
+
+    [GenerateParser(nameof(TryParseEofFallback))]
+    private static Parser<long> EofFallback() =>
+        Terms.Integer().Eof().Or(Terms.Integer().AndSkip(Literals.Char('a')));
+
+    [GenerateParser(nameof(TryParseStandaloneEofFallback))]
+    private static Parser<long> StandaloneEofFallback() =>
+        Terms.Integer().AndSkip(Eof()).Or(Terms.Integer().AndSkip(Literals.Char('a')));
+
     [GenerateParser(nameof(TryParsePrefix))]
     private static Parser<string> Prefix() => Literals.Text("hello");
 

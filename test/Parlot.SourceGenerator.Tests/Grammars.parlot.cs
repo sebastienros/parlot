@@ -15,6 +15,13 @@ namespace Parlot.SourceGenerator.Tests;
 [IncludeUsings("Parlot.Tests.Calc")]
 public static partial class Grammars
 {
+    [GenerateParser(nameof(TryParseStandaloneEof))]
+    private static Parser<object?> BuildStandaloneEof() => Eof();
+
+    [GenerateParser(nameof(TryParseIntegerStandaloneEof))]
+    private static Parser<long> BuildIntegerStandaloneEof() =>
+        Terms.Integer().AndSkip(Eof().ElseError("Unexpected trailing input"));
+
     [GenerateParser(nameof(TryParseHello))]
     private static Parser<string> BuildHello() => Terms.Text("hello");
 

@@ -4,6 +4,61 @@ using System;
 namespace Parlot.Fluent;
 
 /// <summary>
+/// Matches the end of the input without consuming text or skipping whitespace.
+/// </summary>
+public sealed class Eof : Parser<object?>, ISourceable
+{
+    /// <inheritdoc />
+    public override bool Parse(ParseContext context, ref ParseResult<object?> result)
+    {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+
+        if (cursor.Eof)
+        {
+            cursor.MarkHitEnd();
+            result.Set(cursor.Offset, cursor.Offset, null);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    /// <inheritdoc />
+    public SourceResult GenerateSource(SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(object), () => GenerateSource(context));
+        }
+
+        var result = context.CreateResult(typeof(object));
+        result.Body.Add($"if ({context.CursorName}.Eof)");
+        result.Body.Add("{");
+        result.Body.Add($"    {context.CursorName}.MarkHitEnd();");
+        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"    {result.ValueVariable} = null;");
+        result.Body.Add("}");
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public override string ToString() => "Eof";
+}
+
+/// <summary>
 /// Successful when the cursor is at the end of the string.
 /// </summary>
 public sealed class Eof<T> : Parser<T>, ISourceable

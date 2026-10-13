@@ -6,6 +6,14 @@ namespace Parlot.Standalone.Tests;
 
 public static partial class DiagnosticsGrammars
 {
+    [GenerateParser(nameof(StandaloneEofError), Diagnostics = true)]
+    public static Parser<long> BuildStandaloneEofError() =>
+        Terms.Integer().AndSkip(Eof().ElseError("Unexpected trailing input"));
+
+    [GenerateParser(nameof(GenericEofError), Diagnostics = true)]
+    public static Parser<long> BuildGenericEofError() =>
+        Terms.Integer().Eof().ElseError("Unexpected trailing input");
+
     [GenerateParser(nameof(Choice), Diagnostics = true)]
     public static Parser<char> BuildChoice() => Literals.Char('a').Named("a").SkipAnd(Literals.Char('b').Named("b")).Named("ab")
         .Or(Literals.Char('a').Named("a").SkipAnd(Literals.Char('c').Named("c")).Named("ac"));
