@@ -4,6 +4,42 @@ using System.Linq.Expressions;
 namespace Parlot.Fluent;
 
 /// <summary>
+/// Matches the end of the input without consuming text or skipping whitespace.
+/// </summary>
+public sealed class Eof : Parser<object?>, ICompilable
+{
+    /// <inheritdoc />
+    public override bool Parse(ParseContext context, ref ParseResult<object?> result)
+    {
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+
+        if (cursor.Eof)
+        {
+            result.Set(cursor.Offset, cursor.Offset, null);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    /// <inheritdoc />
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<object?>();
+        result.Body.Add(Expression.Assign(result.Success, context.Eof()));
+        return result;
+    }
+
+    /// <inheritdoc />
+    public override string ToString() => "Eof";
+}
+
+/// <summary>
 /// Successful when the cursor is at the end of the string.
 /// </summary>
 public sealed class Eof<T> : Parser<T>, ICompilable
