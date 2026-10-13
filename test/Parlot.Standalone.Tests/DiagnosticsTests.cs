@@ -8,6 +8,30 @@ namespace Parlot.Standalone.Tests;
 public class DiagnosticsTests
 {
     [Fact]
+    public void Eof_Errors_Keep_Standalone_And_Generic_Positions()
+    {
+        Check(() => Assert.False(DiagnosticsGrammars.StandaloneEofError("42a", out _)), 2);
+        Check(() => Assert.False(DiagnosticsGrammars.GenericEofError("42a", out _)), 0);
+        Check(() =>
+        {
+            using var reader = new StringReader("42a");
+            Assert.False(DiagnosticsGrammars.StandaloneEofError(reader, out _));
+        }, 2);
+        Check(() =>
+        {
+            using var reader = new StringReader("42a");
+            Assert.False(DiagnosticsGrammars.GenericEofError(reader, out _));
+        }, 0);
+
+        static void Check(Action parse, int offset)
+        {
+            var events = Collect(parse);
+            Assert.Contains(events, row => (string)row[0] == "exception" && (int)row[4] == offset);
+            AssertBalanced(events);
+        }
+    }
+
+    [Fact]
     public void Rewind_Retains_PreReset_Position_And_Actual_Outcome()
     {
         var events = Collect(() => Assert.True(DiagnosticsGrammars.Choice("ac", out var value) && value == 'c'));

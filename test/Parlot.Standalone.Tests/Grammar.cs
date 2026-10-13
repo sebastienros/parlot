@@ -7,6 +7,10 @@ namespace Parlot.Standalone.Tests;
 public static partial class Grammar
 {
     public static partial bool TryParseNumber(string text, out int value);
+    public static partial bool TryParseEof(string text, out object value);
+    public static partial bool TryParseNumberWithStandaloneEof(string text, out long value);
+    public static partial bool TryParseEofFallback(string text, out long value);
+    public static partial bool TryParseStandaloneEofFallback(string text, out long value);
     public static partial bool TryParsePrefix(string text, out string value);
     public static partial bool TryParseMatchedText(string text, out string value);
     public static partial bool TryParseSkippedValues(string text, out string value);
@@ -42,6 +46,10 @@ public static partial class Grammar
 
     // TextReader entry points parse with a compacting buffer.
     public static partial bool TryParseNumber(TextReader reader, out int value);
+    public static partial bool TryParseEof(TextReader reader, out object value);
+    public static partial bool TryParseNumberWithStandaloneEof(TextReader reader, out long value);
+    public static partial bool TryParseEofFallback(TextReader reader, out long value);
+    public static partial bool TryParseStandaloneEofFallback(TextReader reader, out long value);
     public static partial bool TryParseSkippedValues(TextReader reader, out string value);
     public static partial bool TryParseAlternative(TextReader reader, out char value);
     public static partial bool TryParseString(TextReader reader, out string value);

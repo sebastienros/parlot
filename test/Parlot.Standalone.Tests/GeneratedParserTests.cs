@@ -10,6 +10,49 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Theory]
+    [InlineData("", true)]
+    [InlineData(" ", false)]
+    [InlineData("a", false)]
+    public void Standalone_Eof_Checks_Only_The_Current_Position(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseEof(input, out var value));
+        Assert.Null(value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseEof(reader, out value));
+        Assert.Null(value);
+    }
+
+    [Theory]
+    [InlineData("42", true)]
+    [InlineData(" 42", true)]
+    [InlineData("42a", false)]
+    [InlineData("42 ", false)]
+    [InlineData("", false)]
+    public void Standalone_Eof_Preserves_The_Preceding_Result(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseNumberWithStandaloneEof(input, out var value));
+        Assert.Equal(success ? 42 : 0, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseNumberWithStandaloneEof(reader, out value));
+        Assert.Equal(success ? 42 : 0, value);
+    }
+
+    [Fact]
+    public void Both_Eof_Forms_Allow_Alternatives_To_Retry()
+    {
+        Assert.True(Grammar.TryParseEofFallback("42a", out var value));
+        Assert.Equal(42, value);
+        Assert.True(Grammar.TryParseStandaloneEofFallback("42a", out value));
+        Assert.Equal(42, value);
+        using var genericReader = new StringReader("42a");
+        Assert.True(Grammar.TryParseEofFallback(genericReader, out value));
+        Assert.Equal(42, value);
+        using var standaloneReader = new StringReader("42a");
+        Assert.True(Grammar.TryParseStandaloneEofFallback(standaloneReader, out value));
+        Assert.Equal(42, value);
+    }
+
+    [Theory]
     [InlineData("255KeYwOrDVaLuEEnD", true)]
     [InlineData("256KeYwOrDVaLuEEnD", false)]
     [InlineData("-1KeYwOrDVaLuEEnD", false)]

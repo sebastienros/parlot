@@ -7,6 +7,27 @@ namespace Parlot.SourceGenerator.Tests;
 public class ComprehensiveGeneratedParserTests
 {
     [Theory]
+    [InlineData("", true)]
+    [InlineData(" ", false)]
+    [InlineData("a", false)]
+    public void Standalone_Eof_Returns_Null_Without_Skipping_Whitespace(string input, bool success)
+    {
+        Assert.Equal(success, Grammars.TryParseStandaloneEof(input, out var value));
+        Assert.Null(value);
+    }
+
+    [Theory]
+    [InlineData("42", true)]
+    [InlineData(" 42", true)]
+    [InlineData("42a", false)]
+    [InlineData("42 ", false)]
+    public void Standalone_Eof_Error_Preserves_The_Preceding_Result(string input, bool success)
+    {
+        Assert.Equal(success, Grammars.TryParseIntegerStandaloneEof(input, out var value));
+        Assert.Equal(success ? 42 : 0, value);
+    }
+
+    [Theory]
     [InlineData("hello", true)]
     [InlineData("hello world", true)]
     [InlineData("  hello", true)]

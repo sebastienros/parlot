@@ -19,6 +19,9 @@ public class ReaderParserTests
     public void Tokens_Split_At_Every_Refill_Position_Match_String_Parsing()
     {
         CheckPadded<int>(Grammar.TryParseNumber, Grammar.TryParseNumber, ' ', " 12345 ", "12x", "-42", "");
+        CheckPadded<long>(Grammar.TryParseNumberWithStandaloneEof, Grammar.TryParseNumberWithStandaloneEof, ' ', "42", "42a", "42 ", "");
+        CheckPadded<long>(Grammar.TryParseEofFallback, Grammar.TryParseEofFallback, ' ', "42", "42a", "42b");
+        CheckPadded<long>(Grammar.TryParseStandaloneEofFallback, Grammar.TryParseStandaloneEofFallback, ' ', "42", "42a", "42b");
         CheckPadded<char>(Grammar.TryParseAlternative, Grammar.TryParseAlternative, ' ', "ab", "  ac", "ad");
         CheckPadded<string>(Grammar.TryParseString, Grammar.TryParseString, ' ', "'hello \\u0041 world'", "\"open");
         CheckPadded<int>(Grammar.TryParseOptional, Grammar.TryParseOptional, ' ', "123", "", "x");
