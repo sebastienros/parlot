@@ -239,7 +239,8 @@ public static partial class Numbers
         public static bool TryParseNumber<TNumber>(ReadOnlySpan<char> span, NumberStyles styles, IFormatProvider provider, [MaybeNullWhen(false)] out TNumber value)
                 where TNumber : INumber<TNumber>
         {
-                if ((uint)(span.Length - 1) < MaxFastDigits)
+                // The digits are only decimal ones without a hex or binary style
+                if ((styles & (NumberStyles.AllowHexSpecifier | NumberStyles.AllowBinarySpecifier)) == 0 && (uint)(span.Length - 1) < MaxFastDigits)
                 {
                         long parsed = 0;
 
