@@ -1232,16 +1232,47 @@ public class CompileTests
     }
 
     [Fact]
-    public void CompiledAnyOfAndWhiteSpaceShouldWork()
+    public void CompiledAnyOfNoneOfIdentifierAndWhiteSpaceShouldWork()
     {
         var anyOf = Literals.AnyOf("abc", minSize: 2, maxSize: 3).Compile();
         Assert.Equal("abc", anyOf.Parse("abcd").ToString());
         Assert.False(anyOf.TryParse("ad", out _));
+        Assert.Equal('d', anyOf.SkipAnd(Literals.Char('d')).Compile().Parse("abcd"));
+
+        var noneOf = Literals.NoneOf("xyz", minSize: 2, maxSize: 3).Compile();
+        Assert.Equal("abc", noneOf.Parse("abcdx").ToString());
+        Assert.False(noneOf.TryParse("ax", out _));
+        Assert.Equal('d', noneOf.SkipAnd(Literals.Char('d')).Compile().Parse("abcd"));
+
+#if NET8_0_OR_GREATER
+        var idLiteral = Literals.Identifier("$_", "0123456789").Compile();
+        Assert.Equal("$123", idLiteral.Parse("$123!").ToString());
+        Assert.False(idLiteral.TryParse("123", out _));
+        Assert.Equal('!', idLiteral.SkipAnd(Literals.Char('!')).Compile().Parse("$123!"));
+#endif
+
+        var idWithPredicates = Literals.Identifier(static c => c == '$', static c => c == '-').Compile();
+        Assert.Equal("$a-b", idWithPredicates.Parse("$a-b!").ToString());
+        Assert.False(idWithPredicates.TryParse("-ab", out _));
+        Assert.Equal('!', idWithPredicates.SkipAnd(Literals.Char('!')).Compile().Parse("$a-b!"));
+
+        var pattern = Literals.Pattern(char.IsDigit, minSize: 2, maxSize: 3).Compile();
+        Assert.Equal("123", pattern.Parse("1234").ToString());
+        Assert.False(pattern.TryParse("1a", out _));
+        Assert.Equal('4', pattern.SkipAnd(Literals.Char('4')).Compile().Parse("1234"));
 
         var ws = Terms.WhiteSpace().And(Literals.Text("hello")).Compile();
         Assert.True(ws.TryParse("   hello", out var result));
         Assert.Equal("   ", result.Item1.ToString());
         Assert.Equal("hello", result.Item2);
+        Assert.False(ws.TryParse("hello", out _));
+        Assert.Equal("hello", Terms.WhiteSpace().SkipAnd(Literals.Text("hello")).Compile().Parse("   hello"));
+
+        var customWs = Terms.WhiteSpace().And(Literals.Text("hello")).WithWhiteSpaceParser(Capture(OneOrMany(Literals.Char('.')))).Compile();
+        Assert.True(customWs.TryParse("...hello", out var customResult));
+        Assert.Equal("...", customResult.Item1.ToString());
+        Assert.Equal("hello", customResult.Item2);
+        Assert.False(customWs.TryParse("   hello", out _));
     }
 
     [Fact]
