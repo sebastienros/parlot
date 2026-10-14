@@ -48,6 +48,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
 
         while (true)
         {
+            var previousOffset = context.Scanner.Cursor.Offset;
+
             if (!first)
             {
                 if (!_separator.Parse(context, ref separatorResult))
@@ -74,6 +76,17 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
                 end = context.Scanner.Cursor.Position;
             }
 
+            if (context.Scanner.Cursor.Offset == previousOffset)
+            {
+                if (first)
+                {
+                    context.ExitParser(this);
+                    return false;
+                }
+
+                break;
+            }
+
             if (first)
             {
                 results = [];
@@ -95,6 +108,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         var result = context.CreateCompilationResult<IReadOnlyList<T>>(false, ExpressionHelper.ArrayEmpty<T>());
         var first = result.DeclareVariable<bool>($"first{context.NextNumber}", Expression.Constant(true));
         var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}");
+        var previousOffset = result.DeclareVariable<int>($"previousOffset{context.NextNumber}");
 
         var end = context.DeclarePositionVariable(result);
 
@@ -105,9 +119,10 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
         //
         // while (true)
         // {
+        //   var previousOffset = context.Scanner.Cursor.Offset;
         //   parse1 instructions
         // 
-        //   if (parser1.Success)
+        //   if (parser1.Success && context.Scanner.Cursor.Offset != previousOffset)
         //   {
         //      success = true;
         //      if (first)
@@ -142,11 +157,12 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
 
         var block = Expression.Block(
             parserCompileResult.Variables,
+            Expression.Assign(previousOffset, context.Offset()),
             Expression.Loop(
                 Expression.Block(
                     Expression.Block(parserCompileResult.Body),
                     Expression.IfThenElse(
-                        parserCompileResult.Success,
+                        Expression.AndAlso(parserCompileResult.Success, Expression.NotEqual(context.Offset(), previousOffset)),
                         Expression.Block(
                             context.DiscardResult
                             ? Expression.Empty()
@@ -166,6 +182,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
                             ),
                         Expression.Break(breakLabel)
                         ),
+                    Expression.Assign(previousOffset, context.Offset()),
                     Expression.Block(
                         separatorCompileResult.Variables,
                         Expression.Block(separatorCompileResult.Body),
