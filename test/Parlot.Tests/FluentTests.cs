@@ -1173,6 +1173,24 @@ public class FluentTests
     }
 
     [Fact]
+    public void ShouldReuseTextReferencesWhenReturningMatchedText()
+    {
+        var literal = new string(['h', 'e', 'l', 'l', 'o']);
+        var parser = new TextLiteral(literal, StringComparison.OrdinalIgnoreCase);
+        var exactInput = new string(['h', 'e', 'l', 'l', 'o']);
+        var differentCaseInput = new string(['H', 'E', 'L', 'L', 'O']);
+
+        Assert.Same(literal, parser.Parse(exactInput));
+        Assert.Same(differentCaseInput, parser.Parse(differentCaseInput));
+        Assert.Equal("HELLO", parser.Parse("HELLO world"));
+        Assert.NotSame(differentCaseInput, parser.Parse("HELLO world"));
+        Assert.Equal("HELLO", Terms.Text(literal, caseInsensitive: true).Parse(" HELLO"));
+        Assert.False(parser.TryParse("world", out _));
+        Assert.Same(literal, new TextLiteral(literal, StringComparison.Ordinal).Parse(exactInput));
+        Assert.Same(string.Empty, new TextLiteral(string.Empty, StringComparison.OrdinalIgnoreCase).Parse(""));
+    }
+
+    [Fact]
     public void ShouldBuildCaseInsensitiveLookupTable()
     {
         var parser = OneOf(
