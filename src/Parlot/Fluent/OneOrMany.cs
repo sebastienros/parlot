@@ -35,23 +35,33 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
         context.EnterParser(this);
 
         var parsed = new ParseResult<T>();
-
-        if (!_parser.Parse(context, ref parsed))
+        var previousOffset = context.Scanner.Cursor.Offset;
+        if (!_parser.Parse(context, ref parsed)
+            || context.Scanner.Cursor.Offset == previousOffset)
         {
+            context.ExitParser(this);
             return false;
         }
 
         var start = parsed.Start;
-        var results = new HybridList<T>();
-
-        int end;
-
-        do
+        var end = parsed.End;
+        var results = new HybridList<T>
         {
+            parsed.Value
+        };
+
+        while (true)
+        {
+            previousOffset = context.Scanner.Cursor.Offset;
+            if (!_parser.Parse(context, ref parsed)
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
             end = parsed.End;
             results.Add(parsed.Value);
-
-        } while (_parser.Parse(context, ref parsed));
+        }
 
         result.Set(start, end, results.AsReadOnlyList());
 
@@ -63,14 +73,16 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
     {
         var result = context.CreateCompilationResult<IReadOnlyList<T>>();
         var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}", Expression.New(typeof(List<T>)));
+        var previousOffset = result.DeclareVariable<int>($"previousOffset{context.NextNumber}");
 
         // value = new List<T>();
         //
         // while (true)
         // {
+        //   var previousOffset = context.Scanner.Cursor.Offset;
         //   parse1 instructions
         // 
-        //   if (parser1.Success)
+        //   if (parser1.Success && context.Scanner.Cursor.Offset != previousOffset)
         //   {
         //      value.Add(parse1.Value);
         //   }
@@ -100,9 +112,10 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable, ISeeka
             parserCompileResult.Variables,
             Expression.Loop(
                 Expression.Block(
+                    Expression.Assign(previousOffset, context.Offset()),
                     Expression.Block(parserCompileResult.Body),
                     Expression.IfThenElse(
-                        parserCompileResult.Success,
+                        Expression.AndAlso(parserCompileResult.Success, Expression.NotEqual(context.Offset(), previousOffset)),
                         Expression.Block(
                             context.DiscardResult ?
                                 Expression.Empty() :

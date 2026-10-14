@@ -29,11 +29,15 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
         var first = true;
         var parsed = new ParseResult<T>();
 
-        // TODO: it's not restoring an intermediate failed text position
-        // is the inner parser supposed to be clean?
-
-        while (_parser.Parse(context, ref parsed))
+        while (true)
         {
+            var previousOffset = context.Scanner.Cursor.Offset;
+            if (!_parser.Parse(context, ref parsed)
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
             if (first)
             {
                 results = [];
@@ -58,6 +62,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
 
         var results = result.DeclareVariable<List<T>>($"results{context.NextNumber}");
         var first = result.DeclareVariable<bool>($"first{context.NextNumber}", Expression.Constant(true));
+        var previousOffset = result.DeclareVariable<int>($"previousOffset{context.NextNumber}");
 
         // success = true;
         //
@@ -66,10 +71,10 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
         //
         // while (true)
         // {
-        //
+        //   var previousOffset = context.Scanner.Cursor.Offset;
         //   parse1 instructions
         // 
-        //   if (parser1.Success)
+        //   if (parser1.Success && context.Scanner.Cursor.Offset != previousOffset)
         //   {
         //      if (results == null)
         //      {
@@ -98,9 +103,10 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ICompilable
             Expression.Loop(
                 Expression.Block(
                     parserCompileResult.Variables,
+                    Expression.Assign(previousOffset, context.Offset()),
                     Expression.Block(parserCompileResult.Body),
                     Expression.IfThenElse(
-                        parserCompileResult.Success,
+                        Expression.AndAlso(parserCompileResult.Success, Expression.NotEqual(context.Offset(), previousOffset)),
                         context.DiscardResult
                         ? Expression.Empty()
                         : Expression.Block(
