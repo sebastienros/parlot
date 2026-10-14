@@ -347,6 +347,44 @@ public class FluentTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("a")]
+    public void NullCharLiteralShouldNotMatchAtTheEnd(string text)
+    {
+        var context = new ParseContext(new Scanner(text));
+        var result = new ParseResult<char>();
+
+        context.Scanner.Cursor.Advance(text.Length);
+
+        Assert.False(Literals.Char('\0').Parse(context, ref result));
+        Assert.Equal(text.Length, context.Scanner.Cursor.Offset);
+        Assert.False(context.Scanner.ReadChar('\0'));
+        Assert.Equal(text.Length, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void NullCharLiteralShouldMatchANullChar()
+    {
+        var context = new ParseContext(new Scanner("\0\0a"));
+        var result = new ParseResult<IReadOnlyList<char>>();
+
+        Assert.True(ZeroOrMany(Literals.Char('\0')).Parse(context, ref result));
+        Assert.Equal(2, result.Value.Count);
+        Assert.Equal(2, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ZeroOrManyNullCharLiteralsShouldStopAtTheEnd()
+    {
+        var context = new ParseContext(new Scanner("\0\0"));
+        var result = new ParseResult<IReadOnlyList<char>>();
+
+        Assert.True(ZeroOrMany(Literals.Char('\0')).Parse(context, ref result));
+        Assert.Equal(2, result.Value.Count);
+        Assert.Equal(2, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
     [InlineData("a", "a")]
     [InlineData("abc", "abc")]
     [InlineData(" abc", "abc")]
