@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Globalization;
+using System.Reflection;
 
 namespace Parlot.Fluent;
 
@@ -12,6 +13,8 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
+
+    private static readonly MethodInfo _parseTextMethodInfo = typeof(TextLiteral).GetMethod(nameof(ParseText), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     // The invariant upper case of each char of the BMP, at the index of the char. It is only built for a
     // case-insensitive text which doesn't start with an ASCII char.
@@ -126,40 +129,11 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
 
-        var span = Text.AsSpan();
-
-        if (cursor.Match(span, _comparisonType))
+        if (ParseText(cursor, Text, _comparisonType, _hasNewLines, out var value))
         {
-            var start = cursor.Offset;
-
-            if (_hasNewLines)
-            {
-                cursor.Advance(Text.Length);
-            }
-            else
-            {
-                cursor.AdvanceNoNewLines(Text.Length);
-            }
-
-            var end = cursor.Offset;
-
-            if (_comparisonType == StringComparison.Ordinal)
-            {
-                result.Set(start, end, Text);
-            }
-            else
-            {
-                var buffer = context.Scanner.Buffer;
-                var parsedText = buffer.AsSpan(start, end - start);
-
-                // Prevent an allocation if the text matches exactly or spans the full buffer
-                result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
-                    ? Text
-                    : start == 0 && end == buffer.Length
-                        ? buffer
-                        : parsedText.ToString());
-            }
+            result.Set(start, cursor.Offset, value);
 
             context.ExitParser(this);
             return true;
@@ -169,34 +143,73 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
         return false;
     }
 
+    private static bool ParseText(Cursor cursor, string text, StringComparison comparisonType, bool hasNewLines, out string value)
+    {
+        if (cursor.Match(text.AsSpan(), comparisonType))
+        {
+            var start = cursor.Offset;
+
+            if (hasNewLines)
+            {
+                cursor.Advance(text.Length);
+            }
+            else
+            {
+                cursor.AdvanceNoNewLines(text.Length);
+            }
+
+            var end = cursor.Offset;
+
+            if (comparisonType == StringComparison.Ordinal)
+            {
+                value = text;
+            }
+            else
+            {
+                var buffer = cursor.Buffer;
+                var parsedText = buffer.AsSpan(start, end - start);
+
+                // Prevent an allocation if the text matches exactly or spans the full buffer
+                value = parsedText.Equals(text.AsSpan(), StringComparison.Ordinal)
+                    ? text
+                    : start == 0 && end == buffer.Length
+                        ? buffer
+                        : parsedText.ToString();
+            }
+
+            return true;
+        }
+
+        value = null!;
+        return false;
+    }
+
     public CompilationResult Compile(CompilationContext context)
     {
         var result = context.CreateCompilationResult<string>();
 
-        var start = context.DeclareOffsetVariable(result);
-        var resultSpan = Expression.Variable(typeof(ReadOnlySpan<char>), $"result{context.NextNumber}");
-        result.Variables.Add(resultSpan);
+        var value = Expression.Variable(typeof(string), $"value{context.NextNumber}");
+        result.Variables.Add(value);
 
-        var readTextMethod = typeof(Scanner).GetMethod(nameof(Scanner.ReadText),
-            [typeof(ReadOnlySpan<char>), typeof(StringComparison), typeof(ReadOnlySpan<char>).MakeByRefType()])!;
+        var selfConstant = Expression.Constant(this);
+        var textProperty = Expression.Property(selfConstant, nameof(Text));
 
-        var ifReadText = Expression.IfThen(
-            Expression.Call(
-                Expression.Field(context.ParseContext, "Scanner"),
-                readTextMethod,
-                Expression.Call(ExpressionHelper.MemoryExtensions_AsSpan, Expression.Constant(Text)),
-                Expression.Constant(_comparisonType, typeof(StringComparison)),
-                resultSpan
-            ),
-            Expression.Block(
-                Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
-                context.DiscardResult
-                ? Expression.Empty()
-                : Expression.Assign(result.Value, Expression.Call(resultSpan, ExpressionHelper.ReadOnlySpan_ToString))
+        result.Body.Add(
+            Expression.IfThen(
+                Expression.Call(
+                    _parseTextMethodInfo,
+                    context.Cursor(),
+                    textProperty,
+                    Expression.Constant(_comparisonType, typeof(StringComparison)),
+                    Expression.Constant(_hasNewLines),
+                    value
+                ),
+                Expression.Block(
+                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
+                    context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, value)
+                )
             )
         );
-
-        result.Body.Add(ifReadText);
 
         return result;
     }

@@ -149,16 +149,59 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
             var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
 
+            var limitRecursion = Expression.Variable(typeof(bool), $"limitRecursion{context.NextNumber}");
+            var trackPosition = Expression.Variable(typeof(bool), $"trackPosition{context.NextNumber}");
+            var entryPosition = Expression.Variable(typeof(int), $"entryPosition{context.NextNumber}");
+
+            var maxRecursionDepthProperty = Expression.Property(context.ParseContext, nameof(ParseContext.MaxRecursionDepth));
+            var disableLoopDetectionProperty = Expression.Property(context.ParseContext, nameof(ParseContext.DisableLoopDetection));
+            var enterRecursionMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.EnterRecursion), [])!;
+            var exitRecursionMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.ExitRecursion), [])!;
+            var pushParserMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.PushParserAtPosition), [typeof(object)])!;
+            var popParserMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.PopParserAtPosition), [typeof(object), typeof(int)])!;
+            var selfConstant = Expression.Constant(this, typeof(object));
+
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
                     Expression.Block(
                         type: typeof(ValueTuple<bool, T>),
-                        variables: parserCompileResult.Variables.Append(resultExpression),
-                        Expression.Block(parserCompileResult.Body),
-                        Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                            parserCompileResult.Success,
-                            context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value)),
+                        variables: parserCompileResult.Variables.Append(resultExpression).Append(limitRecursion).Append(trackPosition).Append(entryPosition),
+                        Expression.Assign(limitRecursion, Expression.GreaterThan(maxRecursionDepthProperty, Expression.Constant(0))),
+                        Expression.IfThen(limitRecursion, Expression.Call(context.ParseContext, enterRecursionMethod)),
+                        Expression.Assign(trackPosition, Expression.Not(disableLoopDetectionProperty)),
+                        Expression.Assign(entryPosition, Expression.Constant(0)),
+                        Expression.IfThen(
+                            trackPosition,
+                            Expression.Block(
+                                Expression.Assign(entryPosition, context.Offset()),
+                                Expression.IfThen(
+                                    Expression.Not(Expression.Call(context.ParseContext, pushParserMethod, selfConstant)),
+                                    Expression.Block(
+                                        Expression.IfThen(limitRecursion, Expression.Call(context.ParseContext, exitRecursionMethod)),
+                                        returnExpression
+                                    )
+                                )
+                            )
+                        ),
+                        Expression.TryFinally(
+                            Expression.Block(
+                                Expression.Block(parserCompileResult.Body),
+                                Expression.Assign(resultExpression, Expression.New(
+                                    typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                                    parserCompileResult.Success,
+                                    context.DiscardResult ? Expression.Default(parserCompileResult.Value.Type) : parserCompileResult.Value))
+                            ),
+                            Expression.Block(
+                                Expression.IfThen(
+                                    trackPosition,
+                                    Expression.Call(context.ParseContext, popParserMethod, selfConstant, entryPosition)
+                                ),
+                                Expression.IfThen(
+                                    limitRecursion,
+                                    Expression.Call(context.ParseContext, exitRecursionMethod)
+                                )
+                            )
+                        ),
                         returnExpression,
                         returnLabel),
                     true,

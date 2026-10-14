@@ -1,12 +1,17 @@
 #if NET8_0_OR_GREATER
+using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Buffers;
+using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent;
 
-internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
+internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, ISeekable
 {
+    private static readonly MethodInfo _parseSpanMethodInfo = typeof(SearchValuesCharLiteral).GetMethod(nameof(ParseSpan), BindingFlags.NonPublic | BindingFlags.Static)!;
+
     private readonly SearchValues<char> _searchValues;
     private readonly int _minSize;
     private readonly int _maxSize;
@@ -44,24 +49,39 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
     {
         context.EnterParser(this);
 
-        var span = context.Scanner.Cursor.Span;
-
-        if (_minSize > span.Length)
+        if (ParseSpan(context.Scanner.Cursor, _searchValues, _minSize, _maxSize, _negate, out var span))
         {
+            result.Set(span.Offset, span.Offset + span.Length, span);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    private static bool ParseSpan(Cursor cursor, SearchValues<char> searchValues, int minSize, int maxSize, bool negate, out TextSpan span)
+    {
+        var cursorSpan = cursor.Span;
+
+        if (minSize > cursorSpan.Length)
+        {
+            span = default;
             return false;
         }
 
         // First char not matching the searched values
-        var index = _negate ? span.IndexOfAny(_searchValues) : span.IndexOfAnyExcept(_searchValues);
+        var index = negate ? cursorSpan.IndexOfAny(searchValues) : cursorSpan.IndexOfAnyExcept(searchValues);
 
-        var size = 0;
+        int size;
 
         if (index != -1)
         {
             // Too small?
-            if (index < _minSize)
+            if (index < minSize)
             {
-                context.ExitParser(this);
+                span = default;
                 return false;
             }
 
@@ -70,21 +90,49 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable
         else
         {
             // If index == -1 the whole input is a match
-            size = span.Length;
+            size = cursorSpan.Length;
         }
 
         // Too large? Take only the request size
-        if (_maxSize > 0 && size > _maxSize)
+        if (maxSize > 0 && size > maxSize)
         {
-            size = _maxSize;
+            size = maxSize;
         }
 
-        var start = context.Scanner.Cursor.Position.Offset;
-        context.Scanner.Cursor.Advance(size);
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
-
-        context.ExitParser(this);
+        var start = cursor.Offset;
+        cursor.Advance(size);
+        span = new TextSpan(cursor.Buffer, start, size);
         return true;
+    }
+
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<TextSpan>();
+
+        var span = Expression.Variable(typeof(TextSpan), $"span{context.NextNumber}");
+        result.Variables.Add(span);
+
+        result.Body.Add(
+            Expression.IfThen(
+                Expression.Call(
+                    _parseSpanMethodInfo,
+                    context.Cursor(),
+                    Expression.Constant(_searchValues),
+                    Expression.Constant(_minSize),
+                    Expression.Constant(_maxSize),
+                    Expression.Constant(_negate),
+                    span
+                ),
+                Expression.Block(
+                    context.DiscardResult
+                        ? Expression.Empty()
+                        : Expression.Assign(result.Value, span),
+                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
+                )
+            )
+        );
+
+        return result;
     }
 
     public override string ToString() => $"AnyOf({_searchValues})";

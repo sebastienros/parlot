@@ -1,11 +1,14 @@
 using Parlot.Compilation;
 using System;
 using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Parlot.Fluent;
 
 public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
 {
+    private static readonly MethodInfo _parseSpanMethodInfo = typeof(PatternLiteral).GetMethod(nameof(ParseSpan), BindingFlags.NonPublic | BindingFlags.Static)!;
+
     private readonly Func<char, bool> _predicate;
     private readonly int _minSize;
     private readonly int _maxSize;
@@ -23,25 +26,36 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
     {
         context.EnterParser(this);
 
-        var cursor = context.Scanner.Cursor;
-        var predicate = _predicate;
+        if (ParseSpan(context.Scanner.Cursor, _predicate, _minSize, _maxSize, out var span))
+        {
+            result.Set(span.Offset, span.Offset + span.Length, span);
 
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    private static bool ParseSpan(Cursor cursor, Func<char, bool> predicate, int minSize, int maxSize, out TextSpan span)
+    {
         if (cursor.Eof || !predicate(cursor.Current))
         {
-            context.ExitParser(this);
+            span = default;
             return false;
         }
 
         // The chars are counted first such that the cursor only moves once, and not at all when the size constraint is not met.
 
-        var span = cursor.Span;
-        var limit = _maxSize > 0 && _maxSize < span.Length ? _maxSize : span.Length;
+        var cursorSpan = cursor.Span;
+        var limit = maxSize > 0 && maxSize < cursorSpan.Length ? maxSize : cursorSpan.Length;
         var size = 1;
-        var newLines = span[0] is '\n' or '\r';
+        var newLines = cursorSpan[0] is '\n' or '\r';
 
         while (size < limit)
         {
-            var c = span[size];
+            var c = cursorSpan[size];
 
             if (!predicate(c))
             {
@@ -52,13 +66,13 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
             size++;
         }
 
-        if (size >= _minSize)
+        if (size >= minSize)
         {
             var start = cursor.Offset;
 
             // The line and column only need to be tracked char by char when there are new lines,
             // including the char the cursor moves to since a '\r' doesn't count as a column.
-            if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+            if (newLines || (size < cursorSpan.Length && cursorSpan[size] is '\n' or '\r'))
             {
                 cursor.Advance(size);
             }
@@ -67,13 +81,11 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
                 cursor.AdvanceNoNewLines(size);
             }
 
-            result.Set(start, start + size, new TextSpan(cursor.Buffer, start, size));
-
-            context.ExitParser(this);
+            span = new TextSpan(cursor.Buffer, start, size);
             return true;
         }
 
-        context.ExitParser(this);
+        span = default;
         return false;
     }
 
@@ -81,98 +93,27 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
     {
         var result = context.CreateCompilationResult<TextSpan>();
 
-        // var start = context.Scanner.Cursor.Position;
-
-        var start = Expression.Variable(typeof(TextPosition), $"start{context.NextNumber}");
-        result.Variables.Add(start);
-
-        result.Body.Add(Expression.Assign(start, context.Position()));
-
-        // var size = 0;
-
-        var size = Expression.Variable(typeof(int), $"size{context.NextNumber}");
-        result.Variables.Add(size);
-        result.Body.Add(Expression.Assign(size, Expression.Constant(0, typeof(int))));
-
-        // while (true)
-        // {
-        //     if (context.Scanner.Cursor.Eof)
-        //     {
-        //        break;
-        //     }
-        //
-        //     if (!_predicate(context.Scanner.Cursor.Current))
-        //     {
-        //        break;
-        //     }
-        //
-        //     context.Scanner.Cursor.Advance();
-        // 
-        //     size++;
-        //
-        //     #if _maxSize > 0 ?
-        //     if (size == _maxSize)
-        //     {
-        //        break;
-        //     }
-        //     #endif
-        // }
-
-        var breakLabel = Expression.Label($"break{context.NextNumber}");
+        var span = Expression.Variable(typeof(TextSpan), $"span{context.NextNumber}");
+        result.Variables.Add(span);
 
         result.Body.Add(
-            Expression.Loop(
-                Expression.Block(
-                    Expression.IfThen(
-                        context.Eof(),
-                        Expression.Break(breakLabel)
-                    ),
-                    Expression.IfThen(
-                        Expression.Not(Expression.Invoke(Expression.Constant(_predicate), context.Current())),
-                        Expression.Break(breakLabel)
-                    ),
-                    context.Advance(),
-                    Expression.Assign(size, Expression.Add(size, Expression.Constant(1))),
-                    _maxSize == 0
-                    ? Expression.Empty()
-                    : Expression.IfThen(
-                        Expression.Equal(size, Expression.Constant(_maxSize)),
-                        Expression.Break(breakLabel)
-                        )
+            Expression.IfThen(
+                Expression.Call(
+                    _parseSpanMethodInfo,
+                    context.Cursor(),
+                    Expression.Constant(_predicate),
+                    Expression.Constant(_minSize),
+                    Expression.Constant(_maxSize),
+                    span
                 ),
-                breakLabel)
-            );
-
-
-        // if (size < _minSize)
-        // {
-        //     context.Scanner.Cursor.ResetPosition(startPosition);
-        // }
-        // else
-        // {
-        //     value = new TextSpan(context.Scanner.Buffer, start, end - start);
-        //     success = true;
-        // }
-
-        var startOffset = Expression.Field(start, nameof(TextPosition.Offset));
-
-        result.Body.Add(
-            Expression.IfThenElse(
-                Expression.LessThan(size, Expression.Constant(_minSize)),
-                context.ResetPosition(start),
                 Expression.Block(
                     context.DiscardResult
-                    ? Expression.Empty()
-                    : Expression.Assign(result.Value,
-                        context.NewTextSpan(
-                            context.Buffer(),
-                            startOffset,
-                            Expression.Subtract(context.Offset(), startOffset)
-                            )),
+                        ? Expression.Empty()
+                        : Expression.Assign(result.Value, span),
                     Expression.Assign(result.Success, Expression.Constant(true, typeof(bool)))
-                    )
                 )
-            );
+            )
+        );
 
         return result;
     }

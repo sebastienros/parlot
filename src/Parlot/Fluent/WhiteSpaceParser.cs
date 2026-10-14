@@ -1,9 +1,12 @@
+using Parlot.Compilation;
+using System.Linq.Expressions;
+
 namespace Parlot.Fluent;
 
 /// <summary>
 /// A parser that succeeds when parsing whitespaces as defined in <see cref="ParseContext.WhiteSpaceParser"/>.
 /// </summary>
-public sealed class WhiteSpaceParser : Parser<TextSpan>
+public sealed class WhiteSpaceParser : Parser<TextSpan>, ICompilable
 {
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
@@ -25,6 +28,29 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>
 
         context.ExitParser(this);
         return true;
+    }
+
+    public CompilationResult Compile(CompilationContext context)
+    {
+        var result = context.CreateCompilationResult<TextSpan>();
+
+        var start = context.DeclareOffsetVariable(result);
+
+        result.Body.Add(context.ParserSkipWhiteSpace());
+
+        var end = context.DeclareOffsetVariable(result);
+
+        result.Body.Add(
+            Expression.IfThen(
+                Expression.NotEqual(start, end),
+                Expression.Block(
+                    Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
+                    context.DiscardResult ? Expression.Empty() : Expression.Assign(result.Value, context.NewTextSpan(context.Buffer(), start, Expression.Subtract(end, start)))
+                )
+            )
+        );
+
+        return result;
     }
 
     public override string ToString() => "WhiteSpaceParser";

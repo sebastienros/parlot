@@ -1160,4 +1160,118 @@ public class CompileTests
         Assert.True(parser.TryParse(source, out var result));
         Assert.Equal(source.Length, result.Count);
     }
+
+    [Fact]
+    public void CompiledDeferredShouldEnforceMaxRecursionDepth()
+    {
+        var list = Deferred<string>();
+        list.Parser = Between(Literals.Char('['), list, Literals.Char(']')).Then(static _ => "list")
+            .Or(Literals.Text("item"));
+        var compiled = list.Compile();
+        var source = "[[[item]]]";
+
+        var allowedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 4);
+        Assert.True(compiled.TryParse(allowedContext, out var result, out var error));
+        Assert.Equal("list", result);
+        Assert.Null(error);
+
+        var limitedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 3);
+        Assert.False(compiled.TryParse(limitedContext, out _, out error));
+        Assert.NotNull(error);
+        Assert.Equal("The maximum parser recursion depth of 3 was exceeded.", error.Message);
+        Assert.Equal(3, error.Position.Offset);
+    }
+
+    [Fact]
+    public void CompiledDeferredShouldDetectInfiniteRecursion()
+    {
+        var loop = Deferred<string>();
+        loop.Parser = loop;
+        var compiled = loop.Compile();
+
+        Assert.False(compiled.TryParse("hello parlot", out var result));
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void CompiledUnaryShouldEnforceMaxRecursionDepth()
+    {
+        var parser = Literals.Char('a').Unary(
+            (Literals.Char('-'), static value => value)).Compile();
+        var ctxParser = Literals.Char('a').Unary(
+            (Literals.Char('-'), static (ctx, value) => value)).Compile();
+        const string source = "---a";
+
+        foreach (var compiled in new[] { parser, ctxParser })
+        {
+            var allowedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 4);
+            Assert.True(compiled.TryParse(allowedContext, out _, out var error));
+            Assert.Null(error);
+
+            var limitedContext = new ParseContext(new Scanner(source), maxRecursionDepth: 3);
+            Assert.False(compiled.TryParse(limitedContext, out _, out error));
+            Assert.NotNull(error);
+            Assert.Equal("The maximum parser recursion depth of 3 was exceeded.", error.Message);
+            Assert.Equal(3, error.Position.Offset);
+        }
+    }
+
+    [Fact]
+    public void CompiledTextLiteralShouldReuseTextReferences()
+    {
+        var literal = new string(['h', 'e', 'l', 'l', 'o']);
+        var parser = new TextLiteral(literal, StringComparison.OrdinalIgnoreCase).Compile();
+        var exactInput = new string(['h', 'e', 'l', 'l', 'o']);
+        var differentCaseInput = new string(['H', 'E', 'L', 'L', 'O']);
+
+        Assert.Same(literal, parser.Parse(exactInput));
+        Assert.Same(differentCaseInput, parser.Parse(differentCaseInput));
+        Assert.Equal("HELLO", parser.Parse("HELLO world"));
+        Assert.NotSame(differentCaseInput, parser.Parse("HELLO world"));
+        Assert.Same(literal, new TextLiteral(literal, StringComparison.Ordinal).Compile().Parse(exactInput));
+    }
+
+    [Fact]
+    public void CompiledAnyOfAndWhiteSpaceShouldWork()
+    {
+        var anyOf = Literals.AnyOf("abc", minSize: 2, maxSize: 3).Compile();
+        Assert.Equal("abc", anyOf.Parse("abcd").ToString());
+        Assert.False(anyOf.TryParse("ad", out _));
+
+        var ws = Terms.WhiteSpace().And(Literals.Text("hello")).Compile();
+        Assert.True(ws.TryParse("   hello", out var result));
+        Assert.Equal("   ", result.Item1.ToString());
+        Assert.Equal("hello", result.Item2);
+    }
+
+    [Fact]
+    public void CompiledTextBeforeShouldJumpToNextExpectedCharAfterFalseStarts()
+    {
+        var delimiter = Literals.Text("-->");
+        var parser = AnyCharBefore(delimiter).AndSkip(delimiter).Compile();
+
+        Assert.True(parser.TryParse("a-b-c-->d", out var result));
+        Assert.Equal("a-b-c", result.ToString());
+    }
+
+    [Fact]
+    public void CompiledSeparatedShouldStopWhenSeparatorAndItemMakeNoProgress()
+    {
+        var item = Deferred<string>();
+        item.Parser = Literals.Text("a").Or(Always(""));
+        var separator = ZeroOrOne(Literals.Char(','));
+        var runtimeParser = Separated(separator, item);
+        var compiledParser = runtimeParser.Compile();
+
+        var runtimeContext = new ParseContext(new Scanner("a,a"));
+        var runtimeResult = new ParseResult<IReadOnlyList<string>>();
+        Assert.True(runtimeParser.Parse(runtimeContext, ref runtimeResult));
+
+        var compiledContext = new ParseContext(new Scanner("a,a"));
+        var compiledResult = new ParseResult<IReadOnlyList<string>>();
+        Assert.True(compiledParser.Parse(compiledContext, ref compiledResult));
+
+        Assert.Equal(runtimeResult.Value, compiledResult.Value);
+        Assert.Equal(runtimeContext.Scanner.Cursor.Offset, compiledContext.Scanner.Cursor.Offset);
+    }
 }
