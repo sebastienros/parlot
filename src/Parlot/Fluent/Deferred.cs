@@ -56,6 +56,13 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
+        var limitRecursion = context.MaxRecursionDepth > 0;
+
+        if (limitRecursion)
+        {
+            context.EnterRecursion();
+        }
+
         var trackPosition = !context.DisableLoopDetection;
 
         // Remember the position where we entered this parser
@@ -70,6 +77,11 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             if (!context.PushParserAtPosition(this))
             {
                 // Cycle detected at this position - fail gracefully instead of stack overflow
+                if (limitRecursion)
+                {
+                    context.ExitRecursion();
+                }
+
                 return false;
             }
         }
@@ -91,6 +103,11 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
             if (trackPosition)
             {
                 context.PopParserAtPosition(this, entryPosition);
+            }
+
+            if (limitRecursion)
+            {
+                context.ExitRecursion();
             }
         }
     }
