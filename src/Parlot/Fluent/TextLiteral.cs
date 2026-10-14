@@ -143,12 +143,23 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
             }
 
             var end = cursor.Offset;
-            var parsedText = context.Scanner.Buffer.AsSpan(start, end - start);
 
-            // Prevent an allocation if the text matches exactly
-            result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
-                ? Text
-                : parsedText.ToString());
+            if (_comparisonType == StringComparison.Ordinal)
+            {
+                result.Set(start, end, Text);
+            }
+            else
+            {
+                var buffer = context.Scanner.Buffer;
+                var parsedText = buffer.AsSpan(start, end - start);
+
+                // Prevent an allocation if the text matches exactly or spans the full buffer
+                result.Set(start, end, parsedText.Equals(Text, StringComparison.Ordinal)
+                    ? Text
+                    : start == 0 && end == buffer.Length
+                        ? buffer
+                        : parsedText.ToString());
+            }
 
             context.ExitParser(this);
             return true;
