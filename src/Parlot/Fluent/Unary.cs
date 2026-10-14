@@ -213,17 +213,28 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable
             var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
             var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
             var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
+            var limitRecursion = Expression.Variable(typeof(bool), $"limitRecursion{context.NextNumber}");
+            var maxRecursionDepthProperty = Expression.Property(context.ParseContext, nameof(ParseContext.MaxRecursionDepth));
+            var enterRecursionMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.EnterRecursion), [])!;
+            var exitRecursionMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.ExitRecursion), [])!;
 
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
                     Expression.Block(
                         type: typeof(ValueTuple<bool, T>),
-                        variables: innerResult.Variables.Append(resultExpression),
-                        innerBody,
-                        Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                            innerResult.Success,
-                            context.DiscardResult ? Expression.Default(typeof(T)) : innerResult.Value)),
+                        variables: innerResult.Variables.Append(resultExpression).Append(limitRecursion),
+                        Expression.Assign(limitRecursion, Expression.GreaterThan(maxRecursionDepthProperty, Expression.Constant(0))),
+                        Expression.IfThen(limitRecursion, Expression.Call(context.ParseContext, enterRecursionMethod)),
+                        Expression.TryFinally(
+                            Expression.Block(
+                                innerBody,
+                                Expression.Assign(resultExpression, Expression.New(
+                                    typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                                    innerResult.Success,
+                                    context.DiscardResult ? Expression.Default(typeof(T)) : innerResult.Value))
+                            ),
+                            Expression.IfThen(limitRecursion, Expression.Call(context.ParseContext, exitRecursionMethod))
+                        ),
                         returnExpression,
                         returnLabel),
                     true,
@@ -454,17 +465,28 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ICompilable
             var returnTarget = Expression.Label(typeof(ValueTuple<bool, T>));
             var returnExpression = Expression.Return(returnTarget, resultExpression, typeof(ValueTuple<bool, T>));
             var returnLabel = Expression.Label(returnTarget, defaultValue: Expression.New(typeof(ValueTuple<bool, T>)));
+            var limitRecursion = Expression.Variable(typeof(bool), $"limitRecursion{context.NextNumber}");
+            var maxRecursionDepthProperty = Expression.Property(context.ParseContext, nameof(ParseContext.MaxRecursionDepth));
+            var enterRecursionMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.EnterRecursion), [])!;
+            var exitRecursionMethod = typeof(ParseContext).GetMethod(nameof(ParseContext.ExitRecursion), [])!;
 
             var lambda =
                 Expression.Lambda<Func<ParseContext, ValueTuple<bool, T>>>(
                     Expression.Block(
                         type: typeof(ValueTuple<bool, T>),
-                        variables: innerResult.Variables.Append(resultExpression),
-                        innerBody,
-                        Expression.Assign(resultExpression, Expression.New(
-                            typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
-                            innerResult.Success,
-                            context.DiscardResult ? Expression.Default(typeof(T)) : innerResult.Value)),
+                        variables: innerResult.Variables.Append(resultExpression).Append(limitRecursion),
+                        Expression.Assign(limitRecursion, Expression.GreaterThan(maxRecursionDepthProperty, Expression.Constant(0))),
+                        Expression.IfThen(limitRecursion, Expression.Call(context.ParseContext, enterRecursionMethod)),
+                        Expression.TryFinally(
+                            Expression.Block(
+                                innerBody,
+                                Expression.Assign(resultExpression, Expression.New(
+                                    typeof(ValueTuple<bool, T>).GetConstructor([typeof(bool), typeof(T)])!,
+                                    innerResult.Success,
+                                    context.DiscardResult ? Expression.Default(typeof(T)) : innerResult.Value))
+                            ),
+                            Expression.IfThen(limitRecursion, Expression.Call(context.ParseContext, exitRecursionMethod))
+                        ),
                         returnExpression,
                         returnLabel),
                     true,

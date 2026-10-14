@@ -255,9 +255,9 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
 #endif
         var block = Expression.Block(
             delimiterCompiledResult.Variables.Append(previous).Append(length),
-            _canJumpToNextExpectedChar ? Expression.Call(null, _jumpToNextExpectedCharMethod, context.ParseContext, expectedCharsExpression) : Expression.Empty(),
             Expression.Loop(
                 Expression.Block(
+                    _canJumpToNextExpectedChar ? Expression.Call(null, _jumpToNextExpectedCharMethod, context.ParseContext, expectedCharsExpression) : Expression.Empty(),
                     Expression.Assign(previous, context.Position()),
                     Expression.IfThen(
                         context.Eof(),

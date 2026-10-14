@@ -157,15 +157,31 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
 
         var block = Expression.Block(
             parserCompileResult.Variables,
-            Expression.Assign(previousOffset, context.Offset()),
             Expression.Loop(
                 Expression.Block(
+                    Expression.Assign(previousOffset, context.Offset()),
+                    Expression.IfThen(
+                        Expression.IsFalse(first),
+                        Expression.Block(
+                            separatorCompileResult.Variables,
+                            Expression.Block(separatorCompileResult.Body),
+                            Expression.IfThen(
+                                Expression.Not(separatorCompileResult.Success),
+                                Expression.Break(breakLabel)
+                            )
+                        )
+                    ),
                     Expression.Block(parserCompileResult.Body),
                     Expression.IfThenElse(
-                        Expression.AndAlso(parserCompileResult.Success, Expression.NotEqual(context.Offset(), previousOffset)),
+                        parserCompileResult.Success,
                         Expression.Block(
+                            Expression.Assign(end, context.Position()),
+                            Expression.IfThen(
+                                Expression.Equal(context.Offset(), previousOffset),
+                                Expression.Break(breakLabel)
+                            ),
                             context.DiscardResult
-                            ? Expression.Empty()
+                            ? Expression.Assign(first, Expression.Constant(false))
                             : Expression.Block(
                                 Expression.IfThen(
                                     Expression.IsTrue(first),
@@ -177,19 +193,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
                                     ),
                                 Expression.Call(results, _listAddMethodInfo, parserCompileResult.Value)
                                 ),
-                            Expression.Assign(result.Success, Expression.Constant(true)),
-                            Expression.Assign(end, context.Position())
+                            Expression.Assign(result.Success, Expression.Constant(true))
                             ),
                         Expression.Break(breakLabel)
-                        ),
-                    Expression.Assign(previousOffset, context.Offset()),
-                    Expression.Block(
-                        separatorCompileResult.Variables,
-                        Expression.Block(separatorCompileResult.Body),
-                        Expression.IfThen(
-                            Expression.Not(separatorCompileResult.Success),
-                            Expression.Break(breakLabel)
-                            )
                         ),
                     Expression.IfThen(
                         context.Eof(),

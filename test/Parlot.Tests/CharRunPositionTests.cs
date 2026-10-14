@@ -53,6 +53,13 @@ public class CharRunPositionTests
         Assert.True(Literals.Pattern(static c => c != ' ').Parse(context, ref result));
         Assert.Equal(text.Substring(0, length), result.Value.ToString());
         AssertPosition(Expected(text, length), context.Scanner.Cursor);
+
+        var compiledContext = new ParseContext(new Scanner(text));
+        var compiledResult = new ParseResult<TextSpan>();
+
+        Assert.True(Literals.Pattern(static c => c != ' ').Compile().Parse(compiledContext, ref compiledResult));
+        Assert.Equal(text.Substring(0, length), compiledResult.Value.ToString());
+        AssertPosition(Expected(text, length), compiledContext.Scanner.Cursor);
     }
 
     [Theory]
@@ -108,6 +115,13 @@ public class CharRunPositionTests
         Assert.True(new Identifier(static c => c == '@', static c => c == '-').Parse(context, ref result));
         Assert.Equal(text.Substring(0, length), result.Value.ToString());
         AssertPosition(Expected(text, length), context.Scanner.Cursor);
+
+        var compiledContext = new ParseContext(new Scanner(text));
+        var compiledResult = new ParseResult<TextSpan>();
+
+        Assert.True(new Identifier(static c => c == '@', static c => c == '-').Compile().Parse(compiledContext, ref compiledResult));
+        Assert.Equal(text.Substring(0, length), compiledResult.Value.ToString());
+        AssertPosition(Expected(text, length), compiledContext.Scanner.Cursor);
     }
     [Theory]
     [InlineData("abc\n")]
