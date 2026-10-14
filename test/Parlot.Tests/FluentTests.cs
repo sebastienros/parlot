@@ -642,6 +642,14 @@ public class FluentTests
         Assert.Throws<InvalidOperationException>(() => Literals.Identifier(start.AsSpan(), part.AsSpan()));
         Assert.Throws<InvalidOperationException>(() => Terms.Identifier(System.Buffers.SearchValues.Create(start), System.Buffers.SearchValues.Create(part)));
     }
+
+    [Fact]
+    public void CompiledIdentifierShouldStopBeforeNewLines()
+    {
+        var parser = Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("ab")).Compile();
+
+        Assert.Equal("a", parser.Parse("a\nb").ToString());
+    }
 #endif
 
     [Fact]
