@@ -79,4 +79,22 @@ public class CharacterTests
     {
         Assert.Equal(isWhiteSpace, Character.IsWhiteSpaceOrNewLine(c));
     }
+
+    [Fact]
+    public void IsDecimalDigitShouldMatchDecimalDigitsSetForEveryChar()
+    {
+        for (var c = 0; c <= char.MaxValue; c++)
+        {
+            Assert.Equal(Character.DecimalDigits.IndexOf((char)c) >= 0, Character.IsDecimalDigit((char)c));
+        }
+    }
+
+    [Fact]
+    public void IsHexDigitShouldMatchHexDigitsSetForEveryChar()
+    {
+        for (var c = 0; c <= char.MaxValue; c++)
+        {
+            Assert.Equal(Character.HexDigits.IndexOf((char)c) >= 0, Character.IsHexDigit((char)c));
+        }
+    }
 }
