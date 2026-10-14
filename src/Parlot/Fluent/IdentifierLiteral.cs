@@ -15,7 +15,7 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
         _partSearchValues = partSearchValues;
 
         // Since we assume these can't container new lines, we can check this here.
-        if (partSearchValues.Contains('\n') || startSearchValues.Contains('\r'))
+        if (startSearchValues.Contains('\n') || startSearchValues.Contains('\r') || partSearchValues.Contains('\n') || partSearchValues.Contains('\r'))
         {
             throw new InvalidOperationException("Identifiers cannot contain new lines.");
         }

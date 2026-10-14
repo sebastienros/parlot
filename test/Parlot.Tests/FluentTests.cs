@@ -631,6 +631,27 @@ public class FluentTests
         Assert.Equal(text, Literals.Identifier(start, part).Parse(text).ToString());
     }
 
+#if NET8_0_OR_GREATER
+    [Theory]
+    [InlineData("a\n", "b")]
+    [InlineData("a\r", "b")]
+    [InlineData("a", "b\n")]
+    [InlineData("a", "b\r")]
+    public void IdentifierShouldNotAcceptNewLines(string start, string part)
+    {
+        Assert.Throws<InvalidOperationException>(() => Literals.Identifier(start.AsSpan(), part.AsSpan()));
+        Assert.Throws<InvalidOperationException>(() => Terms.Identifier(System.Buffers.SearchValues.Create(start), System.Buffers.SearchValues.Create(part)));
+    }
+
+    [Fact]
+    public void CompiledIdentifierShouldStopBeforeNewLines()
+    {
+        var parser = Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("ab")).Compile();
+
+        Assert.Equal("a", parser.Parse("a\nb").ToString());
+    }
+#endif
+
     [Fact]
     public void IntegersShouldAcceptSignByDefault()
     {
