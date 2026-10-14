@@ -115,6 +115,8 @@ Matches a given string, optionally in a case insensitive way.
 Parser<string> Text(string text, bool caseInsensitive = false)
 ```
 
+The case-insensitive comparison is ordinal. It doesn't depend on the current culture, neither when the parser is built nor when it parses: `Text("id", caseInsensitive: true)` matches `ID` under a Turkish culture too.
+
 Usage:
 
 ```c#
