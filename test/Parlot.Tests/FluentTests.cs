@@ -668,6 +668,44 @@ public class FluentTests
         Assert.Equal(text, Literals.Identifier(start, part).Parse(text).ToString());
     }
 
+    [Fact]
+    public void IdentifierExpectedCharsShouldBeTheCharsStartingAnIdentifier()
+    {
+        var expected = Assert.IsAssignableFrom<ISeekable>(new Identifier()).ExpectedChars;
+
+        for (var c = char.MinValue; c < char.MaxValue; c++)
+        {
+            Assert.Equal(Character.IsIdentifierStart(c), Array.IndexOf(expected, c) >= 0);
+        }
+    }
+
+    [Fact]
+    public void IdentifierShouldBeSeekableWhenItsStartCharsAreKnown()
+    {
+        Assert.True(((ISeekable)Literals.Identifier()).CanSeek);
+        Assert.True(((ISeekable)Terms.Identifier()).CanSeek);
+        Assert.True(Assert.IsAssignableFrom<ISeekable>(new Identifier(extraPart: static c => c == '-')).CanSeek);
+        Assert.False(((ISeekable)Literals.Identifier(static c => c == '-')).CanSeek);
+
+#if NET8_0_OR_GREATER
+        var custom = (ISeekable)Literals.Identifier("ab-a".AsSpan(), "c".AsSpan());
+        Assert.True(custom.CanSeek);
+        Assert.Equal(new[] { 'a', 'b', '-' }, custom.ExpectedChars);
+
+        Assert.False(((ISeekable)Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("b"))).CanSeek);
+#endif
+    }
+
+    [Theory]
+    [InlineData("foo 12 'a' -bar", "foo,12,a,-bar")]
+    [InlineData("_a $b 3", "_a,$b,3")]
+    public void IdentifierShouldBeChosenFromItsStartChars(string text, string expected)
+    {
+        var token = OneOf(Terms.Identifier(), Terms.Pattern(Character.IsDecimalDigit), Terms.String(), Terms.Identifier(static c => c == '-'));
+
+        Assert.Equal(expected, string.Join(",", ZeroOrMany(token).Parse(text)));
+    }
+
 #if NET8_0_OR_GREATER
     [Theory]
     [InlineData("a\n", "b")]

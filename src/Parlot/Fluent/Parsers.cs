@@ -323,7 +323,7 @@ public class LiteralBuilder
 #if NET8_0_OR_GREATER
         if (extraStart == null && extraPart == null)
         {
-            return new IdentifierLiteral(Character._identifierStart, Character._identifierPart);
+            return new IdentifierLiteral(Character._identifierStart, Character._identifierPart, Character._identifierStartChars);
         }
         else
         {
@@ -344,7 +344,7 @@ public class LiteralBuilder
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
-    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart));
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart), identifierStart.ToArray());
 
 #endif
 
@@ -520,7 +520,7 @@ public class TermBuilder
 #if NET8_0_OR_GREATER
         if (extraStart == null && extraPart == null)
         {
-            return Parsers.SkipWhiteSpace(new IdentifierLiteral(Character._identifierStart, Character._identifierPart));
+            return Parsers.SkipWhiteSpace(new IdentifierLiteral(Character._identifierStart, Character._identifierPart, Character._identifierStartChars));
         }
         else
         {
@@ -541,7 +541,7 @@ public class TermBuilder
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
-    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => Parsers.SkipWhiteSpace(new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart)));
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => Parsers.SkipWhiteSpace(new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart), identifierStart.ToArray()));
 
 #endif
 

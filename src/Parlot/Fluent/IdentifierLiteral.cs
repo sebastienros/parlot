@@ -1,18 +1,27 @@
 #if NET8_0_OR_GREATER
+using Parlot.Rewriting;
 using System;
 using System.Buffers;
+using System.Linq;
 
 namespace Parlot.Fluent;
 
-internal sealed class IdentifierLiteral : Parser<TextSpan>
+internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable
 {
     private readonly SearchValues<char> _startSearchValues;
     private readonly SearchValues<char> _partSearchValues;
 
-    public IdentifierLiteral(SearchValues<char> startSearchValues, SearchValues<char> partSearchValues)
+    // The chars of the start search values can't be listed from them, so they are passed when they are known
+    public IdentifierLiteral(SearchValues<char> startSearchValues, SearchValues<char> partSearchValues, char[]? startChars = null)
     {
         _startSearchValues = startSearchValues;
         _partSearchValues = partSearchValues;
+
+        if (startChars is { Length: > 0 })
+        {
+            CanSeek = true;
+            ExpectedChars = startChars.Distinct().ToArray();
+        }
 
         // Since we assume these can't container new lines, we can check this here.
         if (startSearchValues.Contains('\n') || startSearchValues.Contains('\r') || partSearchValues.Contains('\n') || partSearchValues.Contains('\r'))
@@ -22,6 +31,12 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
 
         Name = "IdentifierLiteral";
     }
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

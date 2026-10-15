@@ -14,4 +14,7 @@ public static partial class Character
     public const string DefaultIdentifierStart = "$_" + AZ;
     public const string DefaultIdentifierPart = "$_" + AZ + DecimalDigits;
     public const string NewLines = "\n\r\v";
+
+    // The chars which can start a default identifier, for the parsers to declare as their expected chars
+    internal static readonly char[] _identifierStartChars = DefaultIdentifierStart.ToCharArray();
 }
