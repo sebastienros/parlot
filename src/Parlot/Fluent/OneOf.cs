@@ -332,7 +332,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         return false;
     }
 
-    public override string ToString() => $"{string.Join(" | ", Parsers)}) on [{string.Join(" ", ExpectedChars)}]";
+    public override string ToString() => $"{string.Join(" | ", Parsers)} on [{string.Join(" ", ExpectedChars)}]";
 
     public Parlot.SourceGeneration.SourceResult GenerateSource(SourceGenerationContext context)
     {
