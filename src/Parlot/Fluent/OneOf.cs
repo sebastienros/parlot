@@ -176,7 +176,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
             }
 
             lookupTable?.Remove(OtherSeekableChar);
-            var expectedChars = string.Join(",", lookupTable?.Keys.ToArray() ?? []);
 
             if (lookupTable?.Count > 0)
             {
