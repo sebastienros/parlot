@@ -71,35 +71,38 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
 
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
 
-        var success = _quotes switch
+        // Any of the quotes can start the string, the other kinds have a single one
+        var quote = ExpectedChars[0];
+
+        if (_quotes == StringLiteralQuotes.SingleOrDouble && cursor.Current == '"')
         {
-            StringLiteralQuotes.Single => context.Scanner.ReadSingleQuotedString(),
-            StringLiteralQuotes.Double => context.Scanner.ReadDoubleQuotedString(),
-            StringLiteralQuotes.SingleOrDouble => context.Scanner.ReadQuotedString(),
-            StringLiteralQuotes.Backtick => context.Scanner.ReadBacktickString(),
-            StringLiteralQuotes.Custom => context.Scanner.ReadQuotedString(ExpectedChars),
-            _ => false
-        };
-
-        var end = context.Scanner.Cursor.Offset;
-
-        if (success)
-        {
-            // Remove quotes
-            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1 - context.Scanner.Cursor.BufferStart, end - start - 2);
-
-            result.Set(start, end, decoded);
-
-            context.ExitParser(this);
-            return true;
+            quote = '"';
         }
-        else
+
+        if (!context.Scanner.ReadQuotedString(quote, out var text, out var hasEscape))
         {
             context.ExitParser(this);
             return false;
         }
+
+        var end = cursor.Offset;
+
+        // The scanner knows whether the string has escape sequences, so a string without any isn't read again
+        if (hasEscape)
+        {
+            result.Set(start, end, new TextSpan(Character.DecodeStringInternal(text.Slice(1, text.Length - 2))));
+        }
+        else
+        {
+            // Remove quotes
+            result.Set(start, end, new TextSpan(context.Scanner.Buffer, start + 1 - cursor.BufferStart, end - start - 2));
+        }
+
+        context.ExitParser(this);
+        return true;
     }
 
 
@@ -118,32 +121,44 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
 
         var startName = $"start{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
+        var textName = $"text{context.NextNumber()}";
+        var hasEscapeName = $"hasEscape{context.NextNumber()}";
 
         if (!context.DiscardResult)
         {
             result.Body.Add($"var {startName} = {cursorName}.Offset;");
         }
 
-        // Generate the appropriate read method call based on quote type
-        var readMethod = _quotes switch
-        {
-            StringLiteralQuotes.Single => $"{scannerName}.ReadSingleQuotedString()",
-            StringLiteralQuotes.Double => $"{scannerName}.ReadDoubleQuotedString()",
-            StringLiteralQuotes.SingleOrDouble => $"{scannerName}.ReadQuotedString()",
-            StringLiteralQuotes.Backtick => $"{scannerName}.ReadBacktickString()",
-            StringLiteralQuotes.Custom => $"{scannerName}.ReadQuotedString((char){(int)ExpectedChars[0]}, out _)",
-            _ => throw new InvalidOperationException()
-        };
+        // Any of the quotes can start the string, the other kinds have a single one
+        var quote = _quotes == StringLiteralQuotes.SingleOrDouble
+            ? $"({cursorName}.Current == (char)34 ? (char)34 : (char)39)"
+            : $"(char){(int)ExpectedChars[0]}";
 
-        result.Body.Add($"if ({readMethod})");
+        if (context.DiscardResult)
+        {
+            result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, out _, out _))");
+        }
+        else
+        {
+            result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, out var {textName}, out var {hasEscapeName}))");
+        }
+
         result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         if (!context.DiscardResult)
         {
             result.Body.Add($"    var {endName} = {cursorName}.Offset;");
-            // Buffer windows are immutable strings, so the decoded span can reference the current one. BufferStart is a
+            // The scanner knows whether the string has escape sequences, so a string without any isn't read again
+            result.Body.Add($"    if ({hasEscapeName})");
+            result.Body.Add("    {");
+            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2)));");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            // Buffer windows are immutable strings, so the span can reference the current one. BufferStart is a
             // constant 0 in assemblies without TextReader entry points.
-            result.Body.Add($"    {result.ValueVariable} = global::Parlot.Character.DecodeString({scannerName}.Buffer, {startName} + 1 - {cursorName}.BufferStart, {endName} - {startName} - 2);");
+            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName} + 1 - {cursorName}.BufferStart, {endName} - {startName} - 2);");
+            result.Body.Add("    }");
         }
         result.Body.Add("}");
 

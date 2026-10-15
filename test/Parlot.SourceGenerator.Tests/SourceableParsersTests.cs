@@ -22,7 +22,7 @@ public class SourceableParsersTests
         var source = Generate(new StringLiteral(quote));
         var generated = string.Join(Environment.NewLine, source.Body);
 
-        Assert.Contains($"scanner.ReadQuotedString((char){(int)quote}, out _)", generated, StringComparison.Ordinal);
+        Assert.Contains($"scanner.ReadQuotedString((char){(int)quote}, out ", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("new char[]", generated, StringComparison.Ordinal);
     }
 
