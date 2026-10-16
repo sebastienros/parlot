@@ -752,6 +752,12 @@ public class FluentTests
     }
 
     [Fact]
+    public void OneOfToStringShouldListTheParsersAndExpectedChars()
+    {
+        Assert.Equal("Char('a') | Char('b') on [a b]", OneOf(Literals.Char('a'), Literals.Char('b')).ToString());
+    }
+
+    [Fact]
     public void OneOfShouldRestorePosition()
     {
         var choice = OneOf(
