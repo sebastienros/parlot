@@ -1,9 +1,10 @@
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Identifier : Parser<TextSpan>, ISourceable
+public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable
 {
     private readonly Func<char, bool>? _extraStart;
     private readonly Func<char, bool>? _extraPart;
@@ -13,8 +14,21 @@ public sealed class Identifier : Parser<TextSpan>, ISourceable
         _extraStart = extraStart;
         _extraPart = extraPart;
 
+        // The chars an extra start predicate accepts are unknown
+        if (extraStart == null)
+        {
+            CanSeek = true;
+            ExpectedChars = Character._identifierStartChars;
+        }
+
         Name = "Identifier";
     }
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
