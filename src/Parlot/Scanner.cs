@@ -603,9 +603,17 @@ public class Scanner
     /// This method doesn't escape the string, but only validates its content is syntactically correct.
     /// The resulting Span contains the original quotes.
     /// </remarks>
-    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
+    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result) => ReadQuotedString(quoteChar, out result, out _);
+
+    /// <summary>
+    /// Reads a string token enclosed in quotes or custom characters, and whether it contains escape sequences to decode.
+    /// </summary>
+    internal bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result, out bool hasEscape)
     {
         var startChar = Cursor.Current;
+
+        // Only a successful read of the escape sequences sets it
+        hasEscape = false;
 
         if (startChar != quoteChar)
         {
@@ -841,6 +849,8 @@ public class Scanner
         }
 
         result = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
+        // A backslash delimiter is removed before decoding, so only escapes inside the quotes count.
+        hasEscape = !quoteIsEscape || result.Slice(1, result.Length - 2).IndexOf('\\') >= 0;
 
         return true;
     }

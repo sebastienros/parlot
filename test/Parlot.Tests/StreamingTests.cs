@@ -51,6 +51,7 @@ public class StreamingTests
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),
         ["pattern"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 2, maxSize: 4)),
         ["string"] = new Grammar<TextSpan>(Terms.String()),
+        ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
         ["nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace()),
         ["textbefore"] = new Grammar<TextSpan>(AnyCharBefore(Literals.Text("--"), failOnEof: true, consumeDelimiter: true)),
@@ -146,6 +147,7 @@ public class StreamingTests
         Add("noneof", "", "a", "ab", "ab,c", "a,", ";");
         Add("pattern", "", "1", "12", "1234", "123456", "1a");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
+        Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\");
         Add("whitespace", "", " ", "  \n\t x", "x");
         Add("nonwhitespace", "", "a", "abc def", " x");
         Add("textbefore", "", "a", "abc", "abc-", "abc--", "a-b--c", "--");
