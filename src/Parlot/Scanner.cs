@@ -849,7 +849,8 @@ public class Scanner
         }
 
         result = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
-        hasEscape = true;
+        // A backslash delimiter is removed before decoding, so only escapes inside the quotes count.
+        hasEscape = !quoteIsEscape || result.Slice(1, result.Length - 2).IndexOf('\\') >= 0;
 
         return true;
     }
