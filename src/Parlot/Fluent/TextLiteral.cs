@@ -2,7 +2,6 @@ using Parlot;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Globalization;
 using Parlot.SourceGeneration;
 
@@ -24,7 +23,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
         _returnMatchedText = returnMatchedText;
-        _hasNewLines = text.Any(Character.IsNewLine);
+        _hasNewLines = text.AsSpan().IndexOf('\n') >= 0;
 
         // An ordinal match is the text itself, and case-insensitive matches return the canonical text by default.
         _returnText = comparisonType == StringComparison.Ordinal || (!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
@@ -255,13 +254,14 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
 public override string ToString() => $"Text(\"{Text}\")";
 
+    // The cursor only ends a line on '\n'; '\r' and '\v' are ordinary chars for it
     internal static int CountNewLines(string value)
     {
         var count = 0;
 
         foreach (var c in value)
         {
-            if (Character.IsNewLine(c))
+            if (c == '\n')
             {
                 count++;
             }
