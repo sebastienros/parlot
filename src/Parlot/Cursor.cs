@@ -177,15 +177,31 @@ public class Cursor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance()
     {
+        var previous = Current;
+
         _offset++;
 
         if (_offset >= _textLength)
         {
-            AdvanceToEnd();
-            return;
+            // Stays at the end of the text when already there, otherwise leaves the last char
+            _offset = _textLength;
+
+            if (Eof)
+            {
+                return;
+            }
+
+            Eof = true;
+            _flags |= HitEndFlag;
+            Current = NullChar;
+        }
+        else
+        {
+            Current = Buffer[_offset];
         }
 
-        if (Current == '\n')
+        // The char that was left either ended its line or occupied a column
+        if (previous == '\n')
         {
             _line++;
             _column = 1;
@@ -194,34 +210,6 @@ public class Cursor
         {
             _column++;
         }
-
-        Current = Buffer[_offset];
-    }
-
-    // Leaves the current char for the end of the text, or stays there when the cursor was already at the end.
-    private void AdvanceToEnd()
-    {
-        _offset = _textLength;
-
-        if (Eof)
-        {
-            return;
-        }
-
-        Eof = true;
-        _flags |= HitEndFlag;
-
-        if (Current == '\n')
-        {
-            _line++;
-            _column = 1;
-        }
-        else
-        {
-            _column++;
-        }
-
-        Current = NullChar;
     }
 
     /// <summary>
