@@ -70,7 +70,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"    throw new global::Parlot.ParseException({LiteralHelper.StringToLiteral(_message)}, {cursorName}.Position);");
         result.Body.Add("}");
 
         return result;
@@ -131,7 +131,7 @@ public sealed class Error<T> : Parser<T>, ISourceable
         
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"    throw new global::Parlot.ParseException({LiteralHelper.StringToLiteral(_message)}, {cursorName}.Position);");
         result.Body.Add("}");
 
         return result;
@@ -207,7 +207,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
-        result.Body.Add($"    throw new global::Parlot.ParseException(\"{_message.Replace("\"", "\\\"")}\", {cursorName}.Position);");
+        result.Body.Add($"    throw new global::Parlot.ParseException({LiteralHelper.StringToLiteral(_message)}, {cursorName}.Position);");
         result.Body.Add("}");
 
         return result;

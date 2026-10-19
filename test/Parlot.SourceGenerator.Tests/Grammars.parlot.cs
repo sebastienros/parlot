@@ -249,6 +249,10 @@ public static partial class Grammars
         return OneOf(unary, Literals.Char('-').Then(static _ => 42m)).Eof();
     }
 
+    [GenerateParser(nameof(TryParseEscapedError))]
+    private static Parser<char> BuildEscapedError() =>
+        Literals.Char('x').ElseError("line1\nline2 \"quoted\" back\\slash\ttab");
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 

@@ -57,6 +57,7 @@ public static partial class Grammars
     public static partial bool TryParseLeftAssociativeEmpty(string text, out int value);
     public static partial bool TryParseLeftAssociativeContextEmpty(string text, out int value);
     public static partial bool TryParseUnaryFallback(string text, out decimal value);
+    public static partial bool TryParseEscapedError(string text, out char value);
     public static partial bool TryParseAnyOfDigits(string text, out string value);
     public static partial bool TryParseAnyOfLetters(string text, out string value);
     public static partial bool TryParseNoneOfWhitespace(string text, out string value);
