@@ -66,7 +66,8 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
                 // Recursively parse the operand (which may have more unary operators)
                 if (Parse(context, ref result))
                 {
-                    result = new ParseResult<T>(result.Start, result.End, factory(result.Value));
+                    // The result spans the operator and its operand
+                    result = new ParseResult<T>(operatorResult.Start, result.End, factory(result.Value));
                     context.ExitParser(this);
                     return true;
                 }
@@ -282,7 +283,8 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
                 if (Parse(context, ref result))
                 {
-                    result = new ParseResult<T>(result.Start, result.End, factory(context, result.Value));
+                    // The result spans the operator and its operand
+                    result = new ParseResult<T>(operatorResult.Start, result.End, factory(context, result.Value));
                     context.ExitParser(this);
                     return true;
                 }

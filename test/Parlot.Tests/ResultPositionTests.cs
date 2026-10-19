@@ -162,4 +162,50 @@ public class ResultPositionTests
         Assert.Equal(3, result.End);
         AssertCursor(context, 3, 1, 4);
     }
+
+    [Fact]
+    public void UnaryShouldStartAtTheOperator()
+    {
+        var parser = Terms.Integer().Unary((Terms.Char('-'), static x => -x));
+
+        var context = Parse(parser, " -1", out var result);
+
+        Assert.Equal(-1, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+
+        context = Parse(parser, "\n- -1", out var nested);
+
+        Assert.Equal(1, nested.Value);
+        Assert.Equal(1, nested.Start);
+        Assert.Equal(5, nested.End);
+        AssertCursor(context, 5, 2, 5);
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldStartAtTheOperator()
+    {
+        var parser = Terms.Integer().Unary((Terms.Char('-'), static (ParseContext _, long x) => -x));
+
+        var context = Parse(parser, " -1", out var result);
+
+        Assert.Equal(-1, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+    }
+
+    [Fact]
+    public void UnaryShouldSpanTheOperandWithoutOperator()
+    {
+        var parser = Terms.Integer().Unary((Terms.Char('-'), static x => -x));
+
+        var context = Parse(parser, " 1", out var result);
+
+        Assert.Equal(1, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(2, result.End);
+        AssertCursor(context, 2, 1, 3);
+    }
 }
