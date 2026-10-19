@@ -32,6 +32,11 @@ public class ReaderParserTests
         CheckPadded<string>(Grammar.TryParseTextChoiceFallback, Grammar.TryParseTextChoiceFallback, ' ', "Content!", "Content-Type!", "Content-Typo!");
         CheckPadded<(int, int, int)>(Grammar.TryParseTextChoicePosition, Grammar.TryParseTextChoicePosition, '\n', " \r\nline\r\nend!", "\r\nif!");
         CheckPadded<char>(Grammar.TryParseError, Grammar.TryParseError, 'y', "x");
+        CheckPadded<string>(Grammar.TryParseIdentifier, Grammar.TryParseIdentifier, 'a', "", "b", " ", "-b", "1");
+        CheckPadded<string>(Grammar.TryParseIdentifierWithPredicates, Grammar.TryParseIdentifierWithPredicates, 'a', "", "-b", " ");
+        CheckPadded<string>(Grammar.TryParseTextBefore, Grammar.TryParseTextBefore, 'a', "-->", "==>", "b-->", "-=->", "--", "");
+        CheckPadded<string>(Grammar.TryParseTextBeforeChar, Grammar.TryParseTextBeforeChar, 'a', ";", "b;", "");
+        CheckPadded<string>(Grammar.TryParsePattern, Grammar.TryParsePattern, '1', "", "2", "a");
 
         var options = new GrammarOptions { Prefix = ">", Formal = true };
         CheckPadded<string>(

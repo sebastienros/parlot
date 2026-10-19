@@ -100,54 +100,99 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
-        var scannerName = context.ScannerName;
 
         var firstCharName = $"first{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
+        var spanName = $"span{context.NextNumber()}";
+        var sizeName = $"size{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
 
         result.Body.Add($"var {firstCharName} = {cursorName}.Current;");
 
-        // Check if first char is an identifier start
-        var startCondition = _extraStart != null
-            ? $"global::Parlot.Character.IsIdentifierStart({firstCharName}) || extraStart{context.NextNumber()}({firstCharName})"
-            : $"global::Parlot.Character.IsIdentifierStart({firstCharName})";
+        var startCondition = $"global::Parlot.Character.IsIdentifierStart({firstCharName})";
 
         if (_extraStart != null)
         {
             var extraStartLambda = context.RegisterLambda(_extraStart);
-            startCondition = $"global::Parlot.Character.IsIdentifierStart({firstCharName}) || {extraStartLambda}({firstCharName})";
+            startCondition = $"{startCondition} || {extraStartLambda}({firstCharName})";
         }
 
         result.Body.Add($"if ({startCondition})");
         result.Body.Add("{");
         result.Body.Add($"    var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"    {cursorName}.AdvanceNoNewLines(1);");
+        result.Body.Add($"    var {spanName} = {cursorName}.Span;");
 
-        // Continue reading while it's an identifier part
-        var partCondition = _extraPart != null
-            ? $"!{cursorName}.Eof && (global::Parlot.Character.IsIdentifierPart({cursorName}.Current) || extraPart{context.NextNumber()}({cursorName}.Current))"
-            : $"!{cursorName}.Eof && global::Parlot.Character.IsIdentifierPart({cursorName}.Current)";
+        // The chars are counted on the span first such that the cursor only moves once, like the runtime parser.
+        // Only an extra start predicate can accept the end of the text, where the span is empty.
+        var indent = "    ";
 
-        if (_extraPart != null)
+        if (_extraStart != null)
         {
-            var extraPartLambda = context.RegisterLambda(_extraPart);
-            partCondition = $"!{cursorName}.Eof && (global::Parlot.Character.IsIdentifierPart({cursorName}.Current) || {extraPartLambda}({cursorName}.Current))";
+            result.Body.Add($"    if ({spanName}.IsEmpty)");
+            result.Body.Add("    {");
+            result.Body.Add($"        {cursorName}.AdvanceNoNewLines(1);");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
+            indent = "        ";
         }
 
-        result.Body.Add($"    while ({partCondition})");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.AdvanceNoNewLines(1);");
-        result.Body.Add("    }");
+        if (_extraPart == null)
+        {
+            // The default identifier part chars are searched with SearchValues on .NET 8+, like IdentifierLiteral
+            var indexName = $"index{context.NextNumber()}";
+
+            result.Body.Add("#if NET8_0_OR_GREATER");
+            result.Body.Add($"{indent}var {indexName} = {spanName}.Slice(1).IndexOfAnyExcept(global::Parlot.Character._identifierPart);");
+            result.Body.Add($"{indent}var {sizeName} = {indexName} == -1 ? {spanName}.Length : {indexName} + 1;");
+            result.Body.Add("#else");
+            GenerateCountLoop(context, result, indent, spanName, sizeName, null);
+            result.Body.Add("#endif");
+        }
+        else
+        {
+            var extraPartLambda = context.RegisterLambda(_extraPart);
+            GenerateCountLoop(context, result, indent, spanName, sizeName, extraPartLambda);
+        }
+
+        result.Body.Add($"{indent}{cursorName}.AdvanceBy({sizeName}, 0, {sizeName});");
+
+        if (_extraStart != null)
+        {
+            result.Body.Add("    }");
+        }
 
         result.Body.Add($"    var {endName} = {cursorName}.Offset;");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {endName} - {startName});");
+            result.Body.Add($"    {result.ValueVariable} = {cursorName}.CreateSpan({startName}, {endName} - {startName});");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 
         return result;
+    }
+
+    // Counts the identifier part chars following the first one
+    private static void GenerateCountLoop(SourceGenerationContext context, SourceResult result, string indent, string spanName, string sizeName, string? extraPartLambda)
+    {
+        var cName = $"c{context.NextNumber()}";
+        var partCondition = $"!global::Parlot.Character.IsIdentifierPart({cName})";
+
+        if (extraPartLambda != null)
+        {
+            partCondition = $"{partCondition} && !{extraPartLambda}({cName})";
+        }
+
+        result.Body.Add($"{indent}var {sizeName} = 1;");
+        result.Body.Add($"{indent}while ({sizeName} < {spanName}.Length)");
+        result.Body.Add($"{indent}{{");
+        result.Body.Add($"{indent}    var {cName} = {spanName}[{sizeName}];");
+        result.Body.Add($"{indent}    if ({partCondition})");
+        result.Body.Add($"{indent}    {{");
+        result.Body.Add($"{indent}        break;");
+        result.Body.Add($"{indent}    }}");
+        result.Body.Add($"{indent}    {sizeName}++;");
+        result.Body.Add($"{indent}}}");
     }
 }
