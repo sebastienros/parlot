@@ -323,6 +323,40 @@ public static partial class Grammars
         return a;
     }
 
+    [GenerateParser(nameof(TryParseUnaryEmptyOperator))]
+    private static Parser<long> BuildUnaryEmptyOperator() =>
+        Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static value => -value),
+            (Literals.Char('+').Then(static _ => 0), static value => value + 100));
+
+    [GenerateParser(nameof(TryParseUnaryContextEmptyOperator))]
+    private static Parser<long> BuildUnaryContextEmptyOperator() =>
+        Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static (ParseContext _, long value) => -value),
+            (Literals.Char('+').Then(static _ => 0), static (ParseContext _, long value) => value + 100));
+
+    [GenerateParser(nameof(TryParseSevenSequenceChoice))]
+    private static Parser<string> BuildSevenSequenceChoice() =>
+        OneOf(
+            Literals.Char('a').And(Literals.Char('b')).And(Literals.Char('c')).And(Literals.Char('d'))
+                .And(Literals.Char('e')).And(Literals.Char('f')).And(Literals.Char('g'))
+                .Then(static _ => "abcdefg"),
+            Literals.Char('z').Then(static _ => "z"));
+
+    [GenerateParser(nameof(TryParseEmptyPattern))]
+    private static Parser<string> BuildEmptyPattern() =>
+        Literals.Pattern(static character => character == 'a', minSize: 0)
+            .And(Literals.Char('b'))
+            .Then(static tuple => tuple.Item1.ToString());
+
+    [GenerateParser(nameof(TryParseReplacedRecursive))]
+    private static Parser<string> BuildReplacedRecursive()
+    {
+        var recursive = Recursive<string>(static _ => Literals.Text("a"));
+        recursive.Parser = Literals.Text("b");
+        return OneOf(recursive, Literals.Text("c"));
+    }
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 

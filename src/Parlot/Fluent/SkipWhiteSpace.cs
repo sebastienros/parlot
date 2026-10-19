@@ -66,8 +66,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
 
         if (Parser is not Parlot.SourceGeneration.ISourceable sourceable)
         {
-            result.Body.Add($"{result.SuccessVariable} = false;");
-            return result;
+            throw new NotSupportedException("SkipWhiteSpace requires a source-generatable parser.");
         }
 
         // Register helper for the inner parser

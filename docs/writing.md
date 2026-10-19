@@ -91,6 +91,28 @@ must keep that text buffered with `context.Pin()` and `context.Unpin(pin)`. Both
 
 > ✔️ DO: Test the parser with `Parse(TextReader)` over a reader returning one character at a time, with `BufferSize = 1`, and compare with `Parse(string)`.
 
+## Moving the cursor
+
+`Cursor.Position` is the absolute offset, the line and the column of the current char. The line starts at 1 and
+increases after each `'\n'`. The column starts at 1 on each line and counts every char other than `'\n'`, `'\r'` included:
+it is one more than the number of chars between the previous `'\n'` (or the start of the text) and the position. A
+position at the end of the text follows the same rule, so after `"ab\n"` the cursor is at line 2, column 1, and after
+`"ab\r"` at line 1, column 4. This is also what source generated parsers report.
+
+All the ways of moving the cursor forward apply that rule; they differ in what they assume about the chars they leave:
+
+- `Advance()` moves by one char and `Advance(count)` by `count` chars, looking at each of them. Both stop at the end of
+  the text, where `Advance()` does nothing.
+- `AdvanceNoNewLines(count)` is for text known not to contain `'\n'`, such as an identifier or digits.
+- `AdvanceBy(consumed, newLines, trailingSegmentLength)` is for text whose number of `'\n'` chars, and number of chars
+  after the last of them, were counted while matching, or at build time for a literal. The source generator emits it for
+  `Text` and `Char` literals.
+
+A parser which counts the chars of a match before moving the cursor should note whether it saw a `'\n'` and call
+`Advance(size)` when it did, or `AdvanceBy(size, 0, size)` otherwise, as `Pattern` does.
+
+> ✔️ DO: Assert the line and the column of the cursor after a match, not only its offset, including after a `"\r\n"` and when the match ends the text.
+
 ## Lookup tables
 
 The `OneOf` parser, which can also be created using `a.Or(b)`, is able to create a lookup table to optimize parsing.

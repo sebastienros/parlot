@@ -924,6 +924,8 @@ Creates a parser that can reference itself.
 Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser)
 ```
 
+Unlike a `Deferred` whose parser is set later, a `Recursive` parser is seekable: it declares the chars its parser can start with, so `OneOf` can skip it when they don't match. The declaration follows the parser when `Parser` is replaced.
+
 Usage:
 
 ```c#
@@ -1296,6 +1298,8 @@ Parser<T> Lookup<U>(params ReadOnlySpan<char> expectedChars)
 Parser<T> Lookup(params ISeekable[] parsers)
 ```
 
+The hints taken from other parsers are only used when every one of them can seek and they all skip white space the same way. Otherwise the resulting parser declares that it can start with any char, like the original one.
+
 ## Other parsers
 
 ### AnyCharBefore
@@ -1305,6 +1309,9 @@ Returns any characters until the specified parser is matched.
 ```c#
 Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
 ```
+
+With `consumeDelimiter: true` the cursor moves past the delimiter. The returned `TextSpan` never includes the delimiter,
+while the end position of the result (as seen by `Then((context, start, end, value) => ...)`) is the cursor position, after it.
 
 It is important to use `AnyCharBefore(a.Or(b))` instead of `AnyCharBefore(a).Or(AnyCharBefore(b))` for performance reasons. Otherwise the first parser will have to look ahead for the whole source if only the second parser can be matched. By using a single `AnyCharBefore`, it will check whatever is first in the source, and then jump to the next option.
 

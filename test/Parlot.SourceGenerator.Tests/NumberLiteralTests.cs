@@ -33,6 +33,8 @@ public class NumberLiteralTests
     [InlineData("1.23E+2", 123.0)]
     [InlineData("1.23e-2", 0.0123)]
     [InlineData("-1.5e3", -1500.0)]
+    [InlineData("1.e2", 100.0)]
+    [InlineData("1.E+2", 100.0)]
     public void Floating_Point_Exponent_Is_Supported(string input, double expected)
     {
         Assert.True(Grammars.TryParseDoubleExponent(input, out var value));

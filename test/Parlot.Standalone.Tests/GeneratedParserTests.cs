@@ -89,7 +89,8 @@ public class GeneratedParserTests
         Assert.False(Grammar.TryParseTextChoiceDiscarded(" \r\nif12!", out _));
         Assert.False(Grammar.TryParseTextChoice(new string('a', 100_000), out _));
         Assert.True(Grammar.TryParseTextChoicePosition(" \r\nline\r\nend!", out var position));
-        Assert.Equal((12, 4, 4), position);
+        // " \r\n" is skipped and "line\r\nend" matched: two line feeds, the CRLFs do not count twice
+        Assert.Equal((12, 3, 4), position);
     }
 
     [Fact]

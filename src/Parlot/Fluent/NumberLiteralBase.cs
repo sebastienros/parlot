@@ -111,6 +111,13 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
+        // The generated code parses with the built-in methods, it has no parser instance to call TryParseNumber on,
+        // so a custom subclass would silently parse differently from the runtime
+        if (GetType().Assembly != typeof(NumberLiteralBase<T>).Assembly)
+        {
+            throw new NotSupportedException($"The number parser '{GetType()}' overrides TryParseNumber, which a generated parser cannot call. Only the built-in number parsers can be source generated.");
+        }
+
         if (context.IsCompacting)
         {
             return context.GenerateToken(this, typeof(T), () => GenerateSource(context));

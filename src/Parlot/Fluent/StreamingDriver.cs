@@ -150,12 +150,6 @@ internal sealed class StreamingDriver : IDisposable
                 _line = end.Line;
                 _column = end.Column;
 
-                // The cursor doesn't count a column for the character before a '\r'
-                if (_frameDelimited && delimiter == '\r' && _frameLength > 0)
-                {
-                    _column--;
-                }
-
                 var consumed = _frameLength + (_frameDelimited ? 1 : 0);
                 _offset += consumed;
                 _frameStart += consumed;
@@ -272,12 +266,13 @@ internal sealed class StreamingDriver : IDisposable
 
         _pendingDelimiter = false;
 
+        // Same rule as the cursor: only '\n' ends a line, every other char occupies a column
         if (delimiter == '\n')
         {
             _line++;
             _column = 1;
         }
-        else if (_frameStart >= _length || _chars[_frameStart] != '\r')
+        else
         {
             _column++;
         }

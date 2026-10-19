@@ -84,9 +84,11 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
 
         HybridList<T>? results = null;
 
-        var start = 0;
         var end = context.Scanner.Cursor.Position;
         var initialPosition = end;
+
+        // An empty result is at the current position
+        var start = end.Offset;
 
         var first = true;
         var parsed = new ParseResult<T>();
@@ -214,7 +216,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             context.ExitParser(this);
             if (_min == 0)
             {
-                result.Set(0, initial.Offset, (IReadOnlyList<T>)[]);
+                result.Set(initial.Offset, initial.Offset, (IReadOnlyList<T>)[]);
                 return true;
             }
             return false;

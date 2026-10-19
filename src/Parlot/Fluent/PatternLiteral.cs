@@ -32,8 +32,19 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
         if (cursor.Eof || !predicate(cursor.Current))
         {
+            if (_minSize > 0)
+            {
+                context.ExitParser(this);
+                return false;
+            }
+
+            // A pattern without a minimum size matches nothing, like the generated parser and AnyOf do.
+            // Reaching the end of a non-final buffer has already marked the cursor.
+            var offset = cursor.Offset;
+            result.Set(offset, offset, cursor.CreateSpan(offset, 0));
+
             context.ExitParser(this);
-            return false;
+            return true;
         }
 
         // The chars are counted first such that the cursor only moves once, and not at all when the size constraint is not met.
@@ -41,7 +52,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         var span = cursor.Span;
         var limit = _maxSize > 0 && _maxSize < span.Length ? _maxSize : span.Length;
         var size = 1;
-        var newLines = span[0] is '\n' or '\r';
+        var newLines = span[0] == '\n';
 
         while (size < limit)
         {
@@ -52,7 +63,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
                 break;
             }
 
-            newLines |= c is '\n' or '\r';
+            newLines |= c == '\n';
             size++;
         }
 
@@ -60,9 +71,8 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         {
             var start = cursor.Offset;
 
-            // The line and column only need to be tracked char by char when there are new lines,
-            // including the char the cursor moves to since a '\r' doesn't count as a column.
-            if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+            // The line and column only need to be tracked char by char when there are new lines
+            if (newLines)
             {
                 cursor.Advance(size);
             }

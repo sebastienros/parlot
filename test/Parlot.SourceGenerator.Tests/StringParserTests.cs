@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using Xunit;
@@ -13,6 +15,20 @@ public class StringParserTests
     {
         Assert.True(StringGrammars.TryParseCapturedStandard(input, out var length));
         Assert.Equal(input.Length, length);
+    }
+
+    [Theory]
+    // The backslash delimiter is also the escape char, so it can't be escaped and the next one ends the string
+    [InlineData("\\abc\\", "abc")]
+    [InlineData("\\n\\rest", "n")]
+    [InlineData("\\\\", "")]
+    [InlineData("\\a\\\\b\\", "a")]
+    [InlineData("\\abc", null)]
+    [InlineData("", null)]
+    public void Backslash_Delimited_Strings_End_At_The_Next_Backslash(string input, string? expected)
+    {
+        Assert.Equal(expected != null, StringGrammars.TryParseBackslashDelimited(input, out var value));
+        Assert.Equal(expected, value);
     }
 
     [Theory]
@@ -133,6 +149,7 @@ public class StringParserTests
 public static partial class StringGrammars
 {
     public static partial bool TryParseDecoded(string text, out string value);
+    public static partial bool TryParseBackslashDelimited(string text, out string value);
     public static partial bool TryParseCaptured(string text, out int value);
     public static partial bool TryParseCapturedStandard(string text, out int value);
     public static partial bool TryParseFallback(string text, out string value);

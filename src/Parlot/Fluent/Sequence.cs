@@ -743,7 +743,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
 
-        if (_lastParser is ISeekable seekable)
+        if (_parser is ISeekable seekable)
         {
             CanSeek = seekable.CanSeek;
             ExpectedChars = seekable.ExpectedChars;
