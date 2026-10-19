@@ -280,6 +280,25 @@ public static partial class Grammars
     [GenerateParser(nameof(TryParseInt128Hex))]
     private static Parser<Int128> BuildInt128Hex() => Terms.Hexadecimal<Int128>().Eof();
 
+    [GenerateParser(nameof(TryParseTupleRightAssociative))]
+    private static Parser<double> BuildTupleRightAssociative() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            (Terms.Char('-'), static (left, right) => left - right),
+            (Terms.Char('+'), static (left, right) => left + right));
+
+    [GenerateParser(nameof(TryParseTupleRightAssociativeContext))]
+    private static Parser<double> BuildTupleRightAssociativeContext() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            (Terms.Char('^'), static (ParseContext _, double left, double right) => Math.Pow(left, right)),
+            (Terms.Char('-'), static (ParseContext _, double left, double right) => left - right));
+
+    [GenerateParser(nameof(TryParseTupleRightAssociativeThenPlus))]
+    private static Parser<double> BuildTupleRightAssociativeThenPlus() =>
+        Terms.Decimal().Then(static value => (double)value)
+            .RightAssociative((Literals.Char('+'), static (left, right) => left + right))
+            .AndSkip(Literals.Char('+'))
+            .Eof();
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 

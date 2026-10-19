@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Parlot.Fluent;
 using Xunit;
 
 namespace Parlot.SourceGenerator.Tests;
@@ -26,8 +27,8 @@ public class GeneratorFixesTests
         Assert.Equal(expected, value);
 
         // The same as the runtime parser
-        var runtime = Fluent.Parsers.Terms.Text("ab")
-            .Then(static (Fluent.ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
+        var runtime = Parsers.Terms.Text("ab")
+            .Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
         Assert.Equal(expected, runtime.Parse(input));
     }
 
@@ -162,6 +163,40 @@ public class GeneratorFixesTests
             diagnostic.Severity == DiagnosticSeverity.Error
             && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("requires .NET 8 or later", StringComparison.Ordinal)),
             string.Join(" | ", result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    [Theory]
+    [InlineData("10 - 4 - 2", 8.0)]
+    [InlineData("10 - 4 + 2", 4.0)]
+    [InlineData("10 + 4 - 2", 12.0)]
+    [InlineData("10", 10.0)]
+    public void Tuple_Right_Associative_Is_Generated(string input, double expected)
+    {
+        Assert.True(Grammars.TryParseTupleRightAssociative(input, out var value));
+        Assert.Equal(expected, value);
+
+        var runtime = Parsers.Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            (Parsers.Terms.Char('-'), static (left, right) => left - right),
+            (Parsers.Terms.Char('+'), static (left, right) => left + right));
+        Assert.Equal(expected, runtime.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("2 ^ 3 ^ 2", 512.0)]
+    [InlineData("2 ^ 3 - 1", 4.0)]
+    [InlineData("8 - 3 - 1", 6.0)]
+    public void Tuple_Right_Associative_With_Context_Is_Generated(string input, double expected)
+    {
+        Assert.True(Grammars.TryParseTupleRightAssociativeContext(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Fact]
+    public void Tuple_Right_Associative_Rolls_Back_An_Operator_With_No_Right_Operand()
+    {
+        Assert.True(Grammars.TryParseTupleRightAssociativeThenPlus("1+2+", out var value));
+        Assert.Equal(3.0, value);
+        Assert.False(Grammars.TryParseTupleRightAssociativeThenPlus("1+2", out _));
     }
 
     internal const string Declaration = """

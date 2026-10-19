@@ -64,6 +64,9 @@ public static partial class Grammars
     public static partial bool TryParseEscapedError(string text, out char value);
     public static partial bool TryParseHalf(string text, out Half value);
     public static partial bool TryParseInt128Hex(string text, out Int128 value);
+    public static partial bool TryParseTupleRightAssociative(string text, out double value);
+    public static partial bool TryParseTupleRightAssociativeContext(string text, out double value);
+    public static partial bool TryParseTupleRightAssociativeThenPlus(string text, out double value);
     public static partial bool TryParseAnyOfDigits(string text, out string value);
     public static partial bool TryParseAnyOfLetters(string text, out string value);
     public static partial bool TryParseNoneOfWhitespace(string text, out string value);
