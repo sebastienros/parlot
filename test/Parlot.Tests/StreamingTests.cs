@@ -137,8 +137,8 @@ public class StreamingTests
         Add("standalone-eof", "", " ", "a");
         Add("integer-standalone-eof", "", "42", "42a", "42 ", " 42");
         Add("integer-eof-error", "", "42", "42a", "42 ", " 42");
-        Add("decimal", "", "1", "1.5", "1.", "1.e", "12.5e-3", "1e", "1e+", ".5", "-0.25 ");
-        Add("double", "", "1", "1.5e10", "1e", "2.", "-3.25e-2x");
+        Add("decimal", "", "1", "1.5", "1.", "1.e", "12.5e-3", "1e", "1e+", ".5", "-0.25 ", "1.e5", "1.e+", "1.E-2x");
+        Add("double", "", "1", "1.5e10", "1e", "2.", "-3.25e-2x", "2.e3", "2.e");
         Add("text", "", "h", "hel", "hello", "hello!", " hello", "help");
         Add("text-ci", "", "HEL", "HeLLo", "HELP", "hellO world");
         Add("keyword", "", "f", "for", "for ", "fore", "for(", "fo");

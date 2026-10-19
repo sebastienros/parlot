@@ -539,6 +539,26 @@ public class ScannerTests
     }
 
     [Theory]
+    // The BCL accepts an exponent right after the decimal separator, like it accepts a trailing separator
+    [InlineData("1.e5", "1.e5")]
+    [InlineData("1.E+5x", "1.E+5")]
+    [InlineData("1.e-5", "1.e-5")]
+    [InlineData("1.5e5", "1.5e5")]
+    [InlineData("1.e", "1.")]
+    [InlineData("1.ex", "1.")]
+    [InlineData("1.e+", "1.")]
+    [InlineData("1.", "1.")]
+    public void ShouldReadExponentAfterTrailingDecimalSeparator(string input, string expected)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.Float, out var result));
+        Assert.True(double.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
+        Assert.Equal(expected, result);
+        Assert.Equal(expected.Length, s.Cursor.Offset);
+    }
+
+    [Theory]
     [InlineData("123.456", "123")]
     [InlineData("123.456a", "123")]
     [InlineData("123.a", "123")]

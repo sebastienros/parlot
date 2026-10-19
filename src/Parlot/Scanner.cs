@@ -217,18 +217,13 @@ public class Scanner
 
             var numberIsEmpty = number.IsEmpty;
 
-            if (!ReadInteger(out number))
+            // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`.
+            // A trailing separator is kept otherwise, e.g. `1.`, and an exponent can still follow it, e.g. `1.e5`.
+            if (!ReadInteger(out number) && numberIsEmpty)
             {
-                // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
-                if (numberIsEmpty)
-                {
-                    Cursor.ResetPosition(start);
+                Cursor.ResetPosition(start);
 
-                    return false;
-                }
-
-                number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
-                return true;
+                return false;
             }
         }
 
