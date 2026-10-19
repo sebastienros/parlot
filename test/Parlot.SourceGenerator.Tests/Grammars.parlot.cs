@@ -249,6 +249,18 @@ public static partial class Grammars
         return OneOf(unary, Literals.Char('-').Then(static _ => 42m)).Eof();
     }
 
+    [GenerateParser(nameof(TryParseUnaryEmptyOperator))]
+    private static Parser<long> BuildUnaryEmptyOperator() =>
+        Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static value => -value),
+            (Literals.Char('+').Then(static _ => 0), static value => value + 100));
+
+    [GenerateParser(nameof(TryParseUnaryContextEmptyOperator))]
+    private static Parser<long> BuildUnaryContextEmptyOperator() =>
+        Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static (ParseContext _, long value) => -value),
+            (Literals.Char('+').Then(static _ => 0), static (ParseContext _, long value) => value + 100));
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 

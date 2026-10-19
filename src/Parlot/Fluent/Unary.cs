@@ -61,6 +61,13 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             var operatorResult = new ParseResult<TInput>();
             if (op.Parse(context, ref operatorResult))
             {
+                // An operator that didn't read anything would be matched again by the recursion, forever.
+                // It is treated as no operator, and the next ones are tried at the same position.
+                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                {
+                    continue;
+                }
+
                 context.Unpin(pin);
 
                 // Recursively parse the operand (which may have more unary operators)
@@ -160,14 +167,15 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             if (i == 0)
             {
                 result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _))");
+                // An operator that didn't read anything is treated as no operator, like at runtime
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
                 result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _))");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
@@ -278,6 +286,13 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
             if (op.Parse(context, ref operatorResult))
             {
+                // An operator that didn't read anything would be matched again by the recursion, forever.
+                // It is treated as no operator, and the next ones are tried at the same position.
+                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                {
+                    continue;
+                }
+
                 context.Unpin(pin);
 
                 if (Parse(context, ref result))
@@ -365,14 +380,15 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
             if (i == 0)
             {
                 result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _))");
+                // An operator that didn't read anything is treated as no operator, like at runtime
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
                 result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _))");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";

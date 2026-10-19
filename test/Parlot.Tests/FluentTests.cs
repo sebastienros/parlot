@@ -1559,6 +1559,38 @@ public class FluentTests
     }
 
     [Fact]
+    public void UnaryShouldTreatANonConsumingOperatorAsNoOperator()
+    {
+        // An operator that matches without consuming anything would otherwise recurse forever,
+        // and the next operator is still tried at the same position
+        var parser = Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static value => -value),
+            (Literals.Char('+').Then(static _ => 0), static value => value + 100));
+
+        Assert.Equal(1, parser.Parse("1"));
+        Assert.Equal(-1, parser.Parse("-1"));
+        Assert.Equal(-1, parser.Parse("--1"));
+        Assert.Equal(101, parser.Parse("+1"));
+        Assert.Equal(-101, parser.Parse("-+1"));
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldTreatANonConsumingOperatorAsNoOperator()
+    {
+        var parser = Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static (ParseContext _, long value) => -value),
+            (Literals.Char('+').Then(static _ => 0), static (ParseContext _, long value) => value + 100));
+
+        Assert.Equal(1, parser.Parse("1"));
+        Assert.Equal(-1, parser.Parse("-1"));
+        Assert.Equal(-1, parser.Parse("--1"));
+        Assert.Equal(101, parser.Parse("+1"));
+        Assert.Equal(-101, parser.Parse("-+1"));
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Fact]
     public void UnaryWithContextShouldRestoreCursorWhenOperandMissing()
     {
         var parser = Terms.Decimal().Unary((Terms.Char('-'), static (ParseContext _, decimal d) => -d));

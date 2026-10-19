@@ -145,6 +145,22 @@ public class GrammarsTests
         Assert.Equal(1, value);
     }
 
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("-1", -1)]
+    [InlineData("--1", -1)]
+    [InlineData("+1", 101)]
+    [InlineData("-+1", -101)]
+    public void Unary_Treats_A_Non_Consuming_Operator_As_No_Operator(string input, long expected)
+    {
+        Assert.True(Grammars.TryParseUnaryEmptyOperator(input, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(Grammars.TryParseUnaryContextEmptyOperator(input, out var contextValue));
+        Assert.Equal(expected, contextValue);
+        Assert.False(Grammars.TryParseUnaryEmptyOperator("x", out _));
+        Assert.False(Grammars.TryParseUnaryContextEmptyOperator("x", out _));
+    }
+
     [Fact]
     public void Unary_Rolls_Back_An_Operator_With_No_Operand()
     {
