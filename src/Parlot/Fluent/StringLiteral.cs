@@ -1,7 +1,6 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
@@ -16,8 +15,6 @@ public enum StringLiteralQuotes
 
 public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
 {
-    private static readonly MethodInfo _decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(string), typeof(int), typeof(int)])!;
-
     static readonly char[] SingleQuotes = ['\''];
     static readonly char[] DoubleQuotes = ['\"'];
     static readonly char[] Backtick = ['`'];

@@ -376,7 +376,7 @@ public sealed partial class ParserSourceGenerator
             || type is IArrayTypeSymbol array && UsesParlotType(array.ElementType)
             || type is INamedTypeSymbol named && named.TypeArguments.Any(UsesParlotType);
 
-    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core)
+    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core, bool wrapperIsContext)
     {
         var entry = standalone.Method;
         var factory = standalone.Factory.Method;
@@ -415,7 +415,9 @@ public sealed partial class ParserSourceGenerator
         }
         var contextCreation = factory.Parameters.Length > 0
             ? $"new {wrapper}({scanner}{cancellationArgument}, {arguments})"
-            : $"new global::Parlot.Fluent.ParseContext({scanner}{cancellationArgument})";
+            : wrapperIsContext
+                ? $"new {wrapper}({scanner}{cancellationArgument})"
+                : $"new global::Parlot.Fluent.ParseContext({scanner}{cancellationArgument})";
         source.AppendLine($"            var {context} = {contextCreation};");
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -88,35 +87,7 @@ public static partial class Parsers
     /// </example>
     public static Parser<T> RightAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<T, T, T> factory)[] list)
     {
-        var choices = list.Select(l => new Then<TInput, Func<T, T, T>>(l.op, l.factory)).ToArray();
-
-        return parser.And(ZeroOrMany(new OneOf<Func<T, T, T>>(choices).And(parser)))
-            .Then(static x =>
-            {
-                // a; (=, b); (^, c) -> = (a, ^(b, c))
-
-                var operations = x.Item2;
-
-                T result;
-
-                if (operations.Count > 0)
-                {
-                    result = operations[operations.Count - 1].Item2;
-
-                    for (var i = operations.Count - 1; i > 0; i--)
-                    {
-                        result = operations[i].Item1(operations[i - 1].Item2, result);
-                    }
-
-                    result = operations[0].Item1(x.Item1, result);
-                }
-                else
-                {
-                    result = x.Item1;
-                }
-
-                return result;
-            });
+        return new RightAssociative<T, TInput>(parser, list);
     }
 
     /// <summary>
@@ -136,35 +107,7 @@ public static partial class Parsers
     /// </example>
     public static Parser<T> RightAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list)
     {
-        var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory)).ToArray();
-
-        return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices).And(parser)))
-            .Then(static (context, x) =>
-            {
-                // a; (=, b); (^, c) -> = (a, ^(b, c))
-
-                var operations = x.Item2;
-
-                T result;
-
-                if (operations.Count > 0)
-                {
-                    result = operations[operations.Count - 1].Item2;
-
-                    for (var i = operations.Count - 1; i > 0; i--)
-                    {
-                        result = operations[i].Item1(context, operations[i - 1].Item2, result);
-                    }
-
-                    result = operations[0].Item1(context, x.Item1, result);
-                }
-                else
-                {
-                    result = x.Item1;
-                }
-
-                return result;
-            });
+        return new RightAssociativeWithContext<T, TInput>(parser, list);
     }
 
     /// <summary>Builds a right-associative parser using the values returned by its operator parsers.</summary>

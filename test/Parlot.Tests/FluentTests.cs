@@ -1506,6 +1506,28 @@ public class FluentTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void TupleAssociativeRestoresCursorAndReportsPositions(bool withContext)
+    {
+        var number = Terms.Decimal();
+        var parser = withContext
+            ? number.RightAssociative((Terms.Char('-'), static (ParseContext _, decimal left, decimal right) => left - right))
+            : number.RightAssociative((Terms.Char('-'), static (left, right) => left - right));
+        var context = new ParseContext(new Scanner(" 8 - 3 - 1 -"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(6m, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(10, result.End);
+        Assert.Equal(10, context.Scanner.Cursor.Offset);
+
+        Assert.Equal(8m, parser.Parse(" 8"));
+        Assert.False(parser.TryParse("-", out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void AssociativeFactoryRestoresCursorOnIncompletePair(bool rightAssociative)
     {
         var number = Terms.Decimal();
@@ -1857,6 +1879,41 @@ public class FluentTests
         Assert.Equal("a", Literals.AnyOf("a", maxSize: 1).Parse("aa"));
         Assert.Equal("aaaa", Literals.AnyOf("a", minSize: 2, maxSize: 4).Parse("aaaaaa"));
         Assert.False(Literals.AnyOf("a", minSize: 2, maxSize: 2).TryParse("a", out _));
+    }
+
+    [Fact]
+    public void AnyOfShouldTrackLinesAndStopAtMaxSize()
+    {
+        var result = new ParseResult<TextSpan>();
+
+        // '\n' is one of the chars, the lines it ends are tracked
+        var context = new ParseContext(new Scanner("a\na\nb"));
+        Assert.True(Literals.AnyOf("a\n").Parse(context, ref result));
+        Assert.Equal("a\na\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(4, 3, 1), context.Scanner.Cursor.Position);
+
+        // A negated set reads the new lines it doesn't exclude
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("c").Parse(context, ref result));
+        Assert.Equal("ab\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(3, 2, 1), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("\n").Parse(context, ref result));
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+
+        // The cursor stops after maxSize chars, on the next one
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.AnyOf("a", maxSize: 2).Parse(context, ref result));
+        Assert.Equal("aa", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+        Assert.Equal('a', context.Scanner.Cursor.Current);
+
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.NoneOf("b", maxSize: 3).Parse(context, ref result));
+        Assert.Equal("aaa", result.Value.ToString());
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
     }
 
     [Fact]
@@ -2411,6 +2468,32 @@ public class FluentTests
         Assert.Same(input, parser.Parse(input));
         Assert.Equal("IF", parser.Parse("IF("));
         Assert.False(parser.TryParse("IFoo", out _));
+    }
+
+    [Fact]
+    public void KeywordShouldNotMoveTheCursorWhenALetterFollows()
+    {
+        var result = new ParseResult<string>();
+
+        var context = new ParseContext(new Scanner(" ifx"));
+        Assert.False(Terms.Keyword("if").Parse(context, ref result));
+        Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("IFX"));
+        Assert.False(Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true).Parse(context, ref result));
+        Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+
+        // The position after the keyword, and the lines of a text containing new lines, are tracked
+        context = new ParseContext(new Scanner(" if("));
+        Assert.True(Terms.Keyword("if").Parse(context, ref result));
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        Assert.Equal(new TextPosition(3, 1, 4), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("a\nb c"));
+        Assert.True(new KeywordLiteral("a\nb").Parse(context, ref result));
+        Assert.Equal("a\nb", result.Value);
+        Assert.Equal(new TextPosition(3, 2, 2), context.Scanner.Cursor.Position);
     }
 
     [Fact]

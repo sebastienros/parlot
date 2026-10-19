@@ -133,6 +133,33 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
             .MethodName);
 
         var outTarget = discardInput ? "_" : $"var {parsedName}Value";
+        var cursorName = context.CursorName;
+        string? startName = null;
+        string? resetName = null;
+
+        if (_action3 != null)
+        {
+            // The callback receives the offsets of the inner match. The runtime reports the start of the
+            // content, after any white space a Terms parser skipped, so a SkipWhiteSpace wrapper is
+            // unfolded here: the white space is skipped first and the start is read after it.
+            startName = $"start{context.NextNumber()}";
+
+            if (_parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable })
+            {
+                helperName = context.Helpers
+                    .GetOrCreate(contentSourceable, helperKey, innerValueTypeName, () => contentSourceable.GenerateSource(context))
+                    .MethodName;
+                resetName = $"reset{context.NextNumber()}";
+                result.Body.Add($"var {resetName} = {cursorName}.Position;");
+                result.Body.Add($"if ({ctx}.WhiteSpaceParser is not null || global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {ctx}.SkipWhiteSpace();");
+                result.Body.Add("}");
+            }
+
+            result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        }
+
         result.Body.Add($"if ({helperName}({ctx}, out {outTarget}))");
         result.Body.Add("{");
 
@@ -165,11 +192,11 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
             var lambdaName = context.RegisterLambda(_action3);
             if (context.DiscardResult)
             {
-                result.Body.Add($"    {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
+                result.Body.Add($"    {lambdaName}({ctx}, {startName}, {cursorName}.Offset, {parsedName}Value);");
             }
             else
             {
-                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {startName}, {cursorName}.Offset, {parsedName}Value);");
             }
         }
         else
@@ -191,6 +218,15 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
         
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
+
+        if (resetName != null)
+        {
+            // The white space skipped above is given back when the content doesn't match
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
+            result.Body.Add("}");
+        }
 
         return result;
     }

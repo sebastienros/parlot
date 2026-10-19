@@ -249,6 +249,80 @@ public static partial class Grammars
         return OneOf(unary, Literals.Char('-').Then(static _ => 42m)).Eof();
     }
 
+    [GenerateParser(nameof(TryParseThenPositions))]
+    private static Parser<string> BuildThenPositions() =>
+        Terms.Text("ab").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
+
+    [GenerateParser(nameof(TryParseLiteralThenPositions))]
+    private static Parser<string> BuildLiteralThenPositions() =>
+        Literals.Text("ab").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
+
+    [GenerateParser(nameof(TryParseThenPositionsFallback))]
+    private static Parser<string> BuildThenPositionsFallback() =>
+        OneOf(
+            Terms.Text("ab").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}"),
+            Literals.Text(" ac").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}"));
+
+    [GenerateParser(nameof(TryParseDiscards))]
+    private static Parser<int> BuildDiscards() =>
+        Literals.Text("a").Then(static (_, _) => 1)
+            .And(Literals.Text("b").Then(static (_, _, _, _) => 2))
+            .And(Literals.Text("c").Then(static (_, start, _, _) => start))
+            .Then(static x => x.Item1 + x.Item2 + x.Item3);
+
+    [GenerateParser(nameof(TryParseEscapedError))]
+    private static Parser<char> BuildEscapedError() =>
+        Literals.Char('x').ElseError("line1\nline2 \"quoted\" back\\slash\ttab");
+
+    [GenerateParser(nameof(TryParseHalf))]
+    private static Parser<Half> BuildHalf() => Terms.Number<Half>(NumberOptions.Float).Eof();
+
+    [GenerateParser(nameof(TryParseInt128Hex))]
+    private static Parser<Int128> BuildInt128Hex() => Terms.Hexadecimal<Int128>().Eof();
+
+    [GenerateParser(nameof(TryParseTupleRightAssociative))]
+    private static Parser<double> BuildTupleRightAssociative() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            (Terms.Char('-'), static (left, right) => left - right),
+            (Terms.Char('+'), static (left, right) => left + right));
+
+    [GenerateParser(nameof(TryParseTupleRightAssociativeContext))]
+    private static Parser<double> BuildTupleRightAssociativeContext() =>
+        Terms.Decimal().Then(static value => (double)value).RightAssociative(
+            (Terms.Char('^'), static (ParseContext _, double left, double right) => Math.Pow(left, right)),
+            (Terms.Char('-'), static (ParseContext _, double left, double right) => left - right));
+
+    [GenerateParser(nameof(TryParseTupleRightAssociativeThenPlus))]
+    private static Parser<double> BuildTupleRightAssociativeThenPlus() =>
+        Terms.Decimal().Then(static value => (double)value)
+            .RightAssociative((Literals.Char('+'), static (left, right) => left + right))
+            .AndSkip(Literals.Char('+'))
+            .Eof();
+
+    [GenerateParser(nameof(TryParseLeftRecursive))]
+    private static Parser<long> BuildLeftRecursive()
+    {
+        // expression = expression '+' integer | integer: the first alternative re-enters the deferred
+        // parser at the same position, which must fail instead of overflowing the stack
+        var expression = Deferred<long>();
+        expression.Parser = expression.AndSkip(Terms.Char('+')).And(Terms.Integer()).Then(static x => x.Item1 + x.Item2)
+            .Or(Terms.Integer());
+        return expression;
+    }
+
+    [GenerateParser(nameof(TryParseIndirectLeftRecursive))]
+    private static Parser<long> BuildIndirectLeftRecursive()
+    {
+        // a = b | integer; b = a '+' integer: the cycle goes through two deferred parsers, and a parenthesized
+        // operand enters them again at a new position
+        var a = Deferred<long>();
+        var b = Deferred<long>();
+        var group = Between(Terms.Char('('), a, Terms.Char(')'));
+        b.Parser = a.AndSkip(Terms.Char('+')).And(Terms.Integer()).Then(static x => x.Item1 + x.Item2);
+        a.Parser = b.Or(group).Or(Terms.Integer());
+        return a;
+    }
+
     [GenerateParser(nameof(TryParseUnaryEmptyOperator))]
     private static Parser<long> BuildUnaryEmptyOperator() =>
         Terms.Integer().Unary(

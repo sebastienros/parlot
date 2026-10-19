@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Globalization;
 using System.Numerics;
+using System.Reflection;
 
 namespace Parlot.Fluent;
 public static class NumberLiterals
@@ -76,12 +78,73 @@ public static class NumberLiterals
             var literal = new BigIntegerNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
+        else if (SpanNumberLiteral<T>.TryParseMethod is not null)
+        {
+            // Types this build can't name, such as Half, Int128, UInt128, nint or nuint, when the runtime
+            // provides their span TryParse. This is how the netstandard2.0 build runs inside the source
+            // generator host, which executes on a modern runtime and emits the consumer's generic path.
+            return new SpanNumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator);
+        }
         else
         {
             throw new NotSupportedException($"The type '{typeof(T)}' is not supported as a type argument for '{nameof(NumberLiteralBase<T>)}'. Only numeric types are allowed.");
         }
 #endif
     }
+
+#if !NET8_0_OR_GREATER
+    private sealed class SpanNumberLiteral<T> : NumberLiteralBase<T>
+    {
+        internal delegate bool TryParseSpan(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out T value);
+
+        // T.TryParse(ReadOnlySpan<char>, NumberStyles, IFormatProvider, out T), resolved once per type
+        public static readonly TryParseSpan? TryParseMethod = CreateTryParse();
+
+        public SpanNumberLiteral(NumberOptions numberOptions, char decimalSeparator, char groupSeparator)
+            : base(numberOptions, decimalSeparator, groupSeparator)
+        {
+        }
+
+        public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out T value)
+            => TryParseMethod!(s, style, provider, out value);
+
+        private static TryParseSpan? CreateTryParse()
+        {
+            var method = typeof(T).GetMethod(
+                "TryParse",
+                BindingFlags.Public | BindingFlags.Static,
+                binder: null,
+                types: [typeof(ReadOnlySpan<char>), typeof(NumberStyles), typeof(IFormatProvider), typeof(T).MakeByRefType()],
+                modifiers: null);
+
+            return method is null || method.ReturnType != typeof(bool)
+                ? null
+                : (TryParseSpan)Delegate.CreateDelegate(typeof(TryParseSpan), method);
+        }
+    }
+
+    /// <summary>
+    /// Whether <typeparamref name="T"/> implements the generic math interface the net8.0+ radix parser requires,
+    /// which this build can't reference. True on a modern runtime, such as the source generator host.
+    /// </summary>
+    private static bool IsBinaryInteger<T>()
+    {
+        foreach (var @interface in typeof(T).GetInterfaces())
+        {
+            if (@interface.IsGenericType && @interface.GetGenericTypeDefinition().FullName == "System.Numerics.IBinaryInteger`1")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ThrowTryParseRadix<T>(ReadOnlySpan<char> span, int radix, out int charsRead, out T value)
+    {
+        throw new NotSupportedException($"Parsing radix numbers of type '{typeof(T)}' requires the .NET 8 or later build of Parlot.");
+    }
+#endif
 
     public static Parser<T> CreateRadixNumberLiteralParser<T>(int radix)
 #if NET8_0_OR_GREATER
@@ -130,6 +193,12 @@ public static class NumberLiterals
             return new RadixNumberLiteral<T>(radix, Numbers.TryParseRadix<T>);
         }
 #else
+        else if (IsBinaryInteger<T>())
+        {
+            // The source generator host runs this build on a modern runtime and emits the consumer's generic
+            // path; the delegate is only reached when such a parser is executed here.
+            return new RadixNumberLiteral<T>(radix, ThrowTryParseRadix<T>);
+        }
         else
         {
             throw new NotSupportedException($"The type '{typeof(T)}' is not supported as a radix number type.");

@@ -10,6 +10,68 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Theory]
+    [InlineData("abc-->def", true, "abc")]
+    [InlineData("a-b->c-->d", true, "a-b->c")]
+    [InlineData("a==>b", true, "a")]
+    [InlineData("a-=-=b==>", true, "a-=-=b")]
+    [InlineData("abc", true, "abc")]
+    [InlineData("-->", false, null)]
+    [InlineData("", false, null)]
+    public void Text_Before_A_Seekable_Delimiter_Is_Searched(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseTextBefore(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseTextBefore(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc;def", "abc")]
+    [InlineData(";", "")]
+    [InlineData("", "")]
+    [InlineData("a\nb;c", "a\nb")]
+    public void Text_Before_A_Char_Is_Searched(string input, string expected)
+    {
+        Assert.True(Grammar.TryParseTextBeforeChar(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.True(Grammar.TryParseTextBeforeChar(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc", true, "abc")]
+    [InlineData("_a1-b", true, "_a1-b")]
+    [InlineData("@x y", true, "@x")]
+    [InlineData("1abc", false, null)]
+    [InlineData("", false, null)]
+    public void Identifier_With_Predicates_Counts_Its_Chars(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("12", true, "12")]
+    [InlineData("12345", true, "1234")]
+    [InlineData("12a", true, "12")]
+    [InlineData("1", false, null)]
+    [InlineData("1a", false, null)]
+    [InlineData("", false, null)]
+    public void Pattern_Counts_Its_Chars(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParsePattern(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParsePattern(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("", true)]
     [InlineData(" ", false)]
     [InlineData("a", false)]
@@ -345,6 +407,36 @@ public class GeneratedParserTests
         var exception = Assert.Throws<InvalidOperationException>(() => Grammar.TryParseThrowingCallback("x", out _));
         Assert.Equal("Callback failed", exception.Message);
         Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber((string)null, out _));
+    }
+
+    [Theory]
+    [InlineData("1+2", true, 1)]
+    [InlineData("42", true, 42)]
+    [InlineData("x", false, 0)]
+    public void Left_Recursive_Deferred_Fails_Instead_Of_Overflowing(string input, bool success, int expected)
+    {
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("12a", "12")]
+    [InlineData("  12a", "12")]
+    [InlineData("  1234x", "1234")]
+    [InlineData("1a", null)]
+    [InlineData("12", null)]
+    public void Char_Sets_Accept_String_Literals_On_Every_Target(string input, string expected)
+    {
+        // AnyOf("...") and NoneOf("...") bind to the string overloads, which a factory compiled for
+        // net472 or netstandard2.0 needs since a string doesn't convert to ReadOnlySpan<char> there.
+        Assert.Equal(expected != null, Grammar.TryParseDigits(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(expected != null, Grammar.TryParseDigits(reader, out value));
+        Assert.Equal(expected, value);
     }
 
     [Fact]
