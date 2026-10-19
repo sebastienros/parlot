@@ -70,6 +70,7 @@ public static partial class Grammars
     public static partial bool TryParseHelloNotBang(string text, out string value);
     public static partial bool TryParseHelloBang(string text, out string value);
     public static partial bool TryParseCountingOneOf(string text, out char value);
+    public static partial bool TryParseLateDeferredOneOf(string text, out char value);
     public static partial bool TryParseCustomSwitch(string text, out char value);
     public static partial bool TryParseCustomSelect(string text, bool preferX, out char value);
     public static partial bool TryParseZeroOrManyOptional(string text, out IReadOnlyList<IReadOnlyList<char>> value);

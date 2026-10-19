@@ -317,6 +317,16 @@ public static partial class Grammars
     private static Parser<char> BuildCountingOneOf() =>
         OneOf(new CountingParser('a', "a", skipWhitespace: true), new CountingParser('b', "b", skipWhitespace: true));
 
+    [GenerateParser(nameof(TryParseLateDeferredOneOf))]
+    private static Parser<char> BuildLateDeferredOneOf()
+    {
+        // The deferred is set after the choice is built, as the expression of a grammar usually is
+        var deferred = Deferred<char>();
+        var choice = OneOf(deferred, new CountingParser('b', "late-b", skipWhitespace: true));
+        deferred.Parser = new CountingParser('a', "late-a", skipWhitespace: true);
+        return choice;
+    }
+
     [GenerateParser(nameof(TryParseCustomSwitch))]
     private static Parser<char> BuildCustomSwitch()
     {

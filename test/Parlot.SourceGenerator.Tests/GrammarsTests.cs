@@ -239,6 +239,30 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void Deferred_Set_After_The_OneOf_Is_In_The_Generated_Lookup_Table()
+    {
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseLateDeferredOneOf("  b", out var value));
+        Assert.Equal('b', value);
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(1, GeneratedParserCounters.GetCount("late-b"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseLateDeferredOneOf("  a", out value));
+        Assert.Equal('a', value);
+        Assert.Equal(1, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.False(Grammars.TryParseLateDeferredOneOf("  c", out _));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
+    }
+
+    [Fact]
     public void Switch_Uses_The_Generated_Target_Parser_Body()
     {
         GeneratedParserCounters.Reset();

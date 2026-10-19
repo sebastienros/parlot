@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -163,6 +164,27 @@ public class SourceableParsersTests
 
         Assert.Throws<NotSupportedException>(
             () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
+    }
+
+    [Fact]
+    public void OneOf_Emitter_Resolves_A_Deferred_Set_After_The_Choice()
+    {
+        var deferred = Deferred<char>();
+        var choice = OneOf(deferred, Literals.Char('b'));
+        var unresolved = string.Join(Environment.NewLine, ((ISeekable)choice).ExpectedChars.Select(static c => (int)c));
+
+        Assert.Contains("0", unresolved, StringComparison.Ordinal);
+
+        deferred.Parser = Literals.Char('a');
+
+        var generated = string.Join(Environment.NewLine, Generate(choice).Body);
+
+        // The table is built from the deferred parser's chars, with no default case for it
+        Assert.Contains("switch (", generated, StringComparison.Ordinal);
+        Assert.Contains("case 'a':", generated, StringComparison.Ordinal);
+        Assert.Contains("case 'b':", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("default:", generated, StringComparison.Ordinal);
+        Assert.Equal(['a', 'b'], ((ISeekable)choice).ExpectedChars.OrderBy(static c => c));
     }
 
     private static SourceResult Generate<T>(Parser<T> parser) =>
