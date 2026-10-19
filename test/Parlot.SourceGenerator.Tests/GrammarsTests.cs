@@ -292,6 +292,33 @@ public class GrammarsTests
         Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LeftAssociative_Operators_Are_Selected_By_Their_First_Char(bool withContext)
+    {
+        GeneratedParserCounters.Reset();
+        var prefix = withContext ? "ctx-op-" : "op-";
+
+        Assert.True(withContext
+            ? Grammars.TryParseCountingLeftAssociativeContext("10 p 4 m 2 m 1", out var value)
+            : Grammars.TryParseCountingLeftAssociative("10 p 4 m 2 m 1", out value));
+        Assert.Equal(11, value);
+
+        // Each operator was only tried where its char was next, and none at the end of the input
+        Assert.Equal(1, GeneratedParserCounters.GetCount(prefix + "p"));
+        Assert.Equal(2, GeneratedParserCounters.GetCount(prefix + "m"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.True(withContext
+            ? Grammars.TryParseCountingLeftAssociativeContext("10 m", out value)
+            : Grammars.TryParseCountingLeftAssociative("10 m", out value));
+        Assert.Equal(10, value);
+        Assert.Equal(0, GeneratedParserCounters.GetCount(prefix + "p"));
+        Assert.Equal(1, GeneratedParserCounters.GetCount(prefix + "m"));
+    }
+
     [Fact]
     public void Switch_Uses_The_Generated_Target_Parser_Body()
     {

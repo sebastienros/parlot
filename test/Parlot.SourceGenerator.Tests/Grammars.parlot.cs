@@ -344,6 +344,18 @@ public static partial class Grammars
             e.Error("no e"));
     }
 
+    [GenerateParser(nameof(TryParseCountingLeftAssociative))]
+    private static Parser<long> BuildCountingLeftAssociative() =>
+        Terms.Integer().LeftAssociative(
+            (new CountingParser('p', "op-p", skipWhitespace: true), static (left, right) => left + right),
+            (new CountingParser('m', "op-m", skipWhitespace: true), static (left, right) => left - right));
+
+    [GenerateParser(nameof(TryParseCountingLeftAssociativeContext))]
+    private static Parser<long> BuildCountingLeftAssociativeContext() =>
+        Terms.Integer().LeftAssociative(
+            (new CountingParser('p', "ctx-op-p", skipWhitespace: true), static (ParseContext _, long left, long right) => left + right),
+            (new CountingParser('m', "ctx-op-m", skipWhitespace: true), static (ParseContext _, long left, long right) => left - right));
+
     [GenerateParser(nameof(TryParseCustomSwitch))]
     private static Parser<char> BuildCustomSwitch()
     {
