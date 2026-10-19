@@ -35,14 +35,17 @@ public sealed class Else<T> : Parser<T>, ISourceable
 
         if (!success)
         {
+            // The parser reset the cursor, and may have left the positions of a partial match in the result
+            var offset = context.Scanner.Cursor.Offset;
+
             if (_func != null)
             {
-                result.Set(result.Start, result.End, _func(context));
+                result.Set(offset, offset, _func(context));
             }
             else
             {
                 // _value can't be null if _func is null
-                result.Set(result.Start, result.End, _value!);
+                result.Set(offset, offset, _value!);
             }
         }
 

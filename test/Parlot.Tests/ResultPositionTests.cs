@@ -132,4 +132,34 @@ public class ResultPositionTests
         Assert.Equal(3, options.End);
         AssertCursor(context, 3, 1, 4);
     }
+
+    [Fact]
+    public void ElseShouldBeAtTheCursorWhenTheParserFails()
+    {
+        // When writes the match in the result before rejecting it
+        var context = Parse(Literals.Text("ab").When(static (_, _) => false).Else("z"), "ab", out var result);
+
+        Assert.Equal("z", result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(0, result.End);
+        AssertCursor(context, 0, 1, 1);
+
+        context = Parse(Terms.Text("x").And(Literals.Text("ab").When(static (_, _) => false).Else(static _ => "z")), "\n xab", out var prefixed);
+
+        Assert.Equal(("x", "z"), prefixed.Value);
+        Assert.Equal(2, prefixed.Start);
+        Assert.Equal(3, prefixed.End);
+        AssertCursor(context, 3, 2, 3);
+    }
+
+    [Fact]
+    public void ElseShouldSpanTheMatch()
+    {
+        var context = Parse(Terms.Text("ab").Else("z"), " ab", out var result);
+
+        Assert.Equal("ab", result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+    }
 }
