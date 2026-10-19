@@ -1,4 +1,5 @@
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using Xunit;
 
 using static Parlot.Fluent.Parsers;
@@ -194,6 +195,45 @@ public class SequenceParserTests
             .And(Literals.Char('d'));
 
         Assert.False(parser.TryParse("axcd", out _));
+    }
+
+    [Fact]
+    public void SequencesShouldBeSeekableByTheirFirstParser()
+    {
+        // Whatever its arity, a sequence can start with what its first parser can start with
+        var two = Terms.Char('a').And(Literals.Char('b'));
+        var three = two.And(Literals.Char('c'));
+        var four = three.And(Literals.Char('d'));
+        var five = four.And(Literals.Char('e'));
+        var six = five.And(Literals.Char('f'));
+        var seven = six.And(Literals.Char('g'));
+
+        var sequences = new ISeekable[]
+        {
+            two, three, four, five, six, seven,
+            six.AndSkip(Literals.Char('g')), six.SkipAnd(Literals.Char('g')),
+        };
+
+        foreach (var sequence in sequences)
+        {
+            Assert.True(sequence.CanSeek);
+            Assert.Equal(['a'], sequence.ExpectedChars);
+            Assert.True(sequence.SkipWhitespace);
+        }
+    }
+
+    [Fact]
+    public void SevenElementSequenceShouldBeTriedByOneOf()
+    {
+        var seven = Literals.Char('a').And(Literals.Char('b')).And(Literals.Char('c')).And(Literals.Char('d'))
+            .And(Literals.Char('e')).And(Literals.Char('f')).And(Literals.Char('g'))
+            .Then(static _ => "abcdefg");
+
+        var parser = OneOf(seven, Literals.Char('z').Then(static _ => "z"));
+
+        Assert.Equal("abcdefg", parser.Parse("abcdefg"));
+        Assert.Equal("z", parser.Parse("z"));
+        Assert.False(parser.TryParse("g", out _));
     }
 
     [Fact]
