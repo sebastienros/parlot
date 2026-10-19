@@ -4,10 +4,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.Memory" Version="4.6.3" />
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.13" />
     <!-- The generator runs in the consumer's compiler host. Upgrading Roslyn can cause CS9057 on
          supported SDKs even when Parlot builds. MinimumSdkCompatibilityTests checks the packaged analyzer. -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Farkle" Version="7.1.1" />
@@ -16,7 +16,7 @@
     <PackageVersion Include="Superpower" Version="3.2.2-dev-00214" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.5-beta1" />
     <!-- Global Package References -->
-    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
+    <GlobalPackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.402" />
     <GlobalPackageReference Include="PolySharp" Version="1.16.0" />
     <!-- Testing -->
     <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.2" />
