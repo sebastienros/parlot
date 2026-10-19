@@ -16,6 +16,40 @@ namespace Parlot.SourceGenerator.Tests;
 /// </summary>
 public class GeneratorFixesTests
 {
+    [Theory]
+    [InlineData("ab", "0:2:ab")]
+    [InlineData(" ab", "1:3:ab")]
+    [InlineData("\n\t ab", "3:5:ab")]
+    public void Then_Position_Callback_Receives_The_Content_Offsets(string input, string expected)
+    {
+        Assert.True(Grammars.TryParseThenPositions(input, out var value));
+        Assert.Equal(expected, value);
+
+        // The same as the runtime parser
+        var runtime = Fluent.Parsers.Terms.Text("ab")
+            .Then(static (Fluent.ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
+        Assert.Equal(expected, runtime.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("ab", "0:2:ab")]
+    [InlineData(" ab", null)]
+    public void Then_Position_Callback_Receives_The_Literal_Offsets(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseLiteralThenPositions(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData(" ab", "1:3:ab")]
+    [InlineData(" ac", "0:3: ac")]
+    [InlineData("  ac", null)]
+    public void Then_Position_Callback_Gives_Back_The_Skipped_White_Space_On_Failure(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseThenPositionsFallback(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
     [Fact]
     public void Discarded_Lambda_Parameters_Get_Distinct_Names()
     {

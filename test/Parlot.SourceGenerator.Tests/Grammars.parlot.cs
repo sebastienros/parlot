@@ -249,6 +249,20 @@ public static partial class Grammars
         return OneOf(unary, Literals.Char('-').Then(static _ => 42m)).Eof();
     }
 
+    [GenerateParser(nameof(TryParseThenPositions))]
+    private static Parser<string> BuildThenPositions() =>
+        Terms.Text("ab").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
+
+    [GenerateParser(nameof(TryParseLiteralThenPositions))]
+    private static Parser<string> BuildLiteralThenPositions() =>
+        Literals.Text("ab").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}");
+
+    [GenerateParser(nameof(TryParseThenPositionsFallback))]
+    private static Parser<string> BuildThenPositionsFallback() =>
+        OneOf(
+            Terms.Text("ab").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}"),
+            Literals.Text(" ac").Then(static (ParseContext _, int start, int end, string value) => $"{start}:{end}:{value}"));
+
     [GenerateParser(nameof(TryParseDiscards))]
     private static Parser<int> BuildDiscards() =>
         Literals.Text("a").Then(static (_, _) => 1)

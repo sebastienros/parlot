@@ -187,6 +187,11 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+- A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A `Terms`
+  parser reports the start of its content, after the skipped white space, as at runtime. A composite parser
+  that skips white space internally (a sequence or a choice of `Terms` parsers) reports the offset where the
+  generated parser was entered, before that white space, where the runtime reports the start of its first
+  element.
 
 ### Cancellation
 
