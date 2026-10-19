@@ -638,32 +638,27 @@ public class Scanner
             return false;
         }
 
-        // When the quote char is a backslash it is also the escape char, in which case the start quote
-        // is itself the first escape sequence and the string is always decoded escape by escape.
-        var quoteIsEscape = startChar == '\\';
-
         // Index of the match in the full span, the start quote is at index 0
-        var nextEscape = quoteIsEscape ? 0 : next + 1;
+        var nextEscape = next + 1;
 
-        if (!quoteIsEscape)
+        // If the first match is the end quote there is no escape to decode, return the string as-is.
+        // When the quote char is a backslash it is also the escape char, so it can't be escaped and
+        // this is always the case: the string ends at the next backslash and is never decoded.
+        if (span[nextEscape] == startChar)
         {
-            // If the first match is the end quote there is no escape to decode, return the string as-is
-            if (span[nextEscape] == startChar)
-            {
-                Cursor.Advance(next + 2); // include start quote
+            Cursor.Advance(next + 2); // include start quote
 
-                result = Cursor.GetSpan(startOffset, next + 2);
-                return true;
-            }
+            result = Cursor.GetSpan(startOffset, next + 2);
+            return true;
+        }
 
-            // The end quote is only after the escape sequences. Make sure there is one at all before
-            // decoding them one by one, as reaching the end of the buffer that way is far more costly.
-            if (span.Slice(next + 2).IndexOf(startChar) == -1)
-            {
-                Cursor.MarkHitEnd();
-                result = [];
-                return false;
-            }
+        // The end quote is only after the escape sequences. Make sure there is one at all before
+        // decoding them one by one, as reaching the end of the buffer that way is far more costly.
+        if (span.Slice(next + 2).IndexOf(startChar) == -1)
+        {
+            Cursor.MarkHitEnd();
+            result = [];
+            return false;
         }
 
         // Decoding the escape sequences needs to restore the line and the column when it fails
@@ -851,8 +846,9 @@ public class Scanner
         }
 
         result = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
-        // A backslash delimiter is removed before decoding, so only escapes inside the quotes count.
-        hasEscape = !quoteIsEscape || result.Slice(1, result.Length - 2).IndexOf('\\') >= 0;
+
+        // Only a string with escape sequences gets here, the others returned before decoding anything
+        hasEscape = true;
 
         return true;
     }

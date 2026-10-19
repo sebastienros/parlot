@@ -151,7 +151,7 @@ public class StreamingTests
         Add("pattern-empty", "", "1", "12a", "a", "123456");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
         Add("nul-string", "", "\0", "\0abc\0", "\0abc", "\0a\\\0b\0", "x");
-        Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\");
+        Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\", "\\abc\\", "\\\\", "\\abc", "\\a\\\\b\\");
         Add("whitespace", "", " ", "  \n\t x", "x");
         Add("nonwhitespace", "", "a", "abc def", " x");
         Add("textbefore", "", "a", "abc", "abc-", "abc--", "a-b--c", "--");

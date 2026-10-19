@@ -457,6 +457,9 @@ public class FluentTests
     [InlineData('`', "`plain`", "plain")]
     [InlineData('|', "|plain|", "plain")]
     [InlineData('\\', "\\n\\rest", "n")]
+    [InlineData('\\', "\\abc\\", "abc")]
+    [InlineData('\\', "\\\\", "")]
+    [InlineData('\\', "\\a\\\\b\\", "a")]
     public void StringsWithoutContentEscapesShouldReuseTheInput(char quote, string text, string expected)
     {
         Assert.True(new StringLiteral(quote).TryParse(text, out var result));

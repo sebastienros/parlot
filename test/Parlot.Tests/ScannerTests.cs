@@ -101,12 +101,17 @@ public class ScannerTests
     }
 
     [Theory]
-    // The quote char is also the escape char, so the start quote is the first escape sequence
+    // The quote char is also the escape char, so it can't be escaped: the backslash following the
+    // start quote is the end quote, and the content is never decoded
     [InlineData("\\n\\rest", true, "\\n\\")]
-    [InlineData("\\p\\rest", false, null)]
-    [InlineData("\\u1234\\rest", false, null)]
-    [InlineData("\\u12\\rest", false, null)]
+    [InlineData("\\p\\rest", true, "\\p\\")]
+    [InlineData("\\abc\\", true, "\\abc\\")]
+    [InlineData("\\\\", true, "\\\\")]
+    [InlineData("\\u1234\\rest", true, "\\u1234\\")]
+    [InlineData("\\u12\\rest", true, "\\u12\\")]
     [InlineData("\\nrest", false, null)]
+    [InlineData("\\", false, null)]
+    [InlineData("", false, null)]
     public void ShouldReadStringWhenQuoteCharIsTheEscapeChar(string text, bool success, string expected)
     {
         Scanner s = new(text);
@@ -116,6 +121,7 @@ public class ScannerTests
         if (success)
         {
             Assert.Equal(expected, result.ToString());
+            Assert.Equal(expected.Length, s.Cursor.Offset);
         }
         else
         {
