@@ -74,6 +74,15 @@ public static partial class Grammar
         return expression.Eof();
     }
 
+    [GenerateParser(nameof(TryParseLeftRecursive))]
+    private static Parser<int> LeftRecursive()
+    {
+        var expression = Deferred<int>();
+        expression.Parser = expression.AndSkip(Literals.Char('+')).And(Literals.Number<int>(NumberOptions.Integer)).Then(static x => x.Item1 + x.Item2)
+            .Or(Literals.Number<int>(NumberOptions.Integer));
+        return expression;
+    }
+
     [GenerateParser(nameof(TryParseCustomWhitespace))]
     private static Parser<string> CustomWhitespace() =>
         Terms.Text("hello").AndSkip(Terms.Text("world")).Eof()
@@ -89,6 +98,10 @@ public static partial class Grammar
         Terms.Text("hello").AndSkip(Terms.Text("world")).Then(value => options.Prefix + value).Eof()
             .WithWhiteSpaceParser(Capture(OneOrMany(
                 If(() => options.Formal, Literals.Char('_'), Literals.Char('-')))));
+
+    [GenerateParser(nameof(TryParseDigits))]
+    private static Parser<string> Digits() =>
+        Terms.AnyOf("0123456789", minSize: 2).AndSkip(Literals.NoneOf("0123456789")).Then(static value => value.ToString()).Eof();
 
     [GenerateParser(nameof(TryParseError))]
     private static Parser<char> ErrorParser() => Literals.Char('x').ElseError("Expected x");

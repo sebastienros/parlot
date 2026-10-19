@@ -57,6 +57,18 @@ public static partial class Grammars
     public static partial bool TryParseLeftAssociativeEmpty(string text, out int value);
     public static partial bool TryParseLeftAssociativeContextEmpty(string text, out int value);
     public static partial bool TryParseUnaryFallback(string text, out decimal value);
+    public static partial bool TryParseThenPositions(string text, out string value);
+    public static partial bool TryParseLiteralThenPositions(string text, out string value);
+    public static partial bool TryParseThenPositionsFallback(string text, out string value);
+    public static partial bool TryParseDiscards(string text, out int value);
+    public static partial bool TryParseEscapedError(string text, out char value);
+    public static partial bool TryParseHalf(string text, out Half value);
+    public static partial bool TryParseInt128Hex(string text, out Int128 value);
+    public static partial bool TryParseTupleRightAssociative(string text, out double value);
+    public static partial bool TryParseTupleRightAssociativeContext(string text, out double value);
+    public static partial bool TryParseTupleRightAssociativeThenPlus(string text, out double value);
+    public static partial bool TryParseLeftRecursive(string text, out long value);
+    public static partial bool TryParseIndirectLeftRecursive(string text, out long value);
     public static partial bool TryParseUnaryEmptyOperator(string text, out long value);
     public static partial bool TryParseUnaryContextEmptyOperator(string text, out long value);
     public static partial bool TryParseSevenSequenceChoice(string text, out string value);

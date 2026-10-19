@@ -180,7 +180,9 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
             context.TargetFramework.Version >= new Version(8, 0);
         var tryParseMethod = supportsFastNumberParsing
             ? $"global::Parlot.Numbers.TryParseNumber<{valueTypeName}>"
-            : "global::Parlot.Numbers.TryParse";
+            : Numbers.HasTryParseOverload(typeof(T))
+                ? "global::Parlot.Numbers.TryParse"
+                : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later.");
         var outTarget = context.DiscardResult ? $"{valueTypeName} _" : parsedValueName;
         result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {outTarget}))");
         result.Body.Add("    {");

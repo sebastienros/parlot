@@ -164,7 +164,20 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         var outTarget = context.DiscardResult ? "_" : parsedValueName;
-        result.Body.Add($"    if (global::Parlot.Numbers.TryParseNumber<{valueTypeName}>({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
+        // The generic helper needs the consumer's net8.0+ runtime; downlevel consumers only have the fixed overloads.
+        // An unknown target keeps the generic path this build was compiled for.
+        var downlevel = context.TargetFramework.Identifier switch
+        {
+            TargetFrameworkIdentifier.NetFramework or TargetFrameworkIdentifier.NetStandard => true,
+            TargetFrameworkIdentifier.NetCoreApp => context.TargetFramework.Version < new Version(8, 0),
+            _ => false,
+        };
+        var tryParseMethod = !downlevel
+            ? $"global::Parlot.Numbers.TryParseNumber<{valueTypeName}>"
+            : Numbers.HasTryParseOverload(typeof(T))
+                ? "global::Parlot.Numbers.TryParse"
+                : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later.");
+        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         if (!context.DiscardResult)

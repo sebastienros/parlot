@@ -51,6 +51,23 @@ public static partial class Numbers
     }
 #endif
 
+    // The overloads every build of Numbers.TryParse provides, which a downlevel consumer can call
+    internal static bool HasTryParseOverload(Type type)
+    {
+        return type == typeof(byte)
+            || type == typeof(sbyte)
+            || type == typeof(short)
+            || type == typeof(ushort)
+            || type == typeof(int)
+            || type == typeof(uint)
+            || type == typeof(long)
+            || type == typeof(ulong)
+            || type == typeof(float)
+            || type == typeof(double)
+            || type == typeof(decimal)
+            || type == typeof(BigInteger);
+    }
+
     internal static bool HasTryParseRadixOverload(Type type)
     {
         return type == typeof(byte)

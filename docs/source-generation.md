@@ -35,6 +35,11 @@ private transitive dependencies are not propagated to consumers of your library.
 error if the explicit compatibility reference is missing. With central package management, put the
 version in `Directory.Packages.props` and omit `Version` on the `PackageReference`.
 
+The factory itself is compiled against the consuming project's references. A grammar shared with a
+.NET Framework or .NET Standard 2.0 target therefore cannot rely on conversions those frameworks lack,
+such as the implicit `string` to `ReadOnlySpan<char>` conversion: `AnyOf` and `NoneOf` provide `string`
+overloads so `Literals.AnyOf("0123456789")` builds on every target.
+
 ## Getting started
 
 Add the analyzer package to the project that owns the grammar:
@@ -187,6 +192,19 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+- A `Deferred` parser that is entered again at the position where it is already active (left recursion) fails
+  at that position instead of overflowing the stack, as the runtime `Deferred` does. The check costs one
+  comparison per entry and allocates nothing. Recursion that consumes input is bounded only by the stack
+  since no recursion depth limit can be set on a generated entry point.
+- `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
+  target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
+  the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
+  primitive types, `decimal` and `BigInteger`; other types are reported as a build error.
+- A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A `Terms`
+  parser reports the start of its content, after the skipped white space, as at runtime. A composite parser
+  that skips white space internally (a sequence or a choice of `Terms` parsers) reports the offset where the
+  generated parser was entered, before that white space, where the runtime reports the start of its first
+  element.
 
 ### Cancellation
 

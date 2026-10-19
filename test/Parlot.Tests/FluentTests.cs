@@ -1506,6 +1506,28 @@ public class FluentTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void TupleAssociativeRestoresCursorAndReportsPositions(bool withContext)
+    {
+        var number = Terms.Decimal();
+        var parser = withContext
+            ? number.RightAssociative((Terms.Char('-'), static (ParseContext _, decimal left, decimal right) => left - right))
+            : number.RightAssociative((Terms.Char('-'), static (left, right) => left - right));
+        var context = new ParseContext(new Scanner(" 8 - 3 - 1 -"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(6m, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(10, result.End);
+        Assert.Equal(10, context.Scanner.Cursor.Offset);
+
+        Assert.Equal(8m, parser.Parse(" 8"));
+        Assert.False(parser.TryParse("-", out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void AssociativeFactoryRestoresCursorOnIncompletePair(bool rightAssociative)
     {
         var number = Terms.Decimal();

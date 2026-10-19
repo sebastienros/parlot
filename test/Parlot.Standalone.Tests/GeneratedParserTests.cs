@@ -347,6 +347,36 @@ public class GeneratedParserTests
         Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber((string)null, out _));
     }
 
+    [Theory]
+    [InlineData("1+2", true, 1)]
+    [InlineData("42", true, 42)]
+    [InlineData("x", false, 0)]
+    public void Left_Recursive_Deferred_Fails_Instead_Of_Overflowing(string input, bool success, int expected)
+    {
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("12a", "12")]
+    [InlineData("  12a", "12")]
+    [InlineData("  1234x", "1234")]
+    [InlineData("1a", null)]
+    [InlineData("12", null)]
+    public void Char_Sets_Accept_String_Literals_On_Every_Target(string input, string expected)
+    {
+        // AnyOf("...") and NoneOf("...") bind to the string overloads, which a factory compiled for
+        // net472 or netstandard2.0 needs since a string doesn't convert to ReadOnlySpan<char> there.
+        Assert.Equal(expected != null, Grammar.TryParseDigits(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(expected != null, Grammar.TryParseDigits(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
     [Fact]
     public void Explicit_Lambda_Return_Types_Are_Supported()
     {
