@@ -497,6 +497,35 @@ public class StandaloneGeneratorTests
     }
 
     [Fact]
+    public void Custom_Number_Parser_Is_A_Generation_Error()
+    {
+        // A generated parser can't call the TryParseNumber override, so it would parse with the built-in method instead
+        const string grammar = """
+            using System;
+            using System.Globalization;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                private sealed class Doubling : NumberLiteralBase<int>
+                {
+                    public override bool TryParseNumber(ReadOnlySpan<char> text, NumberStyles style, IFormatProvider provider, out int value)
+                    {
+                        var success = int.TryParse(text, style, provider, out value);
+                        value *= 2;
+                        return success;
+                    }
+                }
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build() => new Doubling();
+            }
+            """;
+        var (result, _) = Generate(Declaration, grammar);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT005");
+        Assert.Contains("TryParseNumber", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Design_Time_Emits_Only_An_Entry_Point_Stub_Without_Executing_The_Factory()
     {
         var grammar = Grammar.Replace("Terms.Number<int>(NumberOptions.Integer).Eof()", "throw new System.InvalidOperationException(\"Do not execute\")", StringComparison.Ordinal);

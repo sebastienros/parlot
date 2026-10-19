@@ -514,7 +514,10 @@ The support layer is an implementation detail:
 
 Custom parser types used by a build-only grammar must implement `ISourceable` and emit self-contained code
 that resolves only to BCL types, application code, or the generated internal support layer. A custom parser
-that requires the runtime Parlot assembly cannot be used by a dependency-free entry point.
+that requires the runtime Parlot assembly cannot be used by a dependency-free entry point. This includes
+subclasses of `NumberLiteralBase<T>`: the generated code parses numbers with the built-in methods and cannot
+call a `TryParseNumber` override, so the generator reports `PARLOT005` instead of emitting a parser that
+would behave differently from the runtime one.
 
 ### Native AOT
 
