@@ -2,6 +2,7 @@ using Parlot.Tests.Calc;
 using System;
 using System.Buffers;
 using System.Globalization;
+using Parlot.Fluent;
 using Xunit;
 
 namespace Parlot.Tests;
@@ -120,6 +121,25 @@ public class ScannerTests
         {
             Assert.Equal(0, s.Cursor.Offset);
         }
+    }
+
+    [Fact]
+    public void ShouldNotReadNullQuotedStringAtEof()
+    {
+        // The cursor reports the null char at the end of the text, which is not a quote
+        var s = new Scanner("");
+
+        Assert.False(s.ReadQuotedString('\0', out _));
+        Assert.Equal(0, s.Cursor.Offset);
+
+        s = new Scanner("\0abc\0rest");
+
+        Assert.True(s.ReadQuotedString('\0', out var result));
+        Assert.Equal("\0abc\0", result.ToString());
+        Assert.Equal(5, s.Cursor.Offset);
+
+        Assert.False(new StringLiteral('\0').TryParse("", out _));
+        Assert.Equal("abc", new StringLiteral('\0').Parse("\0abc\0").ToString());
     }
 
     [Fact]

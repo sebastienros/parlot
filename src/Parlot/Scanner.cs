@@ -615,7 +615,8 @@ public class Scanner
         // Only a successful read of the escape sequences sets it
         hasEscape = false;
 
-        if (startChar != quoteChar)
+        // Current is also the null char at the end of the text, where there is no quote to read
+        if (startChar != quoteChar || Cursor.Eof)
         {
             result = [];
             return false;
@@ -815,8 +816,9 @@ public class Scanner
                         break;
                     default:
 
-                        // The quote char can be escaped, whichever it is
-                        if (Cursor.Current == startChar)
+                        // The quote char can be escaped, whichever it is. Match excludes the null char the cursor
+                        // reports at the end of the text, which a null quote char would otherwise be taken for.
+                        if (Cursor.Match(startChar))
                         {
                             Cursor.Advance();
                             break;
