@@ -153,7 +153,38 @@ public class IfTests
     [InlineData(true, " 42", true)]
     [InlineData(false, " x", false)]
     [InlineData(true, " x", false)]
-    public void OneOfShouldNotSkipConditionOrHoistWhitespace(bool withElse, string input, bool success)
+    public void OneOfShouldHoistWhitespaceWhenEveryBranchSkipsIt(bool withElse, string input, bool success)
+    {
+        // The branches declare their chars and that they skip white space, so the choice skips it once
+        // before the condition is evaluated and only evaluates it for a char a branch can start with
+        var evaluations = 0;
+        Func<ParseContext, bool> condition = context =>
+        {
+            evaluations++;
+            Assert.Equal(1, context.Scanner.Cursor.Offset);
+            Assert.NotEqual(' ', context.Scanner.Cursor.Current);
+            return true;
+        };
+        var conditional = withElse
+            ? If(condition, Terms.Text("42"), Terms.Text("17"))
+            : If(condition, Terms.Text("42"));
+        Assert.True(conditional is ISeekable { CanSeek: true });
+        Assert.True(conditional is ISeekable { SkipWhitespace: true });
+        var parser = OneOf(conditional, Terms.Text("z")).Or(Terms.Text("y"));
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.Equal(success, parser.Parse(context, ref result));
+        Assert.Equal(success ? 1 : 0, evaluations);
+        Assert.Equal(success ? input.Length : 0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData(false, " 42", true)]
+    [InlineData(true, " 42", true)]
+    [InlineData(false, " x", false)]
+    [InlineData(true, " x", false)]
+    public void OneOfShouldNotSkipConditionOrHoistWhitespaceWhenBranchesDisagree(bool withElse, string input, bool success)
     {
         var evaluations = 0;
         Func<ParseContext, bool> condition = context =>
@@ -164,8 +195,8 @@ public class IfTests
             return true;
         };
         var conditional = withElse
-            ? If(condition, Terms.Text("42"), Terms.Text("17"))
-            : If(condition, Terms.Text("42"));
+            ? If(condition, Terms.Text("42"), Literals.Text("17"))
+            : If(condition, Terms.Text("42").Lookup(Deferred<string>()));
         Assert.False(conditional is ISeekable { CanSeek: true });
         Assert.False(conditional is ISeekable { SkipWhitespace: true });
         var parser = OneOf(conditional, Terms.Text("z")).Or(Terms.Text("y"));

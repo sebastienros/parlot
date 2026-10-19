@@ -262,6 +262,36 @@ public class GrammarsTests
         Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
     }
 
+    [Theory]
+    [InlineData("  a", 'a', "wrap-a")]
+    [InlineData("  b", 'b', "wrap-b")]
+    [InlineData("  c", 'c', "wrap-c")]
+    [InlineData("  xd", 'd', "wrap-d")]
+    public void Seekable_Wrappers_Are_In_The_Generated_Lookup_Table(string input, char expected, string invoked)
+    {
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseSeekableWrappers(input, out var value));
+        Assert.Equal(expected, value);
+
+        foreach (var name in new[] { "wrap-a", "wrap-b", "wrap-c", "wrap-d", "wrap-e" })
+        {
+            Assert.Equal(name == invoked ? 1 : 0, GeneratedParserCounters.GetCount(name));
+        }
+
+        GeneratedParserCounters.Reset();
+
+        Assert.False(Grammars.TryParseSeekableWrappers("  z", out _));
+        Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
+
+        GeneratedParserCounters.Reset();
+
+        // The error is reported as a failure, and only raised when the lookup selected the parser
+        Assert.False(Grammars.TryParseSeekableWrappers("  e", out _));
+        Assert.Equal(1, GeneratedParserCounters.GetCount("wrap-e"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
+    }
+
     [Fact]
     public void Switch_Uses_The_Generated_Target_Parser_Body()
     {

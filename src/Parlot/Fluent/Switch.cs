@@ -1,3 +1,4 @@
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Linq;
@@ -8,7 +9,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Routes the parsing based on a custom delegate.
 /// </summary>
-public sealed class Switch<T, U> : Parser<U>, ISourceable
+public sealed class Switch<T, U> : Parser<U>, ISeekable, ISourceable
 {
     private readonly Parser<T> _previousParser;
     private readonly Parser<U>[] _parsers;
@@ -28,7 +29,24 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
         {
             _parsers[i] = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
         }
+
+        // The previous parser always reads first
+        if (_previousParser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
+
+    /// <inheritdoc />
+    public bool CanSeek { get; }
+
+    /// <inheritdoc />
+    public char[] ExpectedChars { get; } = [];
+
+    /// <inheritdoc />
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {

@@ -1147,6 +1147,9 @@ Result:
 failure: "Unexpected char c"
 ```
 
+`Error` declares the chars of the parser it is applied to, so a `OneOf` only tries it, and only raises the
+error, for one of them.
+
 ### When
 
 Adds some additional logic for a parser to succeed. The condition is executed when the previous parser succeeds. If the predicate returns `false`, the parser fails.
@@ -1209,6 +1212,10 @@ The condition is evaluated once per parse, at the current cursor position before
 When it is false, the two-argument form fails without consuming input or changing the result.
 When it is true, the parser succeeds only if the selected child succeeds.
 
+When every branch is seekable and they agree on skipping whitespace, `If` declares the chars any branch can start
+with, so a `OneOf` only tries it, and only evaluates the condition, for one of these chars. When the branches skip
+whitespace the `OneOf` skips it once before the condition is evaluated. `Select` declares its branches the same way.
+
 Provide an else parser to select between two fixed branches:
 
 ```c#
@@ -1250,11 +1257,13 @@ var parser = Terms.Integer().Switch(
 
 This signature prevents allocating new parsers in the selector.
 
+`Switch` declares the chars of the parser it is applied to, so a `OneOf` only tries it for one of them.
+
 ### Eof
 
 The extension `parser.Eof()` matches the parser followed by the end of the input, preserving its
 result. If trailing input remains, it restores the cursor to where the parser started so alternatives
-can retry.
+can retry. It declares the chars of the parser, so a `OneOf` only tries it for one of them.
 
 ```c#
 Parser<T> Eof()

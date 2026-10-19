@@ -327,6 +327,23 @@ public static partial class Grammars
         return choice;
     }
 
+    [GenerateParser(nameof(TryParseSeekableWrappers))]
+    private static Parser<char> BuildSeekableWrappers()
+    {
+        // Each wrapper declares the chars of the parser it runs first, so the choice only tries the matching one
+        var a = new CountingParser('a', "wrap-a", skipWhitespace: true);
+        var b = new CountingParser('b', "wrap-b", skipWhitespace: true);
+        var c = new CountingParser('c', "wrap-c", skipWhitespace: true);
+        var d = new CountingParser('d', "wrap-d", skipWhitespace: true);
+        var e = new CountingParser('e', "wrap-e", skipWhitespace: true);
+        return OneOf(
+            If(static () => true, a),
+            Select(static () => 0, b),
+            c.Eof(),
+            Terms.Char('x').Switch(static (context, value) => 0, d),
+            e.Error("no e"));
+    }
+
     [GenerateParser(nameof(TryParseCustomSwitch))]
     private static Parser<char> BuildCustomSwitch()
     {
