@@ -31,16 +31,14 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             or StringComparison.CurrentCultureIgnoreCase
             or StringComparison.InvariantCultureIgnoreCase);
 
-        // A CurrentCultureIgnoreCase text is compared with the culture that is current when it parses. This is not
-        // necessarily the one that is current now, so the chars it can start with are not known.
-        if (CanSeek = Text.Length > 0 && comparisonType != StringComparison.CurrentCultureIgnoreCase)
+        // A culture comparison ignores some chars, like the soft hyphen, and the current culture is the one of the
+        // thread that parses, not the one of this thread. The chars such a text can start with are not known, only
+        // an ordinal comparison starts with the first char of the text, or with its other cases.
+        if (CanSeek = Text.Length > 0 && comparisonType is StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase)
         {
-            ExpectedChars = comparisonType switch
-            {
-                StringComparison.OrdinalIgnoreCase => OrdinalIgnoreCaseChars(Text),
-                StringComparison.InvariantCultureIgnoreCase => [Text.ToUpperInvariant()[0], Text.ToLowerInvariant()[0]],
-                _ => [Text[0]]
-            };
+            ExpectedChars = comparisonType == StringComparison.OrdinalIgnoreCase
+                ? OrdinalIgnoreCaseChars(Text)
+                : [Text[0]];
         }
     }
 

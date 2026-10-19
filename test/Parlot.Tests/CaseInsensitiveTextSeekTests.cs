@@ -242,6 +242,36 @@ public class CaseInsensitiveTextSeekTests
         }
     }
 
+    [Theory]
+    [InlineData(StringComparison.CurrentCulture)]
+    [InlineData(StringComparison.CurrentCultureIgnoreCase)]
+    [InlineData(StringComparison.InvariantCulture)]
+    [InlineData(StringComparison.InvariantCultureIgnoreCase)]
+    public void CultureComparisonsShouldNotSeek(StringComparison comparison)
+    {
+        // A culture comparison ignores some chars, like the soft hyphen, so the first char of the input is not
+        // necessarily the first char of the text, and a choice can't skip the text based on it
+        var literal = new TextLiteral("abc", comparison);
+
+        Assert.False(((ISeekable)literal).CanSeek);
+        Assert.False(((ISeekable)new KeywordLiteral("abc", comparison)).CanSeek);
+
+        foreach (var input in new[] { "abc", "ABC", "\u00ADabc", "" })
+        {
+            AssertSameAsWithoutLookup(literal, input);
+        }
+    }
+
+    [Theory]
+    [InlineData("\u01C5x", "\u01C5x")] // Dz, which is neither its upper nor its lower case
+    [InlineData("\u01C5x", "\u01C4x")] // Dz and DZ
+    [InlineData("\u01C5x", "\u01C6x")] // Dz and dz
+    [InlineData("ix", "\u0130x")] // i and dotted capital I
+    public void InvariantCultureIgnoreCaseShouldMatchWhatTheTextMatchesOnItsOwn(string text, string input)
+    {
+        AssertSameAsWithoutLookup(new TextLiteral(text, StringComparison.InvariantCultureIgnoreCase), input);
+    }
+
     // A choice only tries the alternatives which can start with the next char, and has to find the text
     // whenever the text matches when it is tried alone
     private static void AssertSameAsWithoutLookup(Parser<string> literal, string input)
