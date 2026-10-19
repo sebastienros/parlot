@@ -474,6 +474,29 @@ public class StandaloneGeneratorTests
     }
 
     [Fact]
+    public void Runtime_Only_Parser_Under_SkipWhiteSpace_Is_A_Generation_Error()
+    {
+        const string grammar = """
+            using Parlot;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                private sealed class RuntimeOnly : Parser<int>
+                {
+                    public override bool Parse(ParseContext context, ref ParseResult<int> result) => false;
+                }
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build() => SkipWhiteSpace(new RuntimeOnly());
+            }
+            """;
+        var (result, _) = Generate(Declaration, grammar);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT005");
+        Assert.Contains("SkipWhiteSpace requires a source-generatable parser", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Design_Time_Emits_Only_An_Entry_Point_Stub_Without_Executing_The_Factory()
     {
         var grammar = Grammar.Replace("Terms.Number<int>(NumberOptions.Integer).Eof()", "throw new System.InvalidOperationException(\"Do not execute\")", StringComparison.Ordinal);

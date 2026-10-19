@@ -134,6 +134,16 @@ public class SourceableParsersTests
             () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
     }
 
+    [Fact]
+    public void SkipWhiteSpace_Emitter_Rejects_A_Runtime_Only_Parser()
+    {
+        // Silently emitting a parser that always fails would hide the unsupported parser from the build
+        var parser = SkipWhiteSpace(new RuntimeOnlyParser());
+
+        Assert.Throws<NotSupportedException>(
+            () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
+    }
+
     private static SourceResult Generate<T>(Parser<T> parser) =>
         Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext());
 
