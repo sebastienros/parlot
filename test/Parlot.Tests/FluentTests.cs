@@ -1882,6 +1882,41 @@ public class FluentTests
     }
 
     [Fact]
+    public void AnyOfShouldTrackLinesAndStopAtMaxSize()
+    {
+        var result = new ParseResult<TextSpan>();
+
+        // '\n' is one of the chars, the lines it ends are tracked
+        var context = new ParseContext(new Scanner("a\na\nb"));
+        Assert.True(Literals.AnyOf("a\n").Parse(context, ref result));
+        Assert.Equal("a\na\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(4, 3, 1), context.Scanner.Cursor.Position);
+
+        // A negated set reads the new lines it doesn't exclude
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("c").Parse(context, ref result));
+        Assert.Equal("ab\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(3, 2, 1), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("\n").Parse(context, ref result));
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+
+        // The cursor stops after maxSize chars, on the next one
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.AnyOf("a", maxSize: 2).Parse(context, ref result));
+        Assert.Equal("aa", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+        Assert.Equal('a', context.Scanner.Cursor.Current);
+
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.NoneOf("b", maxSize: 3).Parse(context, ref result));
+        Assert.Equal("aaa", result.Value.ToString());
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void AnyOfShouldNotBeSeekableIfOptional()
     {
         var parser = Literals.AnyOf("a", minSize: 0) as ISeekable;
@@ -2433,6 +2468,32 @@ public class FluentTests
         Assert.Same(input, parser.Parse(input));
         Assert.Equal("IF", parser.Parse("IF("));
         Assert.False(parser.TryParse("IFoo", out _));
+    }
+
+    [Fact]
+    public void KeywordShouldNotMoveTheCursorWhenALetterFollows()
+    {
+        var result = new ParseResult<string>();
+
+        var context = new ParseContext(new Scanner(" ifx"));
+        Assert.False(Terms.Keyword("if").Parse(context, ref result));
+        Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("IFX"));
+        Assert.False(Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true).Parse(context, ref result));
+        Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+
+        // The position after the keyword, and the lines of a text containing new lines, are tracked
+        context = new ParseContext(new Scanner(" if("));
+        Assert.True(Terms.Keyword("if").Parse(context, ref result));
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        Assert.Equal(new TextPosition(3, 1, 4), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("a\nb c"));
+        Assert.True(new KeywordLiteral("a\nb").Parse(context, ref result));
+        Assert.Equal("a\nb", result.Value);
+        Assert.Equal(new TextPosition(3, 2, 2), context.Scanner.Cursor.Position);
     }
 
     [Fact]

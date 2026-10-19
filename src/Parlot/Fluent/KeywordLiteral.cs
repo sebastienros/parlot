@@ -11,11 +11,16 @@ namespace Parlot.Fluent;
 /// </summary>
 public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
 {
+    // The text parser is kept for the source generator, which emits it as a helper; the runtime matches the text inline
     private readonly TextLiteral _textLiteral;
+    private readonly bool _hasNewLines;
+    private readonly bool _returnText;
 
     public KeywordLiteral(string text, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
     {
         _textLiteral = new TextLiteral(text, comparison, returnMatchedText: returnMatchedText);
+        _hasNewLines = _textLiteral.HasNewLines;
+        _returnText = _textLiteral.ReturnsText;
         Text = text;
         Comparison = comparison;
         ReturnMatchedText = returnMatchedText;
@@ -45,20 +50,60 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
 
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var cursor = context.Scanner.Cursor;
+        var text = Text;
 
-        if (_textLiteral.Parse(context, ref result))
+        // The text and then the keyword boundary are checked before the cursor moves, such that a mismatch
+        // needs no reset and no string is built for a text that is not a keyword. Match marks HitEnd when
+        // the buffer ends inside the text.
+        if (cursor.Match(text.AsSpan(), Comparison))
         {
-            // Check that the next character is not a letter (keyword boundary)
-            var cursor = context.Scanner.Cursor;
-            if (cursor.Eof || !Character.IsInRange(cursor.Current, 'a', 'z') && !Character.IsInRange(cursor.Current, 'A', 'Z'))
+            var length = text.Length;
+            var span = cursor.Span;
+
+            // The next char must not be a letter (keyword boundary). When the text ends the buffer the cursor
+            // reaches the end, which marks HitEnd.
+            if (span.Length > length)
             {
-                context.ExitParser(this);
-                return true;
+                var next = span[length];
+
+                if (Character.IsInRange(next, 'a', 'z') || Character.IsInRange(next, 'A', 'Z'))
+                {
+                    context.ExitParser(this);
+                    return false;
+                }
             }
 
-            // Not a keyword boundary - backtrack
-            context.Scanner.Cursor.ResetPosition(start);
+            var start = cursor.Offset;
+
+            if (_hasNewLines)
+            {
+                cursor.Advance(length);
+            }
+            else
+            {
+                cursor.AdvanceNoNewLines(length);
+            }
+
+            if (_returnText)
+            {
+                // Return the canonical source text (avoids a second comparison and an allocation).
+                result.Set(start, start + length, text);
+            }
+            else
+            {
+                var buffer = cursor.Buffer;
+                var parsedText = cursor.GetSpan(start, length);
+
+                result.Set(start, start + length, parsedText.Equals(text, StringComparison.Ordinal)
+                    ? text
+                    : start == cursor.BufferStart && length == buffer.Length
+                        ? buffer
+                        : parsedText.ToString());
+            }
+
+            context.ExitParser(this);
+            return true;
         }
 
         context.ExitParser(this);

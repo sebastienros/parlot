@@ -18,8 +18,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
     // be invoked when there is no match.
 
     public const char OtherSeekableChar = '\0';
-    internal readonly CharMap<List<Parser<T>>>? _map;
-    internal readonly List<Parser<T>>? _otherParsers;
+    // The lookup groups are arrays, iterated without the bounds and version checks of List<T>
+    internal readonly CharMap<Parser<T>[]>? _map;
+    internal readonly Parser<T>[]? _otherParsers;
 
     // Parsers as an array, to iterate over it without the interface calls of IReadOnlyList<T>
     private readonly Parser<T>[] _parsers;
@@ -98,6 +99,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
         if (Parsers.Any(x => x is ISeekable seekable))
         {
+            // The groups are built as lists and converted to arrays once, at the end
+            List<Parser<T>>? otherParsers = null;
+
             var lookupTable = Parsers
                             .Where(p => p is ISeekable seekable && seekable.CanSeek)
                             .Cast<ISeekable>()
@@ -119,8 +123,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                         }
                         else
                         {
-                            _otherParsers ??= [];
-                            AddUniqueRange(_otherParsers, subParsers);
+                            otherParsers ??= [];
+                            AddUniqueRange(otherParsers, subParsers);
 
                             foreach (var entry in lookupTable)
                             {
@@ -131,8 +135,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                 }
                 else
                 {
-                    _otherParsers ??= [];
-                    AddUniqueSingle(_otherParsers, parser);
+                    otherParsers ??= [];
+                    AddUniqueSingle(otherParsers, parser);
 
                     foreach (var entry in lookupTable)
                     {
@@ -156,9 +160,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                     RemoveSkipWhiteSpace(entry.Value);
                 }
 
-                if (_otherParsers != null)
+                if (otherParsers != null)
                 {
-                    RemoveSkipWhiteSpace(_otherParsers);
+                    RemoveSkipWhiteSpace(otherParsers);
                 }
             }
             else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
@@ -177,9 +181,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
             lookupTable?.Remove(OtherSeekableChar);
 
+            _otherParsers = otherParsers?.ToArray();
+
             if (lookupTable?.Count > 0)
             {
-                _map = new CharMap<List<Parser<T>>>(lookupTable);
+                _map = new CharMap<Parser<T>[]>(lookupTable.Select(static entry => new KeyValuePair<char, Parser<T>[]>(entry.Key, entry.Value.ToArray())));
 
                 // This parser is only seekable if there isn't a parser
                 // that can't be reached without a lookup.
@@ -246,7 +252,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
             if (seekableParsers != null)
             {
-                var length = seekableParsers.Count;
+                var length = seekableParsers.Length;
 
                 for (var i = 0; i < length; i++)
                 {
@@ -298,11 +304,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
         }
 
         // The lookup map releases the text as soon as a single alternative remains
-        IReadOnlyList<Parser<T>>? parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : Parsers;
+        var parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : _parsers;
 
         if (parsers != null)
         {
-            var length = parsers.Count;
+            var length = parsers.Length;
 
             // Each alternative is read from the same position
             var pin = length > 1 ? context.Pin() : -1;

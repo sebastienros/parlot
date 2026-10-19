@@ -1,3 +1,4 @@
+using System;
 using Parlot.Fluent;
 using System.Globalization;
 using System.Numerics;
@@ -285,6 +286,48 @@ public class NumberLiteralTests
         Assert.False(Literals.Octal<byte>().TryParse("400", out _));
         Assert.False(Literals.Binary<byte>().TryParse("100000000", out _));
     }
+
+#if NET8_0_OR_GREATER
+    [Fact]
+    public void GenericRadixNumbersShouldFailOnOverflowWithoutAnException()
+    {
+        // These types go through the generic TryParseRadix<TNumber>, which must not throw on overflow
+        Assert.Equal(Int128.MaxValue, Literals.Hexadecimal<Int128>().Parse("7fffffffffffffffffffffffffffffff"));
+        Assert.False(Literals.Hexadecimal<Int128>().TryParse("80000000000000000000000000000000", out _));
+        Assert.Equal(UInt128.MaxValue, Literals.Hexadecimal<UInt128>().Parse("ffffffffffffffffffffffffffffffff"));
+        Assert.False(Literals.Hexadecimal<UInt128>().TryParse("100000000000000000000000000000000", out _));
+        Assert.Equal(Int128.MaxValue, Literals.Binary<Int128>().Parse(new string('1', 127)));
+        Assert.False(Literals.Binary<Int128>().TryParse(new string('1', 128), out _));
+        Assert.Equal((Int128)0x1FF, Literals.Octal<Int128>().Parse("777"));
+
+        if (IntPtr.Size == 8)
+        {
+            Assert.Equal(nint.MaxValue, Literals.Hexadecimal<nint>().Parse("7fffffffffffffff"));
+            Assert.False(Literals.Hexadecimal<nint>().TryParse("8000000000000000", out _));
+            Assert.Equal(nuint.MaxValue, Literals.Hexadecimal<nuint>().Parse("ffffffffffffffff"));
+            Assert.False(Literals.Hexadecimal<nuint>().TryParse("10000000000000000", out _));
+        }
+
+        // The generic method called directly with a type that has its own overload
+        Assert.True(Numbers.TryParseRadix<ulong>("ffffffffffffffff", 16, out var charsRead, out var unsignedValue));
+        Assert.Equal(ulong.MaxValue, unsignedValue);
+        Assert.Equal(16, charsRead);
+        Assert.False(Numbers.TryParseRadix<ulong>("10000000000000000", 16, out charsRead, out unsignedValue));
+        Assert.Equal(0, charsRead);
+        Assert.Equal(0ul, unsignedValue);
+        Assert.True(Numbers.TryParseRadix<long>("7fffffffffffffff", 16, out _, out var signedValue));
+        Assert.Equal(long.MaxValue, signedValue);
+        Assert.False(Numbers.TryParseRadix<long>("8000000000000000", 16, out _, out _));
+        Assert.False(Numbers.TryParseRadix<sbyte>("80", 16, out _, out _));
+        Assert.True(Numbers.TryParseRadix<sbyte>("7f", 16, out _, out var small));
+        Assert.Equal(sbyte.MaxValue, small);
+
+        // A type without a largest value never overflows
+        Assert.True(Numbers.TryParseRadix<BigInteger>("ffffffffffffffffffffffffffffffffffffffff", 16, out charsRead, out var big));
+        Assert.Equal(BigInteger.Parse("1461501637330902918203684832716283019655932542975"), big);
+        Assert.Equal(40, charsRead);
+    }
+#endif
 
     [Fact]
     public void RadixNumberLiteralsShouldResetPositionWhenTheyFail()

@@ -4,7 +4,6 @@ using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
 using System.Numerics;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
@@ -13,10 +12,6 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 {
     private const char DefaultDecimalSeparator = '.';
     private const char DefaultGroupSeparator = ',';
-
-    private static readonly MethodInfo _tryParseMethodInfo = typeof(Numbers)
-        .GetMethod(nameof(Numbers.TryParseNumber), BindingFlags.Static | BindingFlags.Public)!
-        .MakeGenericMethod(typeof(T));
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;

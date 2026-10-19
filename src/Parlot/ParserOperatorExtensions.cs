@@ -97,7 +97,12 @@ public static partial class ParserOperatorExtensions
     {
         public static OneOf<T> operator |(IParser<T> p1, IParser<T> p2)
         {
-            return new([new IParserAdapter<T>(p1), new IParserAdapter<T>(p2)]);
+            // Typed parsers are passed as they are, like the + operator does, such that OneOf can
+            // build its lookup table from them and strip their SkipWhiteSpace wrappers. The adapter
+            // is only needed for the covariant IParser<T> implementations.
+            return new([
+                p1 as Parser<T> ?? new IParserAdapter<T>(p1),
+                p2 as Parser<T> ?? new IParserAdapter<T>(p2)]);
         }
     }
 
