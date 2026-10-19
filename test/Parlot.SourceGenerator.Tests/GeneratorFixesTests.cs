@@ -17,6 +17,14 @@ namespace Parlot.SourceGenerator.Tests;
 public class GeneratorFixesTests
 {
     [Fact]
+    public void Discarded_Lambda_Parameters_Get_Distinct_Names()
+    {
+        Assert.True(Grammars.TryParseDiscards("abc", out var value));
+        Assert.Equal(1 + 2 + 2, value);
+        Assert.False(Grammars.TryParseDiscards("abd", out _));
+    }
+
+    [Fact]
     public void Error_Messages_Are_Escaped()
     {
         Assert.True(Grammars.TryParseEscapedError("x", out var value));

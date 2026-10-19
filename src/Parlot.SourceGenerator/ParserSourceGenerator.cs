@@ -1705,7 +1705,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     .Select(static parameter => parameter.Identifier.Text).ToArray(),
                 _ => throw new NotSupportedException("Unsupported lambda syntax.")
             };
-            var paramList = GenerateParameterListWithOriginalNames(invokeMethod, originalParamNames);
+            var paramList = GenerateParameterListWithOriginalNames(invokeMethod, ReplaceDiscards(originalParamNames));
             var body = lambda.Body.ToFullString().Trim();
             var asyncModifier = lambda.Modifiers.Any(SyntaxKind.AsyncKeyword) ? "async " : "";
 
@@ -1741,6 +1741,41 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         }
         
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Replaces discard parameters by unique names. A lambda such as "(_, _) => 0" is valid C#,
+    /// but a method with two parameters named "_" is not. A single "_" is a regular parameter the
+    /// body may reference and is kept.
+    /// </summary>
+    private static string[] ReplaceDiscards(string[] originalNames)
+    {
+        if (originalNames.Count(static name => name == "_") < 2)
+        {
+            return originalNames;
+        }
+
+        var names = (string[])originalNames.Clone();
+        var next = 0;
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (names[i] != "_")
+            {
+                continue;
+            }
+
+            string candidate;
+            do
+            {
+                candidate = "_" + next++;
+            }
+            while (Array.IndexOf(originalNames, candidate) >= 0);
+
+            names[i] = candidate;
+        }
+
+        return names;
     }
 
     /// <summary>

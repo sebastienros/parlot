@@ -249,6 +249,13 @@ public static partial class Grammars
         return OneOf(unary, Literals.Char('-').Then(static _ => 42m)).Eof();
     }
 
+    [GenerateParser(nameof(TryParseDiscards))]
+    private static Parser<int> BuildDiscards() =>
+        Literals.Text("a").Then(static (_, _) => 1)
+            .And(Literals.Text("b").Then(static (_, _, _, _) => 2))
+            .And(Literals.Text("c").Then(static (_, start, _, _) => start))
+            .Then(static x => x.Item1 + x.Item2 + x.Item3);
+
     [GenerateParser(nameof(TryParseEscapedError))]
     private static Parser<char> BuildEscapedError() =>
         Literals.Char('x').ElseError("line1\nline2 \"quoted\" back\\slash\ttab");
