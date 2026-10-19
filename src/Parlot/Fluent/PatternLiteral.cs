@@ -41,7 +41,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         var span = cursor.Span;
         var limit = _maxSize > 0 && _maxSize < span.Length ? _maxSize : span.Length;
         var size = 1;
-        var newLines = span[0] is '\n' or '\r';
+        var newLines = span[0] == '\n';
 
         while (size < limit)
         {
@@ -52,7 +52,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
                 break;
             }
 
-            newLines |= c is '\n' or '\r';
+            newLines |= c == '\n';
             size++;
         }
 
@@ -60,9 +60,8 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         {
             var start = cursor.Offset;
 
-            // The line and column only need to be tracked char by char when there are new lines,
-            // including the char the cursor moves to since a '\r' doesn't count as a column.
-            if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+            // The line and column only need to be tracked char by char when there are new lines
+            if (newLines)
             {
                 cursor.Advance(size);
             }

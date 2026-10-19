@@ -97,6 +97,11 @@ public class Cursor
     {
     }
 
+    /// <summary>
+    /// The current position. The offset is absolute, the line starts at 1 and increases after each <c>'\n'</c>, and the
+    /// column is one more than the number of chars between the previous <c>'\n'</c> (or the start of the text) and the
+    /// position: every char other than <c>'\n'</c>, <c>'\r'</c> included, occupies one column.
+    /// </summary>
     public TextPosition Position => new(_offset + _base, _line, _column);
 
     /// <summary>
@@ -167,7 +172,7 @@ public class Cursor
 #endif
 
     /// <summary>
-    /// Advances the cursor by one character.
+    /// Advances the cursor by one character. Nothing happens when the cursor is already at the end of the text.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance()
@@ -176,32 +181,51 @@ public class Cursor
 
         if (_offset >= _textLength)
         {
-            Eof = true;
-            _flags |= HitEndFlag;
-            _column++;
-            Current = NullChar;
+            AdvanceToEnd();
             return;
         }
-
-        var next = Buffer[_offset];
 
         if (Current == '\n')
         {
             _line++;
             _column = 1;
         }
-        else if (next != '\r')
+        else
         {
             _column++;
         }
 
-        // if c == '\r', don't increase the column count
+        Current = Buffer[_offset];
+    }
 
-        Current = next;
+    // Leaves the current char for the end of the text, or stays there when the cursor was already at the end.
+    private void AdvanceToEnd()
+    {
+        _offset = _textLength;
+
+        if (Eof)
+        {
+            return;
+        }
+
+        Eof = true;
+        _flags |= HitEndFlag;
+
+        if (Current == '\n')
+        {
+            _line++;
+            _column = 1;
+        }
+        else
+        {
+            _column++;
+        }
+
+        Current = NullChar;
     }
 
     /// <summary>
-    /// Advances the cursor and tracks its current location (line and column).
+    /// Advances the cursor by <paramref name="count"/> characters, or to the end of the text, and tracks its current location (line and column).
     /// </summary>
     public void Advance(int count)
     {
@@ -218,77 +242,68 @@ public class Cursor
         }
 #endif
 
-        var maxOffset = _offset + count;
+        var end = _offset + count;
 
         // Detect if the cursor will be over Eof
-        if (maxOffset > _textLength - 1)
+        if (end >= _textLength)
         {
             Eof = true;
             _flags |= HitEndFlag;
-            maxOffset = _textLength - 1;
+            end = _textLength;
         }
 
-        // Keep the loop state in locals and publish it once, as in Sep's block parsers.
+        // Keep the loop state in locals and publish them once, as in Sep's block parsers.
         var offset = _offset;
-        var current = Current;
         var line = _line;
         var column = _column;
         var buffer = Buffer;
 
-        while (offset < maxOffset)
+        // Each char that is left counts as a column, or starts a new line
+        while (offset < end)
         {
-            var next = buffer[++offset];
-
-            if (current == '\n')
+            if (buffer[offset] == '\n')
             {
                 line++;
                 column = 1;
             }
-            else if (next != '\r')
+            else
             {
                 column++;
             }
 
-            current = next;
+            offset++;
         }
 
         _offset = offset;
-        Current = current;
         _line = line;
         _column = column;
-
-        if (Eof)
-        {
-            Current = NullChar;
-            _offset = _textLength;
-            _column++;
-        }
+        Current = Eof ? NullChar : buffer[offset];
     }
 
 #if NET8_0_OR_GREATER
     private bool TryAdvanceWithoutNewLines(int count)
     {
         var offset = _offset;
-        var end = Math.Min(offset + count, _textLength - 1);
+        var end = Math.Min(offset + count, _textLength);
 
-        // Include both endpoints: LF affects the following position, while CR
-        // affects the position at which it is encountered. Guard overflow too.
-        if (end < offset || Buffer.AsSpan(offset, end - offset + 1).ContainsAny('\r', '\n'))
+        // Only the chars that are left matter, not the one the cursor moves to. Guard overflow too.
+        if (end < offset || Buffer.AsSpan(offset, end - offset).Contains('\n'))
         {
             return false;
         }
 
         _column += end - offset;
         _offset = end;
-        Current = Buffer[end];
 
-        if (count > end - offset)
+        if (end == _textLength)
         {
             Eof = true;
             _flags |= HitEndFlag;
             Current = NullChar;
-            _offset = _textLength;
-            _column++;
+        }
+        else
+        {
+            Current = Buffer[end];
         }
 
         return true;
@@ -296,7 +311,8 @@ public class Cursor
 #endif
 
     /// <summary>
-    /// Advances the cursor and tracks its current location (line and column) with the knowledge there are no new lines (\r or \n).
+    /// Advances the cursor and tracks its current location (line and column) with the knowledge that the
+    /// <paramref name="offset"/> chars it leaves contain no <c>'\n'</c>.
     /// </summary>
     public void AdvanceNoNewLines(int offset)
     {
@@ -407,8 +423,8 @@ public class Cursor
     /// Advances the cursor by a precomputed amount, applying known line/column deltas.
     /// </summary>
     /// <param name="consumedLength">How many characters were consumed.</param>
-    /// <param name="newLines">Number of newline characters encountered in the consumed span.</param>
-    /// <param name="trailingSegmentLength">Length of the segment after the last newline (or the full length when there are no newlines).</param>
+    /// <param name="newLines">Number of <c>'\n'</c> characters in the consumed span.</param>
+    /// <param name="trailingSegmentLength">Number of characters after the last <c>'\n'</c> of the consumed span (or the full length when there is none).</param>
     public void AdvanceBy(int consumedLength, int newLines, int trailingSegmentLength)
     {
         _offset += consumedLength;
