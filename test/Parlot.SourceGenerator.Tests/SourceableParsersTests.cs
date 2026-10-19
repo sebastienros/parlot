@@ -187,6 +187,27 @@ public class SourceableParsersTests
         Assert.Equal(['a', 'b'], ((ISeekable)choice).ExpectedChars.OrderBy(static c => c));
     }
 
+    [Fact]
+    public void OneOf_Emitter_Does_Not_Route_The_Group_Separator_Or_The_Exponent_To_Numbers()
+    {
+        var number = Literals.Number<decimal>(NumberOptions.Any).Then(static x => x.ToString(CultureInfo.InvariantCulture));
+        var choice = OneOf(number, Literals.Text("x"));
+        var generated = string.Join(Environment.NewLine, Generate(choice).Body);
+
+        foreach (var c in "0123456789+-.x")
+        {
+            Assert.Contains($"case '{c}':", generated, StringComparison.Ordinal);
+        }
+
+        foreach (var c in ",eE")
+        {
+            Assert.DoesNotContain($"case '{c}':", generated, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("default:", generated, StringComparison.Ordinal);
+        Assert.Equal("+-.0123456789".ToCharArray(), ((ISeekable)choice).ExpectedChars.Where(static c => c != 'x').OrderBy(static c => c));
+    }
+
     private static SourceResult Generate<T>(Parser<T> parser) =>
         Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext());
 
