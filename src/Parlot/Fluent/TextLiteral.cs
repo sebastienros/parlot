@@ -122,6 +122,12 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
     internal StringComparison Comparison => _comparisonType;
 
+    // Whether the text contains '\n', which then needs to be tracked for the line and column
+    internal bool HasNewLines => _hasNewLines;
+
+    // Whether the canonical text is returned rather than the matched one
+    internal bool ReturnsText => _returnText;
+
     public bool CanSeek { get; }
 
     public char[] ExpectedChars { get; } = [];

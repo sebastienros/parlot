@@ -2449,6 +2449,32 @@ public class FluentTests
     }
 
     [Fact]
+    public void KeywordShouldNotMoveTheCursorWhenALetterFollows()
+    {
+        var result = new ParseResult<string>();
+
+        var context = new ParseContext(new Scanner(" ifx"));
+        Assert.False(Terms.Keyword("if").Parse(context, ref result));
+        Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("IFX"));
+        Assert.False(Literals.Keyword("if", caseInsensitive: true, returnMatchedText: true).Parse(context, ref result));
+        Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+
+        // The position after the keyword, and the lines of a text containing new lines, are tracked
+        context = new ParseContext(new Scanner(" if("));
+        Assert.True(Terms.Keyword("if").Parse(context, ref result));
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        Assert.Equal(new TextPosition(3, 1, 4), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("a\nb c"));
+        Assert.True(new KeywordLiteral("a\nb").Parse(context, ref result));
+        Assert.Equal("a\nb", result.Value);
+        Assert.Equal(new TextPosition(3, 2, 2), context.Scanner.Cursor.Position);
+    }
+
+    [Fact]
     public void KeywordShouldMatchNonLetterCharactersAfter()
     {
         var parser = Terms.Keyword("return");
