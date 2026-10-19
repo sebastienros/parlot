@@ -2466,6 +2466,51 @@ public class FluentTests
     }
 
     [Fact]
+    public void LookupShouldOnlySeekWhenAllTheParsersCanSeekAndAgreeOnWhiteSpace()
+    {
+        var a = (ISeekable)Terms.Text("a");
+        var b = (ISeekable)Terms.Text("b");
+
+        var seekable = (ISeekable)Terms.Text("x").Lookup(a, b);
+
+        Assert.True(seekable.CanSeek);
+        Assert.True(seekable.SkipWhitespace);
+        Assert.Equal(['a', 'b'], seekable.ExpectedChars);
+
+        // A parser that can't seek can start with anything
+        seekable = (ISeekable)Terms.Text("x").Lookup(a, Deferred<string>());
+
+        Assert.False(seekable.CanSeek);
+
+        // Parsers that disagree on skipping white space have no common hint
+        seekable = (ISeekable)Terms.Text("x").Lookup(a, (ISeekable)Literals.Text("b"));
+
+        Assert.False(seekable.CanSeek);
+
+        seekable = (ISeekable)Terms.Text("x").Lookup(Array.Empty<ISeekable>());
+
+        Assert.False(seekable.CanSeek);
+    }
+
+    [Fact]
+    public void LookupWithUnusableHintsShouldNotHideTheParserFromOneOf()
+    {
+        // A hint that no white space is skipped made OneOf reject " a" without trying the parser
+        var mixed = Terms.Text("a").Lookup((ISeekable)Terms.Text("a"), (ISeekable)Literals.Text("b"));
+        var parser = OneOf(mixed, Literals.Text("z"));
+
+        Assert.Equal("a", parser.Parse(" a"));
+        Assert.Equal("a", parser.Parse("a"));
+        Assert.Equal("z", parser.Parse("z"));
+
+        // A parser that can't seek contributed no expected chars, so the alternative was never tried
+        parser = OneOf(Terms.Text("a").Lookup(Deferred<string>()), Literals.Text("z"));
+
+        Assert.Equal("a", parser.Parse("a"));
+        Assert.Equal("z", parser.Parse("z"));
+    }
+
+    [Fact]
     public void AnyOfShouldBeSeekable()
     {
         // Building the literal from a SearchValues instance loses the source chars, so a parser built

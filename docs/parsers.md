@@ -1296,6 +1296,8 @@ Parser<T> Lookup<U>(params ReadOnlySpan<char> expectedChars)
 Parser<T> Lookup(params ISeekable[] parsers)
 ```
 
+The hints taken from other parsers are only used when every one of them can seek and they all skip white space the same way. Otherwise the resulting parser declares that it can start with any char, like the original one.
+
 ## Other parsers
 
 ### AnyCharBefore
