@@ -14,6 +14,9 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
     private readonly int _maxSize;
     private readonly bool _negate;
 
+    // Whether the matched chars can contain '\n', which then needs to be tracked for the line and column
+    private readonly bool _hasNewLine;
+
     public bool CanSeek { get; }
 
     public char[] ExpectedChars { get; } = [];
@@ -27,6 +30,9 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
+
+        // A negated set matches every char but its values, so it reads new lines unless '\n' is one of them
+        _hasNewLine = searchValues.Contains('\n') != negate;
     }
 
     public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0, bool negate = false)
@@ -36,6 +42,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
+        _hasNewLine = (searchValues.IndexOf('\n') >= 0) != negate;
 
         if (minSize > 0 && !_negate)
         {
@@ -53,7 +60,14 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
         context.EnterParser(this);
 
-        var span = context.Scanner.Cursor.Span;
+        var cursor = context.Scanner.Cursor;
+        var span = cursor.Span;
+
+        // Only the chars that can be taken are scanned
+        if (_maxSize > 0 && span.Length > _maxSize)
+        {
+            span = span.Slice(0, _maxSize);
+        }
 
         // First char not matching the searched values
         var index = _negate ? span.IndexOfAny(_searchValues) : span.IndexOfAnyExcept(_searchValues);
@@ -67,22 +81,26 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
             if (index == -1)
             {
                 // More matching chars could follow the end of the buffer
-                context.Scanner.Cursor.MarkHitEnd();
+                cursor.MarkHitEnd();
             }
 
             context.ExitParser(this);
             return false;
         }
 
-        // Too large? Take only the request size
-        if (_maxSize > 0 && size > _maxSize)
+        var start = cursor.Offset;
+
+        // The line and column only need to be tracked char by char when there are new lines
+        if (_hasNewLine)
         {
-            size = _maxSize;
+            cursor.Advance(size);
+        }
+        else
+        {
+            cursor.AdvanceNoNewLines(size);
         }
 
-        var start = context.Scanner.Cursor.Position.Offset;
-        context.Scanner.Cursor.Advance(size);
-        result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
+        result.Set(start, start + size, cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;
