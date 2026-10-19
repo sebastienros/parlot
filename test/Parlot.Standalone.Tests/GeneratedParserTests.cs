@@ -347,6 +347,19 @@ public class GeneratedParserTests
     }
 
     [Theory]
+    [InlineData("1+2", true, 1)]
+    [InlineData("42", true, 42)]
+    [InlineData("x", false, 0)]
+    public void Left_Recursive_Deferred_Fails_Instead_Of_Overflowing(string input, bool success, int expected)
+    {
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("12a", "12")]
     [InlineData("  12a", "12")]
     [InlineData("  1234x", "1234")]

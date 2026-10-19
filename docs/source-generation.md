@@ -192,6 +192,10 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+- A `Deferred` parser that is entered again at the position where it is already active (left recursion) fails
+  at that position instead of overflowing the stack, as the runtime `Deferred` does. The check costs one
+  comparison per entry and allocates nothing. Recursion that consumes input is bounded only by the stack
+  since no recursion depth limit can be set on a generated entry point.
 - `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
   target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
   the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the

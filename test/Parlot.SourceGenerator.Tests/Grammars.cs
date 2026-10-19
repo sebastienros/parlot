@@ -67,6 +67,8 @@ public static partial class Grammars
     public static partial bool TryParseTupleRightAssociative(string text, out double value);
     public static partial bool TryParseTupleRightAssociativeContext(string text, out double value);
     public static partial bool TryParseTupleRightAssociativeThenPlus(string text, out double value);
+    public static partial bool TryParseLeftRecursive(string text, out long value);
+    public static partial bool TryParseIndirectLeftRecursive(string text, out long value);
     public static partial bool TryParseAnyOfDigits(string text, out string value);
     public static partial bool TryParseAnyOfLetters(string text, out string value);
     public static partial bool TryParseNoneOfWhitespace(string text, out string value);

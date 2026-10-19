@@ -1216,6 +1216,21 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             sb.AppendLine("            }");
             sb.AppendLine();
         }
+        else if (deferredMethods.Count > 0)
+        {
+            // The context carries the per-parse state of the deferred parsers (see the deferred helpers below),
+            // so the entry point creates this subclass. The parser methods remain static.
+            var cancellationDeclaration = standalone.CancellationTokenParameter is not null
+                ? ", global::System.Threading.CancellationToken __parlotCancellationToken"
+                : "";
+            var cancellationArgument = standalone.CancellationTokenParameter is not null ? ", __parlotCancellationToken" : "";
+            sb.AppendLine($"        private sealed class {wrapperName} : global::Parlot.Fluent.ParseContext");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner __parlotScanner{cancellationDeclaration}) : base(__parlotScanner{cancellationArgument})");
+            sb.AppendLine("            {");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
         else
         {
             // Isolate helper names (including custom emitters) between factories in the same partial class.
@@ -1390,31 +1405,45 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
 
         // Emit helper methods for deferred parsers (already processed earlier)
+        if (deferredMethods.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("        // The offset at which each deferred parser is active, -1 when it isn't. Within one invocation the cursor");
+            sb.AppendLine("        // never moves before its entry offset, so a nested entry at that same offset is left recursion, which");
+            sb.AppendLine("        // fails instead of overflowing the stack. The runtime's Deferred detects the same cycle.");
+            for (var i = 0; i < deferredMethods.Count; i++)
+            {
+                sb.AppendLine($"        private int __parlotDeferred{i} = -1;");
+            }
+        }
+
+        var deferredIndex = 0;
         foreach (var (deferredMethodName, deferredValueTypeName, deferredResult, deferredParserName) in deferredMethods)
         {
+            var stateField = $"__parlotDeferred{deferredIndex++}";
+            var stateExpression = hasParameters ? "this" : $"(({wrapperName})context)";
             sb.AppendLine();
             // Add parser name as comment if available
             if (!string.IsNullOrEmpty(deferredParserName))
             {
                 sb.AppendLine($"        // {deferredParserName}");
             }
+            // The recursion depth limit can't be set on a generated entry point, so the core is called directly
             sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            if (context.MaxRecursionDepth > 0)");
+            sb.AppendLine($"            var state = {stateExpression};");
+            sb.AppendLine("            var offset = context.Scanner.Cursor.Offset;");
+            sb.AppendLine($"            if (state.{stateField} == offset)");
             sb.AppendLine("            {");
-            sb.AppendLine("                context.EnterRecursion();");
-            sb.AppendLine();
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
-            sb.AppendLine($"                    return {deferredMethodName}_Core(context, out value);");
-            sb.AppendLine("                }");
-            sb.AppendLine("                finally");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    context.ExitRecursion();");
-            sb.AppendLine("                }");
+            sb.AppendLine("                value = default!;");
+            sb.AppendLine("                return false;");
             sb.AppendLine("            }");
             sb.AppendLine();
-            sb.AppendLine($"            return {deferredMethodName}_Core(context, out value);");
+            sb.AppendLine($"            var previous = state.{stateField};");
+            sb.AppendLine($"            state.{stateField} = offset;");
+            sb.AppendLine($"            var success = {deferredMethodName}_Core(context, out value);");
+            sb.AppendLine($"            state.{stateField} = previous;");
+            sb.AppendLine("            return success;");
             sb.AppendLine("        }");
             sb.AppendLine();
             sb.AppendLine($"        private {staticModifier}bool {deferredMethodName}_Core(global::Parlot.Fluent.ParseContext context, out {deferredValueTypeName} value)");
@@ -1496,7 +1525,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName);
+        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0);
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
         // Note: Currently no helper methods are needed since we use HashSet<char> and SearchValues<char>

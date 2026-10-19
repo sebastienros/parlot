@@ -22,6 +22,7 @@ public static partial class Grammar
     public static partial bool TryParseZeroOrOne(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseZeroOrOneDiscarded(string text, out char value);
     public static partial bool TryParseRecursive(string text, out int value);
+    public static partial bool TryParseLeftRecursive(string text, out int value);
     public static partial bool TryParseCustomWhitespace(string text, out string value);
     public static partial bool TryParseConfigured(string text, GrammarOptions options, out string value);
     public static partial bool TryParseConfiguredWhitespace(string text, GrammarOptions options, out string value);
@@ -57,6 +58,7 @@ public static partial class Grammar
     public static partial bool TryParseNumbers(TextReader reader, out IReadOnlyList<int> value);
     public static partial bool TryParseOptional(TextReader reader, out int value);
     public static partial bool TryParseRecursive(TextReader reader, out int value);
+    public static partial bool TryParseLeftRecursive(TextReader reader, out int value);
     public static partial bool TryParseCustomWhitespace(TextReader reader, out string value);
     public static partial bool TryParseConfiguredWhitespace(TextReader reader, GrammarOptions options, out string value);
     public static partial bool TryParseDigits(TextReader reader, out string value);

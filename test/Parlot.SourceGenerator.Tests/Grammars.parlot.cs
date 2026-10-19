@@ -299,6 +299,30 @@ public static partial class Grammars
             .AndSkip(Literals.Char('+'))
             .Eof();
 
+    [GenerateParser(nameof(TryParseLeftRecursive))]
+    private static Parser<long> BuildLeftRecursive()
+    {
+        // expression = expression '+' integer | integer: the first alternative re-enters the deferred
+        // parser at the same position, which must fail instead of overflowing the stack
+        var expression = Deferred<long>();
+        expression.Parser = expression.AndSkip(Terms.Char('+')).And(Terms.Integer()).Then(static x => x.Item1 + x.Item2)
+            .Or(Terms.Integer());
+        return expression;
+    }
+
+    [GenerateParser(nameof(TryParseIndirectLeftRecursive))]
+    private static Parser<long> BuildIndirectLeftRecursive()
+    {
+        // a = b | integer; b = a '+' integer: the cycle goes through two deferred parsers, and a parenthesized
+        // operand enters them again at a new position
+        var a = Deferred<long>();
+        var b = Deferred<long>();
+        var group = Between(Terms.Char('('), a, Terms.Char(')'));
+        b.Parser = a.AndSkip(Terms.Char('+')).And(Terms.Integer()).Then(static x => x.Item1 + x.Item2);
+        a.Parser = b.Or(group).Or(Terms.Integer());
+        return a;
+    }
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 

@@ -199,6 +199,76 @@ public class GeneratorFixesTests
         Assert.False(Grammars.TryParseTupleRightAssociativeThenPlus("1+2", out _));
     }
 
+    [Theory]
+    [InlineData("1+2", true, 1L)]
+    [InlineData(" 7 + 2", true, 7L)]
+    [InlineData("x", false, 0L)]
+    public void Left_Recursive_Deferred_Fails_At_The_Entry_Position(string input, bool success, long expected)
+    {
+        // Runtime and generated parsers agree: the recursive alternative fails and the plain integer matches
+        var runtime = Parsers.Deferred<long>();
+        runtime.Parser = runtime.AndSkip(Parsers.Terms.Char('+')).And(Parsers.Terms.Integer()).Then(static x => x.Item1 + x.Item2)
+            .Or(Parsers.Terms.Integer());
+        Assert.Equal(success, runtime.TryParse(input, out var runtimeValue));
+        Assert.Equal(expected, runtimeValue);
+
+        Assert.Equal(success, Grammars.TryParseLeftRecursive(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("1+2", true, 1L)]
+    [InlineData("(1)", true, 1L)]
+    [InlineData("((3))+1", true, 3L)]
+    [InlineData("(", false, 0L)]
+    public void Indirect_Left_Recursion_Is_Tracked_Per_Deferred_Parser(string input, bool success, long expected)
+    {
+        Assert.Equal(success, Grammars.TryParseIndirectLeftRecursive(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Fact]
+    public void Deferred_Helpers_Check_The_Position_Without_The_Recursion_Depth_Wrapper()
+    {
+        var declaration = Declaration.Replace("string text, out string value", "string text, long bias, out long value", StringComparison.Ordinal);
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<long> Build(long bias)
+                {
+                    var expression = Deferred<long>();
+                    expression.Parser = expression.AndSkip(Terms.Char('+')).And(Terms.Integer()).Then(x => x.Item1 + x.Item2 + bias)
+                        .Or(Terms.Integer().Then(x => x + bias));
+                    return expression;
+                }
+            }
+            """;
+        var (result, compilation) = Generate(declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+        var source = string.Join("\n", result.Results.SelectMany(static item => item.GeneratedSources)
+            .Where(static item => item.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal))
+            .Select(static item => item.SourceText.ToString()));
+        Assert.DoesNotContain("MaxRecursionDepth", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnterRecursion", source, StringComparison.Ordinal);
+        // Deferred references call the helper directly and don't reset the cursor themselves
+        Assert.DoesNotMatch(@"Deferred_0\(context, out [^;]*;\s*if \(![^)]*\)\s*\{\s*cursor\.ResetPosition", source);
+        Assert.Contains("= Deferred_0(context, out ", source, StringComparison.Ordinal);
+        Assert.Contains("__parlotDeferred0", source, StringComparison.Ordinal);
+
+        // The configured (instance) shape keeps the state on the context subclass
+        var parse = Load(compilation).GetType("Grammar")!.GetMethod("TryParse")!;
+        object?[] arguments = ["1+2", 10L, null];
+        Assert.True((bool)parse.Invoke(null, arguments)!);
+        Assert.Equal(11L, arguments[2]);
+        arguments = ["x", 10L, null];
+        Assert.False((bool)parse.Invoke(null, arguments)!);
+    }
+
     internal const string Declaration = """
         public static partial class Grammar
         {
