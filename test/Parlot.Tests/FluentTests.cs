@@ -405,6 +405,30 @@ public class FluentTests
              .TryParse("aaaZZ", out _));
     }
 
+    [Fact]
+    public void PatternWithNoMinimumSizeShouldMatchNothing()
+    {
+        var parser = Literals.Pattern(static c => c == 'a', minSize: 0);
+
+        Assert.True(parser.TryParse("b", out var result));
+        Assert.Equal("", result.ToString());
+        Assert.True(parser.TryParse("", out result));
+        Assert.Equal("", result.ToString());
+        Assert.True(parser.TryParse("aab", out result));
+        Assert.Equal("aa", result.ToString());
+
+        // The empty match leaves the cursor where it is, so the next parser reads from there
+        Assert.Equal('b', parser.And(Literals.Char('b')).Parse("b").Item2);
+
+        var context = new ParseContext(new Scanner("b"));
+        var parseResult = new ParseResult<TextSpan>();
+
+        Assert.True(parser.Parse(context, ref parseResult));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(0, parseResult.Start);
+        Assert.Equal(0, parseResult.End);
+    }
+
     [Theory]
     [InlineData("'a\nb' ", "a\nb")]
     [InlineData("'a\r\nb' ", "a\r\nb")]

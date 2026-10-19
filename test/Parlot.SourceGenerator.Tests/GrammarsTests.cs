@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Linq;
 using System.Reflection;
@@ -159,6 +161,26 @@ public class GrammarsTests
         Assert.Equal(expected, contextValue);
         Assert.False(Grammars.TryParseUnaryEmptyOperator("x", out _));
         Assert.False(Grammars.TryParseUnaryContextEmptyOperator("x", out _));
+    }
+
+    [Theory]
+    [InlineData("abcdefg", "abcdefg")]
+    [InlineData("z", "z")]
+    [InlineData("g", null)]
+    public void Seven_Element_Sequence_Is_Tried_By_OneOf(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseSevenSequenceChoice(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("ab", "a")]
+    [InlineData("b", "")]
+    [InlineData("x", null)]
+    public void Pattern_With_No_Minimum_Size_Matches_Nothing(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseEmptyPattern(input, out var value));
+        Assert.Equal(expected, value);
     }
 
     [Fact]

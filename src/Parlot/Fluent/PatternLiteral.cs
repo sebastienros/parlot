@@ -32,8 +32,19 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
         if (cursor.Eof || !predicate(cursor.Current))
         {
+            if (_minSize > 0)
+            {
+                context.ExitParser(this);
+                return false;
+            }
+
+            // A pattern without a minimum size matches nothing, like the generated parser and AnyOf do.
+            // Reaching the end of a non-final buffer has already marked the cursor.
+            var offset = cursor.Offset;
+            result.Set(offset, offset, cursor.CreateSpan(offset, 0));
+
             context.ExitParser(this);
-            return false;
+            return true;
         }
 
         // The chars are counted first such that the cursor only moves once, and not at all when the size constraint is not met.

@@ -50,6 +50,7 @@ public class StreamingTests
         ["anyof-max"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Literals.AnyOf("abc", minSize: 1, maxSize: 2))),
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),
         ["pattern"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 2, maxSize: 4)),
+        ["pattern-empty"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 0)),
         ["string"] = new Grammar<TextSpan>(Terms.String()),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
@@ -146,6 +147,7 @@ public class StreamingTests
         Add("anyof-max", "", "a", "abc", "abcab", "abxa");
         Add("noneof", "", "a", "ab", "ab,c", "a,", ";");
         Add("pattern", "", "1", "12", "1234", "123456", "1a");
+        Add("pattern-empty", "", "1", "12a", "a", "123456");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
         Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\");
         Add("whitespace", "", " ", "  \n\t x", "x");
