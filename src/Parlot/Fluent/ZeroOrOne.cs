@@ -27,7 +27,16 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
         var success = _parser.Parse(context, ref parsed);
         context.Unpin(pin);
 
-        result.Set(parsed.Start, parsed.End, success ? [parsed.Value] : Array.Empty<T>());
+        if (success)
+        {
+            result.Set(parsed.Start, parsed.End, [parsed.Value]);
+        }
+        else
+        {
+            // Nothing was read: the result is empty at the current position
+            var offset = context.Scanner.Cursor.Offset;
+            result.Set(offset, offset, Array.Empty<T>());
+        }
 
         // ZeroOrOne always succeeds
         context.ExitParser(this);
