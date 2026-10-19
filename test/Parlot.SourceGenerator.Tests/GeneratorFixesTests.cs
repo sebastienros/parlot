@@ -94,6 +94,76 @@ public class GeneratorFixesTests
         Assert.False((bool)parse.Invoke(null, arguments)!);
     }
 
+    [Fact]
+    public void Wide_Numeric_Types_Are_Generated_From_The_Downlevel_Host()
+    {
+        Assert.True(Grammars.TryParseHalf(" 1.5", out var half));
+        Assert.Equal((Half)1.5, half);
+        Assert.False(Grammars.TryParseHalf("x", out _));
+        Assert.True(Grammars.TryParseInt128Hex("ffffffffffffffffff", out var int128));
+        Assert.Equal(Int128.Parse("4722366482869645213695"), int128);
+    }
+
+    [Theory]
+    [InlineData("System.Half", "Terms.Number<System.Half>(NumberOptions.Float)", " 1.5", "1.5")]
+    [InlineData("System.Int128", "Terms.Number<System.Int128>()", "-170141183460469231731687303715884105728", "-170141183460469231731687303715884105728")]
+    [InlineData("System.UInt128", "Terms.Number<System.UInt128>()", "340282366920938463463374607431768211455", "340282366920938463463374607431768211455")]
+    [InlineData("nint", "Terms.Number<nint>()", "-42", "-42")]
+    [InlineData("nuint", "Terms.Number<nuint>()", "42", "42")]
+    [InlineData("System.Int128", "Terms.Hexadecimal<System.Int128>()", "ff", "255")]
+    [InlineData("System.UInt128", "Terms.Binary<System.UInt128>()", "101", "5")]
+    [InlineData("nint", "Terms.Hexadecimal<nint>()", "10", "16")]
+    [InlineData("nuint", "Terms.Octal<nuint>()", "17", "15")]
+    public void Wide_Numeric_Types_Are_Supported_By_Modern_Consumers(string type, string parser, string input, string expected)
+    {
+        // The generator host runs the netstandard2.0 Parlot, which can't name these types but must still
+        // build the graph and emit the consumer's generic-math path.
+        var declaration = Declaration.Replace("out string value", $"out {type} value", StringComparison.Ordinal);
+        var grammar = $$"""
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<{{type}}> Build() => {{parser}}.Eof();
+            }
+            """;
+        var (result, compilation) = Generate(declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+        var parse = Load(compilation).GetType("Grammar")!.GetMethod("TryParse")!;
+        object?[] arguments = [input, null];
+        Assert.True((bool)parse.Invoke(null, arguments)!);
+        Assert.Equal(expected, Convert.ToString(arguments[1], System.Globalization.CultureInfo.InvariantCulture));
+        arguments = ["z", null];
+        Assert.False((bool)parse.Invoke(null, arguments)!);
+    }
+
+    [Theory]
+    [InlineData("Terms.Number<System.Half>()")]
+    [InlineData("Terms.Hexadecimal<nint>()")]
+    public void Wide_Numeric_Types_Are_Rejected_For_Downlevel_Consumers(string parser)
+    {
+        var declaration = Declaration.Replace("out string value", "out System.Half value", StringComparison.Ordinal);
+        var grammar = $$"""
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<System.Half> Build() => {{parser}}.Then(static _ => default(System.Half));
+            }
+            """;
+        var (result, _) = Generate(declaration, grammar, targetFrameworkIdentifier: ".NETStandard", targetFrameworkVersion: "v2.0");
+
+        Assert.True(result.Diagnostics.Any(static diagnostic =>
+            diagnostic.Severity == DiagnosticSeverity.Error
+            && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("requires .NET 8 or later", StringComparison.Ordinal)),
+            string.Join(" | ", result.Diagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
     internal const string Declaration = """
         public static partial class Grammar
         {
@@ -115,7 +185,8 @@ public class GeneratorFixesTests
         Assert.Empty(compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
     }
 
-    internal static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) Generate(string source, string grammar)
+    internal static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) Generate(
+        string source, string grammar, string targetFrameworkIdentifier = ".NETCoreApp", string targetFrameworkVersion = "v10.0")
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12,
             preprocessorSymbols: ["NET", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
@@ -127,8 +198,8 @@ public class GeneratorFixesTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var options = new System.Collections.Generic.Dictionary<string, string>
         {
-            ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
-            ["build_property.TargetFrameworkVersion"] = "v10.0",
+            ["build_property.TargetFrameworkIdentifier"] = targetFrameworkIdentifier,
+            ["build_property.TargetFrameworkVersion"] = targetFrameworkVersion,
             ["build_property.DesignTimeBuild"] = "false"
         };
         return GeneratorDiagnosticsTests.RunGenerator(compilation, options, additionalTexts: [new GrammarText(grammar)]);

@@ -274,6 +274,12 @@ public static partial class Grammars
     private static Parser<char> BuildEscapedError() =>
         Literals.Char('x').ElseError("line1\nline2 \"quoted\" back\\slash\ttab");
 
+    [GenerateParser(nameof(TryParseHalf))]
+    private static Parser<Half> BuildHalf() => Terms.Number<Half>(NumberOptions.Float).Eof();
+
+    [GenerateParser(nameof(TryParseInt128Hex))]
+    private static Parser<Int128> BuildInt128Hex() => Terms.Hexadecimal<Int128>().Eof();
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 

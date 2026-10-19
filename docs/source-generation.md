@@ -192,6 +192,10 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+- `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
+  target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
+  the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
+  primitive types, `decimal` and `BigInteger`; other types are reported as a build error.
 - A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A `Terms`
   parser reports the start of its content, after the skipped white space, as at runtime. A composite parser
   that skips white space internally (a sequence or a choice of `Terms` parsers) reports the offset where the
