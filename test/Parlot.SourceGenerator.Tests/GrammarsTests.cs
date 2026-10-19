@@ -183,6 +183,16 @@ public class GrammarsTests
         Assert.Equal(expected, value);
     }
 
+    [Theory]
+    [InlineData("b", "b")]
+    [InlineData("c", "c")]
+    [InlineData("a", null)]
+    public void Replaced_Recursive_Parser_Is_Found_By_OneOf(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseReplacedRecursive(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
     [Fact]
     public void Unary_Rolls_Back_An_Operator_With_No_Operand()
     {

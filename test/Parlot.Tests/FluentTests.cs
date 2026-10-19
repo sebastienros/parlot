@@ -2511,6 +2511,35 @@ public class FluentTests
     }
 
     [Fact]
+    public void RecursiveShouldFollowTheParserWhenItIsReplaced()
+    {
+        var recursive = Recursive<string>(static _ => Literals.Text("a"));
+        var seekable = (ISeekable)recursive;
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['a'], seekable.ExpectedChars);
+
+        recursive.Parser = Literals.Text("b");
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['b'], seekable.ExpectedChars);
+        Assert.Equal("b", OneOf(recursive, Literals.Text("c")).Parse("b"));
+        Assert.Equal("c", OneOf(recursive, Literals.Text("c")).Parse("c"));
+        Assert.False(OneOf(recursive, Literals.Text("c")).TryParse("a", out _));
+
+        // A parser set later is not seekable, and neither is the Recursive once it is replaced by one
+        var deferred = Deferred<string>();
+        deferred.Parser = Literals.Text("d");
+
+        Assert.False(((ISeekable)deferred).CanSeek);
+
+        recursive.Parser = deferred;
+
+        Assert.False(seekable.CanSeek);
+        Assert.Equal("d", OneOf(recursive, Literals.Text("c")).Parse("d"));
+    }
+
+    [Fact]
     public void AnyOfShouldBeSeekable()
     {
         // Building the literal from a SearchValues instance loses the source chars, so a parser built

@@ -924,6 +924,8 @@ Creates a parser that can reference itself.
 Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser)
 ```
 
+Unlike a `Deferred` whose parser is set later, a `Recursive` parser is seekable: it declares the chars its parser can start with, so `OneOf` can skip it when they don't match. The declaration follows the parser when `Parser` is replaced.
+
 Usage:
 
 ```c#

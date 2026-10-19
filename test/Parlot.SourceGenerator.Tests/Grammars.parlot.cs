@@ -275,6 +275,14 @@ public static partial class Grammars
             .And(Literals.Char('b'))
             .Then(static tuple => tuple.Item1.ToString());
 
+    [GenerateParser(nameof(TryParseReplacedRecursive))]
+    private static Parser<string> BuildReplacedRecursive()
+    {
+        var recursive = Recursive<string>(static _ => Literals.Text("a"));
+        recursive.Parser = Literals.Text("b");
+        return OneOf(recursive, Literals.Text("c"));
+    }
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 
