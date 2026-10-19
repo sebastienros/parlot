@@ -90,6 +90,10 @@ public static partial class Grammar
             .WithWhiteSpaceParser(Capture(OneOrMany(
                 If(() => options.Formal, Literals.Char('_'), Literals.Char('-')))));
 
+    [GenerateParser(nameof(TryParseDigits))]
+    private static Parser<string> Digits() =>
+        Terms.AnyOf("0123456789", minSize: 2).AndSkip(Literals.NoneOf("0123456789")).Then(static value => value.ToString()).Eof();
+
     [GenerateParser(nameof(TryParseError))]
     private static Parser<char> ErrorParser() => Literals.Char('x').ElseError("Expected x");
 

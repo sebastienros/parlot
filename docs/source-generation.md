@@ -35,6 +35,11 @@ private transitive dependencies are not propagated to consumers of your library.
 error if the explicit compatibility reference is missing. With central package management, put the
 version in `Directory.Packages.props` and omit `Version` on the `PackageReference`.
 
+The factory itself is compiled against the consuming project's references. A grammar shared with a
+.NET Framework or .NET Standard 2.0 target therefore cannot rely on conversions those frameworks lack,
+such as the implicit `string` to `ReadOnlySpan<char>` conversion: `AnyOf` and `NoneOf` provide `string`
+overloads so `Literals.AnyOf("0123456789")` builds on every target.
+
 ## Getting started
 
 Add the analyzer package to the project that owns the grammar:
