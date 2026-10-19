@@ -225,4 +225,35 @@ public class ResultPositionTests
 
         AssertCursor(context, 0, 1, 1);
     }
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 4)]
+    public void AnyCharBeforeShouldEndWhereTheCursorIs(bool consumeDelimiter, int end)
+    {
+        var context = Parse(AnyCharBefore(Literals.Text("--"), consumeDelimiter: consumeDelimiter), "ab--c", out var result);
+
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Equal(0, result.Start);
+        Assert.Equal(end, result.End);
+        AssertCursor(context, end, 1, end + 1);
+
+        context = Parse(AnyCharBefore(Literals.Text("--"), consumeDelimiter: consumeDelimiter), "a\n--", out var lines);
+
+        Assert.Equal("a\n", lines.Value.ToString());
+        Assert.Equal(0, lines.Start);
+        Assert.Equal(end, lines.End);
+        AssertCursor(context, end, 2, end - 1);
+    }
+
+    [Fact]
+    public void AnyCharBeforeShouldEndAtTheEndOfTheText()
+    {
+        var context = Parse(AnyCharBefore(Literals.Text("--")), "ab\n", out var result);
+
+        Assert.Equal("ab\n", result.Value.ToString());
+        Assert.Equal(0, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 2, 1);
+    }
 }
