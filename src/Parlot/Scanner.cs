@@ -467,33 +467,22 @@ public class Scanner
     {
         var start = Cursor.Offset;
 
-        while (true)
+        // Current is the null char at the end of the text, where there is nothing to read even if it is expected
+        while (!Cursor.Eof && chars.IndexOf(Cursor.Current) != -1)
         {
-            var current = Cursor.Current;
-            var index = chars.IndexOf(current);
-
-            if (index == -1)
-            {
-                if (Cursor.Offset == start)
-                {
-                    result = [];
-                    return false;
-                }
-
-                var length = Cursor.Offset - start;
-
-                result = Cursor.GetSpan(start, length);
-                return true;
-            }
-
-            if (Cursor.Eof)
-            {
-                result = [];
-                return false;
-            }
-
             Cursor.Advance(1);
         }
+
+        var length = Cursor.Offset - start;
+
+        if (length == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = Cursor.GetSpan(start, length);
+        return true;
     }
 
 #if NET8_0_OR_GREATER

@@ -190,6 +190,33 @@ public class ScannerTests
     }
 
     [Fact]
+    public void ReadAnyOfShouldStopAtEofWhenTheNullCharIsExpected()
+    {
+        // The cursor reports the null char at the end of the text, which must not be read even when expected
+        var s = new Scanner("ab");
+
+        Assert.True(s.ReadAnyOf("ab\0", out var result));
+        Assert.Equal("ab", result.ToString());
+        Assert.Equal(2, s.Cursor.Offset);
+
+        s = new Scanner("a\0b");
+
+        Assert.True(s.ReadAnyOf("a\0", out result));
+        Assert.Equal("a\0", result.ToString());
+        Assert.Equal(2, s.Cursor.Offset);
+
+        s = new Scanner("");
+
+        Assert.False(s.ReadAnyOf("\0", out _));
+        Assert.Equal(0, s.Cursor.Offset);
+
+        s = new Scanner("x");
+
+        Assert.False(s.ReadAnyOf("\0", out _));
+        Assert.Equal(0, s.Cursor.Offset);
+    }
+
+    [Fact]
     public void SkipWhitespaceShouldSkipWhitespace()
     {
         // New lines are not considered white spaces
