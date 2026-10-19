@@ -2610,16 +2610,19 @@ public class FluentTests
         Assert.Equal("c", OneOf(recursive, Literals.Text("c")).Parse("c"));
         Assert.False(OneOf(recursive, Literals.Text("c")).TryParse("a", out _));
 
-        // A parser set later is not seekable, and neither is the Recursive once it is replaced by one
+        // A parser set later declares the chars of its parser too
         var deferred = Deferred<string>();
         deferred.Parser = Literals.Text("d");
 
-        Assert.False(((ISeekable)deferred).CanSeek);
+        Assert.True(((ISeekable)deferred).CanSeek);
+        Assert.Equal(['d'], ((ISeekable)deferred).ExpectedChars);
 
         recursive.Parser = deferred;
 
-        Assert.False(seekable.CanSeek);
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['d'], seekable.ExpectedChars);
         Assert.Equal("d", OneOf(recursive, Literals.Text("c")).Parse("d"));
+        Assert.False(OneOf(recursive, Literals.Text("c")).TryParse("a", out _));
     }
 
     [Fact]

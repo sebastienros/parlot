@@ -239,6 +239,87 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void Deferred_Set_After_The_OneOf_Is_In_The_Generated_Lookup_Table()
+    {
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseLateDeferredOneOf("  b", out var value));
+        Assert.Equal('b', value);
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(1, GeneratedParserCounters.GetCount("late-b"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseLateDeferredOneOf("  a", out value));
+        Assert.Equal('a', value);
+        Assert.Equal(1, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.False(Grammars.TryParseLateDeferredOneOf("  c", out _));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
+    }
+
+    [Theory]
+    [InlineData("  a", 'a', "wrap-a")]
+    [InlineData("  b", 'b', "wrap-b")]
+    [InlineData("  c", 'c', "wrap-c")]
+    [InlineData("  xd", 'd', "wrap-d")]
+    public void Seekable_Wrappers_Are_In_The_Generated_Lookup_Table(string input, char expected, string invoked)
+    {
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseSeekableWrappers(input, out var value));
+        Assert.Equal(expected, value);
+
+        foreach (var name in new[] { "wrap-a", "wrap-b", "wrap-c", "wrap-d", "wrap-e" })
+        {
+            Assert.Equal(name == invoked ? 1 : 0, GeneratedParserCounters.GetCount(name));
+        }
+
+        GeneratedParserCounters.Reset();
+
+        Assert.False(Grammars.TryParseSeekableWrappers("  z", out _));
+        Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
+
+        GeneratedParserCounters.Reset();
+
+        // The error is reported as a failure, and only raised when the lookup selected the parser
+        Assert.False(Grammars.TryParseSeekableWrappers("  e", out _));
+        Assert.Equal(1, GeneratedParserCounters.GetCount("wrap-e"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LeftAssociative_Operators_Are_Selected_By_Their_First_Char(bool withContext)
+    {
+        GeneratedParserCounters.Reset();
+        var prefix = withContext ? "ctx-op-" : "op-";
+
+        Assert.True(withContext
+            ? Grammars.TryParseCountingLeftAssociativeContext("10 p 4 m 2 m 1", out var value)
+            : Grammars.TryParseCountingLeftAssociative("10 p 4 m 2 m 1", out value));
+        Assert.Equal(11, value);
+
+        // Each operator was only tried where its char was next, and none at the end of the input
+        Assert.Equal(1, GeneratedParserCounters.GetCount(prefix + "p"));
+        Assert.Equal(2, GeneratedParserCounters.GetCount(prefix + "m"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.True(withContext
+            ? Grammars.TryParseCountingLeftAssociativeContext("10 m", out value)
+            : Grammars.TryParseCountingLeftAssociative("10 m", out value));
+        Assert.Equal(10, value);
+        Assert.Equal(0, GeneratedParserCounters.GetCount(prefix + "p"));
+        Assert.Equal(1, GeneratedParserCounters.GetCount(prefix + "m"));
+    }
+
+    [Fact]
     public void Switch_Uses_The_Generated_Target_Parser_Body()
     {
         GeneratedParserCounters.Reset();

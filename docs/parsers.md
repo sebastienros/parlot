@@ -42,7 +42,7 @@ var expression = number.LeftAssociative(
 expression.Parse("10 - 4 - 2"); // 4
 ```
 
-Replace `LeftAssociative` with `RightAssociative` to obtain `8` for the same input. The factory can also receive `ParseContext` as its first argument: `(context, left, right, operation)`. Existing overloads accepting `(operatorParser, factory)` tuples remain available when each operator needs a distinct factory. If an operator matches but the next operand does not, the operator is rolled back and the expression parsed so far is returned.
+Replace `LeftAssociative` with `RightAssociative` to obtain `8` for the same input. The factory can also receive `ParseContext` as its first argument: `(context, left, right, operation)`. Existing overloads accepting `(operatorParser, factory)` tuples remain available when each operator needs a distinct factory. Both forms try the operators through a `OneOf`, so only the operators that can start with the next char are tried, in order, and white space is skipped once when they all skip it. If an operator matches but the next operand does not, the operator is rolled back and the expression parsed so far is returned.
 
 ## Terms and Literals
 
@@ -916,6 +916,8 @@ Result:
 1
 ```
 
+A `Deferred` declares the chars its parser can start with once `Parser` is set, and the declaration follows the parser when it is replaced. A `OneOf` built before the parser was set reads the declaration again the first time it parses, so the usual `var expression = Deferred<T>(); ... expression.Parser = ...;` grammar gets a complete lookup table. A parser that reaches itself through a choice, directly or through other deferred parsers, can start with any char there.
+
 ### Recursive
 
 Creates a parser that can reference itself.
@@ -924,7 +926,7 @@ Creates a parser that can reference itself.
 Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser)
 ```
 
-Unlike a `Deferred` whose parser is set later, a `Recursive` parser is seekable: it declares the chars its parser can start with, so `OneOf` can skip it when they don't match. The declaration follows the parser when `Parser` is replaced.
+Like a `Deferred`, a `Recursive` parser is seekable: it declares the chars its parser can start with, so `OneOf` can skip it when they don't match. The declaration follows the parser when `Parser` is replaced.
 
 Usage:
 
@@ -1145,6 +1147,9 @@ Result:
 failure: "Unexpected char c"
 ```
 
+`Error` declares the chars of the parser it is applied to, so a `OneOf` only tries it, and only raises the
+error, for one of them.
+
 ### When
 
 Adds some additional logic for a parser to succeed. The condition is executed when the previous parser succeeds. If the predicate returns `false`, the parser fails.
@@ -1207,6 +1212,10 @@ The condition is evaluated once per parse, at the current cursor position before
 When it is false, the two-argument form fails without consuming input or changing the result.
 When it is true, the parser succeeds only if the selected child succeeds.
 
+When every branch is seekable and they agree on skipping whitespace, `If` declares the chars any branch can start
+with, so a `OneOf` only tries it, and only evaluates the condition, for one of these chars. When the branches skip
+whitespace the `OneOf` skips it once before the condition is evaluated. `Select` declares its branches the same way.
+
 Provide an else parser to select between two fixed branches:
 
 ```c#
@@ -1248,11 +1257,13 @@ var parser = Terms.Integer().Switch(
 
 This signature prevents allocating new parsers in the selector.
 
+`Switch` declares the chars of the parser it is applied to, so a `OneOf` only tries it for one of them.
+
 ### Eof
 
 The extension `parser.Eof()` matches the parser followed by the end of the input, preserving its
 result. If trailing input remains, it restores the cursor to where the parser started so alternatives
-can retry.
+can retry. It declares the chars of the parser, so a `OneOf` only tries it for one of them.
 
 ```c#
 Parser<T> Eof()
@@ -1291,7 +1302,7 @@ Parser<U> Discard<U>(U value)
 
 ### Lookup
 
-Builds a parser that lists all possible matches to improve performance. Most parsers implement `ISeekable` parsers in order to provide `OneOf` a way to build a lookup table and identify the potential next parsers in the chain. Some parsers don't implement `ISeekable` because they are built too late, like `Deferred`. The `Lookup` parser circumvents that lack.
+Builds a parser that lists all possible matches to improve performance. Most parsers implement `ISeekable` parsers in order to provide `OneOf` a way to build a lookup table and identify the potential next parsers in the chain. Some parsers can't declare the chars they start with, like a custom parser or one built from a predicate. The `Lookup` parser circumvents that lack.
 
 ```c#
 Parser<T> Lookup<U>(params ReadOnlySpan<char> expectedChars)

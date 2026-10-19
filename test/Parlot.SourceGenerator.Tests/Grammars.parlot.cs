@@ -391,6 +391,45 @@ public static partial class Grammars
     private static Parser<char> BuildCountingOneOf() =>
         OneOf(new CountingParser('a', "a", skipWhitespace: true), new CountingParser('b', "b", skipWhitespace: true));
 
+    [GenerateParser(nameof(TryParseLateDeferredOneOf))]
+    private static Parser<char> BuildLateDeferredOneOf()
+    {
+        // The deferred is set after the choice is built, as the expression of a grammar usually is
+        var deferred = Deferred<char>();
+        var choice = OneOf(deferred, new CountingParser('b', "late-b", skipWhitespace: true));
+        deferred.Parser = new CountingParser('a', "late-a", skipWhitespace: true);
+        return choice;
+    }
+
+    [GenerateParser(nameof(TryParseSeekableWrappers))]
+    private static Parser<char> BuildSeekableWrappers()
+    {
+        // Each wrapper declares the chars of the parser it runs first, so the choice only tries the matching one
+        var a = new CountingParser('a', "wrap-a", skipWhitespace: true);
+        var b = new CountingParser('b', "wrap-b", skipWhitespace: true);
+        var c = new CountingParser('c', "wrap-c", skipWhitespace: true);
+        var d = new CountingParser('d', "wrap-d", skipWhitespace: true);
+        var e = new CountingParser('e', "wrap-e", skipWhitespace: true);
+        return OneOf(
+            If(static () => true, a),
+            Select(static () => 0, b),
+            c.Eof(),
+            Terms.Char('x').Switch(static (context, value) => 0, d),
+            e.Error("no e"));
+    }
+
+    [GenerateParser(nameof(TryParseCountingLeftAssociative))]
+    private static Parser<long> BuildCountingLeftAssociative() =>
+        Terms.Integer().LeftAssociative(
+            (new CountingParser('p', "op-p", skipWhitespace: true), static (left, right) => left + right),
+            (new CountingParser('m', "op-m", skipWhitespace: true), static (left, right) => left - right));
+
+    [GenerateParser(nameof(TryParseCountingLeftAssociativeContext))]
+    private static Parser<long> BuildCountingLeftAssociativeContext() =>
+        Terms.Integer().LeftAssociative(
+            (new CountingParser('p', "ctx-op-p", skipWhitespace: true), static (ParseContext _, long left, long right) => left + right),
+            (new CountingParser('m', "ctx-op-m", skipWhitespace: true), static (ParseContext _, long left, long right) => left - right));
+
     [GenerateParser(nameof(TryParseCustomSwitch))]
     private static Parser<char> BuildCustomSwitch()
     {

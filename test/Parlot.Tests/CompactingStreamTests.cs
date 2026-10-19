@@ -83,6 +83,31 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void DeferredAlternativesSetLaterPinNothing()
+    {
+        // The deferred declares its first char once the choice first parses, so a single alternative
+        // remains for each char and the text can be released as it is read
+        var deferred = Deferred<int>();
+        var parser = OneOf(
+            deferred,
+            Terms.Char('b').SkipAnd(ZeroOrMany(Terms.Char('a'))).Then(static x => -x.Count));
+
+        deferred.Parser = OneOrMany(Terms.Char('a')).AndSkip(Terms.Char(';')).Then(static x => x.Count);
+
+        var text = new string('a', 1000);
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
+
+        Assert.Equal(1000, parser.Parse(new ChunkedReader(text + ";", 1), options));
+        Assert.InRange(peak(), 1, 16);
+
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
+
+        Assert.Equal(-1000, parser.Parse(new ChunkedReader("b" + text, 1), options));
+        Assert.InRange(peak(), 1, 16);
+    }
+
+    [Fact]
     public void CommitReleasesTheText()
     {
         var item = Terms.Char('a').Commit();

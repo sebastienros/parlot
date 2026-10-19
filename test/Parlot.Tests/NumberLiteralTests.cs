@@ -1,5 +1,6 @@
 using System;
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using System.Globalization;
 using System.Numerics;
 using Xunit;
@@ -10,6 +11,67 @@ namespace Parlot.Tests;
 
 public class NumberLiteralTests
 {
+    [Theory]
+    [InlineData(NumberOptions.None, '.', ',', "0123456789")]
+    [InlineData(NumberOptions.AllowLeadingSign, '.', ',', "0123456789+-")]
+    [InlineData(NumberOptions.AllowDecimalSeparator, '.', ',', "0123456789.")]
+    [InlineData(NumberOptions.AllowGroupSeparators, '.', ',', "0123456789")]
+    [InlineData(NumberOptions.AllowExponent, '.', ',', "0123456789")]
+    [InlineData(NumberOptions.Float, '.', ',', "0123456789+-.")]
+    [InlineData(NumberOptions.Number, '.', ',', "0123456789+-.")]
+    [InlineData(NumberOptions.Any, '.', ',', "0123456789+-.")]
+    [InlineData(NumberOptions.Any, ',', '.', "0123456789+-,")]
+    [InlineData(NumberOptions.Any, ',', '_', "0123456789+-,")]
+    public void ExpectedCharsShouldBeTheCharsStartingANumber(NumberOptions options, char decimalSeparator, char groupSeparator, string expected)
+    {
+        // The chars a number can start with are the digits, the signs and the decimal separator. A group
+        // separator or an exponent only follow digits, so they can't be the first char. The runtime parser and
+        // the one the source generator builds the lookup tables from have to agree on the set.
+        var parsers = new System.Collections.Generic.List<ISeekable>
+        {
+            (ISeekable)new TestNumberLiteral(options, decimalSeparator, groupSeparator),
+            (ISeekable)Literals.Number<decimal>(options, decimalSeparator, groupSeparator),
+            (ISeekable)Literals.Number<long>(options, decimalSeparator, groupSeparator),
+        };
+
+        foreach (var parser in parsers)
+        {
+            Assert.True(parser.CanSeek);
+            Assert.False(parser.SkipWhitespace);
+            Assert.Equal(expected.ToCharArray(), parser.ExpectedChars);
+        }
+
+        var terms = (ISeekable)Terms.Number<decimal>(options, decimalSeparator, groupSeparator);
+
+        Assert.True(terms.SkipWhitespace);
+        Assert.Equal(expected.ToCharArray(), terms.ExpectedChars);
+    }
+
+    [Theory]
+    [InlineData(NumberOptions.Any, "1,234.5e2", 123450)]
+    [InlineData(NumberOptions.Any, "1e2", 100)]
+    [InlineData(NumberOptions.Any, ".5", 0.5)]
+    [InlineData(NumberOptions.Any, "-.5", -0.5)]
+    public void TrimmedExpectedCharsShouldStillLetTheChoiceParseNumbers(NumberOptions options, string input, decimal expected)
+    {
+        // Only a number parser is tried for a digit, a sign or the decimal separator, and that is enough
+        var parser = OneOf(Literals.Number<decimal>(options).Then(static x => (object)x), Literals.Text("e").Then(static x => (object)x), Literals.Text(",").Then(static x => (object)x));
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal("e", parser.Parse("e2"));
+        Assert.Equal(",", parser.Parse(",5"));
+    }
+
+    private sealed class TestNumberLiteral : NumberLiteralBase<decimal>
+    {
+        public TestNumberLiteral(NumberOptions options, char decimalSeparator, char groupSeparator) : base(options, decimalSeparator, groupSeparator)
+        {
+        }
+
+        public override bool TryParseNumber(System.ReadOnlySpan<char> s, NumberStyles style, System.IFormatProvider provider, out decimal value)
+            => decimal.TryParse(s.ToString(), style, provider, out value);
+    }
+
 #if NET8_0_OR_GREATER
     [Fact]
     public void GenericRuntimeTryParseShouldStillHonorNumberStyles()
