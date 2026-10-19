@@ -58,7 +58,7 @@ public class LeftAssociativeChoiceTests
         Assert.Equal(expected, result.Value);
 
         // The operator is only tried when the next char is an 'x'
-        Assert.Equal(input.Contains('x') ? 1 : 0, entries);
+        Assert.Equal(input.IndexOf('x') >= 0 ? 1 : 0, entries);
     }
 
     [Theory]
