@@ -208,4 +208,21 @@ public class ResultPositionTests
         Assert.Equal(2, result.End);
         AssertCursor(context, 2, 1, 3);
     }
+
+    [Fact]
+    public void DelegateParserShouldSpanWhatTheDelegateRead()
+    {
+        var parser = new DelegateParser<long>(static (ParseContext c, out long value) => Terms.Integer().TryParse(c, out value, out _));
+
+        var context = Parse(parser, " 12\n", out var result);
+
+        Assert.Equal(12, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+
+        context = Parse(parser, " x", out _, success: false);
+
+        AssertCursor(context, 0, 1, 1);
+    }
 }
