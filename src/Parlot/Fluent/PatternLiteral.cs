@@ -109,41 +109,93 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
-        var scannerName = context.ScannerName;
 
-        var startName = $"start{context.NextNumber()}";
+        var spanName = $"span{context.NextNumber()}";
         var sizeName = $"size{context.NextNumber()}";
+        var newLinesName = $"newLines{context.NextNumber()}";
+        var startName = $"start{context.NextNumber()}";
+        var cName = $"c{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
-        result.Body.Add($"var {sizeName} = 0;");
-
-        // Register the predicate lambda
         var predicateLambda = context.RegisterLambda(_predicate);
 
-        result.Body.Add("while (true)");
+        // The same shape as Parse: the chars are counted on the span first such that the cursor only moves once,
+        // and not at all when the size constraint is not met.
+        if (_minSize <= 0)
+        {
+            // A pattern without a minimum size matches nothing
+            result.Body.Add($"if ({cursorName}.Eof || !{predicateLambda}({cursorName}.Current))");
+            result.Body.Add("{");
+            if (!context.DiscardResult)
+            {
+                result.Body.Add($"    {result.ValueVariable} = {cursorName}.CreateSpan({cursorName}.Offset, 0);");
+            }
+            result.Body.Add($"    {result.SuccessVariable} = true;");
+            result.Body.Add("}");
+            result.Body.Add("else");
+        }
+        else
+        {
+            result.Body.Add($"if (!{cursorName}.Eof && {predicateLambda}({cursorName}.Current))");
+        }
+
         result.Body.Add("{");
-        result.Body.Add($"    if ({cursorName}.Eof) break;");
-        result.Body.Add($"    if (!{predicateLambda}({cursorName}.Current)) break;");
-        result.Body.Add($"    {cursorName}.Advance();");
-        result.Body.Add($"    {sizeName}++;");
+        result.Body.Add($"    var {spanName} = {cursorName}.Span;");
+
+        var limitName = $"{spanName}.Length";
+
         if (_maxSize > 0)
         {
-            result.Body.Add($"    if ({sizeName} == {_maxSize}) break;");
+            limitName = $"limit{context.NextNumber()}";
+            result.Body.Add($"    var {limitName} = {_maxSize} < {spanName}.Length ? {_maxSize} : {spanName}.Length;");
         }
-        result.Body.Add("}");
 
-        result.Body.Add($"if ({sizeName} < {_minSize})");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
-        result.Body.Add("else");
-        result.Body.Add("{");
-        result.Body.Add($"    var end{context.NextNumber()} = {cursorName}.Offset;");
+        result.Body.Add($"    var {sizeName} = 1;");
+        result.Body.Add($"    var {newLinesName} = {spanName}[0] == '\\n';");
+        result.Body.Add($"    while ({sizeName} < {limitName})");
+        result.Body.Add("    {");
+        result.Body.Add($"        var {cName} = {spanName}[{sizeName}];");
+        result.Body.Add($"        if (!{predicateLambda}({cName}))");
+        result.Body.Add("        {");
+        result.Body.Add("            break;");
+        result.Body.Add("        }");
+        result.Body.Add($"        {newLinesName} |= {cName} == '\\n';");
+        result.Body.Add($"        {sizeName}++;");
+        result.Body.Add("    }");
+
+        var indent = "    ";
+
+        if (_minSize > 1)
+        {
+            result.Body.Add($"    if ({sizeName} >= {_minSize})");
+            result.Body.Add("    {");
+            indent = "        ";
+        }
+
+        result.Body.Add($"{indent}var {startName} = {cursorName}.Offset;");
+        result.Body.Add($"{indent}if ({newLinesName})");
+        result.Body.Add($"{indent}{{");
+        result.Body.Add($"{indent}    {cursorName}.Advance({sizeName});");
+        result.Body.Add($"{indent}}}");
+        result.Body.Add($"{indent}else");
+        result.Body.Add($"{indent}{{");
+        result.Body.Add($"{indent}    {cursorName}.AdvanceBy({sizeName}, 0, {sizeName});");
+        result.Body.Add($"{indent}}}");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, end{context.NextNumber() - 1} - {startName}.Offset);");
+            result.Body.Add($"{indent}{result.ValueVariable} = {cursorName}.CreateSpan({startName}, {sizeName});");
         }
-        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"{indent}{result.SuccessVariable} = true;");
+
+        if (_minSize > 1)
+        {
+            result.Body.Add("    }");
+            result.Body.Add($"    else if ({sizeName} == {spanName}.Length)");
+            result.Body.Add("    {");
+            result.Body.Add("        // More matching chars could follow the end of the buffer");
+            result.Body.Add($"        {cursorName}.MarkHitEnd();");
+            result.Body.Add("    }");
+        }
+
         result.Body.Add("}");
 
         return result;
