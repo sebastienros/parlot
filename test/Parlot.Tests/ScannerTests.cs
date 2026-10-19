@@ -2,6 +2,7 @@ using Parlot.Tests.Calc;
 using System;
 using System.Buffers;
 using System.Globalization;
+using Parlot.Fluent;
 using Xunit;
 
 namespace Parlot.Tests;
@@ -100,12 +101,17 @@ public class ScannerTests
     }
 
     [Theory]
-    // The quote char is also the escape char, so the start quote is the first escape sequence
+    // The quote char is also the escape char, so it can't be escaped: the backslash following the
+    // start quote is the end quote, and the content is never decoded
     [InlineData("\\n\\rest", true, "\\n\\")]
-    [InlineData("\\p\\rest", false, null)]
-    [InlineData("\\u1234\\rest", false, null)]
-    [InlineData("\\u12\\rest", false, null)]
+    [InlineData("\\p\\rest", true, "\\p\\")]
+    [InlineData("\\abc\\", true, "\\abc\\")]
+    [InlineData("\\\\", true, "\\\\")]
+    [InlineData("\\u1234\\rest", true, "\\u1234\\")]
+    [InlineData("\\u12\\rest", true, "\\u12\\")]
     [InlineData("\\nrest", false, null)]
+    [InlineData("\\", false, null)]
+    [InlineData("", false, null)]
     public void ShouldReadStringWhenQuoteCharIsTheEscapeChar(string text, bool success, string expected)
     {
         Scanner s = new(text);
@@ -115,11 +121,31 @@ public class ScannerTests
         if (success)
         {
             Assert.Equal(expected, result.ToString());
+            Assert.Equal(expected.Length, s.Cursor.Offset);
         }
         else
         {
             Assert.Equal(0, s.Cursor.Offset);
         }
+    }
+
+    [Fact]
+    public void ShouldNotReadNullQuotedStringAtEof()
+    {
+        // The cursor reports the null char at the end of the text, which is not a quote
+        var s = new Scanner("");
+
+        Assert.False(s.ReadQuotedString('\0', out _));
+        Assert.Equal(0, s.Cursor.Offset);
+
+        s = new Scanner("\0abc\0rest");
+
+        Assert.True(s.ReadQuotedString('\0', out var result));
+        Assert.Equal("\0abc\0", result.ToString());
+        Assert.Equal(5, s.Cursor.Offset);
+
+        Assert.False(new StringLiteral('\0').TryParse("", out _));
+        Assert.Equal("abc", new StringLiteral('\0').Parse("\0abc\0").ToString());
     }
 
     [Fact]
@@ -161,6 +187,33 @@ public class ScannerTests
         s = new Scanner(source);
         Assert.False(s.ReadAnyOf(SearchValues.Create(pattern), out result));
 #endif
+    }
+
+    [Fact]
+    public void ReadAnyOfShouldStopAtEofWhenTheNullCharIsExpected()
+    {
+        // The cursor reports the null char at the end of the text, which must not be read even when expected
+        var s = new Scanner("ab");
+
+        Assert.True(s.ReadAnyOf("ab\0", out var result));
+        Assert.Equal("ab", result.ToString());
+        Assert.Equal(2, s.Cursor.Offset);
+
+        s = new Scanner("a\0b");
+
+        Assert.True(s.ReadAnyOf("a\0", out result));
+        Assert.Equal("a\0", result.ToString());
+        Assert.Equal(2, s.Cursor.Offset);
+
+        s = new Scanner("");
+
+        Assert.False(s.ReadAnyOf("\0", out _));
+        Assert.Equal(0, s.Cursor.Offset);
+
+        s = new Scanner("x");
+
+        Assert.False(s.ReadAnyOf("\0", out _));
+        Assert.Equal(0, s.Cursor.Offset);
     }
 
     [Fact]
@@ -483,6 +536,26 @@ public class ScannerTests
         Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
         Assert.True(decimal.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    // The BCL accepts an exponent right after the decimal separator, like it accepts a trailing separator
+    [InlineData("1.e5", "1.e5")]
+    [InlineData("1.E+5x", "1.E+5")]
+    [InlineData("1.e-5", "1.e-5")]
+    [InlineData("1.5e5", "1.5e5")]
+    [InlineData("1.e", "1.")]
+    [InlineData("1.ex", "1.")]
+    [InlineData("1.e+", "1.")]
+    [InlineData("1.", "1.")]
+    public void ShouldReadExponentAfterTrailingDecimalSeparator(string input, string expected)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(Fluent.NumberOptions.Float, out var result));
+        Assert.True(double.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
+        Assert.Equal(expected, result);
+        Assert.Equal(expected.Length, s.Cursor.Offset);
     }
 
     [Theory]

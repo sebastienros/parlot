@@ -116,7 +116,7 @@ public class SourceableParsersTests
             TargetFrameworkIdentifier.NetCoreApp, new Version(7, 0)));
         var modern = new SourceGenerationContext(targetFramework: new TargetFrameworkInfo(
             TargetFrameworkIdentifier.NetCoreApp, new Version(8, 0)));
-        var parser = new TestLongNumberLiteral();
+        var parser = CreateBuiltInNumberLiteral<long>("LongNumberLiteral");
 
         var downlevelSource = string.Join(Environment.NewLine, parser.GenerateSource(downlevel).Body);
         var modernSource = string.Join(Environment.NewLine, parser.GenerateSource(modern).Body);
@@ -126,9 +126,40 @@ public class SourceableParsersTests
     }
 
     [Fact]
+    public void Number_Emitter_Rejects_A_Custom_Subclass()
+    {
+        // The generated code parses with the built-in methods, so a TryParseNumber override would be ignored
+        var parser = new TestLongNumberLiteral();
+
+        var exception = Assert.Throws<NotSupportedException>(() => parser.GenerateSource(new SourceGenerationContext()));
+
+        Assert.Contains("TryParseNumber", exception.Message, StringComparison.Ordinal);
+    }
+
+    // The built-in number parsers are internal, and the public factory returns NumberLiteral<T> on this runtime
+    private static NumberLiteralBase<T> CreateBuiltInNumberLiteral<T>(string typeName)
+    {
+        var type = typeof(NumberLiteralBase<>).Assembly.GetType("Parlot.Fluent." + typeName)!;
+        var constructor = type.GetConstructors().Single();
+        var arguments = constructor.GetParameters().Select(static parameter => parameter.DefaultValue).ToArray();
+
+        return (NumberLiteralBase<T>)constructor.Invoke(arguments);
+    }
+
+    [Fact]
     public void Unsupported_Runtime_Parser_Is_Rejected_By_Combinator_Emitter()
     {
         var parser = If(static () => true, new RuntimeOnlyParser());
+
+        Assert.Throws<NotSupportedException>(
+            () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
+    }
+
+    [Fact]
+    public void SkipWhiteSpace_Emitter_Rejects_A_Runtime_Only_Parser()
+    {
+        // Silently emitting a parser that always fails would hide the unsupported parser from the build
+        var parser = SkipWhiteSpace(new RuntimeOnlyParser());
 
         Assert.Throws<NotSupportedException>(
             () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));

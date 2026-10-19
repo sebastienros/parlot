@@ -162,7 +162,7 @@ public class GeneratorDiagnosticsTests
                 private static Parser<string> Build()
                 {
                     var prefix = "hello";
-                    return Parsers.Terms.Identifier().Then(value => prefix + value.ToString());
+                    return Parsers.Terms.NonWhiteSpace().Then(value => prefix + value.ToString());
                 }
             }
             """;
@@ -183,7 +183,7 @@ public class GeneratorDiagnosticsTests
             {
                 [GenerateParser(nameof(TryParse))]
                 private static Parser<string> Build() =>
-                    Parsers.Terms.Identifier().Then(static value => value.ToString());
+                    Parsers.Terms.NonWhiteSpace().Then(static value => value.ToString());
             }
             """;
 
@@ -538,7 +538,7 @@ public class GeneratorDiagnosticsTests
             {
                 [GenerateParser(nameof(TryParse))]
                 private static Parser<string> Build() =>
-                    Parsers.Terms.Identifier().Then(static value => value.ToString());
+                    Parsers.Terms.NonWhiteSpace().Then(static value => value.ToString());
             }
             """;
         var path = Path.Combine(Path.GetTempPath(), "quote\"#line\nGrammar.parlot.cs");

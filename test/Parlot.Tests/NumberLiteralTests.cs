@@ -177,6 +177,23 @@ public class NumberLiteralTests
         Assert.Equal(-123.456, result3);
     }
 
+    [Theory]
+    [InlineData("1.e5", 100000, 4)]
+    [InlineData("1.E-2", 0.01, 5)]
+    [InlineData("1.e", 1, 2)]
+    [InlineData("1.", 1, 2)]
+    public void NumbersShouldReadAnExponentAfterATrailingDecimalSeparator(string text, double expected, int end)
+    {
+        var context = new ParseContext(new Scanner(text));
+        var result = new ParseResult<double>();
+
+        Assert.True(Literals.Number<double>(NumberOptions.Float).Parse(context, ref result));
+        Assert.Equal(expected, result.Value);
+        Assert.Equal(end, context.Scanner.Cursor.Offset);
+
+        Assert.Equal((decimal)expected, Literals.Number<decimal>(NumberOptions.Float).Parse(text));
+    }
+
     [Fact]
     public void FloatNumberLiteralShouldParseValidNumbers()
     {

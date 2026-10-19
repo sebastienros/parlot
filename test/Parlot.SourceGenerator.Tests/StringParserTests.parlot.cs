@@ -11,6 +11,10 @@ public static partial class StringGrammars
     private static Parser<string> BuildDecoded() =>
         SkipWhiteSpace(new StringLiteral('%')).Then(static span => span.ToString()).Eof();
 
+    [GenerateParser(nameof(TryParseBackslashDelimited))]
+    private static Parser<string> BuildBackslashDelimited() =>
+        new StringLiteral('\\').Then(static span => span.ToString());
+
     [GenerateParser(nameof(TryParseCaptured))]
     private static Parser<int> BuildCaptured() =>
         Capture(SkipWhiteSpace(new StringLiteral('%'))).Then(static span => span.Length).Eof();

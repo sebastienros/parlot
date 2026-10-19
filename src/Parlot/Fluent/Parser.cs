@@ -198,5 +198,23 @@ public abstract partial class Parser<T> : IParser<T>
     /// <summary>
     /// Builds a parser that lists all possible matches to improve performance.
     /// </summary>
-    public Parser<T> Lookup(params ISeekable[] parsers) => new Seekable<T>(this, parsers.All(x => x.SkipWhitespace), parsers.SelectMany(x => x.ExpectedChars).ToArray());
+    /// <remarks>
+    /// The hints are only used when every parser can seek and they all skip white space the same way,
+    /// otherwise the resulting parser can start with any char.
+    /// </remarks>
+    public Parser<T> Lookup(params ISeekable[] parsers)
+    {
+        ThrowHelper.ThrowIfNull(parsers, nameof(parsers));
+
+        var canSeek = parsers.Length > 0;
+
+        foreach (var parser in parsers)
+        {
+            canSeek &= parser.CanSeek && parser.SkipWhitespace == parsers[0].SkipWhitespace;
+        }
+
+        return canSeek
+            ? new Seekable<T>(this, parsers[0].SkipWhitespace, parsers.SelectMany(x => x.ExpectedChars).ToArray())
+            : new Seekable<T>(this, false, []) { CanSeek = false };
+    }
 }

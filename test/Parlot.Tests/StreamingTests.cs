@@ -50,8 +50,10 @@ public class StreamingTests
         ["anyof-max"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Literals.AnyOf("abc", minSize: 1, maxSize: 2))),
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),
         ["pattern"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 2, maxSize: 4)),
+        ["pattern-empty"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 0)),
         ["string"] = new Grammar<TextSpan>(Terms.String()),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
+        ["nul-string"] = new Grammar<TextSpan>(new StringLiteral('\0')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
         ["nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace()),
         ["textbefore"] = new Grammar<TextSpan>(AnyCharBefore(Literals.Text("--"), failOnEof: true, consumeDelimiter: true)),
@@ -147,8 +149,8 @@ public class StreamingTests
         Add("standalone-eof", "", " ", "a");
         Add("integer-standalone-eof", "", "42", "42a", "42 ", " 42");
         Add("integer-eof-error", "", "42", "42a", "42 ", " 42");
-        Add("decimal", "", "1", "1.5", "1.", "1.e", "12.5e-3", "1e", "1e+", ".5", "-0.25 ");
-        Add("double", "", "1", "1.5e10", "1e", "2.", "-3.25e-2x");
+        Add("decimal", "", "1", "1.5", "1.", "1.e", "12.5e-3", "1e", "1e+", ".5", "-0.25 ", "1.e5", "1.e+", "1.E-2x");
+        Add("double", "", "1", "1.5e10", "1e", "2.", "-3.25e-2x", "2.e3", "2.e");
         Add("text", "", "h", "hel", "hello", "hello!", " hello", "help");
         Add("text-ci", "", "HEL", "HeLLo", "HELP", "hellO world");
         Add("keyword", "", "f", "for", "for ", "fore", "for(", "fo");
@@ -158,8 +160,10 @@ public class StreamingTests
         Add("anyof-max", "", "a", "abc", "abcab", "abxa");
         Add("noneof", "", "a", "ab", "ab,c", "a,", ";");
         Add("pattern", "", "1", "12", "1234", "123456", "1a");
+        Add("pattern-empty", "", "1", "12a", "a", "123456");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
-        Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\");
+        Add("nul-string", "", "\0", "\0abc\0", "\0abc", "\0a\\\0b\0", "x");
+        Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\", "\\abc\\", "\\\\", "\\abc", "\\a\\\\b\\");
         Add("whitespace", "", " ", "  \n\t x", "x");
         Add("nonwhitespace", "", "a", "abc def", " x");
         Add("textbefore", "", "a", "abc", "abc-", "abc--", "a-b--c", "--");

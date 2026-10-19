@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Linq;
 using System.Reflection;
@@ -143,6 +145,52 @@ public class GrammarsTests
     {
         Assert.True(Grammars.TryParseValueRightAssociativeEmpty("", out var value));
         Assert.Equal(1, value);
+    }
+
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("-1", -1)]
+    [InlineData("--1", -1)]
+    [InlineData("+1", 101)]
+    [InlineData("-+1", -101)]
+    public void Unary_Treats_A_Non_Consuming_Operator_As_No_Operator(string input, long expected)
+    {
+        Assert.True(Grammars.TryParseUnaryEmptyOperator(input, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(Grammars.TryParseUnaryContextEmptyOperator(input, out var contextValue));
+        Assert.Equal(expected, contextValue);
+        Assert.False(Grammars.TryParseUnaryEmptyOperator("x", out _));
+        Assert.False(Grammars.TryParseUnaryContextEmptyOperator("x", out _));
+    }
+
+    [Theory]
+    [InlineData("abcdefg", "abcdefg")]
+    [InlineData("z", "z")]
+    [InlineData("g", null)]
+    public void Seven_Element_Sequence_Is_Tried_By_OneOf(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseSevenSequenceChoice(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("ab", "a")]
+    [InlineData("b", "")]
+    [InlineData("x", null)]
+    public void Pattern_With_No_Minimum_Size_Matches_Nothing(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseEmptyPattern(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("b", "b")]
+    [InlineData("c", "c")]
+    [InlineData("a", null)]
+    public void Replaced_Recursive_Parser_Is_Found_By_OneOf(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseReplacedRecursive(input, out var value));
+        Assert.Equal(expected, value);
     }
 
     [Fact]
