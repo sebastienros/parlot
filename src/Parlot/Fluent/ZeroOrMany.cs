@@ -27,8 +27,9 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
 
         HybridList<T>? results = null;
 
-        var start = 0;
-        var end = 0;
+        // An empty result is at the current position
+        var start = context.Scanner.Cursor.Offset;
+        var end = start;
 
         var first = true;
         var parsed = new ParseResult<T>();

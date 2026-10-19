@@ -29,11 +29,13 @@ public sealed class DelegateParser<T> : Parser<T>
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
-        
+
+        var start = context.Scanner.Cursor.Offset;
         var success = _func(context, out var value);
+
         if (success)
         {
-            result.Set(context.Scanner.Cursor.Offset, context.Scanner.Cursor.Offset, value);
+            result.Set(start, context.Scanner.Cursor.Offset, value);
         }
 
         context.ExitParser(this);

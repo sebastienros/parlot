@@ -64,7 +64,19 @@ public class StreamingTests
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // The line and column after the match must not depend on how the text is split
+        ["position-text"] = new Grammar<(int, int, int)>(Literals.Text("\r\n").Then(static (c, _) => Position(c))),
+        ["position-char"] = new Grammar<(int, int, int)>(Literals.Char('\n').Then(static (c, _) => Position(c))),
+        ["position-noneof"] = new Grammar<(int, int, int)>(Literals.NoneOf("abc").Then(static (c, _) => Position(c))),
+        ["position-pattern"] = new Grammar<(int, int, int)>(Literals.Pattern(static c => c != ' ').Then(static (c, _) => Position(c))),
+        ["position-textbefore"] = new Grammar<(int, int, int)>(AnyCharBefore(Literals.Text("--"), consumeDelimiter: true).Then(static (c, _) => Position(c))),
     };
+
+    private static (int Offset, int Line, int Column) Position(ParseContext context)
+    {
+        var position = context.Scanner.Cursor.Position;
+        return (position.Offset, position.Line, position.Column);
+    }
 
     public static TheoryData<string, string> Cases()
     {
@@ -160,6 +172,11 @@ public class StreamingTests
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+        Add("position-text", "", "\r", "\r\n", "\r\nx", "\n");
+        Add("position-char", "", "\n", "\nx", "\r\n");
+        Add("position-noneof", "", "\n", "\r\n", "\r", "x\ny\nz", "x\ny\nz\n", "x\r\ny\rz a", "a");
+        Add("position-pattern", "", "ab\rc", "ab\r", "ab\r\n", "ab\n", "a\n\nb c", new string('a', 70) + "\r" + new string('b', 10) + "\n", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
+        Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
 
         return data;
     }
