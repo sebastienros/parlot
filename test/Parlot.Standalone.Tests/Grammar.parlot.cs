@@ -41,6 +41,23 @@ public static partial class Grammar
     private static Parser<string> Identifier() =>
         Literals.Identifier().Then(static value => value.ToString());
 
+    [GenerateParser(nameof(TryParseIdentifierWithPredicates))]
+    private static Parser<string> IdentifierWithPredicates() =>
+        Literals.Identifier(static c => c == '@', static c => c == '-').Then(static value => value.ToString());
+
+    // The text is searched for the chars the delimiter can start with
+    [GenerateParser(nameof(TryParseTextBefore))]
+    private static Parser<string> TextBefore() =>
+        AnyCharBefore(Literals.Text("-->").Or(Literals.Text("==>")), consumeDelimiter: true).Then(static value => value.ToString());
+
+    [GenerateParser(nameof(TryParseTextBeforeChar))]
+    private static Parser<string> TextBeforeChar() =>
+        AnyCharBefore(Literals.Char(';'), canBeEmpty: true).Then(static value => value.ToString());
+
+    [GenerateParser(nameof(TryParsePattern))]
+    private static Parser<string> Pattern() =>
+        Literals.Pattern(static c => char.IsDigit(c), minSize: 2, maxSize: 4).Then(static value => value.ToString());
+
     [GenerateParser(nameof(TryParseAlternative))]
     private static Parser<char> Alternative() =>
         Terms.Char('a').SkipAnd(Literals.Char('b'))

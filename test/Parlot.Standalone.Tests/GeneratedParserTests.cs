@@ -10,6 +10,68 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Theory]
+    [InlineData("abc-->def", true, "abc")]
+    [InlineData("a-b->c-->d", true, "a-b->c")]
+    [InlineData("a==>b", true, "a")]
+    [InlineData("a-=-=b==>", true, "a-=-=b")]
+    [InlineData("abc", true, "abc")]
+    [InlineData("-->", false, null)]
+    [InlineData("", false, null)]
+    public void Text_Before_A_Seekable_Delimiter_Is_Searched(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseTextBefore(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseTextBefore(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc;def", "abc")]
+    [InlineData(";", "")]
+    [InlineData("", "")]
+    [InlineData("a\nb;c", "a\nb")]
+    public void Text_Before_A_Char_Is_Searched(string input, string expected)
+    {
+        Assert.True(Grammar.TryParseTextBeforeChar(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.True(Grammar.TryParseTextBeforeChar(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc", true, "abc")]
+    [InlineData("_a1-b", true, "_a1-b")]
+    [InlineData("@x y", true, "@x")]
+    [InlineData("1abc", false, null)]
+    [InlineData("", false, null)]
+    public void Identifier_With_Predicates_Counts_Its_Chars(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("12", true, "12")]
+    [InlineData("12345", true, "1234")]
+    [InlineData("12a", true, "12")]
+    [InlineData("1", false, null)]
+    [InlineData("1a", false, null)]
+    [InlineData("", false, null)]
+    public void Pattern_Counts_Its_Chars(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParsePattern(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParsePattern(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("", true)]
     [InlineData(" ", false)]
     [InlineData("a", false)]
