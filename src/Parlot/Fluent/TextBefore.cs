@@ -114,7 +114,8 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ICompilable
                     return false;
                 }
 
-                result.Set(start.Offset, previous.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
+                // The result ends where the cursor is: after the delimiter when it is consumed
+                result.Set(start.Offset, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start.Offset, length));
 
                 context.ExitParser(this);
                 return true;

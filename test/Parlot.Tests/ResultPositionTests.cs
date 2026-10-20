@@ -1,0 +1,210 @@
+using System.Collections.Generic;
+using Parlot.Fluent;
+using Xunit;
+using static Parlot.Fluent.Parsers;
+
+namespace Parlot.Tests;
+
+// The start and end of a result are the text the parser matched, and an empty match is at the position of the cursor.
+public class ResultPositionTests
+{
+    private static ParseContext Parse<T>(Parser<T> parser, string text, out ParseResult<T> result, bool success = true)
+    {
+        var context = new ParseContext(new Scanner(text));
+        result = new ParseResult<T>();
+
+        Assert.Equal(success, parser.Parse(context, ref result));
+
+        return context;
+    }
+
+    private static void AssertCursor(ParseContext context, int offset, int line, int column)
+    {
+        Assert.Equal(offset, context.Scanner.Cursor.Position.Offset);
+        Assert.Equal(line, context.Scanner.Cursor.Position.Line);
+        Assert.Equal(column, context.Scanner.Cursor.Position.Column);
+    }
+
+    [Fact]
+    public void OptionalShouldBeAtTheCursorWhenEmpty()
+    {
+        var context = Parse(Terms.Text("ab").And(Terms.Char('c').Optional()), " ab", out var result);
+
+        Assert.False(result.Value.Item2.HasValue);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+
+        context = Parse(Literals.Char('c').Optional(), "\n\nx", out var empty);
+
+        Assert.Equal(0, empty.Start);
+        Assert.Equal(0, empty.End);
+        AssertCursor(context, 0, 1, 1);
+    }
+
+    [Fact]
+    public void OptionalShouldIgnoreThePositionsOfARejectedMatch()
+    {
+        // When writes the match in the result before rejecting it
+        var context = Parse(Literals.Text("ab").When(static (_, _) => false).Optional(), "ab", out var result);
+
+        Assert.False(result.Value.HasValue);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(0, result.End);
+        AssertCursor(context, 0, 1, 1);
+    }
+
+    [Fact]
+    public void OptionalShouldSpanTheMatch()
+    {
+        var context = Parse(Terms.Char('c').Optional(), " c", out var result);
+
+        Assert.Equal('c', result.Value.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(2, result.End);
+        AssertCursor(context, 2, 1, 3);
+    }
+
+    [Fact]
+    public void ZeroOrOneShouldBeAtTheCursorWhenEmpty()
+    {
+        var context = Parse(Terms.Text("ab").And(ZeroOrOne(Terms.Char('c'))), " ab", out var result);
+
+        Assert.Equal(default, result.Value.Item2);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+
+        context = Parse(ZeroOrOne(Literals.Text("ab").When(static (_, _) => false)), "ab", out var rejected);
+
+        Assert.Null(rejected.Value);
+        Assert.Equal(0, rejected.Start);
+        Assert.Equal(0, rejected.End);
+        AssertCursor(context, 0, 1, 1);
+    }
+
+    [Fact]
+    public void ZeroOrManyShouldBeAtTheCursorWhenEmpty()
+    {
+        var context = Parse(Terms.Text("ab").And(ZeroOrMany(Terms.Char('c'))), " ab", out var result);
+
+        Assert.Empty(result.Value.Item2);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+
+        context = Parse(Terms.Text("ab").And(ZeroOrMany(Terms.Char('c'))), " ab\ncc", out var matched);
+
+        Assert.Equal(2, matched.Value.Item2.Count);
+        Assert.Equal(1, matched.Start);
+        Assert.Equal(6, matched.End);
+        AssertCursor(context, 6, 2, 3);
+    }
+
+    [Fact]
+    public void ElseShouldBeAtTheCursorWhenTheParserFails()
+    {
+        // When writes the match in the result before rejecting it
+        var context = Parse(Literals.Text("ab").When(static (_, _) => false).Else("z"), "ab", out var result);
+
+        Assert.Equal("z", result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(0, result.End);
+        AssertCursor(context, 0, 1, 1);
+
+        context = Parse(Terms.Text("x").And(Literals.Text("ab").When(static (_, _) => false).Else(static _ => "z")), "\n xab", out var prefixed);
+
+        Assert.Equal(("x", "z"), prefixed.Value);
+        Assert.Equal(2, prefixed.Start);
+        Assert.Equal(3, prefixed.End);
+        AssertCursor(context, 3, 2, 3);
+    }
+
+    [Fact]
+    public void ElseShouldSpanTheMatch()
+    {
+        var context = Parse(Terms.Text("ab").Else("z"), " ab", out var result);
+
+        Assert.Equal("ab", result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+    }
+
+    [Fact]
+    public void UnaryShouldStartAtTheOperator()
+    {
+        var parser = Terms.Integer().Unary((Terms.Char('-'), static x => -x));
+
+        var context = Parse(parser, " -1", out var result);
+
+        Assert.Equal(-1, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+
+        context = Parse(parser, "\n- -1", out var nested);
+
+        Assert.Equal(1, nested.Value);
+        Assert.Equal(1, nested.Start);
+        Assert.Equal(5, nested.End);
+        AssertCursor(context, 5, 2, 5);
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldStartAtTheOperator()
+    {
+        var parser = Terms.Integer().Unary((Terms.Char('-'), static (ParseContext _, long x) => -x));
+
+        var context = Parse(parser, " -1", out var result);
+
+        Assert.Equal(-1, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 1, 4);
+    }
+
+    [Fact]
+    public void UnaryShouldSpanTheOperandWithoutOperator()
+    {
+        var parser = Terms.Integer().Unary((Terms.Char('-'), static x => -x));
+
+        var context = Parse(parser, " 1", out var result);
+
+        Assert.Equal(1, result.Value);
+        Assert.Equal(1, result.Start);
+        Assert.Equal(2, result.End);
+        AssertCursor(context, 2, 1, 3);
+    }
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 4)]
+    public void AnyCharBeforeShouldEndWhereTheCursorIs(bool consumeDelimiter, int end)
+    {
+        var context = Parse(AnyCharBefore(Literals.Text("--"), consumeDelimiter: consumeDelimiter), "ab--c", out var result);
+
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Equal(0, result.Start);
+        Assert.Equal(end, result.End);
+        AssertCursor(context, end, 1, end + 1);
+
+        context = Parse(AnyCharBefore(Literals.Text("--"), consumeDelimiter: consumeDelimiter), "a\n--", out var lines);
+
+        Assert.Equal("a\n", lines.Value.ToString());
+        Assert.Equal(0, lines.Start);
+        Assert.Equal(end, lines.End);
+        AssertCursor(context, end, 2, end - 1);
+    }
+
+    [Fact]
+    public void AnyCharBeforeShouldEndAtTheEndOfTheText()
+    {
+        var context = Parse(AnyCharBefore(Literals.Text("--")), "ab\n", out var result);
+
+        Assert.Equal("ab\n", result.Value.ToString());
+        Assert.Equal(0, result.Start);
+        Assert.Equal(3, result.End);
+        AssertCursor(context, 3, 2, 1);
+    }
+}

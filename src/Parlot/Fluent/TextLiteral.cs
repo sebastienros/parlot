@@ -2,7 +2,6 @@ using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Globalization;
 using System.Reflection;
@@ -24,7 +23,8 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
-        _hasNewLines = text.Any(Character.IsNewLine);
+        // The cursor only ends a line on '\n'; '\r' and '\v' are ordinary chars for it
+        _hasNewLines = text.AsSpan().IndexOf('\n') >= 0;
 
         // A culture comparison ignores some chars, like the soft hyphen, and the current culture is the one of the
         // thread that parses, not the one of this thread. The chars such a text can start with are not known, only

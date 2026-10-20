@@ -29,7 +29,16 @@ public sealed class Optional<T> : Parser<Option<T>>, ICompilable
 
         var success = _parser.Parse(context, ref parsed);
 
-        result.Set(parsed.Start, parsed.End, success ? new Option<T>(parsed.Value) : new Option<T>());
+        if (success)
+        {
+            result.Set(parsed.Start, parsed.End, new Option<T>(parsed.Value));
+        }
+        else
+        {
+            // Nothing was read: the result is empty at the current position
+            var offset = context.Scanner.Cursor.Offset;
+            result.Set(offset, offset, new Option<T>());
+        }
 
         // Optional always succeeds
         context.ExitParser(this);

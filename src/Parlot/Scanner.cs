@@ -304,7 +304,7 @@ public class Scanner
 
         var span = Cursor.Span;
         var size = 1;
-        var newLines = span[0] is '\n' or '\r';
+        var newLines = span[0] == '\n';
 
         while (size < span.Length)
         {
@@ -315,13 +315,12 @@ public class Scanner
                 break;
             }
 
-            newLines |= c is '\n' or '\r';
+            newLines |= c == '\n';
             size++;
         }
 
-        // The line and column only need to be tracked char by char when there are new lines,
-        // including the char the cursor moves to since a '\r' doesn't count as a column.
-        if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+        // The line and column only need to be tracked char by char when there are new lines
+        if (newLines)
         {
             Cursor.Advance(size);
         }

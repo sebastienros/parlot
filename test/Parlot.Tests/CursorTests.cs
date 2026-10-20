@@ -115,13 +115,13 @@ public class CursorTests
 
         Assert.Equal('\r', c.Current);
         Assert.Equal(7, c.Position.Offset);
-        Assert.Equal(3, c.Position.Column);
+        Assert.Equal(4, c.Position.Column);
         Assert.Equal(2, c.Position.Line);
         c.Advance();
 
         Assert.Equal('\n', c.Current);
         Assert.Equal(8, c.Position.Offset);
-        Assert.Equal(4, c.Position.Column);
+        Assert.Equal(5, c.Position.Column);
         Assert.Equal(2, c.Position.Line);
         c.Advance();
 
@@ -348,6 +348,129 @@ public class CursorTests
 #if NET6_0_OR_GREATER
         Assert.True(ReadOnlySpan<char>.Empty == t2.Span);
 #endif
+    }
+
+    // Only '\n' ends a line; every other char, '\r' included, occupies one column. All the ways of moving the cursor agree.
+    public static TheoryData<string> LineTrackingInputs => new()
+    {
+        "abc",
+        "ab\n",
+        "ab\r",
+        "ab\rc",
+        "ab\r\n",
+        "ab\r\ncd",
+        "\n",
+        "\r\n",
+        "\r",
+        "\n\n\n",
+        "a\n\nb c",
+        new string('a', 70) + "\rb",
+        new string('a', 70) + "\n",
+        new string('a', 70) + "\r\n" + new string('b', 70),
+        new string('a', 40) + "\r" + new string('b', 40) + "\n",
+    };
+
+    private static TextPosition ExpectedPosition(string text, int offset)
+    {
+        var line = 1;
+        var column = 1;
+
+        for (var i = 0; i < offset; i++)
+        {
+            if (text[i] == '\n')
+            {
+                line++;
+                column = 1;
+            }
+            else
+            {
+                column++;
+            }
+        }
+
+        return new TextPosition(offset, line, column);
+    }
+
+    private static void AssertPosition(TextPosition expected, Cursor cursor)
+    {
+        Assert.Equal(expected.Offset, cursor.Position.Offset);
+        Assert.Equal(expected.Line, cursor.Position.Line);
+        Assert.Equal(expected.Column, cursor.Position.Column);
+        Assert.Equal(expected.Offset == cursor.Buffer.Length, cursor.Eof);
+        Assert.Equal(expected.Offset == cursor.Buffer.Length ? Cursor.NullChar : cursor.Buffer[expected.Offset], cursor.Current);
+    }
+
+    [Theory]
+    [MemberData(nameof(LineTrackingInputs))]
+    public void AdvanceShouldCountEveryCharButLineFeedsAsAColumn(string text)
+    {
+        var cursor = new Cursor(text);
+
+        for (var offset = 1; offset <= text.Length; offset++)
+        {
+            cursor.Advance();
+            AssertPosition(ExpectedPosition(text, offset), cursor);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(LineTrackingInputs))]
+    public void AdvanceByCountShouldAgreeWithAdvance(string text)
+    {
+        for (var start = 0; start <= text.Length; start++)
+        {
+            for (var count = 0; count <= text.Length - start + 1; count++)
+            {
+                var cursor = new Cursor(text);
+                cursor.Advance(start);
+                cursor.Advance(count);
+
+                AssertPosition(ExpectedPosition(text, Math.Min(start + count, text.Length)), cursor);
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(LineTrackingInputs))]
+    public void AdvanceNoNewLinesShouldAgreeWithAdvance(string text)
+    {
+        for (var start = 0; start <= text.Length; start++)
+        {
+            for (var count = 0; count <= text.Length - start + 1; count++)
+            {
+                if (text.AsSpan(start, Math.Min(count, text.Length - start)).IndexOf('\n') >= 0)
+                {
+                    // Not a valid use
+                    continue;
+                }
+
+                var cursor = new Cursor(text);
+                cursor.Advance(start);
+                cursor.AdvanceNoNewLines(count);
+
+                AssertPosition(ExpectedPosition(text, Math.Min(start + count, text.Length)), cursor);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("a")]
+    [InlineData("a\n")]
+    public void AdvanceShouldStayAtEof(string text)
+    {
+        var cursor = new Cursor(text);
+        cursor.Advance(text.Length);
+
+        var end = cursor.Position;
+        Assert.True(cursor.Eof);
+
+        cursor.Advance();
+        cursor.Advance(1);
+        cursor.AdvanceNoNewLines(1);
+
+        AssertPosition(end, cursor);
+        Assert.True(cursor.Span.IsEmpty);
     }
 #pragma warning restore
 }

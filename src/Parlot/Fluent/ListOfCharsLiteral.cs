@@ -28,16 +28,14 @@ internal sealed class ListOfChars : Parser<TextSpan>, ICompilable, ISeekable
         foreach (var c in values)
         {
             _map.Set(c, new object());
-
-            if (Character.IsNewLine(c))
-            {
-                _hasNewLine = true;
-            }
         }
 
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
+
+        // A negated set matches every char but its values, so it reads new lines unless '\n' is one of them
+        _hasNewLine = (values.IndexOf('\n') >= 0) != negate;
 
         if (minSize > 0 && !negate)
         {

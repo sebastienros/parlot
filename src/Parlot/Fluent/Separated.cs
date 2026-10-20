@@ -39,8 +39,10 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ICompilable, ISe
 
         HybridList<T>? results = null;
 
-        var start = 0;
         var end = context.Scanner.Cursor.Position;
+
+        // An empty result is at the current position
+        var start = end.Offset;
 
         var first = true;
         var parsed = new ParseResult<T>();
