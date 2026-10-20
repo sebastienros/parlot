@@ -2,6 +2,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace Parlot.Fluent;
 
@@ -16,12 +17,18 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
     // be invoked when there is no match.
 
     public const char OtherSeekableChar = '\0';
-    // The lookup groups are arrays, iterated without the bounds and version checks of List<T>
-    internal readonly CharMap<Parser<T>[]>? _map;
-    internal readonly Parser<T>[]? _otherParsers;
+    // The lookup groups are arrays, iterated without the bounds and version checks of List<T>.
+    // They are rebuilt by EnsureResolved() when an alternative declared its hints late.
+    internal CharMap<Parser<T>[]>? _map;
+    internal Parser<T>[]? _otherParsers;
 
     // Keep the array for sequential parsing without IReadOnlyList interface calls.
-    private readonly Parser<T>[] _parsers;
+    private Parser<T>[] _parsers;
+    private readonly Parser<T>[] _originalParsers;
+
+    // Whether the lookup table reflects the hints of every alternative, see EnsureResolved()
+    private bool _resolved;
+    private bool _resolving;
 
     // For compilation, ignored for now
     //private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
@@ -29,8 +36,75 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
     public OneOf(Parser<T>[] parsers)
     {
-        Parsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
-        OriginalParsers = parsers;
+        _originalParsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
+        OriginalParsers = Parsers = parsers;
+
+        Build();
+
+        // An alternative that can't tell what it starts with may be a Deferred whose parser is set later, or
+        // a choice holding one, so the table is built again from the hints they declare once parsing starts
+        _resolved = _originalParsers.Length <= 1 || !_originalParsers.Any(static x => x is ISeekable seekable && !IsResolved(seekable));
+
+        static bool IsResolved(ISeekable seekable) => seekable.CanSeek && Array.IndexOf(seekable.ExpectedChars, OtherSeekableChar) < 0;
+    }
+
+    /// <summary>
+    /// Builds the lookup table from the hints the alternatives declare once they are all known.
+    /// </summary>
+    /// <remarks>
+    /// It is called before the first parse when an alternative couldn't declare its hints when this parser was built.
+    /// </remarks>
+    internal void EnsureResolved()
+    {
+        if (Volatile.Read(ref _resolved))
+        {
+            return;
+        }
+
+        // A single lock for every choice and deferred parser, since a table can only be built once the
+        // nested ones are, and two threads resolving a cycle from different ends would otherwise wait for each other
+        lock (SeekableResolution.SyncRoot)
+        {
+            // A choice reached again through a deferred parser while it is resolved keeps its current hints
+            if (_resolved || _resolving)
+            {
+                return;
+            }
+
+            _resolving = true;
+
+            try
+            {
+                // Nested choices are flattened into this table, so they declare their hints first
+                foreach (var parser in _originalParsers)
+                {
+                    if (parser is OneOf<T> oneOf)
+                    {
+                        oneOf.EnsureResolved();
+                    }
+                }
+
+                Build();
+
+                Volatile.Write(ref _resolved, true);
+            }
+            finally
+            {
+                _resolving = false;
+            }
+        }
+    }
+
+    private void Build()
+    {
+        var parsers = _originalParsers;
+
+        Parsers = _parsers = parsers;
+        _map = null;
+        _otherParsers = null;
+        CanSeek = false;
+        ExpectedChars = [];
+        SkipWhitespace = false;
 
         static void AddUniqueRange(List<Parser<T>> target, IReadOnlyList<Parser<T>> items)
         {
@@ -80,7 +154,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
         }
 
         // We can't build a lookup table if there is only one parser
-        if (Parsers.Count <= 1)
+        if (parsers.Length <= 1)
         {
             return;
         }
@@ -95,19 +169,19 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
         // NB:We could extract the lookup logic as a separate parser and then have a each lookup group as a OneOf one.
 
-        if (Parsers.Any(x => x is ISeekable seekable))
+        if (parsers.Any(x => x is ISeekable seekable))
         {
             // The groups are built as lists and converted to arrays once, at the end
             List<Parser<T>>? otherParsers = null;
 
-            var lookupTable = Parsers
+            var lookupTable = parsers
                             .Where(p => p is ISeekable seekable && seekable.CanSeek)
                             .Cast<ISeekable>()
                             .SelectMany(s => s.ExpectedChars.Select(x => (Key: x, Parser: (Parser<T>)s)))
                             .GroupBy(s => s.Key)
                             .ToDictionary(group => group.Key, group => new List<Parser<T>>());
 
-            foreach (var parser in Parsers)
+            foreach (var parser in parsers)
             {
                 if (parser is ISeekable seekable && seekable.CanSeek)
                 {
@@ -145,12 +219,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
             // If only some parser use SkipWhiteSpace, we can't use a lookup table
             // Meaning, All/None is fine, but not Any
-            if (Parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
+            if (parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 SkipWhitespace = true;
 
                 // Remove the SkipWhiteSpace parser if we can
-                Parsers = _parsers = Parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
+                Parsers = _parsers = parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
 
                 // The lookup groups are the ones invoked when there is a map, and they were built from the original parsers
                 foreach (var entry in lookupTable)
@@ -163,7 +237,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
                     RemoveSkipWhiteSpace(otherParsers);
                 }
             }
-            else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
+            else if (parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 // There is a mix of parsers that can skip whitespaces.
                 // If the ones that can skip don't have a custom WS parser then
@@ -208,21 +282,26 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
         }
     }
 
-    public bool CanSeek { get; }
+    public bool CanSeek { get; private set; }
 
-    public char[] ExpectedChars { get; } = [];
+    public char[] ExpectedChars { get; private set; } = [];
 
-    public bool SkipWhitespace { get; }
+    public bool SkipWhitespace { get; private set; }
 
     /// <summary>
     /// Gets the parsers before they get SkipWhitespace removed.
     /// </summary>
     public IReadOnlyList<Parser<T>> OriginalParsers { get; }
 
-    public IReadOnlyList<Parser<T>> Parsers { get; }
+    public IReadOnlyList<Parser<T>> Parsers { get; private set; }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (!Volatile.Read(ref _resolved))
+        {
+            EnsureResolved();
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;

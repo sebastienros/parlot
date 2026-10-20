@@ -79,15 +79,32 @@ public sealed class ElseError<T> : Parser<T>, ICompilable
     public override string ToString() => $"{_parser} (ElseError)";
 }
 
-public sealed class Error<T> : Parser<T>, ICompilable
+public sealed class Error<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
+
+    /// <inheritdoc />
+    public bool CanSeek { get; }
+
+    /// <inheritdoc />
+    public char[] ExpectedChars { get; } = [];
+
+    /// <inheritdoc />
+    public bool SkipWhitespace { get; }
 
     public Error(Parser<T> parser, string message)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
+
+        // The error is only raised when the parser matches, so it can't be raised for a char it doesn't start with
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System.Linq.Expressions;
 
 namespace Parlot.Fluent;
@@ -42,14 +43,31 @@ public sealed class Eof : Parser<object?>, ICompilable
 /// <summary>
 /// Successful when the cursor is at the end of the string.
 /// </summary>
-public sealed class Eof<T> : Parser<T>, ICompilable
+public sealed class Eof<T> : Parser<T>, ICompilable, ISeekable
 {
     private readonly Parser<T> _parser;
 
     public Eof(Parser<T> parser)
     {
         _parser = parser;
+
+        // The parser reads first, the end of the input is only checked after it
+        if (_parser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
+
+    /// <inheritdoc />
+    public bool CanSeek { get; }
+
+    /// <inheritdoc />
+    public char[] ExpectedChars { get; } = [];
+
+    /// <inheritdoc />
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

@@ -110,6 +110,8 @@ To be able to take advantage of this optimization, a parser type can implement `
 
 The expected chars have to include every char the parser can start with, since a parser is not invoked for any other one. They are computed when the parser is built, so they can't depend on something that is only known when it parses, like the current culture. A parser which can't tell sets `CanSeek` to `false`: a text compared with `StringComparison.CurrentCultureIgnoreCase` does.
 
+A `Deferred` parser reads the hints from its `Parser` whenever they are asked for, so they are known once the grammar is complete. A `OneOf` which held an alternative that couldn't tell when it was built, a `Deferred` set later or another `OneOf` holding one, builds its table again from the current hints the first time it parses (once, under a lock shared by every parser). A `Deferred` that reaches itself while its hints are read reports `CanSeek == false`, so a left-recursive alternative is tried for any char.
+
 ## Parser factories
 
 Parsers should not allow other parsers to be created dynamically as parser constructors can be expensive (`OneOf` creates lookup tables).

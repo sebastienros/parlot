@@ -1,4 +1,5 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -10,7 +11,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Routes the parsing based on a custom delegate.
 /// </summary>
-public sealed class Switch<T, U> : Parser<U>, ICompilable
+public sealed class Switch<T, U> : Parser<U>, ICompilable, ISeekable
 {
     private static readonly MethodInfo _uParse = typeof(Parser<U>).GetMethod("Parse", [typeof(ParseContext), typeof(ParseResult<U>).MakeByRefType()])!;
 
@@ -20,7 +21,24 @@ public sealed class Switch<T, U> : Parser<U>, ICompilable
     {
         _previousParser = previousParser ?? throw new ArgumentNullException(nameof(previousParser));
         _action = action ?? throw new ArgumentNullException(nameof(action));
+
+        // The previous parser always reads first
+        if (_previousParser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
     }
+
+    /// <inheritdoc />
+    public bool CanSeek { get; }
+
+    /// <inheritdoc />
+    public char[] ExpectedChars { get; } = [];
+
+    /// <inheritdoc />
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
