@@ -340,7 +340,11 @@ public class Scanner
 
     public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result)
     {
+#if NET8_0_OR_GREATER
+        return ReadNonWhiteSpace(orNewLine: false, out result);
+#else
         return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -348,8 +352,72 @@ public class Scanner
 
     public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result)
     {
+#if NET8_0_OR_GREATER
+        return ReadNonWhiteSpace(orNewLine: true, out result);
+#else
         return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
+#endif
     }
+
+#if NET8_0_OR_GREATER
+    // The vectorized search has a setup cost that only pays off on runs longer than most tokens, so the first chars
+    // are checked with the table
+    private const int NonWhiteSpaceTableLength = 16;
+
+    /// <summary>
+    /// Reads the chars up to the first white space, or white space or new line when <paramref name="orNewLine"/> is set.
+    /// </summary>
+    private bool ReadNonWhiteSpace(bool orNewLine, out ReadOnlySpan<char> result)
+    {
+        var span = Cursor.Span;
+        var tableLength = Math.Min(span.Length, NonWhiteSpaceTableLength);
+        var size = 0;
+
+        if (orNewLine)
+        {
+            while (size < tableLength && !Character.IsWhiteSpaceOrNewLine(span[size]))
+            {
+                size++;
+            }
+        }
+        else
+        {
+            while (size < tableLength && !Character.IsWhiteSpace(span[size]))
+            {
+                size++;
+            }
+        }
+
+        // A longer run is searched with SearchValues instead of a table lookup per char
+        if (size == tableLength && size < span.Length)
+        {
+            var index = span.Slice(size).IndexOfAny(orNewLine ? Character._whiteSpaceOrNewLines : Character._whiteSpaces);
+            size = index < 0 ? span.Length : size + index;
+        }
+
+        // Also the case at the end of the text
+        if (size == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = span.Slice(0, size);
+
+        // New lines are not white space when orNewLine is not set, the run can then contain some and the line and
+        // column only need to be tracked char by char in that case
+        if (!orNewLine && result.Contains('\n'))
+        {
+            Cursor.Advance(size);
+        }
+        else
+        {
+            Cursor.AdvanceNoNewLines(size);
+        }
+
+        return true;
+    }
+#endif
 
     /// <summary>
     /// Reads the specified text.

@@ -1608,6 +1608,41 @@ public class FluentTests
     }
 
     [Fact]
+    public void AnyOfShouldTrackLinesAndStopAtMaxSize()
+    {
+        var result = new ParseResult<TextSpan>();
+
+        // '\n' is one of the chars, the lines it ends are tracked
+        var context = new ParseContext(new Scanner("a\na\nb"));
+        Assert.True(Literals.AnyOf("a\n").Parse(context, ref result));
+        Assert.Equal("a\na\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(4, 3, 1), context.Scanner.Cursor.Position);
+
+        // A negated set reads the new lines it doesn't exclude
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("c").Parse(context, ref result));
+        Assert.Equal("ab\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(3, 2, 1), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("\n").Parse(context, ref result));
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+
+        // The cursor stops after maxSize chars, on the next one
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.AnyOf("a", maxSize: 2).Parse(context, ref result));
+        Assert.Equal("aa", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+        Assert.Equal('a', context.Scanner.Cursor.Current);
+
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.NoneOf("b", maxSize: 3).Parse(context, ref result));
+        Assert.Equal("aaa", result.Value.ToString());
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void AnyOfShouldNotBeSeekableIfOptional()
     {
         var parser = Literals.AnyOf("a", minSize: 0) as ISeekable;

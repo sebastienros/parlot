@@ -217,6 +217,85 @@ public class ScannerTests
     }
 
     [Fact]
+    public void ReadNonWhiteSpaceShouldMatchTheCharacterTableForEveryChar()
+    {
+        // The vectorized scan reads up to a set of chars which must be the one of the Character table
+        for (var i = 0; i <= char.MaxValue; i++)
+        {
+            var c = (char)i;
+            var text = c.ToString();
+
+            Assert.Equal(!Character.IsWhiteSpace(c), new Scanner(text).ReadNonWhiteSpace(out var read));
+            Assert.Equal(Character.IsWhiteSpace(c) ? 0 : 1, read.Length);
+
+            Assert.Equal(!Character.IsWhiteSpaceOrNewLine(c), new Scanner(text).ReadNonWhiteSpaceOrNewLine(out read));
+            Assert.Equal(Character.IsWhiteSpaceOrNewLine(c) ? 0 : 1, read.Length);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(100)]
+    public void ReadNonWhiteSpaceShouldReadRunsOfAnyLength(int length)
+    {
+        // Short runs are read with the char table, longer ones with a vectorized search
+        var run = new string('a', length);
+
+        foreach (var text in new[] { run, run + " b", run + "\u3000b" })
+        {
+            var s = new Scanner(text);
+            Assert.True(s.ReadNonWhiteSpace(out var read));
+            Assert.Equal(run, read.ToString());
+            Assert.Equal(new TextPosition(length, 1, length + 1), s.Cursor.Position);
+
+            s = new Scanner(text);
+            Assert.True(s.ReadNonWhiteSpaceOrNewLine(out read));
+            Assert.Equal(run, read.ToString());
+            Assert.Equal(new TextPosition(length, 1, length + 1), s.Cursor.Position);
+        }
+
+        // A new line ends the run or is part of it
+        var s2 = new Scanner(run + "\n" + run + " b");
+        Assert.True(s2.ReadNonWhiteSpaceOrNewLine(out var read2));
+        Assert.Equal(run, read2.ToString());
+        Assert.Equal(new TextPosition(length, 1, length + 1), s2.Cursor.Position);
+
+        s2 = new Scanner(run + "\n" + run + " b");
+        Assert.True(s2.ReadNonWhiteSpace(out read2));
+        Assert.Equal(run + "\n" + run, read2.ToString());
+        Assert.Equal(new TextPosition(2 * length + 1, 2, length + 1), s2.Cursor.Position);
+    }
+
+    [Fact]
+    public void ReadNonWhiteSpaceShouldTrackLinesAndStopAtTheEnd()
+    {
+        // New lines are not white spaces, the run contains them and the line is tracked
+        Scanner s = new("a\nb c");
+
+        Assert.True(s.ReadNonWhiteSpace(out var read));
+        Assert.Equal("a\nb", read.ToString());
+        Assert.Equal(new TextPosition(3, 2, 2), s.Cursor.Position);
+        Assert.False(s.ReadNonWhiteSpace(out _));
+
+        s.SkipWhiteSpace();
+        Assert.True(s.ReadNonWhiteSpace(out read));
+        Assert.Equal("c", read.ToString());
+        Assert.True(s.Cursor.Eof);
+        Assert.False(s.ReadNonWhiteSpace(out _));
+
+        // Here the new line stops the run and is left to the cursor
+        s = new("a\nb");
+
+        Assert.True(s.ReadNonWhiteSpaceOrNewLine(out read));
+        Assert.Equal("a", read.ToString());
+        Assert.Equal(new TextPosition(1, 1, 2), s.Cursor.Position);
+        Assert.False(s.ReadNonWhiteSpaceOrNewLine(out _));
+    }
+
+    [Fact]
     public void SkipWhitespaceShouldSkipWhitespace()
     {
         // New lines are not considered white spaces

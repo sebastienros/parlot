@@ -16,8 +16,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
     // be invoked when there is no match.
 
     public const char OtherSeekableChar = '\0';
-    internal readonly CharMap<List<Parser<T>>>? _map;
-    internal readonly List<Parser<T>>? _otherParsers;
+    // The lookup groups are arrays, iterated without the bounds and version checks of List<T>
+    internal readonly CharMap<Parser<T>[]>? _map;
+    internal readonly Parser<T>[]? _otherParsers;
 
     // Keep the array for sequential parsing without IReadOnlyList interface calls.
     private readonly Parser<T>[] _parsers;
@@ -96,6 +97,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
         if (Parsers.Any(x => x is ISeekable seekable))
         {
+            // The groups are built as lists and converted to arrays once, at the end
+            List<Parser<T>>? otherParsers = null;
+
             var lookupTable = Parsers
                             .Where(p => p is ISeekable seekable && seekable.CanSeek)
                             .Cast<ISeekable>()
@@ -117,8 +121,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
                         }
                         else
                         {
-                            _otherParsers ??= [];
-                            AddUniqueRange(_otherParsers, subParsers);
+                            otherParsers ??= [];
+                            AddUniqueRange(otherParsers, subParsers);
 
                             foreach (var entry in lookupTable)
                             {
@@ -129,8 +133,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
                 }
                 else
                 {
-                    _otherParsers ??= [];
-                    AddUniqueSingle(_otherParsers, parser);
+                    otherParsers ??= [];
+                    AddUniqueSingle(otherParsers, parser);
 
                     foreach (var entry in lookupTable)
                     {
@@ -154,9 +158,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
                     RemoveSkipWhiteSpace(entry.Value);
                 }
 
-                if (_otherParsers != null)
+                if (otherParsers != null)
                 {
-                    RemoveSkipWhiteSpace(_otherParsers);
+                    RemoveSkipWhiteSpace(otherParsers);
                 }
             }
             else if (Parsers.Any(x => x is ISeekable seekable && seekable.SkipWhitespace))
@@ -175,9 +179,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
             lookupTable?.Remove(OtherSeekableChar);
 
+            _otherParsers = otherParsers?.ToArray();
+
             if (lookupTable?.Count > 0)
             {
-                _map = new CharMap<List<Parser<T>>>(lookupTable);
+                _map = new CharMap<Parser<T>[]>(lookupTable.Select(static entry => new KeyValuePair<char, Parser<T>[]>(entry.Key, entry.Value.ToArray())));
 
                 // This parser is only seekable if there isn't a parser
                 // that can't be reached without a lookup.
@@ -239,7 +245,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
 
             if (seekableParsers != null)
             {
-                var length = seekableParsers.Count;
+                var length = seekableParsers.Length;
 
                 for (var i = 0; i < length; i++)
                 {

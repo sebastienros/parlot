@@ -17,6 +17,9 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
     private readonly int _maxSize;
     private readonly bool _negate;
 
+    // Whether the matched chars can contain '\n', which then needs to be tracked for the line and column
+    private readonly bool _hasNewLine;
+
     public bool CanSeek { get; }
 
     public char[] ExpectedChars { get; } = [];
@@ -29,6 +32,9 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
+
+        // A negated set matches every char but its values, so it reads new lines unless '\n' is one of them
+        _hasNewLine = searchValues.Contains('\n') != negate;
     }
 
     public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0, bool negate = false)
@@ -37,6 +43,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
+        _hasNewLine = (searchValues.IndexOf('\n') >= 0) != negate;
 
         if (minSize > 0 && !_negate)
         {
@@ -49,7 +56,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
     {
         context.EnterParser(this);
 
-        if (ParseSpan(context.Scanner.Cursor, _searchValues, _minSize, _maxSize, _negate, out var span))
+        if (ParseSpan(context.Scanner.Cursor, _searchValues, _minSize, _maxSize, _negate, _hasNewLine, out var span))
         {
             result.Set(span.Offset, span.Offset + span.Length, span);
 
@@ -61,7 +68,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
         return false;
     }
 
-    private static bool ParseSpan(Cursor cursor, SearchValues<char> searchValues, int minSize, int maxSize, bool negate, out TextSpan span)
+    private static bool ParseSpan(Cursor cursor, SearchValues<char> searchValues, int minSize, int maxSize, bool negate, bool hasNewLine, out TextSpan span)
     {
         var cursorSpan = cursor.Span;
 
@@ -69,6 +76,12 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
         {
             span = default;
             return false;
+        }
+
+        // Only the chars that can be taken are scanned
+        if (maxSize > 0 && cursorSpan.Length > maxSize)
+        {
+            cursorSpan = cursorSpan.Slice(0, maxSize);
         }
 
         // First char not matching the searched values
@@ -93,14 +106,18 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
             size = cursorSpan.Length;
         }
 
-        // Too large? Take only the request size
-        if (maxSize > 0 && size > maxSize)
+        var start = cursor.Offset;
+
+        // The line and column only need to be tracked char by char when there are new lines
+        if (hasNewLine)
         {
-            size = maxSize;
+            cursor.Advance(size);
+        }
+        else
+        {
+            cursor.AdvanceNoNewLines(size);
         }
 
-        var start = cursor.Offset;
-        cursor.Advance(size);
         span = new TextSpan(cursor.Buffer, start, size);
         return true;
     }
@@ -121,6 +138,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ICompilable, I
                     Expression.Constant(_minSize),
                     Expression.Constant(_maxSize),
                     Expression.Constant(_negate),
+                    Expression.Constant(_hasNewLine),
                     span
                 ),
                 Expression.Block(

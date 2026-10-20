@@ -21,7 +21,7 @@ namespace Parlot.Benchmarks;
 // | NonWhiteSpace             | 64     | 42.472 ns |  12.3673 ns |  0.6779 ns |
 
 // Measures the parsers reading a run of chars with a predicate: Identifier (the one used with custom predicates,
-// and on the frameworks without SearchValues), Pattern and NonWhiteSpace. The context is reused and the cursor
+// and on the frameworks without SearchValues), Pattern and NonWhiteSpace (with and without new lines as white space). The context is reused and the cursor
 // moved back before each parse, such that the allocations of a parse are not part of the result.
 
 [MemoryDiagnoser, ShortRunJob]
@@ -31,6 +31,7 @@ public class CharRunBenchmarks
     private readonly Parser<TextSpan> _identifierExtra = new Identifier(static c => c == '@', static c => c == '-');
     private readonly Parser<TextSpan> _pattern = Literals.Pattern(static c => c != ' ');
     private readonly Parser<TextSpan> _nonWhiteSpace = Literals.NonWhiteSpace();
+    private readonly Parser<TextSpan> _nonWhiteSpaceNoNewLines = Literals.NonWhiteSpace(includeNewLines: false);
 
     private ParseContext _context;
 
@@ -43,7 +44,7 @@ public class CharRunBenchmarks
         _context = new ParseContext(new Scanner(new string('a', Length) + " = 123"));
 
         if (Identifier().Length != Length || IdentifierExtraPredicates().Length != Length
-            || Pattern().Length != Length || NonWhiteSpace().Length != Length)
+            || Pattern().Length != Length || NonWhiteSpace().Length != Length || NonWhiteSpaceNoNewLines().Length != Length)
         {
             throw new InvalidOperationException("Incorrect char run parsing.");
         }
@@ -68,6 +69,10 @@ public class CharRunBenchmarks
         _context.Scanner.ReadWhile(static c => c != ' ', out var result);
         return result.Length;
     }
+
+    // The white space set without the new lines, the run can then contain some and the lines are tracked
+    [Benchmark]
+    public TextSpan NonWhiteSpaceNoNewLines() => Parse(_nonWhiteSpaceNoNewLines);
 
     private TextSpan Parse(Parser<TextSpan> parser)
     {
