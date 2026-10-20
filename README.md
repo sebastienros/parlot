@@ -418,20 +418,41 @@ The benchmarks were executed with the following versions:
 
 ### Operator Syntax
 
-Parlot supports intuitive operators for parser composition:
+Parlot overloads the C# operators on `Parser<T>` as shorthands for the fluent combinators. Each operator builds exactly
+the parser its method would, so they can be mixed with method calls freely.
 
-- **`+` operator**: Combines parsers in sequence (alternative to `.And()`)
-- **`|` operator**: Creates choice between parsers (alternative to `.Or()`)
+| Operator | Equivalent | Result |
+|---|---|---|
+| `a + b` | `a.And(b)` | `(A, B)`, flattened across a chain |
+| `a \| b` | `a.Or(b)` | `A` |
+| `a >> b` | `a.SkipAnd(b)` | `B`, the arrow points to the kept result |
+| `a << b` | `a.AndSkip(b)` | `A`, the arrow points to the kept result |
+| `a - b` | `Not(b).SkipAnd(a)` | `A`, unless `b` matches at the same position |
+| `a % b` | `Separated(b, a)` | `IReadOnlyList<A>`, one or more `a` separated by `b` |
+| `!a` | `Not(a)` | succeeds without consuming when `a` fails |
+| `-a` | `a.Optional()` | `Option<A>` |
+| `+a` | `a.OneOrMany()` | `IReadOnlyList<A>` |
+| `~a` | `a.ZeroOrMany()` | `IReadOnlyList<A>`, possibly empty |
 
 ```c#
 // Using operators
 var parser = Literals.Char('a') + Literals.Char('b') + Literals.Char('c');
 var choice = Literals.Char('x') | Literals.Char('y') | Literals.Char('z');
+var list = Terms.Char('[') >> Terms.Integer() % Terms.Char(',') << Terms.Char(']');
+var name = Terms.Identifier() - (Terms.Keyword("if") | Terms.Keyword("else"));
+var signed = -Terms.Char('-') + Terms.Integer();
 
 // Equivalent to
 var parser = Literals.Char('a').And(Literals.Char('b')).And(Literals.Char('c'));
 var choice = Literals.Char('x').Or(Literals.Char('y')).Or(Literals.Char('z'));
+var list = Terms.Char('[').SkipAnd(Separated(Terms.Char(','), Terms.Integer())).AndSkip(Terms.Char(']'));
+var name = Not(Terms.Keyword("if").Or(Terms.Keyword("else"))).SkipAnd(Terms.Identifier());
+var signed = Terms.Char('-').Optional().And(Terms.Integer());
 ```
+
+The operators keep their C# precedence: unary operators bind tightest, then `%`, then `+` and `-`, then `<<` and `>>`,
+and `|` last. So `a + b >> c + d` is `(a + b) >> (c + d)`, and a choice between sequences needs no parentheses. Use
+parentheses when a choice is an operand of a sequence, as in `(a | b) + c`.
 
 ### Usages
 
