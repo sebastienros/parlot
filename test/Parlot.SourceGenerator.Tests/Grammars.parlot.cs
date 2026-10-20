@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -24,6 +24,19 @@ public static partial class Grammars
 
     [GenerateParser(nameof(TryParseHello))]
     private static Parser<string> BuildHello() => Terms.Text("hello");
+
+    [GenerateParser(nameof(TryParseOperators))]
+    private static Parser<(bool, long, IReadOnlyList<long>, IReadOnlyList<string>)> BuildOperators()
+    {
+        // sign? integer ('[' integers separated by ',' ']')? identifiers-except-keywords* !'!'
+        var keyword = Terms.Keyword("end") | Terms.Keyword("stop");
+        var sign = (-Terms.Char('-')).Then(static sign => sign.HasValue);
+        var list = (-(Terms.Char('[') >> Terms.Integer() % Terms.Char(',') << Terms.Char(']')))
+            .Then(static list => list.HasValue ? list.Value : []);
+        var name = (Terms.Identifier() - keyword).Then(static name => name.ToString());
+
+        return sign + Terms.Integer() + list + ~name << !Terms.Char('!');
+    }
 
     [GenerateParser(nameof(TryParseExpression))]
     private static Parser<double> BuildExpression()

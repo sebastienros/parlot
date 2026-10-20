@@ -447,6 +447,24 @@ Result:
 abab
 ```
 
+## Operators
+
+The combinators below are also available as C# operators on `Parser<T>`. Each one builds the same parser as the method
+it stands for, so both forms can be mixed. See the [README](../README.md#operator-syntax) for the precedence rules.
+
+| Operator | Equivalent |
+|---|---|
+| `a + b` | [And](#and) |
+| `a \| b` | [Or](#or) |
+| `a >> b` | [SkipAnd](#skipand) |
+| `a << b` | [AndSkip](#andskip) |
+| `a - b` | `Not(b).SkipAnd(a)`, see [Not](#not) |
+| `a % b` | [Separated](#separated)`(b, a)` |
+| `!a` | [Not](#not) |
+| `-a` | [Optional](#optional) |
+| `+a` | [OneOrMany](#oneormany) |
+| `~a` | [ZeroOrMany](#zeroormany) |
+
 ## Combining parsers
 
 ### Or
