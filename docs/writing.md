@@ -68,6 +68,25 @@ In this case it is never necessary to invoke `ResetPosition` since as soon as a 
 
 > ✔️ DO: Create a unit test to ensure that the parser resets the position when it's failing.
 
+## Moving the cursor
+
+`Cursor.Position` is the offset, the line and the column of the current char. The line starts at 1 and increases after
+each `'\n'`. The column starts at 1 on each line and counts every char other than `'\n'`, `'\r'` included: it is one
+more than the number of chars between the previous `'\n'` (or the start of the text) and the position. A position at
+the end of the text follows the same rule, so after `"ab\n"` the cursor is at line 2, column 1, and after `"ab\r"` at
+line 1, column 4.
+
+All the ways of moving the cursor forward apply that rule; they differ in what they assume about the chars they leave:
+
+- `Advance()` moves by one char and `Advance(count)` by `count` chars, looking at each of them. Both stop at the end of
+  the text, where `Advance()` does nothing.
+- `AdvanceNoNewLines(count)` is for text known not to contain `'\n'`, such as an identifier or digits.
+
+A parser which counts the chars of a match before moving the cursor should note whether it saw a `'\n'` and call
+`Advance(size)` when it did, or `AdvanceNoNewLines(size)` otherwise, as `Pattern` does.
+
+> ✔️ DO: Assert the line and the column of the cursor after a match, not only its offset, including after a `"\r\n"` and when the match ends the text.
+
 ## Lookup tables
 
 The `OneOf` parser, which can also be created using `a.Or(b)`, is able to create a lookup table to optimize parsing.
@@ -90,6 +109,8 @@ match is **hello** so only this parser will be invoked. If the char is `z` then 
 To be able to take advantage of this optimization, a parser type can implement `ISeekable`. Even when the parser may or may not be able to provide a list of "expected chars", the interface can be implemented and its `CanSeek` property can be set accordingly.
 
 The expected chars have to include every char the parser can start with, since a parser is not invoked for any other one. They are computed when the parser is built, so they can't depend on something that is only known when it parses, like the current culture. A parser which can't tell sets `CanSeek` to `false`: a text compared with `StringComparison.CurrentCultureIgnoreCase` does.
+
+A `Deferred` parser reads the hints from its `Parser` whenever they are asked for, so they are known once the grammar is complete. A `OneOf` which held an alternative that couldn't tell when it was built, a `Deferred` set later or another `OneOf` holding one, builds its table again from the current hints the first time it parses (once, under a lock shared by every parser). A `Deferred` that reaches itself while its hints are read reports `CanSeek == false`, so a left-recursive alternative is tried for any char.
 
 ## Parser factories
 

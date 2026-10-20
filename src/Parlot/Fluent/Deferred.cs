@@ -16,20 +16,60 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
     private readonly object _lockObject = new();
     private Parser<T>? _parser;
 
+    // Whether the hints are being read from the parser, see Resolve()
+    private bool _resolving;
+
     public Parser<T>? Parser
     {
         get => _parser;
-        set
-        {
-            _parser = value ?? throw new ArgumentNullException(nameof(value));
-        }
+        set => _parser = value ?? throw new ArgumentNullException(nameof(value));
     }
 
-    public bool CanSeek { get; }
+    /// <summary>
+    /// Gets whether the parser can be selected from a single char. The hints follow <see cref="Parser"/>, so a
+    /// parser set after a choice was built is still seekable once the choice starts parsing.
+    /// </summary>
+    public bool CanSeek => Resolve().CanSeek;
 
-    public char[] ExpectedChars { get; } = [];
+    /// <inheritdoc />
+    public char[] ExpectedChars => Resolve().ExpectedChars;
 
-    public bool SkipWhitespace { get; }
+    /// <inheritdoc />
+    public bool SkipWhitespace => Resolve().SkipWhitespace;
+
+    private (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Resolve()
+    {
+        // The hints are read when a choice builds its lookup table, which can happen from any thread, and the
+        // parser is in turn a choice when this one is the usual "expression" of a grammar
+        lock (SeekableResolution.SyncRoot)
+        {
+            var parser = _parser;
+
+            // A parser that reaches itself, directly or through other deferred parsers, can start with any char
+            if (parser is null || _resolving)
+            {
+                return (false, [], false);
+            }
+
+            _resolving = true;
+
+            try
+            {
+                if (parser is OneOf<T> oneOf)
+                {
+                    oneOf.EnsureResolved();
+                }
+
+                return parser is ISeekable seekable
+                    ? (seekable.CanSeek, seekable.ExpectedChars, seekable.SkipWhitespace)
+                    : (false, [], false);
+            }
+            finally
+            {
+                _resolving = false;
+            }
+        }
+    }
 
     public Deferred()
     {
@@ -38,13 +78,6 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
     public Deferred(Func<Deferred<T>, Parser<T>> parser) : this()
     {
         Parser = parser(this);
-
-        if (Parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

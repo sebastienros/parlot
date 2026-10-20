@@ -2,7 +2,6 @@ using Parlot.Compilation;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Globalization;
 using System.Reflection;
@@ -24,18 +23,17 @@ public sealed class TextLiteral : Parser<string>, ICompilable, ISeekable
     {
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
-        _hasNewLines = text.Any(Character.IsNewLine);
+        // The cursor only ends a line on '\n'; '\r' and '\v' are ordinary chars for it
+        _hasNewLines = text.AsSpan().IndexOf('\n') >= 0;
 
-        // A CurrentCultureIgnoreCase text is compared with the culture that is current when it parses. This is not
-        // necessarily the one that is current now, so the chars it can start with are not known.
-        if (CanSeek = Text.Length > 0 && comparisonType != StringComparison.CurrentCultureIgnoreCase)
+        // A culture comparison ignores some chars, like the soft hyphen, and the current culture is the one of the
+        // thread that parses, not the one of this thread. The chars such a text can start with are not known, only
+        // an ordinal comparison starts with the first char of the text, or with its other cases.
+        if (CanSeek = Text.Length > 0 && comparisonType is StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase)
         {
-            ExpectedChars = comparisonType switch
-            {
-                StringComparison.OrdinalIgnoreCase => OrdinalIgnoreCaseChars(Text),
-                StringComparison.InvariantCultureIgnoreCase => [Text.ToUpperInvariant()[0], Text.ToLowerInvariant()[0]],
-                _ => [Text[0]]
-            };
+            ExpectedChars = comparisonType == StringComparison.OrdinalIgnoreCase
+                ? OrdinalIgnoreCaseChars(Text)
+                : [Text[0]];
         }
     }
 

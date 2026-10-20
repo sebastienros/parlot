@@ -61,9 +61,17 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable
 
             if (op.Parse(context, ref operatorResult))
             {
+                // An operator that didn't read anything would be matched again by the recursion, forever.
+                // It is treated as no operator, and the next ones are tried at the same position.
+                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                {
+                    continue;
+                }
+
                 if (Parse(context, ref result))
                 {
-                    result = new ParseResult<T>(result.Start, result.End, factory(result.Value));
+                    // The result spans the operator and its operand
+                    result = new ParseResult<T>(operatorResult.Start, result.End, factory(result.Value));
                     context.ExitParser(this);
                     return true;
                 }
@@ -119,12 +127,17 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable
 
                 var factoryConst = Expression.Constant(factory);
 
+                // An operator that didn't read anything is treated as no operator, like at runtime
+                var operatorConsumed = Expression.AndAlso(
+                    opCompileResult.Success,
+                    Expression.NotEqual(innerContext.Offset(), innerContext.Offset(operatorPosition)));
+
                 if (i == 0)
                 {
                     operatorCheckExpressions.AddRange(opCompileResult.Body);
                     operatorCheckExpressions.Add(
                         Expression.IfThen(
-                            opCompileResult.Success,
+                            operatorConsumed,
                             Expression.Block(
                                 Expression.Assign(operatorMatched, Expression.Constant(true)),
                                 Expression.Assign(matchedFactory, factoryConst)
@@ -141,7 +154,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ICompilable
                                 opCompileResult.Body.Concat(new Expression[]
                                 {
                                     Expression.IfThen(
-                                        opCompileResult.Success,
+                                        operatorConsumed,
                                         Expression.Block(
                                             Expression.Assign(operatorMatched, Expression.Constant(true)),
                                             Expression.Assign(matchedFactory, factoryConst)
@@ -314,9 +327,17 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ICompilable
 
             if (op.Parse(context, ref operatorResult))
             {
+                // An operator that didn't read anything would be matched again by the recursion, forever.
+                // It is treated as no operator, and the next ones are tried at the same position.
+                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                {
+                    continue;
+                }
+
                 if (Parse(context, ref result))
                 {
-                    result = new ParseResult<T>(result.Start, result.End, factory(context, result.Value));
+                    // The result spans the operator and its operand
+                    result = new ParseResult<T>(operatorResult.Start, result.End, factory(context, result.Value));
                     context.ExitParser(this);
                     return true;
                 }
@@ -371,12 +392,17 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ICompilable
 
                 var factoryConst = Expression.Constant(factory);
 
+                // An operator that didn't read anything is treated as no operator, like at runtime
+                var operatorConsumed = Expression.AndAlso(
+                    opCompileResult.Success,
+                    Expression.NotEqual(innerContext.Offset(), innerContext.Offset(operatorPosition)));
+
                 if (i == 0)
                 {
                     operatorCheckExpressions.AddRange(opCompileResult.Body);
                     operatorCheckExpressions.Add(
                         Expression.IfThen(
-                            opCompileResult.Success,
+                            operatorConsumed,
                             Expression.Block(
                                 Expression.Assign(operatorMatched, Expression.Constant(true)),
                                 Expression.Assign(matchedFactory, factoryConst)
@@ -393,7 +419,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ICompilable
                                 opCompileResult.Body.Concat(new Expression[]
                                 {
                                     Expression.IfThen(
-                                        opCompileResult.Success,
+                                        operatorConsumed,
                                         Expression.Block(
                                             Expression.Assign(operatorMatched, Expression.Constant(true)),
                                             Expression.Assign(matchedFactory, factoryConst)

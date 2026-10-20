@@ -812,6 +812,8 @@ Result:
 1
 ```
 
+A `Deferred` declares the chars its parser can start with once `Parser` is set, and the declaration follows the parser when it is replaced. A `OneOf` built before the parser was set reads the declaration again the first time it parses, so the usual `var expression = Deferred<T>(); ... expression.Parser = ...;` grammar gets a complete lookup table. A parser that reaches itself through a choice, directly or through other deferred parsers, can start with any char there.
+
 ### Recursive
 
 Creates a parser that can reference itself.
@@ -819,6 +821,8 @@ Creates a parser that can reference itself.
 ```c#
 Deferred<T> Recursive<T>(Func<Deferred<T>, Parser<T>> parser)
 ```
+
+Like a `Deferred`, a `Recursive` parser is seekable: it declares the chars its parser can start with, so `OneOf` can skip it when they don't match. The declaration follows the parser when `Parser` is replaced.
 
 Usage:
 
@@ -1039,6 +1043,9 @@ Result:
 failure: "Unexpected char c"
 ```
 
+`Error` declares the chars of the parser it is applied to, so a `OneOf` only tries it, and only raises the
+error, for one of them.
+
 ### When
 
 Adds some additional logic for a parser to succeed. The condition is executed when the previous parser succeeds. If the predicate returns `false`, the parser fails.
@@ -1123,11 +1130,13 @@ var parser = Terms.Integer().Switch((context, i) =>
 
 For performance reasons it is recommended to return a singleton (or static) Parser instance. Otherwise each `Parse` execution will allocate a new Parser instance.
 
+`Switch` declares the chars of the parser it is applied to, so a `OneOf` only tries it for one of them.
+
 ### Eof
 
 The extension `parser.Eof()` matches the parser followed by the end of the input, preserving its
 result. If trailing input remains, it restores the cursor to where the parser started so alternatives
-can retry.
+can retry. It declares the chars of the parser, so a `OneOf` only tries it for one of them.
 
 ```c#
 Parser<T> Eof()
@@ -1166,12 +1175,14 @@ Parser<U> Discard<U>(U value)
 
 ### Lookup
 
-Builds a parser that lists all possible matches to improve performance. Most parsers implement `ISeekable` parsers in order to provide `OneOf` a way to build a lookup table and identify the potential next parsers in the chain. Some parsers don't implement `ISeekable` because they are built too late, like `Deferred`. The `Lookup` parser circumvents that lack.
+Builds a parser that lists all possible matches to improve performance. Most parsers implement `ISeekable` parsers in order to provide `OneOf` a way to build a lookup table and identify the potential next parsers in the chain. Some parsers can't declare the chars they start with, like a custom parser or one built from a predicate. The `Lookup` parser circumvents that lack.
 
 ```c#
 Parser<T> Lookup<U>(params ReadOnlySpan<char> expectedChars)
 Parser<T> Lookup(params ISeekable[] parsers)
 ```
+
+The hints taken from other parsers are only used when every one of them can seek and they all skip white space the same way. Otherwise the resulting parser declares that it can start with any char, like the original one.
 
 ## Other parsers
 
@@ -1182,6 +1193,9 @@ Returns any characters until the specified parser is matched.
 ```c#
 Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false)
 ```
+
+With `consumeDelimiter: true` the cursor moves past the delimiter. The returned `TextSpan` never includes the delimiter,
+while the end position of the result (as seen by `Then((context, start, end, value) => ...)`) is the cursor position, after it.
 
 It is important to use `AnyCharBefore(a.Or(b))` instead of `AnyCharBefore(a).Or(AnyCharBefore(b))` for performance reasons. Otherwise the first parser will have to look ahead for the whole source if only the second parser can be matched. By using a single `AnyCharBefore`, it will check whatever is first in the source, and then jump to the next option.
 

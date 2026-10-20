@@ -109,6 +109,11 @@ public static partial class Parsers
     /// <summary>
     /// Builds a parser that matches any chars before a specific parser.
     /// </summary>
+    /// <param name="parser">The delimiter the text is read up to.</param>
+    /// <param name="canBeEmpty">Whether to succeed when the delimiter is at the current position.</param>
+    /// <param name="failOnEof">Whether to fail when the end of the text is reached before the delimiter. Otherwise the text up to the end is returned.</param>
+    /// <param name="consumeDelimiter">Whether to move the cursor past the delimiter. The returned <see cref="TextSpan"/> never includes
+    /// it, but the end of the parse result is the cursor position, after the delimiter.</param>
     public static Parser<TextSpan> AnyCharBefore<T>(Parser<T> parser, bool canBeEmpty = false, bool failOnEof = false, bool consumeDelimiter = false) => new TextBefore<T>(parser, canBeEmpty, failOnEof, consumeDelimiter);
 
     /// <summary>
@@ -220,7 +225,7 @@ public class LiteralBuilder
 #if NET8_0_OR_GREATER
         if (extraStart == null && extraPart == null)
         {
-            return new IdentifierLiteral(Character._identifierStart, Character._identifierPart);
+            return new IdentifierLiteral(Character._identifierStart, Character._identifierPart, Character._identifierStartChars);
         }
         else
         {
@@ -241,7 +246,7 @@ public class LiteralBuilder
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
-    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart));
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart), identifierStart.ToArray());
 
 #endif
 
@@ -390,7 +395,7 @@ public class TermBuilder
 #if NET8_0_OR_GREATER
         if (extraStart == null && extraPart == null)
         {
-            return Parsers.SkipWhiteSpace(new IdentifierLiteral(Character._identifierStart, Character._identifierPart));
+            return Parsers.SkipWhiteSpace(new IdentifierLiteral(Character._identifierStart, Character._identifierPart, Character._identifierStartChars));
         }
         else
         {
@@ -411,7 +416,7 @@ public class TermBuilder
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
-    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => Parsers.SkipWhiteSpace(new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart)));
+    public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => Parsers.SkipWhiteSpace(new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart), identifierStart.ToArray()));
 
 #endif
 

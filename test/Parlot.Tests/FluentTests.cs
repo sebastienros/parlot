@@ -415,6 +415,30 @@ public class FluentTests
              .TryParse("aaaZZ", out _));
     }
 
+    [Fact]
+    public void PatternWithNoMinimumSizeShouldMatchNothing()
+    {
+        var parser = Literals.Pattern(static c => c == 'a', minSize: 0);
+
+        Assert.True(parser.TryParse("b", out var result));
+        Assert.Equal("", result.ToString());
+        Assert.True(parser.TryParse("", out result));
+        Assert.Equal("", result.ToString());
+        Assert.True(parser.TryParse("aab", out result));
+        Assert.Equal("aa", result.ToString());
+
+        // The empty match leaves the cursor where it is, so the next parser reads from there
+        Assert.Equal('b', parser.And(Literals.Char('b')).Parse("b").Item2);
+
+        var context = new ParseContext(new Scanner("b"));
+        var parseResult = new ParseResult<TextSpan>();
+
+        Assert.True(parser.Parse(context, ref parseResult));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(0, parseResult.Start);
+        Assert.Equal(0, parseResult.End);
+    }
+
     [Theory]
     [InlineData("'a\nb' ", "a\nb")]
     [InlineData("'a\r\nb' ", "a\r\nb")]
@@ -439,6 +463,23 @@ public class FluentTests
         Assert.Equal(expected, result.ToString());
         Assert.True(parser.Compile().TryParse(text, out result));
         Assert.Equal(expected, result.ToString());
+    }
+
+    [Theory]
+    [InlineData('\'', "'plain'", "plain")]
+    [InlineData('"', "\"plain\"", "plain")]
+    [InlineData('`', "`plain`", "plain")]
+    [InlineData('|', "|plain|", "plain")]
+    [InlineData('\\', "\\n\\rest", "n")]
+    [InlineData('\\', "\\abc\\", "abc")]
+    [InlineData('\\', "\\\\", "")]
+    [InlineData('\\', "\\a\\\\b\\", "a")]
+    public void StringsWithoutContentEscapesShouldReuseTheInput(char quote, string text, string expected)
+    {
+        Assert.True(new StringLiteral(quote).TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.Same(text, result.Buffer);
+        Assert.Equal(1, result.Offset);
     }
 
     [Theory]
@@ -669,6 +710,44 @@ public class FluentTests
         Assert.Equal(text, Literals.Identifier(start, part).Parse(text).ToString());
     }
 
+    [Fact]
+    public void IdentifierExpectedCharsShouldBeTheCharsStartingAnIdentifier()
+    {
+        var expected = Assert.IsAssignableFrom<ISeekable>(new Identifier()).ExpectedChars;
+
+        for (var c = char.MinValue; c < char.MaxValue; c++)
+        {
+            Assert.Equal(Character.IsIdentifierStart(c), Array.IndexOf(expected, c) >= 0);
+        }
+    }
+
+    [Fact]
+    public void IdentifierShouldBeSeekableWhenItsStartCharsAreKnown()
+    {
+        Assert.True(((ISeekable)Literals.Identifier()).CanSeek);
+        Assert.True(((ISeekable)Terms.Identifier()).CanSeek);
+        Assert.True(Assert.IsAssignableFrom<ISeekable>(new Identifier(extraPart: static c => c == '-')).CanSeek);
+        Assert.False(((ISeekable)Literals.Identifier(static c => c == '-')).CanSeek);
+
+#if NET8_0_OR_GREATER
+        var custom = (ISeekable)Literals.Identifier("ab-a".AsSpan(), "c".AsSpan());
+        Assert.True(custom.CanSeek);
+        Assert.Equal(new[] { 'a', 'b', '-' }, custom.ExpectedChars);
+
+        Assert.False(((ISeekable)Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("b"))).CanSeek);
+#endif
+    }
+
+    [Theory]
+    [InlineData("foo 12 'a' -bar", "foo,12,a,-bar")]
+    [InlineData("_a $b 3", "_a,$b,3")]
+    public void IdentifierShouldBeChosenFromItsStartChars(string text, string expected)
+    {
+        var token = OneOf(Terms.Identifier(), Terms.Pattern(Character.IsDecimalDigit), Terms.String(), Terms.Identifier(static c => c == '-'));
+
+        Assert.Equal(expected, string.Join(",", ZeroOrMany(token).Parse(text)));
+    }
+
 #if NET8_0_OR_GREATER
     [Theory]
     [InlineData("a\n", "b")]
@@ -720,6 +799,12 @@ public class FluentTests
         Assert.False(Terms.Integer(NumberOptions.None).TryParse("-123", out _));
         Assert.False(Terms.Decimal(NumberOptions.None).TryParse("+123", out _));
         Assert.False(Terms.Integer(NumberOptions.None).TryParse("+123", out _));
+    }
+
+    [Fact]
+    public void OneOfToStringShouldListTheParsersAndExpectedChars()
+    {
+        Assert.Equal("Char('a') | Char('b') on [a b]", OneOf(Literals.Char('a'), Literals.Char('b')).ToString());
     }
 
     [Fact]
@@ -1283,6 +1368,50 @@ public class FluentTests
     }
 
     [Fact]
+    public void UnaryShouldTreatANonConsumingOperatorAsNoOperator()
+    {
+        // An operator that matches without consuming anything would otherwise recurse forever,
+        // and the next operator is still tried at the same position
+        var parser = Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static value => -value),
+            (Literals.Char('+').Then(static _ => 0), static value => value + 100));
+
+        Assert.Equal(1, parser.Parse("1"));
+        Assert.Equal(-1, parser.Parse("-1"));
+        Assert.Equal(-1, parser.Parse("--1"));
+        Assert.Equal(101, parser.Parse("+1"));
+        Assert.Equal(-101, parser.Parse("-+1"));
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldTreatANonConsumingOperatorAsNoOperator()
+    {
+        var parser = Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static (ParseContext _, long value) => -value),
+            (Literals.Char('+').Then(static _ => 0), static (ParseContext _, long value) => value + 100));
+
+        Assert.Equal(1, parser.Parse("1"));
+        Assert.Equal(-1, parser.Parse("-1"));
+        Assert.Equal(-1, parser.Parse("--1"));
+        Assert.Equal(101, parser.Parse("+1"));
+        Assert.Equal(-101, parser.Parse("-+1"));
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Fact]
+    public void UnaryWithContextShouldRestoreCursorWhenOperandMissing()
+    {
+        var parser = Terms.Decimal().Unary((Terms.Char('-'), static (ParseContext _, decimal d) => -d));
+
+        var context = new ParseContext(new Scanner("-"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void ShouldZeroOrOne()
     {
         var parser = ZeroOrOne(Terms.Text("hello"));
@@ -1476,6 +1605,41 @@ public class FluentTests
         Assert.Equal("a", Literals.AnyOf("a", maxSize: 1).Parse("aa"));
         Assert.Equal("aaaa", Literals.AnyOf("a", minSize: 2, maxSize: 4).Parse("aaaaaa"));
         Assert.False(Literals.AnyOf("a", minSize: 2, maxSize: 2).TryParse("a", out _));
+    }
+
+    [Fact]
+    public void AnyOfShouldTrackLinesAndStopAtMaxSize()
+    {
+        var result = new ParseResult<TextSpan>();
+
+        // '\n' is one of the chars, the lines it ends are tracked
+        var context = new ParseContext(new Scanner("a\na\nb"));
+        Assert.True(Literals.AnyOf("a\n").Parse(context, ref result));
+        Assert.Equal("a\na\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(4, 3, 1), context.Scanner.Cursor.Position);
+
+        // A negated set reads the new lines it doesn't exclude
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("c").Parse(context, ref result));
+        Assert.Equal("ab\n", result.Value.ToString());
+        Assert.Equal(new TextPosition(3, 2, 1), context.Scanner.Cursor.Position);
+
+        context = new ParseContext(new Scanner("ab\ncd"));
+        Assert.True(Literals.NoneOf("\n").Parse(context, ref result));
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+
+        // The cursor stops after maxSize chars, on the next one
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.AnyOf("a", maxSize: 2).Parse(context, ref result));
+        Assert.Equal("aa", result.Value.ToString());
+        Assert.Equal(new TextPosition(2, 1, 3), context.Scanner.Cursor.Position);
+        Assert.Equal('a', context.Scanner.Cursor.Current);
+
+        context = new ParseContext(new Scanner("aaaa"));
+        Assert.True(Literals.NoneOf("b", maxSize: 3).Parse(context, ref result));
+        Assert.Equal("aaa", result.Value.ToString());
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
     }
 
     [Fact]
@@ -2070,6 +2234,83 @@ public class FluentTests
 
         Assert.True(parser.TryParse("   cab!", out var result));
         Assert.Equal("cab", result.ToString());
+    }
+
+    [Fact]
+    public void LookupShouldOnlySeekWhenAllTheParsersCanSeekAndAgreeOnWhiteSpace()
+    {
+        var a = (ISeekable)Terms.Text("a");
+        var b = (ISeekable)Terms.Text("b");
+
+        var seekable = (ISeekable)Terms.Text("x").Lookup(a, b);
+
+        Assert.True(seekable.CanSeek);
+        Assert.True(seekable.SkipWhitespace);
+        Assert.Equal(['a', 'b'], seekable.ExpectedChars);
+
+        // A parser that can't seek can start with anything
+        seekable = (ISeekable)Terms.Text("x").Lookup(a, Deferred<string>());
+
+        Assert.False(seekable.CanSeek);
+
+        // Parsers that disagree on skipping white space have no common hint
+        seekable = (ISeekable)Terms.Text("x").Lookup(a, (ISeekable)Literals.Text("b"));
+
+        Assert.False(seekable.CanSeek);
+
+        seekable = (ISeekable)Terms.Text("x").Lookup(Array.Empty<ISeekable>());
+
+        Assert.False(seekable.CanSeek);
+    }
+
+    [Fact]
+    public void LookupWithUnusableHintsShouldNotHideTheParserFromOneOf()
+    {
+        // A hint that no white space is skipped made OneOf reject " a" without trying the parser
+        var mixed = Terms.Text("a").Lookup((ISeekable)Terms.Text("a"), (ISeekable)Literals.Text("b"));
+        var parser = OneOf(mixed, Literals.Text("z"));
+
+        Assert.Equal("a", parser.Parse(" a"));
+        Assert.Equal("a", parser.Parse("a"));
+        Assert.Equal("z", parser.Parse("z"));
+
+        // A parser that can't seek contributed no expected chars, so the alternative was never tried
+        parser = OneOf(Terms.Text("a").Lookup(Deferred<string>()), Literals.Text("z"));
+
+        Assert.Equal("a", parser.Parse("a"));
+        Assert.Equal("z", parser.Parse("z"));
+    }
+
+    [Fact]
+    public void RecursiveShouldFollowTheParserWhenItIsReplaced()
+    {
+        var recursive = Recursive<string>(static _ => Literals.Text("a"));
+        var seekable = (ISeekable)recursive;
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['a'], seekable.ExpectedChars);
+
+        recursive.Parser = Literals.Text("b");
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['b'], seekable.ExpectedChars);
+        Assert.Equal("b", OneOf(recursive, Literals.Text("c")).Parse("b"));
+        Assert.Equal("c", OneOf(recursive, Literals.Text("c")).Parse("c"));
+        Assert.False(OneOf(recursive, Literals.Text("c")).TryParse("a", out _));
+
+        // A parser set later declares the chars of its parser too
+        var deferred = Deferred<string>();
+        deferred.Parser = Literals.Text("d");
+
+        Assert.True(((ISeekable)deferred).CanSeek);
+        Assert.Equal(['d'], ((ISeekable)deferred).ExpectedChars);
+
+        recursive.Parser = deferred;
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['d'], seekable.ExpectedChars);
+        Assert.Equal("d", OneOf(recursive, Literals.Text("c")).Parse("d"));
+        Assert.False(OneOf(recursive, Literals.Text("c")).TryParse("a", out _));
     }
 
     [Fact]

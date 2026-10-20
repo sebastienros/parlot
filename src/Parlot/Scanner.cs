@@ -195,18 +195,13 @@ public class Scanner
 
             var numberIsEmpty = number.IsEmpty;
 
-            if (!ReadInteger(out number))
+            // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`.
+            // A trailing separator is kept otherwise, e.g. `1.`, and an exponent can still follow it, e.g. `1.e5`.
+            if (!ReadInteger(out number) && numberIsEmpty)
             {
-                // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
-                if (numberIsEmpty)
-                {
-                    Cursor.ResetPosition(start);
+                Cursor.ResetPosition(start);
 
-                    return false;
-                }
-
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
-                return true;
+                return false;
             }
         }
 
@@ -309,7 +304,7 @@ public class Scanner
 
         var span = Cursor.Span;
         var size = 1;
-        var newLines = span[0] is '\n' or '\r';
+        var newLines = span[0] == '\n';
 
         while (size < span.Length)
         {
@@ -320,13 +315,12 @@ public class Scanner
                 break;
             }
 
-            newLines |= c is '\n' or '\r';
+            newLines |= c == '\n';
             size++;
         }
 
-        // The line and column only need to be tracked char by char when there are new lines,
-        // including the char the cursor moves to since a '\r' doesn't count as a column.
-        if (newLines || (size < span.Length && span[size] is '\n' or '\r'))
+        // The line and column only need to be tracked char by char when there are new lines
+        if (newLines)
         {
             Cursor.Advance(size);
         }
@@ -346,7 +340,11 @@ public class Scanner
 
     public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result)
     {
+#if NET8_0_OR_GREATER
+        return ReadNonWhiteSpace(orNewLine: false, out result);
+#else
         return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -354,8 +352,72 @@ public class Scanner
 
     public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result)
     {
+#if NET8_0_OR_GREATER
+        return ReadNonWhiteSpace(orNewLine: true, out result);
+#else
         return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
+#endif
     }
+
+#if NET8_0_OR_GREATER
+    // The vectorized search has a setup cost that only pays off on runs longer than most tokens, so the first chars
+    // are checked with the table
+    private const int NonWhiteSpaceTableLength = 16;
+
+    /// <summary>
+    /// Reads the chars up to the first white space, or white space or new line when <paramref name="orNewLine"/> is set.
+    /// </summary>
+    private bool ReadNonWhiteSpace(bool orNewLine, out ReadOnlySpan<char> result)
+    {
+        var span = Cursor.Span;
+        var tableLength = Math.Min(span.Length, NonWhiteSpaceTableLength);
+        var size = 0;
+
+        if (orNewLine)
+        {
+            while (size < tableLength && !Character.IsWhiteSpaceOrNewLine(span[size]))
+            {
+                size++;
+            }
+        }
+        else
+        {
+            while (size < tableLength && !Character.IsWhiteSpace(span[size]))
+            {
+                size++;
+            }
+        }
+
+        // A longer run is searched with SearchValues instead of a table lookup per char
+        if (size == tableLength && size < span.Length)
+        {
+            var index = span.Slice(size).IndexOfAny(orNewLine ? Character._whiteSpaceOrNewLines : Character._whiteSpaces);
+            size = index < 0 ? span.Length : size + index;
+        }
+
+        // Also the case at the end of the text
+        if (size == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = span.Slice(0, size);
+
+        // New lines are not white space when orNewLine is not set, the run can then contain some and the line and
+        // column only need to be tracked char by char in that case
+        if (!orNewLine && result.Contains('\n'))
+        {
+            Cursor.Advance(size);
+        }
+        else
+        {
+            Cursor.AdvanceNoNewLines(size);
+        }
+
+        return true;
+    }
+#endif
 
     /// <summary>
     /// Reads the specified text.
@@ -445,33 +507,22 @@ public class Scanner
     {
         var start = Cursor.Offset;
 
-        while (true)
+        // Current is the null char at the end of the text, where there is nothing to read even if it is expected
+        while (!Cursor.Eof && chars.IndexOf(Cursor.Current) != -1)
         {
-            var current = Cursor.Current;
-            var index = chars.IndexOf(current);
-
-            if (index == -1)
-            {
-                if (Cursor.Offset == start)
-                {
-                    result = [];
-                    return false;
-                }
-
-                var length = Cursor.Offset - start;
-
-                result = Cursor.Buffer.AsSpan(start, length);
-                return true;
-            }
-
-            if (Cursor.Eof)
-            {
-                result = [];
-                return false;
-            }
-
             Cursor.Advance(1);
         }
+
+        var length = Cursor.Offset - start;
+
+        if (length == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = Cursor.Buffer.AsSpan(start, length);
+        return true;
     }
 
 #if NET8_0_OR_GREATER
@@ -581,11 +632,28 @@ public class Scanner
     /// This method doesn't escape the string, but only validates its content is syntactically correct.
     /// The resulting Span contains the original quotes.
     /// </remarks>
-    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
+    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result) => ReadQuotedString(quoteChar, out result, out _);
+
+    /// <summary>
+    /// Reads a string token enclosed in quotes or custom characters, and whether it contains escape sequences to decode.
+    /// </summary>
+    /// <remarks>
+    /// Compiled parsers can't use <see cref="ReadOnlySpan{T}"/> variables, so they only get the escape flag.
+    /// </remarks>
+    internal bool ReadQuotedString(char quoteChar, out bool hasEscape) => ReadQuotedString(quoteChar, out _, out hasEscape);
+
+    /// <summary>
+    /// Reads a string token enclosed in quotes or custom characters, and whether it contains escape sequences to decode.
+    /// </summary>
+    internal bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result, out bool hasEscape)
     {
         var startChar = Cursor.Current;
 
-        if (startChar != quoteChar)
+        // Only a successful read of the escape sequences sets it
+        hasEscape = false;
+
+        // Current is also the null char at the end of the text, where there is no quote to read
+        if (startChar != quoteChar || Cursor.Eof)
         {
             result = [];
             return false;
@@ -606,31 +674,26 @@ public class Scanner
             return false;
         }
 
-        // When the quote char is a backslash it is also the escape char, in which case the start quote
-        // is itself the first escape sequence and the string is always decoded escape by escape.
-        var quoteIsEscape = startChar == '\\';
-
         // Index of the match in the full span, the start quote is at index 0
-        var nextEscape = quoteIsEscape ? 0 : next + 1;
+        var nextEscape = next + 1;
 
-        if (!quoteIsEscape)
+        // If the first match is the end quote there is no escape to decode, return the string as-is.
+        // When the quote char is a backslash it is also the escape char, so it can't be escaped and
+        // this is always the case: the string ends at the next backslash and is never decoded.
+        if (span[nextEscape] == startChar)
         {
-            // If the first match is the end quote there is no escape to decode, return the string as-is
-            if (span[nextEscape] == startChar)
-            {
-                Cursor.Advance(next + 2); // include start quote
+            Cursor.Advance(next + 2); // include start quote
 
-                result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
-                return true;
-            }
+            result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
+            return true;
+        }
 
-            // The end quote is only after the escape sequences. Make sure there is one at all before
-            // decoding them one by one, as reaching the end of the buffer that way is far more costly.
-            if (span.Slice(next + 2).IndexOf(startChar) == -1)
-            {
-                result = [];
-                return false;
-            }
+        // The end quote is only after the escape sequences. Make sure there is one at all before
+        // decoding them one by one, as reaching the end of the buffer that way is far more costly.
+        if (span.Slice(next + 2).IndexOf(startChar) == -1)
+        {
+            result = [];
+            return false;
         }
 
         // Decoding the escape sequences needs to restore the line and the column when it fails
@@ -772,8 +835,9 @@ public class Scanner
                         break;
                     default:
 
-                        // The quote char can be escaped, whichever it is
-                        if (Cursor.Current == startChar)
+                        // The quote char can be escaped, whichever it is. Match excludes the null char the cursor
+                        // reports at the end of the text, which a null quote char would otherwise be taken for.
+                        if (Cursor.Match(startChar))
                         {
                             Cursor.Advance();
                             break;
@@ -804,6 +868,9 @@ public class Scanner
         }
 
         result = Cursor.Buffer.AsSpan()[start.Offset..Cursor.Offset];
+
+        // Only a string with escape sequences gets here, the others returned before decoding anything
+        hasEscape = true;
 
         return true;
     }

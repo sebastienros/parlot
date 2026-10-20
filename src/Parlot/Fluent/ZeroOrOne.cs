@@ -23,7 +23,16 @@ public sealed class ZeroOrOne<T> : Parser<T>, ICompilable
 
         var success = _parser.Parse(context, ref parsed);
 
-        result.Set(parsed.Start, parsed.End, success ? parsed.Value : _defaultValue);
+        if (success)
+        {
+            result.Set(parsed.Start, parsed.End, parsed.Value);
+        }
+        else
+        {
+            // Nothing was read: the result is empty at the current position
+            var offset = context.Scanner.Cursor.Offset;
+            result.Set(offset, offset, _defaultValue);
+        }
 
         // ZeroOrOne always succeeds
         context.ExitParser(this);

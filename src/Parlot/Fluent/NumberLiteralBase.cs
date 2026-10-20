@@ -69,10 +69,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ICompilable, ISeekable
             expectedChars += _decimalSeparator;
         }
 
-        if (_allowExponent)
-        {
-            expectedChars += "eE";
-        }
+        // A group separator or an exponent can't be a starting char
 
         ExpectedChars = expectedChars.ToCharArray();
 

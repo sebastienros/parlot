@@ -29,14 +29,18 @@ public class CaseInsensitiveTextSeekTests
     }
 
     // Hides the seekable properties of a parser
-    private static Parser<T> NotSeekable<T>(Parser<T> parser)
+    private static Parser<T> NotSeekable<T>(Parser<T> parser) => new Hidden<T>(parser);
+
+    private sealed class Hidden<T> : Parser<T>
     {
-        var deferred = Deferred<T>();
-        deferred.Parser = parser;
+        private readonly Parser<T> _parser;
 
-        Assert.False(((ISeekable)deferred).CanSeek);
+        public Hidden(Parser<T> parser)
+        {
+            _parser = parser;
+        }
 
-        return deferred;
+        public override bool Parse(ParseContext context, ref ParseResult<T> result) => _parser.Parse(context, ref result);
     }
 
     // The chars an ordinal case-insensitive comparison takes for a char, found by asking it about every one
@@ -240,6 +244,35 @@ public class CaseInsensitiveTextSeekTests
                 AssertSameAsWithoutLookup(literal, input);
             }
         }
+    }
+
+    [Theory]
+    [InlineData(StringComparison.CurrentCulture)]
+    [InlineData(StringComparison.CurrentCultureIgnoreCase)]
+    [InlineData(StringComparison.InvariantCulture)]
+    [InlineData(StringComparison.InvariantCultureIgnoreCase)]
+    public void CultureComparisonsShouldNotSeek(StringComparison comparison)
+    {
+        // A culture comparison ignores some chars, like the soft hyphen, so the first char of the input is not
+        // necessarily the first char of the text, and a choice can't skip the text based on it
+        var literal = new TextLiteral("abc", comparison);
+
+        Assert.False(((ISeekable)literal).CanSeek);
+
+        foreach (var input in new[] { "abc", "ABC", "\u00ADabc", "" })
+        {
+            AssertSameAsWithoutLookup(literal, input);
+        }
+    }
+
+    [Theory]
+    [InlineData("\u01C5x", "\u01C5x")] // Dz, which is neither its upper nor its lower case
+    [InlineData("\u01C5x", "\u01C4x")] // Dz and DZ
+    [InlineData("\u01C5x", "\u01C6x")] // Dz and dz
+    [InlineData("ix", "\u0130x")] // i and dotted capital I
+    public void InvariantCultureIgnoreCaseShouldMatchWhatTheTextMatchesOnItsOwn(string text, string input)
+    {
+        AssertSameAsWithoutLookup(new TextLiteral(text, StringComparison.InvariantCultureIgnoreCase), input);
     }
 
     // A choice only tries the alternatives which can start with the next char, and has to find the text

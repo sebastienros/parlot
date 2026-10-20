@@ -11,6 +11,8 @@ public static partial class Character
     internal static readonly SearchValues<char> _identifierStart = SearchValues.Create(DefaultIdentifierStart);
     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);
     internal static readonly SearchValues<char> _newLines = SearchValues.Create(NewLines);
+    internal static readonly SearchValues<char> _whiteSpaces = SearchValues.Create(WhiteSpaces);
+    internal static readonly SearchValues<char> _whiteSpaceOrNewLines = SearchValues.Create(WhiteSpaceOrNewLines);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsDecimalDigit(char ch) => char.IsAsciiDigit(ch);

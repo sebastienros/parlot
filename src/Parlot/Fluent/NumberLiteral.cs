@@ -67,12 +67,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ICompilable, ISeekable
             ExpectedChars = [.. ExpectedChars, decimalSeparator];
         }
 
-        if (_allowGroupSeparator)
-        {
-            ExpectedChars = [.. ExpectedChars, groupSeparator];
-        }
-
-        // Exponent can't be a starting char
+        // A group separator or an exponent can't be a starting char
 
         Name = "NumberLiteral";
     }

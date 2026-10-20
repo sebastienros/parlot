@@ -10,14 +10,18 @@ namespace Parlot.Tests;
 public class TextBeforeJumpTests
 {
     // Hides the seekable properties of a parser
-    private static Parser<T> NotSeekable<T>(Parser<T> parser)
+    private static Parser<T> NotSeekable<T>(Parser<T> parser) => new Hidden<T>(parser);
+
+    private sealed class Hidden<T> : Parser<T>
     {
-        var deferred = Deferred<T>();
-        deferred.Parser = parser;
+        private readonly Parser<T> _parser;
 
-        Assert.False(((ISeekable)deferred).CanSeek);
+        public Hidden(Parser<T> parser)
+        {
+            _parser = parser;
+        }
 
-        return deferred;
+        public override bool Parse(ParseContext context, ref ParseResult<T> result) => _parser.Parse(context, ref result);
     }
 
     [Theory]

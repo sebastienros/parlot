@@ -86,6 +86,61 @@ public class OperatorsTests
     private class Dog : Animal { }
 
     [Fact]
+    public void Operator_Pipe_Passes_Typed_Parsers_Without_Adapter()
+    {
+        var a = Terms.Integer();
+        var b = Terms.Integer();
+
+        var parser = a | b;
+
+        // The operands are the parsers themselves, not adapters, so OneOf could strip their SkipWhiteSpace wrappers
+        Assert.Same(a, parser.OriginalParsers[0]);
+        Assert.Same(b, parser.OriginalParsers[1]);
+        Assert.True(parser.SkipWhitespace);
+        Assert.All(parser.Parsers, static p => Assert.IsNotType<SkipWhiteSpace<long>>(p));
+
+        var or = Assert.IsType<OneOf<long>>(a.Or(b));
+        Assert.Equal(or.SkipWhitespace, parser.SkipWhitespace);
+        Assert.Equal(or.Parsers.Count, parser.Parsers.Count);
+
+        Assert.Equal(123, parser.Parse("  123"));
+    }
+
+#if NET8_0_OR_GREATER
+    [Fact]
+    public void Operator_Pipe_Allocates_Like_Or()
+    {
+        var pipe = Terms.Integer() | Terms.Integer();
+        var or = Terms.Integer().Or(Terms.Integer());
+
+        Assert.Equal(Allocated(or), Allocated(pipe));
+
+        static long Allocated(Parser<long> parser)
+        {
+            var context = new ParseContext(new Scanner("  123"));
+            var result = new ParseResult<long>();
+
+            // Warm up, such that the tiering and the lazy initializations are not measured
+            for (var i = 0; i < 100; i++)
+            {
+                context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+                Assert.True(parser.Parse(context, ref result));
+            }
+
+            var before = System.GC.GetAllocatedBytesForCurrentThread();
+
+            for (var i = 0; i < 100; i++)
+            {
+                context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+                parser.Parse(context, ref result);
+            }
+
+            return System.GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+    }
+#endif
+
+    [Fact]
     public void Operator_Pipe_Supports_Covariance()
     {
         var animalParser = Literals.Char('a').Then(c => new Animal());

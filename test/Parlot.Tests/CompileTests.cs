@@ -109,6 +109,88 @@ public class CompileTests
         Assert.Equal("ab\nc", result);
     }
 
+    [Theory]
+    [InlineData('\'', "'plain'", "plain")]
+    [InlineData('"', "\"plain\"", "plain")]
+    [InlineData('`', "`plain`", "plain")]
+    [InlineData('|', "|plain|", "plain")]
+    [InlineData('\\', "\\n\\rest", "n")]
+    public void CompiledStringsWithoutContentEscapesShouldReuseTheInput(char quote, string text, string expected)
+    {
+        Assert.True(new StringLiteral(quote).Compile().TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.Same(text, result.Buffer);
+        Assert.Equal(1, result.Offset);
+    }
+
+    [Theory]
+    [InlineData("'a\\nb'", "a\nb")]
+    [InlineData("\"a\\tb\"", "a\tb")]
+    public void CompiledStringsWithEscapesShouldBeDecoded(string text, string expected)
+    {
+        Assert.True(Literals.String().Compile().TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.NotSame(text, result.Buffer);
+    }
+
+    [Fact]
+    public void CompiledUnaryShouldTreatANonConsumingOperatorAsNoOperator()
+    {
+        // An operator that matches without consuming anything would otherwise recurse forever,
+        // and the next operator is still tried at the same position
+        var parser = Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static value => -value),
+            (Literals.Char('+').Then(static _ => 0), static value => value + 100)).Compile();
+
+        Assert.Equal(1, parser.Parse("1"));
+        Assert.Equal(-1, parser.Parse("-1"));
+        Assert.Equal(-1, parser.Parse("--1"));
+        Assert.Equal(101, parser.Parse("+1"));
+        Assert.Equal(-101, parser.Parse("-+1"));
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Fact]
+    public void CompiledUnaryWithContextShouldTreatANonConsumingOperatorAsNoOperator()
+    {
+        var parser = Terms.Integer().Unary(
+            (ZeroOrMany(Literals.Char('-')).Then(static _ => 0), static (ParseContext _, long value) => -value),
+            (Literals.Char('+').Then(static _ => 0), static (ParseContext _, long value) => value + 100)).Compile();
+
+        Assert.Equal(1, parser.Parse("1"));
+        Assert.Equal(-1, parser.Parse("-1"));
+        Assert.Equal(-1, parser.Parse("--1"));
+        Assert.Equal(101, parser.Parse("+1"));
+        Assert.Equal(-101, parser.Parse("-+1"));
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PatternWithoutMinimumSizeShouldMatchNothing(bool compile)
+    {
+        var parser = Literals.Pattern(Character.IsDecimalDigit, minSize: 0);
+
+        if (compile)
+        {
+            parser = parser.Compile();
+        }
+
+        var context = new ParseContext(new Scanner("abc"));
+        var result = new ParseResult<TextSpan>();
+
+        // The pattern matches nothing and leaves the cursor in place
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(0, result.Value.Length);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        Assert.True(parser.TryParse("", out result.Value));
+        Assert.Equal(0, result.Value.Length);
+
+        Assert.Equal("12", parser.Parse("12a").ToString());
+    }
+
     [Fact]
     public void ShouldCompileCustomBacktickStringLiterals()
     {
