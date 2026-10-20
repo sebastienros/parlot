@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +9,7 @@ namespace Parlot.SourceGenerator.Tests;
 public static partial class Grammars
 {
     public static partial bool TryParseHello(string text, out string value);
+    public static partial bool TryParseOperators(string text, out (bool, long, IReadOnlyList<long>, IReadOnlyList<string>) value);
     public static partial bool TryParseStandaloneEof(string text, out object? value);
     public static partial bool TryParseIntegerStandaloneEof(string text, out long value);
     public static partial bool TryParseExpression(string text, out double value);

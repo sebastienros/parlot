@@ -1,4 +1,4 @@
-using Parlot.Fluent;
+﻿using Parlot.Fluent;
 using Parlot.Tests.Json;
 using System.Collections.Generic;
 using System.Linq;
@@ -200,5 +200,184 @@ public class OperatorsTests
         var success = Json.TryParse(input, out var result);
         Assert.True(success);
 
+    }
+
+    [Fact]
+    public void Operator_ShiftRight_Skips_Left_Result()
+    {
+        var parser = Terms.Char('(') >> Terms.Integer();
+
+        Assert.IsType<SequenceSkipAnd<char, long>>(parser);
+        Assert.True(parser.TryParse("( 42", out var result));
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void Operator_ShiftLeft_Skips_Right_Result()
+    {
+        var parser = Terms.Integer() << Terms.Char(')');
+
+        Assert.IsType<SequenceAndSkip<long, char>>(parser);
+        Assert.True(parser.TryParse("42 )", out var result));
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void Operator_Shifts_Chain_Like_Between()
+    {
+        var parser = Terms.Char('(') >> Terms.Integer() << Terms.Char(')');
+
+        Assert.True(parser.TryParse(" ( 42 ) ", out var result));
+        Assert.Equal(42, result);
+        Assert.False(parser.TryParse("( 42", out _));
+        Assert.False(parser.TryParse("42 )", out _));
+    }
+
+    [Fact]
+    public void Operator_Shifts_Bind_Looser_Than_Plus()
+    {
+        // + is additive and binds tighter than the shift operators, so each side of a shift is one sequence
+        var parser = Terms.Identifier() + Terms.Char('=') >> Terms.Integer() + Terms.Char(';');
+
+        Assert.True(parser.TryParse("age = 12;", out var result));
+        Assert.Equal((12L, ';'), result);
+
+        var kept = Terms.Identifier() + Terms.Char('=') << Terms.Integer() + Terms.Char(';');
+
+        Assert.True(kept.TryParse("age = 12;", out var left));
+        Assert.Equal("age", left.Item1.ToString());
+        Assert.Equal('=', left.Item2);
+    }
+
+    [Fact]
+    public void Operator_Minus_Excludes_Right_Parser()
+    {
+        // Keyword checks the word boundary; Text("if") would also exclude "iffy", like Not(Text("if")) does
+        var keyword = Terms.Keyword("if") | Terms.Keyword("else");
+        var parser = Terms.Identifier() - keyword;
+
+        Assert.True(parser.TryParse("iffy", out var result));
+        Assert.Equal("iffy", result.ToString());
+        Assert.False(parser.TryParse("if", out _));
+        Assert.False(parser.TryParse("else", out _));
+
+        var fluent = Not(keyword).SkipAnd(Terms.Identifier());
+        Assert.Equal(fluent.TryParse("if", out _), parser.TryParse("if", out _));
+    }
+
+    [Fact]
+    public void Operator_Minus_Restores_Position_On_Failure()
+    {
+        var parser = Terms.Identifier() - Terms.Text("if");
+        var context = new ParseContext(new Scanner("  if"));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void Operator_Modulo_Builds_Separated_List()
+    {
+        var parser = Terms.Integer() % Terms.Char(',');
+
+        Assert.IsType<Separated<char, long>>(parser);
+        Assert.True(parser.TryParse("1, 2, 3", out var result));
+        Assert.Equal([1, 2, 3], result);
+        Assert.False(parser.TryParse("", out _));
+
+        var fluent = Separated(Terms.Char(','), Terms.Integer());
+        Assert.Equal(fluent.Parse("1,2"), parser.Parse("1,2"));
+    }
+
+    [Fact]
+    public void Operator_Modulo_Binds_Tighter_Than_Plus()
+    {
+        // % is multiplicative, so the list is built before the sequence
+        var parser = Terms.Char('[') >> Terms.Integer() % Terms.Char(',') << Terms.Char(']');
+
+        Assert.True(parser.TryParse("[1, 2]", out var result));
+        Assert.Equal([1, 2], result);
+    }
+
+    [Fact]
+    public void Operator_Not_Succeeds_When_Parser_Fails()
+    {
+        var parser = !Terms.Char('a');
+
+        Assert.IsType<Not<char>>(parser);
+        Assert.True(parser.TryParse("b", out _));
+        Assert.False(parser.TryParse("a", out _));
+
+        var context = new ParseContext(new Scanner("a"));
+        var result = new ParseResult<char>();
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void Operator_Unary_Minus_Is_Optional()
+    {
+        var parser = -Terms.Integer();
+
+        Assert.IsType<Optional<long>>(parser);
+        Assert.True(parser.TryParse("42", out var some));
+        Assert.True(some.HasValue);
+        Assert.Equal(42, some.Value);
+        Assert.True(parser.TryParse("x", out var none));
+        Assert.False(none.HasValue);
+    }
+
+    [Fact]
+    public void Operator_Unary_Plus_Is_OneOrMany()
+    {
+        var parser = +Terms.Integer();
+
+        Assert.IsType<OneOrMany<long>>(parser);
+        Assert.True(parser.TryParse("1 2 3", out var result));
+        Assert.Equal([1, 2, 3], result);
+        Assert.False(parser.TryParse("x", out _));
+    }
+
+    [Fact]
+    public void Operator_Tilde_Is_ZeroOrMany()
+    {
+        var parser = ~Terms.Integer();
+
+        Assert.IsType<ZeroOrMany<long>>(parser);
+        Assert.True(parser.TryParse("1 2 3", out var result));
+        Assert.Equal([1, 2, 3], result);
+        Assert.True(parser.TryParse("x", out var empty));
+        Assert.Empty(empty);
+    }
+
+    [Fact]
+    public void Unary_Operators_Compose_With_Binary_Ones()
+    {
+        // sign? digits (',' digits)*  ->  (Option<char>, long, list)
+        var parser = -Terms.Char('-') + Terms.Integer() + ~(Terms.Char(',') >> Terms.Integer());
+
+        Assert.True(parser.TryParse("-1, 2, 3", out var result));
+        Assert.True(result.Item1.HasValue);
+        Assert.Equal(1, result.Item2);
+        Assert.Equal([2, 3], result.Item3);
+
+        Assert.True(parser.TryParse("7", out result));
+        Assert.False(result.Item1.HasValue);
+        Assert.Equal(7, result.Item2);
+        Assert.Empty(result.Item3);
+    }
+
+    [Fact]
+    public void Operators_Are_Usable_In_Choices()
+    {
+        // The parsers built by the operators keep the ISeekable hints of their operands, so OneOf can still build its lookup
+        var parser = (Terms.Char('(') >> Terms.Integer() << Terms.Char(')')) | Terms.Integer();
+
+        Assert.True(parser.TryParse("(1)", out var result));
+        Assert.Equal(1, result);
+        Assert.True(parser.TryParse("2", out result));
+        Assert.Equal(2, result);
+        Assert.False(parser.TryParse("x", out _));
     }
 }

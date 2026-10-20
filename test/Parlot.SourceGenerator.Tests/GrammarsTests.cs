@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Linq;
@@ -28,6 +28,25 @@ public class GrammarsTests
         Assert.DoesNotContain(
             typeof(Grammars).GetMethods(BindingFlags.NonPublic | BindingFlags.Static),
             static method => method.Name.StartsWith("Build", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Operators_Build_Generated_Parsers()
+    {
+        Assert.True(Grammars.TryParseOperators("-1 [2, 3] foo bar end", out var result));
+        Assert.True(result.Item1);
+        Assert.Equal(1, result.Item2);
+        Assert.Equal([2, 3], result.Item3);
+        Assert.Equal(["foo", "bar"], result.Item4);
+
+        Assert.True(Grammars.TryParseOperators("7", out result));
+        Assert.False(result.Item1);
+        Assert.Equal(7, result.Item2);
+        Assert.Empty(result.Item3);
+        Assert.Empty(result.Item4);
+
+        // The trailing !Terms.Char('!') lookahead rejects an exclamation mark
+        Assert.False(Grammars.TryParseOperators("7 !", out _));
     }
 
     [Fact]
