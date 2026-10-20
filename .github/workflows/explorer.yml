@@ -7,6 +7,13 @@ on:
     branches: [main]
     paths: ['tools/**', 'src/Parlot.SourceGenerator/**', 'src/Parlot/**', 'Directory.*', 'global.json', '.github/workflows/explorer.yml']
   workflow_dispatch:
+  # publish.yml calls this workflow for release tags and pushes the package with the other NuGet packages
+  workflow_call:
+    inputs:
+      version:
+        description: Release version of the package, without the leading v
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -92,8 +99,28 @@ jobs:
           npm test --prefix tools/Parlot.Explorer/Client
           python3 tools/Parlot.Explorer/verify.py
       - name: Pack all native shells
-        run: dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Debug -p:SkipDesktopBuild=true -p:PackageVersion=2.0.0-preview.${{ github.run_number }} -o artifacts/explorer --disable-build-servers
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            version_args=("-p:Version=$RELEASE_VERSION")
+          else
+            version_args=("-p:VersionSuffix=preview.${{ github.run_number }}")
+          fi
+          dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Release -p:SkipDesktopBuild=true "${version_args[@]}" -p:ContinuousIntegrationBuild=True -o artifacts/explorer --disable-build-servers
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: parlot-explorer-package
           path: artifacts/explorer/*.nupkg
+      - name: Push preview package to Feedz
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          FEEDZ_IO_API_KEY: ${{ secrets.FEEDZ_IO_API_KEY }}
+        run: |
+          set -euo pipefail
+          for package in artifacts/explorer/*.nupkg; do
+            dotnet nuget push "$package" --api-key "$FEEDZ_IO_API_KEY" --source https://f.feedz.io/sebastienros/parlot/nuget/index.json --skip-duplicate
+          done
