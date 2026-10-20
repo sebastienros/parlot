@@ -42,8 +42,15 @@ public sealed class PatternLiteral : Parser<TextSpan>, ICompilable
     {
         if (cursor.Eof || !predicate(cursor.Current))
         {
-            span = default;
-            return false;
+            if (minSize > 0)
+            {
+                span = default;
+                return false;
+            }
+
+            // A pattern without a minimum size matches nothing, like AnyOf does, and leaves the cursor in place
+            span = new TextSpan(cursor.Buffer, cursor.Offset, 0);
+            return true;
         }
 
         // The chars are counted first such that the cursor only moves once, and not at all when the size constraint is not met.

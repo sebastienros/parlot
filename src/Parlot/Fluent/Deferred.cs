@@ -14,6 +14,7 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 {
 
     private readonly object _lockObject = new();
+    private readonly bool _seekable;
     private Parser<T>? _parser;
 
     public Parser<T>? Parser
@@ -22,14 +23,31 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
         set
         {
             _parser = value ?? throw new ArgumentNullException(nameof(value));
+
+            // The hints follow the parser, otherwise a OneOf built after a replacement would skip this parser
+            if (_seekable)
+            {
+                if (_parser is ISeekable seekable)
+                {
+                    CanSeek = seekable.CanSeek;
+                    ExpectedChars = seekable.ExpectedChars;
+                    SkipWhitespace = seekable.SkipWhitespace;
+                }
+                else
+                {
+                    CanSeek = false;
+                    ExpectedChars = [];
+                    SkipWhitespace = false;
+                }
+            }
         }
     }
 
-    public bool CanSeek { get; }
+    public bool CanSeek { get; private set; }
 
-    public char[] ExpectedChars { get; } = [];
+    public char[] ExpectedChars { get; private set; } = [];
 
-    public bool SkipWhitespace { get; }
+    public bool SkipWhitespace { get; private set; }
 
     public Deferred()
     {
@@ -37,14 +55,11 @@ public sealed class Deferred<T> : Parser<T>, ICompilable, ISeekable
 
     public Deferred(Func<Deferred<T>, Parser<T>> parser) : this()
     {
-        Parser = parser(this);
+        // The parser is known when this one is built, unlike one that is set later, so it can declare
+        // what the parser can start with
+        _seekable = true;
 
-        if (Parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
+        Parser = parser(this);
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

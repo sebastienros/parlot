@@ -195,18 +195,13 @@ public class Scanner
 
             var numberIsEmpty = number.IsEmpty;
 
-            if (!ReadInteger(out number))
+            // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`.
+            // A trailing separator is kept otherwise, e.g. `1.`, and an exponent can still follow it, e.g. `1.e5`.
+            if (!ReadInteger(out number) && numberIsEmpty)
             {
-                // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
-                if (numberIsEmpty)
-                {
-                    Cursor.ResetPosition(start);
+                Cursor.ResetPosition(start);
 
-                    return false;
-                }
-
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
-                return true;
+                return false;
             }
         }
 
@@ -445,33 +440,22 @@ public class Scanner
     {
         var start = Cursor.Offset;
 
-        while (true)
+        // Current is the null char at the end of the text, where there is nothing to read even if it is expected
+        while (!Cursor.Eof && chars.IndexOf(Cursor.Current) != -1)
         {
-            var current = Cursor.Current;
-            var index = chars.IndexOf(current);
-
-            if (index == -1)
-            {
-                if (Cursor.Offset == start)
-                {
-                    result = [];
-                    return false;
-                }
-
-                var length = Cursor.Offset - start;
-
-                result = Cursor.Buffer.AsSpan(start, length);
-                return true;
-            }
-
-            if (Cursor.Eof)
-            {
-                result = [];
-                return false;
-            }
-
             Cursor.Advance(1);
         }
+
+        var length = Cursor.Offset - start;
+
+        if (length == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = Cursor.Buffer.AsSpan(start, length);
+        return true;
     }
 
 #if NET8_0_OR_GREATER
@@ -601,7 +585,8 @@ public class Scanner
         // Only a successful read of the escape sequences sets it
         hasEscape = false;
 
-        if (startChar != quoteChar)
+        // Current is also the null char at the end of the text, where there is no quote to read
+        if (startChar != quoteChar || Cursor.Eof)
         {
             result = [];
             return false;
@@ -622,31 +607,26 @@ public class Scanner
             return false;
         }
 
-        // When the quote char is a backslash it is also the escape char, in which case the start quote
-        // is itself the first escape sequence and the string is always decoded escape by escape.
-        var quoteIsEscape = startChar == '\\';
-
         // Index of the match in the full span, the start quote is at index 0
-        var nextEscape = quoteIsEscape ? 0 : next + 1;
+        var nextEscape = next + 1;
 
-        if (!quoteIsEscape)
+        // If the first match is the end quote there is no escape to decode, return the string as-is.
+        // When the quote char is a backslash it is also the escape char, so it can't be escaped and
+        // this is always the case: the string ends at the next backslash and is never decoded.
+        if (span[nextEscape] == startChar)
         {
-            // If the first match is the end quote there is no escape to decode, return the string as-is
-            if (span[nextEscape] == startChar)
-            {
-                Cursor.Advance(next + 2); // include start quote
+            Cursor.Advance(next + 2); // include start quote
 
-                result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
-                return true;
-            }
+            result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
+            return true;
+        }
 
-            // The end quote is only after the escape sequences. Make sure there is one at all before
-            // decoding them one by one, as reaching the end of the buffer that way is far more costly.
-            if (span.Slice(next + 2).IndexOf(startChar) == -1)
-            {
-                result = [];
-                return false;
-            }
+        // The end quote is only after the escape sequences. Make sure there is one at all before
+        // decoding them one by one, as reaching the end of the buffer that way is far more costly.
+        if (span.Slice(next + 2).IndexOf(startChar) == -1)
+        {
+            result = [];
+            return false;
         }
 
         // Decoding the escape sequences needs to restore the line and the column when it fails
@@ -788,8 +768,9 @@ public class Scanner
                         break;
                     default:
 
-                        // The quote char can be escaped, whichever it is
-                        if (Cursor.Current == startChar)
+                        // The quote char can be escaped, whichever it is. Match excludes the null char the cursor
+                        // reports at the end of the text, which a null quote char would otherwise be taken for.
+                        if (Cursor.Match(startChar))
                         {
                             Cursor.Advance();
                             break;
@@ -820,8 +801,9 @@ public class Scanner
         }
 
         result = Cursor.Buffer.AsSpan()[start.Offset..Cursor.Offset];
-        // A backslash delimiter is removed before decoding, so only escapes inside the quotes count.
-        hasEscape = !quoteIsEscape || result.Slice(1, result.Length - 2).IndexOf('\\') >= 0;
+
+        // Only a string with escape sequences gets here, the others returned before decoding anything
+        hasEscape = true;
 
         return true;
     }
