@@ -174,7 +174,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
             }
 
             lookupTable?.Remove(OtherSeekableChar);
-            var expectedChars = string.Join(",", lookupTable?.Keys.ToArray() ?? []);
 
             if (lookupTable?.Count > 0)
             {
@@ -278,7 +277,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable /*, ICompilable*/
         return false;
     }
 
-    public override string ToString() => $"{string.Join(" | ", Parsers)}) on [{string.Join(" ", ExpectedChars)}]";
+    public override string ToString() => $"{string.Join(" | ", Parsers)} on [{string.Join(" ", ExpectedChars)}]";
 
     /* We don't use the ICompilable interface anymore since the generated code is still slower than the original one.
      * Furthermore the current implementation is creating too many lambdas (there might be a bug in the code).
