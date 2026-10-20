@@ -58,19 +58,31 @@ public static partial class Character
         try
         {
             var dataIndex = 0;
-#if NET8_0_OR_GREATER
-            var plainRunLength = 0;
-#endif
 
             for (var i = 0; i < span.Length; i++)
             {
+#if NET8_0_OR_GREATER
+                if (span.Length - i >= 16)
+                {
+                    var remaining = span.Slice(i);
+                    var nextEscape = remaining.IndexOf('\\');
+                    var count = nextEscape < 0 ? remaining.Length : nextEscape;
+                    if (count > 0)
+                    {
+                        remaining.Slice(0, count).CopyTo(buffer.Slice(dataIndex));
+                        dataIndex += count;
+                        if (nextEscape < 0)
+                        {
+                            break;
+                        }
+                        i += count;
+                    }
+                }
+#endif
                 var c = span[i];
 
                 if (c == '\\')
                 {
-#if NET8_0_OR_GREATER
-                    plainRunLength = 0;
-#endif
                     i++;
 
                     // A backslash at the end doesn't escape anything, it is kept as-is
@@ -105,19 +117,6 @@ public static partial class Character
                             break;
                     }
                 }
-#if NET8_0_OR_GREATER
-                else if (++plainRunLength == 16)
-                {
-                    var remaining = span.Slice(i);
-                    var nextEscape = remaining.IndexOf('\\');
-                    var count = nextEscape < 0 ? remaining.Length : nextEscape;
-                    remaining.Slice(0, count).CopyTo(buffer.Slice(dataIndex));
-                    dataIndex += count;
-                    i += count - 1;
-                    plainRunLength = 0;
-                    continue;
-                }
-#endif
 
                 buffer[dataIndex++] = c;
             }

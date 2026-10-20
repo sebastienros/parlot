@@ -109,6 +109,30 @@ public class CompileTests
         Assert.Equal("ab\nc", result);
     }
 
+    [Theory]
+    [InlineData('\'', "'plain'", "plain")]
+    [InlineData('"', "\"plain\"", "plain")]
+    [InlineData('`', "`plain`", "plain")]
+    [InlineData('|', "|plain|", "plain")]
+    [InlineData('\\', "\\n\\rest", "n")]
+    public void CompiledStringsWithoutContentEscapesShouldReuseTheInput(char quote, string text, string expected)
+    {
+        Assert.True(new StringLiteral(quote).Compile().TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.Same(text, result.Buffer);
+        Assert.Equal(1, result.Offset);
+    }
+
+    [Theory]
+    [InlineData("'a\\nb'", "a\nb")]
+    [InlineData("\"a\\tb\"", "a\tb")]
+    public void CompiledStringsWithEscapesShouldBeDecoded(string text, string expected)
+    {
+        Assert.True(Literals.String().Compile().TryParse(text, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.NotSame(text, result.Buffer);
+    }
+
     [Fact]
     public void ShouldCompileCustomBacktickStringLiterals()
     {

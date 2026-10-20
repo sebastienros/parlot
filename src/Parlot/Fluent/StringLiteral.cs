@@ -3,6 +3,7 @@ using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -17,7 +18,10 @@ public enum StringLiteralQuotes
 
 public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
 {
-    private static readonly MethodInfo _decodeStringMethodInfo = typeof(Character).GetMethod("DecodeString", [typeof(string), typeof(int), typeof(int)])!;
+    // Expression trees can't use ReadOnlySpan<char> variables, so compiled parsers only get the escape flag from the
+    // scanner and build the result from the buffer offsets
+    private static readonly MethodInfo _readQuotedStringMethodInfo = typeof(Scanner).GetMethod(nameof(Scanner.ReadQuotedString), BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(char), typeof(bool).MakeByRefType()], null)!;
+    private static readonly MethodInfo _createResultMethodInfo = typeof(StringLiteral).GetMethod(nameof(CreateResult), BindingFlags.Static | BindingFlags.NonPublic)!;
 
     static readonly char[] SingleQuotes = ['\''];
     static readonly char[] DoubleQuotes = ['\"'];
@@ -67,35 +71,44 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
 
-        var success = _quotes switch
+        // Any of the quotes can start the string, the other kinds have a single one
+        var quote = ExpectedChars[0];
+
+        if (_quotes == StringLiteralQuotes.SingleOrDouble && cursor.Current == '"')
         {
-            StringLiteralQuotes.Single => context.Scanner.ReadSingleQuotedString(),
-            StringLiteralQuotes.Double => context.Scanner.ReadDoubleQuotedString(),
-            StringLiteralQuotes.SingleOrDouble => context.Scanner.ReadQuotedString(),
-            StringLiteralQuotes.Backtick => context.Scanner.ReadBacktickString(),
-            StringLiteralQuotes.Custom => context.Scanner.ReadQuotedString(ExpectedChars),
-            _ => false
-        };
-
-        var end = context.Scanner.Cursor.Offset;
-
-        if (success)
-        {
-            // Remove quotes
-            var decoded = Character.DecodeString(context.Scanner.Buffer, start + 1, end - start - 2);
-
-            result.Set(start, end, decoded);
-
-            context.ExitParser(this);
-            return true;
+            quote = '"';
         }
-        else
+
+        if (!context.Scanner.ReadQuotedString(quote, out _, out var hasEscape))
         {
             context.ExitParser(this);
             return false;
         }
+
+        var end = cursor.Offset;
+
+        result.Set(start, end, CreateResult(context.Scanner.Buffer, start, end, hasEscape));
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    /// <summary>
+    /// Builds the value of a string read by the scanner, without its quotes.
+    /// </summary>
+    /// <remarks>
+    /// The scanner knows whether the string has escape sequences, so a string without any isn't read again
+    /// and references the input buffer.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static TextSpan CreateResult(string buffer, int start, int end, bool hasEscape)
+    {
+        return hasEscape
+            ? new TextSpan(Character.DecodeStringInternal(buffer.AsSpan(start + 1, end - start - 2)))
+            : new TextSpan(buffer, start + 1, end - start - 2);
     }
 
     public CompilationResult Compile(CompilationContext context)
@@ -104,45 +117,35 @@ public sealed class StringLiteral : Parser<TextSpan>, ICompilable, ISeekable
 
         // var start = context.Scanner.Cursor.Offset;
 
-        var start = Expression.Variable(typeof(int), $"start{context.NextNumber}");
-        result.Variables.Add(start);
+        var start = context.DeclareOffsetVariable(result);
 
-        result.Body.Add(Expression.Assign(start, context.Offset()));
+        var hasEscape = Expression.Variable(typeof(bool), $"hasEscape{context.NextNumber}");
+        result.Variables.Add(hasEscape);
 
-        var parseStringExpression = _quotes switch
-        {
-            StringLiteralQuotes.Single => context.ReadSingleQuotedString(),
-            StringLiteralQuotes.Double => context.ReadDoubleQuotedString(),
-            StringLiteralQuotes.SingleOrDouble => context.ReadQuotedString(),
-            StringLiteralQuotes.Backtick => context.ReadBacktickString(),
-            StringLiteralQuotes.Custom => context.ReadCustomString(Expression.Constant(ExpectedChars)),
-            _ => throw new InvalidOperationException()
-        };
+        // Any of the quotes can start the string, the other kinds have a single one
+        var quote = _quotes == StringLiteralQuotes.SingleOrDouble
+            ? Expression.Condition(Expression.Equal(context.Current(), Expression.Constant('"')), Expression.Constant('"'), Expression.Constant('\''))
+            : (Expression)Expression.Constant(ExpectedChars[0]);
 
-        // if (context.Scanner.ReadSingleQuotedString())
+        // if (context.Scanner.ReadQuotedString(quote, out hasEscape))
         // {
-        //     var end = context.Scanner.Cursor.Offset;
         //     success = true;
-        //     value = Character.DecodeString(context.Scanner.Buffer, start + 1, end - start - 2);
+        //     value = CreateResult(context.Scanner.Buffer, start, context.Scanner.Cursor.Offset, hasEscape);
         // }
-
-        var end = Expression.Variable(typeof(int), $"end{context.NextNumber}");
 
         result.Body.Add(
             Expression.IfThen(
-                parseStringExpression,
+                Expression.Call(context.Scanner(), _readQuotedStringMethodInfo, quote, hasEscape),
                 Expression.Block(
-                    [end],
-                    Expression.Assign(end, context.Offset()),
                     Expression.Assign(result.Success, Expression.Constant(true, typeof(bool))),
                     context.DiscardResult
                     ? Expression.Empty()
                     : Expression.Assign(result.Value,
-                        Expression.Call(_decodeStringMethodInfo,
+                        Expression.Call(_createResultMethodInfo,
                             context.Buffer(),
-                            Expression.Add(start, Expression.Constant(1)),
-                            Expression.Subtract(Expression.Subtract(end, start), Expression.Constant(2))
-                            ))
+                            start,
+                            context.Offset(),
+                            hasEscape))
                 )
             ));
 
