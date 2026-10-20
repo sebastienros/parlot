@@ -165,7 +165,9 @@ artifacts/explorer-tool/parlot-explorer /absolute/path/to/Your.Parsers.dll
 ```
 
 The Explorer workflow builds shells on their respective native runners, combines their distribution
-folders, and produces one tool package. Release packing requires all four native targets by default:
+folders, and produces one tool package. Pushes to `main` publish it to the Feedz preview feed as
+`<VersionPrefix>-preview.<run>`. Release tags run it from the Publish workflow, which pushes it to NuGet
+with the library packages at the tag's version. Release packing requires all four native targets by default:
 
 ```sh
 dotnet pack tools/Parlot.Explorer/Parlot.Explorer.csproj -c Release \

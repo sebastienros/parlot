@@ -36,6 +36,11 @@ cache is enabled.
 `setup-dotnet` keeps `check-latest: false` to prefer installed matching SDKs, but still installs an
 SDK if the runner has no match.
 
+`Parlot.Explorer` is not in `Parlot.sln`, so the root `dotnet pack` never includes it: its native shells
+need one runner per platform. `explorer.yml` pushes its previews to Feedz, and `publish.yml` calls
+`explorer.yml` as a reusable workflow on release tags, then pushes its package through the same NuGet
+trusted-publishing login. Keep NuGet pushes in `publish.yml`, as the trusted-publishing policy names that file.
+
 ### Running a single test
 
 Microsoft.Testing.Platform has no VSTest `--filter`. Use xunit v3's filters, after `--`:
