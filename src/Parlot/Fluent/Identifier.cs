@@ -1,11 +1,12 @@
 using Parlot.Compilation;
+using Parlot.Rewriting;
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class Identifier : Parser<TextSpan>, ICompilable
+public sealed class Identifier : Parser<TextSpan>, ICompilable, ISeekable
 {
     private static readonly MethodInfo _parseSpanMethodInfo = typeof(Identifier).GetMethod(nameof(ParseSpan), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -17,8 +18,21 @@ public sealed class Identifier : Parser<TextSpan>, ICompilable
         _extraStart = extraStart;
         _extraPart = extraPart;
 
+        // The chars an extra start predicate accepts are unknown
+        if (extraStart == null)
+        {
+            CanSeek = true;
+            ExpectedChars = Character._identifierStartChars;
+        }
+
         Name = "Identifier";
     }
+
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
