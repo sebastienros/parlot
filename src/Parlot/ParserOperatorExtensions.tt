@@ -16,14 +16,45 @@ namespace Parlot;
 
 public static partial class ParserOperatorExtensions
 {
-    // + operator to replace And method
+    // Binary operators on two parsers. They share one extension block: separate blocks with the same receiver
+    // are reported by CA1708 on the .NET 10 SDK.
 
     extension<T1, T2>(Parser<T1>)
     {
+        // + operator to replace And
+
         [OverloadResolutionPriority(-1)]
         public static Sequence<T1, T2> operator +(Parser<T1> p1, Parser<T2> p2)
         {
             return p1.And(p2);
+        }
+
+        // >> operator to replace SkipAnd: the result of the left parser is skipped, the arrow points to the kept one
+
+        public static SequenceSkipAnd<T1, T2> operator >>(Parser<T1> p1, Parser<T2> p2)
+        {
+            return p1.SkipAnd(p2);
+        }
+
+        // << operator to replace AndSkip: the result of the right parser is skipped, the arrow points to the kept one
+
+        public static SequenceAndSkip<T1, T2> operator <<(Parser<T1> p1, Parser<T2> p2)
+        {
+            return p1.AndSkip(p2);
+        }
+
+        // - operator to replace Not(b).SkipAnd(a): a matches unless b matches at the same position
+
+        public static SequenceSkipAnd<T2, T1> operator -(Parser<T1> p1, Parser<T2> p2)
+        {
+            return Parsers.Not(p2).SkipAnd(p1);
+        }
+
+        // % operator to replace Separated: a list of the left parser separated by the right one
+
+        public static Separated<T2, T1> operator %(Parser<T1> p1, Parser<T2> p2)
+        {
+            return new Separated<T2, T1>(p2, p1);
         }
     }
 <#
@@ -66,46 +97,6 @@ public static partial class ParserOperatorExtensions
             return p2 is Parser<T> parser ?
               new OneOf<T>([.. p1.OriginalParsers, parser]) :
               new([.. p1.OriginalParsers, new IParserAdapter<T>(p2)]);
-        }
-    }
-
-    // >> operator to replace SkipAnd: the result of the left parser is skipped, the arrow points to the kept one
-
-    extension<T1, T2>(Parser<T1>)
-    {
-        public static SequenceSkipAnd<T1, T2> operator >>(Parser<T1> p1, Parser<T2> p2)
-        {
-            return p1.SkipAnd(p2);
-        }
-    }
-
-    // << operator to replace AndSkip: the result of the right parser is skipped, the arrow points to the kept one
-
-    extension<T1, T2>(Parser<T1>)
-    {
-        public static SequenceAndSkip<T1, T2> operator <<(Parser<T1> p1, Parser<T2> p2)
-        {
-            return p1.AndSkip(p2);
-        }
-    }
-
-    // - operator to replace Not(b).SkipAnd(a): a matches unless b matches at the same position
-
-    extension<T1, T2>(Parser<T1>)
-    {
-        public static SequenceSkipAnd<T2, T1> operator -(Parser<T1> p1, Parser<T2> p2)
-        {
-            return Parsers.Not(p2).SkipAnd(p1);
-        }
-    }
-
-    // % operator to replace Separated: a list of the left parser separated by the right one
-
-    extension<T, U>(Parser<T>)
-    {
-        public static Separated<U, T> operator %(Parser<T> p1, Parser<U> p2)
-        {
-            return new Separated<U, T>(p2, p1);
         }
     }
 
