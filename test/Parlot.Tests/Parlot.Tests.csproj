@@ -26,7 +26,6 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3.mtp-v2" />
-    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
   </ItemGroup>
 
 </Project>

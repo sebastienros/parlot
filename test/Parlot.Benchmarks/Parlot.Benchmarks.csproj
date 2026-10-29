@@ -25,7 +25,6 @@
     <PackageReference Include="Sprache" />
     <PackageReference Include="Superpower" />
     <PackageReference Include="Newtonsoft.Json" />
-    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
   </ItemGroup>
   
   <ItemGroup>

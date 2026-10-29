@@ -20,7 +20,6 @@
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
     <!-- Build-time only dependency for source generation literal escaping - not shipped with the package -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
-    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
   </ItemGroup>
 
   <!-- Include build props file in the NuGet package for automatic using static import when ImplicitUsings is enabled -->
