@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Parlot.Fluent;
 using Xunit;
 
 namespace Parlot.SourceGenerator.Tests;

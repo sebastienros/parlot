@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis.CSharp;
-using System;
 
 namespace Parlot.SourceGeneration;
 

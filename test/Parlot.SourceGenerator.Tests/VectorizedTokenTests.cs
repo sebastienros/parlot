@@ -2,7 +2,6 @@
 
 using System;
 using System.IO;
-using System.Linq;
 using Parlot.Fluent;
 using Parlot.SourceGeneration;
 using Xunit;

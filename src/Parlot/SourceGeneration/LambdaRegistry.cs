@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Threading;
-using Parlot;
 
 namespace Parlot.SourceGeneration;
 

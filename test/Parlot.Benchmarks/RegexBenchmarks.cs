@@ -2,7 +2,6 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Parlot.Benchmarks.FarkleParsers;
 using Parlot.Benchmarks.PidginParsers;
-using Parlot.Fluent;
 using System;
 using System.Text.RegularExpressions;
 

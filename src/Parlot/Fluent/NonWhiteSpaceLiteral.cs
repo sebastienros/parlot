@@ -1,5 +1,4 @@
 using Parlot.SourceGeneration;
-using System;
 
 namespace Parlot.Fluent;
 

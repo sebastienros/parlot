@@ -3,7 +3,6 @@
 using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Tests.Sql;
