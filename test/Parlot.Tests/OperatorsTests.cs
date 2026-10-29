@@ -83,8 +83,8 @@ public class OperatorsTests
         Assert.IsType<Dog>(result.Item2);
     }
 
-    private class Animal { }
-    private class Dog : Animal { }
+    private class Animal;
+    private class Dog : Animal;
 
     [Fact]
     public void Operator_Pipe_Passes_Typed_Parsers_Without_Adapter()

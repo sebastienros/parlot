@@ -7,9 +7,7 @@ using System.Linq;
 
 namespace Parlot.Tests.Sql;
 // Base interface
-public interface ISqlNode
-{
-}
+public interface ISqlNode;
 
 // Statements
 public sealed class StatementList : ISqlNode
@@ -144,9 +142,7 @@ public sealed class ColumnItem : ISqlNode
     }
 }
 
-public abstract class ColumnSource : ISqlNode
-{
-}
+public abstract class ColumnSource : ISqlNode;
 
 public sealed class ColumnSourceIdentifier : ColumnSource
 {
@@ -183,9 +179,7 @@ public sealed class FromClause : ISqlNode
     }
 }
 
-public abstract class TableSource : ISqlNode
-{
-}
+public abstract class TableSource : ISqlNode;
 
 public sealed class TableSourceItem : TableSource
 {
@@ -337,9 +331,7 @@ public sealed class PartitionByClause : ISqlNode
 }
 
 // Expressions
-public abstract class Expression : ISqlNode
-{
-}
+public abstract class Expression : ISqlNode;
 
 public sealed class BinaryExpression : Expression
 {
@@ -468,9 +460,7 @@ public sealed class FunctionCall : Expression
     }
 }
 
-public abstract class FunctionArguments : ISqlNode
-{
-}
+public abstract class FunctionArguments : ISqlNode;
 
 public sealed class EmptyArguments : FunctionArguments
 {
