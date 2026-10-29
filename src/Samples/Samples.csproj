@@ -27,6 +27,10 @@
     <Analyzer Include="..\..\src\Parlot\bin\$(Configuration)\netstandard2.0\Parlot.dll" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
+  </ItemGroup>
+
   <Import Project="..\Parlot.SourceGenerator\build\Parlot.SourceGenerator.props"
           Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))" />
   <Import Project="..\Parlot.SourceGenerator\build\Parlot.SourceGenerator.targets"

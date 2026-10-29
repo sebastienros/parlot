@@ -39,6 +39,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Remove="Microsoft.SourceLink.GitHub" />
   </ItemGroup>
 
   <ItemGroup>
