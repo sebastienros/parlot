@@ -16,7 +16,7 @@ internal sealed class DiagnosticsRewriter : CSharpSyntaxRewriter
     private DiagnosticsRewriter(string entry) { _entry = entry; }
 
     internal static string Rewrite(string source, CSharpParseOptions options, string entry)
-        => new DiagnosticsRewriter(entry).Visit(CSharpSyntaxTree.ParseText(source, options).GetRoot())!.ToFullString();
+        => new DiagnosticsRewriter(entry).Visit(CSharpSyntaxTree.ParseText(source, options).GetRoot()).ToFullString();
 
     public override SyntaxNode? VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
@@ -36,7 +36,7 @@ internal sealed class DiagnosticsRewriter : CSharpSyntaxRewriter
             .Select(static trivia => trivia.ToString().Substring(2).Trim()).LastOrDefault()
             ?? FriendlyName(node);
         _inside = true;
-        var body = (BlockSyntax)Visit(node.Body)!;
+        var body = (BlockSyntax)Visit(node.Body);
         _inside = false;
         var declarations = SyntaxFactory.ParseStatement($"var __parlotTrace = {Runtime}.Enter({SymbolDisplay.FormatLiteral(name, true)}, context.Scanner.Cursor);");
         var outcome = SyntaxFactory.ParseStatement("bool? __parlotOutcome = null;");

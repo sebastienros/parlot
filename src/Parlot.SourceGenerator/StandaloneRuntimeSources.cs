@@ -71,7 +71,7 @@ internal static class StandaloneRuntimeSources
             using var reader = new StreamReader(stream, Encoding.UTF8);
             var hintName = ResourcePrefix + name.Replace(".cs", ".g.cs");
             var tree = CSharpSyntaxTree.ParseText(reader.ReadToEnd(), embeddedOptions, hintName, Encoding.UTF8);
-            var root = (CompilationUnitSyntax)rewriter.Visit(tree.GetRoot())!;
+            var root = (CompilationUnitSyntax)rewriter.Visit(tree.GetRoot());
             var text = header + root.ToFullString();
             sources.Add((hintName, CSharpSyntaxTree.ParseText(text, options, hintName, Encoding.UTF8)));
         }
@@ -82,7 +82,7 @@ internal static class StandaloneRuntimeSources
     internal static string RewriteGeneratedSource(string source, CSharpParseOptions options)
     {
         var tree = CSharpSyntaxTree.ParseText(source, options);
-        return new RuntimeRewriter(rewriteDeclarations: false, downlevel: false).Visit(tree.GetRoot())!.ToFullString();
+        return new RuntimeRewriter(rewriteDeclarations: false, downlevel: false).Visit(tree.GetRoot()).ToFullString();
     }
 
     private sealed class RuntimeRewriter : CSharpSyntaxRewriter

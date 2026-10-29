@@ -83,7 +83,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     {
         var pointer = _nextPointer++;
         var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
-            .Visit(originalLambda)!.ToFullString().Trim();
+            .Visit(originalLambda).ToFullString().Trim();
         var capturedVariables = DetectCapturedVariables(originalLambda, originalSource);
 
         // Determine return type and parameter types from semantic model
@@ -131,7 +131,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 !symbol.Locations.Any(location =>
                     location.SourceTree == originalLambda.SyntaxTree && originalLambda.Span.Contains(location.SourceSpan))) == true;
             var executionBody = blockBody is not null
-                ? (BlockSyntax)Visit(blockBody)!
+                ? (BlockSyntax)Visit(blockBody)
                 : SyntaxFactory.Block(ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, delegateInvokeMethod.ReturnsVoid));
             if (hasCaptures && FactoryParameterUsage.IsDeferredCallback(originalLambda, _semanticModel))
             {
@@ -144,7 +144,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         else if (blockBody != null)
         {
             // Already a block body - prepend the registration
-            var visitedBody = (BlockSyntax)Visit(blockBody)!;
+            var visitedBody = (BlockSyntax)Visit(blockBody);
             newBody = visitedBody.WithStatements(
                 visitedBody.Statements.Insert(0, registrationStatement));
         }
@@ -153,7 +153,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             // Expression body - convert to block with registration + return
             newBody = SyntaxFactory.Block(
                 registrationStatement,
-                ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, returnsVoid: false));
+                ExpressionStatement((ExpressionSyntax)Visit(expressionBody), returnsVoid: false));
         }
         else
         {
@@ -193,7 +193,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 
                 var pointer = _nextPointer++;
                 var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
-                    .Visit(node.Expression)!.ToFullString().Trim();
+                    .Visit(node.Expression).ToFullString().Trim();
 
                 var paramTypes = method.Parameters.Select(p => p.Type.ToDisplayString()).ToList();
                 var returnType = method.ReturnType.Name.ToLowerInvariant();
