@@ -1,12 +1,5 @@
 using System;
-using System.Diagnostics.Tracing;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Diagnosers;
-using BenchmarkDotNet.Jobs;
-using BenchmarkDotNet.Running;
-using Microsoft.Diagnostics.NETCore.Client;
-using Microsoft.Diagnostics.Tracing.Parsers;
 using Parlot.Tests.Sql;
 
 namespace Parlot.Benchmarks;

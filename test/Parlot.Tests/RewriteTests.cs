@@ -1,8 +1,5 @@
 using Parlot.Fluent;
 using Parlot.Rewriting;
-using System;
-using System.Collections.Generic;
-using System.Reflection;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 using static Parlot.Tests.Models.RewriteTests;

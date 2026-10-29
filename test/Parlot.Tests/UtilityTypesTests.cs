@@ -1,5 +1,3 @@
-using Parlot.Fluent;
-using System.Collections.Generic;
 using Xunit;
 
 namespace Parlot.Tests;

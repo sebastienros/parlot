@@ -1,7 +1,6 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 

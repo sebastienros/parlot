@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Parlot.Fluent;
 using Xunit;
 using static Parlot.Fluent.Parsers;

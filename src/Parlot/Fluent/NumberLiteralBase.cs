@@ -2,7 +2,6 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
 using System.Reflection;
 

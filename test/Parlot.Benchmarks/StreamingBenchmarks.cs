@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using Parlot.Fluent;
 using Parlot.Tests.AccessLog;
 
 namespace Parlot.Benchmarks;

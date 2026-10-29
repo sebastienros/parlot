@@ -1,7 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using Parlot.Fluent;
 using System;
-using System.Collections.Generic;
 using System.Text;
 using static Parlot.Fluent.Parsers;
 

@@ -1,9 +1,6 @@
 #nullable enable
 
 using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.ComponentModel.Design;
-using System.Linq;
 
 namespace Parlot.Tests.Sql;
 // Base interface
