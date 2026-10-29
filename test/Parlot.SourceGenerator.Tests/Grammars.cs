@@ -110,9 +110,7 @@ public static partial class Grammars
     public static partial bool TryParseBinary(string text, out byte value);
 }
 
-public abstract class NodeBase
-{
-}
+public abstract class NodeBase;
 
 public sealed class BasicNode : NodeBase
 {

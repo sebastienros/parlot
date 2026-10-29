@@ -86,26 +86,18 @@ public static class TypeNameProbes
 {
     public static class Container
     {
-        public sealed class Nested
-        {
-        }
+        public sealed class Nested;
 
-        public sealed class Generic<T>
-        {
-        }
+        public sealed class Generic<T>;
     }
 
     public sealed class Outer<T>
     {
-        public sealed class Inner<U>
-        {
-        }
+        public sealed class Inner<U>;
 
         public sealed class Plain
         {
-            public sealed class Deep<V, W>
-            {
-            }
+            public sealed class Deep<V, W>;
         }
     }
 }
