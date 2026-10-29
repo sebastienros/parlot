@@ -1,7 +1,11 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using System.Reflection;
+#if NET8_0_OR_GREATER
+using System.Runtime.CompilerServices;
+#endif
 
 namespace Parlot;
 
