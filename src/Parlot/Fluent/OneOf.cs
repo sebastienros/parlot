@@ -190,7 +190,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
                 {
                     foreach (var c in seekable.ExpectedChars)
                     {
-                        IReadOnlyList<Parser<T>> subParsers = parser is OneOf<T> oneof ? oneof._map?[c] ?? [parser] : [parser!];
+                        IReadOnlyList<Parser<T>> subParsers = parser is OneOf<T> oneof ? oneof._map?[c] ?? [parser] : [parser];
 
                         if (c != OtherSeekableChar)
                         {
