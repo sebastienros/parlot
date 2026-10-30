@@ -167,6 +167,14 @@ public class BuildContextIntegrationTests
                 UseShellExecute = false
             }
         };
+        // dotnet test passes its own SDK's MSBuild paths down, which breaks a child pinned to another SDK by global.json
+        foreach (var name in process.StartInfo.Environment.Keys.ToArray())
+        {
+            if (name.StartsWith("MSBuild", StringComparison.OrdinalIgnoreCase))
+            {
+                process.StartInfo.Environment.Remove(name);
+            }
+        }
         process.StartInfo.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en-US";
         process.StartInfo.Environment["DOTNET_NOLOGO"] = "true";
         foreach (var argument in arguments)
