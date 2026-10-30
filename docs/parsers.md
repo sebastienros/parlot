@@ -391,6 +391,87 @@ Result:
 abab
 ```
 
+### Scan
+
+Matches a token whose rules are written by hand, as a function that receives the remaining text and returns the
+length of the token at its start. Use it instead of a custom `Parser<TextSpan>` when a token can't be expressed
+quickly with other parsers.
+
+```c#
+delegate int SpanScanner(ReadOnlySpan<char> span)
+
+Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default)
+```
+
+The scanner returns:
+
+- the number of chars of the token, between `1` and `span.Length`;
+- `0` when there is no token;
+- a negative value when there is no token because `span` ended, such that more text could make one.
+
+`startChars` lists the chars a token can start with, such that `OneOf` can skip the parser. Leave it empty when they
+are not known.
+
+Parlot handles the rest of the parser contract: the cursor doesn't move on failure, lines and columns are tracked when
+the token contains new lines, and the token is scanned again with more text when parsing a stream. When parsing a
+stream, `span` can end before the input does: a token reaching the end of `span` is scanned again, so a scanner that
+looks at the chars following its token must include them when they are missing, or return a negative value.
+
+Usage, the identifiers of Liquid templates, which can contain dashes but not end with one that starts a `-}}` or `-%}`
+delimiter, and need a char other than a digit:
+
+```c#
+static int LiquidIdentifier(ReadOnlySpan<char> span)
+{
+    var size = 0;
+    var nonDigits = 0;
+
+    while (size < span.Length)
+    {
+        var c = span[size];
+
+        if (char.IsAsciiLetter(c) || c == '_' || (c == '-' && size > 0))
+        {
+            nonDigits++;
+        }
+        else if (!char.IsAsciiDigit(c))
+        {
+            break;
+        }
+
+        size++;
+    }
+
+    // At the end of the span the dash is kept, then scanned again with more text
+    if (size > 1 && size < span.Length && span[size - 1] == '-' && span[size] is '%' or '}')
+    {
+        size--;
+        nonDigits--;
+    }
+
+    if (nonDigits == 0)
+    {
+        // Only digits, more text could add a letter
+        return size == span.Length ? -1 : 0;
+    }
+
+    return size;
+}
+
+var input = "page-title-}}";
+var parser = Terms.Scan(LiquidIdentifier, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
+```
+
+Result:
+
+```
+page-title
+```
+
+Source generated parsers call the scanner directly. It must be a method group or a lambda that captures nothing,
+not even the factory's parameters (`PARLOT015`, `PARLOT021`). At runtime a delegate to a static method goes through a thunk; a `static` lambda calling
+it is slightly faster.
+
 ### AnyOf
 
 Matches any chars from a list of chars.

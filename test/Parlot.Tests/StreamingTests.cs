@@ -51,6 +51,9 @@ public class StreamingTests
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),
         ["pattern"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 2, maxSize: 4)),
         ["pattern-empty"] = new Grammar<TextSpan>(Literals.Pattern(char.IsDigit, minSize: 0)),
+        ["scan-identifier"] = new Grammar<TextSpan>(Literals.Scan(LiquidScanners.Identifier, LiquidScanners.StartChars)),
+        ["scan-signature"] = new Grammar<TextSpan>(Literals.Scan(LiquidScanners.VariableSignature, LiquidScanners.StartChars)),
+        ["scan-tag"] = new Grammar<IReadOnlyList<TextSpan>>(Terms.Text("{%").SkipAnd(ZeroOrMany(Terms.Scan(LiquidScanners.Identifier, LiquidScanners.StartChars))).AndSkip(Terms.Text("-%}").Or(Terms.Text("%}")))),
         ["string"] = new Grammar<TextSpan>(Terms.String()),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["nul-string"] = new Grammar<TextSpan>(new StringLiteral('\0')),
@@ -71,6 +74,7 @@ public class StreamingTests
         ["position-char"] = new Grammar<(int, int, int)>(Literals.Char('\n').Then(static (c, _) => Position(c))),
         ["position-noneof"] = new Grammar<(int, int, int)>(Literals.NoneOf("abc").Then(static (c, _) => Position(c))),
         ["position-pattern"] = new Grammar<(int, int, int)>(Literals.Pattern(static c => c != ' ').Then(static (c, _) => Position(c))),
+        ["position-scan"] = new Grammar<(int, int, int)>(Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length).Then(static (c, _) => Position(c))),
         ["position-textbefore"] = new Grammar<(int, int, int)>(AnyCharBefore(Literals.Text("--"), consumeDelimiter: true).Then(static (c, _) => Position(c))),
     };
 
@@ -161,6 +165,10 @@ public class StreamingTests
         Add("noneof", "", "a", "ab", "ab,c", "a,", ";");
         Add("pattern", "", "1", "12", "1234", "123456", "1a");
         Add("pattern-empty", "", "1", "12a", "a", "123456");
+        string[] liquidIdentifiers = ["", "a", "abc", "1", "123", "123a", "12 a", "a-", "a-}", "a-%", "a--}", "1-}", "1-a", "-a", "a_b-c d", "abc-", "  x", "a\n", "a}"];
+        Add("scan-identifier", liquidIdentifiers);
+        Add("scan-signature", liquidIdentifiers);
+        Add("scan-tag", "", "{%", "{% a %}", "{%a-%}", "{% a b- -%}", "{% a 12 %}", "{% a 12-%}", "{% 1 %}", "{% a-b c--%}", "{% a");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
         Add("nul-string", "", "\0", "\0abc\0", "\0abc", "\0a\\\0b\0", "x");
         Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\", "\\abc\\", "\\\\", "\\abc", "\\a\\\\b\\");
@@ -180,6 +188,7 @@ public class StreamingTests
         Add("position-char", "", "\n", "\nx", "\r\n");
         Add("position-noneof", "", "\n", "\r\n", "\r", "x\ny\nz", "x\ny\nz\n", "x\r\ny\rz a", "a");
         Add("position-pattern", "", "ab\rc", "ab\r", "ab\r\n", "ab\n", "a\n\nb c", new string('a', 70) + "\r" + new string('b', 10) + "\n", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
+        Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
 
         return data;

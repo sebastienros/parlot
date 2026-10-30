@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using Parlot;
 using Parlot.Fluent;
 using Parlot.SourceGenerator;
@@ -87,6 +88,32 @@ public static partial class VectorizedTokenGrammars
     [GenerateParser(nameof(TryParsePatternPosition))]
     private static Parser<(string, int, int, int)> BuildPatternPosition() =>
         Literals.Pattern(static c => c != ' ', maxSize: 6)
+            .Then(static (ParseContext context, TextSpan span) =>
+            {
+                var position = context.Scanner.Cursor.Position;
+                return (span.ToString(), position.Offset, position.Line, position.Column);
+            });
+
+    [GenerateParser(nameof(TryParseScanIdentifier))]
+    private static Parser<string> BuildScanIdentifier() =>
+        Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier, global::Parlot.Tests.LiquidScanners.StartChars).Then(static span => span.ToString());
+
+    [GenerateParser(nameof(TryParseScanTag))]
+    private static Parser<string> BuildScanTag() =>
+        Terms.Text("{%")
+            .SkipAnd(ZeroOrMany(Terms.Scan(global::Parlot.Tests.LiquidScanners.VariableSignature, global::Parlot.Tests.LiquidScanners.StartChars).Or(Terms.Text("|").Then(static _ => new TextSpan("|")))))
+            .AndSkip(Terms.Text("-%}").Or(Terms.Text("%}")))
+            .Then(static list => string.Join(",", list));
+
+    // The scanned token is discarded
+    [GenerateParser(nameof(TryParseScanDiscarded))]
+    private static Parser<char> BuildScanDiscarded() =>
+        Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier).SkipAnd(Literals.Char('!'));
+
+    // The line and column after a scanned token with new lines
+    [GenerateParser(nameof(TryParseScanPosition))]
+    private static Parser<(string, int, int, int)> BuildScanPosition() =>
+        Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length)
             .Then(static (ParseContext context, TextSpan span) =>
             {
                 var position = context.Scanner.Cursor.Position;

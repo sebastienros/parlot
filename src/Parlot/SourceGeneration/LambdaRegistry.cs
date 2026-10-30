@@ -148,6 +148,12 @@ public sealed class LambdaRegistry
     /// </summary>
     private static int TryInvokeForPointer(Delegate @delegate)
     {
+        // A span can't be boxed for DynamicInvoke
+        if (@delegate is Fluent.SpanScanner scanner)
+        {
+            return TryInvokeForPointer(scanner);
+        }
+
         try
         {
             var method = @delegate.Method;
@@ -184,6 +190,26 @@ public sealed class LambdaRegistry
         {
             return -1;
         }
+    }
+
+    private static int TryInvokeForPointer(Fluent.SpanScanner scanner)
+    {
+        var wasRegistering = LambdaPointer.IsRegistering;
+        LambdaPointer.IsRegistering = true;
+        try
+        {
+            scanner(default);
+        }
+        catch
+        {
+            // Ignore exceptions from the original lambda body
+        }
+        finally
+        {
+            LambdaPointer.IsRegistering = wasRegistering;
+        }
+
+        return LambdaPointer.CurrentPointer;
     }
 
     /// <summary>

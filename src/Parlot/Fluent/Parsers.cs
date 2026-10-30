@@ -361,6 +361,13 @@ public class LiteralBuilder
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => new PatternLiteral(predicate, minSize, maxSize);
 
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the remaining text.
+    /// </summary>
+    /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
+
 #if NET8_0_OR_GREATER
     /// <summary>
     /// Builds a parser that matches a list of chars.
@@ -605,6 +612,13 @@ public class TermBuilder
     /// <param name="minSize">The minimum number of matches required. Defaults to 1.</param>
     /// <param name="maxSize">When the parser reaches the maximum number of matches it returns <see langword="True"/>. Defaults to 0, i.e. no maximum size.</param>
     public Parser<TextSpan> Pattern(Func<char, bool> predicate, int minSize = 1, int maxSize = 0) => Parsers.SkipWhiteSpace(new PatternLiteral(predicate, minSize, maxSize));
+
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the remaining text.
+    /// </summary>
+    /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => Parsers.SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
 
 #if NET8_0_OR_GREATER
     /// <summary>
