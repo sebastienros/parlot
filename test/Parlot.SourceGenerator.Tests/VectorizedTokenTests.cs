@@ -273,7 +273,7 @@ public class VectorizedTokenTests
     }
 
     // A reader returning at most a fixed number of chars per read
-    private sealed class ChunkedReader : TextReader
+    internal sealed class ChunkedReader : TextReader
     {
         private readonly string _text;
         private readonly int _chunk;

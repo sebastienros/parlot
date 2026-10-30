@@ -22,7 +22,7 @@ public class KeywordChoiceSourceTests
             Literals.Keyword(""), Literals.Keyword("if1"), Literals.Keyword("Content-Type"),
             Literals.Keyword("\u00e9"), Literals.Keyword("two\nlines"), Literals.Keyword(new string('a', 65)),
             Literals.Keyword("IF", caseInsensitive: true), new KeywordLiteral("if", StringComparison.InvariantCulture),
-            Literals.Text("if"), Terms.Keyword("if"),
+            Literals.Text("if"), Terms.Keyword("if"), Literals.Keyword("if", "abcdefghijklmnopqrstuvwxyz0123456789_"),
         })
         {
             AssertOptimized(OneOf([replacement, .. compatible[1..]]), false);

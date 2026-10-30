@@ -2516,6 +2516,68 @@ public class FluentTests
         Assert.False(parser.TryParse("returns", out result));
     }
 
+    [Theory]
+    [InlineData("in", true)]
+    [InlineData("in (1..3)", true)]
+    [InlineData("in.x", true)]
+    [InlineData("inX", true)]
+    [InlineData("inside", false)]
+    [InlineData("in1", false)]
+    [InlineData("in_x", false)]
+    [InlineData("in-x", false)]
+    [InlineData("in\u00e9", false)]
+    [InlineData("in\u00e8", true)]
+    [InlineData("i", false)]
+    public void KeywordShouldNotMatchIfFollowedByIdentifierPart(string input, bool success)
+    {
+        const string identifierPart = "abcdefghijklmnopqrstuvwxyz0123456789_-\u00e9";
+
+        foreach (var parser in new[]
+        {
+            Literals.Keyword("in", identifierPart),
+            Literals.Keyword("in", identifierPart.AsSpan()),
+            Terms.Keyword("in", identifierPart),
+            Terms.Keyword("in", identifierPart.AsSpan()),
+        })
+        {
+            var context = new ParseContext(new Scanner(input));
+            var result = new ParseResult<string>();
+            Assert.Equal(success, parser.Parse(context, ref result));
+
+            if (success)
+            {
+                Assert.Equal("in", result.Value);
+                Assert.Equal(2, context.Scanner.Cursor.Offset);
+            }
+            else
+            {
+                Assert.Equal(TextPosition.Start, context.Scanner.Cursor.Position);
+            }
+        }
+    }
+
+    [Fact]
+    public void KeywordIdentifierPartShouldReplaceTheDefaultLetters()
+    {
+        // An empty set accepts any following char, like Text
+        Assert.Equal("in", Literals.Keyword("in", "").Parse("inside"));
+        Assert.Equal("in", Literals.Keyword("in", "-").Parse("inside"));
+        Assert.Null(Literals.Keyword("in", "-").Parse("in-x"));
+
+        // Both halves of the ASCII bitset, and the chars at their edges
+        foreach (var c in "\0?@\u007f")
+        {
+            Assert.Null(Literals.Keyword("in", c.ToString()).Parse("in" + c));
+            Assert.Equal("in", Literals.Keyword("in", "x").Parse("in" + c));
+        }
+
+        Assert.Equal("IN", Terms.Keyword("in", "abc", caseInsensitive: true, returnMatchedText: true).Parse(" IN!"));
+        Assert.Null(Terms.Keyword("in", "abc", caseInsensitive: true).Parse(" INa"));
+        Assert.Throws<ArgumentNullException>(() => Literals.Keyword("in", (string)null!));
+        Assert.Equal("abc", ((KeywordLiteral)Literals.Keyword("in", "abc")).IdentifierPart);
+        Assert.Null(((KeywordLiteral)Literals.Keyword("in")).IdentifierPart);
+    }
+
     [Fact]
     public void TermsFactoriesShouldSkipWhiteSpaceExactlyOnce()
     {
