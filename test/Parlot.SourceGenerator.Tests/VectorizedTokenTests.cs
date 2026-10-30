@@ -301,6 +301,15 @@ public class VectorizedTokenTests
     }
 
     [Fact]
+    public void Scan_Rejects_Tokens_Longer_Than_The_Text_Like_The_Runtime()
+    {
+        var expected = Assert.Throws<InvalidOperationException>(() => Literals.Scan(static span => span.Length + 1).Parse("abc"));
+
+        Assert.Equal(expected.Message, Assert.Throws<InvalidOperationException>(() => VectorizedTokenGrammars.TryParseScanOversize("abc", out _)).Message);
+        Assert.Equal(expected.Message, Assert.Throws<InvalidOperationException>(() => VectorizedTokenGrammars.TryParseScanOversize(new StringReader("abc"), out _)).Message);
+    }
+
+    [Fact]
     public void Scan_Results_Do_Not_Depend_On_The_Buffer_Boundaries()
     {
         CheckPadded(Text(Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier, global::Parlot.Tests.LiquidScanners.StartChars)), VectorizedTokenGrammars.TryParseScanIdentifier, VectorizedTokenGrammars.TryParseScanIdentifier, 'a', "", "-}", "-", "1", " ");
@@ -408,4 +417,6 @@ public static partial class VectorizedTokenGrammars
     public static partial bool TryParseScanDiscarded(TextReader reader, out char value);
     public static partial bool TryParseScanPosition(string text, out (string, int, int, int) value);
     public static partial bool TryParseScanPosition(TextReader reader, out (string, int, int, int) value);
+    public static partial bool TryParseScanOversize(string text, out string value);
+    public static partial bool TryParseScanOversize(TextReader reader, out string value);
 }

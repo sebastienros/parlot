@@ -126,7 +126,7 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
         result.Body.Add("{");
         result.Body.Add($"    if ({sizeName} > {spanName}.Length)");
         result.Body.Add("    {");
-        result.Body.Add($"        throw new global::System.InvalidOperationException(\"The scanner returned a token longer than the available text.\");");
+        result.Body.Add($"        throw new global::System.InvalidOperationException($\"The scanner returned a token of {{{sizeName}}} chars while only {{{spanName}.Length}} were available.\");");
         result.Body.Add("    }");
         result.Body.Add($"    var {startName} = {cursorName}.Offset;");
         result.Body.Add($"    if ({spanName}.Slice(0, {sizeName}).IndexOf('\\n') < 0)");
