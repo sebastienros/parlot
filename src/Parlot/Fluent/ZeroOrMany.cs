@@ -92,23 +92,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
             result.Body.Add($"bool {firstName} = true;");
         }
 
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
-
-        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
         var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var itemValueName = $"itemValue{context.NextNumber()}";

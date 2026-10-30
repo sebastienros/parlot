@@ -123,20 +123,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
 
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
-        // Helper function to get parser value type
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
+        var opValueTypeName = SourceGenerationContext.GetTypeName(typeof(TInput));
 
         // The operators are tried from the same position
         var pin = context.Pin(result);
@@ -155,7 +142,6 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             var factoryFieldName = context.RegisterLambda(factory);
 
             // Register helper for the operator parser
-            var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
             var opHelperName = context.WithDiscardResult(true, () => context.Helpers
                 .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_Unary", opValueTypeName, () => opSourceable.GenerateSource(context))
                 .MethodName);
@@ -341,19 +327,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
+        var opValueTypeName = SourceGenerationContext.GetTypeName(typeof(TInput));
 
         // The operators are tried from the same position
         var pin = context.Pin(result);
@@ -369,7 +343,6 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
             var factoryFieldName = context.RegisterLambda(factory);
 
-            var opValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(opSourceable));
             var opHelperName = context.WithDiscardResult(true, () => context.Helpers
                 .GetOrCreate(opSourceable, $"{context.MethodNamePrefix}_UnaryCtx", opValueTypeName, () => opSourceable.GenerateSource(context))
                 .MethodName);
