@@ -192,7 +192,8 @@ public class StreamingTests
         Add("position-char", "", "\n", "\nx", "\r\n");
         Add("position-noneof", "", "\n", "\r\n", "\r", "x\ny\nz", "x\ny\nz\n", "x\r\ny\rz a", "a");
         Add("position-pattern", "", "ab\rc", "ab\r", "ab\r\n", "ab\n", "a\n\nb c", new string('a', 70) + "\r" + new string('b', 10) + "\n", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
-        Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
+        Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", "\n\n\nab c", new string('a', 70) + "\r\n" + new string('b', 70) + " x",
+            new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x");
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
 
         return data;

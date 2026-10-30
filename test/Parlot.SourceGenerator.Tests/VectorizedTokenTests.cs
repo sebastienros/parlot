@@ -288,6 +288,9 @@ public class VectorizedTokenTests
     [InlineData("ab\ncd\ne f")]
     [InlineData("ab\r\n")]
     [InlineData("abc d")]
+    [InlineData("\n\nab\n c")]
+    [InlineData("a\n\n\nb")]
+    [InlineData("0123456789012345678901234567890123456789\n0123456789012345678901234567890123456789\n\n0123456789 x")]
     public void Scan_Position_Matches_The_Runtime(string text)
     {
         var position = Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length)

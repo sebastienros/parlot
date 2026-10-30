@@ -49,6 +49,7 @@ public static partial class Grammar
     public static partial bool TryParseTextChoiceCustomWhitespace(string text, out string value);
     public static partial bool TryParseTextChoiceDiscarded(string text, out char value);
     public static partial bool TryParseTextChoicePosition(string text, out (int Offset, int Line, int Column) value);
+    public static partial bool TryParseScanPosition(string text, out (string Text, int Offset, int Line, int Column) value);
 
     // TextReader entry points parse with a compacting buffer.
     public static partial bool TryParseNumber(TextReader reader, out int value);
@@ -81,6 +82,7 @@ public static partial class Grammar
     public static partial bool TryParseTextChoiceFallback(TextReader reader, out string value);
     public static partial bool TryParseTextChoiceCapture(TextReader reader, out string value);
     public static partial bool TryParseTextChoicePosition(TextReader reader, out (int Offset, int Line, int Column) value);
+    public static partial bool TryParseScanPosition(TextReader reader, out (string Text, int Offset, int Line, int Column) value);
 }
 
 public sealed class CancellationOptions

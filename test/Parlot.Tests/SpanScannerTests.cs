@@ -120,6 +120,48 @@ public class SpanScannerTests
         Assert.Equal(new TextPosition(3, 1, 4), position);
     }
 
+    public static TheoryData<string> MultiLineTokens() =>
+    [
+        "ab\ncd\ne f", "ab\ncd", "\nab c", "ab\n c", "ab\n\n\n c", "a\r\nb\rc\n d", "\n", "\n\n",
+        new string('a', 70) + "\n" + new string('b', 70) + " x",
+        new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x",
+        new string('\n', 100) + "a",
+    ];
+
+    [Theory]
+    [MemberData(nameof(MultiLineTokens))]
+    public void ScanTracksNewLinesLikeAdvancingCharByChar(string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.True(Literals.Scan(UpToSpace).Parse(context, ref result));
+
+        var expected = new Cursor(input);
+
+        for (var i = 0; i < result.Value.Length; i++)
+        {
+            expected.Advance();
+        }
+
+        Assert.Equal(expected.Position, context.Scanner.Cursor.Position);
+        Assert.Equal(expected.Eof, context.Scanner.Cursor.Eof);
+        Assert.Equal(expected.Current, context.Scanner.Cursor.Current);
+    }
+
+    // Matches up to the first space, new lines included
+    private static int UpToSpace(ReadOnlySpan<char> span)
+    {
+        var index = span.IndexOf(' ');
+
+        if (index >= 0)
+        {
+            return index;
+        }
+
+        return span.Length;
+    }
+
     [Fact]
     public void ScanResultHasThePositions()
     {
