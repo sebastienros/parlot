@@ -51,7 +51,7 @@ public partial class RewriteTests
     {
         var hello = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], SkipWhitespace = false, Success = true, Result = "hello" };
         var goodbye = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "goodbye" };
-        var oneof = Parsers.OneOf(hello, goodbye);
+        var oneof = OneOf(hello, goodbye);
         Assert.Equal("hello", oneof.Parse("a"));
         Assert.Equal("goodbye", oneof.Parse("b"));
         Assert.Null(oneof.Parse("hello"));

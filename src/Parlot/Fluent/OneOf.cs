@@ -420,7 +420,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekable, ISourceable /**/
 
     public override string ToString() => $"{string.Join(" | ", Parsers)} on [{string.Join(" ", ExpectedChars)}]";
 
-    public Parlot.SourceGeneration.SourceResult GenerateSource(SourceGenerationContext context)
+    public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 

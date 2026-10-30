@@ -34,7 +34,7 @@ public class TextBeforeJumpTests
         var delimiter = Literals.Text("--").Or(Literals.Pattern(static c => c == '!').Then(static x => x.ToString()));
 
         // The pattern can start with any char
-        Assert.Contains(Parlot.Fluent.OneOf<string>.OtherSeekableChar, ((ISeekable)delimiter).ExpectedChars);
+        Assert.Contains(Fluent.OneOf<string>.OtherSeekableChar, ((ISeekable)delimiter).ExpectedChars);
 
         Assert.True(AnyCharBefore(delimiter).TryParse(text, out var result));
         Assert.Equal(expected, result.ToString());

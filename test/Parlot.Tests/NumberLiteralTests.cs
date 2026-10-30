@@ -68,7 +68,7 @@ public class NumberLiteralTests
         {
         }
 
-        public override bool TryParseNumber(System.ReadOnlySpan<char> s, NumberStyles style, System.IFormatProvider provider, out decimal value)
+        public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out decimal value)
             => decimal.TryParse(s.ToString(), style, provider, out value);
     }
 

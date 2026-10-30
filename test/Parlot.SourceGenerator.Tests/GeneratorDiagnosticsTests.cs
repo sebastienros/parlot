@@ -482,7 +482,7 @@ public class GeneratorDiagnosticsTests
     {
         using var project = new TemporaryDirectory();
         var absolutePath = Path.Combine(project.Path, "Secret.cs");
-        var literal = Parlot.SourceGeneration.LiteralHelper.StringToLiteral(absolutePath);
+        var literal = SourceGeneration.LiteralHelper.StringToLiteral(absolutePath);
         var grammar = $$"""
             using Parlot.Fluent;
             using Parlot.SourceGenerator;
@@ -599,7 +599,7 @@ public class GeneratorDiagnosticsTests
         var declarations = string.Join(
             Environment.NewLine,
             values.Select((value, index) =>
-                $"internal const string Value{index} = {Parlot.SourceGeneration.LiteralHelper.StringToLiteral(value)};"));
+                $"internal const string Value{index} = {SourceGeneration.LiteralHelper.StringToLiteral(value)};"));
         var tree = CSharpSyntaxTree.ParseText(
             $"internal static class EscapedValues {{{Environment.NewLine}{declarations}{Environment.NewLine}}}",
             new CSharpParseOptions(LanguageVersion.CSharp12));
@@ -640,7 +640,7 @@ public class GeneratorDiagnosticsTests
             .ToList();
         if (referenceParlot)
         {
-            references.Add(MetadataReference.CreateFromFile(typeof(Parlot.Fluent.Parser<>).Assembly.Location));
+            references.Add(MetadataReference.CreateFromFile(typeof(Fluent.Parser<>).Assembly.Location));
         }
         references.Add(MetadataReference.CreateFromFile(typeof(GeneratorDiagnosticsTests).Assembly.Location));
 

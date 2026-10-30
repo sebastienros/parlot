@@ -1378,7 +1378,7 @@ public class FluentTests
         var exponent = Terms.Char('^');
 
         var exponentiation = primary.RightAssociative(
-            (exponent, static (a, b) => System.Math.Pow(a, b))
+            (exponent, static (a, b) => Math.Pow(a, b))
             );
 
         Assert.Equal(result, exponentiation.Parse(expression));

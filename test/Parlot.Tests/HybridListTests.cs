@@ -82,8 +82,8 @@ public class HybridListTests
         var list = new HybridList<int>();
         list.Add(1);
 
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[-1]);
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[-1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[1]);
     }
 
     [Fact]
@@ -95,8 +95,8 @@ public class HybridListTests
             list.Add(i);
         }
 
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[-1]);
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[5]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[-1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[5]);
     }
 
     [Fact]

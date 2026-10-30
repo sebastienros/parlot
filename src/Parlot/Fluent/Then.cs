@@ -92,7 +92,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
 
 
     
-    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 

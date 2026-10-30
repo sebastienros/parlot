@@ -188,7 +188,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
 
 
     
-    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 

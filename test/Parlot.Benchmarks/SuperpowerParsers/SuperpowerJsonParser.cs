@@ -7,7 +7,7 @@ namespace Parlot.Benchmarks.SuperpowerParsers;
 
 public static class SuperpowerJsonParser
 {
-    private static TextParser<T> Between<T, U, V>(this Superpower.TextParser<T> p, Superpower.TextParser<U> before, Superpower.TextParser<V> after)
+    private static TextParser<T> Between<T, U, V>(this TextParser<T> p, TextParser<U> before, TextParser<V> after)
         => before.IgnoreThen(p).Then(x => after.Value(x));
 
     private static readonly TextParser<char> LBrace = Superpower.Parsers.Character.EqualTo('{');

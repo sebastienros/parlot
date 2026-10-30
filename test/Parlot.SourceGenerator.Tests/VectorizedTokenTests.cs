@@ -29,7 +29,7 @@ public class VectorizedTokenTests
     public void Delimiter_Which_Is_Not_Seekable_In_A_OneOf_Is_Found(string text)
     {
         var delimiter = Literals.Text("--").Or(Literals.Pattern(static c => c == '!').Then(static x => x.ToString()));
-        Assert.Contains(Parlot.Fluent.OneOf<string>.OtherSeekableChar, ((Parlot.Rewriting.ISeekable)delimiter).ExpectedChars);
+        Assert.Contains(Fluent.OneOf<string>.OtherSeekableChar, ((Rewriting.ISeekable)delimiter).ExpectedChars);
 
         Check(Text(AnyCharBefore(delimiter)), VectorizedTokenGrammars.TryParseOtherSeekableDelimiter, VectorizedTokenGrammars.TryParseOtherSeekableDelimiter, text);
     }
