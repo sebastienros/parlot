@@ -188,22 +188,30 @@ public class SpanScannerTests
     [MemberData(nameof(LiquidInputs))]
     public void ScanReadsOneCharAtATime(string input)
     {
-        var parser = ZeroOrMany(Terms.Scan(LiquidScanners.Identifier, LiquidScanners.StartChars).Or(Terms.Text("-}}").Then(static _ => new TextSpan("end"))).Or(Terms.Text("}}").Then(static _ => new TextSpan("end"))))
-            .Then(static list => string.Join("|", list));
         var text = input + " a-}} b}}";
 
-        var expected = parser.TryParse(text, out var expectedValue);
+        var expected = _liquidTokens.TryParse(text, out var expectedValue);
         var options = new StreamParseOptions { BufferSize = 1 };
 
-        if (expected)
-        {
-            Assert.Equal(expectedValue, parser.Parse(new OneCharReader(text), options));
-        }
-        else
-        {
-            Assert.ThrowsAny<Exception>(() => parser.Parse(new OneCharReader(text), options));
-        }
+        Assert.Equal(expected, _liquidTokens.TryParse(new OneCharReader(text), out var value, options));
+        Assert.Equal(expectedValue, value);
     }
+
+    [Theory]
+    [InlineData("é")]
+    [InlineData("a%}")]
+    [InlineData("-a")]
+    public void ScanReadsOneCharAtATimeComparesFailures(string input)
+    {
+        // Some inputs of ScanReadsOneCharAtATime aren't only tokens, so failures are compared too
+        Assert.False(_liquidTokens.TryParse(input + " a-}} b}}", out _));
+    }
+
+    // Eof makes the parse fail when the tokens don't cover the text
+    private static readonly Parser<string> _liquidTokens =
+        ZeroOrMany(Terms.Scan(LiquidScanners.Identifier, LiquidScanners.StartChars).Or(Terms.Text("-}}").Then(static _ => new TextSpan("end"))).Or(Terms.Text("}}").Then(static _ => new TextSpan("end"))))
+            .Then(static list => string.Join("|", list))
+            .Eof();
 
     private static void AssertSameResult(Parser<TextSpan> expectedParser, Parser<TextSpan> parser, string input)
     {
