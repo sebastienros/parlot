@@ -46,6 +46,8 @@ public class StreamingTests
         ["keyword"] = new Grammar<string>(Terms.Keyword("for")),
         ["choice"] = new Grammar<string>(OneOf(Terms.Text("for"), Terms.Text("foreach"), Terms.Text("forever"), Terms.Text("if"))),
         ["keywords"] = new Grammar<string>(OneOf(Terms.Keyword("for"), Terms.Keyword("foreach"), Terms.Keyword("if"))),
+        ["keyword-part"] = new Grammar<string>(Terms.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789_-\u00e9")),
+        ["keywords-part"] = new Grammar<string>(OneOf(Literals.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789_-"), Literals.Keyword("inc", "-"), Literals.Text("i"))),
         ["anyof"] = new Grammar<TextSpan>(Literals.AnyOf("abc", minSize: 3)),
         ["anyof-max"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Literals.AnyOf("abc", minSize: 1, maxSize: 2))),
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),
@@ -156,6 +158,8 @@ public class StreamingTests
         Add("keyword", "", "f", "for", "for ", "fore", "for(", "fo");
         Add("choice", "", "f", "for", "fore", "foreach", "forever", "foreve", "if", "i", "x");
         Add("keywords", "", "for", "fore", "foreach", "foreachx", "if", "ifx", "x");
+        Add("keyword-part", "", "i", "in", " in ", "in(", "inx", "in1", "in_", "in-", "in\u00e9", "in\u00e8", "inX", "i n");
+        Add("keywords-part", "", "i", "in", "in1", "inc", "inc-", "incx", "in.", "x");
         Add("anyof", "", "a", "ab", "abc", "abca", "abx", "x");
         Add("anyof-max", "", "a", "abc", "abcab", "abxa");
         Add("noneof", "", "a", "ab", "ab,c", "a,", ";");

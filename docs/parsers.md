@@ -213,6 +213,8 @@ Matches a keyword string, ensuring the following character is not a letter. This
 
 ```c#
 Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false)
+Parser<string> Keyword(string text, ReadOnlySpan<char> identifierPart, bool caseInsensitive = false, bool returnMatchedText = false)
+Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false)
 ```
 
 Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to preserve the matched input casing; exact-case matches reuse the keyword, and whole-input matches can reuse the input string.
@@ -242,6 +244,20 @@ var result = parser.Parse(input); // Returns null - failure
 ```
 
 Any non-letter is considered valid after a keyword (non-letters): `(`, `)`, `;`, `,`, whitespace, digits, `_`, `$`, etc.
+
+When the identifiers of a language contain other chars, pass them as `identifierPart`: the keyword then fails when it is followed by one of these chars, which replace the default ASCII letters. For instance Liquid identifiers are made of letters, digits, `_` and `-`:
+
+```c#
+const string liquidIdentifierPart = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
+var parser = Terms.Keyword("in", liquidIdentifierPart);
+
+parser.Parse("in (1..3)"); // "in"
+parser.Parse("in1");       // null - failure
+parser.Parse("in_x");      // null - failure
+parser.Parse("in-x");      // null - failure
+```
+
+The set is checked with a bitset for ASCII chars, and any other char is looked up in the set, so it has the cost of the default check. The `string` overload lets factories compiled for .NET Framework or .NET Standard 2.0 pass a string literal. A large source-generated choice of keywords only uses the [keyword lookup](keyword-lookups.md) when none of them has custom identifier chars.
 
 ### Integer
 

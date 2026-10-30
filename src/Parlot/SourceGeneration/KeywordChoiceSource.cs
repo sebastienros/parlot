@@ -65,7 +65,9 @@ internal static class KeywordChoiceSource
                         return false;
                     }
                 }
+                // The recognizer scans an ASCII-letter run, which is only the default keyword boundary
                 else if (parser is KeywordLiteral keyword && keyword.Comparison == StringComparison.Ordinal
+                    && keyword.IdentifierPart == null
                     && keyword.Text.Length is > 0 and <= 64
                     && keyword.Text.All(static c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z'))
                 {

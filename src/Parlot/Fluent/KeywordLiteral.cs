@@ -5,7 +5,8 @@ using System;
 namespace Parlot.Fluent;
 
 /// <summary>
-/// Parses a keyword (text followed by non-letter character or EOF).
+/// Parses a keyword: a text that is not followed by a char that continues an identifier. By default these chars
+/// are the ASCII letters; a custom set can be given, e.g. to also reject digits, <c>_</c> or <c>-</c>.
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
 public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
@@ -14,6 +15,16 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
     private readonly TextLiteral _textLiteral;
     private readonly bool _hasNewLines;
     private readonly bool _returnText;
+
+    // The chars that continue an identifier, which a keyword must not be followed by: a bitset of the ASCII chars,
+    // 0-63 in _identifierPartLow and 64-127 in _identifierPartHigh, and the other chars in _identifierPartNonAscii
+    // (null when there are none). The default set is the ASCII letters.
+    private readonly ulong _identifierPartLow;
+    private readonly ulong _identifierPartHigh = AsciiLettersHigh;
+    private readonly string? _identifierPartNonAscii;
+
+    // 'A'-'Z' and 'a'-'z' are 65-90 and 97-122, i.e. bits 1-26 and 33-58 of the high half
+    private const ulong AsciiLettersHigh = 0x07FFFFFE07FFFFFEUL;
 
     public KeywordLiteral(string text, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
     {
@@ -28,7 +39,45 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
         SkipWhitespace = _textLiteral.SkipWhitespace;
     }
 
+    /// <summary>
+    /// Creates a keyword parser that fails when the text is followed by one of <paramref name="identifierPart"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPart">The chars that continue an identifier. They replace the default ASCII letters.</param>
+    /// <param name="comparison">How the text is compared.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    public KeywordLiteral(string text, ReadOnlySpan<char> identifierPart, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
+        : this(text, comparison, returnMatchedText)
+    {
+        _identifierPartHigh = 0;
+        var nonAscii = "";
+
+        foreach (var c in identifierPart)
+        {
+            if (c < 64)
+            {
+                _identifierPartLow |= 1UL << c;
+            }
+            else if (c < 128)
+            {
+                _identifierPartHigh |= 1UL << (c - 64);
+            }
+            else if (nonAscii.IndexOf(c) < 0)
+            {
+                nonAscii += c;
+            }
+        }
+
+        _identifierPartNonAscii = nonAscii.Length > 0 ? nonAscii : null;
+        IdentifierPart = identifierPart.ToString();
+    }
+
     public string Text { get; }
+
+    /// <summary>
+    /// The chars that continue an identifier, or <see langword="null"/> for the default ASCII letters.
+    /// </summary>
+    public string? IdentifierPart { get; }
 
     public StringComparison Comparison { get; }
 
@@ -60,13 +109,15 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
             var length = text.Length;
             var span = cursor.Span;
 
-            // The next char must not be a letter (keyword boundary). When the text ends the buffer the cursor
-            // reaches the end, which marks HitEnd.
+            // The next char must not continue an identifier (keyword boundary). When the text ends the buffer the
+            // cursor reaches the end, which marks HitEnd.
             if (span.Length > length)
             {
                 var next = span[length];
 
-                if (Character.IsInRange(next, 'a', 'z') || Character.IsInRange(next, 'A', 'Z'))
+                if (next < 128
+                    ? (((next < 64 ? _identifierPartLow : _identifierPartHigh) >> (next & 63)) & 1UL) != 0
+                    : _identifierPartNonAscii != null && _identifierPartNonAscii.AsSpan().IndexOf(next) >= 0)
                 {
                     context.ExitParser(this);
                     return false;
@@ -154,7 +205,31 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
         
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out {outTarget}))");
         result.Body.Add("{");
-        result.Body.Add($"    if ({cursorName}.Eof || (!Parlot.Character.IsInRange({cursorName}.Current, 'a', 'z') && !Parlot.Character.IsInRange({cursorName}.Current, 'A', 'Z')))");
+
+        if (IdentifierPart == null)
+        {
+            result.Body.Add($"    if ({cursorName}.Eof || (!Parlot.Character.IsInRange({cursorName}.Current, 'a', 'z') && !Parlot.Character.IsInRange({cursorName}.Current, 'A', 'Z')))");
+        }
+        else
+        {
+            // The same bitset as the runtime, as constants
+            var boundaryName = $"boundary{context.NextNumber()}";
+            var nextName = $"next{context.NextNumber()}";
+            var nonAscii = _identifierPartNonAscii == null
+                ? "true"
+                : $"\"{LiteralHelper.EscapeStringContent(_identifierPartNonAscii)}\".IndexOf({nextName}) < 0";
+
+            result.Body.Add($"    var {boundaryName} = {cursorName}.Eof;");
+            result.Body.Add($"    if (!{boundaryName})");
+            result.Body.Add("    {");
+            result.Body.Add($"        var {nextName} = {cursorName}.Current;");
+            result.Body.Add($"        {boundaryName} = {nextName} < 128");
+            result.Body.Add($"            ? ((({nextName} < 64 ? 0x{_identifierPartLow:X}UL : 0x{_identifierPartHigh:X}UL) >> ({nextName} & 63)) & 1UL) == 0");
+            result.Body.Add($"            : {nonAscii};");
+            result.Body.Add("    }");
+            result.Body.Add($"    if ({boundaryName})");
+        }
+
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");

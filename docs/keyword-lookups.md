@@ -8,7 +8,9 @@ Keep the runtime `CharMap` lookup, small generated choices, and mixed or unsuppo
 parser types unchanged. No new public parser or byte-input API is introduced.
 
 The automatic specialization accepts 8-256 ordinal, nonempty ASCII-letter keywords, each
-at most 64 characters, with at most 4096 characters in the vocabulary. Nested choices are
+at most 64 characters, with at most 4096 characters in the vocabulary, all with the default
+ASCII-letter boundary: a keyword built with custom `identifierPart` chars keeps the choice
+on the existing path. Nested choices are
 flattened when their whitespace behavior agrees. These are conservative generation/code-size
 bounds, not a universal performance crossover.
 

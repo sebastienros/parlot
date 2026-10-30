@@ -253,6 +253,28 @@ public class LiteralBuilder
     public Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
 
     /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not one of <paramref name="identifierPart"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPart">The chars that continue an identifier, e.g. <c>"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"</c>. They replace the default ASCII letters.</param>
+    /// <param name="caseInsensitive">Whether the text is matched ignoring case.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    public Parser<string> Keyword(string text, ReadOnlySpan<char> identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, identifierPart, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
+
+    /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not one of <paramref name="identifierPart"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPart">The chars that continue an identifier, e.g. <c>"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"</c>. They replace the default ASCII letters.</param>
+    /// <param name="caseInsensitive">Whether the text is matched ignoring case.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    /// <remarks>
+    /// This overload exists so a factory compiled for .NET Framework or .NET Standard 2.0, where a <see cref="string"/>
+    /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
+    /// </remarks>
+    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
+
+    /// <summary>
     /// Builds a parser that matches the specified char.
     /// </summary>
     public Parser<char> Char(char c) => new CharLiteral(c);
@@ -496,6 +518,28 @@ public class TermBuilder
     /// Builds a parser that matches a keyword by ensuring the following character is not a letter.
     /// </summary>
     public Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false) => Parsers.SkipWhiteSpace(new KeywordLiteral(text, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
+
+    /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not one of <paramref name="identifierPart"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPart">The chars that continue an identifier, e.g. <c>"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"</c>. They replace the default ASCII letters.</param>
+    /// <param name="caseInsensitive">Whether the text is matched ignoring case.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    public Parser<string> Keyword(string text, ReadOnlySpan<char> identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => Parsers.SkipWhiteSpace(new KeywordLiteral(text, identifierPart, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
+
+    /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not one of <paramref name="identifierPart"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPart">The chars that continue an identifier, e.g. <c>"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"</c>. They replace the default ASCII letters.</param>
+    /// <param name="caseInsensitive">Whether the text is matched ignoring case.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    /// <remarks>
+    /// This overload exists so a factory compiled for .NET Framework or .NET Standard 2.0, where a <see cref="string"/>
+    /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
+    /// </remarks>
+    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => Parsers.SkipWhiteSpace(new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
 
     /// <summary>
     /// Builds a parser that matches the specified char.
