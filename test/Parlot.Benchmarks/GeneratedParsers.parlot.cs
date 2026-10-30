@@ -76,6 +76,11 @@ public static partial class GeneratedParsers
         return json;
     }
 
+    // The JSON grammar with the ASCII white space set, for WhiteSpaceSetBenchmarks
+    [GenerateParser(nameof(TryParseJsonAscii))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonAscii() => BuildJson().WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
+
     [GenerateParser(nameof(TryParseLog))]
     [IncludeUsings("System.Collections.Generic")]
     private static Parser<int> BuildLog()

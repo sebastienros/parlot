@@ -28,6 +28,7 @@ internal static class StandaloneRuntimeSources
         "Character.Generated.cs",
         "Character.Mask.cs",
         "Character.SearchValues.cs",
+        "WhiteSpaceSet.cs",
         "Numbers.cs",
         "HexConverter.cs",
         "ThrowHelper.cs",
@@ -310,7 +311,7 @@ internal static class StandaloneRuntimeSources
             return (fluent, name.Identifier.ValueText, arity) switch
             {
                 (false, "Scanner" or "Cursor" or "TextPosition" or "TextSpan" or "ParseException"
-                    or "ParseError" or "Character" or "CharacterMask" or "Numbers" or "HexConverter" or "ThrowHelper", 0) => true,
+                    or "ParseError" or "Character" or "CharacterMask" or "WhiteSpaceSet" or "Numbers" or "HexConverter" or "ThrowHelper", 0) => true,
                 (false, "ParseResult" or "Option", 1) => true,
                 (true, "ParseContext" or "NumberOptions" or "StreamRefillSource" or "TextReaderRefillSource", 0) => true,
                 (true, "Parser" or "HybridList" or "DelegateParser", 1) => true,

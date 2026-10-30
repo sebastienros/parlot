@@ -71,6 +71,12 @@ public class StreamingTests
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        ["ascii-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
+        ["ascii-context"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.Ascii }),
+        ["ascii-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\u00A0"))).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
+        ["ascii-whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
+        ["ascii-nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace().WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
+        ["ascii-comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//")).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
         // The line and column after the match must not depend on how the text is split
         ["position-text"] = new Grammar<(int, int, int)>(Literals.Text("\r\n").Then(static (c, _) => Position(c))),
         ["position-char"] = new Grammar<(int, int, int)>(Literals.Char('\n').Then(static (c, _) => Position(c))),
@@ -188,6 +194,13 @@ public class StreamingTests
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+        string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];
+        Add("ascii-separated", separated);
+        Add("ascii-context", separated);
+        Add("ascii-choice", "", "for if", "for\u00A0if", "\u00A0 if", "  \u3000", "if\tfor\nif");
+        Add("ascii-whitespace", "", " \t\n\r\v\f x", "\u00A0", " \u2000", "x");
+        Add("ascii-nonwhitespace", "", "a\u00A0b c", "a\u3000b\tc", "ab\fc", " x");
+        Add("ascii-comments", "", "a // b\n c", "a\u00A0b", "a\u00A0// b", "a \u00A0b");
         Add("position-text", "", "\r", "\r\n", "\r\nx", "\n");
         Add("position-char", "", "\n", "\nx", "\r\n");
         Add("position-noneof", "", "\n", "\r\n", "\r", "x\ny\nz", "x\ny\nz\n", "x\r\ny\rz a", "a");

@@ -9,7 +9,9 @@ internal enum CharacterMask : byte
     IdentifierStart = 1,
     IdentifierPart = 2,
     WhiteSpace = 4,
-    WhiteSpaceOrNewLine = 8
+    WhiteSpaceOrNewLine = 8,
+    AsciiWhiteSpace = 16,
+    AsciiWhiteSpaceOrNewLine = 32
 }
 
 #if !NET8_0_OR_GREATER

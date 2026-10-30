@@ -56,7 +56,8 @@ Terms and Literals are accessed using the `Terms` and `Literals` properties from
 
 #### Literals.WhiteSpace()
 
-Matches blank spaces, optionally including new lines. Returns a `TextSpan` with the matched spaces. 
+Matches blank spaces, optionally including new lines. Returns a `TextSpan` with the matched spaces. The blank spaces are the
+chars of the context's white space set, see [WithWhiteSpaceSet](#withwhitespaceset).
 
 ```c#
 Parser<TextSpan> WhiteSpace(bool includeNewLines = false)
@@ -96,7 +97,8 @@ parser.Parse("helloworld"); // failure
 
 ### NonWhiteSpace
 
-Matches any non-blank spaces, optionally including new lines. Returns a `TextSpan` with the matched characters.  
+Matches any non-blank spaces, optionally including new lines. Returns a `TextSpan` with the matched characters. The blank
+spaces are the chars of the context's white space set, see [WithWhiteSpaceSet](#withwhitespaceset).
 
 
 ```c#
@@ -981,6 +983,57 @@ outer.Parse("a.b-c");  // Inner uses '.', outer uses '-' as whitespace
 ```
 
 > Note: The custom whitespace parser must return a `TextSpan`. Use `Capture()` to wrap parsers that don't return `TextSpan`.
+
+### WithWhiteSpaceSet
+
+Selects the chars that are white space for the inner parser, then restores the previous set. It applies to every `Terms` parser,
+to `SkipWhiteSpace`, to `Literals.WhiteSpace()` and `NonWhiteSpace()`, and to the white space of `WithComments`.
+
+```c#
+Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSet)
+```
+
+| Set | White space | New lines |
+|---|---|---|
+| `WhiteSpaceSet.Default` | `\t`, `\f`, space, U+00A0, U+1680, U+180E, U+2000-U+200A, U+202F, U+205F, U+3000, U+FEFF (`Character.WhiteSpaces`) | `\n`, `\r`, `\v` |
+| `WhiteSpaceSet.Ascii` | `\t`, `\f`, space (`Character.AsciiWhiteSpaces`) | `\n`, `\r`, `\v` |
+
+`Ascii` is the white space of C's `isspace` and Ruby's `\s`: a no-break space or another Unicode space is then a char like any
+other, which a grammar can match or reject.
+
+Usage:
+
+```c#
+var list = Separated(Terms.Char(','), Terms.Integer());
+
+list.Parse("1,\u00A02");                                         // [1, 2]
+list.WithWhiteSpaceSet(WhiteSpaceSet.Ascii).Parse("1,\u00A02");  // [1], the no-break space is not skipped
+list.WithWhiteSpaceSet(WhiteSpaceSet.Ascii).Parse("1,\n\t2");     // [1, 2]
+```
+
+The set can also be selected for a whole parse with `ParseContext.WhiteSpaceSet`, for instance from
+`StreamParseOptions.ContextFactory`:
+
+```c#
+var context = new ParseContext(new Scanner(text)) { WhiteSpaceSet = WhiteSpaceSet.Ascii };
+```
+
+New lines follow `UseNewLines` as with the default set: when it is `true` the `Terms` parsers skip `\t`, `\f` and space only.
+`Literals.WhiteSpace(includeNewLines: true)` and `NonWhiteSpace(includeNewLines: true)` include the new lines of the set.
+
+Unlike a `WithWhiteSpaceParser` that would match the same chars, a set keeps the white space fast path: skipping is still one
+table lookup per char, and `OneOf` still skips white space once for all its alternatives. A `WhiteSpaceParser`, when one is set,
+is used instead of the set to skip white space, but the `Literals.WhiteSpace()` it contains reads the set. To skip ASCII white
+space and comments:
+
+```c#
+var parser = grammar
+    .WithComments(builder => builder.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
+    .WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
+```
+
+`WithWhiteSpaceSet` is part of the grammar, so a [source-generated](source-generation.md) parser honors it too.
+Use `WithWhiteSpaceParser` for any other set of chars.
 
 ### WithComments
 
