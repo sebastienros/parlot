@@ -255,10 +255,10 @@ public class CompactingStreamTests
     [InlineData("_deepJson")]
     public void BenchmarkDocumentsMatchTheWholeText(string field)
     {
-        var benchmark = new Parlot.Benchmarks.JsonBench();
+        var benchmark = new Benchmarks.JsonBench();
         benchmark.Setup();
 
-        var text = (string)typeof(Parlot.Benchmarks.JsonBench).GetField(field, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(benchmark)!;
+        var text = (string)typeof(Benchmarks.JsonBench).GetField(field, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(benchmark)!;
         var expected = JsonParser.Json.Parse(text)!.ToString();
 
         foreach (var (chunk, bufferSize) in new[] { (1, 1), (3, 16), (int.MaxValue, 64), (7, 4096) })
@@ -274,11 +274,11 @@ public class CompactingStreamTests
     [InlineData(int.MaxValue, 4096)]
     public void BenchmarkLogsKeepTheBufferBounded(int chunk, int bufferSize)
     {
-        var (log, failed) = Parlot.Benchmarks.StreamingBenchmarks.CreateLog(10_000);
+        var (log, failed) = Benchmarks.StreamingBenchmarks.CreateLog(10_000);
 
         var (options, peak) = Observe(new StreamParseOptions { BufferSize = bufferSize });
 
-        Assert.Equal(failed, Parlot.Tests.AccessLog.LogParser.Log.Parse(new ChunkedReader(log, chunk), options));
+        Assert.Equal(failed, AccessLog.LogParser.Log.Parse(new ChunkedReader(log, chunk), options));
 
         // The longest record has 121 chars
         Assert.InRange(peak(), 1, Math.Max(bufferSize, 128) * 2);

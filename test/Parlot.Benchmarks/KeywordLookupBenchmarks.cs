@@ -341,7 +341,7 @@ public class KeywordLookupBenchmarks
             target.AppendLine("switch (input) {");
             foreach (var (text, index) in group)
             {
-                target.AppendLine($"case {Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true)}: return {index};");
+                target.AppendLine($"case {SymbolDisplay.FormatLiteral(text, quote: true)}: return {index};");
             }
 
             target.AppendLine("}");
@@ -370,7 +370,7 @@ public class KeywordLookupBenchmarks
             output.AppendLine($"case {group.Key}U:");
             foreach (var (word, index) in group)
             {
-                var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(word, quote: true);
+                var literal = SymbolDisplay.FormatLiteral(word, quote: true);
                 output.AppendLine(ignoreCase
                     ? $"if (System.Text.Ascii.EqualsIgnoreCase(input, {literal}.AsSpan())) return {index};"
                     : $"if (input.SequenceEqual({literal}.AsSpan())) return {index};");
@@ -390,7 +390,7 @@ public class KeywordLookupBenchmarks
             output.AppendLine($"case {group.Key}:");
             foreach (var (text, index) in group)
             {
-                var literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(text, quote: true);
+                var literal = SymbolDisplay.FormatLiteral(text, quote: true);
                 var comparison = bytes
                     ? ignoreCase ? $"System.Text.Ascii.EqualsIgnoreCase(input, {literal}u8)" : $"input.SequenceEqual({literal}u8)"
                     : $"input.Equals({literal}.AsSpan(), StringComparison.{(ignoreCase ? "OrdinalIgnoreCase" : "Ordinal")})";

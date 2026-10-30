@@ -53,7 +53,7 @@ public class AnyOfPatternBenchmarks
     // the cost of that extra layer: the first is the shape it produces now, the second the shape it used
     // to produce.
     private static readonly Parser<TextSpan> TermsAnyOfDigits = Terms.AnyOf(DigitsSet);
-    private static readonly Parser<TextSpan> TermsAnyOfDigitsDoubleSkip = Parsers.SkipWhiteSpace(Terms.AnyOf(DigitsSet));
+    private static readonly Parser<TextSpan> TermsAnyOfDigitsDoubleSkip = SkipWhiteSpace(Terms.AnyOf(DigitsSet));
 
     private static readonly Parser<TextSpan> NoneOfDigits = Literals.NoneOf(DigitsSet);
     private static readonly Parser<TextSpan> PatternNotDigit = Literals.Pattern(static c => !char.IsDigit(c));

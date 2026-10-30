@@ -157,8 +157,8 @@ public class CollectionParserTests
     private static (bool Success, IReadOnlyList<string> Values) SeparatedResult(
         string input, bool removeEmptyEntries = false, bool allowLeadingSeparator = false, bool allowTrailingSeparator = false)
     {
-        var parser = Parlot.Fluent.Parsers.Separated(Parlot.Fluent.Parsers.Literals.Char(','),
-            Parlot.Fluent.Parsers.Literals.Text("x"), removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator).Eof();
+        var parser = Fluent.Parsers.Separated(Fluent.Parsers.Literals.Char(','),
+            Fluent.Parsers.Literals.Text("x"), removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator).Eof();
         var success = parser.TryParse(input, out var values);
         return (success, values);
     }

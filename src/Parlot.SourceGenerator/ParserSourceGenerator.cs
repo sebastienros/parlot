@@ -532,7 +532,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // If emit fails with CS8795/CS0759, rewrite the affected partial methods in-memory into non-partial stubs and retry once.
         List<string>? partialBypassedMethods = null;
 
-        using var peStream = new System.IO.MemoryStream();
+        using var peStream = new MemoryStream();
         var emitResult = tempCompilation.Emit(peStream);
 
         if (!emitResult.Success && emitResult.Diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error && (d.Id == "CS8795" || d.Id == "CS0759")))
@@ -563,7 +563,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     var lineSpan = location.GetLineSpan();
                     var fileName = Path.GetFileName(lineSpan.Path);
                     var line = lineSpan.StartLinePosition.Line + 1;
-                    return $"{fileName}({line}): {d.GetMessage(System.Globalization.CultureInfo.InvariantCulture)}";
+                    return $"{fileName}({line}): {d.GetMessage(CultureInfo.InvariantCulture)}";
                 }));
             
             if (missingGeneratorOutputErrors.Count > 0)
@@ -688,7 +688,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             {
                 // Return the Parlot assembly that this generator is already using
                 // This ensures ISourceable and other types have the same identity
-                return typeof(Parlot.Fluent.Parser<>).Assembly;
+                return typeof(Fluent.Parser<>).Assembly;
             }
 
             // Try to return pre-loaded assembly from project references (CompilationReference)
@@ -741,7 +741,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 }
                 else
                 {
-                    var errors = string.Join("; ", refEmitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Take(3).Select(d => d.GetMessage(System.Globalization.CultureInfo.InvariantCulture)));
+                    var errors = string.Join("; ", refEmitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Take(3).Select(d => d.GetMessage(CultureInfo.InvariantCulture)));
                     context.ReportDiagnostic(Diagnostic.Create(
                         new DiagnosticDescriptor("PARLOT097", "Emit failed for ref", "Failed to emit '{0}': {1}", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
                         GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), refAssemblyName, errors));
@@ -891,7 +891,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             static int GetCSharpLanguageMajorVersion(IMethodSymbol symbol)
             {
                 var syntaxRef = symbol.DeclaringSyntaxReferences.FirstOrDefault();
-                if (syntaxRef?.SyntaxTree.Options is not Microsoft.CodeAnalysis.CSharp.CSharpParseOptions csharpOptions)
+                if (syntaxRef?.SyntaxTree.Options is not CSharpParseOptions csharpOptions)
                 {
                     return 0;
                 }
@@ -899,7 +899,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 var lv = csharpOptions.LanguageVersion;
 
                 // Normalize common Roslyn values to a major integer.
-                if (lv == Microsoft.CodeAnalysis.CSharp.LanguageVersion.Latest || lv == Microsoft.CodeAnalysis.CSharp.LanguageVersion.Preview)
+                if (lv == LanguageVersion.Latest || lv == LanguageVersion.Preview)
                 {
                     return int.MaxValue;
                 }
@@ -1676,7 +1676,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
     /// </summary>
     private static string GenerateLambdaMethod(
         string methodName, 
-        System.Reflection.MethodInfo invokeMethod, 
+        MethodInfo invokeMethod, 
         string lambdaSource, 
         bool isMethodGroup,
         string? originalFilePath,
@@ -1810,7 +1810,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
     /// Generates a parameter list using original parameter names from the lambda.
     /// For "x => x.Length" generates "TextSpan x".
     /// </summary>
-    private static string GenerateParameterListWithOriginalNames(System.Reflection.MethodInfo invokeMethod, string[] originalNames)
+    private static string GenerateParameterListWithOriginalNames(MethodInfo invokeMethod, string[] originalNames)
     {
         var parameters = invokeMethod.GetParameters();
         var sb = new StringBuilder();
@@ -1832,7 +1832,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
     /// Generates a parameter list with standard names like "TextSpan arg0, char arg1".
     /// Used for method groups and fallback cases.
     /// </summary>
-    private static string GenerateParameterListWithStandardNames(System.Reflection.MethodInfo invokeMethod)
+    private static string GenerateParameterListWithStandardNames(MethodInfo invokeMethod)
     {
         var parameters = invokeMethod.GetParameters();
         var sb = new StringBuilder();

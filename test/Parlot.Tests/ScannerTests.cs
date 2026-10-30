@@ -498,7 +498,7 @@ public class ScannerTests
     [InlineData(",")]
     public void ShouldNotReadInvalidDecimal(string text)
     {
-        Assert.False(new Scanner(text).ReadDecimal(Fluent.NumberOptions.Any, groupSeparator: ',', decimalSeparator: '.', number: out _));
+        Assert.False(new Scanner(text).ReadDecimal(NumberOptions.Any, groupSeparator: ',', decimalSeparator: '.', number: out _));
     }
 
     [Theory]
@@ -512,7 +512,7 @@ public class ScannerTests
     {
         var scanner = new Scanner(text);
 
-        Assert.False(scanner.ReadDecimal(Fluent.NumberOptions.Any, out _));
+        Assert.False(scanner.ReadDecimal(NumberOptions.Any, out _));
         Assert.Equal(TextPosition.Start, scanner.Cursor.Position);
     }
 
@@ -579,7 +579,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out var result));
+        Assert.True(s.ReadDecimal(NumberOptions.AllowGroupSeparators, out var result));
         Assert.Equal(expected, result);
     }
 
@@ -597,7 +597,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators | Fluent.NumberOptions.AllowDecimalSeparator, out var result, groupSeparator: ',', decimalSeparator: '.'));
+        Assert.True(s.ReadDecimal(NumberOptions.AllowGroupSeparators | NumberOptions.AllowDecimalSeparator, out var result, groupSeparator: ',', decimalSeparator: '.'));
         Assert.Equal(expected, result);
     }
 
@@ -611,7 +611,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
+        Assert.True(s.ReadDecimal(NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
         Assert.True(decimal.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }
@@ -630,7 +630,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.Float, out var result));
+        Assert.True(s.ReadDecimal(NumberOptions.Float, out var result));
         Assert.True(double.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
         Assert.Equal(expected.Length, s.Cursor.Offset);
@@ -650,7 +650,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.Integer | Fluent.NumberOptions.AllowExponent, out var result, decimalSeparator: '.'));
+        Assert.True(s.ReadDecimal(NumberOptions.Integer | NumberOptions.AllowExponent, out var result, decimalSeparator: '.'));
         Assert.True(decimal.TryParse(expected, NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }

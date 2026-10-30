@@ -45,7 +45,7 @@ public static partial class ParserOperatorExtensions
 
         public static SequenceSkipAnd<T2, T1> operator -(Parser<T1> p1, Parser<T2> p2)
         {
-            return Parsers.Not(p2).SkipAnd(p1);
+            return Not(p2).SkipAnd(p1);
         }
 
         // % operator to replace Separated: a list of the left parser separated by the right one

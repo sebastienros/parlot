@@ -56,14 +56,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
     }
 
     
-    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
 
-        if (Parser is not Parlot.SourceGeneration.ISourceable sourceable)
+        if (Parser is not ISourceable sourceable)
         {
             throw new NotSupportedException("SkipWhiteSpace requires a source-generatable parser.");
         }

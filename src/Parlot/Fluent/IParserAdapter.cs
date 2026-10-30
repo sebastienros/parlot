@@ -17,7 +17,7 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
 
     public IParserAdapter(IParser<T> parser)
     {
-        _parser = parser ?? throw new System.ArgumentNullException(nameof(parser));
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _typedParser = parser as Parser<T>;
 
         // Forward ISeekable properties from the wrapped parser if it implements ISeekable
