@@ -156,6 +156,44 @@ public class GeneratedParserTests
     }
 
     [Fact]
+    public void Scanned_Tokens_Track_New_Lines()
+    {
+        string[] inputs =
+        [
+            "abc d", "ab\ncd\ne f", "ab\ncd", "\nab c", "ab\n\n\n c", "a\r\nb\rc\n d",
+            new string('a', 70) + "\n" + new string('b', 70) + " x", new string('\n', 100) + "a",
+        ];
+
+        foreach (var input in inputs)
+        {
+            var token = input.Split(' ')[0];
+            var line = 1;
+            var column = 1;
+
+            // The cursor only ends a line on '\n'
+            foreach (var c in token)
+            {
+                if (c == '\n')
+                {
+                    line++;
+                    column = 1;
+                }
+                else
+                {
+                    column++;
+                }
+            }
+
+            Assert.True(Grammar.TryParseScanPosition(input, out var position));
+            Assert.Equal((token, token.Length, line, column), position);
+
+            using var reader = new StringReader(input);
+            Assert.True(Grammar.TryParseScanPosition(reader, out position));
+            Assert.Equal((token, token.Length, line, column), position);
+        }
+    }
+
+    [Fact]
     public void Text_Choices_Agree_With_An_Ordered_Unicode_Prefix_Reference()
     {
         string[] words = ["if1", "if", "if12", "Content-Encoding", "Content-Type", "Content", "\u00e9\0x", "\ud800\udc00", "line\r\nend", "line\r\n", "if"];

@@ -207,4 +207,20 @@ public static partial class Grammar
     private static Parser<(int Offset, int Line, int Column)> TextChoicePosition() =>
         TextChoice().Then(static (context, _) =>
             (context.Scanner.Cursor.Offset, context.Scanner.Cursor.Position.Line, context.Scanner.Cursor.Position.Column));
+
+    // Matches up to the first space, new lines included
+    [GenerateParser(nameof(TryParseScanPosition))]
+    private static Parser<(string Text, int Offset, int Line, int Column)> ScanPosition() =>
+        Literals.Scan(static span =>
+        {
+            var size = 0;
+
+            while (size < span.Length && span[size] != ' ')
+            {
+                size++;
+            }
+
+            return size;
+        }).Then(static (context, span) =>
+            (span.ToString(), context.Scanner.Cursor.Offset, context.Scanner.Cursor.Position.Line, context.Scanner.Cursor.Position.Column));
 }
