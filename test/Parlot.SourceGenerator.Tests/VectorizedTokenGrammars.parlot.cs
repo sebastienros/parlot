@@ -119,4 +119,9 @@ public static partial class VectorizedTokenGrammars
                 var position = context.Scanner.Cursor.Position;
                 return (span.ToString(), position.Offset, position.Line, position.Column);
             });
+
+    // The scanner breaks its contract by returning more chars than the span has
+    [GenerateParser(nameof(TryParseScanOversize))]
+    private static Parser<string> BuildScanOversize() =>
+        Literals.Scan(static span => span.Length + 1).Then(static span => span.ToString());
 }
