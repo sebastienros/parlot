@@ -54,7 +54,7 @@ public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{ctx}.SkipWhiteSpace();");
         result.Body.Add($"var {endName} = {cursorName}.Offset;");
-        
+
         result.Body.Add($"if ({startName} != {endName})");
         result.Body.Add("{");
         result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {endName} - {startName});");

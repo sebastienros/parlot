@@ -29,7 +29,6 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -56,7 +55,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         // {
         //     throw new ParseException(_message, cursor.Position);
         // }
-        
+
         if (context.DiscardResult)
         {
             result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
@@ -121,7 +120,6 @@ public sealed class Error<T> : Parser<T>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -145,7 +143,7 @@ public sealed class Error<T> : Parser<T>, ISeekable, ISourceable
         //     throw new ParseException(_message, cursor.Position);
         // }
         // success = false;
-        
+
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
         result.Body.Add($"    throw new global::Parlot.ParseException({LiteralHelper.StringToLiteral(_message)}, {cursorName}.Position);");
@@ -197,7 +195,6 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -221,7 +218,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
         //     throw new ParseException(_message, cursor.Position);
         // }
         // success = false;
-        
+
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
         result.Body.Add("{");
         result.Body.Add($"    throw new global::Parlot.ParseException({LiteralHelper.StringToLiteral(_message)}, {cursorName}.Position);");

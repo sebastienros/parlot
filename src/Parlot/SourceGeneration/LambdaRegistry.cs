@@ -158,7 +158,7 @@ public sealed class LambdaRegistry
         {
             var method = @delegate.Method;
             var parameters = method.GetParameters();
-            
+
             // Build default arguments for each parameter
             var args = new object?[parameters.Length];
             for (int i = 0; i < parameters.Length; i++)
@@ -166,7 +166,7 @@ public sealed class LambdaRegistry
                 var paramType = parameters[i].ParameterType;
                 args[i] = GetDefaultValue(paramType);
             }
-            
+
             var wasRegistering = LambdaPointer.IsRegistering;
             LambdaPointer.IsRegistering = true;
             try
@@ -182,7 +182,7 @@ public sealed class LambdaRegistry
             {
                 LambdaPointer.IsRegistering = wasRegistering;
             }
-            
+
             // Read the pointer that was set by the rewritten lambda
             return LambdaPointer.CurrentPointer;
         }

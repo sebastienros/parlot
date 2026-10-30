@@ -26,16 +26,15 @@ public sealed class Always<T> : Parser<T>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         var result = context.CreateResult(typeof(T), defaultSuccess: true);
-        
+
         // Try to get a string representation of the value for inlining
         var valueExpr = LiteralHelper.ToLiteral(_value);
-        
+
         if (valueExpr == null)
         {
             throw new NotSupportedException(

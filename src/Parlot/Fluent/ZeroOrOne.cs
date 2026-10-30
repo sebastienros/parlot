@@ -43,7 +43,6 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

@@ -183,13 +183,13 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             && _semanticModel.GetTypeInfo(node.Expression).ConvertedType?.TypeKind == TypeKind.Delegate)
         {
             var symbolInfo = _semanticModel.GetSymbolInfo(node.Expression);
-            
+
             // Check if it resolves to a method (method group)
             if (symbolInfo.Symbol is IMethodSymbol methodSymbol ||
                 (symbolInfo.CandidateSymbols.Length > 0 && symbolInfo.CandidateSymbols[0] is IMethodSymbol))
             {
                 var method = (IMethodSymbol)(symbolInfo.Symbol ?? symbolInfo.CandidateSymbols[0]);
-                
+
                 var pointer = _nextPointer++;
                 var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
                     .Visit(node.Expression).ToFullString().Trim();
@@ -217,7 +217,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
 
                 // Replace method group with a lambda that sets the pointer and calls the method
                 // e.g., char.IsLetter becomes (char arg0) => { LambdaPointer.CurrentPointer = N; return char.IsLetter(arg0); }
-                
+
                 var parameters = method.Parameters.Select((p, i) =>
                     SyntaxFactory.Parameter(SyntaxFactory.Identifier($"arg{i}"))
                         .WithType(SyntaxFactory.ParseTypeName(p.Type.ToDisplayString() + " ")))
@@ -231,7 +231,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 // Build the method invocation
                 var arguments = parameters.Select((_, i) =>
                     SyntaxFactory.Argument(SyntaxFactory.IdentifierName($"arg{i}")));
-                
+
                 var methodCall = SyntaxFactory.InvocationExpression(
                     node.Expression,
                     SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments)));

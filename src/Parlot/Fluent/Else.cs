@@ -53,7 +53,6 @@ public sealed class Else<T> : Parser<T>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -80,11 +79,11 @@ public sealed class Else<T> : Parser<T>, ISourceable
         //     value = _func != null ? _func(context) : _value;
         // }
         // success = true; (always succeeds)
-        
+
         var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {result.ValueVariable})");
         result.Body.Add($"if (!{success})");
         result.Body.Add("{");
-        
+
         if (_func != null)
         {
             var lambdaId = context.RegisterLambda(_func);
@@ -107,13 +106,13 @@ public sealed class Else<T> : Parser<T>, ISourceable
                     $"Else<{typeof(T).Name}> with a value of type '{typeof(T).Name}' cannot be source-generated. " +
                     $"Use a lambda instead, e.g., .Else(static _ => yourValue)");
             }
-            
+
             if (!context.DiscardResult)
             {
                 result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
             }
         }
-        
+
         result.Body.Add("}");
         result.Body.Add($"{result.SuccessVariable} = true;");
 

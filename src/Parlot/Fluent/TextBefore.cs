@@ -221,7 +221,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         result.Body.Add($"    var {previousName} = {cursorName}.Position;");
         result.Body.Add($"    if ({cursorName}.Eof)");
         result.Body.Add("    {");
-        
+
         if (_failOnEof)
         {
             result.Body.Add($"        {cursorName}.ResetPosition({startName});");
@@ -246,14 +246,14 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add("        break;");
         }
-        
+
         result.Body.Add("    }");
 
         // Try to parse delimiter
         result.Body.Add($"    if ({delimiterHelperName}({context.ParseContextName}, out _))");
         result.Body.Add("    {");
         result.Body.Add($"        var {lengthName} = {previousName}.Offset - {startName}.Offset;");
-        
+
         if (!_consumeDelimiter)
         {
             result.Body.Add($"        {cursorName}.ResetPosition({previousName});");
@@ -284,7 +284,6 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 
         return result;
     }
-
 
     // Emits the same jump as JumpToNextExpectedChar: the cursor moves to the first char the delimiter can start with,
     // or to the end of the text. A single char is searched with IndexOf on every framework; several chars with

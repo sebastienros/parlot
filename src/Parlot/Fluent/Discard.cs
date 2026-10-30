@@ -36,7 +36,6 @@ public sealed class Discard<T, U> : Parser<U>, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

@@ -52,7 +52,6 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -72,7 +71,7 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add($"if (!{cursorName}.Eof)");
         result.Body.Add("{");
         result.Body.Add($"    var {startName} = {cursorName}.Offset;");
-        
+
         if (_includeNewLines)
         {
             result.Body.Add($"    {scannerName}.ReadNonWhiteSpaceOrNewLine();");

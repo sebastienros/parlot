@@ -98,7 +98,6 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -121,7 +120,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
 
         // Generate a unique ID for this LeftAssociative instance to avoid collisions
         var uniqueId = context.NextNumber();
-        
+
         // Register helper for the base parser with unique prefix
         var baseHelperName = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_LeftAssoc{uniqueId}", valueTypeName, () => parserSourceable.GenerateSource(context))
@@ -188,7 +187,6 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
 
     public override string ToString() => Name ?? $"LeftAssociative({_parser})";
 }
-
 
 public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceable
 {
@@ -272,7 +270,6 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
         context.ExitParser(this);
         return true;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

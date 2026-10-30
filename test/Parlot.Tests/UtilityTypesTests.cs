@@ -220,8 +220,6 @@ public class UtilityTypesTests
         Assert.Equal(0, readOnlySpan.Length);
     }
 
-
-
     [Fact]
     public void CharToStringTableShouldCacheCommonChars()
     {

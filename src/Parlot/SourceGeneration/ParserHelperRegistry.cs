@@ -36,7 +36,7 @@ public sealed class ParserHelperRegistry
         {
             var methodName = suggestedName + "_" + _nextId++;
             var result = resultFactory();
-            
+
             // Try to get the parser's Name property via reflection
             string? parserName = null;
             var nameProp = parser.GetType().GetProperty("Name");
@@ -44,7 +44,7 @@ public sealed class ParserHelperRegistry
             {
                 parserName = nameProp.GetValue(parser) as string;
             }
-            
+
             entry = new HelperEntry(methodName, valueTypeName, result, parserName);
             _helpers[key] = entry;
         }

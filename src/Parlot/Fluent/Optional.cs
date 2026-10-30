@@ -44,7 +44,6 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

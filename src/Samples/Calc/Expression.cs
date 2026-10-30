@@ -42,7 +42,6 @@ public class NegateExpression : UnaryExpression
     }
 }
 
-
 public class Addition : BinaryExpression
 {
     public Addition(Expression left, Expression right) : base(left, right)
@@ -67,7 +66,6 @@ public class Subtraction : BinaryExpression
     }
 }
 
-
 public class Multiplication : BinaryExpression
 {
     public Multiplication(Expression left, Expression right) : base(left, right)
@@ -79,7 +77,6 @@ public class Multiplication : BinaryExpression
         return Left.Evaluate() * Right.Evaluate();
     }
 }
-
 
 public class Division : BinaryExpression
 {

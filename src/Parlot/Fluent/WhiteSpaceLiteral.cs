@@ -67,7 +67,6 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -85,7 +84,7 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
         var endName = $"end{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        
+
         if (_includeNewLines)
         {
             result.Body.Add($"{scannerName}.SkipWhiteSpaceOrNewLine();");

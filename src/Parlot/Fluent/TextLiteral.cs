@@ -186,8 +186,6 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
         return false;
     }
 
-
-    
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -227,7 +225,7 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             result.Body.Add($"    var {startName} = {cursorName}.Offset;");
         }
         result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
-        
+
         // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
         if (context.DiscardResult)
         {

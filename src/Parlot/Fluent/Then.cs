@@ -90,8 +90,6 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
         return false;
     }
 
-
-    
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -207,13 +205,13 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
                     $"Then<{typeof(T).Name}, {typeof(U).Name}> with a value of type '{typeof(U).Name}' cannot be source-generated. " +
                     $"Use a lambda instead, e.g., .Then(static _ => yourValue)");
             }
-            
+
             if (!context.DiscardResult)
             {
                 result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
             }
         }
-        
+
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

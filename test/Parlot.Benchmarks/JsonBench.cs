@@ -118,7 +118,6 @@ public class JsonBench
         return JToken.Parse(_longJson);
     }
 
-
     [Benchmark, BenchmarkCategory("Long")]
     public JsonDocument LongJson_SystemTextJson()
     {

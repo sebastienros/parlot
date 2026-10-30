@@ -102,7 +102,6 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable where C : Parse
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

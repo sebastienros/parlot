@@ -61,7 +61,6 @@ public sealed class When<T> : Parser<T>, ISeekable, ISourceable
         return valid;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

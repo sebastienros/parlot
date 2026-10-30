@@ -117,7 +117,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var operatorMatchedName = $"unaryOpMatched{context.NextNumber()}";
-        
+
         // Register this unary parser as a deferred method for recursive calls
         var helperMethodName = context.Deferred.GetOrCreateMethodName(this, "Unary");
 
@@ -182,7 +182,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             result.Body.Add($"{innerIndent}{{");
             result.Body.Add($"{innerIndent}    {operatorMatchedName} = true;");
             context.Unpin(result, pin, $"{innerIndent}    ");
-            
+
             // Recursive call via helper method
             result.Body.Add($"{innerIndent}    if ({helperMethodName}({ctx}, out var {opResultName}RecursiveValue))");
             result.Body.Add($"{innerIndent}    {{");

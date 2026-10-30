@@ -107,13 +107,13 @@ public class CovarianceTests
     {
         // Test covariance with nullable reference types
         var stringParser = Terms.Text("hello").Then(_ => "world");
-        
+
         // string is derived from object, should work with covariance
         IParser<object> objectParser = stringParser;
-        
+
         var context = new ParseContext(new Scanner("hello"));
         var success = objectParser.Parse(context, out int start, out int end, out object? value);
-        
+
         Assert.True(success);
         Assert.Equal("world", value);
     }

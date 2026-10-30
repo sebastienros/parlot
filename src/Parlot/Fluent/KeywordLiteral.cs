@@ -160,7 +160,6 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -188,7 +187,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
             .MethodName;
 
         var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
-        
+
         // if (Helper(context, out var innerValue))
         // {
         //     // Check keyword boundary: cursor.Eof || (!IsInRange(current, 'a', 'z') && !IsInRange(current, 'A', 'Z'))
@@ -202,7 +201,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
         //         cursor.ResetPosition(start);
         //     }
         // }
-        
+
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out {outTarget}))");
         result.Body.Add("{");
 

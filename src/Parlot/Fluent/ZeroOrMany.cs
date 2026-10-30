@@ -68,7 +68,6 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         return true;
     }
 
-
     public override string ToString() => $"{_parser}*";
 
     public SourceResult GenerateSource(SourceGenerationContext context)

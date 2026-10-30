@@ -51,7 +51,6 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
         return success;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

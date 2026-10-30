@@ -98,7 +98,6 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -138,7 +137,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 
         // Emit NumberStyles as a literal cast
         var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
-        
+
         var cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat";
         if (!ReferenceEquals(_culture, CultureInfo.InvariantCulture.NumberFormat))
         {

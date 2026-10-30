@@ -55,7 +55,6 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         return false;
     }
 
-    
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

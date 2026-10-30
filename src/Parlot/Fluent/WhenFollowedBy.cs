@@ -72,7 +72,6 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekable, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
