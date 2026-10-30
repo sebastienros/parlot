@@ -21,7 +21,9 @@ public class CharMaskGeneratorTest
         IdentifierStart = 1,
         IdentifierPart = 2,
         WhiteSpace = 4,
-        WhiteSpaceOrNewLine = 8
+        WhiteSpaceOrNewLine = 8,
+        AsciiWhiteSpace = 16,
+        AsciiWhiteSpaceOrNewLine = 32
     }
 
     // Unicode v8.0.0 NonAsciiIdentifierStart
@@ -46,6 +48,14 @@ public class CharMaskGeneratorTest
             {
                 mask |= CharacterMask.WhiteSpaceOrNewLine;
             }
+            if (c is ' ' or '\t' or '\f')
+            {
+                mask |= CharacterMask.AsciiWhiteSpace;
+            }
+            if (c is ' ' or '\t' or '\f' or '\n' or '\r' or '\v')
+            {
+                mask |= CharacterMask.AsciiWhiteSpaceOrNewLine;
+            }
             if (IsIdentifierStart(c))
             {
                 mask |= CharacterMask.IdentifierStart;
@@ -59,7 +69,7 @@ public class CharMaskGeneratorTest
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("    private static ReadOnlySpan<byte> _characterData => new byte[]");
+        sb.AppendLine("    internal static ReadOnlySpan<byte> _characterData => new byte[]");
         sb.AppendLine("    {");
         foreach (var chunk in masks.Chunk(40))
         {

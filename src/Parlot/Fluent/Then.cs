@@ -147,7 +147,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
                     .MethodName;
                 resetName = $"reset{context.NextNumber()}";
                 result.Body.Add($"var {resetName} = {cursorName}.Position;");
-                result.Body.Add($"if ({ctx}.WhiteSpaceParser is not null || global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current))");
+                result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
                 result.Body.Add("{");
                 result.Body.Add($"    {ctx}.SkipWhiteSpace();");
                 result.Body.Add("}");

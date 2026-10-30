@@ -84,6 +84,7 @@ public class ParseContext
 
         Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         UseNewLines = useNewLines;
+        _skipMask = useNewLines ? (byte)CharacterMask.WhiteSpace : (byte)CharacterMask.WhiteSpaceOrNewLine;
         CancellationToken = cancellationToken;
         _flags = cancellationToken.CanBeCanceled ? CancellableFlag : (byte)0;
         DisableLoopDetection = disableLoopDetection;
@@ -175,6 +176,58 @@ public class ParseContext
 
     private Parser<TextSpan>? _whiteSpaceParser;
 
+    /// <summary>
+    /// The chars that are white space. Default is <see cref="WhiteSpaceSet.Default"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The set applies to <see cref="SkipWhiteSpace"/>, thus to every <c>Terms</c> parser, and to <c>Literals.WhiteSpace</c>
+    /// and <c>NonWhiteSpace</c>, including when they are used in <see cref="WhiteSpaceParser"/>. Skipping white space then reads
+    /// a single table lookup per char, as with the default set, whereas a <see cref="WhiteSpaceParser"/> is a parser invocation.
+    /// </para>
+    /// <para>A grammar can also select it for a parser with <see cref="ParserExtensions.WithWhiteSpaceSet{T}(Parser{T}, WhiteSpaceSet)"/>.</para>
+    /// </remarks>
+    public WhiteSpaceSet WhiteSpaceSet
+    {
+        get => WhiteSpaceMask == (byte)CharacterMask.WhiteSpace ? WhiteSpaceSet.Default : WhiteSpaceSet.Ascii;
+        set
+        {
+            var mask = Character.GetWhiteSpaceMask(value);
+
+            if (WhiteSpaceMask != mask)
+            {
+                _skipMask = UseNewLines ? mask : (byte)(mask << 1);
+
+                // The white spaces skipped with the previous set are not the ones this one skips
+                _cacheOffset = -1;
+            }
+        }
+    }
+
+    // The bit of the white space set in Character._characterData that SkipWhiteSpace skips: the set's white space when
+    // UseNewLines is set, its white space or new lines otherwise. The set isn't stored otherwise, the context would grow.
+    private byte _skipMask = (byte)CharacterMask.WhiteSpaceOrNewLine;
+
+    // The bit of the white space set without new lines
+    internal byte WhiteSpaceMask
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => UseNewLines ? _skipMask : (byte)(_skipMask >> 1);
+    }
+
+    // The bit of the white space set with new lines, the one after the bit without them
+    internal byte WhiteSpaceOrNewLineMask
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => UseNewLines ? (byte)(_skipMask << 1) : _skipMask;
+    }
+
+    /// <summary>
+    /// Whether <see cref="SkipWhiteSpace"/> can skip something at a char, the shortcut of the parsers skipping white space.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is not null || Character.HasMask(ch, _skipMask);
+
     private int _cacheOffset = -1;
     private TextPosition _cachePosition;
 
@@ -200,11 +253,11 @@ public class ParseContext
         {
             if (UseNewLines)
             {
-                Scanner.SkipWhiteSpace();
+                Scanner.SkipWhiteSpace(_skipMask);
             }
             else
             {
-                Scanner.SkipWhiteSpaceOrNewLine();
+                Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
             }
         }
         else
@@ -388,11 +441,11 @@ public class ParseContext
 
                 if (UseNewLines)
                 {
-                    Scanner.SkipWhiteSpace();
+                    Scanner.SkipWhiteSpace(_skipMask);
                 }
                 else
                 {
-                    Scanner.SkipWhiteSpaceOrNewLine();
+                    Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
                 }
 
                 if (!cursor.HitEnd)

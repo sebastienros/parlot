@@ -32,7 +32,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         var cursor = context.Scanner.Cursor;
 
         // Shortcut for common scenario
-        if (context.WhiteSpaceParser is null && !Character.IsWhiteSpaceOrNewLine(cursor.Current))
+        if (!context.MaySkipWhiteSpace(cursor.Current))
         {
             context.ExitParser(this);
             return Parser.Parse(context, ref result);
@@ -91,7 +91,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         var shortcutName = $"shortcut{context.NextNumber()}";
         var contentStartOffsetName = $"contentStart{context.NextNumber()}";
 
-        result.Body.Add($"var {shortcutName} = {ctx}.WhiteSpaceParser is null && !global::Parlot.Character.IsWhiteSpaceOrNewLine({cursorName}.Current);");
+        result.Body.Add($"var {shortcutName} = !{ctx}.MaySkipWhiteSpace({cursorName}.Current);");
         result.Body.Add($"var {contentStartOffsetName} = {cursorName}.Offset;");
 
         result.Body.Add($"if (!{shortcutName})");

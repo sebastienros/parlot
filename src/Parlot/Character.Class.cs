@@ -25,6 +25,16 @@ public static partial class Character
     /// </summary>
     public const string WhiteSpaceOrNewLines = WhiteSpaces + NewLines;
 
+    /// <summary>
+    /// The chars <see cref="IsWhiteSpace(char, WhiteSpaceSet)"/> accepts for <see cref="WhiteSpaceSet.Ascii"/>: tab, form feed and space.
+    /// </summary>
+    public const string AsciiWhiteSpaces = "\t\f ";
+
+    /// <summary>
+    /// The chars of <see cref="WhiteSpaceSet.Ascii"/>: <see cref="AsciiWhiteSpaces"/> and <see cref="NewLines"/>.
+    /// </summary>
+    public const string AsciiWhiteSpaceOrNewLines = AsciiWhiteSpaces + NewLines;
+
     // The chars which can start a default identifier, for the parsers to declare as their expected chars
     internal static readonly char[] _identifierStartChars = DefaultIdentifierStart.ToCharArray();
 }

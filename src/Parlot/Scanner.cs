@@ -54,50 +54,72 @@ public class Scanner
     /// </summary>
     /// <returns>Whether some white space was read.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool SkipWhiteSpaceOrNewLine()
+    public bool SkipWhiteSpaceOrNewLine() => SkipWhiteSpaceOrNewLine((byte)CharacterMask.WhiteSpaceOrNewLine);
+
+    /// <summary>
+    /// Reads any whitespace or new line of a set without generating a token.
+    /// </summary>
+    /// <returns>Whether some white space was read.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool SkipWhiteSpaceOrNewLine(WhiteSpaceSet set) => SkipWhiteSpaceOrNewLine(Character.GetWhiteSpaceOrNewLineMask(set));
+
+    // The mask is a white space or new line bit of Character._characterData
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool SkipWhiteSpaceOrNewLine(byte mask)
     {
-        if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
+        if (!Character.HasMask(Cursor.Current, mask))
         {
             return false;
         }
 
-        SkipRemainingWhiteSpaceOrNewLine();
+        SkipRemainingWhiteSpaceOrNewLine(mask);
         return true;
     }
 
-    private void SkipRemainingWhiteSpaceOrNewLine()
+    private void SkipRemainingWhiteSpaceOrNewLine(byte mask)
     {
         var span = Cursor.Span;
         var length = span.Length;
 
         var i = 0;
 
-        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i])) ;
+        while (++i < length && Character.HasMask(span[i], mask)) ;
 
         Cursor.Advance(i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool SkipWhiteSpace()
+    public bool SkipWhiteSpace() => SkipWhiteSpace((byte)CharacterMask.WhiteSpace);
+
+    /// <summary>
+    /// Reads any whitespace of a set, but no new line, without generating a token.
+    /// </summary>
+    /// <returns>Whether some white space was read.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool SkipWhiteSpace(WhiteSpaceSet set) => SkipWhiteSpace(Character.GetWhiteSpaceMask(set));
+
+    // The mask is a white space bit of Character._characterData, which has no new line
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool SkipWhiteSpace(byte mask)
     {
-        if (!Character.IsWhiteSpace(Cursor.Current))
+        if (!Character.HasMask(Cursor.Current, mask))
         {
             return false;
         }
 
         // Splitting such that not all code is inlined
-        SkipRemainingWhiteSpace();
+        SkipRemainingWhiteSpace(mask);
         return true;
     }
 
-    private void SkipRemainingWhiteSpace()
+    private void SkipRemainingWhiteSpace(byte mask)
     {
         var span = Cursor.Span;
         var length = span.Length;
 
         var i = 0;
 
-        while (++i < length && Character.IsWhiteSpace(span[i])) ;
+        while (++i < length && Character.HasMask(span[i], mask)) ;
 
         Cursor.AdvanceNoNewLines(i);
     }
@@ -360,62 +382,46 @@ public class Scanner
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _);
 
-    public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result)
-    {
-#if NET8_0_OR_GREATER
-        return ReadNonWhiteSpace(orNewLine: false, out result);
-#else
-        return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
-#endif
-    }
+    public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result) => ReadNonWhiteSpace((byte)CharacterMask.WhiteSpace, out result);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _);
 
-    public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result)
-    {
-#if NET8_0_OR_GREATER
-        return ReadNonWhiteSpace(orNewLine: true, out result);
-#else
-        return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
-#endif
-    }
+    public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result) => ReadNonWhiteSpace((byte)CharacterMask.WhiteSpaceOrNewLine, out result);
 
 #if NET8_0_OR_GREATER
     // The vectorized search has a setup cost that only pays off on runs longer than most tokens, so the first chars
     // are checked with the table
     private const int NonWhiteSpaceTableLength = 16;
+#endif
 
     /// <summary>
-    /// Reads the chars up to the first white space, or white space or new line when <paramref name="orNewLine"/> is set.
+    /// Reads the chars up to the first white space of a mask of <see cref="Character"/>'s table, with or without new lines.
     /// </summary>
-    private bool ReadNonWhiteSpace(bool orNewLine, out ReadOnlySpan<char> result)
+    internal bool ReadNonWhiteSpace(byte mask, out ReadOnlySpan<char> result)
     {
         var span = Cursor.Span;
+        var orNewLine = (mask & ((byte)CharacterMask.WhiteSpaceOrNewLine | (byte)CharacterMask.AsciiWhiteSpaceOrNewLine)) != 0;
+#if NET8_0_OR_GREATER
         var tableLength = Math.Min(span.Length, NonWhiteSpaceTableLength);
+#else
+        var tableLength = span.Length;
+#endif
         var size = 0;
 
-        if (orNewLine)
+        while (size < tableLength && !Character.HasMask(span[size], mask))
         {
-            while (size < tableLength && !Character.IsWhiteSpaceOrNewLine(span[size]))
-            {
-                size++;
-            }
-        }
-        else
-        {
-            while (size < tableLength && !Character.IsWhiteSpace(span[size]))
-            {
-                size++;
-            }
+            size++;
         }
 
+#if NET8_0_OR_GREATER
         // A longer run is searched with SearchValues instead of a table lookup per char
         if (size == tableLength && size < span.Length)
         {
-            var index = span.Slice(size).IndexOfAny(orNewLine ? Character._whiteSpaceOrNewLines : Character._whiteSpaces);
+            var index = span.Slice(size).IndexOfAny(Character.GetWhiteSpaceSearchValues(mask));
             size = index < 0 ? span.Length : size + index;
         }
+#endif
 
         // Also the case at the end of the text
         if (size == 0)
@@ -428,7 +434,7 @@ public class Scanner
 
         // New lines are not white space when orNewLine is not set, the run can then contain some and the line and
         // column only need to be tracked char by char in that case
-        if (!orNewLine && result.Contains('\n'))
+        if (!orNewLine && result.IndexOf('\n') >= 0)
         {
             Cursor.Advance(size);
         }
@@ -439,7 +445,6 @@ public class Scanner
 
         return true;
     }
-#endif
 
     /// <summary>
     /// Reads the specified text.

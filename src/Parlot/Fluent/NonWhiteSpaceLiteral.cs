@@ -29,14 +29,7 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
 
         var start = context.Scanner.Cursor.Offset;
 
-        if (_includeNewLines)
-        {
-            context.Scanner.ReadNonWhiteSpaceOrNewLine();
-        }
-        else
-        {
-            context.Scanner.ReadNonWhiteSpace();
-        }
+        context.Scanner.ReadNonWhiteSpace(_includeNewLines ? context.WhiteSpaceOrNewLineMask : context.WhiteSpaceMask, out _);
 
         var end = context.Scanner.Cursor.Offset;
 
@@ -72,14 +65,8 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add("{");
         result.Body.Add($"    var {startName} = {cursorName}.Offset;");
 
-        if (_includeNewLines)
-        {
-            result.Body.Add($"    {scannerName}.ReadNonWhiteSpaceOrNewLine();");
-        }
-        else
-        {
-            result.Body.Add($"    {scannerName}.ReadNonWhiteSpace();");
-        }
+        var maskName = _includeNewLines ? "WhiteSpaceOrNewLineMask" : "WhiteSpaceMask";
+        result.Body.Add($"    {scannerName}.ReadNonWhiteSpace({context.ParseContextName}.{maskName}, out _);");
 
         result.Body.Add($"    var {endName} = {cursorName}.Offset;");
         result.Body.Add($"    if ({startName} != {endName})");

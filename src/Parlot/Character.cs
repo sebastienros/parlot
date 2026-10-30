@@ -188,5 +188,40 @@ public static partial class Character
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpaceOrNewLine) != 0;
     }
 
+    /// <summary>
+    /// Whether a char is white space, but not a new line, in a given set.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsWhiteSpace(char ch, WhiteSpaceSet set)
+    {
+        return (_characterData[ch] & GetWhiteSpaceMask(set)) != 0;
+    }
+
+    /// <summary>
+    /// Whether a char is white space or a new line in a given set.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsWhiteSpaceOrNewLine(char ch, WhiteSpaceSet set)
+    {
+        return (_characterData[ch] & GetWhiteSpaceOrNewLineMask(set)) != 0;
+    }
+
+    // The bit of a set's white space in _characterData. The bit of its white space or new lines is the next one.
+    internal static byte GetWhiteSpaceMask(WhiteSpaceSet set) => set switch
+    {
+        WhiteSpaceSet.Default => (byte)CharacterMask.WhiteSpace,
+        WhiteSpaceSet.Ascii => (byte)CharacterMask.AsciiWhiteSpace,
+        _ => ThrowInvalidWhiteSpaceSet(set),
+    };
+
+    internal static byte GetWhiteSpaceOrNewLineMask(WhiteSpaceSet set) => (byte)(GetWhiteSpaceMask(set) << 1);
+
+    // Whether a char has one of the bits of a mask in _characterData
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool HasMask(char ch, byte mask) => (_characterData[ch] & mask) != 0;
+
+    private static byte ThrowInvalidWhiteSpaceSet(WhiteSpaceSet set)
+        => throw new ArgumentOutOfRangeException(nameof(set), set, "Unknown white space set.");
+
     public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v';
 }
