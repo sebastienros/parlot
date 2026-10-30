@@ -225,16 +225,6 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
             result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
         else
         {
@@ -244,17 +234,18 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hlValue);");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
+
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }
@@ -353,16 +344,6 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
             result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
         else
         {
@@ -372,17 +353,18 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hlValue);");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
+
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }
@@ -484,16 +466,6 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
             result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
         else
         {
@@ -503,17 +475,18 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hlValue);");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
+
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }
@@ -617,16 +590,6 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
             result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
         else
         {
@@ -636,17 +599,18 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hlValue);");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
+
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }
@@ -751,16 +715,6 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
             result.Body.Add($"    if ({helperLast}({context.ParseContextName}, out _))");
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
         else
         {
@@ -770,17 +724,18 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
             result.Body.Add("    {");
             result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = new {tupleTypeName}(hpValue.Item1, hpValue.Item2, hpValue.Item3, hpValue.Item4, hpValue.Item5, hpValue.Item6, hlValue);");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
-            result.Body.Add("    }");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-            result.Body.Add("}");
         }
+
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+        result.Body.Add("}");
 
         return result;
     }

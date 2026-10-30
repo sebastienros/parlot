@@ -232,9 +232,6 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
             {
                 result.Body.Add("    if (!isMember)");
             }
-            result.Body.Add("    {");
-            result.Body.Add("        break;");
-            result.Body.Add("    }");
         }
         else
         {
@@ -244,10 +241,11 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
                 ? $"if ({fieldName}.Contains({spanVar}[i]))"
                 : $"if (!{fieldName}.Contains({spanVar}[i]))";
             result.Body.Add($"    {breakCondition}");
-            result.Body.Add("    {");
-            result.Body.Add("        break;");
-            result.Body.Add("    }");
         }
+
+        result.Body.Add("    {");
+        result.Body.Add("        break;");
+        result.Body.Add("    }");
         result.Body.Add($"    {sizeVar}++;");
         result.Body.Add("}");
 

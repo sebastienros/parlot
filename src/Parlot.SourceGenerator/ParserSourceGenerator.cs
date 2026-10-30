@@ -1739,15 +1739,14 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             if (lambda.Body is BlockSyntax)
             {
                 sb.Append($"        private {staticModifier}{asyncModifier}{returnTypeName} {methodName}({paramList})\n");
+                sb.Append("        ");
                 if (hasLineInfo)
                 {
-                    sb.Append("        ");
                     sb.Append(AddLineDirectivesToBody(body, originalLine, originalFilePath!));
                     sb.Append("\n#line default");
                 }
                 else
                 {
-                    sb.Append("        ");
                     sb.Append(body);
                 }
             }
