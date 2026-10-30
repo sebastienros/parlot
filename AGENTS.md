@@ -136,7 +136,9 @@ A new parser type should implement each one that applies:
 `ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
 scanned with a vectorized `IndexOf` rather than a hash set), cancellation checks throttled to every 64
-parser entries, and the `OnEnterParser` / `OnExitParser` hooks. Runtime grammars that need external state
+parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is the context's `WhiteSpaceSet`, a bit
+of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
+one-argument `Character.IsWhiteSpace*`, which only know the default set. Runtime grammars that need external state
 can subclass it; generated entry points instead accept application-owned configuration parameters.
 
 ### Source generation
