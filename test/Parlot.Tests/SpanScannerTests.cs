@@ -240,6 +240,7 @@ public class SpanScannerTests
             return 1;
         }
 
+#if NET8_0_OR_GREATER
         public override int Read(Span<char> buffer)
         {
             if (_position == _text.Length || buffer.IsEmpty)
@@ -250,5 +251,6 @@ public class SpanScannerTests
             buffer[0] = _text[_position++];
             return 1;
         }
+#endif
     }
 }
