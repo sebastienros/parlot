@@ -226,7 +226,6 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         {
             result.Body.Add($"        {cursorName}.ResetPosition({startName});");
             result.Body.Add($"        {result.SuccessVariable} = false;");
-            result.Body.Add("        break;");
         }
         else
         {
@@ -244,8 +243,9 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
                 result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, {lengthName});");
             }
             result.Body.Add($"        {result.SuccessVariable} = true;");
-            result.Body.Add("        break;");
         }
+
+        result.Body.Add("        break;");
 
         result.Body.Add("    }");
 

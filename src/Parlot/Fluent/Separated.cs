@@ -423,9 +423,6 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             result.Body.Add("else");
             result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
-            // No items parsed - Separated requires at least one element
-            result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
-            result.Body.Add("}");
         }
         else
         {
@@ -436,10 +433,11 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
             result.Body.Add("}");
             result.Body.Add("else");
             result.Body.Add("{");
-            // No items parsed - Separated requires at least one element
-            result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
-            result.Body.Add("}");
         }
+
+        // No items parsed - Separated requires at least one element
+        result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
+        result.Body.Add("}");
 
         return result;
     }
