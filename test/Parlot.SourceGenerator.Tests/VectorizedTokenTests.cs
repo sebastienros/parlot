@@ -246,6 +246,67 @@ public class VectorizedTokenTests
     private static string Generate<T>(Parser<T> parser, SourceGenerationContext context) =>
         string.Join(Environment.NewLine, Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context).Body);
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("123")]
+    [InlineData("123a")]
+    [InlineData("1-}")]
+    [InlineData("a-}")]
+    [InlineData("a-%")]
+    [InlineData("a--}")]
+    [InlineData("abc-")]
+    [InlineData("-a")]
+    [InlineData("a b")]
+    [InlineData("é")]
+    public void Scan_Matches_The_Runtime(string text)
+    {
+        Check(Text(Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier, global::Parlot.Tests.LiquidScanners.StartChars)), VectorizedTokenGrammars.TryParseScanIdentifier, VectorizedTokenGrammars.TryParseScanIdentifier, text);
+        Check(Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier).SkipAnd(Literals.Char('!')), VectorizedTokenGrammars.TryParseScanDiscarded, VectorizedTokenGrammars.TryParseScanDiscarded, text + "!");
+    }
+
+    [Theory]
+    [InlineData("{% a %}")]
+    [InlineData("{%a-%}")]
+    [InlineData("{% a-b | c- -%}")]
+    [InlineData("{% 12 | 1-%}")]
+    [InlineData("{% a")]
+    [InlineData("{% %}")]
+    [InlineData("{%")]
+    public void Scan_In_A_Tag_Matches_The_Runtime(string text)
+    {
+        var tag = Terms.Text("{%")
+            .SkipAnd(ZeroOrMany(Terms.Scan(global::Parlot.Tests.LiquidScanners.VariableSignature, global::Parlot.Tests.LiquidScanners.StartChars).Or(Terms.Text("|").Then(static _ => new TextSpan("|")))))
+            .AndSkip(Terms.Text("-%}").Or(Terms.Text("%}")))
+            .Then(static list => string.Join(",", list));
+
+        Check(tag, VectorizedTokenGrammars.TryParseScanTag, VectorizedTokenGrammars.TryParseScanTag, text);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ab\ncd\ne f")]
+    [InlineData("ab\r\n")]
+    [InlineData("abc d")]
+    public void Scan_Position_Matches_The_Runtime(string text)
+    {
+        var position = Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length)
+            .Then(static (ParseContext context, TextSpan span) =>
+            {
+                var position = context.Scanner.Cursor.Position;
+                return (span.ToString(), position.Offset, position.Line, position.Column);
+            });
+
+        Check(position, VectorizedTokenGrammars.TryParseScanPosition, VectorizedTokenGrammars.TryParseScanPosition, text);
+    }
+
+    [Fact]
+    public void Scan_Results_Do_Not_Depend_On_The_Buffer_Boundaries()
+    {
+        CheckPadded(Text(Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier, global::Parlot.Tests.LiquidScanners.StartChars)), VectorizedTokenGrammars.TryParseScanIdentifier, VectorizedTokenGrammars.TryParseScanIdentifier, 'a', "", "-}", "-", "1", " ");
+        CheckPadded(Text(Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier, global::Parlot.Tests.LiquidScanners.StartChars)), VectorizedTokenGrammars.TryParseScanIdentifier, VectorizedTokenGrammars.TryParseScanIdentifier, '1', "", "a", "-}", " ");
+    }
+
     private static void CheckPadded<T>(Parser<T> parser, StringParser<T> parseString, ReaderParser<T> parseReader, char padding, params string[] inputs)
     {
         foreach (var input in inputs)
@@ -339,4 +400,12 @@ public static partial class VectorizedTokenGrammars
     public static partial bool TryParseEmptyPattern(TextReader reader, out string value);
     public static partial bool TryParsePatternPosition(string text, out (string, int, int, int) value);
     public static partial bool TryParsePatternPosition(TextReader reader, out (string, int, int, int) value);
+    public static partial bool TryParseScanIdentifier(string text, out string value);
+    public static partial bool TryParseScanIdentifier(TextReader reader, out string value);
+    public static partial bool TryParseScanTag(string text, out string value);
+    public static partial bool TryParseScanTag(TextReader reader, out string value);
+    public static partial bool TryParseScanDiscarded(string text, out char value);
+    public static partial bool TryParseScanDiscarded(TextReader reader, out char value);
+    public static partial bool TryParseScanPosition(string text, out (string, int, int, int) value);
+    public static partial bool TryParseScanPosition(TextReader reader, out (string, int, int, int) value);
 }

@@ -174,6 +174,50 @@ public class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void Scanner_Capturing_A_Local_Reports_A_Diagnostic()
+    {
+        const string grammar = """
+            using System;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build()
+                {
+                    var terminator = ';';
+                    return Parsers.Literals.Scan(span => span.IndexOf(terminator)).Then(static value => value.ToString());
+                }
+            }
+            """;
+
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT015");
+        Assert.Contains("terminator", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Static_Scanner_Generates_Standalone_Source()
+    {
+        const string grammar = """
+            using System;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    Parsers.Terms.Scan(static span => span.IndexOf(';') is var i and > 0 ? i : 0, "abc").Then(static value => value.ToString());
+            }
+            """;
+
+        var (result, compilation) = RunStandalone(Declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+    }
+
+    [Fact]
     public void Static_Lambda_Generates_Standalone_Source()
     {
         const string grammar = """
