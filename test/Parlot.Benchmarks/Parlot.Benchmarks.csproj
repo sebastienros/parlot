@@ -29,6 +29,8 @@
   
   <ItemGroup>
     <Compile Include="../../src/Parlot/SourceGeneration/KnownStringLookup.cs" Link="KnownStringLookup.cs" />
+    <Compile Include="../Parlot.Tests/LiquidScanners.cs" Link="LiquidScanners.cs" />
+    <Compile Include="../Parlot.Tests/HandWrittenLiquidIdentifier.cs" Link="HandWrittenLiquidIdentifier.cs" />
     <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
     <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
     
