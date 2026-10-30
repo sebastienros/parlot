@@ -245,11 +245,11 @@ var result = parser.Parse(input); // Returns null - failure
 
 Any non-letter is considered valid after a keyword (non-letters): `(`, `)`, `;`, `,`, whitespace, digits, `_`, `$`, etc.
 
-When the identifiers of a language contain other chars, pass them as `identifierPart`: the keyword then fails when it is followed by one of these chars, which replace the default ASCII letters. For instance Liquid identifiers are made of letters, digits, `_` and `-`:
+When the identifiers of a language contain other chars, pass them as `identifierPart`: the keyword then fails when it is followed by one of these chars, which replace the default ASCII letters. For instance, to also reject a keyword followed by a digit, `_` or `-`:
 
 ```c#
-const string liquidIdentifierPart = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
-var parser = Terms.Keyword("in", liquidIdentifierPart);
+const string identifierPart = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
+var parser = Terms.Keyword("in", identifierPart);
 
 parser.Parse("in (1..3)"); // "in"
 parser.Parse("in1");       // null - failure
