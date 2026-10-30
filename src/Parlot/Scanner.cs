@@ -54,7 +54,29 @@ public class Scanner
     /// </summary>
     /// <returns>Whether some white space was read.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool SkipWhiteSpaceOrNewLine() => SkipWhiteSpaceOrNewLine((byte)CharacterMask.WhiteSpaceOrNewLine);
+    public bool SkipWhiteSpaceOrNewLine()
+    {
+        if (!Character.IsWhiteSpaceOrNewLine(Cursor.Current))
+        {
+            return false;
+        }
+
+        SkipRemainingWhiteSpaceOrNewLine();
+        return true;
+    }
+
+    // The default set has its own loop, with a constant mask, since it's the common case
+    private void SkipRemainingWhiteSpaceOrNewLine()
+    {
+        var span = Cursor.Span;
+        var length = span.Length;
+
+        var i = 0;
+
+        while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i])) ;
+
+        Cursor.Advance(i);
+    }
 
     /// <summary>
     /// Reads any whitespace or new line of a set without generating a token.
@@ -89,7 +111,29 @@ public class Scanner
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool SkipWhiteSpace() => SkipWhiteSpace((byte)CharacterMask.WhiteSpace);
+    public bool SkipWhiteSpace()
+    {
+        if (!Character.IsWhiteSpace(Cursor.Current))
+        {
+            return false;
+        }
+
+        // Splitting such that not all code is inlined
+        SkipRemainingWhiteSpace();
+        return true;
+    }
+
+    private void SkipRemainingWhiteSpace()
+    {
+        var span = Cursor.Span;
+        var length = span.Length;
+
+        var i = 0;
+
+        while (++i < length && Character.IsWhiteSpace(span[i])) ;
+
+        Cursor.AdvanceNoNewLines(i);
+    }
 
     /// <summary>
     /// Reads any whitespace of a set, but no new line, without generating a token.

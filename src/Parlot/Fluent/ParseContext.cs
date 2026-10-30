@@ -206,7 +206,7 @@ public class ParseContext
 
     // The bit of the white space set in Character._characterData that SkipWhiteSpace skips: the set's white space when
     // UseNewLines is set, its white space or new lines otherwise. The set isn't stored otherwise, the context would grow.
-    private byte _skipMask = (byte)CharacterMask.WhiteSpaceOrNewLine;
+    internal byte _skipMask = (byte)CharacterMask.WhiteSpaceOrNewLine;
 
     // The bit of the white space set without new lines
     internal byte WhiteSpaceMask
@@ -251,14 +251,7 @@ public class ParseContext
 
         if (WhiteSpaceParser is null)
         {
-            if (UseNewLines)
-            {
-                Scanner.SkipWhiteSpace(_skipMask);
-            }
-            else
-            {
-                Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
-            }
+            SkipWhiteSpaceOfSet();
         }
         else
         {
@@ -268,6 +261,31 @@ public class ParseContext
 
         _cacheOffset = offset;
         _cachePosition = Scanner.Cursor.Position;
+    }
+
+    // Skips the white space of the set, with the scanner's constant mask loops for the default set
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SkipWhiteSpaceOfSet()
+    {
+        if (UseNewLines)
+        {
+            if (_skipMask == (byte)CharacterMask.WhiteSpace)
+            {
+                Scanner.SkipWhiteSpace();
+            }
+            else
+            {
+                Scanner.SkipWhiteSpace(_skipMask);
+            }
+        }
+        else if (_skipMask == (byte)CharacterMask.WhiteSpaceOrNewLine)
+        {
+            Scanner.SkipWhiteSpaceOrNewLine();
+        }
+        else
+        {
+            Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
+        }
     }
 
     /// <summary>
@@ -439,14 +457,7 @@ public class ParseContext
             {
                 cursor.ResetHitEnd();
 
-                if (UseNewLines)
-                {
-                    Scanner.SkipWhiteSpace(_skipMask);
-                }
-                else
-                {
-                    Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
-                }
+                SkipWhiteSpaceOfSet();
 
                 if (!cursor.HitEnd)
                 {
