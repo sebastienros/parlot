@@ -129,7 +129,7 @@ public class SkipWhiteSpaceBenchmarks
         {
             index = span.Slice(index).IndexOfAnyExcept(SearchValuesHelper._whiteSpaces);
         }
-        
+
         // Only spaces ?
         // Not tracking new lines since we know these are only spaces
         switch (index)

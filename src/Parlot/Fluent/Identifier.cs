@@ -88,7 +88,6 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

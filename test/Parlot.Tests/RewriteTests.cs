@@ -63,26 +63,26 @@ public partial class RewriteTests
         var p1 = new FakeParser<string> { CanSeek = false, ExpectedChars = ['a'], SkipWhitespace = false, Success = true, Result = "a" };
         var p2 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "b" };
         var p3 = new FakeParser<string> { CanSeek = false, ExpectedChars = ['c'], SkipWhitespace = false, Success = true, Result = "c" };
-        
+
         var p = OneOf(p1, p2, p3);
-        
+
         // Parsing 'd' such that there is no match in the lookup and it invokes non-seekable parsers
         Assert.Equal("a", p.Parse("d"));
 
         p1.Success = false;
-        
+
         // We know the first non-seekable parser is invoked, now check if it invokes the other
-        // ones if the first fails 
+        // ones if the first fails
         Assert.Equal("c", p.Parse("d"));
     }
-    
+
     [Fact]
     public void LookupTableSkipsParsers()
     {
         var p1 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['a'], ThrowOnParse = true };
         var p2 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], SkipWhitespace = false, Success = true, Result = "b" };
         var p3 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['c'], SkipWhitespace = false, Success = true, Result = "c" };
-        
+
         var p = OneOf(p1, p2, p3);
         Assert.Equal("b", p.Parse("b"));
         Assert.Equal("c", p.Parse("c"));
@@ -94,9 +94,9 @@ public partial class RewriteTests
         var p1 = new FakeParser<string> { CanSeek = false, ExpectedChars = ['a'], Success = false, Result = "a" };
         var p2 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], Success = true, Result = "b" };
         var p3 = new FakeParser<string> { CanSeek = true, ExpectedChars = ['b'], Success = true, Result = "c" };
-        
+
         var p = OneOf(p1, p2, p3);
-        
+
         // Parsing 'b' such that there is a match in the lookup and it invokes all parsers
         Assert.Equal("b", p.Parse("b"));
 
@@ -124,9 +124,9 @@ public partial class RewriteTests
 
         Assert.True(p1 is ISeekable seekable1 && seekable1.CanSeek);
 
-        // This one should not be seekable because not of its parsers are. 
+        // This one should not be seekable because not of its parsers are.
         var p2 = OneOf(pc, pd);
-        
+
         Assert.False(p2 is ISeekable seekable2 && seekable2.CanSeek);
 
         var p3 = OneOf(p1, p2);
@@ -134,7 +134,7 @@ public partial class RewriteTests
         Assert.Equal("a", p3.Parse("a"));
         Assert.Equal("b", p3.Parse("b"));
         Assert.Equal("d", p3.Parse("c"));
-        
+
         // Because p2 is non-seekable and pc always succeeds, anything else returns 'c'
         Assert.Equal("d", p3.Parse("d"));
         Assert.Equal("d", p3.Parse("e"));
@@ -173,7 +173,7 @@ public partial class RewriteTests
 
         Assert.Equal("a", p3.Parse("a"));
         Assert.Equal("d", p3.Parse("b")); // p1's non-seekable are invoked, now fail, p2 is invoked, 'c' doesn't match so pd is invoked and succeeds
-        Assert.Equal("c", p3.Parse("c")); 
+        Assert.Equal("c", p3.Parse("c"));
         Assert.Equal("d", p3.Parse("d"));
     }
 

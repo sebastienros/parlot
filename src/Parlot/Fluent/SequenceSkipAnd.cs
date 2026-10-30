@@ -55,8 +55,6 @@ public sealed class SequenceSkipAnd<T1, T2> : Parser<T2>, ISeekable, ISourceable
         return false;
     }
 
-
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -185,8 +183,6 @@ public sealed class SequenceSkipAnd<T1, T2, T3> : Parser<ValueTuple<T1, T3>>, IS
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -330,8 +326,6 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -477,8 +471,6 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -626,8 +618,6 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -777,8 +767,6 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
         return false;
     }
 
-
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -927,8 +915,6 @@ public sealed class SequenceSkipAnd<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

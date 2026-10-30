@@ -1,6 +1,6 @@
 namespace Parlot.Fluent;
 
-// We don't care about the performance of these helpers since they are called only once 
+// We don't care about the performance of these helpers since they are called only once
 // during the parser tree creation
 
 public static partial class Parsers
@@ -10,7 +10,7 @@ public static partial class Parsers
     /// </summary>
     public static Parser<T> Or<T>(this Parser<T> parser, Parser<T> or)
     {
-        // We don't care about the performance of these helpers since they are called only once 
+        // We don't care about the performance of these helpers since they are called only once
         // during the parser tree creation
 
         if (parser is OneOf<T> oneOf)

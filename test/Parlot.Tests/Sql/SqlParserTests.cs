@@ -14,7 +14,7 @@ public class SqlParserTests
         Assert.NotNull(result);
         Assert.Single(result.Statements);
     }
-    
+
     [Theory]
     [InlineData("-- comment SELECT * FROM users")]
     [InlineData("/* some documentation SELECT id, name FROM users WHERE id = 1 */")]
@@ -22,7 +22,7 @@ public class SqlParserTests
     {
         var result = SqlParser.Parse(sql);
         Assert.NotNull(result);
-        Assert.Empty(result.Statements);   
+        Assert.Empty(result.Statements);
     }
 
     [Theory]
@@ -112,17 +112,17 @@ public class SqlParserTests
     public void ParsedSelectShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT * FROM users");
-        
+
         Assert.NotNull(result);
         Assert.Single(result.Statements);
-        
+
         var statement = GetSelectStatement(result);
         Assert.Single(statement.ColumnItemList);
         Assert.Equal("*", ((ColumnSourceIdentifier)statement.ColumnItemList[0].Source).Identifier.ToString());
 
         Assert.NotNull(statement.FromClause);
         Assert.Single(statement.FromClause.TableSources);
-        
+
         var table = Assert.IsType<TableSourceItem>(statement.FromClause.TableSources[0]);
         Assert.Equal("users", table.Identifier.ToString());
         Assert.Null(statement.WhereClause);
@@ -132,7 +132,7 @@ public class SqlParserTests
     public void ParsedSelectWithColumnsShouldHaveCorrectColumns()
     {
         var result = SqlParser.Parse("SELECT id, name FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -153,17 +153,17 @@ public class SqlParserTests
     public void ParsedWhereClauseShouldHaveCorrectExpression()
     {
         var result = SqlParser.Parse("SELECT id, name FROM users WHERE id = 1");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(BinaryOperator.Equal, whereExpr.Operator);
-        
+
         var left = Assert.IsType<IdentifierExpression>(whereExpr.Left);
         Assert.Equal("id", left.Identifier.ToString());
-        
+
         var right = Assert.IsType<LiteralExpression<decimal>>(whereExpr.Right);
         Assert.Equal(1m, right.Value);
     }
@@ -172,10 +172,10 @@ public class SqlParserTests
     public void ParsedStringLiteralShouldHaveCorrectValue()
     {
         var result = SqlParser.Parse("SELECT * FROM users WHERE name = 'John'");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
 
@@ -187,13 +187,13 @@ public class SqlParserTests
     public void ParsedOrderByClauseShouldHaveCorrectDirection()
     {
         var result = SqlParser.Parse("SELECT * FROM users ORDER BY id ASC");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.OrderByClause);
         Assert.Single(statement.OrderByClause.Items);
-        
+
         var orderItem = statement.OrderByClause.Items[0];
         Assert.Equal("id", orderItem.Identifier.ToString());
         Assert.Equal(OrderDirection.Asc, orderItem.Direction);
@@ -203,10 +203,10 @@ public class SqlParserTests
     public void ParsedLimitClauseShouldHaveCorrectValue()
     {
         var result = SqlParser.Parse("SELECT * FROM users LIMIT 10");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.LimitClause);
         var limitExpr = Assert.IsType<LiteralExpression<decimal>>(statement.LimitClause.Expression);
         Assert.Equal(10m, limitExpr.Value);
@@ -216,10 +216,10 @@ public class SqlParserTests
     public void ParsedOffsetClauseShouldHaveCorrectValue()
     {
         var result = SqlParser.Parse("SELECT * FROM users OFFSET 5");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.OffsetClause);
         var offsetExpr = Assert.IsType<LiteralExpression<decimal>>(statement.OffsetClause.Expression);
         Assert.Equal(5m, offsetExpr.Value);
@@ -229,7 +229,7 @@ public class SqlParserTests
     public void ParsedFunctionWithStarShouldHaveStarArgument()
     {
         var result = SqlParser.Parse("SELECT COUNT(*) FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -244,7 +244,7 @@ public class SqlParserTests
     public void ParsedFunctionWithExpressionShouldHaveExpressionArguments()
     {
         var result = SqlParser.Parse("SELECT COUNT(id) FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -254,7 +254,7 @@ public class SqlParserTests
         Assert.Equal("COUNT", funcSource.FunctionCall.Name.ToString());
         var exprArgs = Assert.IsType<ExpressionListArguments>(funcSource.FunctionCall.Arguments);
         Assert.Single(exprArgs.Expressions);
-        
+
         var arg = Assert.IsType<IdentifierExpression>(exprArgs.Expressions[0]);
         Assert.Equal("id", arg.Identifier.ToString());
     }
@@ -263,7 +263,7 @@ public class SqlParserTests
     public void ParsedMultipleFunctionsShouldHaveCorrectFunctionNames()
     {
         var result = SqlParser.Parse("SELECT SUM(amount), AVG(price) FROM orders");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -280,17 +280,17 @@ public class SqlParserTests
     public void ParsedAndExpressionShouldHaveCorrectOperators()
     {
         var result = SqlParser.Parse("SELECT * FROM users WHERE id > 10 AND name LIKE 'A%'");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var andExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(BinaryOperator.And, andExpr.Operator);
-        
+
         var leftExpr = Assert.IsType<BinaryExpression>(andExpr.Left);
         Assert.Equal(BinaryOperator.GreaterThan, leftExpr.Operator);
-        
+
         var rightExpr = Assert.IsType<BinaryExpression>(andExpr.Right);
         Assert.Equal(BinaryOperator.Like, rightExpr.Operator);
     }
@@ -299,15 +299,15 @@ public class SqlParserTests
     public void ParsedBetweenExpressionShouldHaveCorrectBounds()
     {
         var result = SqlParser.Parse("SELECT * FROM users WHERE id BETWEEN 1 AND 100");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var betweenExpr = Assert.IsType<BetweenExpression>(statement.WhereClause.Expression);
-        
+
         Assert.False(betweenExpr.IsNot);
-        
+
         var exprId = Assert.IsType<IdentifierExpression>(betweenExpr.Expression);
         Assert.Equal("id", exprId.Identifier.ToString());
 
@@ -322,13 +322,13 @@ public class SqlParserTests
     public void ParsedInExpressionShouldHaveCorrectValues()
     {
         var result = SqlParser.Parse("SELECT * FROM users WHERE id IN (1, 2, 3)");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var inExpr = Assert.IsType<InExpression>(statement.WhereClause.Expression);
-        
+
         Assert.False(inExpr.IsNot);
         var values = Assert.IsType<ExpressionListArguments>(inExpr.Values);
         Assert.Equal(3, values.Expressions.Count);
@@ -347,14 +347,14 @@ public class SqlParserTests
     public void ParsedUnaryNotExpressionShouldHaveCorrectOperator()
     {
         var result = SqlParser.Parse("SELECT * FROM users WHERE NOT active");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var unaryExpr = Assert.IsType<UnaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(UnaryOperator.Not, unaryExpr.Operator);
-        
+
         var innerExpr = Assert.IsType<IdentifierExpression>(unaryExpr.Expression);
         Assert.Equal("active", innerExpr.Identifier.ToString());
     }
@@ -363,10 +363,10 @@ public class SqlParserTests
     public void ParsedTableAliasShouldBeCorrect()
     {
         var result = SqlParser.Parse("SELECT u.id, u.name FROM users AS u");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.FromClause);
         var table = Assert.IsType<TableSourceItem>(statement.FromClause.TableSources[0]);
         Assert.Equal("users", table.Identifier.ToString());
@@ -382,29 +382,29 @@ public class SqlParserTests
     public void ParsedJoinShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT u.id, o.amount FROM users AS u JOIN orders AS o ON u.id = o.user_id");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.FromClause);
         Assert.NotNull(statement.FromClause.Joins);
         Assert.Single(statement.FromClause.Joins);
-        
+
         var join = statement.FromClause.Joins[0];
         Assert.Equal(JoinKind.None, join.JoinKind); // Default join (no INNER/LEFT/RIGHT specified)
         Assert.Single(join.Tables);
         Assert.Equal("orders", join.Tables[0].Identifier.ToString());
         Assert.Equal("o", join.Tables[0].Alias?.ToString());
-        
+
         Assert.IsType<BinaryExpression>(join.Conditions);
-        
+
         // Verify the join condition structure: u.id = o.user_id
         var joinCondition = Assert.IsType<BinaryExpression>(join.Conditions);
         Assert.Equal(BinaryOperator.Equal, joinCondition.Operator);
-        
+
         var leftExpr = Assert.IsType<IdentifierExpression>(joinCondition.Left);
         Assert.Equal("u.id", leftExpr.Identifier.ToString());
-        
+
         var rightExpr = Assert.IsType<IdentifierExpression>(joinCondition.Right);
         Assert.Equal("o.user_id", rightExpr.Identifier.ToString());
     }
@@ -413,10 +413,10 @@ public class SqlParserTests
     public void ParsedLeftJoinShouldHaveCorrectJoinKind()
     {
         var result = SqlParser.Parse("SELECT * FROM users AS u LEFT JOIN orders AS o ON u.id = o.user_id");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.FromClause?.Joins);
         var join = statement.FromClause.Joins[0];
         Assert.Equal(JoinKind.Left, join.JoinKind);
@@ -426,10 +426,10 @@ public class SqlParserTests
     public void ParsedInnerJoinShouldHaveCorrectJoinKind()
     {
         var result = SqlParser.Parse("SELECT * FROM users AS u INNER JOIN orders AS o ON u.id = o.user_id");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.FromClause?.Joins);
         var join = statement.FromClause.Joins[0];
         Assert.Equal(JoinKind.Inner, join.JoinKind);
@@ -439,13 +439,13 @@ public class SqlParserTests
     public void ParsedGroupByClauseShouldHaveCorrectColumns()
     {
         var result = SqlParser.Parse("SELECT category, COUNT(*) FROM products GROUP BY category");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.GroupByClause);
         Assert.Single(statement.GroupByClause.Columns);
-        
+
         var groupCol = Assert.IsType<ColumnSourceIdentifier>(statement.GroupByClause.Columns[0]);
         Assert.Equal("category", groupCol.Identifier.ToString());
     }
@@ -454,16 +454,16 @@ public class SqlParserTests
     public void ParsedHavingClauseShouldHaveCorrectExpression()
     {
         var result = SqlParser.Parse("SELECT category, COUNT(*) FROM products GROUP BY category HAVING COUNT(*) > 10");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.GroupByClause);
         Assert.NotNull(statement.HavingClause);
-        
+
         var havingExpr = Assert.IsType<BinaryExpression>(statement.HavingClause.Expression);
         Assert.Equal(BinaryOperator.GreaterThan, havingExpr.Operator);
-        
+
         var left = Assert.IsType<FunctionCall>(havingExpr.Left);
         Assert.Equal("COUNT", left.Name.ToString());
 
@@ -475,17 +475,17 @@ public class SqlParserTests
     public void ParsedUnionShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT * FROM users UNION SELECT * FROM customers");
-        
+
         Assert.NotNull(result);
         Assert.Single(result.Statements);
-        
+
         var statementLine = result.Statements[0];
         Assert.Equal(2, statementLine.UnionStatements.Count);
-        
+
         var first = statementLine.UnionStatements[0];
         Assert.NotNull(first.UnionClause);
         Assert.False(first.UnionClause.IsAll);
-        
+
         var second = statementLine.UnionStatements[1];
         Assert.Null(second.UnionClause);
     }
@@ -494,10 +494,10 @@ public class SqlParserTests
     public void ParsedUnionAllShouldHaveIsAllSetToTrue()
     {
         var result = SqlParser.Parse("SELECT * FROM users UNION ALL SELECT * FROM customers");
-        
+
         Assert.NotNull(result);
         var statementLine = result.Statements[0];
-        
+
         var first = statementLine.UnionStatements[0];
         Assert.NotNull(first.UnionClause);
         Assert.True(first.UnionClause.IsAll);
@@ -507,23 +507,23 @@ public class SqlParserTests
     public void ParsedCommonTableExpressionShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("WITH cte AS (SELECT * FROM users) SELECT * FROM cte");
-        
+
         Assert.NotNull(result);
         Assert.Single(result.Statements);
-        
+
         var statementLine = result.Statements[0];
         Assert.Single(statementLine.UnionStatements);
         var unionStatement = statementLine.UnionStatements[0];
         var statement = unionStatement.Statement;
-        
+
         Assert.NotNull(statement.WithClause);
         Assert.Single(statement.WithClause.CTEs);
-        
+
         var cte = statement.WithClause.CTEs[0];
         Assert.Equal("cte", cte.Name);
         Assert.Null(cte.ColumnNames);
         Assert.Single(cte.Query);
-        
+
         // Verify the CTE query itself
         var cteQuery = cte.Query[0].Statement.SelectStatement;
         Assert.NotNull(cteQuery.FromClause);
@@ -552,13 +552,13 @@ public class SqlParserTests
     public void ParsedArithmeticOperatorsShouldHaveCorrectOperator(string sql, BinaryOperator expectedOperator)
     {
         var result = SqlParser.Parse(sql);
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
-        
+
         var leftExpr = Assert.IsType<BinaryExpression>(whereExpr.Left);
         Assert.Equal(expectedOperator, leftExpr.Operator);
     }
@@ -572,7 +572,7 @@ public class SqlParserTests
     public void ParsedFunctionWithNoArgumentsShouldHaveEmptyArguments()
     {
         var result = SqlParser.Parse("SELECT GETDATE() FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -587,7 +587,7 @@ public class SqlParserTests
     public void ParsedFunctionWithMultipleExpressionsShouldHaveExpressionListArguments()
     {
         var result = SqlParser.Parse("SELECT SUBSTRING(name, 1, 3) FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -597,13 +597,13 @@ public class SqlParserTests
         Assert.Equal("SUBSTRING", funcSource.FunctionCall.Name.ToString());
         var exprArgs = Assert.IsType<ExpressionListArguments>(funcSource.FunctionCall.Arguments);
         Assert.Equal(3, exprArgs.Expressions.Count);
-        
+
         var arg1 = Assert.IsType<IdentifierExpression>(exprArgs.Expressions[0]);
         Assert.Equal("name", arg1.Identifier.ToString());
-        
+
         var arg2 = Assert.IsType<LiteralExpression<decimal>>(exprArgs.Expressions[1]);
         Assert.Equal(1m, arg2.Value);
-        
+
         var arg3 = Assert.IsType<LiteralExpression<decimal>>(exprArgs.Expressions[2]);
         Assert.Equal(3m, arg3.Value);
     }
@@ -612,7 +612,7 @@ public class SqlParserTests
     public void ParsedNestedFunctionCallsShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT UPPER(TRIM(name)) FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
@@ -622,14 +622,14 @@ public class SqlParserTests
         Assert.Equal("UPPER", funcSource.FunctionCall.Name.ToString());
         var exprArgs = Assert.IsType<ExpressionListArguments>(funcSource.FunctionCall.Arguments);
         Assert.Single(exprArgs.Expressions);
-        
+
         // The argument should be another function call
         var innerFunc = Assert.IsType<FunctionCall>(exprArgs.Expressions[0]);
         Assert.Equal("TRIM", innerFunc.Name.ToString());
-        
+
         var innerArgs = Assert.IsType<ExpressionListArguments>(innerFunc.Arguments);
         Assert.Single(innerArgs.Expressions);
-        
+
         var innerArg = Assert.IsType<IdentifierExpression>(innerArgs.Expressions[0]);
         Assert.Equal("name", innerArg.Identifier.ToString());
     }
@@ -638,23 +638,23 @@ public class SqlParserTests
     public void ParsedFunctionInWhereClauseShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT * FROM users WHERE LEN(name) > 5");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(BinaryOperator.GreaterThan, whereExpr.Operator);
-        
+
         var leftFunc = Assert.IsType<FunctionCall>(whereExpr.Left);
         Assert.Equal("LEN", leftFunc.Name.ToString());
-        
+
         var funcArgs = Assert.IsType<ExpressionListArguments>(leftFunc.Arguments);
         Assert.Single(funcArgs.Expressions);
-        
+
         var arg = Assert.IsType<IdentifierExpression>(funcArgs.Expressions[0]);
         Assert.Equal("name", arg.Identifier.ToString());
-        
+
         var rightLiteral = Assert.IsType<LiteralExpression<decimal>>(whereExpr.Right);
         Assert.Equal(5m, rightLiteral.Value);
     }
@@ -663,48 +663,48 @@ public class SqlParserTests
     public void ParsedFunctionInOrderByClauseShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT * FROM users ORDER BY name DESC");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.OrderByClause);
         Assert.Single(statement.OrderByClause.Items);
-        
+
         var orderItem = statement.OrderByClause.Items[0];
         Assert.Equal(OrderDirection.Desc, orderItem.Direction);
         Assert.Equal("name", orderItem.Identifier.ToString());
-        
+
         // Note: Function calls in ORDER BY are more complex to parse correctly
         // This test validates basic ORDER BY functionality
     }
 
-    // Note: More advanced function features like subqueries and window functions 
+    // Note: More advanced function features like subqueries and window functions
     // may need additional parser development to work correctly
 
     [Fact]
     public void ParsedComplexFunctionExpressionShouldHaveCorrectStructure()
     {
         var result = SqlParser.Parse("SELECT COALESCE(first_name + ' ' + last_name, email) AS full_name FROM users");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
 
         Assert.Single(statement.ColumnItemList);
         var columnItem = statement.ColumnItemList[0];
-        
+
         // Verify the alias
         Assert.Equal("full_name", columnItem.Alias?.ToString());
-        
+
         var funcSource = Assert.IsType<ColumnSourceFunction>(columnItem.Source);
         Assert.Equal("COALESCE", funcSource.FunctionCall.Name.ToString());
-        
+
         var exprArgs = Assert.IsType<ExpressionListArguments>(funcSource.FunctionCall.Arguments);
         Assert.Equal(2, exprArgs.Expressions.Count);
-        
+
         // First argument should be a complex string concatenation expression
         var firstArg = Assert.IsType<BinaryExpression>(exprArgs.Expressions[0]);
         Assert.Equal(BinaryOperator.Add, firstArg.Operator);
-        
+
         // Second argument should be a simple identifier
         var secondArg = Assert.IsType<IdentifierExpression>(exprArgs.Expressions[1]);
         Assert.Equal("email", secondArg.Identifier.ToString());
@@ -723,10 +723,10 @@ public class SqlParserTests
     public void ParsedComparisonOperatorsShouldHaveCorrectOperator(string sql, BinaryOperator expectedOperator)
     {
         var result = SqlParser.Parse(sql);
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(expectedOperator, whereExpr.Operator);
@@ -740,10 +740,10 @@ public class SqlParserTests
     public void ParsedLogicalOperatorsShouldHaveCorrectOperator(string sql, BinaryOperator expectedOperator)
     {
         var result = SqlParser.Parse(sql);
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(expectedOperator, whereExpr.Operator);
@@ -754,29 +754,29 @@ public class SqlParserTests
     {
         // Test: 1 + 2 * 3 should parse as 1 + (2 * 3), not (1 + 2) * 3
         var result = SqlParser.Parse("SELECT * FROM users WHERE 1 + 2 * 3 = 7");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(BinaryOperator.Equal, whereExpr.Operator);
-        
+
         // Left side should be addition (1 + (2 * 3))
         var leftExpr = Assert.IsType<BinaryExpression>(whereExpr.Left);
         Assert.Equal(BinaryOperator.Add, leftExpr.Operator);
-        
+
         // Left of addition should be literal 1
         var addLeft = Assert.IsType<LiteralExpression<decimal>>(leftExpr.Left);
         Assert.Equal(1m, addLeft.Value);
-        
+
         // Right of addition should be multiplication (2 * 3)
         var multiplyExpr = Assert.IsType<BinaryExpression>(leftExpr.Right);
         Assert.Equal(BinaryOperator.Multiply, multiplyExpr.Operator);
-        
+
         var multiplyLeft = Assert.IsType<LiteralExpression<decimal>>(multiplyExpr.Left);
         Assert.Equal(2m, multiplyLeft.Value);
-        
+
         var multiplyRight = Assert.IsType<LiteralExpression<decimal>>(multiplyExpr.Right);
         Assert.Equal(3m, multiplyRight.Value);
     }
@@ -786,20 +786,20 @@ public class SqlParserTests
     {
         // Test: A AND B OR C should parse as (A AND B) OR C
         var result = SqlParser.Parse("SELECT * FROM users WHERE active = 1 AND verified = 1 OR deleted = 0");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
-        
+
         // Top level should be OR
         Assert.Equal(BinaryOperator.Or, whereExpr.Operator);
-        
+
         // Left side of OR should be AND expression
         var andExpr = Assert.IsType<BinaryExpression>(whereExpr.Left);
         Assert.Equal(BinaryOperator.And, andExpr.Operator);
-        
+
         // Right side of OR should be comparison
         var rightComparison = Assert.IsType<BinaryExpression>(whereExpr.Right);
         Assert.Equal(BinaryOperator.Equal, rightComparison.Operator);
@@ -810,25 +810,25 @@ public class SqlParserTests
     {
         // Test simpler expression first: price * quantity
         var result = SqlParser.Parse("SELECT * FROM orders WHERE price * quantity > 100");
-        
+
         Assert.NotNull(result);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(BinaryOperator.GreaterThan, whereExpr.Operator);
-        
+
         // Left side should be multiplication
         var multiplyExpr = Assert.IsType<BinaryExpression>(whereExpr.Left);
         Assert.Equal(BinaryOperator.Multiply, multiplyExpr.Operator);
-        
+
         // Verify the identifiers
         var priceId = Assert.IsType<IdentifierExpression>(multiplyExpr.Left);
         Assert.Equal("price", priceId.Identifier.ToString());
-        
+
         var quantityId = Assert.IsType<IdentifierExpression>(multiplyExpr.Right);
         Assert.Equal("quantity", quantityId.Identifier.ToString());
-        
+
         // Right side of comparison should be literal 100
         var rightLiteral = Assert.IsType<LiteralExpression<decimal>>(whereExpr.Right);
         Assert.Equal(100m, rightLiteral.Value);
@@ -949,7 +949,7 @@ public class SqlParserTests
         Assert.NotNull(result);
         Assert.Single(result.Statements);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         Assert.NotNull(statement.OrderByClause);
         Assert.Single(statement.OrderByClause.Items);
@@ -963,7 +963,7 @@ public class SqlParserTests
         Assert.NotNull(result);
         Assert.Single(result.Statements);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         Assert.NotNull(statement.OrderByClause);
         Assert.NotNull(statement.LimitClause);
@@ -977,22 +977,22 @@ public class SqlParserTests
         Assert.NotNull(result);
         Assert.Single(result.Statements);
         var statement = GetSelectStatement(result);
-        
+
         Assert.NotNull(statement.WhereClause);
         var whereExpr = Assert.IsType<BinaryExpression>(statement.WhereClause.Expression);
         Assert.Equal(BinaryOperator.Or, whereExpr.Operator);
-        
+
         // Verify both sides of OR are equality comparisons
         var leftExpr = Assert.IsType<BinaryExpression>(whereExpr.Left);
         Assert.Equal(BinaryOperator.Equal, leftExpr.Operator);
-        
+
         var rightExpr = Assert.IsType<BinaryExpression>(whereExpr.Right);
         Assert.Equal(BinaryOperator.Equal, rightExpr.Operator);
-        
+
         // Verify string literals
         var leftStr = Assert.IsType<LiteralExpression<string>>(leftExpr.Right);
         Assert.Equal("foo", leftStr.Value);
-        
+
         var rightStr = Assert.IsType<LiteralExpression<string>>(rightExpr.Right);
         Assert.Equal("by c", rightStr.Value);
     }

@@ -20,16 +20,15 @@ public sealed class Fail<T> : Parser<T>, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         var result = context.CreateResult(typeof(T), defaultSuccess: false);
-        
+
         // success = false; (already set by CreateResult)
         // value = default; (already set by CreateResult)
-        
+
         return result;
     }
 }

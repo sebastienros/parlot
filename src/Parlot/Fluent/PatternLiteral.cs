@@ -97,7 +97,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

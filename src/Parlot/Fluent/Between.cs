@@ -77,7 +77,6 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -146,5 +145,4 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
     }
 
     public override string ToString() => Name ?? $"Between({_before},{_parser},{_after})";
-
 }

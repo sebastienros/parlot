@@ -102,7 +102,6 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

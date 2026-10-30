@@ -35,7 +35,6 @@ public sealed class Not<T> : Parser<T>, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -48,7 +47,7 @@ public sealed class Not<T> : Parser<T>, ISourceable
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-        
+
         var startName = $"start{context.NextNumber()}";
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 

@@ -13,7 +13,7 @@ namespace Parlot.Benchmarks;
 public class SimpleParsersBenchmarks
 {
     // ==================== Text ====================
-    
+
     private static readonly Parser<string> _textFluent = Terms.Text("hello");
 
     private const string TextInput = "hello world";

@@ -14,7 +14,6 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
 
     public bool SkipWhitespace { get; }
 
-
     public Capture(Parser<T> parser)
     {
         _parser = parser;
@@ -55,7 +54,6 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -69,11 +67,11 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-        
+
         var startName = $"start{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
         var lengthName = $"length{context.NextNumber()}";
-        
+
         result.Body.Add($"var {startName} = {cursorName}.Position;");
 
         // Use helper instead of inlining

@@ -33,7 +33,7 @@ namespace Parlot.Benchmarks
     {
         private const string _helloWorldNoEscape = "Hello World!!!/n";
         private const string _helloWorldEscape = "Hello World!!!\\n";
-        
+
         [Benchmark(Baseline = true), BenchmarkCategory("ROS.IndexOf")]
         public int RosIndexOfChar()
         {

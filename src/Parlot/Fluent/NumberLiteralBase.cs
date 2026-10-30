@@ -102,7 +102,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -149,7 +148,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
         var numberStylesFieldName = context.RegisterStaticField(
             $"private static readonly global::System.Globalization.NumberStyles",
             $"(global::System.Globalization.NumberStyles){(int)_numberStyles}");
-        
+
         // Emit CultureInfo - use InvariantCulture if it's the default, otherwise create a static field
         string cultureExpr;
         if (_culture == CultureInfo.InvariantCulture)

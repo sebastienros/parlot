@@ -49,7 +49,6 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

@@ -21,7 +21,7 @@ public class CancellationTokenTests
         cts.Cancel();
 
         // Parsing should throw OperationCanceledException
-        Assert.Throws<OperationCanceledException>(() => 
+        Assert.Throws<OperationCanceledException>(() =>
             parser.Parse("1,2,3,4,5", cts.Token));
     }
 

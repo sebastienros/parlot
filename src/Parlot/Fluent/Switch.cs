@@ -90,7 +90,6 @@ public sealed class Switch<T, U> : Parser<U>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

@@ -44,7 +44,6 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
         return false;
     }
 
-
     public override string ToString() => $"Char('{Char}')";
 
     public SourceResult GenerateSource(SourceGenerationContext context)
@@ -58,11 +57,11 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
 
         var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(char));
-        
+
         // Precalculate line tracking values for the character: only '\n' ends a line
         var newLines = Char == '\n' ? 1 : 0;
         var trailingSegmentLength = Char == '\n' ? 0 : 1;
-        
+
         // Use direct SourceResult construction for early return optimization
         var result = new SourceResult(
             successVariable: "success",  // Not used with early returns

@@ -54,8 +54,6 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekable, IS
         return false;
     }
 
-
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -348,8 +346,6 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
         return false;
     }
 
-
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -494,8 +490,6 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -644,8 +638,6 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
         return false;
     }
 
-
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -793,8 +785,6 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
         context.ExitParser(this);
         return false;
     }
-
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

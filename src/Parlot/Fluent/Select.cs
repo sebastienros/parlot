@@ -94,7 +94,6 @@ public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable where C : P
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));

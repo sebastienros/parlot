@@ -57,7 +57,6 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
         }
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -77,7 +76,7 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var previousWhiteSpaceParserName = $"previousWhiteSpaceParser{context.NextNumber()}";
-        
+
         // Generate the whitespace parser as a helper method
         var wsHelperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(whiteSpaceSourceable, $"{context.MethodNamePrefix}_WhiteSpace", "global::Parlot.TextSpan", () => whiteSpaceSourceable.GenerateSource(context))

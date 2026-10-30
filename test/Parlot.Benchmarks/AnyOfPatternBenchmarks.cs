@@ -109,7 +109,6 @@ public class AnyOfPatternBenchmarks
 
 }
 
-
 /*
 
 CONCLUSION: AnyOf/NoneOf is faster than Pattern, with contiguous or non-contiguous sets.
