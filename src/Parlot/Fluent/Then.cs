@@ -108,26 +108,11 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
         // Register helper for the inner parser
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
-
-        var innerValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
         var helperKey = $"{context.MethodNamePrefix}_Then_{context.NextNumber()}";
         // Callbacks consume the inner value even when their output is discarded; constants do not.
         var discardInput = _action1 == null && _action2 == null && _action3 == null;
         var helperName = context.WithDiscardResult(discardInput, () => context.Helpers
-            .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
+            .GetOrCreate(sourceable, helperKey, parsedTypeName, () => sourceable.GenerateSource(context))
             .MethodName);
 
         var outTarget = discardInput ? "_" : $"var {parsedName}Value";
@@ -145,7 +130,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
             if (_parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable })
             {
                 helperName = context.Helpers
-                    .GetOrCreate(contentSourceable, helperKey, innerValueTypeName, () => contentSourceable.GenerateSource(context))
+                    .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
                     .MethodName;
                 resetName = $"reset{context.NextNumber()}";
                 result.Body.Add($"var {resetName} = {cursorName}.Position;");

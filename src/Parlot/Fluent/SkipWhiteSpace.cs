@@ -69,21 +69,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekable, ISourceable
         }
 
         // Register helper for the inner parser
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
-
-        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var helperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_SkipWS", valueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;

@@ -94,31 +94,17 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
         result.Body.Add($"var {startName} = {cursorName}.Position;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
-        static Type GetParserValueType(object parser)
+        string Helper(ISourceable p, Type valueType, string suffix)
         {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
-
-        string Helper(ISourceable p, string suffix)
-        {
-            var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(p));
+            var valueTypeName = SourceGenerationContext.GetTypeName(valueType);
             return context.Helpers
                 .GetOrCreate(p, $"{context.MethodNamePrefix}_Between_{suffix}", valueTypeName, () => p.GenerateSource(context))
                 .MethodName;
         }
 
-        var helperBefore = context.WithDiscardResult(true, () => Helper(beforeSourceable, "Before"));
-        var helperParser = Helper(parserSourceable, "Parser");
-        var helperAfter = context.WithDiscardResult(true, () => Helper(afterSourceable, "After"));
+        var helperBefore = context.WithDiscardResult(true, () => Helper(beforeSourceable, typeof(A), "Before"));
+        var helperParser = Helper(parserSourceable, typeof(T), "Parser");
+        var helperAfter = context.WithDiscardResult(true, () => Helper(afterSourceable, typeof(B), "After"));
 
         result.Body.Add($"if ({helperBefore}({context.ParseContextName}, out _))");
         result.Body.Add("{");
