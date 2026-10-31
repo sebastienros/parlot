@@ -13,13 +13,26 @@ namespace Parlot;
 /// This class is used to return tokens extracted from the input buffer.
 /// </summary>
 public class Scanner
+#if PARLOT_STANDALONE
+    // Generated parsers allocate a scanner for each parse. Their scanner is its own cursor rather than an object
+    // referencing one, the types are internal to the consuming assembly.
+    : Cursor
+#endif
 {
+#if PARLOT_STANDALONE
+    public Cursor Cursor
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => this;
+    }
+#else
     public readonly Cursor Cursor;
 
     /// <summary>
     /// The buffered text, see <see cref="Cursor.Buffer"/>.
     /// </summary>
     public string Buffer => Cursor.Buffer;
+#endif
 
     /// <summary>
     /// Scans some text.
@@ -45,9 +58,15 @@ public class Scanner
     /// <param name="start">The initial position. Its offset indexes into <paramref name="buffer"/>, its line and column are reported as-is.</param>
     /// <param name="isFinal"><see langword="false"/> when more text may follow <paramref name="buffer"/>. See <see cref="Cursor.HitEnd"/>.</param>
     public Scanner(string buffer, in TextPosition start, bool isFinal)
+#if PARLOT_STANDALONE
+        : base(buffer ?? throw new ArgumentNullException(nameof(buffer)), start, isFinal)
+    {
+    }
+#else
     {
         Cursor = new Cursor(buffer ?? throw new ArgumentNullException(nameof(buffer)), start, isFinal);
     }
+#endif
 
     /// <summary>
     /// Reads any whitespace without generating a token.
