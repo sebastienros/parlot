@@ -62,6 +62,14 @@ public static partial class SpanSourceGrammars
             Literals.Char(')'))
             .Then(static t => $"{string.Join(",", t.Item1)}|{string.Join(",", t.Item2)}");
 
+    // Loops in a loop: each run of an inner loop starts with no item
+    [GenerateParser(nameof(TryParseNestedLoops))]
+    private static Parser<string> BuildNestedLoops() =>
+        ZeroOrMany(Literals.Char('a').And(OneOrMany(Literals.Char('b'), 2)).And(ZeroOrMany(Literals.Char('c'))))
+            .Then(static items => items.Count == 0
+                ? "none"
+                : $"{items.Count}:{items[0].Item2.Count},{items[0].Item3.Count}:{items[items.Count - 1].Item2.Count},{items[items.Count - 1].Item3.Count}");
+
     // An alternative generated as span code fails after reading some text: the next one reads from the same position
     [GenerateParser(nameof(TryParseRestore))]
     private static Parser<string> BuildRestore() =>

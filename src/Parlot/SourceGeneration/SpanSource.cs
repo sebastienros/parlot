@@ -372,6 +372,14 @@ internal static class SpanSource
         var itemFail = writer.NewLabel("itemFail");
         var pos = writer.Pos;
 
+        // The locals are declared at the start of the method, and a loop can run several times in an enclosing loop
+        writer.Add($"{count} = 0;");
+
+        if (list != null)
+        {
+            writer.Add($"{list} = null;");
+        }
+
         writer.BeginBlock(max > 0 ? $"while ({count} < {max})" : "while (true)");
 
         // Cancellation is checked for each element, like when each one was a helper method: the loop is the only part of

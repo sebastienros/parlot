@@ -127,6 +127,25 @@ public class SpanSourceTests
     }
 
     [Theory]
+    [InlineData("abbab")]
+    [InlineData("abbcabcc")]
+    [InlineData("ababab")]
+    [InlineData("abbbab")]
+    [InlineData("abba")]
+    [InlineData("acab")]
+    [InlineData("a")]
+    [InlineData("")]
+    public void Loops_In_A_Loop_Start_Empty(string text)
+    {
+        var parser = ZeroOrMany(Literals.Char('a').And(OneOrMany(Literals.Char('b'), 2)).And(ZeroOrMany(Literals.Char('c'))))
+            .Then(static items => items.Count == 0
+                ? "none"
+                : $"{items.Count}:{items[0].Item2.Count},{items[0].Item3.Count}:{items[items.Count - 1].Item2.Count},{items[items.Count - 1].Item3.Count}");
+
+        Check(parser, SpanSourceGrammars.TryParseNestedLoops, SpanSourceGrammars.TryParseNestedLoops, text);
+    }
+
+    [Theory]
     [InlineData("abc")]
     [InlineData("abd")]
     [InlineData("ab")]
@@ -412,6 +431,8 @@ public static partial class SpanSourceGrammars
     public static partial bool TryParseSkipped(TextReader reader, out string value);
     public static partial bool TryParseLoops(string text, out string value);
     public static partial bool TryParseLoops(TextReader reader, out string value);
+    public static partial bool TryParseNestedLoops(string text, out string value);
+    public static partial bool TryParseNestedLoops(TextReader reader, out string value);
     public static partial bool TryParseRestore(string text, out string value);
     public static partial bool TryParseRestore(TextReader reader, out string value);
     public static partial bool TryParsePosition(string text, out (int, int, int) value);
