@@ -55,6 +55,13 @@ public class ParseContext
 
     private int _cancellationCheckCount;
     private int _recursionDepth;
+#if !PARLOT_STANDALONE
+
+    // The number of cycles the loop detection detected, and the lowest position a parser was marked as active at
+    // while memoized parsers parse, see Memoize<T>
+    private int _loopCuts;
+    private int _memoizedMinPush;
+#endif
 
     // TODO: For backward compatibility only, remove in future versions
     public ParseContext(Scanner scanner, bool useNewLines)
@@ -133,6 +140,11 @@ public class ParseContext
 
         // The offset of the last Commit(), no parser can read the text before it again
         public int CommitOffset;
+#if !PARLOT_STANDALONE
+
+        // The results of the memoized parsers, see Memoize<T>
+        public MemoTable? MemoTables;
+#endif
     }
 
     private ColdState GetColdState() => _coldState ??= new ColdState();
@@ -594,6 +606,64 @@ public class ParseContext
         }
     }
 
+#if !PARLOT_STANDALONE
+    // The results of the memoized parsers, see Memoize<T>
+    internal MemoTable? MemoTables
+    {
+        get => _coldState?.MemoTables;
+        set => GetColdState().MemoTables = value;
+    }
+
+    // The number of cycles the loop detection detected: a memoized parser compares it before and after it parses
+    internal int LoopCuts => _loopCuts;
+
+    /// <summary>
+    /// Starts recording the lowest position at which a parser is marked as active by the loop detection, while a memoized
+    /// parser parses.
+    /// </summary>
+    /// <returns>The value to pass to <see cref="EndMemoized(int)"/>.</returns>
+    internal int BeginMemoized()
+    {
+        var previous = _memoizedMinPush;
+        _memoizedMinPush = int.MaxValue;
+        return previous;
+    }
+
+    /// <summary>
+    /// Stops the recording started by <see cref="BeginMemoized"/>, which can be nested.
+    /// </summary>
+    /// <param name="previous">The value returned by <see cref="BeginMemoized"/>.</param>
+    /// <returns>The lowest position at which a parser was marked as active since <see cref="BeginMemoized"/>, or <see cref="int.MaxValue"/>.</returns>
+    internal int EndMemoized(int previous)
+    {
+        var min = _memoizedMinPush;
+
+        // The pushes of a nested memoized parser are also the ones of the enclosing one
+        _memoizedMinPush = previous < min ? previous : min;
+
+        return min;
+    }
+
+    /// <summary>
+    /// Whether a memoized result recorded at the current position, <paramref name="offset"/>, can be returned.
+    /// </summary>
+    /// <param name="offset">The current offset.</param>
+    /// <param name="pushedAtStart">Whether the memoized parse marked parsers as active at <paramref name="offset"/>.</param>
+    internal bool CanReuseMemoized(int offset, bool pushedAtStart)
+    {
+        // A compacting stream can't move back to discarded text: the parser is invoked, and throws
+        if ((_flags & CompactingMask) != 0 && (Scanner.Cursor.IsDiscarded || offset < _coldState!.CommitOffset))
+        {
+            return false;
+        }
+
+        // A parser which is already active at this position would stop the recursion if the parse reached it again.
+        // The active parsers are never after the current position, and the parse never before it, so they can only
+        // meet at this position.
+        return !pushedAtStart || _activeCount == 0 || _activePositions!.AsSpan(0, _activeCount).IndexOf(offset) < 0;
+    }
+
+#endif
     /// <summary>
     /// Called whenever a parser is invoked.
     /// </summary>
@@ -693,7 +763,25 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsParserActiveAtPosition(object parser)
     {
-        return IndexOfActiveParser(parser, Scanner.Cursor.Offset) >= 0;
+        var position = Scanner.Cursor.Offset;
+
+        if (IndexOfActiveParser(parser, position) < 0)
+        {
+#if !PARLOT_STANDALONE
+            // The caller depends on the parsers active at the position, like when it marks itself as active
+            if (position < _memoizedMinPush)
+            {
+                _memoizedMinPush = position;
+            }
+#endif
+            return false;
+        }
+
+#if !PARLOT_STANDALONE
+        // The caller is expected to stop the recursion, which memoized results can't depend on
+        _loopCuts++;
+#endif
+        return true;
     }
 
     /// <summary>
@@ -747,8 +835,19 @@ public class ParseContext
 
         if (IndexOfActiveParser(parser, position) >= 0)
         {
+#if !PARLOT_STANDALONE
+            _loopCuts++;
+#endif
             return false;
         }
+
+#if !PARLOT_STANDALONE
+        // Only recorded while a memoized parser parses, the value is 0 otherwise
+        if (position < _memoizedMinPush)
+        {
+            _memoizedMinPush = position;
+        }
+#endif
 
         var count = _activeCount;
 

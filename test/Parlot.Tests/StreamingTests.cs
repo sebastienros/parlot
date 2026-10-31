@@ -87,7 +87,35 @@ public class StreamingTests
         ["position-pattern"] = new Grammar<(int, int, int)>(Literals.Pattern(static c => c != ' ').Then(static (c, _) => Position(c))),
         ["position-scan"] = new Grammar<(int, int, int)>(Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length).Then(static (c, _) => Position(c))),
         ["position-textbefore"] = new Grammar<(int, int, int)>(AnyCharBefore(Literals.Text("--"), consumeDelimiter: true).Then(static (c, _) => Position(c))),
+        // Memoized results, and their end positions, must not depend on how the text is split
+        ["memoize"] = new Grammar<string>(MemoizedAssignment()),
+        // The memoized delimiter is also parsed in a token
+        ["memoize-tags"] = new Grammar<string>(MemoizedTags()),
     };
+
+    private static Parser<string> MemoizedAssignment()
+    {
+        var prefix = Terms.Identifier().AndSkip(Terms.Char('=')).Memoize();
+
+        return OneOf(
+            prefix.And(Terms.Integer()).Then(static x => $"{x.Item1}=int:{x.Item2}"),
+            prefix.And(Terms.String()).Then(static x => $"{x.Item1}=string:{x.Item2}"),
+            prefix.And(Terms.Identifier()).Then(static x => $"{x.Item1}=id:{x.Item2}"),
+            Terms.Identifier().Then(static x => x.ToString()))
+            .Then(static (c, x) => $"{x} at {Position(c)}");
+    }
+
+    private static Parser<string> MemoizedTags()
+    {
+        // Like Liquid: a text ends at a tag, and the tags that don't start an item end the list
+        var tagStart = Literals.Text("{%").SkipAnd(Literals.Char('-').Optional()).Memoize();
+        var tagEnd = Terms.Text("%}");
+        var text = AnyCharBefore(tagStart).Then(static x => "text:" + x.ToString());
+        var tag = tagStart.SkipAnd(Terms.Keyword("x")).AndSkip(tagEnd);
+        var end = tagStart.SkipAnd(Terms.Keyword("end")).AndSkip(tagEnd);
+
+        return ZeroOrMany(tag.Or(text)).AndSkip(end).Then(static (c, x) => $"{string.Join(",", x)} at {Position(c)}");
+    }
 
     private static (int Offset, int Line, int Column) Position(ParseContext context)
     {
@@ -213,6 +241,9 @@ public class StreamingTests
         Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", "\n\n\nab c", new string('a', 70) + "\r\n" + new string('b', 70) + " x",
             new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x");
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
+        Add("memoize", "", "a", "a=", "a=1", "a = 'b'", "a = b", "a = 'b", "a=1x", " a\r\n=\n 2", "1", "abc = def ");
+        Add("memoize-tags", "", "{% end %}", "a{% end %}", "a{% x %}b{%- end %}", "a{% x %}{% y %}", "a{", "a{%", "a{% x", "{% x %}{%x%}c\n{%end%}d",
+            "a{ b{% end %}", "{%- x -%}");
 
         return data;
     }

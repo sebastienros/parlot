@@ -169,6 +169,24 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<T> Commit() => new Commit<T>(this);
 
     /// <summary>
+    /// Builds a parser that remembers the results of the previous parser in the <see cref="ParseContext"/>, so that it is
+    /// parsed once at a position when several alternatives start with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Use it on a parser that alternatives parse again at the same position, like a prefix that several alternatives of a
+    /// choice start with, when parsing it costs more than looking its result up: a result is looked up and recorded each
+    /// time the parser is invoked.
+    /// </para>
+    /// <para>
+    /// The parser's result must only depend on the text at its position: a memoized result is returned without invoking
+    /// the callbacks of the parser again, and the same value is returned to each parser using it.
+    /// Source generated parsers parse the parser itself. See <see cref="Memoize{T}"/>.
+    /// </para>
+    /// </remarks>
+    public Parser<T> Memoize() => new Memoize<T>(this);
+
+    /// <summary>
     /// Builds a parser that discards the previous result and replaces it by the specified type or value.
     /// </summary>
     [Obsolete("Use Then<U>() instead.")]

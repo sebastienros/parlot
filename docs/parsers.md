@@ -1142,6 +1142,55 @@ Result:
 "age = 12"
 ```
 
+### Memoize
+
+Remembers the results of a parser in the `ParseContext`, so that it is parsed once at a position when several
+alternatives start with it.
+
+```c#
+Parser<T> Memoize()
+```
+
+Usage:
+
+```c#
+// The statements start with the same member access, which the alternatives that fail after it would parse again
+var target = Separated(Terms.Char('.'), Terms.Identifier()).Then(static x => x.Count).Memoize();
+
+var assignment = target.AndSkip(Terms.Char('=')).And(Terms.Integer()).Then(static x => $"assign {x.Item1}");
+var call = target.AndSkip(Terms.Char('(')).AndSkip(Terms.Char(')')).Then(static x => $"call {x}");
+var statement = OneOf(assignment, call, target.Then(static x => $"expression {x}")).AndSkip(Terms.Char(';'));
+
+statement.Parse("a.b.c;");
+```
+
+Result:
+
+```
+expression 3
+```
+
+The member access is parsed once, by the first alternative, and its result is returned to the two others.
+
+- A context keeps the results of a memoized parser in a table of 8 entries indexed by the offset, the last result
+  replacing the one at an offset sharing its entry. A result is returned again, failures included, with its value and end
+  position, as long as it's in the table: it suits the alternatives which parse the same prefix one after the other,
+  not reusing results anywhere in the input like a packrat parser.
+- Looking a result up and recording it costs about as much as parsing a short token, and the table is allocated for
+  each context, so memoize a parser that is parsed again and costs more than that: a prefix made of several tokens or
+  a recursive parser, rather than a single literal. `MemoizeBenchmarks` measures both cases.
+- The parser's result must only depend on the text at its position. A memoized result is returned without invoking
+  the callbacks of the parser again (`Then`, `When`, ...), the same value is returned to each parser using it, so it
+  shouldn't be modified, and a parser which depends on the state of a custom `ParseContext`, like an `If`, shouldn't be
+  memoized. `ParseContext.OnEnterParser` sees the `Memoize` parser, not the parsers it skips.
+- A result is only reused with the white space settings it was parsed with (`WhiteSpaceParser`, `WhiteSpaceSet`).
+  It isn't recorded when the loop detection of a `Deferred` parser stopped a recursion while it was parsed, and isn't
+  reused where a parser it reached at its position is already active, so a left recursion gives the same result as
+  without `Memoize`.
+- Streams give the same results as strings: a result which depended on text not read yet isn't recorded, and the
+  memoized parser keeps no text in the buffer. Moving back to text released by `Commit()` still throws.
+- Source generated parsers don't keep results: the memoized parser is generated as is, and parsed by each alternative.
+
 ## Flow parsers
 
 ### Then
