@@ -159,3 +159,6 @@ dotnet_style_prefer_compound_assignment = true:suggestion
 dotnet_style_prefer_simplified_interpolation = true:suggestion
 dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
 dotnet_style_namespace_match_folder = true:suggestion
+
+[*.Generated.g.cs]
+generated_code = true
