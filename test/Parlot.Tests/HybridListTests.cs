@@ -21,7 +21,7 @@ public class HybridListTests
     {
         var list = new HybridList<int>();
         list.Add(1);
-        
+
         Assert.Single(list);
         Assert.Equal(1, list[0]);
     }
@@ -82,8 +82,8 @@ public class HybridListTests
         var list = new HybridList<int>();
         list.Add(1);
 
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[-1]);
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[-1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[1]);
     }
 
     [Fact]
@@ -95,8 +95,8 @@ public class HybridListTests
             list.Add(i);
         }
 
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[-1]);
-        Assert.Throws<System.ArgumentOutOfRangeException>(() => list[5]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[-1]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => list[5]);
     }
 
     [Fact]
@@ -379,7 +379,7 @@ public class HybridListTests
         list.Add(200);
         list.Add(300);
         list.Add(400);
-        
+
         // Should still use inline storage
         Assert.Equal(4, list.Count);
         Assert.Equal(100, list[0]);
@@ -395,7 +395,7 @@ public class HybridListTests
         list.Add(300);
         list.Add(400);
         list.Add(500);
-        
+
         // Should have transitioned to List<T>
         Assert.Equal(5, list.Count);
         Assert.Equal(100, list[0]);

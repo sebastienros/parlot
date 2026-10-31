@@ -4,8 +4,12 @@ Parlot source generation compiles a build-only Fluent grammar into a direct part
 The generated parser and its support code are emitted into the consuming assembly, so application code
 does not need a runtime reference to `Parlot`.
 
-Use an SDK or IDE with a Roslyn 5.9 or later compiler host, independently of the application's runtime
-target. For example, .NET SDK 10.0.400 supplies a compatible compiler.
+Use an SDK or IDE with a Roslyn 5.0 or later compiler host, independently of the application's runtime
+target. The minimum supported SDK is .NET SDK 10.0.100. The package compatibility test pins that SDK
+with roll-forward disabled in `test/Parlot.SourceGenerator.Tests/MinimumSdk/global.json`; CI installs it
+explicitly on both platforms. The test treats CS9057 as an error and compiles and runs a generated parser.
+When raising the minimum compiler requirement deliberately, update that manifest and this requirement
+together rather than only upgrading the Roslyn package.
 Generated consumers support the same target frameworks as Parlot: .NET Framework 4.7.2,
 .NET Standard 2.0, .NET 8, and .NET 10. C# 12 or later is required even when targeting an older runtime.
 Downlevel targets use compatibility packages such as `System.Memory`, but never require the Parlot
@@ -30,6 +34,11 @@ Do not mark that reference `PrivateAssets="all"`. The analyzer itself should rem
 private transitive dependencies are not propagated to consumers of your library. Packing reports an
 error if the explicit compatibility reference is missing. With central package management, put the
 version in `Directory.Packages.props` and omit `Version` on the `PackageReference`.
+
+The factory itself is compiled against the consuming project's references. A grammar shared with a
+.NET Framework or .NET Standard 2.0 target therefore cannot rely on conversions those frameworks lack,
+such as the implicit `string` to `ReadOnlySpan<char>` conversion: `AnyOf` and `NoneOf` provide `string`
+overloads so `Literals.AnyOf("0123456789")` builds on every target.
 
 ## Getting started
 
@@ -120,7 +129,8 @@ application and no `Parser<T>` object or combinator graph is created when `TryPa
 
 ## Entry point contract
 
-Each `[GenerateParser(nameof(...))]` factory must have exactly one matching partial method declaration.
+Each `[GenerateParser(nameof(...))]` factory must have one matching partial method declaration whose input is a
+`string`, one whose input is a `TextReader`, or both.
 
 The factory:
 
@@ -133,7 +143,7 @@ The factory:
 The application-facing method:
 
 - is a static, non-generic partial method returning `bool`;
-- takes the input `string` first;
+- takes the input first, as a `string` or a `System.IO.TextReader` (see [TextReader entry points](#textreader-entry-points));
 - takes the factory's configuration parameters next, in the same type and order;
 - may take one additional by-value `CancellationToken` after configuration and before the result;
 - takes `out T value` last, where `T` is the factory parser's result type, unless the
@@ -170,6 +180,18 @@ Callbacks, mixed parser kinds, other comparisons, and choices outside those boun
 the existing dispatch. Larger keyword recognizers separate length buckets into helpers
 to keep the length dispatcher small; helper inlining remains a JIT decision.
 
+Other choices dispatch on the first char, then again on the rest of the input when at least
+three of the alternatives for a char tell longer prefixes: ordinal `Text` and `Keyword`
+parsers, and the parsers which start with one, like `Then`, `When`, `Error`, `Capture`,
+sequences and nested choices. Only the alternatives whose prefix the input starts with are
+invoked, in their order, and each one still matches its own text. Choices read from a
+`TextReader` keep the first-char dispatch. See
+[Keyword lookup investigation](keyword-lookups.md#prefix-dispatch-for-wrapped-and-mixed-choices).
+
+An `Operators()` table (see [Operator tables](parsers.md#operator-tables)) is emitted as a single precedence climbing
+loop: recursive local functions which look for the operator following an operand once, through the
+generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
+
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
 allocation. The scanner, cursor, and context use the shared runtime implementations.
@@ -185,7 +207,21 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - Cancellation throws `OperationCanceledException`; it is not reported as a parse mismatch.
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
-- `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not.
+- `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not. The execution context can't be
+  configured, so select ASCII whitespace with `WithWhiteSpaceSet(WhiteSpaceSet.Ascii)` in the grammar.
+- A `Deferred` parser that is entered again at the position where it is already active (left recursion) fails
+  at that position instead of overflowing the stack, as the runtime `Deferred` does. The check costs one
+  comparison per entry and allocates nothing. Recursion that consumes input is bounded only by the stack
+  since no recursion depth limit can be set on a generated entry point.
+- `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
+  target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
+  the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
+  primitive types, `decimal` and `BigInteger`; other types are reported as a build error.
+- A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A `Terms`
+  parser reports the start of its content, after the skipped white space, as at runtime. A composite parser
+  that skips white space internally (a sequence or a choice of `Terms` parsers) reports the offset where the
+  generated parser was entered, before that white space, where the runtime reports the start of its first
+  element.
 
 ### Non-breaking diagnostics
 
@@ -248,14 +284,63 @@ the parsed value. They do not expose the internal execution context:
   caller cannot retrieve the position where parsing stopped. Use `.Eof()` for whole-input parsing.
 - No custom `ParseContext`, recursion-depth setting, or other execution-context option can be supplied.
   Factory parameters configure generated callbacks and branches; they do not configure the parsing engine.
-- The input is a `string`; `ReadOnlySpan<char>` entry points are not supported.
+- The input is a `string` or a `TextReader`; `ReadOnlySpan<char>` and `Stream` entry points are not supported.
+  Wrap a `Stream` in a `StreamReader`.
 
 Use the normal Parlot runtime API when consumed positions or custom parse contexts are
 required.
 
-Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
-larger results grow into a list, and an empty `ZeroOrMany` result uses an empty array. Public results should
-normally use `IReadOnlyList<T>`.
+### TextReader entry points
+
+An entry point whose input is a `System.IO.TextReader` parses a large document without reading it into a string
+first, using the [compacting buffer](streaming.md#compacting-buffer) of `Parser<T>.Parse(TextReader)`:
+
+```csharp
+public static partial bool TryParse(string input, out IJson value);
+public static partial bool TryParse(TextReader reader, out IJson value);
+public static partial bool TryParse(TextReader reader, CancellationToken cancellationToken, out IJson value);
+```
+
+Both overloads share the factory, and the configuration and cancellation rules above apply unchanged. A factory can
+have one `string` overload, one `TextReader` overload, or both; declare a second `TextReader` overload as a normal
+forwarding method. The generated reader method:
+
+- reads the first 4096 characters; when the input ends within them it is parsed like a `string`;
+- otherwise refills a pooled buffer synchronously with `TextReader.Read`, dropping the text no active parser can
+  return to, so the memory is bounded by the largest pending value, not by the document;
+- doesn't dispose the reader;
+- returns the same values and failures as the `string` overload for the same text.
+
+A `TextSpan` value references the buffer window it was read from. Windows are immutable strings, so the value stays
+valid after later refills, but it keeps its window alive: convert it with `ToString()` in the grammar to keep only the
+token. Choices which aren't exclusive
+and unbounded lookaheads retain their text until they complete, see [Limitations](streaming.md#limitations).
+
+The reader overload is generated as a separate parser with the token refill and backtrack pin code. The `string`
+overload of the same factory keeps its own code, but an assembly which declares any `TextReader` entry point embeds a
+streaming-capable `Cursor`, whose movable buffer base can cost some throughput to generated `string` parsers of
+that assembly. The 2026-10-02 `ShortRun` comparison measured roughly 1-3% higher expression means and JSON
+means ranging from 3% lower to 5% higher. Most confidence intervals overlap, so this run does not establish
+a consistent overhead. Keep latency-critical `string` parsers and reader parsers in separate assemblies when that matters.
+Assemblies without reader entry points compile the compacting code out.
+
+The paired generated-parser means below use the same Apple M4 Pro, .NET 10.0.11,
+SDK 11.0.100-rc.1.26425.128, and deterministic JSON inputs; only the reader-enabled build changes.
+Allocations were unchanged between the two builds.
+
+| Generated parser | String-only assembly | Reader-enabled assembly | Mean change |
+|---|---:|---:|---:|
+| Expression small | 178.3 ns | 181.1 ns | +1.6% |
+| Expression big | 1,004.2 ns | 1,022.9 ns | +1.9% |
+| Expression unary | 238.6 ns | 245.2 ns | +2.8% |
+| JSON big | 32.070 us | 32.40 us | +1.0% |
+| JSON deep | 23.901 us | 25.14 us | +5.2% |
+| JSON long | 26.640 us | 26.93 us | +1.1% |
+| JSON wide | 13.593 us | 13.21 us | -2.8% |
+
+Generated collection parsers preserve the runtime collection behavior: the first four items are kept in a local and
+longer lists are accumulated on a scratch stack of the thread, shared by nested lists, and each non-empty result is one array of its exact size; an empty result is
+`Array.Empty<T>()`. Public results should normally use `IReadOnlyList<T>`.
 
 ## Configuration and captures
 
@@ -487,7 +572,10 @@ The support layer is an implementation detail:
 
 Custom parser types used by a build-only grammar must implement `ISourceable` and emit self-contained code
 that resolves only to BCL types, application code, or the generated internal support layer. A custom parser
-that requires the runtime Parlot assembly cannot be used by a dependency-free entry point.
+that requires the runtime Parlot assembly cannot be used by a dependency-free entry point. This includes
+subclasses of `NumberLiteralBase<T>`: the generated code parses numbers with the built-in methods and cannot
+call a `TryParseNumber` override, so the generator reports `PARLOT005` instead of emitting a parser that
+would behave differently from the runtime one.
 
 ### Native AOT
 
@@ -504,6 +592,11 @@ grammar still execute in the normal compiler host, not in the published applicat
 IDE/design-time analysis does not execute grammar factories. The generator emits throwing stubs so partial
 method declarations remain available to IntelliSense and other compiler features. A real command-line or
 explicit IDE build executes the factory and emits the parser implementation.
+
+Grammar files are registered during project evaluation so the IDE can discover them before a build.
+Design-time builds use a separate generated MSBuild editorconfig file: a real build must not replace the
+IDE's design-time flags and cause grammar factories to run during editor analysis. Referenced application
+assemblies are loaded from memory so compiler hosts do not lock their build outputs.
 
 Do not call a generated entry point while constructing another grammar. Entry points are parse-time APIs,
 not factory-composition APIs.
@@ -530,7 +623,7 @@ Standalone-specific diagnostics are:
 
 | Diagnostic | Meaning |
 |---|---|
-| `PARLOT023` | The named direct entry point is missing, ambiguous, or has an invalid signature |
+| `PARLOT023` | The named direct entry point is missing, ambiguous (for instance two `TextReader` overloads), or has an invalid signature |
 | `PARLOT024` | Generated code requires unsupported runtime code |
 | `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
 | `PARLOT026` | The project targets an unsupported framework or C# language version |
@@ -552,6 +645,11 @@ Direct generated parsers avoid runtime graph construction, parser-instance cachi
 generated callbacks, and an application dependency on the Parlot runtime assembly. Configuration is supplied
 per call without allocating a bound parser object.
 
+Besides what the grammar's callbacks and results allocate, a `string` entry point allocates two objects: the
+internal context, which also holds the configuration and the state of the grammar's deferred parsers, and a
+scanner that is its own cursor. The context's loop detection and recursion limit members, which generated
+parsers don't use, only allocate their state when a callback calls them.
+
 Generated parser helpers and callbacks use normal JIT inlining heuristics. Forcing inlining based only
 on a helper's local statement count can duplicate large parser chains, increasing native code size and
 stack initialization costs. A bounded hint is retained only for the entry core, which can inline into
@@ -566,3 +664,61 @@ per token. When `Capture` discards a string parser's decoded value, the generate
 escape sequences but skips decoding and its string allocation. Callbacks and predicates that consume the
 value still receive decoded text and execute normally, even when their result is captured or discarded.
 Helpers are specialized by result mode so the same parser can be used both for capture and for its value.
+
+Generated parsers also use recognition-only helpers for fully skipped `AndSkip`/`SkipAnd` operands,
+`Between` delimiters, separators, lookaheads, operator tokens whose values are unused, and `AnyCharBefore`
+delimiters. Constant-result `Then(value)` parsers do not materialize their input value either. A skipped
+`Text` token still checks its comparison mode and advances the cursor, but does not materialize matched
+text, including when `returnMatchedText: true`. Retained tokens keep their normal casing and value
+semantics. This optimization applies to generated string and `TextReader` entry points, not runtime
+`Parse` methods.
+
+Recognition-only helpers still validate numeric conversion and range: skipping a number does not
+accept overflow or values its numeric type cannot represent. Skipping a callback's result does not
+skip its execution, required input values, or exceptions.
+Higher-arity `SkipAnd` keeps the preceding tuple value-producing when some of its members are returned;
+individual dropped tuple members are not independently optimized.
+
+### Span code
+
+Parsers which only read the text are generated as *span code*, the way the .NET regular expression source
+generator emits a pattern. The text after the cursor is read through a `ReadOnlySpan<char>` local indexed by a
+position local, the parsers of the subgraph are emitted inline in a single method, with jumps to failure labels, and
+the cursor is moved once, when the subgraph matches. A failure leaves the cursor where it was: a sequence doesn't
+move it back, and choices, optional parsers and loops move the position local back rather than the cursor.
+
+`Char`, ordinal `Text`, `Pattern`, `AnyOf`, `NoneOf`, `Identifier` and the decimal number parsers (`Number<T>`,
+`Integer`, `Decimal`) are generated as span code inside the composite parsers whose parsers all are: `Terms` parsers
+(`SkipWhiteSpace`), `Then` with a callback receiving the value or with a constant, `Capture`, `OneOf` with less than 8
+alternatives (more texts or keywords use their lookups), `ZeroOrMany`, `OneOrMany`, `Optional`, `ZeroOrOne`,
+`Between` and the sequences (`And`, `AndSkip`, `SkipAnd`). The outermost such parser becomes one method, of up to 64
+parsers, a parser used twice counting twice and a number 8 times. The other parsers, like `Deferred`, `Separated`, lookaheads or callbacks
+receiving the context, invoke the span code of their parts. A literal alone keeps its code.
+
+```csharp
+// One method, which moves the cursor once. The JIT inlines the 'w' callbacks and drops their TextSpan.
+var wordChar = Literals.Pattern(char.IsLetterOrDigit);
+var email = Capture(
+    OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('.'), Literals.Char('+'), Literals.Char('-')))
+        .And(Literals.Char('@'))
+        .And(OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('-'))))
+        .And(Literals.Char('.'))
+        .And(OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('.'), Literals.Char('-')))));
+```
+
+The white space before a `Terms` parser is skipped by the execution context, which can run a custom white space
+parser. Span code checks the next char first, and only moves the cursor to skip white space when there is some, then
+moves it to the end of the match, or back to where it was, from there.
+
+The results are the ones of the other generated code, and of the runtime parsers: values, failures, positions, and
+the `Cursor.HitEnd` marks a non-final buffer depends on. A check of the char at the end of the span marks it, so does
+a callback invoked there, and moving the cursor to the end does. `TextReader` entry points don't use span code, their
+literals are tokens which refill the buffer, except inside a token, like the delimiter of `AnyCharBefore`.
+
+### Parser Explorer diagnostics
+
+Set `Diagnostics = true` on a factory's `GenerateParser` attribute to emit diagnostic entry/exit and
+cursor-reset events for the local [Parser Explorer](explorer.md). This mode is intended for debugging;
+ordinary generated parsers contain no tracing calls. It doesn't generate span code, so that each parser that is invoked
+and each move of the cursor is reported. The explorer supports private entry points,
+Monaco input editing, replay, rebuild detection, and result inspection without uploading assemblies.

@@ -1,21 +1,30 @@
 #if NET8_0_OR_GREATER
+using Parlot.Rewriting;
 using System;
 using System.Buffers;
+using System.Linq;
 
 namespace Parlot.Fluent;
 
-internal sealed class IdentifierLiteral : Parser<TextSpan>
+internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable, ILoopAnalyzable
 {
     private readonly SearchValues<char> _startSearchValues;
     private readonly SearchValues<char> _partSearchValues;
 
-    public IdentifierLiteral(SearchValues<char> startSearchValues, SearchValues<char> partSearchValues)
+    // The chars of the start search values can't be listed from them, so they are passed when they are known
+    public IdentifierLiteral(SearchValues<char> startSearchValues, SearchValues<char> partSearchValues, char[]? startChars = null)
     {
         _startSearchValues = startSearchValues;
         _partSearchValues = partSearchValues;
 
+        if (startChars is { Length: > 0 })
+        {
+            CanSeek = true;
+            ExpectedChars = startChars.Distinct().ToArray();
+        }
+
         // Since we assume these can't container new lines, we can check this here.
-        if (partSearchValues.Contains('\n') || startSearchValues.Contains('\r'))
+        if (startSearchValues.Contains('\n') || startSearchValues.Contains('\r') || partSearchValues.Contains('\n') || partSearchValues.Contains('\r'))
         {
             throw new InvalidOperationException("Identifiers cannot contain new lines.");
         }
@@ -23,8 +32,21 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
         Name = "IdentifierLiteral";
     }
 
+    public bool CanSeek { get; }
+
+    public char[] ExpectedChars { get; } = [];
+
+    public bool SkipWhitespace { get; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var span = context.Scanner.Cursor.Span;
@@ -40,9 +62,9 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>
         // If index == -1 the whole input is a match
         var size = index == -1 ? span.Length : index + 1;
 
-        var start = context.Scanner.Cursor.Position.Offset;
+        var start = context.Scanner.Cursor.Offset;
         context.Scanner.Cursor.AdvanceNoNewLines(size);
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+        result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;

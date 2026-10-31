@@ -1,12 +1,14 @@
 ﻿using System;
+#if NET8_0_OR_GREATER
 using System.Globalization;
+#endif
 
 namespace Parlot;
 
 public readonly struct TextSpan : IEquatable<string>, IEquatable<TextSpan>
 {
     public static readonly TextSpan Empty = new(string.Empty);
-    
+
     public TextSpan(string? value)
     {
         Buffer = value;

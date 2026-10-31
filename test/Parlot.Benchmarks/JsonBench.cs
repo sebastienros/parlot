@@ -26,7 +26,7 @@ public class JsonBench
 
     private static readonly JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
     private static readonly JsonDocumentOptions _jsonDocumentOptions = new() { MaxDepth = 1024 };
-    private static readonly Random _random = new();
+    private static readonly Random _random = new(0);
 
     [GlobalSetup]
     public void Setup()
@@ -117,7 +117,6 @@ public class JsonBench
     {
         return JToken.Parse(_longJson);
     }
-
 
     [Benchmark, BenchmarkCategory("Long")]
     public JsonDocument LongJson_SystemTextJson()

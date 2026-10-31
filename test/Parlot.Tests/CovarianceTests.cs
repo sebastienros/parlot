@@ -31,13 +31,13 @@ public class CovarianceTests
         var success1 = animalDogParser.Parse(context1, out int start1, out int end1, out object? value1);
         Assert.True(success1);
         Assert.IsType<Dog>(value1);
-        Assert.Equal("Buddy", ((Dog)value1!).Name);
+        Assert.Equal("Buddy", ((Dog)value1).Name);
 
         var context2 = new ParseContext(new Scanner("cat"));
         var success2 = animalCatParser.Parse(context2, out int start2, out int end2, out object? value2);
         Assert.True(success2);
         Assert.IsType<Cat>(value2);
-        Assert.Equal("Whiskers", ((Cat)value2!).Name);
+        Assert.Equal("Whiskers", ((Cat)value2).Name);
     }
 
     [Fact]
@@ -107,13 +107,13 @@ public class CovarianceTests
     {
         // Test covariance with nullable reference types
         var stringParser = Terms.Text("hello").Then(_ => "world");
-        
+
         // string is derived from object, should work with covariance
         IParser<object> objectParser = stringParser;
-        
+
         var context = new ParseContext(new Scanner("hello"));
         var success = objectParser.Parse(context, out int start, out int end, out object? value);
-        
+
         Assert.True(success);
         Assert.Equal("world", value);
     }

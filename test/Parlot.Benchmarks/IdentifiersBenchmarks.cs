@@ -25,7 +25,7 @@ public class IdentifiersBenchmarks
 {
     private static readonly string _identifier1 = "workflowIdentifier = 123";
     private static readonly int _length = 18;
-    
+
     public IdentifiersBenchmarks()
     {
         if (NaiveIdentifierMatch() != _length) throw new InvalidOperationException(nameof(NaiveIdentifierMatch));

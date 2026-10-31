@@ -21,7 +21,9 @@ public class CharMaskGeneratorTest
         IdentifierStart = 1,
         IdentifierPart = 2,
         WhiteSpace = 4,
-        WhiteSpaceOrNewLine = 8
+        WhiteSpaceOrNewLine = 8,
+        AsciiWhiteSpace = 16,
+        AsciiWhiteSpaceOrNewLine = 32
     }
 
     // Unicode v8.0.0 NonAsciiIdentifierStart
@@ -46,6 +48,14 @@ public class CharMaskGeneratorTest
             {
                 mask |= CharacterMask.WhiteSpaceOrNewLine;
             }
+            if (c is ' ' or '\t' or '\f')
+            {
+                mask |= CharacterMask.AsciiWhiteSpace;
+            }
+            if (c is ' ' or '\t' or '\f' or '\n' or '\r' or '\v')
+            {
+                mask |= CharacterMask.AsciiWhiteSpaceOrNewLine;
+            }
             if (IsIdentifierStart(c))
             {
                 mask |= CharacterMask.IdentifierStart;
@@ -56,10 +66,13 @@ public class CharMaskGeneratorTest
             }
 
             masks.Add(mask);
+
+            // The default set must stay the one of the runtime
+            Assert.Equal(char.IsWhiteSpace(c), IsWhiteSpaceOrNewLine(c));
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("    private static ReadOnlySpan<byte> _characterData => new byte[]");
+        sb.AppendLine("    internal static ReadOnlySpan<byte> _characterData => new byte[]");
         sb.AppendLine("    {");
         foreach (var chunk in masks.Chunk(40))
         {
@@ -87,42 +100,15 @@ public class CharMaskGeneratorTest
         Assert.Equal(char.MaxValue + 1, masks.Count);
     }
 
+    // The default set is the Unicode White_Space property (PropList.txt), the chars char.IsWhiteSpace accepts. Its new lines are
+    // the line breaks: \n, \v, \r, the next line char U+0085 and the line and paragraph separators U+2028 and U+2029.
     public static bool IsWhiteSpace(char ch)
-    {
-        return (ch <= 32 &&
-                ((ch == 32) || // space
-                 (ch == '\f') ||
-                 (ch == '\t')))  // horizontal tab
-               || (ch == 0xA0) // non-breaking space
-               || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
-            ;
-    }
+        => (int)ch is 0x09 or 0x0C or 0x20 or 0xA0 or 0x1680 or (>= 0x2000 and <= 0x200A) or 0x202F or 0x205F or 0x3000;
 
-    public static bool IsWhiteSpaceNonAscii(char ch)
-    {
-        return (ch >= 0x1680 && (
-            ch == 0x1680 ||
-            ch == 0x180E ||
-            (ch >= 0x2000 && ch <= 0x200A) ||
-            ch == 0x202F ||
-            ch == 0x205F ||
-            ch == 0x3000 ||
-            ch == 0xFEFF));
-    }
+    public static bool IsNewLine(char ch)
+        => (int)ch is 0x0A or 0x0B or 0x0D or 0x85 or 0x2028 or 0x2029;
 
-    public static bool IsWhiteSpaceOrNewLine(char ch)
-    {
-        return (ch <= 32 &&
-                ((ch == 32) || // space
-                 (ch == '\n') ||
-                 (ch == '\f') ||
-                 (ch == '\r') ||
-                 (ch == '\t') || // horizontal tab
-                 (ch == '\v')))
-               || (ch == 0xA0) // non-breaking space
-               || (ch >= 0x1680 && IsWhiteSpaceNonAscii(ch))
-            ;
-    }
+    public static bool IsWhiteSpaceOrNewLine(char ch) => IsWhiteSpace(ch) || IsNewLine(ch);
 
     public static bool IsIdentifierStart(char ch)
         => (ch == '$') || (ch == '_') ||

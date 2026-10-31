@@ -22,6 +22,20 @@ public class CharacterTests
         Assert.Equal(expected, Character.DecodeString(text).ToString());
     }
 
+    [Theory]
+    [InlineData("\\", "\\")]
+    [InlineData("abc\\", "abc\\")]
+    [InlineData("a\\nb\\", "a\nb\\")]
+    [InlineData("abc\\\\", "abc\\")]
+    [InlineData("abc\\u", "abc\0")]
+    [InlineData("abcdefghijklmnopqrstuvwxyz\\", "abcdefghijklmnopqrstuvwxyz\\")]
+    public void ShouldDecodeStringEndingWithABackslash(string text, string expected)
+    {
+        Assert.Equal(expected, Character.DecodeString(new TextSpan(text)).ToString());
+        Assert.Equal(expected, Character.DecodeString(text).ToString());
+        Assert.Equal(expected, Character.DecodeString("'" + text + "'", 1, text.Length).ToString());
+    }
+
     [Fact]
     public void ShouldDecodeStringWithOffset()
     {

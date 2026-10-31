@@ -13,19 +13,60 @@ namespace Parlot;
 /// This class is used to return tokens extracted from the input buffer.
 /// </summary>
 public class Scanner
+#if PARLOT_STANDALONE
+    // Generated parsers allocate a scanner for each parse. Their scanner is its own cursor rather than an object
+    // referencing one, the types are internal to the consuming assembly.
+    : Cursor
+#endif
 {
-    public readonly string Buffer;
+#if PARLOT_STANDALONE
+    public Cursor Cursor
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => this;
+    }
+#else
     public readonly Cursor Cursor;
+
+    /// <summary>
+    /// The buffered text, see <see cref="Cursor.Buffer"/>.
+    /// </summary>
+    public string Buffer => Cursor.Buffer;
+#endif
 
     /// <summary>
     /// Scans some text.
     /// </summary>
     /// <param name="buffer">The string containing the text to scan.</param>
-    public Scanner(string buffer)
+    public Scanner(string buffer) : this(buffer, TextPosition.Start, isFinal: true)
     {
-        Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-        Cursor = new Cursor(Buffer, TextPosition.Start);
     }
+
+    /// <summary>
+    /// Scans some text which may be followed by more input.
+    /// </summary>
+    /// <param name="buffer">The string containing the text to scan.</param>
+    /// <param name="isFinal"><see langword="false"/> when more text may follow <paramref name="buffer"/>. See <see cref="Cursor.HitEnd"/>.</param>
+    public Scanner(string buffer, bool isFinal) : this(buffer, TextPosition.Start, isFinal)
+    {
+    }
+
+    /// <summary>
+    /// Scans some text from a given position, which may be followed by more input.
+    /// </summary>
+    /// <param name="buffer">The string containing the text to scan.</param>
+    /// <param name="start">The initial position. Its offset indexes into <paramref name="buffer"/>, its line and column are reported as-is.</param>
+    /// <param name="isFinal"><see langword="false"/> when more text may follow <paramref name="buffer"/>. See <see cref="Cursor.HitEnd"/>.</param>
+    public Scanner(string buffer, in TextPosition start, bool isFinal)
+#if PARLOT_STANDALONE
+        : base(buffer ?? throw new ArgumentNullException(nameof(buffer)), start, isFinal)
+    {
+    }
+#else
+    {
+        Cursor = new Cursor(buffer ?? throw new ArgumentNullException(nameof(buffer)), start, isFinal);
+    }
+#endif
 
     /// <summary>
     /// Reads any whitespace without generating a token.
@@ -43,6 +84,7 @@ public class Scanner
         return true;
     }
 
+    // The default set has its own loop, with a constant mask, since it's the common case
     private void SkipRemainingWhiteSpaceOrNewLine()
     {
         var span = Cursor.Span;
@@ -51,6 +93,38 @@ public class Scanner
         var i = 0;
 
         while (++i < length && Character.IsWhiteSpaceOrNewLine(span[i])) ;
+
+        Cursor.Advance(i);
+    }
+
+    /// <summary>
+    /// Reads any whitespace or new line of a set without generating a token.
+    /// </summary>
+    /// <returns>Whether some white space was read.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool SkipWhiteSpaceOrNewLine(WhiteSpaceSet set) => SkipWhiteSpaceOrNewLine(Character.GetWhiteSpaceOrNewLineMask(set));
+
+    // The mask is a white space or new line bit of Character._characterData
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool SkipWhiteSpaceOrNewLine(byte mask)
+    {
+        if (!Character.HasMask(Cursor.Current, mask))
+        {
+            return false;
+        }
+
+        SkipRemainingWhiteSpaceOrNewLine(mask);
+        return true;
+    }
+
+    private void SkipRemainingWhiteSpaceOrNewLine(byte mask)
+    {
+        var span = Cursor.Span;
+        var length = span.Length;
+
+        var i = 0;
+
+        while (++i < length && Character.HasMask(span[i], mask)) ;
 
         Cursor.Advance(i);
     }
@@ -80,6 +154,39 @@ public class Scanner
         Cursor.AdvanceNoNewLines(i);
     }
 
+    /// <summary>
+    /// Reads any whitespace of a set, but no new line, without generating a token.
+    /// </summary>
+    /// <returns>Whether some white space was read.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool SkipWhiteSpace(WhiteSpaceSet set) => SkipWhiteSpace(Character.GetWhiteSpaceMask(set));
+
+    // The mask is a white space bit of Character._characterData, which has no new line
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool SkipWhiteSpace(byte mask)
+    {
+        if (!Character.HasMask(Cursor.Current, mask))
+        {
+            return false;
+        }
+
+        // Splitting such that not all code is inlined
+        SkipRemainingWhiteSpace(mask);
+        return true;
+    }
+
+    private void SkipRemainingWhiteSpace(byte mask)
+    {
+        var span = Cursor.Span;
+        var length = span.Length;
+
+        var i = 0;
+
+        while (++i < length && Character.HasMask(span[i], mask)) ;
+
+        Cursor.AdvanceNoNewLines(i);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     [Obsolete("Not optimized")]
     public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
@@ -102,7 +209,7 @@ public class Scanner
 
         ReadWhile(other, out _);
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -141,97 +248,147 @@ public class Scanner
     public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
     {
         // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
+        // The chars are counted on the span first such that the cursor only moves once, and not at all when there is no number.
 
-        var start = Cursor.Position;
+        var span = Cursor.Span;
+        var length = ScanDecimal(span, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, decimalSeparator, groupSeparator, out var reachedEnd);
 
-        if (allowLeadingSign)
+        if (reachedEnd)
         {
-            if (Cursor.Current is '-' or '+')
-            {
-                Cursor.AdvanceNoNewLines(1);
-            }
+            // More digits could follow the end of the buffer
+            Cursor.MarkHitEnd();
         }
 
-        if (!ReadInteger(out number))
+        if (length == 0)
         {
-            // If there is no number, check if the decimal separator is allowed and present, otherwise fail
-            if (!allowDecimalSeparator || Cursor.Current != decimalSeparator)
-            {
-                Cursor.ResetPosition(start);
-                return false;
-            }
+            number = [];
+            return false;
         }
 
-        // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
-        if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
+        number = span.Slice(0, length);
+        Cursor.AdvanceNoNewLines(length);
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the length of the decimal number <paramref name="text"/> starts with, or 0 when it doesn't start with one.
+    /// </summary>
+    /// <param name="text">The text to read.</param>
+    /// <param name="allowLeadingSign">Whether the number can start with <c>'-'</c> or <c>'+'</c>.</param>
+    /// <param name="allowDecimalSeparator">Whether the number can have a decimal part.</param>
+    /// <param name="allowGroupSeparator">Whether the integral part can have group separators.</param>
+    /// <param name="allowExponent">Whether the number can have an exponent.</param>
+    /// <param name="decimalSeparator">The decimal separator.</param>
+    /// <param name="groupSeparator">The group separator.</param>
+    /// <param name="reachedEnd">
+    /// Whether the number was read up to the end of <paramref name="text"/>, so that the text which follows it could change
+    /// it, including when the number doesn't use the chars it read last, like the <c>e</c> of <c>1e</c>.
+    /// </param>
+    /// <remarks>
+    /// The number is read like <see cref="ReadDecimal(bool, bool, bool, bool, out ReadOnlySpan{char}, char, char)"/> reads it,
+    /// which moves the cursor over it. Generated parsers read it on the span they match without the cursor.
+    /// </remarks>
+    internal static int ScanDecimal(ReadOnlySpan<char> text, bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, char decimalSeparator, char groupSeparator, out bool reachedEnd)
+    {
+        var i = 0;
+
+        if (allowLeadingSign && i < text.Length && text[i] is '-' or '+')
         {
-            var beforeGroupPosition = Cursor.Position;
+            i++;
+        }
+
+        var integralStart = i;
+        i = ScanDigits(text, i);
+
+        // The furthest char read, which a group separator or an exponent the number doesn't use can be after
+        var furthest = i;
+        var hasIntegralPart = i != integralStart;
+
+        // A number without integral part must have a decimal part, e.g. `.5`
+        if (!hasIntegralPart && (!allowDecimalSeparator || i >= text.Length || text[i] != decimalSeparator))
+        {
+            reachedEnd = furthest >= text.Length;
+            return 0;
+        }
+
+        // An integral part without digits can't have group separators
+        if (hasIntegralPart && allowGroupSeparator && i < text.Length && text[i] == groupSeparator)
+        {
+            var beforeGroup = i;
 
             // Group separators can be repeated as many times
             while (true)
             {
-                if (Cursor.Current == groupSeparator)
+                if (i < text.Length && text[i] == groupSeparator)
                 {
-                    Cursor.AdvanceNoNewLines(1);
-                }
-                else if (!ReadInteger())
-                {
-                    // it was not a group separator so go back where the symbol was and stop
-                    Cursor.ResetPosition(beforeGroupPosition);
-                    break;
+                    i++;
                 }
                 else
                 {
-                    beforeGroupPosition = Cursor.Position;
+                    var digits = ScanDigits(text, i);
+
+                    if (digits == i)
+                    {
+                        // it was not a group separator so go back where the symbol was and stop
+                        furthest = i;
+                        i = beforeGroup;
+                        break;
+                    }
+
+                    i = beforeGroup = digits;
                 }
             }
         }
 
-        var beforeDecimalSeparator = Cursor.Position;
-
-        if (allowDecimalSeparator && Cursor.Current == decimalSeparator)
+        if (allowDecimalSeparator && i < text.Length && text[i] == decimalSeparator)
         {
-            Cursor.AdvanceNoNewLines(1);
+            var afterSeparator = i + 1;
 
-            var numberIsEmpty = number.IsEmpty;
+            i = ScanDigits(text, afterSeparator);
+            furthest = Math.Max(furthest, i);
 
-            if (!ReadInteger(out number))
+            // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`.
+            // A trailing separator is kept otherwise, e.g. `1.`, and an exponent can still follow it, e.g. `1.e5`.
+            if (i == afterSeparator && !hasIntegralPart)
             {
-                // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`
-                if (numberIsEmpty)
-                {
-                    Cursor.ResetPosition(beforeDecimalSeparator);
-
-                    return false;
-                }
-
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
-                return true;
+                reachedEnd = furthest >= text.Length;
+                return 0;
             }
         }
 
-        var beforeExponent = Cursor.Position;
-
-        if (allowExponent && (Cursor.Current is 'e' or 'E'))
+        if (allowExponent && i < text.Length && text[i] is 'e' or 'E')
         {
-            Cursor.AdvanceNoNewLines(1);
+            var exponent = i + 1;
 
-            if (Cursor.Current is '-' or '+')
+            if (exponent < text.Length && text[exponent] is '-' or '+')
             {
-                Cursor.AdvanceNoNewLines(1);
+                exponent++;
             }
 
-            // The exponent must be followed by a number, without a group separator, otherwise backtrack to before the exponent
-            if (!ReadInteger(out _))
+            var digits = ScanDigits(text, exponent);
+            furthest = Math.Max(furthest, digits);
+
+            // The exponent must be followed by a number, without a group separator, otherwise it isn't part of the number
+            if (digits != exponent)
             {
-                Cursor.ResetPosition(beforeExponent);
-                number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
-                return true;
+                i = digits;
             }
         }
 
-        number = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
-        return true;
+        reachedEnd = Math.Max(furthest, i) >= text.Length;
+        return i;
+    }
+
+    // Returns the index of the first char from start which isn't a decimal digit
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ScanDigits(ReadOnlySpan<char> text, int start)
+    {
+        while (start < text.Length && Character.IsDecimalDigit(text[start]))
+        {
+            start++;
+        }
+
+        return start;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -282,7 +439,7 @@ public class Scanner
         }
 
         Cursor.AdvanceNoNewLines(next);
-        result = Buffer.AsSpan(Cursor.Offset - next, next);
+        result = Cursor.GetSpan(Cursor.Offset - next, next);
 
         return true;
     }
@@ -305,16 +462,21 @@ public class Scanner
             return false;
         }
 
-        var start = Cursor.Offset;
+        // The chars are counted first such that the cursor only moves once
 
-        Cursor.Advance();
+        var span = Cursor.Span;
+        var size = 1;
 
-        while (!Cursor.Eof && predicate(Cursor.Current))
+        while (size < span.Length && predicate(span[size]))
         {
-            Cursor.Advance();
+            size++;
         }
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        // The lines of the chars, which can be new lines, are counted when the position is read
+        Cursor.AdvanceNoNewLines(size);
+
+        // The span was read before the cursor moved, the buffer is the same
+        result = span.Slice(0, size);
 
         return true;
     }
@@ -322,17 +484,57 @@ public class Scanner
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadNonWhiteSpace() => ReadNonWhiteSpace(out _);
 
-    public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result)
-    {
-        return ReadWhile(static x => !Character.IsWhiteSpace(x), out result);
-    }
+    public bool ReadNonWhiteSpace(out ReadOnlySpan<char> result) => ReadNonWhiteSpace((byte)CharacterMask.WhiteSpace, out result);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadNonWhiteSpaceOrNewLine() => ReadNonWhiteSpaceOrNewLine(out _);
 
-    public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result)
+    public bool ReadNonWhiteSpaceOrNewLine(out ReadOnlySpan<char> result) => ReadNonWhiteSpace((byte)CharacterMask.WhiteSpaceOrNewLine, out result);
+
+#if NET8_0_OR_GREATER
+    // The vectorized search has a setup cost that only pays off on runs longer than most tokens, so the first chars
+    // are checked with the table
+    private const int NonWhiteSpaceTableLength = 16;
+#endif
+
+    /// <summary>
+    /// Reads the chars up to the first white space of a mask of <see cref="Character"/>'s table, with or without new lines.
+    /// </summary>
+    internal bool ReadNonWhiteSpace(byte mask, out ReadOnlySpan<char> result)
     {
-        return ReadWhile(static x => !Character.IsWhiteSpaceOrNewLine(x), out result);
+        var span = Cursor.Span;
+#if NET8_0_OR_GREATER
+        var tableLength = Math.Min(span.Length, NonWhiteSpaceTableLength);
+#else
+        var tableLength = span.Length;
+#endif
+        var size = 0;
+
+        while (size < tableLength && !Character.HasMask(span[size], mask))
+        {
+            size++;
+        }
+
+#if NET8_0_OR_GREATER
+        // A longer run is searched with SearchValues instead of a table lookup per char
+        if (size == tableLength && size < span.Length)
+        {
+            var index = span.Slice(size).IndexOfAny(Character.GetWhiteSpaceSearchValues(mask));
+            size = index < 0 ? span.Length : size + index;
+        }
+#endif
+
+        // Also the case at the end of the text
+        if (size == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = span.Slice(0, size);
+        Cursor.AdvanceNoNewLines(size);
+
+        return true;
     }
 
     /// <summary>
@@ -365,7 +567,7 @@ public class Scanner
         var start = Cursor.Offset;
         Cursor.Advance();
 
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
         return true;
     }
 
@@ -388,7 +590,7 @@ public class Scanner
 
         var start = Cursor.Offset;
         Cursor.Advance(text.Length);
-        result = Buffer.AsSpan(start, Cursor.Offset - start);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         return true;
     }
@@ -399,7 +601,7 @@ public class Scanner
     [Obsolete("Prefer bool ReadAnyOf(ReadOnlySpan<char>, out ReadOnlySpan<char>)")]
     public bool ReadAnyOf(ReadOnlySpan<char> chars, StringComparison comparisonType, out ReadOnlySpan<char> result)
     {
-        var current = Cursor.Buffer.AsSpan(Cursor.Offset, 1);
+        var current = Cursor.GetSpan(Cursor.Offset, 1);
 
         var index = chars.IndexOf(current, comparisonType);
 
@@ -411,7 +613,7 @@ public class Scanner
 
         var start = Cursor.Offset;
         Cursor.Advance(index + 1);
-        result = Cursor.Buffer.AsSpan(start, index + 1);
+        result = Cursor.GetSpan(start, index + 1);
 
         return true;
     }
@@ -423,33 +625,22 @@ public class Scanner
     {
         var start = Cursor.Offset;
 
-        while (true)
+        // Current is the null char at the end of the text, where there is nothing to read even if it is expected
+        while (!Cursor.Eof && chars.IndexOf(Cursor.Current) != -1)
         {
-            var current = Cursor.Current;
-            var index = chars.IndexOf(current);
-
-            if (index == -1)
-            {
-                if (Cursor.Offset == start)
-                {
-                    result = [];
-                    return false;
-                }
-
-                var length = Cursor.Offset - start;
-
-                result = Cursor.Buffer.AsSpan(start, length);
-                return true;
-            }
-
-            if (Cursor.Eof)
-            {
-                result = [];
-                return false;
-            }
-
             Cursor.Advance(1);
         }
+
+        var length = Cursor.Offset - start;
+
+        if (length == 0)
+        {
+            result = [];
+            return false;
+        }
+
+        result = Cursor.GetSpan(start, length);
+        return true;
     }
 
 #if NET8_0_OR_GREATER
@@ -559,11 +750,20 @@ public class Scanner
     /// This method doesn't escape the string, but only validates its content is syntactically correct.
     /// The resulting Span contains the original quotes.
     /// </remarks>
-    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result)
+    public bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result) => ReadQuotedString(quoteChar, out result, out _);
+
+    /// <summary>
+    /// Reads a string token enclosed in quotes or custom characters, and whether it contains escape sequences to decode.
+    /// </summary>
+    internal bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result, out bool hasEscape)
     {
         var startChar = Cursor.Current;
 
-        if (startChar != quoteChar)
+        // Only a successful read of the escape sequences sets it
+        hasEscape = false;
+
+        // Current is also the null char at the end of the text, where there is no quote to read
+        if (startChar != quoteChar || Cursor.Eof)
         {
             result = [];
             return false;
@@ -580,39 +780,36 @@ public class Scanner
         if (next == -1)
         {
             // There is no end quote nor an escape sequence, not a string
+            Cursor.MarkHitEnd();
             result = [];
             return false;
         }
 
-        // When the quote char is a backslash it is also the escape char, in which case the start quote
-        // is itself the first escape sequence and the string is always decoded escape by escape.
-        var quoteIsEscape = startChar == '\\';
-
         // Index of the match in the full span, the start quote is at index 0
-        var nextEscape = quoteIsEscape ? 0 : next + 1;
+        var nextEscape = next + 1;
 
-        if (!quoteIsEscape)
+        // If the first match is the end quote there is no escape to decode, return the string as-is.
+        // When the quote char is a backslash it is also the escape char, so it can't be escaped and
+        // this is always the case: the string ends at the next backslash and is never decoded.
+        if (span[nextEscape] == startChar)
         {
-            // If the first match is the end quote there is no escape to decode, return the string as-is
-            if (span[nextEscape] == startChar)
-            {
-                Cursor.Advance(next + 2); // include start quote
+            Cursor.Advance(next + 2); // include start quote
 
-                result = Cursor.Buffer.AsSpan().Slice(startOffset, next + 2);
-                return true;
-            }
-
-            // The end quote is only after the escape sequences. Make sure there is one at all before
-            // decoding them one by one, as reaching the end of the buffer that way is far more costly.
-            if (span.Slice(next + 2).IndexOf(startChar) == -1)
-            {
-                result = [];
-                return false;
-            }
+            result = Cursor.GetSpan(startOffset, next + 2);
+            return true;
         }
 
-        // Decoding the escape sequences needs to restore the line and the column when it fails
-        var start = Cursor.Position;
+        // The end quote is only after the escape sequences. Make sure there is one at all before
+        // decoding them one by one, as reaching the end of the buffer that way is far more costly.
+        if (span.Slice(next + 2).IndexOf(startChar) == -1)
+        {
+            Cursor.MarkHitEnd();
+            result = [];
+            return false;
+        }
+
+        // Decoding the escape sequences moves the cursor, which is moved back when it fails
+        var start = Cursor.Offset;
 
         while (nextEscape != -1)
         {
@@ -657,6 +854,11 @@ public class Scanner
 
                         if (!isValidUnicode)
                         {
+                            if (Cursor.Span.Length <= 4)
+                            {
+                                Cursor.MarkHitEnd();
+                            }
+
                             Cursor.ResetPosition(start);
 
                             result = [];
@@ -705,6 +907,12 @@ public class Scanner
 
                         if (!isValidHex)
                         {
+                            if (firstNonHexDigit == -1)
+                            {
+                                // The hex digits run to the end of the buffer
+                                Cursor.MarkHitEnd();
+                            }
+
                             Cursor.ResetPosition(start);
 
                             result = [];
@@ -749,6 +957,15 @@ public class Scanner
 
                         break;
                     default:
+
+                        // The quote char can be escaped, whichever it is. Match excludes the null char the cursor
+                        // reports at the end of the text, which a null quote char would otherwise be taken for.
+                        if (Cursor.Match(startChar))
+                        {
+                            Cursor.Advance();
+                            break;
+                        }
+
                         Cursor.ResetPosition(start);
 
                         result = [];
@@ -766,6 +983,8 @@ public class Scanner
             }
             else if (nextEscape == -1)
             {
+                // No end quote before the end of the buffer
+                Cursor.MarkHitEnd();
                 Cursor.ResetPosition(start);
 
                 result = [];
@@ -773,7 +992,10 @@ public class Scanner
             }
         }
 
-        result = Cursor.Buffer.AsSpan(start.Offset, Cursor.Offset - start.Offset);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
+
+        // Only a string with escape sequences gets here, the others returned before decoding anything
+        hasEscape = true;
 
         return true;
     }

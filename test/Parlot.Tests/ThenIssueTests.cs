@@ -30,7 +30,7 @@ public class ThenIssueTests
         var simpleParser = OneOf(commentParser.Then<BaseExp>(), expressionParser);
 
         var success = simpleParser.TryParse(testString, out var result);
-        
+
         Assert.True(success);
     }
 

@@ -1,21 +1,23 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
-using System;
 
 namespace Parlot.Fluent;
 
-public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly bool _includeNewLines;
 
-    private static char[] _whiteSpaceChars =>
+    // Shared by the parsers, which only read them (ExpectedChars is exposed as char[] to the lookup tables).
+    // They are the chars of the default set (Character.WhiteSpaces and Character.WhiteSpaceOrNewLines), which contains the
+    // chars of every WhiteSpaceSet.
+    private static readonly char[] _whiteSpaceChars =
     [
-        '\u0009', '\u000C', '\u0020', '\u00A0', '\u1680', '\u180E', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF'
+        '\u0009', '\u000C', '\u0020', '\u00A0', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000'
     ];
 
-    private static char[] _whiteSpaceOrNewLineChars =>
+    private static readonly char[] _whiteSpaceOrNewLineChars =
     [
-        '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0020', '\u00A0', '\u1680', '\u180E', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF'
+        '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0020', '\u0085', '\u00A0', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u2028', '\u2029', '\u202F', '\u205F', '\u3000'
     ];
 
     public bool CanSeek { get; } = true;
@@ -33,19 +35,26 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
         Name = "WhiteSpaceLiteral";
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var start = context.Scanner.Cursor.Offset;
 
         if (_includeNewLines)
         {
-            context.Scanner.SkipWhiteSpaceOrNewLine();
+            context.Scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
         }
         else
         {
-            context.Scanner.SkipWhiteSpace();
+            context.Scanner.SkipWhiteSpace(context.WhiteSpaceMask);
         }
 
         var end = context.Scanner.Cursor.Offset;
@@ -56,16 +65,20 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
             return false;
         }
 
-        result.Set(start, context.Scanner.Cursor.Offset, new TextSpan(context.Scanner.Buffer, start, end - start));
+        result.Set(start, context.Scanner.Cursor.Offset, context.Scanner.Cursor.CreateSpan(start, end - start));
 
         context.ExitParser(this);
         return true;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
@@ -75,14 +88,14 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
         var endName = $"end{context.NextNumber()}";
 
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        
+
         if (_includeNewLines)
         {
-            result.Body.Add($"{scannerName}.SkipWhiteSpaceOrNewLine();");
+            result.Body.Add($"{scannerName}.SkipWhiteSpaceOrNewLine({context.ParseContextName}.WhiteSpaceOrNewLineMask);");
         }
         else
         {
-            result.Body.Add($"{scannerName}.SkipWhiteSpace();");
+            result.Body.Add($"{scannerName}.SkipWhiteSpace({context.ParseContextName}.WhiteSpaceMask);");
         }
 
         result.Body.Add($"var {endName} = {cursorName}.Offset;");
@@ -90,7 +103,7 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
         result.Body.Add("{");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName}, {endName} - {startName});");
+            result.Body.Add($"    {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {endName} - {startName});");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");

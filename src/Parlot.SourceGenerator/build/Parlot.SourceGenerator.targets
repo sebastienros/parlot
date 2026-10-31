@@ -17,13 +17,26 @@
            Text="The System.Memory PackageReference must not use PrivateAssets=all when packaging generated Parlot parsers for $(TargetFramework)." />
   </Target>
 
+  <!-- IDE project systems need grammar items during evaluation, before any build targets run. -->
+  <ItemGroup>
+    <AdditionalFiles Include="**/*.parlot.cs"
+                     Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder);@(AdditionalFiles)" />
+    <Compile Remove="**/*.parlot.cs" />
+  </ItemGroup>
   <Target Name="CollectParlotGrammarFiles"
           BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun;CoreCompile">
     <ItemGroup>
-      <AdditionalFiles Include="**/*.parlot.cs"
-                       Exclude="$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder);@(AdditionalFiles)" />
       <Compile Remove="@(AdditionalFiles)"
                Condition="$([System.String]::Copy('%(AdditionalFiles.Identity)').EndsWith('.parlot.cs', System.StringComparison.OrdinalIgnoreCase))" />
     </ItemGroup>
+  </Target>
+  <Target Name="IsolateParlotDesignTimeEditorConfig"
+          BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun"
+          Condition="'$(DesignTimeBuild)' == 'true' or ('$(BuildingInsideVisualStudio)' == 'true' and '$(BuildingProject)' == 'false')">
+    <!-- Real builds must not overwrite the IDE's factory-execution flags. -->
+    <PropertyGroup>
+      <GeneratedMSBuildEditorConfigFile Condition="'$(GeneratedMSBuildEditorConfigFile)' != ''">$(GeneratedMSBuildEditorConfigFile).Parlot.DesignTime.editorconfig</GeneratedMSBuildEditorConfigFile>
+      <GeneratedMSBuildEditorConfigFile Condition="'$(GeneratedMSBuildEditorConfigFile)' == ''">$(IntermediateOutputPath)$(MSBuildProjectName).Parlot.DesignTime.editorconfig</GeneratedMSBuildEditorConfigFile>
+    </PropertyGroup>
   </Target>
 </Project>

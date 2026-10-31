@@ -105,6 +105,56 @@ public class BuildContextIntegrationTests
     internal static Task<string> RunDotnet(string directory, params string[] arguments)
         => RunProcess(directory, "dotnet", arguments);
 
+    [Fact]
+    public void Generating_Standalone_Parser_Does_Not_Lock_Referenced_Assembly()
+    {
+        var directory = Directory.CreateDirectory(Path.Combine(
+            Path.GetTempPath(), "Parlot.ReferenceLoading.Tests", Guid.NewGuid().ToString("N"))).FullName;
+        try
+        {
+            var dependency = CreateCompilation()
+                .WithAssemblyName("GrammarDependency" + Guid.NewGuid().ToString("N"))
+                .RemoveAllSyntaxTrees()
+                .AddSyntaxTrees(CSharpSyntaxTree.ParseText("""
+                    namespace BuildContextDependency;
+                    public static class Tokens
+                    {
+                        public static string Text => "ok";
+                    }
+                    """));
+            using var stream = new MemoryStream();
+            Assert.True(dependency.Emit(stream).Success);
+            var path = Path.Combine(directory, dependency.AssemblyName + ".dll");
+            var bytes = stream.ToArray();
+            File.WriteAllBytes(path, bytes);
+            var compilation = CreateCompilation().AddReferences(
+                MetadataReference.CreateFromImage(bytes, filePath: path));
+            var (result, output) = GeneratorDiagnosticsTests.RunGenerator(
+                compilation,
+                new Dictionary<string, string>
+                {
+                    ["build_property.TargetFramework"] = "net10.0",
+                    ["build_property.TargetFrameworkIdentifier"] = ".NETCoreApp",
+                    ["build_property.TargetFrameworkVersion"] = "v10.0",
+                    ["build_property.MSBuildProjectDirectory"] = directory
+                },
+                additionalTexts: [new GrammarText(Grammar.Replace(
+                    """Text("ok")""", "Text(BuildContextDependency.Tokens.Text)", StringComparison.Ordinal))]);
+
+            Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            Assert.DoesNotContain(output.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            Assert.Contains(result.Results.SelectMany(static item => item.GeneratedSources),
+                static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
+            using var writable = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            writable.SetLength(0);
+            writable.Write(bytes);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     internal static async Task<string> RunProcess(string directory, string executable, params string[] arguments)
     {
         using var process = new Process
@@ -117,6 +167,14 @@ public class BuildContextIntegrationTests
                 UseShellExecute = false
             }
         };
+        // dotnet test passes its own SDK's MSBuild paths down, which breaks a child pinned to another SDK by global.json
+        foreach (var name in process.StartInfo.Environment.Keys.ToArray())
+        {
+            if (name.StartsWith("MSBuild", StringComparison.OrdinalIgnoreCase))
+            {
+                process.StartInfo.Environment.Remove(name);
+            }
+        }
         process.StartInfo.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en-US";
         process.StartInfo.Environment["DOTNET_NOLOGO"] = "true";
         foreach (var argument in arguments)

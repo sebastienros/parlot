@@ -16,6 +16,27 @@ namespace Parlot.SourceGenerator.Tests;
 
 public class GeneratorDiagnosticsTests
 {
+    [Fact]
+    public void Replay_Support_Is_Only_Emitted_When_Requested()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                public static Parser<string> Build() => Parsers.Literals.Text("hello");
+            }
+            """;
+        var (normal, _) = RunStandalone(Declaration, grammar);
+        Assert.DoesNotContain(normal.Results.SelectMany(static result => result.GeneratedSources),
+            static source => source.SourceText.ToString().Contains("ParserDiagnostics", StringComparison.Ordinal));
+        var (diagnostic, compilation) = RunStandalone(Declaration, grammar.Replace("nameof(TryParse))", "nameof(TryParse), Diagnostics = true)", StringComparison.Ordinal));
+        Assert.Empty(compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        Assert.Contains(diagnostic.Results.SelectMany(static result => result.GeneratedSources),
+            static source => source.HintName.EndsWith("ParserDiagnostics.g.cs", StringComparison.Ordinal));
+    }
+
     private const string Declaration = """
         public static partial class Grammar
         {
@@ -141,7 +162,7 @@ public class GeneratorDiagnosticsTests
                 private static Parser<string> Build()
                 {
                     var prefix = "hello";
-                    return Parsers.Terms.Identifier().Then(value => prefix + value.ToString());
+                    return Parsers.Terms.NonWhiteSpace().Then(value => prefix + value.ToString());
                 }
             }
             """;
@@ -150,6 +171,50 @@ public class GeneratorDiagnosticsTests
 
         var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT015");
         Assert.Contains("prefix", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scanner_Capturing_A_Local_Reports_A_Diagnostic()
+    {
+        const string grammar = """
+            using System;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build()
+                {
+                    var terminator = ';';
+                    return Parsers.Literals.Scan(span => span.IndexOf(terminator)).Then(static value => value.ToString());
+                }
+            }
+            """;
+
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT015");
+        Assert.Contains("terminator", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Static_Scanner_Generates_Standalone_Source()
+    {
+        const string grammar = """
+            using System;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() =>
+                    Parsers.Terms.Scan(static span => span.IndexOf(';') is var i and > 0 ? i : 0, "abc").Then(static value => value.ToString());
+            }
+            """;
+
+        var (result, compilation) = RunStandalone(Declaration, grammar);
+
+        AssertNoErrors(result, compilation);
     }
 
     [Fact]
@@ -162,7 +227,7 @@ public class GeneratorDiagnosticsTests
             {
                 [GenerateParser(nameof(TryParse))]
                 private static Parser<string> Build() =>
-                    Parsers.Terms.Identifier().Then(static value => value.ToString());
+                    Parsers.Terms.NonWhiteSpace().Then(static value => value.ToString());
             }
             """;
 
@@ -417,7 +482,7 @@ public class GeneratorDiagnosticsTests
     {
         using var project = new TemporaryDirectory();
         var absolutePath = Path.Combine(project.Path, "Secret.cs");
-        var literal = Parlot.SourceGeneration.LiteralHelper.StringToLiteral(absolutePath);
+        var literal = SourceGeneration.LiteralHelper.StringToLiteral(absolutePath);
         var grammar = $$"""
             using Parlot.Fluent;
             using Parlot.SourceGenerator;
@@ -517,7 +582,7 @@ public class GeneratorDiagnosticsTests
             {
                 [GenerateParser(nameof(TryParse))]
                 private static Parser<string> Build() =>
-                    Parsers.Terms.Identifier().Then(static value => value.ToString());
+                    Parsers.Terms.NonWhiteSpace().Then(static value => value.ToString());
             }
             """;
         var path = Path.Combine(Path.GetTempPath(), "quote\"#line\nGrammar.parlot.cs");
@@ -534,7 +599,7 @@ public class GeneratorDiagnosticsTests
         var declarations = string.Join(
             Environment.NewLine,
             values.Select((value, index) =>
-                $"internal const string Value{index} = {Parlot.SourceGeneration.LiteralHelper.StringToLiteral(value)};"));
+                $"internal const string Value{index} = {SourceGeneration.LiteralHelper.StringToLiteral(value)};"));
         var tree = CSharpSyntaxTree.ParseText(
             $"internal static class EscapedValues {{{Environment.NewLine}{declarations}{Environment.NewLine}}}",
             new CSharpParseOptions(LanguageVersion.CSharp12));
@@ -575,7 +640,7 @@ public class GeneratorDiagnosticsTests
             .ToList();
         if (referenceParlot)
         {
-            references.Add(MetadataReference.CreateFromFile(typeof(Parlot.Fluent.Parser<>).Assembly.Location));
+            references.Add(MetadataReference.CreateFromFile(typeof(Fluent.Parser<>).Assembly.Location));
         }
         references.Add(MetadataReference.CreateFromFile(typeof(GeneratorDiagnosticsTests).Assembly.Location));
 

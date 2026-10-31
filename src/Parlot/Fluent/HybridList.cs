@@ -15,6 +15,8 @@ namespace Parlot.Fluent;
 /// <remarks>
 /// This type is public to support source-generated parsers in consumer assemblies.
 /// Parser consumers should use <see cref="IReadOnlyList{T}"/> rather than depending on this implementation.
+/// The built-in list parsers no longer return it: they accumulate their items on a scratch stack and return an
+/// array of the exact size.
 /// </remarks>
 /// <typeparam name="T">The element type.</typeparam>
 #nullable enable
@@ -64,7 +66,6 @@ public sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
         if (_list is not null)
         {
             _list.Add(item);
-            _count++;
         }
         else
         {
@@ -72,19 +73,15 @@ public sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
             {
                 case 0:
                     _item1 = item;
-                    _count++;
                     break;
                 case 1:
                     _item2 = item;
-                    _count++;
                     break;
                 case 2:
                     _item3 = item;
-                    _count++;
                     break;
                 case 3:
                     _item4 = item;
-                    _count++;
                     break;
                 case 4:
                     // Transition to List<T>
@@ -93,12 +90,13 @@ public sealed class HybridList<T> : IReadOnlyList<T>, ICollection<T>
                     _item2 = default;
                     _item3 = default;
                     _item4 = default;
-                    _count++;
                     break;
                 default:
                     throw new InvalidOperationException("Unexpected count value");
             }
         }
+
+        _count++;
     }
 
     // ICollection<T> is implemented so that BCL collections built from a parser result, e.g.

@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Threading;
-using Parlot;
 
 namespace Parlot.SourceGeneration;
 
@@ -151,11 +148,17 @@ public sealed class LambdaRegistry
     /// </summary>
     private static int TryInvokeForPointer(Delegate @delegate)
     {
+        // A span can't be boxed for DynamicInvoke
+        if (@delegate is Fluent.SpanScanner scanner)
+        {
+            return TryInvokeForPointer(scanner);
+        }
+
         try
         {
             var method = @delegate.Method;
             var parameters = method.GetParameters();
-            
+
             // Build default arguments for each parameter
             var args = new object?[parameters.Length];
             for (int i = 0; i < parameters.Length; i++)
@@ -163,7 +166,7 @@ public sealed class LambdaRegistry
                 var paramType = parameters[i].ParameterType;
                 args[i] = GetDefaultValue(paramType);
             }
-            
+
             var wasRegistering = LambdaPointer.IsRegistering;
             LambdaPointer.IsRegistering = true;
             try
@@ -179,7 +182,7 @@ public sealed class LambdaRegistry
             {
                 LambdaPointer.IsRegistering = wasRegistering;
             }
-            
+
             // Read the pointer that was set by the rewritten lambda
             return LambdaPointer.CurrentPointer;
         }
@@ -187,6 +190,26 @@ public sealed class LambdaRegistry
         {
             return -1;
         }
+    }
+
+    private static int TryInvokeForPointer(Fluent.SpanScanner scanner)
+    {
+        var wasRegistering = LambdaPointer.IsRegistering;
+        LambdaPointer.IsRegistering = true;
+        try
+        {
+            scanner(default);
+        }
+        catch
+        {
+            // Ignore exceptions from the original lambda body
+        }
+        finally
+        {
+            LambdaPointer.IsRegistering = wasRegistering;
+        }
+
+        return LambdaPointer.CurrentPointer;
     }
 
     /// <summary>

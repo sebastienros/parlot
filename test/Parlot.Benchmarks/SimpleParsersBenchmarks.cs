@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using Parlot.Fluent;
 using static Parlot.Fluent.Parsers;
 
@@ -14,7 +13,7 @@ namespace Parlot.Benchmarks;
 public class SimpleParsersBenchmarks
 {
     // ==================== Text ====================
-    
+
     private static readonly Parser<string> _textFluent = Terms.Text("hello");
 
     private const string TextInput = "hello world";

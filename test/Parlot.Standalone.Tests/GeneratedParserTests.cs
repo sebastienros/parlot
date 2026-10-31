@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -8,6 +9,125 @@ namespace Parlot.Standalone.Tests;
 
 public class GeneratedParserTests
 {
+    [Theory]
+    [InlineData("abc-->def", true, "abc")]
+    [InlineData("a-b->c-->d", true, "a-b->c")]
+    [InlineData("a==>b", true, "a")]
+    [InlineData("a-=-=b==>", true, "a-=-=b")]
+    [InlineData("abc", true, "abc")]
+    [InlineData("-->", false, null)]
+    [InlineData("", false, null)]
+    public void Text_Before_A_Seekable_Delimiter_Is_Searched(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseTextBefore(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseTextBefore(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc;def", "abc")]
+    [InlineData(";", "")]
+    [InlineData("", "")]
+    [InlineData("a\nb;c", "a\nb")]
+    public void Text_Before_A_Char_Is_Searched(string input, string expected)
+    {
+        Assert.True(Grammar.TryParseTextBeforeChar(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.True(Grammar.TryParseTextBeforeChar(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc", true, "abc")]
+    [InlineData("_a1-b", true, "_a1-b")]
+    [InlineData("@x y", true, "@x")]
+    [InlineData("1abc", false, null)]
+    [InlineData("", false, null)]
+    public void Identifier_With_Predicates_Counts_Its_Chars(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("12", true, "12")]
+    [InlineData("12345", true, "1234")]
+    [InlineData("12a", true, "12")]
+    [InlineData("1", false, null)]
+    [InlineData("1a", false, null)]
+    [InlineData("", false, null)]
+    public void Pattern_Counts_Its_Chars(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParsePattern(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParsePattern(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData(" ", false)]
+    [InlineData("a", false)]
+    public void Standalone_Eof_Checks_Only_The_Current_Position(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseEof(input, out var value));
+        Assert.Null(value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseEof(reader, out value));
+        Assert.Null(value);
+    }
+
+    [Theory]
+    [InlineData("42", true)]
+    [InlineData(" 42", true)]
+    [InlineData("42a", false)]
+    [InlineData("42 ", false)]
+    [InlineData("", false)]
+    public void Standalone_Eof_Preserves_The_Preceding_Result(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseNumberWithStandaloneEof(input, out var value));
+        Assert.Equal(success ? 42 : 0, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseNumberWithStandaloneEof(reader, out value));
+        Assert.Equal(success ? 42 : 0, value);
+    }
+
+    [Fact]
+    public void Both_Eof_Forms_Allow_Alternatives_To_Retry()
+    {
+        Assert.True(Grammar.TryParseEofFallback("42a", out var value));
+        Assert.Equal(42, value);
+        Assert.True(Grammar.TryParseStandaloneEofFallback("42a", out value));
+        Assert.Equal(42, value);
+        using var genericReader = new StringReader("42a");
+        Assert.True(Grammar.TryParseEofFallback(genericReader, out value));
+        Assert.Equal(42, value);
+        using var standaloneReader = new StringReader("42a");
+        Assert.True(Grammar.TryParseStandaloneEofFallback(standaloneReader, out value));
+        Assert.Equal(42, value);
+    }
+
+    [Theory]
+    [InlineData("255KeYwOrDVaLuEEnD", true)]
+    [InlineData("256KeYwOrDVaLuEEnD", false)]
+    [InlineData("-1KeYwOrDVaLuEEnD", false)]
+    [InlineData("255KeYwOrDVaLuE?", false)]
+    public void Skipped_Values_Preserve_Numeric_Validation_And_Retained_Casing(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseSkippedValues(input, out var value));
+        Assert.Equal(success ? "VaLuE" : null, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseSkippedValues(reader, out value));
+        Assert.Equal(success ? "VaLuE" : null, value);
+    }
+
     [Fact]
     public void Text_Choices_Preserve_Order_Backtracking_Capture_And_Custom_Whitespace()
     {
@@ -31,7 +151,53 @@ public class GeneratedParserTests
         Assert.False(Grammar.TryParseTextChoiceDiscarded(" \r\nif12!", out _));
         Assert.False(Grammar.TryParseTextChoice(new string('a', 100_000), out _));
         Assert.True(Grammar.TryParseTextChoicePosition(" \r\nline\r\nend!", out var position));
-        Assert.Equal((12, 4, 4), position);
+        // " \r\n" is skipped and "line\r\nend" matched: two line feeds, the CRLFs do not count twice
+        Assert.Equal((12, 3, 4), position);
+    }
+
+    [Fact]
+    public void Callbacks_Can_Use_The_Loop_Detection_Of_The_Context()
+    {
+        Assert.True(Grammar.TryParseContextLoopDetection("x", out var value));
+        Assert.Equal("True False True True False 0 False", value);
+    }
+
+    [Fact]
+    public void Scanned_Tokens_Track_New_Lines()
+    {
+        string[] inputs =
+        [
+            "abc d", "ab\ncd\ne f", "ab\ncd", "\nab c", "ab\n\n\n c", "a\r\nb\rc\n d",
+            new string('a', 70) + "\n" + new string('b', 70) + " x", new string('\n', 100) + "a",
+        ];
+
+        foreach (var input in inputs)
+        {
+            var token = input.Split(' ')[0];
+            var line = 1;
+            var column = 1;
+
+            // The cursor only ends a line on '\n'
+            foreach (var c in token)
+            {
+                if (c == '\n')
+                {
+                    line++;
+                    column = 1;
+                }
+                else
+                {
+                    column++;
+                }
+            }
+
+            Assert.True(Grammar.TryParseScanPosition(input, out var position));
+            Assert.Equal((token, token.Length, line, column), position);
+
+            using var reader = new StringReader(input);
+            Assert.True(Grammar.TryParseScanPosition(reader, out position));
+            Assert.Equal((token, token.Length, line, column), position);
+        }
     }
 
     [Fact]
@@ -166,6 +332,111 @@ public class GeneratedParserTests
             Assert.Equal(expected != null, Grammar.TryParseKeyword(input, out var value));
             Assert.Equal(expected, value);
         }
+    }
+
+    [Fact]
+    public void Prefix_Dispatched_Keywords_Agree_With_An_Ordered_Reference()
+    {
+        var words = Grammar.PrefixKeywordWords;
+
+        foreach (var input in PrefixInputs(words, seed: 431))
+        {
+            var text = " \r\n" + input;
+            var trimmed = text.TrimStart();
+            var offset = text.Length - trimmed.Length;
+            (int Value, int Offset)? expected = null;
+
+            for (var i = 0; i <= words.Length && expected == null; i++)
+            {
+                if (i == Grammar.PrefixKeywordFallback)
+                {
+                    var length = trimmed.TakeWhile(static c => c is >= 'a' and <= 'z').Count();
+                    expected = length > 0 ? (-1, offset + length) : null;
+                    continue;
+                }
+
+                var index = i < Grammar.PrefixKeywordFallback ? i : i - 1;
+                var word = words[index];
+
+                if (trimmed.StartsWith(word, StringComparison.Ordinal)
+                    && (trimmed.Length == word.Length || trimmed[word.Length] is not (>= 'a' and <= 'z' or >= 'A' and <= 'Z')))
+                {
+                    expected = (index, offset + word.Length);
+                }
+            }
+
+            Assert.Equal(expected.HasValue, Grammar.TryParsePrefixKeywords(text, out var value));
+            Assert.Equal(expected ?? default, value);
+        }
+    }
+
+    [Fact]
+    public void Prefix_Dispatched_Texts_Agree_With_An_Ordered_Reference()
+    {
+        var operators = Grammar.PrefixOperatorTexts;
+
+        foreach (var input in PrefixInputs(operators, seed: 577))
+        {
+            var text = " \r\n" + input;
+            var trimmed = text.TrimStart();
+            var index = Array.FindIndex(operators, op => trimmed.StartsWith(op, StringComparison.Ordinal));
+            (int Value, int Offset) expected = index < 0 ? default : (index, text.Length - trimmed.Length + operators[index].Length);
+
+            Assert.Equal(index >= 0, Grammar.TryParsePrefixOperators(text, out var value));
+            Assert.Equal(expected, value);
+
+            index = Array.FindIndex(operators, op => input.StartsWith(op + " ", StringComparison.Ordinal));
+            expected = index < 0 ? default : (index, operators[index].Length + 1);
+
+            Assert.Equal(index >= 0, Grammar.TryParsePrefixOperatorSequences(input, out value));
+            Assert.Equal(expected, value);
+        }
+    }
+
+    // Each alternative, shortened, extended and with each of its chars replaced, then random texts of their chars
+    private static string[] PrefixInputs(string[] words, int seed)
+    {
+        var inputs = new System.Collections.Generic.List<string> { "", " ", "x" };
+        var alphabet = string.Concat(words) + " xX9\u00e9\0";
+
+        foreach (var word in words)
+        {
+            foreach (var other in words)
+            {
+                inputs.Add(word + other);
+                inputs.Add(word + " " + other);
+            }
+
+            inputs.Add(word.Substring(0, word.Length - 1));
+            inputs.Add(word.Substring(1));
+            inputs.Add(word + "x");
+            inputs.Add(word + "9");
+            inputs.Add(word + "\u00e9");
+
+            for (var offset = 0; offset < word.Length; offset++)
+            {
+                for (var c = 0; c < 128; c++)
+                {
+                    inputs.Add(word.Substring(0, offset) + (char)c + word.Substring(offset + 1));
+                }
+            }
+        }
+
+        var random = new Random(seed);
+
+        for (var i = 0; i < 5000; i++)
+        {
+            var input = new char[random.Next(0, 16)];
+
+            for (var j = 0; j < input.Length; j++)
+            {
+                input[j] = random.Next(8) == 0 ? (char)random.Next(0, 65536) : alphabet[random.Next(alphabet.Length)];
+            }
+
+            inputs.Add(new string(input));
+        }
+
+        return inputs.ToArray();
     }
 
     [Theory]
@@ -304,7 +575,37 @@ public class GeneratedParserTests
         Assert.Equal(default, value);
         var exception = Assert.Throws<InvalidOperationException>(() => Grammar.TryParseThrowingCallback("x", out _));
         Assert.Equal("Callback failed", exception.Message);
-        Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber(null, out _));
+        Assert.Throws<ArgumentNullException>(() => Grammar.TryParseNumber((string)null, out _));
+    }
+
+    [Theory]
+    [InlineData("1+2", true, 1)]
+    [InlineData("42", true, 42)]
+    [InlineData("x", false, 0)]
+    public void Left_Recursive_Deferred_Fails_Instead_Of_Overflowing(string input, bool success, int expected)
+    {
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseLeftRecursive(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("12a", "12")]
+    [InlineData("  12a", "12")]
+    [InlineData("  1234x", "1234")]
+    [InlineData("1a", null)]
+    [InlineData("12", null)]
+    public void Char_Sets_Accept_String_Literals_On_Every_Target(string input, string expected)
+    {
+        // AnyOf("...") and NoneOf("...") bind to the string overloads, which a factory compiled for
+        // net472 or netstandard2.0 needs since a string doesn't convert to ReadOnlySpan<char> there.
+        Assert.Equal(expected != null, Grammar.TryParseDigits(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(expected != null, Grammar.TryParseDigits(reader, out value));
+        Assert.Equal(expected, value);
     }
 
     [Fact]

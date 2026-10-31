@@ -8,13 +8,17 @@ namespace Parlot.Fluent;
 /// Adapts an IParser&lt;T&gt; to a Parser&lt;T&gt; for use in contexts that require Parser.
 /// This is used internally to support covariance.
 /// </summary>
-internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
+internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly IParser<T> _parser;
 
+    // The wrapped parser when it is a Parser<T>, to call its typed Parse without boxing the value
+    private readonly Parser<T>? _typedParser;
+
     public IParserAdapter(IParser<T> parser)
     {
-        _parser = parser ?? throw new System.ArgumentNullException(nameof(parser));
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _typedParser = parser as Parser<T>;
 
         // Forward ISeekable properties from the wrapped parser if it implements ISeekable
         if (_parser is ISeekable seekable)
@@ -31,8 +35,16 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
 
     public bool SkipWhitespace { get; }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (_typedParser != null)
+        {
+            return _typedParser.Parse(context, ref result);
+        }
+
+        // The object path is kept for the covariant implementations, e.g. a Parser<Dog> used as an IParser<Animal>
         var success = _parser.Parse(context, out int start, out int end, out object? value);
         if (success)
         {
@@ -40,7 +52,6 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
         }
         return success;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

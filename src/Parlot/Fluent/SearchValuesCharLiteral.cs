@@ -6,7 +6,7 @@ using System.Buffers;
 
 namespace Parlot.Fluent;
 
-internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable
+internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly SearchValues<char> _searchValues;
     private readonly string? _valuesString;
@@ -44,48 +44,50 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         }
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _minSize <= 0;
+
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
-        var span = context.Scanner.Cursor.Span;
+        var cursor = context.Scanner.Cursor;
+        var span = cursor.Span;
 
-        if (_minSize > span.Length)
+        // Only the chars that can be taken are scanned
+        if (_maxSize > 0 && span.Length > _maxSize)
         {
-            return false;
+            span = span.Slice(0, _maxSize);
         }
 
         // First char not matching the searched values
         var index = _negate ? span.IndexOfAny(_searchValues) : span.IndexOfAnyExcept(_searchValues);
 
-        var size = 0;
+        // If index == -1 the whole input is a match
+        var size = index == -1 ? span.Length : index;
 
-        if (index != -1)
+        // Too small?
+        if (size < _minSize)
         {
-            // Too small?
-            if (index < _minSize)
+            if (index == -1)
             {
-                context.ExitParser(this);
-                return false;
+                // More matching chars could follow the end of the buffer
+                cursor.MarkHitEnd();
             }
 
-            size = index;
-        }
-        else
-        {
-            // If index == -1 the whole input is a match
-            size = span.Length;
+            context.ExitParser(this);
+            return false;
         }
 
-        // Too large? Take only the request size
-        if (_maxSize > 0 && size > _maxSize)
-        {
-            size = _maxSize;
-        }
+        var start = cursor.Offset;
 
-        var start = context.Scanner.Cursor.Position.Offset;
-        context.Scanner.Cursor.Advance(size);
-        result.Set(start, start + size, new TextSpan(context.Scanner.Buffer, start, size));
+        cursor.AdvanceNoNewLines(size);
+
+        result.Set(start, start + size, cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;
@@ -96,6 +98,11 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(TextSpan), () => GenerateSource(context));
+        }
 
         // We can only generate source if we have the original values string
         if (_valuesString == null)
@@ -188,12 +195,13 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         // Common code for both paths
         result.Body.Add($"if ({sizeVar} < {_minSize})");
         result.Body.Add("{");
+        result.Body.Add($"    if ({sizeVar} == {spanVar}.Length) {cursorName}.MarkHitEnd();");
         result.Body.Add($"    {result.ValueVariable} = default;");
         result.Body.Add("    return false;");
         result.Body.Add("}");
 
-        result.Body.Add($"{cursorName}.Advance({sizeVar});");
-        result.Body.Add($"{result.ValueVariable} = new Parlot.TextSpan({scannerName}.Buffer, {startVar}, {sizeVar});");
+        result.Body.Add($"{cursorName}.AdvanceNoNewLines({sizeVar});");
+        result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
         result.Body.Add("return true;");
 
         return result;

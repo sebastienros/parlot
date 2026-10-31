@@ -12,16 +12,21 @@ namespace Parlot.Fluent;
 /// It is only recorded when <see cref="ParseContext.CollectDiagnostics"/> is enabled. When
 /// <see cref="ParseContext.TreatWarningsAsErrors"/> is enabled it is reported as an error instead, and this parser fails.
 /// </remarks>
-public sealed class Warning<T> : Parser<T>, ISeekable, ISourceable
+public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
 
+    /// <inheritdoc />
     public bool CanSeek { get; }
 
+    /// <inheritdoc />
     public char[] ExpectedChars { get; } = [];
 
+    /// <inheritdoc />
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public Warning(Parser<T> parser, string message)
     {
@@ -36,35 +41,41 @@ public sealed class Warning<T> : Parser<T>, ISeekable, ISourceable
         }
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
+        if (!context.CollectDiagnostics && !context.TreatWarningsAsErrors)
+        {
+            var success = _parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+            return success;
+        }
+
         var cursor = context.Scanner.Cursor;
-        var start = cursor.Position;
+        var start = cursor.Offset;
+
+        // The warning is located after the white space the parser skips. It's skipped first, and the position read before
+        // the parser runs, since a compacting buffer can discard the text the parser reads.
+        if (SkipWhitespace)
+        {
+            context.SkipWhiteSpace();
+        }
+
+        var location = cursor.Position;
 
         if (!_parser.Parse(context, ref result))
         {
+            cursor.ResetPosition(start);
+
             context.ExitParser(this);
             return false;
         }
 
         context.ExitParser(this);
-
-        if (!context.CollectDiagnostics && !context.TreatWarningsAsErrors)
-        {
-            return true;
-        }
-
-        var location = start;
-        if (SkipWhitespace)
-        {
-            var end = cursor.Position;
-            cursor.ResetPosition(start);
-            context.SkipWhiteSpace();
-            location = cursor.Position;
-            cursor.ResetPosition(end);
-        }
 
         if (!context.TreatWarningsAsErrors)
         {
@@ -91,11 +102,17 @@ public sealed class Warning<T> : Parser<T>, ISeekable, ISourceable
             throw new NotSupportedException("Warning requires a source-generatable parser.");
         }
 
+        // Generated parsers only report warnings through the entry points returning the diagnostics
+        if (!context.CollectDiagnostics)
+        {
+            return sourceable.GenerateSource(context);
+        }
+
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
         var cursorName = context.CursorName;
+        var reportName = $"report{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
-        var endName = $"end{context.NextNumber()}";
         var locationName = $"location{context.NextNumber()}";
         var message = LiteralHelper.StringToLiteral(_message);
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
@@ -106,20 +123,25 @@ public sealed class Warning<T> : Parser<T>, ISeekable, ISourceable
 
         var outTarget = context.DiscardResult ? "_" : result.ValueVariable;
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
-        result.Body.Add($"{result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
-        result.Body.Add($"if ({result.SuccessVariable} && ({ctx}.CollectDiagnostics || {ctx}.TreatWarningsAsErrors))");
+        result.Body.Add($"var {reportName} = {ctx}.CollectDiagnostics || {ctx}.TreatWarningsAsErrors;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        result.Body.Add($"var {locationName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"if ({reportName})");
         result.Body.Add("{");
-        result.Body.Add($"    var {locationName} = {startName};");
         if (SkipWhitespace)
         {
-            result.Body.Add($"    var {endName} = {cursorName}.Position;");
-            result.Body.Add($"    {cursorName}.ResetPosition({startName});");
             result.Body.Add($"    {ctx}.SkipWhiteSpace();");
-            result.Body.Add($"    {locationName} = {cursorName}.Position;");
-            result.Body.Add($"    {cursorName}.ResetPosition({endName});");
         }
-        result.Body.Add($"    if (!{ctx}.TreatWarningsAsErrors)");
+        result.Body.Add($"    {locationName} = {cursorName}.Position;");
+        result.Body.Add("}");
+        result.Body.Add($"{result.SuccessVariable} = {helperName}({ctx}, out {outTarget});");
+        result.Body.Add($"if ({reportName})");
+        result.Body.Add("{");
+        result.Body.Add($"    if (!{result.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add("    }");
+        result.Body.Add($"    else if (!{ctx}.TreatWarningsAsErrors)");
         result.Body.Add("    {");
         result.Body.Add($"        {ctx}.AddDiagnostic({message}, {locationName}, global::Parlot.ParseDiagnosticSeverity.Warning);");
         result.Body.Add("    }");
@@ -137,6 +159,13 @@ public sealed class Warning<T> : Parser<T>, ISeekable, ISourceable
 
         return result;
     }
+
+    // Without diagnostics the warning is the parser it wraps
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context)
+        => context.CollectDiagnostics ? -1 : SpanSource.GetWeight(_parser, context);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => writer.Generate(_parser, valueVariable, fail);
 
     public override string ToString() => $"{_parser} (Warning)";
 }

@@ -70,20 +70,40 @@ public static partial class Character
         try
         {
             var dataIndex = 0;
-#if NET8_0_OR_GREATER
-            var plainRunLength = 0;
-#endif
 
             for (var i = 0; i < span.Length; i++)
             {
+#if NET8_0_OR_GREATER
+                if (span.Length - i >= 16)
+                {
+                    var remaining = span.Slice(i);
+                    var nextEscape = remaining.IndexOf('\\');
+                    var count = nextEscape < 0 ? remaining.Length : nextEscape;
+                    if (count > 0)
+                    {
+                        remaining.Slice(0, count).CopyTo(buffer.Slice(dataIndex));
+                        dataIndex += count;
+                        if (nextEscape < 0)
+                        {
+                            break;
+                        }
+                        i += count;
+                    }
+                }
+#endif
                 var c = span[i];
 
                 if (c == '\\')
                 {
-#if NET8_0_OR_GREATER
-                    plainRunLength = 0;
-#endif
                     i++;
+
+                    // A backslash at the end doesn't escape anything, it is kept as-is
+                    if (i == span.Length)
+                    {
+                        buffer[dataIndex++] = '\\';
+                        break;
+                    }
+
                     c = span[i];
 
                     switch (c)
@@ -100,29 +120,15 @@ public static partial class Character
                         case 't': c = '\t'; break;
                         case 'v': c = '\v'; break;
                         case 'u':
-                            c = Character.ScanHexEscape(span.Slice(i), out var length);
+                            c = ScanHexEscape(span.Slice(i), out var length);
                             i += length;
                             break;
                         case 'x':
-                            c = Character.ScanHexEscape(span.Slice(i), out length);
+                            c = ScanHexEscape(span.Slice(i), out length);
                             i += length;
                             break;
                     }
                 }
-
-#if NET8_0_OR_GREATER
-                else if (++plainRunLength == 16)
-                {
-                    var remaining = span.Slice(i);
-                    var nextEscape = remaining.IndexOf('\\');
-                    var count = nextEscape < 0 ? remaining.Length : nextEscape;
-                    remaining.Slice(0, count).CopyTo(buffer.Slice(dataIndex));
-                    dataIndex += count;
-                    i += count - 1;
-                    plainRunLength = 0;
-                    continue;
-                }
-#endif
 
                 buffer[dataIndex++] = c;
             }
@@ -172,15 +178,60 @@ public static partial class Character
 
     private static int HexValue(char ch) => HexConverter.FromChar(ch);
 
+    /// <summary>
+    /// Whether a char is white space, but not a new line, in the default set: one of <see cref="WhiteSpaces"/>.
+    /// </summary>
     public static bool IsWhiteSpace(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpace) != 0;
     }
 
+    /// <summary>
+    /// Whether a char is white space or a new line in the default set: one of <see cref="WhiteSpaceOrNewLines"/>, the chars
+    /// <see cref="char.IsWhiteSpace(char)"/> accepts.
+    /// </summary>
     public static bool IsWhiteSpaceOrNewLine(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpaceOrNewLine) != 0;
     }
 
-    public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v';
+    /// <summary>
+    /// Whether a char is white space, but not a new line, in a given set.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsWhiteSpace(char ch, WhiteSpaceSet set)
+    {
+        return (_characterData[ch] & GetWhiteSpaceMask(set)) != 0;
+    }
+
+    /// <summary>
+    /// Whether a char is white space or a new line in a given set.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsWhiteSpaceOrNewLine(char ch, WhiteSpaceSet set)
+    {
+        return (_characterData[ch] & GetWhiteSpaceOrNewLineMask(set)) != 0;
+    }
+
+    // The bit of a set's white space in _characterData. The bit of its white space or new lines is the next one.
+    internal static byte GetWhiteSpaceMask(WhiteSpaceSet set) => set switch
+    {
+        WhiteSpaceSet.Default => (byte)CharacterMask.WhiteSpace,
+        WhiteSpaceSet.Ascii => (byte)CharacterMask.AsciiWhiteSpace,
+        _ => ThrowInvalidWhiteSpaceSet(set),
+    };
+
+    internal static byte GetWhiteSpaceOrNewLineMask(WhiteSpaceSet set) => (byte)(GetWhiteSpaceMask(set) << 1);
+
+    // Whether a char has one of the bits of a mask in _characterData
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool HasMask(char ch, byte mask) => (_characterData[ch] & mask) != 0;
+
+    private static byte ThrowInvalidWhiteSpaceSet(WhiteSpaceSet set)
+        => throw new ArgumentOutOfRangeException(nameof(set), set, "Unknown white space set.");
+
+    /// <summary>
+    /// Whether a char is a new line of the default set: one of <see cref="NewLines"/>.
+    /// </summary>
+    public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v' or '\u0085' or '\u2028' or '\u2029';
 }

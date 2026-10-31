@@ -20,7 +20,7 @@ internal static class KeywordChoiceSource
         var body = result.Body;
         if (skipWhitespace)
         {
-            body.Add($"var start = {cursor}.Position;");
+            body.Add($"var start = {cursor}.Offset;");
             body.Add($"{context.ParseContextName}.SkipWhiteSpace();");
         }
 
@@ -31,6 +31,8 @@ internal static class KeywordChoiceSource
         body.Add("{");
         body.Add("    length++;");
         body.Add("}");
+        // The word could continue after the end of a partial buffer.
+        body.Add($"if (length == keywordInput.Length) {cursor}.MarkHitEnd();");
         body.Add("var keyword = MatchKeyword(keywordInput.Slice(0, length));");
         body.Add("if (keyword != null)");
         body.Add("{");
@@ -63,7 +65,9 @@ internal static class KeywordChoiceSource
                         return false;
                     }
                 }
+                // The recognizer scans an ASCII-letter run, which is only the default keyword boundary
                 else if (parser is KeywordLiteral keyword && keyword.Comparison == StringComparison.Ordinal
+                    && keyword.IdentifierPart == null
                     && keyword.Text.Length is > 0 and <= 64
                     && keyword.Text.All(static c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z'))
                 {

@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +9,9 @@ namespace Parlot.SourceGenerator.Tests;
 public static partial class Grammars
 {
     public static partial bool TryParseHello(string text, out string value);
+    public static partial bool TryParseOperators(string text, out (bool, long, IReadOnlyList<long>, IReadOnlyList<string>) value);
+    public static partial bool TryParseStandaloneEof(string text, out object? value);
+    public static partial bool TryParseIntegerStandaloneEof(string text, out long value);
     public static partial bool TryParseExpression(string text, out double value);
     public static partial bool TryParseLeftAssociative(string text, out double value);
     public static partial bool TryParseValueLeftAssociative(string text, out double value);
@@ -52,7 +55,26 @@ public static partial class Grammars
     public static partial bool TryParseUnaryDecimal(string text, out decimal value);
     public static partial bool TryParseLeftAssociativeDecimal(string text, out decimal value);
     public static partial bool TryParseLeftAssociativeThenPlus(string text, out decimal value);
+    public static partial bool TryParseLeftAssociativeEmpty(string text, out int value);
+    public static partial bool TryParseLeftAssociativeContextEmpty(string text, out int value);
     public static partial bool TryParseUnaryFallback(string text, out decimal value);
+    public static partial bool TryParseThenPositions(string text, out string value);
+    public static partial bool TryParseLiteralThenPositions(string text, out string value);
+    public static partial bool TryParseThenPositionsFallback(string text, out string value);
+    public static partial bool TryParseDiscards(string text, out int value);
+    public static partial bool TryParseEscapedError(string text, out char value);
+    public static partial bool TryParseHalf(string text, out Half value);
+    public static partial bool TryParseInt128Hex(string text, out Int128 value);
+    public static partial bool TryParseTupleRightAssociative(string text, out double value);
+    public static partial bool TryParseTupleRightAssociativeContext(string text, out double value);
+    public static partial bool TryParseTupleRightAssociativeThenPlus(string text, out double value);
+    public static partial bool TryParseLeftRecursive(string text, out long value);
+    public static partial bool TryParseIndirectLeftRecursive(string text, out long value);
+    public static partial bool TryParseUnaryEmptyOperator(string text, out long value);
+    public static partial bool TryParseUnaryContextEmptyOperator(string text, out long value);
+    public static partial bool TryParseSevenSequenceChoice(string text, out string value);
+    public static partial bool TryParseEmptyPattern(string text, out string value);
+    public static partial bool TryParseReplacedRecursive(string text, out string value);
     public static partial bool TryParseAnyOfDigits(string text, out string value);
     public static partial bool TryParseAnyOfLetters(string text, out string value);
     public static partial bool TryParseNoneOfWhitespace(string text, out string value);
@@ -61,6 +83,10 @@ public static partial class Grammars
     public static partial bool TryParseHelloNotBang(string text, out string value);
     public static partial bool TryParseHelloBang(string text, out string value);
     public static partial bool TryParseCountingOneOf(string text, out char value);
+    public static partial bool TryParseLateDeferredOneOf(string text, out char value);
+    public static partial bool TryParseSeekableWrappers(string text, out char value);
+    public static partial bool TryParseCountingLeftAssociative(string text, out long value);
+    public static partial bool TryParseCountingLeftAssociativeContext(string text, out long value);
     public static partial bool TryParseCustomSwitch(string text, out char value);
     public static partial bool TryParseCustomSelect(string text, bool preferX, out char value);
     public static partial bool TryParseZeroOrManyOptional(string text, out IReadOnlyList<IReadOnlyList<char>> value);
@@ -84,9 +110,7 @@ public static partial class Grammars
     public static partial bool TryParseBinary(string text, out byte value);
 }
 
-public abstract class NodeBase
-{
-}
+public abstract class NodeBase;
 
 public sealed class BasicNode : NodeBase
 {

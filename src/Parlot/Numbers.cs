@@ -1,8 +1,10 @@
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+#if NET8_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
 
 namespace Parlot;
 
@@ -126,24 +128,71 @@ public static partial class Numbers
             return false;
         }
 
-        var radixValue = TNumber.CreateChecked(radix);
+        var radixValue = TNumber.CreateTruncating(radix);
 
-        try
+        // An overflowing literal fails without an exception: the value is compared with the largest one a
+        // digit can still be appended to, like TryParseUnsignedRadix does with its 64-bit guard.
+        var limit = RadixLimits<TNumber>.Limits[radix];
+        var lastDigit = RadixLimits<TNumber>.LastDigits[radix];
+        var bounded = RadixLimits<TNumber>.Bounded;
+
+        while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
         {
-            while (charsRead < span.Length && TryGetDigit(span[charsRead], radix, out var digit))
+            if (bounded && (value > limit || (value == limit && digit > lastDigit)))
             {
-                value = checked((value * radixValue) + TNumber.CreateChecked(digit));
-                charsRead++;
+                value = default;
+                charsRead = 0;
+                return false;
             }
-        }
-        catch (OverflowException)
-        {
-            value = default;
-            charsRead = 0;
-            return false;
+
+            value = (value * radixValue) + TNumber.CreateTruncating(digit);
+            charsRead++;
         }
 
         return charsRead > 0;
+    }
+
+    /// <summary>
+    /// The largest value of <typeparamref name="TNumber"/> and, per radix, the largest value a digit can be
+    /// appended to and the largest digit that can be appended to it.
+    /// </summary>
+    private static class RadixLimits<TNumber> where TNumber : IBinaryInteger<TNumber>
+    {
+        public static readonly TNumber[] Limits = new TNumber[17];
+        public static readonly int[] LastDigits = new int[17];
+
+        // False for a type without a largest value, like BigInteger, which can't overflow
+        public static readonly bool Bounded;
+
+        static RadixLimits()
+        {
+            // All bits set is the largest value of an unsigned type and -1 for a signed one, whose largest value
+            // is all the bits but the sign one.
+            var max = TNumber.AllBitsSet;
+
+            if (TNumber.IsNegative(max))
+            {
+                max >>>= 1;
+            }
+
+            // A fixed-size type wraps past its largest value, an arbitrary-precision one doesn't (and its unsigned
+            // shift of -1 is not its largest value either)
+            Bounded = max + TNumber.One < max;
+
+            if (!Bounded)
+            {
+                return;
+            }
+
+            for (var radix = 2; radix <= 16; radix++)
+            {
+                var radixValue = TNumber.CreateTruncating(radix);
+                var limit = max / radixValue;
+
+                Limits[radix] = limit;
+                LastDigits[radix] = int.CreateTruncating(max - (limit * radixValue));
+            }
+        }
     }
 #endif
 
@@ -239,7 +288,8 @@ public static partial class Numbers
         public static bool TryParseNumber<TNumber>(ReadOnlySpan<char> span, NumberStyles styles, IFormatProvider provider, [MaybeNullWhen(false)] out TNumber value)
                 where TNumber : INumber<TNumber>
         {
-                if ((uint)(span.Length - 1) < MaxFastDigits)
+                // The digits are only decimal ones without a hex or binary style
+                if ((styles & (NumberStyles.AllowHexSpecifier | NumberStyles.AllowBinarySpecifier)) == 0 && (uint)(span.Length - 1) < MaxFastDigits)
                 {
                         long parsed = 0;
 

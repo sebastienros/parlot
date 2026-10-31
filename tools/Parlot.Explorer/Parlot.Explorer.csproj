@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackAsTool>true</PackAsTool>
+    <IsPackable>true</IsPackable>
+    <ToolCommandName>parlot-explorer</ToolCommandName>
+    <PackageId>Parlot.Explorer</PackageId>
+    <Description>Local parser diagnostics and replay explorer for Parlot generated parsers.</Description>
+    <AnalysisLevel>latest-Default</AnalysisLevel>
+    <IncludeSymbols>false</IncludeSymbols>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <DesktopShellRoot Condition="'$(DesktopShellRoot)' == ''">$(MSBuildProjectDirectory)/../Parlot.Explorer.Desktop/dist</DesktopShellRoot>
+    <RequireAllDesktopRids Condition="'$(RequireAllDesktopRids)' == ''">true</RequireAllDesktopRids>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Update="README.md" Pack="true" PackagePath="/" />
+    <Content Remove="Client/**/*" />
+    <None Remove="Client/node_modules/**/*" />
+  </ItemGroup>
+  <Target Name="BuildClient" BeforeTargets="PrepareForBuild" Condition="'$(SkipClientBuild)' != 'true'">
+    <Exec WorkingDirectory="Client" Command="npm ci --no-audit --no-fund" />
+    <Exec WorkingDirectory="Client" Command="npm run build" />
+  </Target>
+  <Target Name="BuildDesktopShell" BeforeTargets="PrepareForBuild" Condition="'$(SkipDesktopBuild)' != 'true'">
+    <Exec Command="node ../Parlot.Explorer.Desktop/build.mjs &quot;$(DesktopShellRoot)&quot;" />
+  </Target>
+  <Target Name="IncludeDesktopShell" BeforeTargets="PrepareForBuild" DependsOnTargets="BuildDesktopShell">
+    <ItemGroup>
+      <_DesktopShellFiles Include="$(DesktopShellRoot)/**/*" />
+      <Content Include="@(_DesktopShellFiles)">
+        <Link>desktop/%(_DesktopShellFiles.RecursiveDir)%(_DesktopShellFiles.Filename)%(_DesktopShellFiles.Extension)</Link>
+        <Pack>false</Pack>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+  <Target Name="ValidateDesktopPackage" BeforeTargets="GenerateNuspec" Condition="'$(RequireAllDesktopRids)' == 'true'">
+    <Error Condition="!Exists('$(DesktopShellRoot)/win-x64/parlot-explorer-desktop.exe')" Text="Missing win-x64 desktop shell. Assemble CI artifacts before packing, or set RequireAllDesktopRids=false for a local-only development package." />
+    <Error Condition="!Exists('$(DesktopShellRoot)/linux-x64/parlot-explorer-desktop')" Text="Missing linux-x64 desktop shell." />
+    <Error Condition="!Exists('$(DesktopShellRoot)/osx-x64/Parlot Explorer.app/Contents/MacOS/parlot-explorer-desktop')" Text="Missing osx-x64 desktop shell." />
+    <Error Condition="!Exists('$(DesktopShellRoot)/osx-arm64/Parlot Explorer.app/Contents/MacOS/parlot-explorer-desktop')" Text="Missing osx-arm64 desktop shell." />
+  </Target>
+  <Target Name="IncludeClient" BeforeTargets="PrepareForBuild" DependsOnTargets="BuildClient">
+    <ItemGroup>
+      <Content Remove="wwwroot/**/*" />
+      <Content Include="wwwroot/**/*" Pack="false" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -88,35 +87,7 @@ public static partial class Parsers
     /// </example>
     public static Parser<T> RightAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<T, T, T> factory)[] list)
     {
-        var choices = list.Select(l => new Then<TInput, Func<T, T, T>>(l.op, l.factory)).ToArray();
-
-        return parser.And(ZeroOrMany(new OneOf<Func<T, T, T>>(choices).And(parser)))
-            .Then(static x =>
-            {
-                // a; (=, b); (^, c) -> = (a, ^(b, c))
-
-                var operations = x.Item2;
-
-                T result;
-
-                if (operations.Count > 0)
-                {
-                    result = operations[operations.Count - 1].Item2;
-
-                    for (var i = operations.Count - 1; i > 0; i--)
-                    {
-                        result = operations[i].Item1(operations[i - 1].Item2, result);
-                    }
-
-                    result = operations[0].Item1(x.Item1, result);
-                }
-                else
-                {
-                    result = x.Item1;
-                }
-
-                return result;
-            });
+        return new RightAssociative<T, TInput>(parser, list);
     }
 
     /// <summary>
@@ -136,35 +107,7 @@ public static partial class Parsers
     /// </example>
     public static Parser<T> RightAssociative<T, TInput>(this Parser<T> parser, params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list)
     {
-        var choices = list.Select(l => new Then<TInput, Func<ParseContext, T, T, T>>(l.op, l.factory)).ToArray();
-
-        return parser.And(ZeroOrMany(new OneOf<Func<ParseContext, T, T, T>>(choices).And(parser)))
-            .Then(static (context, x) =>
-            {
-                // a; (=, b); (^, c) -> = (a, ^(b, c))
-
-                var operations = x.Item2;
-
-                T result;
-
-                if (operations.Count > 0)
-                {
-                    result = operations[operations.Count - 1].Item2;
-
-                    for (var i = operations.Count - 1; i > 0; i--)
-                    {
-                        result = operations[i].Item1(context, operations[i - 1].Item2, result);
-                    }
-
-                    result = operations[0].Item1(context, x.Item1, result);
-                }
-                else
-                {
-                    result = x.Item1;
-                }
-
-                return result;
-            });
+        return new RightAssociativeWithContext<T, TInput>(parser, list);
     }
 
     /// <summary>Builds a right-associative parser using the values returned by its operator parsers.</summary>
@@ -189,6 +132,35 @@ public static partial class Parsers
     public static Parser<T> RightAssociative<T, TOperator>(this Parser<T> parser, Parser<TOperator>[] operators, Func<ParseContext, T, T, TOperator, T> factory)
     {
         return new AssociativeWithOperator<T, TOperator>(parser, operators, factory, rightAssociative: true);
+    }
+
+    /// <summary>
+    /// Builds a parser applying a table of operators to the values of <paramref name="operand"/>, with a single loop for
+    /// all its precedence levels. Levels are added from the one which binds the tightest, with the
+    /// <see cref="PrecedenceParser{T}.Unary{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>,
+    /// <see cref="PrecedenceParser{T}.Postfix{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>,
+    /// <see cref="PrecedenceParser{T}.LeftAssociative{TInput}(ValueTuple{Parser{TInput}, Func{T, T, T}}[])"/> and
+    /// <see cref="PrecedenceParser{T}.RightAssociative{TInput}(ValueTuple{Parser{TInput}, Func{T, T, T}}[])"/> methods
+    /// of the returned parser.
+    /// </summary>
+    /// <remarks>
+    /// The result parses the same values as the chain of <c>Unary</c>, <c>LeftAssociative</c> and <c>RightAssociative</c>
+    /// parsers with the same levels, but looks for the operator following an operand once, whatever the number of levels.
+    /// </remarks>
+    /// <typeparam name="T">The type of the operands and of the result.</typeparam>
+    /// <param name="operand">The parser of the operands, which binds tighter than any operator.</param>
+    /// <returns>A parser with no operators yet.</returns>
+    /// <example>
+    /// <code>
+    /// var expression = primary.Operators()
+    ///     .Unary((Terms.Char('-'), static x => -x))
+    ///     .LeftAssociative((Terms.Char('*'), static (a, b) => a * b), (Terms.Char('/'), static (a, b) => a / b))
+    ///     .LeftAssociative((Terms.Char('+'), static (a, b) => a + b), (Terms.Char('-'), static (a, b) => a - b));
+    /// </code>
+    /// </example>
+    public static PrecedenceParser<T> Operators<T>(this Parser<T> operand)
+    {
+        return new PrecedenceParser<T>(operand);
     }
 
     /// <summary>

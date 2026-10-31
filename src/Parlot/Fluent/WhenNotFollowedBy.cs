@@ -1,7 +1,6 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
@@ -9,7 +8,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser does NOT match at the current position without consuming input (negative lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
+public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<object> _lookahead;
@@ -34,11 +33,25 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
 
     public bool SkipWhitespace { get; }
 
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        if (nullable)
+        {
+            analysis.Invoke(_lookahead);
+        }
+
+        return nullable;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         // First, parse with the main parser
         var mainSuccess = _parser.Parse(context, ref result);
@@ -50,11 +63,13 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
         }
 
         // Save position before lookahead check
-        var beforeLookahead = context.Scanner.Cursor.Position;
+        var beforeLookahead = context.Scanner.Cursor.Offset;
 
         // Now check if the lookahead parser matches at the current position
         var lookaheadResult = new ParseResult<object>();
+        var pin = context.Pin();
         var lookaheadSuccess = _lookahead.Parse(context, ref lookaheadResult);
+        context.Unpin(pin);
 
         // Reset position to before the lookahead (it shouldn't consume input)
         context.Scanner.Cursor.ResetPosition(beforeLookahead);
@@ -70,7 +85,6 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
         context.ExitParser(this);
         return true;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -92,7 +106,7 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
         var startName = $"start{context.NextNumber()}";
         var beforeLookaheadName = $"beforeLookahead{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         var mainValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(typeof(object));
@@ -102,9 +116,9 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Main", mainValueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var lookaheadHelperName = context.Helpers
+        var lookaheadHelperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(lookaheadSourceable, $"{context.MethodNamePrefix}_WhenNotFollowedBy_Lookahead", lookaheadValueTypeName, () => lookaheadSourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         if (context.DiscardResult)
         {
@@ -119,8 +133,9 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekable, ISourceable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Position;");
-        result.Body.Add($"    if ({lookaheadHelperName}({context.ParseContextName}, out _))");
+        result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Offset;");
+        var lookahead = context.PinnedCall(result, $"{lookaheadHelperName}({context.ParseContextName}, out _)", "    ");
+        result.Body.Add($"    if ({lookahead})");
         result.Body.Add("    {");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add($"        {result.SuccessVariable} = false;");

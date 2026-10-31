@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Parlot.Fluent;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
 using Xunit;
 
 namespace Parlot.SourceGenerator.Tests;
@@ -24,13 +27,173 @@ public class CollectionParserTests
         {
             Assert.Same(Array.Empty<string>(), values);
         }
-        else if (count <= 4)
-        {
-            Assert.Equal("Parlot.Generated.Fluent.HybridList`1", values.GetType().GetGenericTypeDefinition().FullName);
-        }
         else
         {
-            Assert.IsType<List<string>>(values);
+            // One array of the exact size, without the support types
+            Assert.Equal(count, Assert.IsType<string[]>(values).Length);
+        }
+
+        Assert.Equal(0, ScratchCount<string>());
+    }
+
+    // The number of items on the scratch stack of the generated list parsers, on the current thread
+    private static int ScratchCount<T>()
+    {
+        var type = typeof(CollectionGrammars).Assembly.GetType("Parlot.Generated.Fluent.ListScratch`1", throwOnError: true)!.MakeGenericType(typeof(T));
+        var scratch = type.GetField("t_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
+        return scratch == null ? 0 : (int)type.GetField("Count", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(scratch)!;
+    }
+
+    // name(child ...), name[child, ...] and name{child ...}, with the expected TreeNode.ToString()
+    private static (string Input, string Expected) BuildTree(int seed, int depth, int maxWidth)
+    {
+        var random = new Random(seed);
+        var input = new StringBuilder();
+        var expected = new StringBuilder();
+        var counter = 0;
+
+        void Build(int level)
+        {
+            var name = "n" + counter++;
+            input.Append(name);
+            expected.Append(name);
+
+            if (level == depth)
+            {
+                return;
+            }
+
+            var kind = random.Next(3);
+            var width = random.Next(kind == 2 ? 1 : 0, maxWidth + 1);
+            var (open, separator, close) = kind switch { 0 => ("(", " ", ")"), 1 => ("[", ",", "]"), _ => ("{", " ", "}") };
+
+            input.Append(open);
+            expected.Append('(');
+
+            for (var i = 0; i < width; i++)
+            {
+                if (i > 0)
+                {
+                    input.Append(separator);
+                    expected.Append(' ');
+                }
+
+                Build(level + 1);
+            }
+
+            input.Append(close);
+            expected.Append(')');
+        }
+
+        Build(0);
+        return (input.ToString(), expected.ToString());
+    }
+
+    [Theory]
+    [InlineData(1, 3, 4)]
+    [InlineData(2, 5, 3)]
+    [InlineData(3, 2, 40)]
+    [InlineData(4, 1, 2000)]
+    public void Nested_Lists_Of_The_Same_Type_Keep_Their_Items(int seed, int depth, int maxWidth)
+    {
+        var (input, expected) = BuildTree(seed, depth, maxWidth);
+
+        Assert.True(CollectionGrammars.TryParseTree(input, out var tree));
+        Assert.Equal(expected, tree.ToString());
+        Assert.Equal(0, ScratchCount<TreeNode>());
+
+        // The compacting reader, refilled one char at a time, parses the same lists
+        Assert.True(input.Length > 4096 || maxWidth < 2000);
+        foreach (var reader in new TextReader[] { new StringReader(input), new ChunkedReader(input, 1), new ChunkedReader(input, 7) })
+        {
+            Assert.True(CollectionGrammars.TryParseTree(reader, out var streamed));
+            Assert.Equal(expected, streamed.ToString());
+            Assert.Equal(0, ScratchCount<TreeNode>());
+        }
+    }
+
+    [Fact]
+    public void Exception_In_A_List_Does_Not_Corrupt_Later_Parses()
+    {
+        var (input, expected) = BuildTree(5, 4, 5);
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Throws<InvalidOperationException>(() => CollectionGrammars.TryParseTree("a(b c d[e, f, g{h i j(k l boom m)}] n)", out _));
+            Assert.Equal(0, ScratchCount<TreeNode>());
+
+            Assert.True(CollectionGrammars.TryParseTree(input, out var tree));
+            Assert.Equal(expected, tree.ToString());
+            Assert.Equal(0, ScratchCount<TreeNode>());
+        }
+    }
+
+    [Fact]
+    public void Reentrant_Parse_From_A_Callback_Keeps_The_Open_Lists()
+    {
+        Assert.True(CollectionGrammars.TryParseTree(TreeNode.SubTree, out var sub));
+        var nested = sub.ToString();
+
+        Assert.True(CollectionGrammars.TryParseTree("a(b c d[e, f, g{h i sub j}, sub, k] l sub)", out var tree));
+        Assert.Equal($"a(b c d(e f g(h i {nested} j) {nested} k) l {nested})", tree.ToString());
+        Assert.Equal(0, ScratchCount<TreeNode>());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(20)]
+    [InlineData(1500)]
+    public void Right_Associative_Folds_The_Operations_In_Order(int operators)
+    {
+        var values = new long[operators + 1];
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = i + 1;
+        }
+
+        var expected = values[values.Length - 1];
+        for (var i = values.Length - 2; i >= 0; i--)
+        {
+            expected = TreeNode.Fold(values[i], expected);
+        }
+
+        var input = string.Join(" ^ ", values);
+
+        Assert.True(CollectionGrammars.TryParseRightFold(input, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(CollectionGrammars.TryParseRightFoldWithOperator(input, out value));
+        Assert.Equal(expected, value);
+    }
+
+    // A reader returning at most a fixed number of chars per read
+    private sealed class ChunkedReader : TextReader
+    {
+        private readonly string _text;
+        private readonly int _chunk;
+        private int _position;
+
+        public ChunkedReader(string text, int chunk)
+        {
+            _text = text;
+            _chunk = chunk;
+        }
+
+        public override int Read(char[] buffer, int index, int count)
+        {
+            var length = Math.Min(Math.Min(count, _chunk), _text.Length - _position);
+            _text.CopyTo(_position, buffer, index, length);
+            _position += length;
+            return length;
+        }
+
+        public override int Read(Span<char> buffer)
+        {
+            var length = Math.Min(Math.Min(buffer.Length, _chunk), _text.Length - _position);
+            _text.AsSpan(_position, length).CopyTo(buffer);
+            _position += length;
+            return length;
         }
     }
 
@@ -158,8 +321,8 @@ public class CollectionParserTests
     private static (bool Success, IReadOnlyList<string> Values) SeparatedResult(
         string input, bool removeEmptyEntries = false, bool allowLeadingSeparator = false, bool allowTrailingSeparator = false)
     {
-        var parser = Parlot.Fluent.Parsers.Separated(Parlot.Fluent.Parsers.Literals.Char(','),
-            Parlot.Fluent.Parsers.Literals.Text("x"), removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator).Eof();
+        var parser = Fluent.Parsers.Separated(Fluent.Parsers.Literals.Char(','),
+            Fluent.Parsers.Literals.Text("x"), removeEmptyEntries, allowLeadingSeparator, allowTrailingSeparator).Eof();
         var success = parser.TryParse(input, out var values);
         return (success, values);
     }
@@ -272,4 +435,35 @@ public static partial class CollectionGrammars
     public static partial bool TryParseBoundedSeparatedOptionsFallback(string text, out char value);
     public static partial bool TryParseOptionalSeparatedOptions(string text, out int value);
     public static partial bool TryParseDiscardedBoundedSeparatedOptions(string text, out char value);
+    public static partial bool TryParseTree(string text, out TreeNode value);
+    public static partial bool TryParseTree(TextReader reader, out TreeNode value);
+    public static partial bool TryParseRightFold(string text, out long value);
+    public static partial bool TryParseRightFoldWithOperator(string text, out long value);
+}
+
+public sealed class TreeNode
+{
+    // Parsed by the "sub" leaves: more items than the initial capacity of the scratch stack
+    public static readonly string SubTree = "n(" + string.Join(" ", Enumerable.Range(0, 100).Select(static i => "r" + i)) + " m[s, t{u v}])";
+
+    public TreeNode(string name, IReadOnlyList<TreeNode> children = null)
+    {
+        Name = name;
+        Children = children;
+    }
+
+    public string Name { get; }
+
+    public IReadOnlyList<TreeNode> Children { get; }
+
+    public static TreeNode Leaf(string name) => name switch
+    {
+        "boom" => throw new InvalidOperationException(name),
+        "sub" => CollectionGrammars.TryParseTree(SubTree, out var sub) ? sub : throw new InvalidOperationException(name),
+        _ => new TreeNode(name),
+    };
+
+    public static long Fold(long left, long right) => (left * 31 + right) % 1_000_003;
+
+    public override string ToString() => Children == null ? Name : $"{Name}({string.Join(" ", Children)})";
 }

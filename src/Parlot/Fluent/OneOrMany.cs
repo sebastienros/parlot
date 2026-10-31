@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourceable
+public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
@@ -35,6 +35,16 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
 
     public bool SkipWhitespace { get; }
 
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // It fails when the first element doesn't move the cursor
+        return false;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {
         context.EnterParser(this);
@@ -50,30 +60,41 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
 
         var start = parsed.Start;
         var end = parsed.End;
-        var results = new HybridList<T>
-        {
-            parsed.Value
-        };
+        var results = new ListBuilder<T>();
+        results.Add(parsed.Value);
 
-        while (_max == 0 || results.Count < _max)
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
+        try
         {
-            previousOffset = context.Scanner.Cursor.Offset;
-            if (!_parser.Parse(context, ref parsed)
-                || context.Scanner.Cursor.Offset == previousOffset)
+            while (_max == 0 || results.Count < _max)
             {
-                break;
+                previousOffset = context.Scanner.Cursor.Offset;
+                if (!_parser.Parse(context, ref parsed)
+                    || context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
+                }
+
+                context.MovePin(pin);
+
+                end = parsed.End;
+                results.Add(parsed.Value);
             }
 
-            end = parsed.End;
-            results.Add(parsed.Value);
-        }
+            context.Unpin(pin);
 
-        result.Set(start, end, results.AsReadOnlyList());
+            result.Set(start, end, results.ToArray());
+        }
+        finally
+        {
+            results.Release();
+        }
 
         context.ExitParser(this);
         return true;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -84,35 +105,32 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             throw new NotSupportedException("OneOrMany requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(IReadOnlyList<T>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var result = context.CreateResult(typeof(IReadOnlyList<T>));
+
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        if (!context.DiscardResult && !context.IsCompacting)
+        {
+            ListBuilderSource.EmitFirstItemThenRest(context, result, helperName, elementTypeName, _max);
+            return result;
+        }
 
         var listName = $"list{context.NextNumber()}";
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
+            result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
         }
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
-
-        var valueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", valueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var itemValueName = $"itemValue{context.NextNumber()}";
         var countName = $"count{context.NextNumber()}";
@@ -121,6 +139,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         {
             result.Body.Add($"int {countName} = 0;");
         }
+        // Each element is read again from its start when it fails
+        var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
@@ -128,13 +149,10 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
+        context.MovePin(result, pin, "    ");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    if ({listName} == null)");
-            result.Body.Add("    {");
-            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
-            result.Body.Add("    }");
-            result.Body.Add($"    {listName}!.Add({itemValueName});");
+            result.Body.Add($"    {listName}.Add({itemValueName});");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         if (_max > 0)
@@ -142,16 +160,23 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekable, ISourcea
             result.Body.Add($"    {countName}++;");
         }
         result.Body.Add("}");
+        context.Unpin(result, pin);
         if (!context.DiscardResult)
         {
-            result.Body.Add($"if ({listName} != null)");
+            result.Body.Add($"if ({result.SuccessVariable})");
             result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {listName}.AsReadOnlyList();");
+            result.Body.Add($"    {result.ValueVariable} = {listName}.ToArray();");
             result.Body.Add("}");
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, listName);
         }
 
         return result;
     }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateLoop(writer, _parser, typeof(T), _max, oneOrMore: true, valueVariable, fail);
 
     public override string ToString() => $"{_parser}+";
 }

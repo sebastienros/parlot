@@ -4,11 +4,16 @@
 
 Use a generated length/discriminator tree for sufficiently large, compatible keyword-only
 `OneOf`/`Or` choices. Ordinal text-only choices use a separate ordered-prefix recognizer.
-Keep the runtime `CharMap` lookup, small generated choices, and mixed or unsupported
-parser types unchanged. No new public parser or byte-input API is introduced.
+Runtime and generated choices refine their first-char dispatch with the prefixes the
+alternatives tell, when several alternatives share a char, see
+[Prefix dispatch for wrapped and mixed choices](#prefix-dispatch-for-wrapped-and-mixed-choices).
+Keep the runtime `CharMap` lookup for the other chars and small choices unchanged. No new
+public parser, interface or byte-input API is introduced.
 
 The automatic specialization accepts 8-256 ordinal, nonempty ASCII-letter keywords, each
-at most 64 characters, with at most 4096 characters in the vocabulary. Nested choices are
+at most 64 characters, with at most 4096 characters in the vocabulary, all with the default
+ASCII-letter boundary: a keyword built with custom `identifierPart` chars keeps the choice
+on the existing path. Nested choices are
 flattened when their whitespace behavior agrees. These are conservative generation/code-size
 bounds, not a universal performance crossover.
 
@@ -144,9 +149,9 @@ shorter alternative. For `Text("if1"), Text("if"), Text("if12")`, input `if12` r
 `if1`, while `ifx` returns `if`. For `Text("if"), Text("if1")`, both return `if`.
 Canonical strings are returned without allocating substrings.
 
-The cursor advances once on success, using the same precomputed `AdvanceBy` line/column
-deltas as `TextLiteral.GenerateSource`. Newline metadata is computed during generation,
-not by scanning the matched text during parsing. On failure, no text has been consumed,
+The cursor advances once on success, by the length of the matched text, like
+`TextLiteral.GenerateSource`. The cursor only tracks its offset: the line and column are
+computed from the text when a position is read. On failure, no text has been consumed,
 and any skipped whitespace is restored. Capture, discarded results, custom whitespace,
 and later sequence failure continue to compose with the existing generated contracts.
 
@@ -265,25 +270,25 @@ All other grammar construction is shared. Setup checks every result record again
 independently calculated expected values, and verifies that invalid files fail without
 returning partial results.
 
-On the same Apple M4 Pro/.NET 10.0.11 environment, using normal runtime tiering, two
-launches, five warmups, and twelve 500 ms measurement iterations:
+Refreshed on 2026-10-02 on the same Apple M4 Pro/.NET 10.0.11 environment,
+SDK 11.0.100-rc.1.26425.128, using normal runtime tiering and BenchmarkDotNet `ShortRun`
+without command-line iteration or warmup overrides:
 
 | Declarations | Input | Before | After | Time reduction | Allocated, both |
 |---|---|---:|---:|---:|---:|
-| 8 | Valid | 1.805 us | 1.598 us | 11.5% | 1.43 KB |
-| 128 | Valid | 29.259 us | 26.237 us | 10.3% | 19.34 KB |
-| 8 | Unknown type in final declaration | 1.636 us | 1.448 us | 11.5% | 1.35 KB |
-| 128 | Unknown type in final declaration | 28.952 us | 25.899 us | 10.5% | 19.26 KB |
-| 8 | Invalid expression in final declaration | 1.682 us | 1.519 us | 9.7% | 1.39 KB |
-| 128 | Invalid expression in final declaration | 28.622 us | 25.887 us | 9.6% | 19.30 KB |
+| 8 | Valid | 1.774 us | 1.595 us | 10.1% | 1.41 KB |
+| 128 | Valid | 29.155 us | 26.597 us | 8.8% | 19.32 KB |
+| 8 | Unknown type in final declaration | 1.582 us | 1.415 us | 10.6% | 1.34 KB |
+| 128 | Unknown type in final declaration | 29.703 us | 26.223 us | 11.7% | 19.24 KB |
+| 8 | Invalid expression in final declaration | 1.673 us | 1.492 us | 10.8% | 1.38 KB |
+| 128 | Invalid expression in final declaration | 28.975 us | 26.399 us | 8.9% | 19.28 KB |
 
-The 99.9% confidence intervals for valid files are 1.805 +/- 0.0146 us versus
-1.598 +/- 0.0039 us (eight declarations), and 29.259 +/- 0.1516 us versus
-26.237 +/- 0.0564 us (128 declarations). An earlier, shorter run showed 8-9% lower
-valid-file parsing times, but its long-input failure cases were noisy; the table above
-uses the longer confirmation run rather than drawing conclusions from that noise.
+The 99.9% confidence intervals for valid files are 1.774 +/- 0.0471 us versus
+1.595 +/- 0.0199 us (eight declarations), and 29.155 +/- 3.2016 us versus
+26.597 +/- 1.9845 us (128 declarations). The longer-input intervals overlap:
+the mean reductions are indicative, not a precise speedup guarantee.
 
-The application-shaped gain is approximately **10-11% lower total parsing time**, not
+The valid-file means show approximately **9-10% lower total parsing time**, not
 the larger isolated-token speedup. Expression parsing and object construction account
 for the unaffected work. Allocations are unchanged. These results do not extend to the
 existing SQL sample: its case-insensitive keywords are ineligible for this optimization.
@@ -293,8 +298,7 @@ Reproduce this comparison with:
 ```bash
 dotnet build -c Release
 dotnet run --no-build --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- \
-  --filter '*KeywordSourceBenchmarks*' --job short \
-  --warmupCount 5 --iterationCount 12 --launchCount 2 --iterationTime 500
+  --filter '*KeywordSourceBenchmarks*' --job short
 ```
 
 ## Article-driven measurements
@@ -379,6 +383,157 @@ DOTNET_TieredCompilation=0 dotnet run --no-build \
 
 For `IgnoreCase=true`, `CharSpanSwitch` uses the original comparison-chain fallback,
 not an ordinal span switch. The switch strategy table above uses only the ordinal rows.
+
+## Prefix dispatch for wrapped and mixed choices
+
+The specializations above only apply when every alternative is a bare `Keyword` or `Text`.
+A grammar usually maps them to its own values, `Terms.Keyword("select").Then(...)`, mixes
+them with an identifier, or builds operators through `LeftAssociative`, whose operators are
+wrapped to return their index. These choices kept the first-char `switch`, invoking every
+alternative that shares the input's first char. At runtime, every choice did, bare keywords
+included.
+
+An internal `ISeekablePrefixes` refines `ISeekable`: a parser tells the texts the input
+starts with when it matches, not only their first chars. Ordinal `Text` and `Keyword`
+parsers tell their text. `Then`, `When`, `Error`, `Capture`, `Commit`, `Switch`,
+`SkipWhiteSpace`, `WhenFollowedBy`, `WhenNotFollowedBy`, `Between`, `OneOrMany`,
+`Separated`, the sequences, `OperatorIndex` and `Deferred` forward the prefixes of the
+parser that reads first, and a `OneOf` tells those of its alternatives. A parser that
+doesn't implement it, including any custom `ISeekable`, tells its expected chars as
+prefixes of one char. Like the expected chars, a prefix is only a condition for the parser
+to match: the parser still reads its text, so a shorter prefix is always valid. The
+interface stays internal, so a custom parser can't tell prefixes yet.
+
+For each char of the lookup table with at least three alternatives, the choice collects
+their prefixes that start with the char, shortened to 64 chars. The input selects the
+alternatives of the **longest** prefix it starts with: these are the alternatives with a
+prefix this one starts with, which are exactly the ones with a prefix the input starts
+with. An alternative that can start with any char has the char itself as prefix, so it is
+selected for every input.
+
+At runtime, the choice builds a trie of the prefixes of such a char when it builds its
+lookup table, each node holding the alternatives of the longest prefix up to it, and
+chains of single children compared at once. The table `Parse` reads gives such a char an
+empty group, which no other char has, so `Parse` only tests the length of the group it
+reads anyway. An empty group calls a method that walks the trie from the next char and
+returns the alternatives of the node it stops at. When a streamed window ends before the
+walk could tell whether a longer prefix follows, it marks `HitEnd`, since the alternatives
+it would skip are the ones that read further.
+
+The generator emits the same selection. Since `KnownStringLookup.GeneratePrefixes` returns
+the first prefix in order, the prefixes are given longest first, and each one returns the
+index of its group of alternatives. The `case` of the char then invokes that group, in the
+original order:
+
+```csharp
+case 'i':
+{
+    switch (DispatchPrefix12(cursor.Span.Slice(1)))
+    {
+        // "interface..." selects the alternatives with the prefixes "in", "int" and "interface", and the identifier
+        case 0: success = In(context, out value) || Int(context, out value) || Interface(context, out value) || Identifier(context, out value); break;
+        // "if..."
+        case 1: success = If(context, out value) || Identifier(context, out value); break;
+        // ...
+    }
+    break;
+}
+```
+
+A char is not refined when every prefix selects all of its alternatives, when it has more
+than 256 prefixes or 4096 chars of them, or when the parser reads from a `TextReader`: the
+compacting buffer may not hold the text after the current char.
+
+Prefixes don't carry the keyword boundary. For `interface`, the `in` and `int` keywords are
+still invoked before `interface`, and fail on their boundary. Generated choices of bare
+keywords keep the exact recognizer above.
+
+An alternative that the lookup skips is not invoked, as with the first-char table: an
+`Error` behind a longer prefix is not raised for an input that only shares its first char,
+and the `OnEnterParser` hooks don't see it.
+
+`KeywordParserBenchmarks` compares, **in the same build**, keywords wrapped in
+`Then(word)`, which tell their prefixes, with `BaselineKeyword` wrapped the same way, which
+only tells its first char and keeps the first-char dispatch. Both entry points return the
+canonical keyword, and setup checks them against the runtime parser.
+
+Measured on an Apple M4 Pro, macOS 15.8.2, .NET 10.0.11 Arm64, BenchmarkDotNet 0.15.8, with
+normal tiering, one launch, three warmups and ten 250 ms iterations. Means in ns/call; all
+methods allocate the same **176 B/call**, the context of the entry point:
+
+| Vocabulary | Input | First-char dispatch | Prefix dispatch | Time reduction |
+|---|---|---:|---:|---:|
+| 4 keywords | Hit | 31.76 | 31.90 | none emitted |
+| 4 keywords | Mixed | 30.21 | 30.93 | none emitted |
+| 16 keywords | Hit | 40.97 | 34.92 | 14.8% |
+| 16 keywords | Miss | 38.43 | 32.72 | 14.9% |
+| 16 keywords | Mixed | 41.65 | 33.74 | 19.0% |
+| 77 keywords | Hit | 42.62 | 35.40 | 16.9% |
+| 77 keywords | Miss | 40.35 | 33.47 | 17.1% |
+| 77 keywords | Mixed | 44.15 | 32.91 | 25.5% |
+| 128 shared-prefix tokens | Hit | 214.84 | 35.13 | 83.6% |
+| 128 shared-prefix tokens | Miss | 224.30 | 24.19 | 89.2% |
+| 128 shared-prefix tokens | Mixed | 270.17 | 27.41 | 89.9% |
+
+The four keywords start with different chars, so no dispatch is emitted: their rows are
+the same code, and show the noise of the run. The bare keyword recognizer remains faster,
+20-24 ns/call in the same run, since it invokes no helper for the keyword it recognized.
+
+Reproduce with:
+
+```bash
+dotnet build -c Release
+dotnet run --no-build --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- \
+  --filter '*KeywordParserBenchmarks.Generated*' \
+  --warmupCount 3 --iterationCount 10 --iterationTime 250 --launchCount 1
+```
+
+### Runtime choices
+
+The runtime has no in-build baseline: a keyword that hides its prefixes would cost one more
+call per alternative, which is what the dispatch saves. So `RuntimeOneOf` (bare
+`Literals.Keyword(word)`), `RuntimeWrappedOneOf` (`Literals.Keyword(word).Then(word)`),
+`OperatorChoiceBenchmarks` and `OneOfConstructionBenchmarks` ran on the build without the
+runtime dispatch and on this one, alternately, twice each, with the settings above. Means
+of the two runs in ns/call; every parse allocates the same **176 B/call**:
+
+| Vocabulary | Input | Bare before | Bare after | Change | Wrapped before | Wrapped after | Change |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 4 keywords | Hit | 23.13 | 23.37 | +1.0% | 24.91 | 25.20 | +1.1% |
+| 4 keywords | Miss | 18.51 | 18.40 | -0.6% | 18.93 | 18.95 | +0.1% |
+| 4 keywords | Mixed | 20.75 | 21.13 | +1.8% | 21.88 | 21.71 | -0.8% |
+| 16 keywords | Hit | 30.57 | 29.86 | -2.3% | 32.00 | 30.44 | -4.9% |
+| 16 keywords | Miss | 24.96 | 20.74 | -16.9% | 26.13 | 20.86 | -20.2% |
+| 16 keywords | Mixed | 28.55 | 23.20 | -18.7% | 29.75 | 24.04 | -19.2% |
+| 77 keywords | Hit | 28.76 | 29.34 | +2.0% | 30.39 | 29.59 | -2.6% |
+| 77 keywords | Miss | 24.79 | 21.30 | -14.1% | 26.00 | 21.12 | -18.8% |
+| 77 keywords | Mixed | 27.91 | 24.16 | -13.4% | 29.29 | 24.57 | -16.1% |
+| 128 shared-prefix tokens | Hit | 204.73 | 29.29 | -85.7% | 225.17 | 29.98 | -86.7% |
+| 128 shared-prefix tokens | Miss | 209.42 | 24.90 | -88.1% | 230.88 | 24.75 | -89.3% |
+| 128 shared-prefix tokens | Mixed | 250.87 | 27.38 | -89.1% | 275.60 | 27.77 | -89.9% |
+
+The four keywords start with different chars, so their rows run the code of a choice
+without dispatch: between rounds, the same build varies by about 2%. Hits gain little,
+since a keyword usually follows few others of its char, and they compare the prefix twice,
+in the trie and in the keyword. A choice of 27 operators, longest first, each returning its
+index, goes from 31.18 to 28.51 ns/call (-8.6%). Building a choice of 4 or 32 texts, with
+no char to dispatch, takes 0.5-3.0% longer and 16 more bytes, for the new fields.
+
+The selection costs nothing to the choices that don't use it because it stays out of
+`Parse`. Testing a second map there made every choice 1-3% slower, and so did inlining the
+trie lookup behind the empty group, whose `out` local grows the frame of `Parse`. A parser
+in place of the alternatives took 1.5 ns more on each dispatched char, an extra virtual call.
+Returning the alternatives of a leaf without comparing the rest of its prefix made inputs
+that only differ at the end invoke one more alternative, and was slower overall.
+
+Reproduce each build with:
+
+```bash
+dotnet build -c Release
+dotnet run --no-build --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- \
+  --filter '*KeywordParserBenchmarks.Runtime*' '*OperatorChoiceBenchmarks*' '*OneOfConstructionBenchmarks*' \
+  --warmupCount 3 --iterationCount 10 --iterationTime 250 --launchCount 1
+```
 
 ## Generated shapes
 

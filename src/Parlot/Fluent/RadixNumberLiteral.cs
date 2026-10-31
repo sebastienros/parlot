@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 
 internal delegate bool TryParseRadix<T>(ReadOnlySpan<char> span, int radix, out int charsRead, [MaybeNullWhen(false)] out T value);
 
-internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
+internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly int _radix;
     private readonly TryParseRadix<T> _tryParse;
@@ -32,8 +32,15 @@ internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 
     public bool SkipWhitespace => false;
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -55,6 +62,11 @@ internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(T), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;

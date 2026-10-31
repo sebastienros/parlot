@@ -1,29 +1,149 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace Parlot.Fluent;
 
-public sealed class Deferred<T> : Parser<T>, ISeekable, ISourceable
+public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IDeferredParser
 {
 
     private readonly object _lockObject = new();
     private Parser<T>? _parser;
+
+    // Whether the hints are being read from the parser, see Resolve()
+    private bool _resolving;
+
+    // Whether Parse() looks for this parser in the parsers that are active at the position, see LoopAnalysis. Written under
+    // LoopAnalysis.SyncRoot, read on each parse.
+    private int _loopDetection;
+
+    // The analyses that read the parser, see LoopAnalysis.Invalidate()
+    private List<IDeferredParser[]>? _loopGroups;
 
     public Parser<T>? Parser
     {
         get => _parser;
         set
         {
-            _parser = value ?? throw new ArgumentNullException(nameof(value));
+            ThrowHelper.ThrowIfNull(value, nameof(value));
+
+            // The deferred parsers which were analyzed with the previous parser are analyzed again when they are invoked
+            lock (LoopAnalysis.SyncRoot)
+            {
+                _parser = value;
+                LoopAnalysis.Invalidate(this);
+            }
         }
     }
 
-    public bool CanSeek { get; }
+    /// <summary>
+    /// Gets whether this parser can't be invoked again at the position where it is already active, such that it doesn't
+    /// look for itself in the active parsers of the context. The grammar is analyzed when it is first needed.
+    /// </summary>
+    /// <remarks>
+    /// The loop detection is still enabled when the white space parser of the context can invoke a deferred parser, see
+    /// <see cref="LoopAnalysis"/>.
+    /// </remarks>
+    internal bool IsLoopDetectionElided
+    {
+        get
+        {
+            var loopDetection = Volatile.Read(ref _loopDetection);
 
-    public char[] ExpectedChars { get; } = [];
+            return loopDetection == LoopAnalysis.Unknown ? LoopAnalysis.Analyze(this) : loopDetection == LoopAnalysis.Elided;
+        }
+    }
 
-    public bool SkipWhitespace { get; }
+    int IDeferredParser.LoopDetection
+    {
+        get => _loopDetection;
+        set => Volatile.Write(ref _loopDetection, value);
+    }
+
+    List<IDeferredParser[]>? IDeferredParser.LoopGroups
+    {
+        get => _loopGroups;
+        set => _loopGroups = value;
+    }
+
+    // A parser which isn't initialized throws when it is invoked
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _parser is { } parser && analysis.Invoke(parser);
+
+    /// <summary>
+    /// Gets whether the parser can be selected from a single char. The hints follow <see cref="Parser"/>, so a
+    /// parser set after a choice was built is still seekable once the choice starts parsing.
+    /// </summary>
+    public bool CanSeek => Resolve().CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => Resolve().ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => Resolve().SkipWhitespace;
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes
+    {
+        get
+        {
+            // The same guard as Resolve(): a parser that reaches itself gives no prefixes
+            lock (SeekableResolution.SyncRoot)
+            {
+                var parser = _parser;
+
+                if (parser is null || _resolving)
+                {
+                    return null;
+                }
+
+                _resolving = true;
+
+                try
+                {
+                    return SeekableHints.Prefixes(parser);
+                }
+                finally
+                {
+                    _resolving = false;
+                }
+            }
+        }
+    }
+
+    private (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Resolve()
+    {
+        // The hints are read when a choice builds its lookup table, which can happen from any thread, and the
+        // parser is in turn a choice when this one is the usual "expression" of a grammar
+        lock (SeekableResolution.SyncRoot)
+        {
+            var parser = _parser;
+
+            // A parser that reaches itself, directly or through other deferred parsers, can start with any char
+            if (parser is null || _resolving)
+            {
+                return (false, [], false);
+            }
+
+            _resolving = true;
+
+            try
+            {
+                if (parser is OneOf<T> oneOf)
+                {
+                    oneOf.EnsureResolved();
+                }
+
+                return parser is ISeekable seekable
+                    ? (seekable.CanSeek, seekable.ExpectedChars, seekable.SkipWhitespace)
+                    : (false, [], false);
+            }
+            finally
+            {
+                _resolving = false;
+            }
+        }
+    }
 
     public Deferred()
     {
@@ -32,32 +152,57 @@ public sealed class Deferred<T> : Parser<T>, ISeekable, ISourceable
     public Deferred(Func<Deferred<T>, Parser<T>> parser) : this()
     {
         Parser = parser(this);
-
-        if (Parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
-        var parser = Parser;
+        var parser = _parser;
 
         if (parser is null)
         {
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
+        // A parser which can't be invoked again where it is active has nothing to track, unless the context limits the
+        // recursion or skips white space with a parser that can invoke it
+        if (_loopDetection == LoopAnalysis.Elided && !context.TracksDeferredParsers)
+        {
+            context.EnterParser(this);
+
+            var success = parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+
+            return success;
+        }
+
+        return ParseTracked(context, ref result, parser);
+    }
+
+    private bool ParseTracked(ParseContext context, ref ParseResult<T> result, Parser<T> parser)
+    {
+        // The grammar is analyzed even when the context disables the loop detection, such that the next parses take the
+        // shortcut when they can
+        var elided = IsLoopDetectionElided;
+
+        var trackPosition = !context.DisableLoopDetection && (!elided || context.HasReentrantWhiteSpaceParser);
         var limitRecursion = context.MaxRecursionDepth > 0;
+
+        if (!trackPosition && !limitRecursion)
+        {
+            context.EnterParser(this);
+
+            var success = parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+
+            return success;
+        }
 
         if (limitRecursion)
         {
             context.EnterRecursion();
         }
-
-        var trackPosition = !context.DisableLoopDetection;
 
         // Remember the position where we entered this parser
         var entryPosition = 0;
@@ -122,14 +267,9 @@ public sealed class Deferred<T> : Parser<T>, ISeekable, ISourceable
 
         var result = context.CreateResult(typeof(T));
         var ctx = context.ParseContextName;
-        var cursorName = context.CursorName;
-        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
-        // Track position for backtracking on failure
-        var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
-
-        // Generate a call to the helper method
+        // Generate a call to the helper method. Like every generated parser it leaves the cursor where it
+        // started when it fails, so the caller doesn't capture the position.
         if (context.DiscardResult)
         {
             result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out _);");
@@ -138,12 +278,6 @@ public sealed class Deferred<T> : Parser<T>, ISeekable, ISourceable
         {
             result.Body.Add($"{result.SuccessVariable} = {methodName}({ctx}, out {result.ValueVariable});");
         }
-
-        // Reset position if the deferred parser failed
-        result.Body.Add($"if (!{result.SuccessVariable})");
-        result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.ResetPosition({startName});");
-        result.Body.Add("}");
 
         return result;
     }

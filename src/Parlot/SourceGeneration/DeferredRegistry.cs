@@ -15,7 +15,7 @@ public sealed class DeferredRegistry
         if (!_methods.TryGetValue(parser, out var entry))
         {
             var methodName = $"{suggestedName}_{_methods.Count}";
-            
+
             // Try to get the parser's Name property via reflection
             string? parserName = null;
             var nameProp = parser.GetType().GetProperty("Name");
@@ -23,7 +23,7 @@ public sealed class DeferredRegistry
             {
                 parserName = nameProp.GetValue(parser) as string;
             }
-            
+
             entry = (methodName, parserName);
             _methods[parser] = entry;
         }

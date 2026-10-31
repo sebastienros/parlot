@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Parlot.Explorer/Parlot.Explorer.csproj" />
+  <Project Path="Parlot.Explorer.Sample/Parlot.Explorer.Sample.csproj" />
+  <Project Path="Parlot.Explorer.Sample.Models/Parlot.Explorer.Sample.Models.csproj" />
+</Solution>

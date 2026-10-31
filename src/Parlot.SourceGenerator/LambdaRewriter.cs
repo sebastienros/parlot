@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Parlot.SourceGeneration;
 
 namespace Parlot.SourceGenerator;
 
@@ -83,7 +82,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     {
         var pointer = _nextPointer++;
         var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
-            .Visit(originalLambda)!.ToFullString().Trim();
+            .Visit(originalLambda).ToFullString().Trim();
         var capturedVariables = DetectCapturedVariables(originalLambda, originalSource);
 
         // Determine return type and parameter types from semantic model
@@ -131,7 +130,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 !symbol.Locations.Any(location =>
                     location.SourceTree == originalLambda.SyntaxTree && originalLambda.Span.Contains(location.SourceSpan))) == true;
             var executionBody = blockBody is not null
-                ? (BlockSyntax)Visit(blockBody)!
+                ? (BlockSyntax)Visit(blockBody)
                 : SyntaxFactory.Block(ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, delegateInvokeMethod.ReturnsVoid));
             if (hasCaptures && FactoryParameterUsage.IsDeferredCallback(originalLambda, _semanticModel))
             {
@@ -144,7 +143,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         else if (blockBody != null)
         {
             // Already a block body - prepend the registration
-            var visitedBody = (BlockSyntax)Visit(blockBody)!;
+            var visitedBody = (BlockSyntax)Visit(blockBody);
             newBody = visitedBody.WithStatements(
                 visitedBody.Statements.Insert(0, registrationStatement));
         }
@@ -153,7 +152,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             // Expression body - convert to block with registration + return
             newBody = SyntaxFactory.Block(
                 registrationStatement,
-                ExpressionStatement((ExpressionSyntax)Visit(expressionBody)!, returnsVoid: false));
+                ExpressionStatement((ExpressionSyntax)Visit(expressionBody), returnsVoid: false));
         }
         else
         {
@@ -184,16 +183,16 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
             && _semanticModel.GetTypeInfo(node.Expression).ConvertedType?.TypeKind == TypeKind.Delegate)
         {
             var symbolInfo = _semanticModel.GetSymbolInfo(node.Expression);
-            
+
             // Check if it resolves to a method (method group)
             if (symbolInfo.Symbol is IMethodSymbol methodSymbol ||
                 (symbolInfo.CandidateSymbols.Length > 0 && symbolInfo.CandidateSymbols[0] is IMethodSymbol))
             {
                 var method = (IMethodSymbol)(symbolInfo.Symbol ?? symbolInfo.CandidateSymbols[0]);
-                
+
                 var pointer = _nextPointer++;
                 var originalSource = new ParameterBindingRewriter(_semanticModel, _factory)
-                    .Visit(node.Expression)!.ToFullString().Trim();
+                    .Visit(node.Expression).ToFullString().Trim();
 
                 var paramTypes = method.Parameters.Select(p => p.Type.ToDisplayString()).ToList();
                 var returnType = method.ReturnType.Name.ToLowerInvariant();
@@ -218,7 +217,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
 
                 // Replace method group with a lambda that sets the pointer and calls the method
                 // e.g., char.IsLetter becomes (char arg0) => { LambdaPointer.CurrentPointer = N; return char.IsLetter(arg0); }
-                
+
                 var parameters = method.Parameters.Select((p, i) =>
                     SyntaxFactory.Parameter(SyntaxFactory.Identifier($"arg{i}"))
                         .WithType(SyntaxFactory.ParseTypeName(p.Type.ToDisplayString() + " ")))
@@ -232,7 +231,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 // Build the method invocation
                 var arguments = parameters.Select((_, i) =>
                     SyntaxFactory.Argument(SyntaxFactory.IdentifierName($"arg{i}")));
-                
+
                 var methodCall = SyntaxFactory.InvocationExpression(
                     node.Expression,
                     SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments)));
@@ -296,7 +295,6 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                         identifier.GetLocation()));
                 }
             }
-
         }
 
         return captures;
@@ -475,37 +473,5 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 SyntaxFactory.LiteralExpression(
                     SyntaxKind.NumericLiteralExpression,
                     SyntaxFactory.Literal(pointer))));
-    }
-}
-
-/// <summary>
-/// Result of rewriting a syntax tree with lambda stubs.
-/// </summary>
-internal sealed class LambdaRewriteResult
-{
-    public LambdaRewriteResult(
-        SyntaxTree rewrittenTree,
-        IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> lambdas)
-    {
-        RewrittenTree = rewrittenTree;
-        Lambdas = lambdas;
-    }
-
-    /// <summary>
-    /// The rewritten syntax tree with stub lambdas.
-    /// </summary>
-    public SyntaxTree RewrittenTree { get; }
-
-    /// <summary>
-    /// Map from lambda pointer to original lambda information.
-    /// </summary>
-    public IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> Lambdas { get; }
-
-    /// <summary>
-    /// Gets a dictionary mapping pointers to their original source code.
-    /// </summary>
-    public Dictionary<int, string> GetSourceCodeMap()
-    {
-        return Lambdas.ToDictionary(kv => kv.Key, kv => kv.Value.OriginalSource);
     }
 }

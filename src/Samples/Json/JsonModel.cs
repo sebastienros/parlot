@@ -3,9 +3,7 @@ using System.Linq;
 
 namespace Parlot.Tests.Json;
 
-public interface IJson
-{
-}
+public interface IJson;
 
 public class JsonArray : IJson
 {

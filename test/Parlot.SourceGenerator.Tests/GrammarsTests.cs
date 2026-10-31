@@ -1,3 +1,5 @@
+﻿#nullable enable
+
 using System;
 using System.Linq;
 using System.Reflection;
@@ -26,6 +28,25 @@ public class GrammarsTests
         Assert.DoesNotContain(
             typeof(Grammars).GetMethods(BindingFlags.NonPublic | BindingFlags.Static),
             static method => method.Name.StartsWith("Build", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Operators_Build_Generated_Parsers()
+    {
+        Assert.True(Grammars.TryParseOperators("-1 [2, 3] foo bar end", out var result));
+        Assert.True(result.Item1);
+        Assert.Equal(1, result.Item2);
+        Assert.Equal([2, 3], result.Item3);
+        Assert.Equal(["foo", "bar"], result.Item4);
+
+        Assert.True(Grammars.TryParseOperators("7", out result));
+        Assert.False(result.Item1);
+        Assert.Equal(7, result.Item2);
+        Assert.Empty(result.Item3);
+        Assert.Empty(result.Item4);
+
+        // The trailing !Terms.Char('!') lookahead rejects an exclamation mark
+        Assert.False(Grammars.TryParseOperators("7 !", out _));
     }
 
     [Fact]
@@ -99,6 +120,16 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void Left_Associative_Stops_When_Operator_And_Operand_Are_Empty()
+    {
+        Assert.True(Grammars.TryParseLeftAssociativeEmpty("x+x+y", out var value));
+        Assert.Equal(3, value);
+
+        Assert.True(Grammars.TryParseLeftAssociativeContextEmpty("x+x+y", out value));
+        Assert.Equal(3, value);
+    }
+
+    [Fact]
     public void Left_Associative_Rolls_Back_An_Operator_With_No_Right_Operand()
     {
         Assert.True(Grammars.TryParseLeftAssociativeThenPlus("1+", out var value));
@@ -133,6 +164,52 @@ public class GrammarsTests
     {
         Assert.True(Grammars.TryParseValueRightAssociativeEmpty("", out var value));
         Assert.Equal(1, value);
+    }
+
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("-1", -1)]
+    [InlineData("--1", -1)]
+    [InlineData("+1", 101)]
+    [InlineData("-+1", -101)]
+    public void Unary_Treats_A_Non_Consuming_Operator_As_No_Operator(string input, long expected)
+    {
+        Assert.True(Grammars.TryParseUnaryEmptyOperator(input, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(Grammars.TryParseUnaryContextEmptyOperator(input, out var contextValue));
+        Assert.Equal(expected, contextValue);
+        Assert.False(Grammars.TryParseUnaryEmptyOperator("x", out _));
+        Assert.False(Grammars.TryParseUnaryContextEmptyOperator("x", out _));
+    }
+
+    [Theory]
+    [InlineData("abcdefg", "abcdefg")]
+    [InlineData("z", "z")]
+    [InlineData("g", null)]
+    public void Seven_Element_Sequence_Is_Tried_By_OneOf(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseSevenSequenceChoice(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("ab", "a")]
+    [InlineData("b", "")]
+    [InlineData("x", null)]
+    public void Pattern_With_No_Minimum_Size_Matches_Nothing(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseEmptyPattern(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("b", "b")]
+    [InlineData("c", "c")]
+    [InlineData("a", null)]
+    public void Replaced_Recursive_Parser_Is_Found_By_OneOf(string input, string? expected)
+    {
+        Assert.Equal(expected != null, Grammars.TryParseReplacedRecursive(input, out var value));
+        Assert.Equal(expected, value);
     }
 
     [Fact]
@@ -178,6 +255,87 @@ public class GrammarsTests
         Assert.Equal('b', value);
         Assert.Equal(0, GeneratedParserCounters.GetCount("a"));
         Assert.Equal(1, GeneratedParserCounters.GetCount("b"));
+    }
+
+    [Fact]
+    public void Deferred_Set_After_The_OneOf_Is_In_The_Generated_Lookup_Table()
+    {
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseLateDeferredOneOf("  b", out var value));
+        Assert.Equal('b', value);
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(1, GeneratedParserCounters.GetCount("late-b"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseLateDeferredOneOf("  a", out value));
+        Assert.Equal('a', value);
+        Assert.Equal(1, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.False(Grammars.TryParseLateDeferredOneOf("  c", out _));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-a"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount("late-b"));
+    }
+
+    [Theory]
+    [InlineData("  a", 'a', "wrap-a")]
+    [InlineData("  b", 'b', "wrap-b")]
+    [InlineData("  c", 'c', "wrap-c")]
+    [InlineData("  xd", 'd', "wrap-d")]
+    public void Seekable_Wrappers_Are_In_The_Generated_Lookup_Table(string input, char expected, string invoked)
+    {
+        GeneratedParserCounters.Reset();
+
+        Assert.True(Grammars.TryParseSeekableWrappers(input, out var value));
+        Assert.Equal(expected, value);
+
+        foreach (var name in new[] { "wrap-a", "wrap-b", "wrap-c", "wrap-d", "wrap-e" })
+        {
+            Assert.Equal(name == invoked ? 1 : 0, GeneratedParserCounters.GetCount(name));
+        }
+
+        GeneratedParserCounters.Reset();
+
+        Assert.False(Grammars.TryParseSeekableWrappers("  z", out _));
+        Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
+
+        GeneratedParserCounters.Reset();
+
+        // The error is reported as a failure, and only raised when the lookup selected the parser
+        Assert.False(Grammars.TryParseSeekableWrappers("  e", out _));
+        Assert.Equal(1, GeneratedParserCounters.GetCount("wrap-e"));
+        Assert.Equal(0, GeneratedParserCounters.GetCount(invoked));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LeftAssociative_Operators_Are_Selected_By_Their_First_Char(bool withContext)
+    {
+        GeneratedParserCounters.Reset();
+        var prefix = withContext ? "ctx-op-" : "op-";
+
+        Assert.True(withContext
+            ? Grammars.TryParseCountingLeftAssociativeContext("10 p 4 m 2 m 1", out var value)
+            : Grammars.TryParseCountingLeftAssociative("10 p 4 m 2 m 1", out value));
+        Assert.Equal(11, value);
+
+        // Each operator was only tried where its char was next, and none at the end of the input
+        Assert.Equal(1, GeneratedParserCounters.GetCount(prefix + "p"));
+        Assert.Equal(2, GeneratedParserCounters.GetCount(prefix + "m"));
+
+        GeneratedParserCounters.Reset();
+
+        Assert.True(withContext
+            ? Grammars.TryParseCountingLeftAssociativeContext("10 m", out value)
+            : Grammars.TryParseCountingLeftAssociative("10 m", out value));
+        Assert.Equal(10, value);
+        Assert.Equal(0, GeneratedParserCounters.GetCount(prefix + "p"));
+        Assert.Equal(1, GeneratedParserCounters.GetCount(prefix + "m"));
     }
 
     [Fact]

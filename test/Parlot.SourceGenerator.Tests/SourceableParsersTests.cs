@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -22,7 +23,7 @@ public class SourceableParsersTests
         var source = Generate(new StringLiteral(quote));
         var generated = string.Join(Environment.NewLine, source.Body);
 
-        Assert.Contains($"scanner.ReadQuotedString((char){(int)quote}, out _)", generated, StringComparison.Ordinal);
+        Assert.Contains($"scanner.ReadQuotedString((char){(int)quote}, out ", generated, StringComparison.Ordinal);
         Assert.DoesNotContain("new char[]", generated, StringComparison.Ordinal);
     }
 
@@ -73,7 +74,8 @@ public class SourceableParsersTests
     [Fact]
     public void Sequence_Emitter_Registers_Both_Children()
     {
-        var context = new SourceGenerationContext("context", "Sequence");
+        // Span code would inline the chars
+        var context = new SourceGenerationContext("context", "Sequence") { GenerateSpanCode = false };
         var parser = Literals.Char('a').And(Literals.Char('b'));
 
         var source = Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context);
@@ -116,7 +118,7 @@ public class SourceableParsersTests
             TargetFrameworkIdentifier.NetCoreApp, new Version(7, 0)));
         var modern = new SourceGenerationContext(targetFramework: new TargetFrameworkInfo(
             TargetFrameworkIdentifier.NetCoreApp, new Version(8, 0)));
-        var parser = new TestLongNumberLiteral();
+        var parser = CreateBuiltInNumberLiteral<long>("LongNumberLiteral");
 
         var downlevelSource = string.Join(Environment.NewLine, parser.GenerateSource(downlevel).Body);
         var modernSource = string.Join(Environment.NewLine, parser.GenerateSource(modern).Body);
@@ -126,12 +128,85 @@ public class SourceableParsersTests
     }
 
     [Fact]
+    public void Number_Emitter_Rejects_A_Custom_Subclass()
+    {
+        // The generated code parses with the built-in methods, so a TryParseNumber override would be ignored
+        var parser = new TestLongNumberLiteral();
+
+        var exception = Assert.Throws<NotSupportedException>(() => parser.GenerateSource(new SourceGenerationContext()));
+
+        Assert.Contains("TryParseNumber", exception.Message, StringComparison.Ordinal);
+    }
+
+    // The built-in number parsers are internal, and the public factory returns NumberLiteral<T> on this runtime
+    private static NumberLiteralBase<T> CreateBuiltInNumberLiteral<T>(string typeName)
+    {
+        var type = typeof(NumberLiteralBase<>).Assembly.GetType("Parlot.Fluent." + typeName)!;
+        var constructor = type.GetConstructors().Single();
+        var arguments = constructor.GetParameters().Select(static parameter => parameter.DefaultValue).ToArray();
+
+        return (NumberLiteralBase<T>)constructor.Invoke(arguments);
+    }
+
+    [Fact]
     public void Unsupported_Runtime_Parser_Is_Rejected_By_Combinator_Emitter()
     {
         var parser = If(static () => true, new RuntimeOnlyParser());
 
         Assert.Throws<NotSupportedException>(
             () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
+    }
+
+    [Fact]
+    public void SkipWhiteSpace_Emitter_Rejects_A_Runtime_Only_Parser()
+    {
+        // Silently emitting a parser that always fails would hide the unsupported parser from the build
+        var parser = SkipWhiteSpace(new RuntimeOnlyParser());
+
+        Assert.Throws<NotSupportedException>(
+            () => Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext()));
+    }
+
+    [Fact]
+    public void OneOf_Emitter_Resolves_A_Deferred_Set_After_The_Choice()
+    {
+        var deferred = Deferred<char>();
+        var choice = OneOf(deferred, Literals.Char('b'));
+        var unresolved = string.Join(Environment.NewLine, ((ISeekable)choice).ExpectedChars.Select(static c => (int)c));
+
+        Assert.Contains("0", unresolved, StringComparison.Ordinal);
+
+        deferred.Parser = Literals.Char('a');
+
+        var generated = string.Join(Environment.NewLine, Generate(choice).Body);
+
+        // The table is built from the deferred parser's chars, with no default case for it
+        Assert.Contains("switch (", generated, StringComparison.Ordinal);
+        Assert.Contains("case 'a':", generated, StringComparison.Ordinal);
+        Assert.Contains("case 'b':", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("default:", generated, StringComparison.Ordinal);
+        Assert.Equal(['a', 'b'], ((ISeekable)choice).ExpectedChars.OrderBy(static c => c));
+    }
+
+    [Fact]
+    public void OneOf_Emitter_Does_Not_Route_The_Group_Separator_Or_The_Exponent_To_Numbers()
+    {
+        var number = Literals.Number<decimal>(NumberOptions.Any).Then(static x => x.ToString(CultureInfo.InvariantCulture));
+        var choice = OneOf(number, Literals.Text("x"));
+        var generated = string.Join(Environment.NewLine, Generate(choice).Body);
+
+        foreach (var c in "0123456789+-.x")
+        {
+            Assert.Contains($"case '{c}':", generated, StringComparison.Ordinal);
+        }
+
+        foreach (var c in ",eE")
+        {
+            Assert.DoesNotContain($"case '{c}':", generated, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("default:", generated, StringComparison.Ordinal);
+        Assert.Equal("+-.0123456789".ToCharArray(), ((ISeekable)choice).ExpectedChars.Where(static c => c != 'x').OrderBy(static c => c));
     }
 
     private static SourceResult Generate<T>(Parser<T> parser) =>

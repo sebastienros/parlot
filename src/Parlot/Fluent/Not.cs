@@ -3,7 +3,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Not<T> : Parser<T>, ISourceable
+public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
@@ -12,13 +12,25 @@ public sealed class Not<T> : Parser<T>, ISourceable
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
-        if (!_parser.Parse(context, ref result))
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref result);
+        context.Unpin(pin);
+
+        if (!success)
         {
             context.ExitParser(this);
             return true;
@@ -29,7 +41,6 @@ public sealed class Not<T> : Parser<T>, ISourceable
         context.ExitParser(this);
         return false;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -43,14 +54,14 @@ public sealed class Not<T> : Parser<T>, ISourceable
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
-        
+
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper instead of inlining
-        var helperName = context.Helpers
+        var helperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Not", innerValueTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         // if (Helper(context, out _))
         // {
@@ -61,7 +72,8 @@ public sealed class Not<T> : Parser<T>, ISourceable
         // {
         //     success = true;
         // }
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out _))");
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out _)");
+        result.Body.Add($"if ({success})");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add($"    {result.SuccessVariable} = false;");

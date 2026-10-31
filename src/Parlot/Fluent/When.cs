@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser is valid based on a condition, and backtracks if not.
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class When<T> : Parser<T>, ISeekable, ISourceable
+public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Func<ParseContext, T, bool> _action;
     private readonly Parser<T> _parser;
@@ -44,11 +44,15 @@ public sealed class When<T> : Parser<T>, ISeekable, ISourceable
 
     public bool SkipWhitespace { get; private set; }
 
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         var valid = _parser.Parse(context, ref result) && _action(context, result.Value);
 
@@ -60,7 +64,6 @@ public sealed class When<T> : Parser<T>, ISeekable, ISourceable
         context.ExitParser(this);
         return valid;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -76,7 +79,7 @@ public sealed class When<T> : Parser<T>, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper instead of inlining
         var helperName = context.WithDiscardResult(false, () => context.Helpers

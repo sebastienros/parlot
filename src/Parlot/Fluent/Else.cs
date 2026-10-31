@@ -6,7 +6,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a default value if the previous parser failed.
 /// </summary>
-public sealed class Else<T> : Parser<T>, ISourceable
+public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly T? _value;
@@ -24,27 +24,41 @@ public sealed class Else<T> : Parser<T>, ISourceable
         _func = func ?? throw new ArgumentNullException(nameof(func));
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        if (!_parser.Parse(context, ref result))
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _parser.Parse(context, ref result);
+        context.Unpin(pin);
+
+        if (!success)
         {
+            // The parser reset the cursor, and may have left the positions of a partial match in the result
+            var offset = context.Scanner.Cursor.Offset;
+
             if (_func != null)
             {
-                result.Set(result.Start, result.End, _func(context));
+                result.Set(offset, offset, _func(context));
             }
             else
             {
                 // _value can't be null if _func is null
-                result.Set(result.Start, result.End, _value!);
+                result.Set(offset, offset, _value!);
             }
         }
 
         context.ExitParser(this);
         return true;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -72,10 +86,11 @@ public sealed class Else<T> : Parser<T>, ISourceable
         //     value = _func != null ? _func(context) : _value;
         // }
         // success = true; (always succeeds)
-        
-        result.Body.Add($"if (!{helperName}({context.ParseContextName}, out {result.ValueVariable}))");
+
+        var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out {result.ValueVariable})");
+        result.Body.Add($"if (!{success})");
         result.Body.Add("{");
-        
+
         if (_func != null)
         {
             var lambdaId = context.RegisterLambda(_func);
@@ -98,13 +113,13 @@ public sealed class Else<T> : Parser<T>, ISourceable
                     $"Else<{typeof(T).Name}> with a value of type '{typeof(T).Name}' cannot be source-generated. " +
                     $"Use a lambda instead, e.g., .Else(static _ => yourValue)");
             }
-            
+
             if (!context.DiscardResult)
             {
                 result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
             }
         }
-        
+
         result.Body.Add("}");
         result.Body.Add($"{result.SuccessVariable} = true;");
 

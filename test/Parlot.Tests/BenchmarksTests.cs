@@ -15,6 +15,59 @@ public class BenchmarksTests
     const decimal _expected1 = (decimal)3.5;
     const decimal _expected2 = (decimal)-64.5;
 
+    [Fact]
+    public void DiscardedTextGrammar()
+    {
+        var benchmark = new DiscardResultBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("value", benchmark.SkippedText());
+        Assert.Equal("value", benchmark.BetweenText());
+        Assert.Equal("KeYwOrD", benchmark.RetainedText());
+    }
+
+    [Theory]
+    [InlineData("Small", "Mixed")]
+    [InlineData("Medium", "Mixed")]
+    [InlineData("Language", "Hit")]
+    [InlineData("Language", "Miss")]
+    [InlineData("Language", "Mixed")]
+    [InlineData("SharedPrefix", "Mixed")]
+    public void KeywordChoiceGrammar(string vocabulary, string scenario)
+    {
+        // The setup checks every parser against the runtime one
+        var benchmark = new KeywordParserBenchmarks { Vocabulary = vocabulary, Scenario = scenario };
+        benchmark.Setup();
+        var expected = scenario switch { "Hit" => 64, "Mixed" => 16, _ => 0 };
+        Assert.Equal(expected, benchmark.RuntimeOneOf());
+        Assert.Equal(expected, benchmark.RuntimeWrappedOneOf());
+        Assert.Equal(expected, benchmark.GeneratedWrappedPrefixDispatch());
+        Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
+    }
+
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Arithmetic", 7)]
+    [InlineData("Mixed", 1)]
+    [InlineData("Nested", 0)]
+    public void PrecedenceGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the nested runtime one
+        var benchmark = new PrecedenceBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.NestedRuntime());
+        Assert.Equal(expected, benchmark.ChainGenerated());
+    }
+
+    [Fact]
+    public void OperatorChoiceGrammar()
+    {
+        var benchmark = new OperatorChoiceBenchmarks();
+        benchmark.Setup();
+
+        // The sum of the indexes of the operators the inputs start with
+        Assert.Equal(566, benchmark.RuntimeOneOf());
+    }
+
     [Theory]
     [InlineData("Language", "Hit")]
     [InlineData("Language", "Miss")]
@@ -118,6 +171,16 @@ public class BenchmarksTests
 
         Assert.Equal(success, benchmarks.Lookup());
         Assert.Equal(success, benchmarks.Lookup());
+    }
+
+    [Fact]
+    public void PositionBenchmarks()
+    {
+        var benchmarks = new PositionBenchmarks();
+
+        Assert.Equal(2000, benchmarks.Identifiers());
+        Assert.Equal(400, benchmarks.PositionAfterEachIdentifier());
+        Assert.Equal(400, benchmarks.ErrorPositionAtTheEnd());
     }
 
     [Fact]
@@ -602,5 +665,23 @@ public class BenchmarksTests
         var result = benchmarks.LookupMatchFluent();
     }
 
+    [Theory]
+    [InlineData(1000)]
+    [InlineData(10000)]
+    public async System.Threading.Tasks.Task StreamingGrammar(int count)
+    {
+        var benchmarks = new StreamingBenchmarks { Count = count };
+        benchmarks.Setup();
+        var expected = benchmarks.Expected;
+
+        Assert.True(expected > 0);
+        Assert.Equal(expected, benchmarks.Document_ReadToEnd());
+        Assert.Equal(expected, await benchmarks.Document_TryParseAsync());
+        Assert.Equal(expected, benchmarks.Document_Parse());
+        Assert.Equal(expected, benchmarks.Document_Generated_ReadToEnd());
+        Assert.Equal(expected, benchmarks.Lines_ReadLine());
+        Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync());
+        Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync_Delimited());
+    }
 }
 #endif

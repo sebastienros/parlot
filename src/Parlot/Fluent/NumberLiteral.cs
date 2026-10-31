@@ -4,19 +4,14 @@ using Parlot.SourceGeneration;
 using System;
 using System.Globalization;
 using System.Numerics;
-using System.Reflection;
 
 namespace Parlot.Fluent;
 
-public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
+public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
     where T : INumber<T>
 {
     private const char DefaultDecimalSeparator = '.';
     private const char DefaultGroupSeparator = ',';
-
-    private static readonly MethodInfo _tryParseMethodInfo = typeof(Numbers)
-        .GetMethod(nameof(Numbers.TryParseNumber), BindingFlags.Static | BindingFlags.Public)!
-        .MakeGenericMethod(typeof(T));
 
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -67,22 +62,24 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
             ExpectedChars = [.. ExpectedChars, decimalSeparator];
         }
 
-        if (_allowGroupSeparator)
-        {
-            ExpectedChars = [.. ExpectedChars, groupSeparator];
-        }
-
-        // Exponent can't be a starting char
+        // A group separator or an exponent can't be a starting char
 
         Name = "NumberLiteral";
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return context.ParseToken(this, ref result);
+        }
+
         context.EnterParser(this);
 
-        var reset = context.Scanner.Cursor.Position;
-        var start = reset.Offset;
+        var reset = context.Scanner.Cursor.Offset;
+        var start = reset;
 
         if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
         {
@@ -103,10 +100,14 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         return false;
     }
 
-
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        if (context.IsCompacting)
+        {
+            return context.GenerateToken(this, typeof(T), () => GenerateSource(context));
+        }
 
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
@@ -119,14 +120,17 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         var endName = $"end{context.NextNumber()}";
         var parsedValueName = $"parsedValue{context.NextNumber()}";
 
-        result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {resetName} = 0;");
         result.Body.Add($"var {startName} = 0;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
-        result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
+        }
 
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{resetName} = {cursorName}.Position;");
-        result.Body.Add($"{startName} = {resetName}.Offset;");
+        result.Body.Add($"{resetName} = {cursorName}.Offset;");
+        result.Body.Add($"{startName} = {resetName};");
 
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
         var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
@@ -135,7 +139,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 
         // Emit NumberStyles as a literal cast
         var numberStylesExpr = $"(global::System.Globalization.NumberStyles){(int)_numberStyles}";
-        
+
         var cultureExpr = "global::System.Globalization.CultureInfo.InvariantCulture.NumberFormat";
         if (!ReferenceEquals(_culture, CultureInfo.InvariantCulture.NumberFormat))
         {
@@ -150,18 +154,28 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
-        if (context.DiscardResult)
+        var outTarget = context.DiscardResult ? "_" : parsedValueName;
+        // The generic helper needs the consumer's net8.0+ runtime; downlevel consumers only have the fixed overloads.
+        // An unknown target keeps the generic path this build was compiled for.
+        var downlevel = context.TargetFramework.Identifier switch
         {
-            result.Body.Add($"    {result.SuccessVariable} = true;");
-        }
-        else
+            TargetFrameworkIdentifier.NetFramework or TargetFrameworkIdentifier.NetStandard => true,
+            TargetFrameworkIdentifier.NetCoreApp => context.TargetFramework.Version < new Version(8, 0),
+            _ => false,
+        };
+        var tryParseMethod = !downlevel
+            ? $"global::Parlot.Numbers.TryParseNumber<{valueTypeName}>"
+            : Numbers.HasTryParseOverload(typeof(T))
+                ? "global::Parlot.Numbers.TryParse"
+                : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later.");
+        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {outTarget}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
+        if (!context.DiscardResult)
         {
-            result.Body.Add($"    if (global::Parlot.Numbers.TryParseNumber<{valueTypeName}>({numberSpanName}, {numberStylesExpr}, {cultureExpr}, out {parsedValueName}))");
-            result.Body.Add("    {");
-            result.Body.Add($"        {result.SuccessVariable} = true;");
             result.Body.Add($"        {result.ValueVariable} = {parsedValueName};");
-            result.Body.Add("    }");
         }
+        result.Body.Add("    }");
         result.Body.Add("}");
 
         result.Body.Add($"if (!{result.SuccessVariable})");

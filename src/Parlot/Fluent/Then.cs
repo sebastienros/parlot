@@ -1,7 +1,5 @@
-using Parlot;
 using Parlot.Rewriting;
 using System;
-using System.Linq;
 using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
@@ -12,7 +10,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The input parser type.</typeparam>
 /// <typeparam name="U">The output parser type.</typeparam>
-public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
+public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Func<T, U>? _action1;
     private readonly Func<ParseContext, T, U>? _action2;
@@ -58,6 +56,10 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
 
     public bool SkipWhitespace { get; }
 
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
         context.EnterParser(this);
@@ -92,15 +94,18 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
         return false;
     }
 
-
-    
-    public Parlot.SourceGeneration.SourceResult GenerateSource(Parlot.SourceGeneration.SourceGenerationContext context)
+    public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         if (_parser is not ISourceable sourceable)
         {
             throw new NotSupportedException("Then requires a source-generatable parser.");
+        }
+
+        if (SpanSource.TryGenerate(this, typeof(U), context) is { } spanResult)
+        {
+            return spanResult;
         }
 
         var result = context.CreateResult(typeof(U));
@@ -110,28 +115,42 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(U));
 
         // Register helper for the inner parser
-        static Type GetParserValueType(object parser)
-        {
-            var type = parser.GetType();
-            while (type != null)
-            {
-                if (type.IsGenericType && type.GetGenericTypeDefinition().FullName == "Parlot.Fluent.Parser`1")
-                {
-                    return type.GetGenericArguments()[0];
-                }
-                type = type.BaseType!;
-            }
-            throw new InvalidOperationException("Unable to determine parser value type.");
-        }
-
-        var innerValueTypeName = SourceGenerationContext.GetTypeName(GetParserValueType(sourceable));
         var helperKey = $"{context.MethodNamePrefix}_Then_{context.NextNumber()}";
-        // The callback still consumes the inner value when its own result is discarded.
-        var helperName = context.WithDiscardResult(false, () => context.Helpers
-            .GetOrCreate(sourceable, helperKey, innerValueTypeName, () => sourceable.GenerateSource(context))
+        // Callbacks consume the inner value even when their output is discarded; constants do not.
+        var discardInput = _action1 == null && _action2 == null && _action3 == null;
+        var helperName = context.WithDiscardResult(discardInput, () => context.Helpers
+            .GetOrCreate(sourceable, helperKey, parsedTypeName, () => sourceable.GenerateSource(context))
             .MethodName);
 
-        result.Body.Add($"if ({helperName}({ctx}, out var {parsedName}Value))");
+        var outTarget = discardInput ? "_" : $"var {parsedName}Value";
+        var cursorName = context.CursorName;
+        string? startName = null;
+        string? resetName = null;
+
+        if (_action3 != null)
+        {
+            // The callback receives the offsets of the inner match. The runtime reports the start of the
+            // content, after any white space a Terms parser skipped, so a SkipWhiteSpace wrapper is
+            // unfolded here: the white space is skipped first and the start is read after it.
+            startName = $"start{context.NextNumber()}";
+
+            if (_parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable })
+            {
+                helperName = context.Helpers
+                    .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
+                    .MethodName;
+                resetName = $"reset{context.NextNumber()}";
+                result.Body.Add($"var {resetName} = {cursorName}.Offset;");
+                result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {ctx}.SkipWhiteSpace();");
+                result.Body.Add("}");
+            }
+
+            result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        }
+
+        result.Body.Add($"if ({helperName}({ctx}, out {outTarget}))");
         result.Body.Add("{");
 
         if (_action1 != null)
@@ -163,11 +182,11 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
             var lambdaName = context.RegisterLambda(_action3);
             if (context.DiscardResult)
             {
-                result.Body.Add($"    {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
+                result.Body.Add($"    {lambdaName}({ctx}, {startName}, {cursorName}.Offset, {parsedName}Value);");
             }
             else
             {
-                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, 0, 0, {parsedName}Value);");
+                result.Body.Add($"    {result.ValueVariable} = {lambdaName}({ctx}, {startName}, {cursorName}.Offset, {parsedName}Value);");
             }
         }
         else
@@ -180,18 +199,56 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
                     $"Then<{typeof(T).Name}, {typeof(U).Name}> with a value of type '{typeof(U).Name}' cannot be source-generated. " +
                     $"Use a lambda instead, e.g., .Then(static _ => yourValue)");
             }
-            
+
             if (!context.DiscardResult)
             {
                 result.Body.Add($"    {result.ValueVariable} = {valueExpr};");
             }
         }
-        
+
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
+
+        if (resetName != null)
+        {
+            // The white space skipped above is given back when the content doesn't match
+            result.Body.Add("else");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.ResetPosition({resetName});");
+            result.Body.Add("}");
+        }
 
         return result;
     }
 
-override public string ToString() => $"{_parser} (Then)";
+    // The callbacks which receive the context can read the cursor, which span code doesn't move
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context)
+        => _action2 == null && _action3 == null && (_action1 != null || LiteralHelper.ToLiteral(_value) != null)
+            ? SpanSource.GetWeight(context, _parser)
+            : -1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        if (_action1 != null)
+        {
+            // The callback consumes the value even when its result is discarded
+            var parsed = writer.DeclareLocal(typeof(T), "parsed");
+            var lambdaName = writer.Context.RegisterLambda(_action1);
+
+            writer.Generate(_parser, parsed, fail);
+            writer.BeforeCallback();
+            writer.Add(valueVariable != null ? $"{valueVariable} = {lambdaName}({parsed});" : $"{lambdaName}({parsed});");
+        }
+        else
+        {
+            writer.Generate(_parser, null, fail);
+
+            if (valueVariable != null)
+            {
+                writer.Add($"{valueVariable} = {LiteralHelper.ToLiteral(_value)};");
+            }
+        }
+    }
+
+    override public string ToString() => $"{_parser} (Then)";
 }

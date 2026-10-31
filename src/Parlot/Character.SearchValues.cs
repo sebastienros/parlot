@@ -11,6 +11,19 @@ public static partial class Character
     internal static readonly SearchValues<char> _identifierStart = SearchValues.Create(DefaultIdentifierStart);
     internal static readonly SearchValues<char> _identifierPart = SearchValues.Create(DefaultIdentifierPart);
     internal static readonly SearchValues<char> _newLines = SearchValues.Create(NewLines);
+    internal static readonly SearchValues<char> _whiteSpaces = SearchValues.Create(WhiteSpaces);
+    internal static readonly SearchValues<char> _whiteSpaceOrNewLines = SearchValues.Create(WhiteSpaceOrNewLines);
+    internal static readonly SearchValues<char> _asciiWhiteSpaces = SearchValues.Create(AsciiWhiteSpaces);
+    internal static readonly SearchValues<char> _asciiWhiteSpaceOrNewLines = SearchValues.Create(AsciiWhiteSpaceOrNewLines);
+
+    // The chars of a white space mask, see GetWhiteSpaceMask
+    internal static SearchValues<char> GetWhiteSpaceSearchValues(byte mask) => mask switch
+    {
+        (byte)CharacterMask.WhiteSpace => _whiteSpaces,
+        (byte)CharacterMask.WhiteSpaceOrNewLine => _whiteSpaceOrNewLines,
+        (byte)CharacterMask.AsciiWhiteSpace => _asciiWhiteSpaces,
+        _ => _asciiWhiteSpaceOrNewLines,
+    };
 
     // _decimalDigits and _hexDigits are still used for span-wide IndexOfAnyExcept scans in Scanner,
     // which is what SearchValues is good at. The single-char predicates live in Character.cs and use

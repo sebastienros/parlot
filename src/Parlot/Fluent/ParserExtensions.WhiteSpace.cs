@@ -16,6 +16,20 @@ public static partial class ParserExtensions
         => new WithWhiteSpaceParser<T>(parser, whiteSpaceParser);
 
     /// <summary>
+    /// Builds a parser that selects the chars that are white space for the current parser.
+    /// </summary>
+    /// <typeparam name="T">The type of the parser result.</typeparam>
+    /// <param name="parser">The parser to execute with the white space set.</param>
+    /// <param name="whiteSpaceSet">The chars that are white space while <paramref name="parser"/> runs.</param>
+    /// <returns>A parser that uses the white space set.</returns>
+    /// <remarks>
+    /// It sets <see cref="ParseContext.WhiteSpaceSet"/>, which keeps the white space fast path. Unlike a context option it is
+    /// part of the grammar, so a source-generated parser honors it too.
+    /// </remarks>
+    public static Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSet)
+        => new WithWhiteSpaceSet<T>(parser, whiteSpaceSet);
+
+    /// <summary>
     /// Builds a parser that sets comments for the current parser.
     /// </summary>
     /// <typeparam name="T">The type of the parser result.</typeparam>

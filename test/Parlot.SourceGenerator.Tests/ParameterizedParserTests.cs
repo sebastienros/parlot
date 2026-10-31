@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -222,6 +223,22 @@ public class ParameterizedParserTests
     }
 
     [Fact]
+    public void Opt_In_Generated_Reader_Overload_Reports_Diagnostics()
+    {
+        Assert.True(ParameterizedGrammars.TryParseWarning(new StringReader(" var"), out var value, out var diagnostics));
+        Assert.Equal("var", value);
+        Assert.Equal(("'var' is deprecated", true, 1, 1, 2), Assert.Single(diagnostics));
+
+        Assert.True(ParameterizedGrammars.TryParseWarning(new StringReader(" a"), out value, out diagnostics));
+        Assert.Equal("a", value);
+        Assert.Empty(diagnostics);
+
+        Assert.False(ParameterizedGrammars.TryParseRequiredBang(new StringReader("x"), out value, out var errors));
+        Assert.Null(value);
+        Assert.Equal(("Expected '!'.", false, 1, 1, 2), Assert.Single(errors));
+    }
+
+    [Fact]
     public void Generated_Configuration_Uses_The_Existing_Execution_Context()
     {
         var wrappers = typeof(ParameterizedGrammars).GetNestedTypes(BindingFlags.NonPublic)
@@ -320,6 +337,10 @@ public static partial class ParameterizedGrammars
     public static partial bool TryParseWarning(string text, out string value);
     public static partial bool TryParseWarning(string text, out string value,
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
+    public static partial bool TryParseWarning(TextReader text, out string value,
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
+    public static partial bool TryParseRequiredBang(TextReader text, out string value,
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseOverloadedDefault(string text, out string value);
     public static partial bool TryParseOverloadedBoolean(string text, bool enabled, out string value);
     public static partial bool TryParseOverloadedInteger(string text, int number, out string value);

@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a list containing zero or one result from the inner parser.
 /// </summary>
-public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
+public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
 
@@ -16,21 +16,39 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {
         context.EnterParser(this);
 
         var parsed = new ParseResult<T>();
 
+        // The text is read again when the parser fails
+        var pin = context.Pin();
         var success = _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
 
-        result.Set(parsed.Start, parsed.End, success ? [parsed.Value] : Array.Empty<T>());
+        if (success)
+        {
+            result.Set(parsed.Start, parsed.End, [parsed.Value]);
+        }
+        else
+        {
+            // Nothing was read: the result is empty at the current position
+            var offset = context.Scanner.Cursor.Offset;
+            result.Set(offset, offset, Array.Empty<T>());
+        }
 
         // ZeroOrOne always succeeds
         context.ExitParser(this);
         return true;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -39,6 +57,11 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
         if (_parser is not ISourceable sourceable)
         {
             throw new NotSupportedException("ZeroOrOne requires a source-generatable parser.");
+        }
+
+        if (SpanSource.TryGenerate(this, typeof(IReadOnlyList<T>), context) is { } spanResult)
+        {
+            return spanResult;
         }
 
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
@@ -50,18 +73,35 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
 
         if (context.DiscardResult)
         {
-            result.Body.Add($"{helperName}({context.ParseContextName}, out _);");
+            var call = $"{helperName}({context.ParseContextName}, out _)";
+            if (context.PinnedCall(result, call) == call)
+            {
+                result.Body.Add($"{call};");
+            }
         }
         else
         {
             var itemValueName = $"itemValue{context.NextNumber()}";
-            result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {itemValueName}))");
+            var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out var {itemValueName})");
+            result.Body.Add($"if ({success})");
             result.Body.Add("{");
             result.Body.Add($"    {result.ValueVariable} = new {elementTypeName}[] {{ {itemValueName} }};");
             result.Body.Add("}");
         }
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var item = valueVariable != null ? writer.DeclareLocal(typeof(T), "item") : null;
+
+        SpanSource.GenerateOptional(writer, _parser, item,
+            valueVariable != null ? $"{valueVariable} = new {elementTypeName}[] {{ {item} }};" : null,
+            valueVariable != null ? $"{valueVariable} = global::System.Array.Empty<{elementTypeName}>();" : null);
     }
 
     public override string ToString() => $"{_parser}?";

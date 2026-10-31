@@ -7,21 +7,29 @@ namespace Parlot.Fluent;
 /// <summary>
 /// A parser that temporarily sets a custom whitespace parser for its inner parser.
 /// </summary>
-public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
+public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<TextSpan> _whiteSpaceParser;
+
+    // Whether the white space parser can invoke a deferred parser, see ParseContext.HasReentrantWhiteSpaceParser.
+    // Unknown until the first parse, which needs the grammar to be complete.
+    private int _reentrantWhiteSpaceParser = Unknown;
+    private const int Unknown = 0;
+    private const int NotReentrant = 1;
+    private const int Reentrant = 2;
 
     public WithWhiteSpaceParser(Parser<T> parser, Parser<TextSpan> whiteSpaceParser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _whiteSpaceParser = whiteSpaceParser ?? throw new ArgumentNullException(nameof(whiteSpaceParser));
 
-        if (parser is ISeekable seekable)
+        // A parser skipping white spaces does it with the custom parser, which a OneOf doesn't know about:
+        // it would skip them with its own before looking up the first char.
+        if (parser is ISeekable seekable && !seekable.SkipWhitespace)
         {
             CanSeek = seekable.CanSeek;
             ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
         }
     }
 
@@ -37,11 +45,12 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
 
         // Save the current whitespace parser
         var previousWhiteSpaceParser = context.WhiteSpaceParser;
+        var previousReentrant = context.HasReentrantWhiteSpaceParser;
 
         try
         {
             // Set the custom whitespace parser
-            context.WhiteSpaceParser = _whiteSpaceParser;
+            context.SetWhiteSpaceParser(_whiteSpaceParser, IsWhiteSpaceParserReentrant());
 
             // Parse with the custom whitespace parser
             var success = _parser.Parse(context, ref result);
@@ -52,10 +61,26 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
         finally
         {
             // Restore the previous whitespace parser
-            context.WhiteSpaceParser = previousWhiteSpaceParser;
+            context.SetWhiteSpaceParser(previousWhiteSpaceParser, previousReentrant);
         }
     }
 
+    private bool IsWhiteSpaceParserReentrant()
+    {
+        var reentrant = _reentrantWhiteSpaceParser;
+
+        if (reentrant == Unknown)
+        {
+            // The answer doesn't change once the parser can't reach a deferred parser
+            reentrant = LoopAnalysis.CanReachDeferred(_whiteSpaceParser) ? Reentrant : NotReentrant;
+            _reentrantWhiteSpaceParser = reentrant;
+        }
+
+        return reentrant == Reentrant;
+    }
+
+    // The white space parser is invoked by the parsers that skip white space, see LoopAnalysis.CanReachDeferred()
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -76,11 +101,11 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var previousWhiteSpaceParserName = $"previousWhiteSpaceParser{context.NextNumber()}";
-        
+
         // Generate the whitespace parser as a helper method
-        var wsHelperName = context.Helpers
+        var wsHelperName = context.WithDiscardResult(true, () => context.Helpers
             .GetOrCreate(whiteSpaceSourceable, $"{context.MethodNamePrefix}_WhiteSpace", "global::Parlot.TextSpan", () => whiteSpaceSourceable.GenerateSource(context))
-            .MethodName;
+            .MethodName);
 
         // Create a wrapper parser that delegates to the helper
         var wsWrapperName = $"_{context.MethodNamePrefix}_WsWrapper{context.NextNumber()}";

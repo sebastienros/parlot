@@ -1,7 +1,7 @@
-using Parlot.Tests.Calc;
 using System;
 using System.Buffers;
 using System.Globalization;
+using Parlot.Fluent;
 using Xunit;
 
 namespace Parlot.Tests;
@@ -100,12 +100,17 @@ public class ScannerTests
     }
 
     [Theory]
-    // The quote char is also the escape char, so the start quote is the first escape sequence
+    // The quote char is also the escape char, so it can't be escaped: the backslash following the
+    // start quote is the end quote, and the content is never decoded
     [InlineData("\\n\\rest", true, "\\n\\")]
-    [InlineData("\\p\\rest", false, null)]
-    [InlineData("\\u1234\\rest", false, null)]
-    [InlineData("\\u12\\rest", false, null)]
+    [InlineData("\\p\\rest", true, "\\p\\")]
+    [InlineData("\\abc\\", true, "\\abc\\")]
+    [InlineData("\\\\", true, "\\\\")]
+    [InlineData("\\u1234\\rest", true, "\\u1234\\")]
+    [InlineData("\\u12\\rest", true, "\\u12\\")]
     [InlineData("\\nrest", false, null)]
+    [InlineData("\\", false, null)]
+    [InlineData("", false, null)]
     public void ShouldReadStringWhenQuoteCharIsTheEscapeChar(string text, bool success, string expected)
     {
         Scanner s = new(text);
@@ -115,11 +120,31 @@ public class ScannerTests
         if (success)
         {
             Assert.Equal(expected, result.ToString());
+            Assert.Equal(expected.Length, s.Cursor.Offset);
         }
         else
         {
             Assert.Equal(0, s.Cursor.Offset);
         }
+    }
+
+    [Fact]
+    public void ShouldNotReadNullQuotedStringAtEof()
+    {
+        // The cursor reports the null char at the end of the text, which is not a quote
+        var s = new Scanner("");
+
+        Assert.False(s.ReadQuotedString('\0', out _));
+        Assert.Equal(0, s.Cursor.Offset);
+
+        s = new Scanner("\0abc\0rest");
+
+        Assert.True(s.ReadQuotedString('\0', out var result));
+        Assert.Equal("\0abc\0", result.ToString());
+        Assert.Equal(5, s.Cursor.Offset);
+
+        Assert.False(new StringLiteral('\0').TryParse("", out _));
+        Assert.Equal("abc", new StringLiteral('\0').Parse("\0abc\0").ToString());
     }
 
     [Fact]
@@ -161,6 +186,112 @@ public class ScannerTests
         s = new Scanner(source);
         Assert.False(s.ReadAnyOf(SearchValues.Create(pattern), out result));
 #endif
+    }
+
+    [Fact]
+    public void ReadAnyOfShouldStopAtEofWhenTheNullCharIsExpected()
+    {
+        // The cursor reports the null char at the end of the text, which must not be read even when expected
+        var s = new Scanner("ab");
+
+        Assert.True(s.ReadAnyOf("ab\0", out var result));
+        Assert.Equal("ab", result.ToString());
+        Assert.Equal(2, s.Cursor.Offset);
+
+        s = new Scanner("a\0b");
+
+        Assert.True(s.ReadAnyOf("a\0", out result));
+        Assert.Equal("a\0", result.ToString());
+        Assert.Equal(2, s.Cursor.Offset);
+
+        s = new Scanner("");
+
+        Assert.False(s.ReadAnyOf("\0", out _));
+        Assert.Equal(0, s.Cursor.Offset);
+
+        s = new Scanner("x");
+
+        Assert.False(s.ReadAnyOf("\0", out _));
+        Assert.Equal(0, s.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ReadNonWhiteSpaceShouldMatchTheCharacterTableForEveryChar()
+    {
+        // The vectorized scan reads up to a set of chars which must be the one of the Character table
+        for (var i = 0; i <= char.MaxValue; i++)
+        {
+            var c = (char)i;
+            var text = c.ToString();
+
+            Assert.Equal(!Character.IsWhiteSpace(c), new Scanner(text).ReadNonWhiteSpace(out var read));
+            Assert.Equal(Character.IsWhiteSpace(c) ? 0 : 1, read.Length);
+
+            Assert.Equal(!Character.IsWhiteSpaceOrNewLine(c), new Scanner(text).ReadNonWhiteSpaceOrNewLine(out read));
+            Assert.Equal(Character.IsWhiteSpaceOrNewLine(c) ? 0 : 1, read.Length);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(100)]
+    public void ReadNonWhiteSpaceShouldReadRunsOfAnyLength(int length)
+    {
+        // Short runs are read with the char table, longer ones with a vectorized search
+        var run = new string('a', length);
+
+        foreach (var text in new[] { run, run + " b", run + "\u3000b" })
+        {
+            var s = new Scanner(text);
+            Assert.True(s.ReadNonWhiteSpace(out var read));
+            Assert.Equal(run, read.ToString());
+            Assert.Equal(new TextPosition(length, 1, length + 1), s.Cursor.Position);
+
+            s = new Scanner(text);
+            Assert.True(s.ReadNonWhiteSpaceOrNewLine(out read));
+            Assert.Equal(run, read.ToString());
+            Assert.Equal(new TextPosition(length, 1, length + 1), s.Cursor.Position);
+        }
+
+        // A new line ends the run or is part of it
+        var s2 = new Scanner(run + "\n" + run + " b");
+        Assert.True(s2.ReadNonWhiteSpaceOrNewLine(out var read2));
+        Assert.Equal(run, read2.ToString());
+        Assert.Equal(new TextPosition(length, 1, length + 1), s2.Cursor.Position);
+
+        s2 = new Scanner(run + "\n" + run + " b");
+        Assert.True(s2.ReadNonWhiteSpace(out read2));
+        Assert.Equal(run + "\n" + run, read2.ToString());
+        Assert.Equal(new TextPosition(2 * length + 1, 2, length + 1), s2.Cursor.Position);
+    }
+
+    [Fact]
+    public void ReadNonWhiteSpaceShouldTrackLinesAndStopAtTheEnd()
+    {
+        // New lines are not white spaces, the run contains them and the line is tracked
+        Scanner s = new("a\nb c");
+
+        Assert.True(s.ReadNonWhiteSpace(out var read));
+        Assert.Equal("a\nb", read.ToString());
+        Assert.Equal(new TextPosition(3, 2, 2), s.Cursor.Position);
+        Assert.False(s.ReadNonWhiteSpace(out _));
+
+        s.SkipWhiteSpace();
+        Assert.True(s.ReadNonWhiteSpace(out read));
+        Assert.Equal("c", read.ToString());
+        Assert.True(s.Cursor.Eof);
+        Assert.False(s.ReadNonWhiteSpace(out _));
+
+        // Here the new line stops the run and is left to the cursor
+        s = new("a\nb");
+
+        Assert.True(s.ReadNonWhiteSpaceOrNewLine(out read));
+        Assert.Equal("a", read.ToString());
+        Assert.Equal(new TextPosition(1, 1, 2), s.Cursor.Position);
+        Assert.False(s.ReadNonWhiteSpaceOrNewLine(out _));
     }
 
     [Fact]
@@ -321,6 +452,9 @@ public class ScannerTests
         Assert.False(new Scanner("`abcd").ReadBacktickString());
         Assert.False(new Scanner("abcd`").ReadBacktickString());
         Assert.False(new Scanner("`ab\\`cd").ReadBacktickString());
+
+        new Scanner("`a\\`b` c").ReadBacktickString(out result);
+        Assert.Equal("`a\\`b`", result);
     }
 
     [Theory]
@@ -364,7 +498,22 @@ public class ScannerTests
     [InlineData(",")]
     public void ShouldNotReadInvalidDecimal(string text)
     {
-        Assert.False(new Scanner(text).ReadDecimal(Fluent.NumberOptions.Any, groupSeparator: ',', decimalSeparator: '.', number: out _));
+        Assert.False(new Scanner(text).ReadDecimal(NumberOptions.Any, groupSeparator: ',', decimalSeparator: '.', number: out _));
+    }
+
+    [Theory]
+    [InlineData("-")]
+    [InlineData("-x")]
+    [InlineData("-.")]
+    [InlineData("-.x")]
+    [InlineData("+.x")]
+    [InlineData(".x")]
+    public void ShouldNotMoveWhenDecimalIsInvalid(string text)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.False(scanner.ReadDecimal(NumberOptions.Any, out _));
+        Assert.Equal(TextPosition.Start, scanner.Cursor.Position);
     }
 
     [Theory]
@@ -430,7 +579,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators, out var result));
+        Assert.True(s.ReadDecimal(NumberOptions.AllowGroupSeparators, out var result));
         Assert.Equal(expected, result);
     }
 
@@ -448,7 +597,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowGroupSeparators | Fluent.NumberOptions.AllowDecimalSeparator, out var result, groupSeparator: ',', decimalSeparator: '.'));
+        Assert.True(s.ReadDecimal(NumberOptions.AllowGroupSeparators | NumberOptions.AllowDecimalSeparator, out var result, groupSeparator: ',', decimalSeparator: '.'));
         Assert.Equal(expected, result);
     }
 
@@ -462,9 +611,29 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
+        Assert.True(s.ReadDecimal(NumberOptions.AllowDecimalSeparator, out var result, decimalSeparator: '.'));
         Assert.True(decimal.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    // The BCL accepts an exponent right after the decimal separator, like it accepts a trailing separator
+    [InlineData("1.e5", "1.e5")]
+    [InlineData("1.E+5x", "1.E+5")]
+    [InlineData("1.e-5", "1.e-5")]
+    [InlineData("1.5e5", "1.5e5")]
+    [InlineData("1.e", "1.")]
+    [InlineData("1.ex", "1.")]
+    [InlineData("1.e+", "1.")]
+    [InlineData("1.", "1.")]
+    public void ShouldReadExponentAfterTrailingDecimalSeparator(string input, string expected)
+    {
+        Scanner s = new(input);
+
+        Assert.True(s.ReadDecimal(NumberOptions.Float, out var result));
+        Assert.True(double.TryParse(expected, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
+        Assert.Equal(expected, result);
+        Assert.Equal(expected.Length, s.Cursor.Offset);
     }
 
     [Theory]
@@ -481,7 +650,7 @@ public class ScannerTests
     {
         Scanner s = new(input);
 
-        Assert.True(s.ReadDecimal(Fluent.NumberOptions.Integer | Fluent.NumberOptions.AllowExponent, out var result, decimalSeparator: '.'));
+        Assert.True(s.ReadDecimal(NumberOptions.Integer | NumberOptions.AllowExponent, out var result, decimalSeparator: '.'));
         Assert.True(decimal.TryParse(expected, NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }

@@ -1,5 +1,3 @@
-using Parlot.Fluent;
-using System.Collections.Generic;
 using Xunit;
 
 namespace Parlot.Tests;
@@ -220,35 +218,5 @@ public class UtilityTypesTests
         var readOnlySpan = span.Span;
 
         Assert.Equal(0, readOnlySpan.Length);
-    }
-
-
-
-    [Fact]
-    public void CharToStringTableShouldCacheCommonChars()
-    {
-        // Test the internal CharToStringTable class through reflection
-        var type = typeof(Scanner).Assembly.GetType("Parlot.CharToStringTable");
-        Assert.NotNull(type);
-
-        var method = type!.GetMethod("GetString", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-        Assert.NotNull(method);
-
-        var result = method!.Invoke(null, new object[] { 'a' });
-        Assert.Equal("a", result);
-
-        var result2 = method.Invoke(null, new object[] { 'Z' });
-        Assert.Equal("Z", result2);
-    }
-
-    [Fact]
-    public void CharToStringTableShouldHandleNonCachedChars()
-    {
-        // Test characters beyond the cache size
-        var type = typeof(Scanner).Assembly.GetType("Parlot.CharToStringTable");
-        var method = type!.GetMethod("GetString", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-
-        var result = method!.Invoke(null, new object[] { 'α' }); // Greek alpha
-        Assert.Equal("α", result);
     }
 }

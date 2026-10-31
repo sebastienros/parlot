@@ -127,7 +127,32 @@ public class SelectTests
     [Theory]
     [InlineData(" 42", true)]
     [InlineData(" x", false)]
-    public void OneOfShouldNotSkipSelectorOrHoistWhitespace(string input, bool success)
+    public void OneOfShouldHoistWhitespaceWhenEveryBranchSkipsIt(string input, bool success)
+    {
+        // The branches declare their chars and that they skip white space, so the choice skips it once
+        // before the selector is evaluated and only evaluates it for a char a branch can start with
+        var context = new ParseContext(new Scanner(input));
+        var evaluations = 0;
+        var select = Select(() =>
+        {
+            evaluations++;
+            Assert.Equal(1, context.Scanner.Cursor.Offset);
+            return 0;
+        }, Terms.Text("42"), Terms.Text("17"));
+        Assert.True(select is ISeekable { CanSeek: true });
+        Assert.True(select is ISeekable { SkipWhitespace: true });
+        var parser = OneOf(select, Terms.Text("z")).Or(Terms.Text("y"));
+        var result = new ParseResult<string>();
+
+        Assert.Equal(success, parser.Parse(context, ref result));
+        Assert.Equal(success ? 1 : 0, evaluations);
+        Assert.Equal(success ? input.Length : 0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData(" 42", true)]
+    [InlineData(" x", false)]
+    public void OneOfShouldNotSkipSelectorOrHoistWhitespaceWhenBranchesDisagree(string input, bool success)
     {
         var context = new ParseContext(new Scanner(input));
         var evaluations = 0;
@@ -136,7 +161,7 @@ public class SelectTests
             evaluations++;
             Assert.Equal(0, context.Scanner.Cursor.Offset);
             return 0;
-        }, Terms.Text("42"), Terms.Text("17"));
+        }, Terms.Text("42"), Literals.Text("17"));
         Assert.False(select is ISeekable { CanSeek: true });
         Assert.False(select is ISeekable { SkipWhitespace: true });
         var parser = OneOf(select, Terms.Text("z")).Or(Terms.Text("y"));

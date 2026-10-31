@@ -13,29 +13,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      attestations: write
-      contents: read
-      id-token: write
-    env:
-        DOTNET_NOLOGO: true
-        DOTNET_CLI_TELEMETRY_OPTOUT: 1
-
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       with:
         fetch-depth: 0
         persist-credentials: false
-    - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
-      with:
-        dotnet-version: | 
-          8.0.x
-          10.0.x
-        global-json-file: global.json
-
     - name: Validate release tag
       id: release
       shell: bash
@@ -58,8 +44,54 @@ jobs:
 
         echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+  explorer:
+    needs: validate
+    uses: ./.github/workflows/explorer.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
+
+  build:
+    needs: [validate, explorer]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    env:
+        DOTNET_NOLOGO: true
+        DOTNET_CLI_TELEMETRY_OPTOUT: 1
+        NUGET_PACKAGES: /mnt/nuget/packages
+        NUGET_HTTP_CACHE_PATH: ${{ github.workspace }}/.nuget/http-cache
+        NUGET_SCRATCH: ${{ github.workspace }}/.nuget/scratch
+        NUGET_PLUGINS_CACHE_PATH: ${{ github.workspace }}/.nuget/plugins
+
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Prepare Linux NuGet package directory
+      shell: bash
+      run: sudo install -d -o "$(id -u)" -g "$(id -g)" "$NUGET_PACKAGES"
+    - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        dotnet-version: | 
+          8.0.x
+          10.0.x
+        global-json-file: global.json
+        check-latest: false
+    - name: Install minimum supported compiler host
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        global-json-file: test/Parlot.SourceGenerator.Tests/MinimumSdk/global.json
+        check-latest: false
+
+    - name: Restore
+      run: dotnet restore -p:Configuration=Release -p:Version=${{ needs.validate.outputs.version }} -p:ContinuousIntegrationBuild=True
+
     - name: Build
-      run: dotnet build --configuration Release -p:Version=${{ steps.release.outputs.version }} -p:ContinuousIntegrationBuild=True
+      run: dotnet build --configuration Release --no-restore -p:Version=${{ needs.validate.outputs.version }} -p:ContinuousIntegrationBuild=True
 
     - name: Test Parlot
       run: dotnet test test/Parlot.Tests/Parlot.Tests.csproj --configuration Release --no-build -f net10.0
@@ -71,7 +103,13 @@ jobs:
       run: dotnet test test/Parlot.Standalone.Tests/Parlot.Standalone.Tests.csproj --configuration Release --no-build
 
     - name: Pack with dotnet
-      run: dotnet pack --output artifacts --configuration Release --no-build -p:Version=${{ steps.release.outputs.version }} -p:ContinuousIntegrationBuild=True
+      run: dotnet pack --output artifacts --configuration Release --no-build -p:Version=${{ needs.validate.outputs.version }} -p:ContinuousIntegrationBuild=True
+
+    - name: Download Parlot.Explorer package
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: parlot-explorer-package
+        path: artifacts
 
     - name: Attest NuGet packages
       uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3

@@ -1,6 +1,6 @@
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Routes the parsing based on a custom delegate.
 /// </summary>
-public sealed class Switch<T, U> : Parser<U>, ISourceable
+public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _previousParser;
     private readonly Parser<U>[] _parsers;
@@ -28,6 +28,42 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
         {
             _parsers[i] = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
         }
+
+        // The previous parser always reads first
+        if (_previousParser is ISeekable seekable)
+        {
+            CanSeek = seekable.CanSeek;
+            ExpectedChars = seekable.ExpectedChars;
+            SkipWhitespace = seekable.SkipWhitespace;
+        }
+    }
+
+    /// <inheritdoc />
+    public bool CanSeek { get; }
+
+    /// <inheritdoc />
+    public char[] ExpectedChars { get; } = [];
+
+    /// <inheritdoc />
+    public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_previousParser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        if (!analysis.Invoke(_previousParser))
+        {
+            return false;
+        }
+
+        var nullable = false;
+
+        foreach (var parser in _parsers)
+        {
+            nullable |= analysis.Invoke(parser);
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
@@ -35,6 +71,8 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
         context.EnterParser(this);
 
         var previousResult = new ParseResult<T>();
+
+        var start = context.Scanner.Cursor.Offset;
 
         if (!_previousParser.Parse(context, ref previousResult))
         {
@@ -46,6 +84,8 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
 
         if ((uint)index >= (uint)_parsers.Length)
         {
+            context.Scanner.Cursor.ResetPosition(start);
+
             context.ExitParser(this);
             return false;
         }
@@ -62,10 +102,12 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
             return true;
         }
 
+        // The previous parser matched, its text is read again by the next alternative
+        context.Scanner.Cursor.ResetPosition(start);
+
         context.ExitParser(this);
         return false;
     }
-
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
@@ -100,6 +142,9 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
         var previousValueName = $"previousValue{context.NextNumber()}";
         var indexName = $"index{context.NextNumber()}";
 
+        var startName = $"start{context.NextNumber()}";
+
+        result.Body.Add($"var {startName} = {context.CursorName}.Offset;");
         result.Body.Add($"if ({helperName}({ctx}, out var {previousValueName}))");
         result.Body.Add("{");
         result.Body.Add($"    var {indexName} = {selectorLambda}({ctx}, {previousValueName});");
@@ -126,6 +171,10 @@ public sealed class Switch<T, U> : Parser<U>, ISourceable
             result.Body.Add("        }");
         }
 
+        result.Body.Add("    }");
+        result.Body.Add($"    if (!{result.SuccessVariable})");
+        result.Body.Add("    {");
+        result.Body.Add($"        {context.CursorName}.ResetPosition({startName});");
         result.Body.Add("    }");
         result.Body.Add("}");
 

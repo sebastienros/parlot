@@ -4,7 +4,7 @@
 methods. The consuming application calls a generated partial
 `bool TryParse(string input, ..., out T value)` method and does not need a runtime reference to `Parlot`.
 
-Use an SDK or IDE with Roslyn 5.9 or later and C# 12 or later. Generated code supports .NET Framework 4.7.2,
+Use an SDK or IDE with Roslyn 5.0 or later and C# 12 or later. Generated code supports .NET Framework 4.7.2,
 .NET Standard 2.0, .NET 8, and .NET 10. Older targets use compatibility packages such as `System.Memory`,
 not the Parlot runtime package.
 

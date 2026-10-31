@@ -270,10 +270,116 @@ public class StandaloneGeneratorTests
     [InlineData("public static partial bool TryParse(string text, ref System.Threading.CancellationToken cancellationToken, out int value);")]
     [InlineData("public static partial bool TryParse(string text, System.Threading.CancellationToken? cancellationToken, out int value);")]
     [InlineData("public static partial bool TryParse(string text, System.Threading.CancellationToken first, System.Threading.CancellationToken second, out int value);")]
+    [InlineData("public static partial bool TryParse(System.IO.Stream stream, out int value);")]
+    [InlineData("public static partial bool TryParse(System.IO.StringReader reader, out int value);")]
+    [InlineData("public static partial bool TryParse(System.IO.TextReader reader, out int value); public static partial bool TryParse(System.IO.TextReader reader, System.Threading.CancellationToken cancellationToken, out int value);")]
     public void Invalid_Entry_Point_Is_Rejected(string declaration)
     {
         var (result, _) = Generate("public static partial class Grammar { " + declaration + " }", Grammar);
         Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT023");
+    }
+
+    [Fact]
+    public void String_Only_Assemblies_Compile_Out_The_Compacting_Buffer()
+    {
+        var (result, compilation) = Generate(Declaration, Grammar);
+        AssertNoErrors(result, compilation);
+        var sources = result.Results.SelectMany(static item => item.GeneratedSources).ToArray();
+        Assert.Contains("#define PARLOT_STRING_ONLY", Assert.Single(sources, static source => source.HintName.EndsWith(".Cursor.g.cs", StringComparison.Ordinal)).SourceText.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(sources, static source => source.HintName.Contains("TextReaderRefillSource", StringComparison.Ordinal));
+        Assert.DoesNotContain(sources, static source => source.SourceText.ToString().Contains("BeginToken()", StringComparison.Ordinal)
+            && source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Cancellable_Entry_Points_Check_The_Token_Repeatedly_In_Checked_Assemblies()
+    {
+        // The context counts its cancellation checks in a byte, which must wrap around when the consuming
+        // assembly checks for arithmetic overflows
+        const string declaration = "public static partial class Grammar { public static partial bool TryParse(string text, System.Threading.CancellationToken cancellationToken, out int value); }";
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build()
+                {
+                    var nested = Deferred<int>();
+                    nested.Parser = Between(Literals.Char('('), nested, Literals.Char(')')).Then(static depth => depth + 1)
+                        .Or(Literals.Char('x').Then(0));
+                    return nested.Eof();
+                }
+            }
+            """;
+        var (result, compilation) = Generate(declaration, grammar, warningsAsErrors: true, checkOverflow: true);
+        AssertNoErrors(result, compilation);
+
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var parse = Assembly.Load(stream.ToArray()).GetType("Grammar").GetMethod("TryParse");
+        using var source = new CancellationTokenSource();
+
+        // Each nested Deferred invocation checks the token
+        object[] arguments = [new string('(', 300) + "x" + new string(')', 300), source.Token, null];
+        Assert.True((bool)parse.Invoke(null, arguments));
+        Assert.Equal(300, arguments[2]);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void TextReader_Entry_Points_Parse_With_A_Compacting_Buffer(bool withString, bool cancelable)
+    {
+        var token = cancelable ? "System.Threading.CancellationToken cancellationToken, " : "";
+        var declaration = "public static partial class Grammar { "
+            + (withString ? $"public static partial bool TryParse(string text, {token}out int value); " : "")
+            + $"public static partial bool TryParse(System.IO.TextReader reader, {token}out int value); }}";
+        var grammar = Grammar.Replace("Terms.Number<int>(NumberOptions.Integer).Eof()",
+            "Separated(Terms.Char(','), Terms.Number<int>(NumberOptions.Integer)).Then(static values => values.Count).Eof()", StringComparison.Ordinal);
+        var (result, compilation) = Generate(declaration, grammar, warningsAsErrors: true, checkOverflow: true);
+        AssertNoErrors(result, compilation);
+        var sources = result.Results.SelectMany(static item => item.GeneratedSources).ToArray();
+        Assert.Contains(sources, static source => source.HintName.Contains("TextReaderRefillSource", StringComparison.Ordinal));
+        Assert.DoesNotContain("#define PARLOT_STRING_ONLY", Assert.Single(sources, static source => source.HintName.EndsWith(".Cursor.g.cs", StringComparison.Ordinal)).SourceText.ToString(), StringComparison.Ordinal);
+
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var assembly = Assembly.Load(stream.ToArray());
+        Assert.DoesNotContain(assembly.GetReferencedAssemblies(), static name => name.Name.StartsWith("Parlot", StringComparison.Ordinal));
+        var methods = assembly.GetType("Grammar").GetMethods().Where(static method => method.Name == "TryParse").ToArray();
+        Assert.Equal(withString ? 2 : 1, methods.Length);
+        var parseReader = methods.Single(static method => method.GetParameters()[0].ParameterType == typeof(TextReader));
+        var input = string.Join(", ", Enumerable.Range(0, 3_000));
+        object[] Arguments(object input, CancellationToken cancellationToken) => cancelable ? [input, cancellationToken, null] : [input, null];
+
+        var arguments = Arguments(new StringReader(input), default);
+        Assert.True((bool)parseReader.Invoke(null, arguments));
+        Assert.Equal(3_000, arguments[^1]);
+        arguments = Arguments(new StringReader(input + ", x"), default);
+        Assert.False((bool)parseReader.Invoke(null, arguments));
+        Assert.Equal(0, arguments[^1]);
+
+        if (withString)
+        {
+            var parseString = methods.Single(static method => method.GetParameters()[0].ParameterType == typeof(string));
+            arguments = Arguments(input, default);
+            Assert.True((bool)parseString.Invoke(null, arguments));
+            Assert.Equal(3_000, arguments[^1]);
+        }
+
+        if (cancelable)
+        {
+            using var source = new CancellationTokenSource();
+            source.Cancel();
+            var exception = Assert.Throws<TargetInvocationException>(() => parseReader.Invoke(null, Arguments(new StringReader(input), source.Token)));
+            Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
+        }
+
+        var (designTimeResult, designTimeCompilation) = Generate(declaration, grammar, designTime: true);
+        AssertNoErrors(designTimeResult, designTimeCompilation);
     }
 
     [Theory]
@@ -401,6 +507,58 @@ public class StandaloneGeneratorTests
             """;
         var (result, _) = Generate(Declaration, grammar);
         Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT024");
+    }
+
+    [Fact]
+    public void Runtime_Only_Parser_Under_SkipWhiteSpace_Is_A_Generation_Error()
+    {
+        const string grammar = """
+            using Parlot;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                private sealed class RuntimeOnly : Parser<int>
+                {
+                    public override bool Parse(ParseContext context, ref ParseResult<int> result) => false;
+                }
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build() => SkipWhiteSpace(new RuntimeOnly());
+            }
+            """;
+        var (result, _) = Generate(Declaration, grammar);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT005");
+        Assert.Contains("SkipWhiteSpace requires a source-generatable parser", diagnostic.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Custom_Number_Parser_Is_A_Generation_Error()
+    {
+        // A generated parser can't call the TryParseNumber override, so it would parse with the built-in method instead
+        const string grammar = """
+            using System;
+            using System.Globalization;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                private sealed class Doubling : NumberLiteralBase<int>
+                {
+                    public override bool TryParseNumber(ReadOnlySpan<char> text, NumberStyles style, IFormatProvider provider, out int value)
+                    {
+                        var success = int.TryParse(text, style, provider, out value);
+                        value *= 2;
+                        return success;
+                    }
+                }
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build() => new Doubling();
+            }
+            """;
+        var (result, _) = Generate(Declaration, grammar);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT005");
+        Assert.Contains("TryParseNumber", diagnostic.GetMessage(), StringComparison.Ordinal);
     }
 
     [Fact]

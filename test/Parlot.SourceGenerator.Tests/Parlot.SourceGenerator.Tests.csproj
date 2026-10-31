@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- Runtime Parlot remains available for direct emitter tests. -->
     <ProjectReference Include="..\..\src\Parlot\Parlot.csproj" />
+    <Compile Include="..\Parlot.Tests\LiquidScanners.cs" Link="LiquidScanners.cs" />
     <ProjectReference Include="..\..\src\Samples\Samples.csproj" />
 
     <ProjectReference Include="..\..\src\Parlot.SourceGenerator\Parlot.SourceGenerator.csproj" 
