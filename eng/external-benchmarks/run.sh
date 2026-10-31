@@ -47,6 +47,11 @@ if [ "${SKIP_BUILD:-}" != "1" ]; then
         # The source generator executes the grammar factories with Parlot's netstandard2.0 assembly
         dotnet build "$root/src/Parlot/Parlot.csproj" -c Release -f netstandard2.0 -nologo -v q
 
+        # MSBuild skips compiling a project whose inputs are older than its outputs, which a generator built before
+        # the previous variant's build is: NCalc's generated parser would be the previous variant's. Build from scratch.
+        rm -rf "$repos"/ncalc/src/*/obj "$repos"/ncalc/src/*/bin "$repos"/fluid/Fluid/obj "$repos"/fluid/Fluid/bin \
+            "$here/Parlot.ExternalBenchmarks/obj" "$here/Parlot.ExternalBenchmarks/bin"
+
         # No compiler server: the analyzer assemblies of the previous variant must not be reused
         dotnet build "$project" -c Release -nologo -v q -p:UseSharedCompilation=false \
             -p:ParlotRoot="$root" -p:ParlotCommit="$commit" -p:ParlotVariant="$name" -p:ExternalRepos="$repos"
@@ -56,6 +61,17 @@ if [ "${SKIP_BUILD:-}" != "1" ]; then
         cp -r "$here/Parlot.ExternalBenchmarks/bin/Release/net10.0/." "$out/bin/$name/"
 
         dotnet "$out/bin/$name/Parlot.ExternalBenchmarks.dll" --validate > "$out/validate-$name.txt"
+    done
+
+    # Every variant must run its own Parlot assembly and its own generated NCalc parser
+    for variant in "${variants[@]}"; do
+        name="${variant%%=*}"
+        spec="${variant#*=}"
+        root="$(cd "${spec%%,*}" && pwd)"
+        if ! cmp -s "$out/bin/$name/Parlot.dll" "$root/src/Parlot/bin/Release/net10.0/Parlot.dll"; then
+            echo "!! $name doesn't run the Parlot assembly of $root"
+        fi
+        echo "== $name: NCalc.Parser.dll $(sha256sum "$out/bin/$name/NCalc.Parser.dll" | cut -c1-12)"
     done
 fi
 
