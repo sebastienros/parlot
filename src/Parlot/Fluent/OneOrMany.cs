@@ -52,32 +52,37 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
 
         var start = parsed.Start;
         var end = parsed.End;
-        var results = new HybridList<T>
-        {
-            parsed.Value
-        };
+        var results = new ListBuilder<T>();
+        results.Add(parsed.Value);
 
         // The start of the current element is read again when it fails
         var pin = context.Pin();
 
-        while (_max == 0 || results.Count < _max)
+        try
         {
-            previousOffset = context.Scanner.Cursor.Offset;
-            if (!_parser.Parse(context, ref parsed)
-                || context.Scanner.Cursor.Offset == previousOffset)
+            while (_max == 0 || results.Count < _max)
             {
-                break;
+                previousOffset = context.Scanner.Cursor.Offset;
+                if (!_parser.Parse(context, ref parsed)
+                    || context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
+                }
+
+                context.MovePin(pin);
+
+                end = parsed.End;
+                results.Add(parsed.Value);
             }
 
-            context.MovePin(pin);
+            context.Unpin(pin);
 
-            end = parsed.End;
-            results.Add(parsed.Value);
+            result.Set(start, end, results.ToArray());
         }
-
-        context.Unpin(pin);
-
-        result.Set(start, end, results.AsReadOnlyList());
+        finally
+        {
+            results.Release();
+        }
 
         context.ExitParser(this);
         return true;

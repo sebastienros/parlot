@@ -1,0 +1,255 @@
+using System;
+using System.Buffers;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+
+namespace Parlot.Fluent;
+
+#nullable enable
+
+/// <summary>
+/// Accumulates the items of a list result, then allocates the result once, with its exact size.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The first item is kept in the builder, so an empty or single item list doesn't touch the scratch stack. The
+/// following items are pushed on the <see cref="ListScratch{T}"/> of the thread. Nested lists of the same type complete
+/// in reverse order, so they share the stack: each one owns the items above the index at which it started.
+/// </para>
+/// <para>
+/// A builder is a mutable struct: declare it as a local, never copy it, and call <see cref="Release"/> in a
+/// <see langword="finally"/> block, so that an exception thrown while the list is open doesn't leave its items on
+/// the stack. <see cref="ToArray"/> releases it too.
+/// </para>
+/// </remarks>
+internal struct ListBuilder<T>
+{
+    private T _first;
+    private ListScratch<T>? _scratch;
+    private int _start;
+    private int _count;
+
+    /// <summary>Gets the number of items.</summary>
+    public readonly int Count => _count;
+
+    /// <summary>Gets the item at <paramref name="index"/>, which must be less than <see cref="Count"/>.</summary>
+    public readonly T this[int index] => _scratch is null ? _first : _scratch.Items[_start + index];
+
+    /// <summary>Adds an item.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Add(T item)
+    {
+        if (_count == 0)
+        {
+            _first = item;
+        }
+        else
+        {
+            AddToScratch(item);
+        }
+
+        _count++;
+    }
+
+    private void AddToScratch(T item)
+    {
+        var scratch = _scratch;
+
+        if (scratch is null)
+        {
+            // The first item joins the scratch stack with the second one
+            _scratch = scratch = ListScratch<T>.Current;
+            _start = scratch.Count;
+            scratch.Push(_first);
+            _first = default!;
+        }
+
+        Debug.Assert(scratch.Count == _start + _count, "A nested list didn't release the scratch stack.");
+
+        scratch.Push(item);
+    }
+
+    /// <summary>
+    /// Returns the items in an array of their exact size, and releases the builder.
+    /// </summary>
+    public T[] ToArray()
+    {
+        switch (_count)
+        {
+            case 0:
+                return [];
+            case 1:
+                return [_first];
+        }
+
+        var scratch = _scratch!;
+        _scratch = null;
+        return scratch.ToArrayAndRelease(_start, _count);
+    }
+
+    /// <summary>
+    /// Removes the items from the scratch stack, if they haven't been by <see cref="ToArray"/>.
+    /// </summary>
+    public void Release()
+    {
+        var scratch = _scratch;
+
+        if (scratch is not null)
+        {
+            _scratch = null;
+            scratch.Release(_start);
+        }
+    }
+}
+
+/// <summary>
+/// The stack on which the <see cref="ListBuilder{T}"/> of a thread accumulate their items.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The stack is per thread: a parse is synchronous, so a list completes on the thread which started it, and a parse
+/// started by a callback on the same thread, while a list is open, pushes its items above the open ones. The
+/// streaming and asynchronous parse methods only await between two synchronous parses.
+/// </para>
+/// <para>
+/// The released slots are cleared when they can reference objects. The stack grows up to
+/// <see cref="MaxRetainedCapacity"/> items. Above, it is rented from <see cref="ArrayPool{T}.Shared"/> and returned
+/// once the stack is empty, so an idle thread doesn't retain more than this capacity.
+/// </para>
+/// </remarks>
+internal sealed class ListScratch<T>
+{
+    [ThreadStatic]
+    private static ListScratch<T>? t_current;
+
+    internal const int InitialCapacity = 16;
+    internal const int MaxRetainedCapacity = 1024;
+
+#if NET8_0_OR_GREATER
+    private static bool ClearReleasedItems => RuntimeHelpers.IsReferenceOrContainsReferences<T>();
+#else
+    private static readonly bool ClearReleasedItems = !typeof(T).IsPrimitive && !typeof(T).IsEnum;
+#endif
+
+    // The array of at most MaxRetainedCapacity items kept by the thread
+    private T[] _retained;
+
+    /// <summary>The items: the retained array, or an array rented while the stack is larger.</summary>
+    internal T[] Items;
+
+    /// <summary>The number of items on the stack.</summary>
+    internal int Count;
+
+    private ListScratch()
+    {
+        _retained = new T[InitialCapacity];
+        Items = _retained;
+    }
+
+    /// <summary>Gets the stack of the current thread.</summary>
+    public static ListScratch<T> Current
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => t_current ?? Create();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ListScratch<T> Create() => t_current = new ListScratch<T>();
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Push(T item)
+    {
+        var items = Items;
+        var count = Count;
+
+        if ((uint)count < (uint)items.Length)
+        {
+            items[count] = item;
+            Count = count + 1;
+        }
+        else
+        {
+            PushWithResize(item);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void PushWithResize(T item)
+    {
+        var items = Items;
+        var count = Count;
+        T[] grown;
+
+        if (items.Length < MaxRetainedCapacity)
+        {
+            // Smaller arrays are always the retained one, which is replaced
+            grown = new T[Math.Min(items.Length * 2, MaxRetainedCapacity)];
+            Array.Copy(items, grown, count);
+            _retained = grown;
+        }
+        else
+        {
+            grown = ArrayPool<T>.Shared.Rent(items.Length * 2);
+            Array.Copy(items, grown, count);
+
+            if (ClearReleasedItems)
+            {
+                Array.Clear(items, 0, count);
+            }
+
+            if (items != _retained)
+            {
+                ArrayPool<T>.Shared.Return(items);
+            }
+        }
+
+        grown[count] = item;
+        Items = grown;
+        Count = count + 1;
+    }
+
+    /// <summary>
+    /// Copies the <paramref name="length"/> items from <paramref name="start"/>, the top of the stack, to a new array,
+    /// and removes them.
+    /// </summary>
+    public T[] ToArrayAndRelease(int start, int length)
+    {
+        Debug.Assert(start + length == Count, "The items aren't the top of the stack.");
+
+        var result = new T[length];
+        Array.Copy(Items, start, result, 0, length);
+        Release(start);
+        return result;
+    }
+
+    /// <summary>
+    /// Removes the items above <paramref name="start"/>.
+    /// </summary>
+    public void Release(int start)
+    {
+        var count = Count;
+
+        Debug.Assert(start <= count, "The stack was released below an open list.");
+
+        if (ClearReleasedItems && count > start)
+        {
+            Array.Clear(Items, start, count - start);
+        }
+
+        Count = start;
+
+        if (start == 0 && Items != _retained)
+        {
+            ReturnRented();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ReturnRented()
+    {
+        // The rented array is cleared: the lists released their items
+        var rented = Items;
+        Items = _retained;
+        ArrayPool<T>.Shared.Return(rented);
+    }
+}

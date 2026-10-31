@@ -72,6 +72,8 @@ public class StreamingTests
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
         ["separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer())),
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
+        // Nested lists of the same element type share the scratch stack of the list parsers
+        ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["ascii-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
@@ -88,6 +90,16 @@ public class StreamingTests
         ["position-scan"] = new Grammar<(int, int, int)>(Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length).Then(static (c, _) => Position(c))),
         ["position-textbefore"] = new Grammar<(int, int, int)>(AnyCharBefore(Literals.Text("--"), consumeDelimiter: true).Then(static (c, _) => Position(c))),
     };
+
+    private static Parser<object> CreateNestedLists()
+    {
+        var item = Deferred<object>();
+        var separated = Between(Terms.Char('['), Separated(Terms.Char(','), item, min: 0), Terms.Char(']')).Then<object>(static items => items);
+        var zeroOrMany = Between(Terms.Char('('), ZeroOrMany(item), Terms.Char(')')).Then<object>(static items => items);
+        var oneOrMany = Between(Terms.Char('{'), OneOrMany(item), Terms.Char('}')).Then<object>(static items => items);
+        item.Parser = OneOf(Terms.Integer().Then<object>(static value => value), separated, zeroOrMany, oneOrMany);
+        return item;
+    }
 
     private static (int Offset, int Line, int Column) Position(ParseContext context)
     {
@@ -197,6 +209,9 @@ public class StreamingTests
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
+        Add("nested-lists", "", "1", "[", "[]", "()", "{}", "[1]", "(1)", "{1}", "[1,2,3,4,5,6]", "(1 2 3 4 5 6)", "[1,[2,[3,4],5],(6 7 (8 9 10 11 12) 13),{14 15}]",
+            "(1 2 [3,4 (5 6)] 7", "[1,2,", "[1,(2 3", "{1 2", "((((((((1 2 3))))))))", "[" + string.Join(",", Enumerable.Range(0, 40)) + ",(" + string.Join(" ", Enumerable.Range(0, 30)) + ")]",
+            "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
         string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];

@@ -84,61 +84,44 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             return ParseWithOptions(context, ref result);
         }
 
-        HybridList<T>? results = null;
-
         var end = context.Scanner.Cursor.Position;
         var initialPosition = end;
 
         // An empty result is at the current position
         var start = end.Offset;
 
-        var first = true;
         var parsed = new ParseResult<T>();
         var separatorResult = new ParseResult<U>();
+        var results = new ListBuilder<T>();
 
         // The end of the last element is read again when a separator isn't followed by an element
         var pin = context.Pin();
 
-        while (_max == 0 || (results?.Count ?? 0) < _max)
+        try
         {
-            var previousOffset = context.Scanner.Cursor.Offset;
-
-            if (!first)
+            while (_max == 0 || results.Count < _max)
             {
-                if (!_separator.Parse(context, ref separatorResult))
-                {
-                    break;
-                }
-            }
+                var first = results.Count == 0;
+                var previousOffset = context.Scanner.Cursor.Offset;
 
-            if (!_parser.Parse(context, ref parsed))
-            {
                 if (!first)
                 {
-                    // A separator was found, but not followed by another value.
-                    // It's still successful if there was one value parsed, but we reset the cursor to before the separator
-                    context.Scanner.Cursor.ResetPosition(end);
-                    break;
+                    if (!_separator.Parse(context, ref separatorResult))
+                    {
+                        break;
+                    }
                 }
 
-                if (_min > 0)
+                if (!_parser.Parse(context, ref parsed))
                 {
-                    context.Unpin(pin);
-                    context.ExitParser(this);
-                    return false;
-                }
-                break;
-            }
-            else
-            {
-                end = context.Scanner.Cursor.Position;
-                context.MovePin(pin);
-            }
+                    if (!first)
+                    {
+                        // A separator was found, but not followed by another value.
+                        // It's still successful if there was one value parsed, but we reset the cursor to before the separator
+                        context.Scanner.Cursor.ResetPosition(end);
+                        break;
+                    }
 
-            if (context.Scanner.Cursor.Offset == previousOffset)
-            {
-                if (first)
-                {
                     if (_min > 0)
                     {
                         context.Unpin(pin);
@@ -147,30 +130,47 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                     }
                     break;
                 }
+                else
+                {
+                    end = context.Scanner.Cursor.Position;
+                    context.MovePin(pin);
+                }
 
-                break;
+                if (context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    if (first && _min > 0)
+                    {
+                        context.Unpin(pin);
+                        context.ExitParser(this);
+                        return false;
+                    }
+
+                    break;
+                }
+
+                if (first)
+                {
+                    start = parsed.Start;
+                }
+
+                results.Add(parsed.Value);
             }
 
-            if (first)
+            context.Unpin(pin);
+
+            if (_min > 1 && results.Count < _min)
             {
-                results = [];
-                start = parsed.Start;
-                first = false;
+                context.Scanner.Cursor.ResetPosition(initialPosition);
+                context.ExitParser(this);
+                return false;
             }
 
-            results!.Add(parsed.Value);
+            result.Set(start, end.Offset, results.ToArray());
         }
-
-        context.Unpin(pin);
-
-        if (_min > 1 && results!.Count < _min)
+        finally
         {
-            context.Scanner.Cursor.ResetPosition(initialPosition);
-            context.ExitParser(this);
-            return false;
+            results.Release();
         }
-
-        result.Set(start, end.Offset, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
 
         context.ExitParser(this);
         return true;
@@ -226,67 +226,76 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
         var start = parsed.Start;
         var end = cursor.Position;
-        var results = new HybridList<T> { parsed.Value };
+        var results = new ListBuilder<T>();
+        results.Add(parsed.Value);
         context.MovePin(pin);
 
-        while (_max == 0 || results.Count < _max)
+        try
         {
-            if (!_separator.Parse(context, ref separatorResult))
+            while (_max == 0 || results.Count < _max)
             {
-                break;
-            }
-
-            var foundNext = false;
-            while (true)
-            {
-                var beforeValue = cursor.Offset;
-                if (_parser.Parse(context, ref parsed) && cursor.Offset != beforeValue)
-                {
-                    foundNext = true;
-                    break;
-                }
-
-                if (!_removeEmptyEntries)
+                if (!_separator.Parse(context, ref separatorResult))
                 {
                     break;
                 }
 
-                var beforeSeparator = cursor.Offset;
-                if (!_separator.Parse(context, ref separatorResult) || cursor.Offset == beforeSeparator)
+                var foundNext = false;
+                while (true)
                 {
+                    var beforeValue = cursor.Offset;
+                    if (_parser.Parse(context, ref parsed) && cursor.Offset != beforeValue)
+                    {
+                        foundNext = true;
+                        break;
+                    }
+
+                    if (!_removeEmptyEntries)
+                    {
+                        break;
+                    }
+
+                    var beforeSeparator = cursor.Offset;
+                    if (!_separator.Parse(context, ref separatorResult) || cursor.Offset == beforeSeparator)
+                    {
+                        break;
+                    }
+                }
+
+                if (!foundNext)
+                {
+                    if (_allowTrailingSeparator)
+                    {
+                        end = cursor.Position;
+                    }
+                    else
+                    {
+                        cursor.ResetPosition(end);
+                    }
+
                     break;
                 }
+
+                end = cursor.Position;
+                context.MovePin(pin);
+                results.Add(parsed.Value);
             }
 
-            if (!foundNext)
+            context.Unpin(pin);
+
+            if (results.Count < _min)
             {
-                if (_allowTrailingSeparator)
-                {
-                    end = cursor.Position;
-                }
-                else
-                {
-                    cursor.ResetPosition(end);
-                }
-
-                break;
+                cursor.ResetPosition(initial);
+                context.ExitParser(this);
+                return false;
             }
 
-            end = cursor.Position;
-            context.MovePin(pin);
-            results.Add(parsed.Value);
+            result.Set(start, end.Offset, results.ToArray());
+        }
+        finally
+        {
+            results.Release();
         }
 
-        context.Unpin(pin);
-
-        if (results.Count < _min)
-        {
-            cursor.ResetPosition(initial);
-            context.ExitParser(this);
-            return false;
-        }
-
-        result.Set(start, end.Offset, results.AsReadOnlyList());
         context.ExitParser(this);
         return true;
     }

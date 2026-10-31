@@ -25,44 +25,47 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
     {
         context.EnterParser(this);
 
-        HybridList<T>? results = null;
-
         // An empty result is at the current position
         var start = context.Scanner.Cursor.Offset;
         var end = start;
 
-        var first = true;
         var parsed = new ParseResult<T>();
+        var results = new ListBuilder<T>();
 
         // The start of the current element is read again when it fails
         var pin = context.Pin();
 
-        while (_max == 0 || (results?.Count ?? 0) < _max)
+        try
         {
-            var previousOffset = context.Scanner.Cursor.Offset;
-            if (!_parser.Parse(context, ref parsed)
-                || context.Scanner.Cursor.Offset == previousOffset)
+            while (_max == 0 || results.Count < _max)
             {
-                break;
+                var previousOffset = context.Scanner.Cursor.Offset;
+                if (!_parser.Parse(context, ref parsed)
+                    || context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
+                }
+
+                context.MovePin(pin);
+
+                if (results.Count == 0)
+                {
+                    start = parsed.Start;
+                }
+
+                end = parsed.End;
+
+                results.Add(parsed.Value);
             }
 
-            context.MovePin(pin);
+            context.Unpin(pin);
 
-            if (first)
-            {
-                results = [];
-                first = false;
-                start = parsed.Start;
-            }
-
-            end = parsed.End;
-
-            results!.Add(parsed.Value);
+            result.Set(start, end, results.ToArray());
         }
-
-        context.Unpin(pin);
-
-        result.Set(start, end, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
+        finally
+        {
+            results.Release();
+        }
 
         context.ExitParser(this);
         return true;
