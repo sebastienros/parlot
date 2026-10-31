@@ -8,12 +8,12 @@ namespace Parlot.Tests;
 
 public class WhiteSpaceSetTests
 {
-    // The chars of the default set which aren't ASCII white space
+    // The chars of the default set which aren't ASCII white space: the Unicode spaces and new lines
     public static TheoryData<char> UnicodeSpaces()
     {
         var data = new TheoryData<char>();
 
-        foreach (var c in Character.WhiteSpaces)
+        foreach (var c in Character.WhiteSpaceOrNewLines)
         {
             if (c > 127)
             {
@@ -43,7 +43,7 @@ public class WhiteSpaceSetTests
             Assert.True(!Character.IsWhiteSpaceOrNewLine(c, WhiteSpaceSet.Ascii) || Character.IsWhiteSpaceOrNewLine(c));
         }
 
-        Assert.Equal(Character.AsciiWhiteSpaceOrNewLines.Length, Character.AsciiWhiteSpaces.Length + Character.NewLines.Length);
+        Assert.Equal(Character.AsciiWhiteSpaceOrNewLines.Length, Character.AsciiWhiteSpaces.Length + Character.AsciiNewLines.Length);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class WhiteSpaceSetTests
     {
         var parser = Terms.Text("a");
 
-        foreach (var newLine in Character.NewLines)
+        foreach (var newLine in Character.AsciiNewLines)
         {
             Assert.False(parser.TryParse(AsciiContext($"{newLine}a", useNewLines: true), out _, out _));
             Assert.True(parser.TryParse(AsciiContext($"{newLine}a", useNewLines: false), out _, out _));
@@ -298,5 +298,86 @@ public class WhiteSpaceSetTests
         Assert.Equal([1L, 2L], parser.Parse(new System.IO.StringReader("1 ,\n 2"), options));
         Assert.Equal([1L], parser.Parse(new System.IO.StringReader("1 ,\u00A02"), options));
         Assert.Equal([1L, 2L], parser.Parse(new System.IO.StringReader("1 ,\u00A02")));
+    }
+
+    // The default set is the Unicode White_Space property (PropList.txt)
+    private const string UnicodeWhiteSpace = "\t\n\v\f\r \u0085\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000";
+    private const string UnicodeNewLines = "\n\v\r\u0085\u2028\u2029";
+
+    [Fact]
+    public void DefaultSetShouldBeUnicodeWhiteSpace()
+    {
+        for (var i = 0; i <= char.MaxValue; i++)
+        {
+            var c = (char)i;
+            var isNewLine = UnicodeNewLines.IndexOf(c) >= 0;
+
+            Assert.Equal(UnicodeWhiteSpace.IndexOf(c) >= 0, Character.IsWhiteSpaceOrNewLine(c));
+            Assert.Equal(Character.IsWhiteSpaceOrNewLine(c) && !isNewLine, Character.IsWhiteSpace(c));
+            Assert.Equal(isNewLine, Character.IsNewLine(c));
+#if NET8_0_OR_GREATER
+            Assert.Equal(char.IsWhiteSpace(c), Character.IsWhiteSpaceOrNewLine(c));
+#endif
+        }
+
+        Assert.Equal(UnicodeWhiteSpace.Length, Character.WhiteSpaceOrNewLines.Length);
+        Assert.Equal(UnicodeNewLines.Length, Character.NewLines.Length);
+        Assert.Equal(Character.WhiteSpaceOrNewLines.Length, Character.WhiteSpaces.Length + Character.NewLines.Length);
+    }
+
+    [Theory]
+    [InlineData('\u0085')]
+    [InlineData('\u2028')]
+    [InlineData('\u2029')]
+    public void TermsShouldSkipUnicodeNewLines(char newLine)
+    {
+        var parser = Terms.Text("a");
+
+        Assert.True(parser.TryParse($"{newLine}a", out _));
+        Assert.True(parser.TryParse($" {newLine}\ta", out _));
+
+        // With UseNewLines they are new lines, which are not skipped
+        var context = new ParseContext(new Scanner($" {newLine}a"), useNewLines: true);
+        Assert.False(parser.TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        // Literals.WhiteSpace reads them only with the new lines
+        Assert.False(Literals.WhiteSpace().TryParse($"{newLine} ", out _));
+        Assert.True(Literals.WhiteSpace(includeNewLines: true).TryParse($"{newLine} a", out var span));
+        Assert.Equal($"{newLine} ", span.ToString());
+
+        // Like \r and \v they don't start a line, only \n does
+        var scanner = new Scanner($"{newLine}a");
+        Assert.True(scanner.SkipWhiteSpaceOrNewLine());
+        Assert.Equal(1, scanner.Cursor.Offset);
+        Assert.Equal(1, scanner.Cursor.Position.Line);
+    }
+
+    [Theory]
+    [InlineData('\uFEFF')]
+    [InlineData('\u180E')]
+    public void TermsShouldNotSkipCharsOutsideUnicodeWhiteSpace(char c)
+    {
+        // The byte order mark and the Mongolian vowel separator are not white space
+        var context = new ParseContext(new Scanner($"{c}a"));
+        Assert.False(Terms.Text("a").TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        Assert.False(Literals.WhiteSpace(includeNewLines: true).TryParse($"{c} ", out _));
+        Assert.True(Literals.NonWhiteSpace().TryParse($"{c}a b", out var span));
+        Assert.Equal($"{c}a", span.ToString());
+
+        // A grammar can match them
+        Assert.True(Terms.Char(c).SkipAnd(Terms.Text("a")).TryParse($" {c} a", out _));
+    }
+
+    [Fact]
+    public void StreamsShouldSkipUnicodeWhiteSpace()
+    {
+        var parser = Separated(Terms.Char(','), Terms.Integer());
+        var options = new StreamParseOptions { BufferSize = 1 };
+
+        Assert.Equal([1L, 2L, 3L], parser.Parse(new System.IO.StringReader("1\u2028,\u20292\u0085,\u00A03"), options));
+        Assert.Equal([1L], parser.Parse(new System.IO.StringReader("1,\uFEFF2"), options));
     }
 }
