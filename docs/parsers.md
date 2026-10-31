@@ -707,8 +707,8 @@ Assert.Equal(12, result.Item2);
 ## Cardinality Parsers
 
 `ZeroOrMany`, `OneOrMany` and `Separated` return an array of the exact number of items, or `Array.Empty<T>()` when
-there is none, typed as `IReadOnlyList<T>`. The items are accumulated on a scratch stack of the thread, shared by
-nested lists, so a list only allocates its result. Rely on `IReadOnlyList<T>` rather than on the concrete type:
+there is none, typed as `IReadOnlyList<T>`. The first four items are kept by the parser and longer lists are
+accumulated on a scratch stack of the thread, shared by nested lists, so a list only allocates its result. Rely on `IReadOnlyList<T>` rather than on the concrete type:
 earlier versions returned a `HybridList<T>` or a `List<T>`.
 
 ### ZeroOrOne

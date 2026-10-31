@@ -12,9 +12,10 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The first item is kept in the builder, so an empty or single item list doesn't touch the scratch stack. The
-/// following items are pushed on the <see cref="ListScratch{T}"/> of the thread. Nested lists of the same type complete
-/// in reverse order, so they share the stack: each one owns the items above the index at which it started.
+/// The first <see cref="InlineCapacity"/> items are kept in the builder, so short lists, the most common ones, don't touch
+/// the scratch stack, whose thread static access costs a lookup in shared generic code. Longer lists move their items to
+/// the <see cref="ListScratch{T}"/> of the thread. Nested lists of the same type complete in reverse order, so they share
+/// the stack: each one owns the items above the index at which it started.
 /// </para>
 /// <para>
 /// A builder is a mutable struct: declare it as a local, never copy it, and call <see cref="Release"/> in a
@@ -24,7 +25,12 @@ namespace Parlot.Fluent;
 /// </remarks>
 internal struct ListBuilder<T>
 {
-    private T _first;
+    internal const int InlineCapacity = 4;
+
+    private T _item0;
+    private T _item1;
+    private T _item2;
+    private T _item3;
     private ListScratch<T>? _scratch;
     private int _start;
     private int _count;
@@ -33,19 +39,46 @@ internal struct ListBuilder<T>
     public readonly int Count => _count;
 
     /// <summary>Gets the item at <paramref name="index"/>, which must be less than <see cref="Count"/>.</summary>
-    public readonly T this[int index] => _scratch is null ? _first : _scratch.Items[_start + index];
+    public readonly T this[int index]
+    {
+        get
+        {
+            if (_scratch is not null)
+            {
+                return _scratch.Items[_start + index];
+            }
+
+            return index switch
+            {
+                0 => _item0,
+                1 => _item1,
+                2 => _item2,
+                _ => _item3,
+            };
+        }
+    }
 
     /// <summary>Adds an item.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(T item)
     {
-        if (_count == 0)
+        switch (_count)
         {
-            _first = item;
-        }
-        else
-        {
-            AddToScratch(item);
+            case 0:
+                _item0 = item;
+                break;
+            case 1:
+                _item1 = item;
+                break;
+            case 2:
+                _item2 = item;
+                break;
+            case 3:
+                _item3 = item;
+                break;
+            default:
+                AddToScratch(item);
+                break;
         }
 
         _count++;
@@ -57,11 +90,17 @@ internal struct ListBuilder<T>
 
         if (scratch is null)
         {
-            // The first item joins the scratch stack with the second one
+            // The inline items move to the stack, the builder doesn't keep references to them
             _scratch = scratch = ListScratch<T>.Current;
             _start = scratch.Count;
-            scratch.Push(_first);
-            _first = default!;
+            scratch.Push(_item0);
+            scratch.Push(_item1);
+            scratch.Push(_item2);
+            scratch.Push(_item3);
+            _item0 = default!;
+            _item1 = default!;
+            _item2 = default!;
+            _item3 = default!;
         }
 
         Debug.Assert(scratch.Count == _start + _count, "A nested list didn't release the scratch stack.");
@@ -69,9 +108,7 @@ internal struct ListBuilder<T>
         scratch.Push(item);
     }
 
-    /// <summary>
-    /// Returns the items in an array of their exact size, and releases the builder.
-    /// </summary>
+    /// <summary>Returns the items in an array of their exact size, and releases the builder.</summary>
     public T[] ToArray()
     {
         switch (_count)
@@ -79,7 +116,13 @@ internal struct ListBuilder<T>
             case 0:
                 return [];
             case 1:
-                return [_first];
+                return [_item0];
+            case 2:
+                return [_item0, _item1];
+            case 3:
+                return [_item0, _item1, _item2];
+            case 4:
+                return [_item0, _item1, _item2, _item3];
         }
 
         var scratch = _scratch!;
@@ -87,9 +130,7 @@ internal struct ListBuilder<T>
         return scratch.ToArrayAndRelease(_start, _count);
     }
 
-    /// <summary>
-    /// Removes the items from the scratch stack, if they haven't been by <see cref="ToArray"/>.
-    /// </summary>
+    /// <summary>Removes the items from the scratch stack, when they were moved to it.</summary>
     public void Release()
     {
         var scratch = _scratch;
