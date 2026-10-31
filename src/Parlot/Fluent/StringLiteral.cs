@@ -13,7 +13,7 @@ public enum StringLiteralQuotes
     Custom
 }
 
-public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     static readonly char[] SingleQuotes = ['\''];
     static readonly char[] DoubleQuotes = ['\"'];
@@ -58,6 +58,8 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable
     public char[] ExpectedChars { get; }
 
     public bool SkipWhitespace { get; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

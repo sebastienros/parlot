@@ -22,7 +22,7 @@ public delegate int SpanScanner(ReadOnlySpan<char> span);
 /// <summary>
 /// A parser that matches the token found by a <see cref="SpanScanner"/>.
 /// </summary>
-public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly SpanScanner _scanner;
 
@@ -49,6 +49,8 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

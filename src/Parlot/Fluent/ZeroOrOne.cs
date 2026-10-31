@@ -7,13 +7,20 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a list containing zero or one result from the inner parser.
 /// </summary>
-public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
+public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
     public ZeroOrOne(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)

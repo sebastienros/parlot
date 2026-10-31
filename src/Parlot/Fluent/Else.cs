@@ -6,7 +6,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a default value if the previous parser failed.
 /// </summary>
-public sealed class Else<T> : Parser<T>, ISourceable
+public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly T? _value;
@@ -22,6 +22,13 @@ public sealed class Else<T> : Parser<T>, ISourceable
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _func = func ?? throw new ArgumentNullException(nameof(func));
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

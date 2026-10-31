@@ -6,7 +6,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
+public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
@@ -141,6 +141,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => _expectedPrefixes;
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => Text.Length == 0;
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {

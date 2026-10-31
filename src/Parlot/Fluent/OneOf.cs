@@ -14,7 +14,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable /**/
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -393,6 +393,19 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
     public IReadOnlyList<Parser<T>> OriginalParsers { get; }
 
     public IReadOnlyList<Parser<T>> Parsers { get; private set; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        // The lookup tables only hold these parsers, or the ones they invoke at their start
+        var nullable = false;
+
+        foreach (var parser in _originalParsers)
+        {
+            nullable |= analysis.Invoke(parser);
+        }
+
+        return nullable;
+    }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

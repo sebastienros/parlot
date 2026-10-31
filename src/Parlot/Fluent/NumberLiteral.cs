@@ -7,7 +7,7 @@ using System.Numerics;
 
 namespace Parlot.Fluent;
 
-public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
+public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
     where T : INumber<T>
 {
     private const char DefaultDecimalSeparator = '.';
@@ -66,6 +66,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable
 
         Name = "NumberLiteral";
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

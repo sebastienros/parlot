@@ -5,8 +5,10 @@ namespace Parlot.Fluent;
 /// <summary>
 /// A parser that succeeds when parsing whitespaces as defined in <see cref="ParseContext.WhiteSpaceParser"/>.
 /// </summary>
-public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable
+public sealed class WhiteSpaceParser : Parser<TextSpan>, ISourceable, ILoopAnalyzable
 {
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
         if (context.IsCompacting)

@@ -10,7 +10,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class Unary<T, TInput> : Parser<T>, ISourceable
+public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T> Factory)[] _operators;
@@ -24,6 +24,17 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        foreach (var (op, _) in _operators)
+        {
+            analysis.Invoke(op);
+        }
+
+        // An operator is followed by an operand only when it moved the cursor
+        return analysis.Invoke(_parser);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -222,7 +233,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
     public override string ToString() => Name ?? $"Unary({_parser})";
 }
 
-public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
+public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T> Factory)[] _operators;
@@ -236,6 +247,17 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        foreach (var (op, _) in _operators)
+        {
+            analysis.Invoke(op);
+        }
+
+        // An operator is followed by an operand only when it moved the cursor
+        return analysis.Invoke(_parser);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
