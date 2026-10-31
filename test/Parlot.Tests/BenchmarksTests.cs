@@ -5,6 +5,7 @@ using Parlot.Benchmarks.PidginParsers;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
 using System;
+using System.Linq;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
 
@@ -23,6 +24,17 @@ public class BenchmarksTests
         Assert.Equal("value", benchmark.SkippedText());
         Assert.Equal("value", benchmark.BetweenText());
         Assert.Equal("KeYwOrD", benchmark.RetainedText());
+    }
+
+    [Fact]
+    public void MemoizedGrammars()
+    {
+        var benchmark = new MemoizeBenchmarks();
+        benchmark.Setup();
+
+        Assert.Equal(1200, benchmark.SharedPrefixMemoized());
+        Assert.Equal(384, benchmark.NestedGroupsMemoized());
+        Assert.Equal(Enumerable.Range(0, 1000).Select(static x => (long)x), benchmark.NoReuseMemoized());
     }
 
     [Theory]
