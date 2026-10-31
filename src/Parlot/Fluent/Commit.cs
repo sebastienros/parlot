@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// When the input is streamed through a compacting buffer, the text before the match is no longer buffered.
 /// Otherwise the parser has no effect.
 /// </remarks>
-public sealed class Commit<T> : Parser<T>, ISeekablePrefixes, ISourceable
+public sealed class Commit<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
@@ -34,6 +34,8 @@ public sealed class Commit<T> : Parser<T>, ISeekablePrefixes, ISourceable
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

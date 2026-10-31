@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// <typeparam name="A">The type of the parser before the main parser.</typeparam>
 /// <typeparam name="T">The type of the value parsed by the main parser.</typeparam>
 /// <typeparam name="B">The type of the parser after the main parser.</typeparam>
-public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
+public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<A> _before;
@@ -39,13 +39,15 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_before);
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_before) && analysis.Invoke(_parser) && analysis.Invoke(_after);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
 
-        var start = cursor.Position;
+        var start = cursor.Offset;
 
         var parsedA = new ParseResult<A>();
 
@@ -88,11 +90,16 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
             throw new NotSupportedException("Between requires all parsers to be source-generatable.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(T), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(T));
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -131,6 +138,13 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 
         return result;
     }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _before, _parser, _after);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_before, typeof(A), false), (_parser, typeof(T), true), (_after, typeof(B), false)],
+            static values => values[1]!);
 
     public override string ToString() => Name ?? $"Between({_before},{_parser},{_after})";
 }

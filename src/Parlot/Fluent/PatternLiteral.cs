@@ -3,7 +3,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
+public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Func<char, bool> _predicate;
     private readonly int _minSize;
@@ -17,6 +17,8 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
         Name = "PatternLiteral";
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _minSize <= 0;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
@@ -52,18 +54,9 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         var span = cursor.Span;
         var limit = _maxSize > 0 && _maxSize < span.Length ? _maxSize : span.Length;
         var size = 1;
-        var newLines = span[0] == '\n';
 
-        while (size < limit)
+        while (size < limit && predicate(span[size]))
         {
-            var c = span[size];
-
-            if (!predicate(c))
-            {
-                break;
-            }
-
-            newLines |= c == '\n';
             size++;
         }
 
@@ -71,15 +64,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         {
             var start = cursor.Offset;
 
-            // The line and column only need to be tracked char by char when there are new lines
-            if (newLines)
-            {
-                cursor.Advance(size);
-            }
-            else
-            {
-                cursor.AdvanceBy(size, 0, size);
-            }
+            cursor.AdvanceNoNewLines(size);
 
             result.Set(start, start + size, cursor.CreateSpan(start, size));
 
@@ -111,7 +96,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
 
         var spanName = $"span{context.NextNumber()}";
         var sizeName = $"size{context.NextNumber()}";
-        var newLinesName = $"newLines{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
         var cName = $"c{context.NextNumber()}";
 
@@ -149,7 +133,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         }
 
         result.Body.Add($"    var {sizeName} = 1;");
-        result.Body.Add($"    var {newLinesName} = {spanName}[0] == '\\n';");
         result.Body.Add($"    while ({sizeName} < {limitName})");
         result.Body.Add("    {");
         result.Body.Add($"        var {cName} = {spanName}[{sizeName}];");
@@ -157,7 +140,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add("        {");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        {newLinesName} |= {cName} == '\\n';");
         result.Body.Add($"        {sizeName}++;");
         result.Body.Add("    }");
 
@@ -171,14 +153,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         }
 
         result.Body.Add($"{indent}var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{indent}if ({newLinesName})");
-        result.Body.Add($"{indent}{{");
-        result.Body.Add($"{indent}    {cursorName}.Advance({sizeName});");
-        result.Body.Add($"{indent}}}");
-        result.Body.Add($"{indent}else");
-        result.Body.Add($"{indent}{{");
-        result.Body.Add($"{indent}    {cursorName}.AdvanceBy({sizeName}, 0, {sizeName});");
-        result.Body.Add($"{indent}}}");
+        result.Body.Add($"{indent}{cursorName}.AdvanceNoNewLines({sizeName});");
         if (!context.DiscardResult)
         {
             result.Body.Add($"{indent}{result.ValueVariable} = {cursorName}.CreateSpan({startName}, {sizeName});");
@@ -198,5 +173,65 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable
         result.Body.Add("}");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => 1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var span = writer.Span;
+        var pos = writer.Pos;
+        var predicateLambda = writer.Context.RegisterLambda(_predicate);
+        var start = writer.DeclareLocal("int", "patternStart", "0");
+
+        writer.Add($"{start} = {pos};");
+
+        // The same shape as Parse: the first char, then the following ones up to the maximum size
+        var firstChar = $"(uint){pos} < (uint){span}.Length && {predicateLambda}({span}[{pos}])";
+
+        if (_minSize <= 0)
+        {
+            // A pattern without a minimum size matches nothing
+            writer.BeginBlock($"if ({firstChar})");
+        }
+        else
+        {
+            writer.BeginBlock($"if (!({firstChar}))");
+            writer.Fail(fail);
+            writer.EndBlock();
+        }
+
+        writer.Add($"{pos}++;");
+
+        if (_maxSize != 1)
+        {
+            var limit = $"{span}.Length";
+
+            if (_maxSize > 0)
+            {
+                limit = writer.DeclareLocal("int", "patternLimit", "0");
+                writer.Add($"{limit} = {span}.Length - {start} > {_maxSize} ? {start} + {_maxSize} : {span}.Length;");
+            }
+
+            writer.Add($"while ({pos} < {limit} && {predicateLambda}({span}[{pos}])) {pos}++;");
+        }
+
+        if (_minSize <= 0)
+        {
+            writer.EndBlock();
+            writer.Add($"else if ({writer.AtEnd}) {writer.MarkHitEnd}");
+        }
+        else if (_minSize > 1)
+        {
+            writer.BeginBlock($"if ({pos} - {start} < {_minSize})");
+            // More matching chars could follow the end of the span
+            writer.Fail(fail);
+            writer.EndBlock();
+        }
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {writer.CreateSpan(start, $"{pos} - {start}")};");
+        }
     }
 }

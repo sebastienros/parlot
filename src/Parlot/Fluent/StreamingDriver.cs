@@ -73,25 +73,27 @@ internal sealed class StreamingDriver : IDisposable
     /// <summary>
     /// Drops the text before <paramref name="start"/>, reads more text and starts a new window at <paramref name="start"/>.
     /// </summary>
-    /// <param name="start">The position of the text to keep.</param>
-    public async ValueTask GrowAsync(TextPosition start)
+    /// <param name="start">The offset of the text to keep in the current window.</param>
+    public async ValueTask GrowAsync(int start)
     {
-        var available = _length - start.Offset;
+        // The line and column of the new window are the ones of its first char in the current window
+        var position = Cursor.GetPosition(start);
+        var available = _length - start;
 
         if (available >= _options.MaxBufferedCharacters)
         {
-            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(start));
+            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(position));
         }
 
-        if (start.Offset > 0)
+        if (start > 0)
         {
-            Array.Copy(_chars, start.Offset, _chars, 0, available);
+            Array.Copy(_chars, start, _chars, 0, available);
             _length = available;
-            _offset += start.Offset;
+            _offset += start;
         }
 
-        _line = start.Line;
-        _column = start.Column;
+        _line = position.Line;
+        _column = position.Column;
 
         // Grow geometrically so that the retries cost a bounded multiple of a single parse
         var target = available + Math.Max(available, _options.BufferSize);
@@ -346,9 +348,9 @@ internal sealed class StreamingItemReader<T, TSeparator>
     public long Count { get; private set; }
 
     /// <summary>
-    /// The position to retry from when <see cref="Next(out T)"/> returns <see cref="StreamingStep.NeedMore"/>.
+    /// The offset to retry from when <see cref="Next(out T)"/> returns <see cref="StreamingStep.NeedMore"/>.
     /// </summary>
-    public TextPosition RetryPosition { get; private set; }
+    public int RetryOffset { get; private set; }
 
     public StreamingStep Next(out T value)
     {
@@ -358,7 +360,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
         {
             var context = _driver.Context;
             var cursor = context.Scanner.Cursor;
-            var start = cursor.Position;
+            var start = cursor.Offset;
 
             cursor.ResetHitEnd();
 
@@ -369,7 +371,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 // Don't retain the white space unless it might continue
                 if (!cursor.HitEnd)
                 {
-                    start = cursor.Position;
+                    start = cursor.Offset;
                 }
             }
 
@@ -381,7 +383,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
                     return StreamingStep.End;
                 }
 
-                RetryPosition = start;
+                RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
 
@@ -389,14 +391,14 @@ internal sealed class StreamingItemReader<T, TSeparator>
             {
                 if (cursor.HitEnd)
                 {
-                    RetryPosition = start;
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
 
                 throw new ParseException("Expected a separator or the end of the input.", _driver.ToAbsolute(cursor.Position));
             }
 
-            var itemStart = cursor.Position;
+            var itemStart = cursor.Offset;
 
             if (_expectSeparator)
             {
@@ -409,7 +411,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 }
                 catch (ParseException) when (cursor.HitEnd)
                 {
-                    RetryPosition = start;
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
                 catch (ParseException e)
@@ -419,7 +421,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
 
                 if (cursor.HitEnd)
                 {
-                    RetryPosition = start;
+                    RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
 
@@ -437,7 +439,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
             }
             catch (ParseException) when (cursor.HitEnd)
             {
-                RetryPosition = start;
+                RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
             catch (ParseException e)
@@ -447,16 +449,16 @@ internal sealed class StreamingItemReader<T, TSeparator>
 
             if (cursor.HitEnd)
             {
-                RetryPosition = start;
+                RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
 
             if (!success)
             {
-                throw new ParseException("The input could not be parsed.", _driver.ToAbsolute(itemStart));
+                throw new ParseException("The input could not be parsed.", _driver.ToAbsolute(cursor.GetPosition(itemStart)));
             }
 
-            if (cursor.Offset == itemStart.Offset)
+            if (cursor.Offset == itemStart)
             {
                 throw new InvalidOperationException("The parser succeeded without consuming any input, which would never end.");
             }

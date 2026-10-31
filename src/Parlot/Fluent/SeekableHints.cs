@@ -16,9 +16,14 @@ internal static class SeekableHints
     /// The hints are only usable when every parser can seek and they all skip white space the same way,
     /// otherwise the resulting parser can start with any char.
     /// </remarks>
-    public static (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Union<T>(params Parser<T>[] parsers)
+    public static (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Union<T>(params Parser<T>[] parsers) => Union((IReadOnlyList<object>)parsers);
+
+    /// <summary>
+    /// Gets the hints of a parser which runs any one of the <paramref name="parsers"/>, whatever their value types.
+    /// </summary>
+    public static (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Union(IReadOnlyList<object> parsers)
     {
-        if (parsers.Length == 0 || parsers[0] is not ISeekable first || !first.CanSeek)
+        if (parsers.Count == 0 || parsers[0] is not ISeekable first || !first.CanSeek)
         {
             return (false, [], false);
         }

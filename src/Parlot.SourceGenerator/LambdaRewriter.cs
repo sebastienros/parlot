@@ -301,7 +301,6 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                         identifier.GetLocation()));
                 }
             }
-
         }
 
         return captures;
@@ -480,37 +479,5 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 SyntaxFactory.LiteralExpression(
                     SyntaxKind.NumericLiteralExpression,
                     SyntaxFactory.Literal(pointer))));
-    }
-}
-
-/// <summary>
-/// Result of rewriting a syntax tree with lambda stubs.
-/// </summary>
-internal sealed class LambdaRewriteResult
-{
-    public LambdaRewriteResult(
-        SyntaxTree rewrittenTree,
-        IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> lambdas)
-    {
-        RewrittenTree = rewrittenTree;
-        Lambdas = lambdas;
-    }
-
-    /// <summary>
-    /// The rewritten syntax tree with stub lambdas.
-    /// </summary>
-    public SyntaxTree RewrittenTree { get; }
-
-    /// <summary>
-    /// Map from lambda pointer to original lambda information.
-    /// </summary>
-    public IReadOnlyDictionary<int, LambdaRewriter.LambdaInfo> Lambdas { get; }
-
-    /// <summary>
-    /// Gets a dictionary mapping pointers to their original source code.
-    /// </summary>
-    public Dictionary<int, string> GetSourceCodeMap()
-    {
-        return Lambdas.ToDictionary(kv => kv.Key, kv => kv.Value.OriginalSource);
     }
 }

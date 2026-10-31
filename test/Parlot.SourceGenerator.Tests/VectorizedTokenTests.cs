@@ -220,13 +220,13 @@ public class VectorizedTokenTests
         var body = Generate(new Identifier(), new SourceGenerationContext());
 
         Assert.Contains(".Slice(1).IndexOfAnyExcept(global::Parlot.Character._identifierPart)", body, StringComparison.Ordinal);
-        Assert.Contains(".AdvanceBy(", body, StringComparison.Ordinal);
+        Assert.Contains(".AdvanceNoNewLines(size", body, StringComparison.Ordinal);
         Assert.DoesNotContain(".AdvanceNoNewLines(1)", body, StringComparison.Ordinal);
 
         var withPredicates = Generate(new Identifier(static c => c == '@', static c => c == '-'), new SourceGenerationContext());
 
         Assert.DoesNotContain("IndexOfAnyExcept", withPredicates, StringComparison.Ordinal);
-        Assert.Contains(".AdvanceBy(", withPredicates, StringComparison.Ordinal);
+        Assert.Contains(".AdvanceNoNewLines(size", withPredicates, StringComparison.Ordinal);
         Assert.Contains(".AdvanceNoNewLines(1)", withPredicates, StringComparison.Ordinal);
     }
 
@@ -235,7 +235,7 @@ public class VectorizedTokenTests
     {
         var body = Generate(Literals.Pattern(static c => char.IsDigit(c), minSize: 2, maxSize: 4), new SourceGenerationContext());
 
-        Assert.Contains(".AdvanceBy(", body, StringComparison.Ordinal);
+        Assert.Contains(".AdvanceNoNewLines(size", body, StringComparison.Ordinal);
         Assert.Contains(".MarkHitEnd()", body, StringComparison.Ordinal);
         Assert.DoesNotContain("ResetPosition", body, StringComparison.Ordinal);
         Assert.DoesNotContain(".Advance();", body, StringComparison.Ordinal);

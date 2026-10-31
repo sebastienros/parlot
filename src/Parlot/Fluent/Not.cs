@@ -3,7 +3,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Not<T> : Parser<T>, ISourceable
+public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
@@ -12,11 +12,18 @@ public sealed class Not<T> : Parser<T>, ISourceable
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         // The text is read again when the parser fails
         var pin = context.Pin();
@@ -49,7 +56,7 @@ public sealed class Not<T> : Parser<T>, ISourceable
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper instead of inlining
         var helperName = context.WithDiscardResult(true, () => context.Helpers

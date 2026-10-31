@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class ElseError<T> : Parser<T>, ISourceable
+public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -15,14 +15,40 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         _message = message;
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return ParseCompacting(context, ref result);
+        }
+
         context.EnterParser(this);
 
         if (!_parser.Parse(context, ref result))
         {
             context.ExitParser(this);
             throw new ParseException(_message, context.Scanner.Cursor.Position);
+        }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        // A parser which fails moves the cursor back to its start, whose text might have been discarded from the buffer by then.
+        // The line and column are computed from the text, so the position is read while the text is buffered.
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Position;
+
+        if (!_parser.Parse(context, ref result))
+        {
+            context.ExitParser(this);
+            throw new ParseException(_message, cursor.Offset == start.Offset ? start : cursor.Position);
         }
 
         context.ExitParser(this);
@@ -78,7 +104,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
     public override string ToString() => $"{_parser} (ElseError)";
 }
 
-public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
+public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -106,6 +132,14 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // It throws when the parser succeeds
+        return false;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -157,7 +191,7 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
     public override string ToString() => $"{_parser} (Error)";
 }
 
-public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
+public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -181,6 +215,14 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // It throws when the parser succeeds
+        return false;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)

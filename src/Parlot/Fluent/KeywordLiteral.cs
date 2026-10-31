@@ -9,11 +9,10 @@ namespace Parlot.Fluent;
 /// are the ASCII letters; a custom set can be given, e.g. to also reject digits, <c>_</c> or <c>-</c>.
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
-public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable
+public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     // The text parser is kept for the source generator, which emits it as a helper; the runtime matches the text inline
     private readonly TextLiteral _textLiteral;
-    private readonly bool _hasNewLines;
     private readonly bool _returnText;
 
     // The chars that continue an identifier, which a keyword must not be followed by: a bitset of the ASCII chars,
@@ -29,7 +28,6 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
     public KeywordLiteral(string text, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
     {
         _textLiteral = new TextLiteral(text, comparison, returnMatchedText: returnMatchedText);
-        _hasNewLines = _textLiteral.HasNewLines;
         _returnText = _textLiteral.ReturnsText;
         Text = text;
         Comparison = comparison;
@@ -92,6 +90,8 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
     // The keyword starts with its text, the boundary is checked after it
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_textLiteral);
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => Text.Length == 0;
+
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {
         if (context.IsCompacting)
@@ -129,14 +129,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
 
             var start = cursor.Offset;
 
-            if (_hasNewLines)
-            {
-                cursor.Advance(length);
-            }
-            else
-            {
-                cursor.AdvanceNoNewLines(length);
-            }
+            cursor.AdvanceNoNewLines(length);
 
             if (_returnText)
             {
@@ -182,7 +175,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
 
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper for the text literal
         var helperName = context.Helpers

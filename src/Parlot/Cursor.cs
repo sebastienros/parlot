@@ -18,8 +18,18 @@ public class Cursor
 #else
     private int _base;
 #endif
-    private int _line;
-    private int _column;
+
+    // The line and column are only computed when a position is requested, from the text (see GetPosition), such that moving
+    // the cursor only updates the offset. Absolute offsets. The origin is the position the cursor was created at, the only
+    // one whose line and column are given rather than counted. In compacting mode it moves to the start of the window when
+    // the text before it is dropped. The last position computed is memoized such that requests for successive positions
+    // only scan the text between them. Invariant: _base <= _originOffset <= _lastOffset <= _base + _textLength.
+    private int _originOffset;
+    private int _originLine;
+    private int _originColumn;
+    private int _lastOffset;
+    private int _lastLine;
+    private int _lastColumn;
 
     // HitEndFlag is set unconditionally on the cold end-of-buffer paths; only observable through HitEnd when the buffer is not final.
     // IsFinal shares the byte so that the cursor, which is allocated for each parse, doesn't grow.
@@ -56,8 +66,9 @@ public class Cursor
         }
 
         _offset = position.Offset;
-        _line = position.Line;
-        _column = position.Column;
+        _originOffset = _lastOffset = position.Offset;
+        _originLine = _lastLine = position.Line;
+        _originColumn = _lastColumn = position.Column;
         Eof = _offset == _textLength;
         _flags = (byte)((isFinal ? 0 : NotFinalFlag) | (Eof ? HitEndFlag : 0));
         Current = Eof ? NullChar : Buffer[_offset];
@@ -74,7 +85,7 @@ public class Cursor
     /// A parse result obtained while this is <see langword="true"/> may change once more text is available.
     /// Always <see langword="false"/> when <see cref="IsFinal"/> is <see langword="true"/>.
     /// </summary>
-    /// <remarks>The flag is sticky: moving the cursor back with <see cref="ResetPosition(in TextPosition)"/> does not clear it.</remarks>
+    /// <remarks>The flag is sticky: moving the cursor back with <see cref="ResetPosition(int)"/> does not clear it.</remarks>
     public bool HitEnd => _flags == (HitEndFlag | NotFinalFlag);
 
     /// <summary>
@@ -102,7 +113,146 @@ public class Cursor
     /// column is one more than the number of chars between the previous <c>'\n'</c> (or the start of the text) and the
     /// position: every char other than <c>'\n'</c>, <c>'\r'</c> included, occupies one column.
     /// </summary>
-    public TextPosition Position => new(_offset + _base, _line, _column);
+    /// <remarks>
+    /// The line and the column are computed when this property is read, by counting the <c>'\n'</c> chars between the
+    /// last position read and this one, rather than tracked as the cursor moves. Reading it thus costs a scan of the text
+    /// the cursor moved over since the last read. Parsers which save a position to move the cursor back to it should save
+    /// <see cref="Offset"/> and call <see cref="ResetPosition(int)"/> instead.
+    /// </remarks>
+    public TextPosition Position => GetPosition(_offset + _base);
+
+    /// <summary>
+    /// Returns the position of an absolute offset of the buffered text, see <see cref="Position"/>.
+    /// </summary>
+    /// <remarks>
+    /// The lines and columns of the offsets before the initial position of the cursor are counted backward from it, the
+    /// start of the buffer starting a line. In compacting mode, the text discarded from the buffer can't be counted: an
+    /// offset in it gets the line of the first buffered char, and its column assuming that no line ends between them.
+    /// </remarks>
+    internal TextPosition GetPosition(int offset)
+    {
+        if (offset != _lastOffset)
+        {
+            if (offset < _originOffset || offset - _base > _textLength)
+            {
+                return GetPositionOutsideOrigin(offset);
+            }
+
+            ComputePosition(offset, out var line, out var column);
+
+            _lastOffset = offset;
+            _lastLine = line;
+            _lastColumn = column;
+        }
+
+        return new TextPosition(offset, _lastLine, _lastColumn);
+    }
+
+    // Computes the line and column of an offset between the origin and the end of the buffer
+    private void ComputePosition(int offset, out int line, out int column)
+    {
+        if (offset >= _lastOffset)
+        {
+            CountForward(_lastOffset, _lastLine, _lastColumn, offset, out line, out column);
+        }
+        else if (offset - _originOffset <= _lastOffset - offset)
+        {
+            CountForward(_originOffset, _originLine, _originColumn, offset, out line, out column);
+        }
+        else
+        {
+            // Closer to the last position than to the origin: only the text between them, and the start of the line, are read
+            var newLines = CountNewLines(GetSpan(offset, _lastOffset - offset));
+
+            line = _lastLine - newLines;
+
+            if (newLines == 0)
+            {
+                column = _lastColumn - (_lastOffset - offset);
+            }
+            else
+            {
+                var before = GetSpan(_originOffset, offset - _originOffset);
+                var lastNewLine = before.LastIndexOf('\n');
+
+                column = lastNewLine >= 0 ? before.Length - lastNewLine : _originColumn + before.Length;
+            }
+        }
+    }
+
+    // Computes the line and column of an offset from a known position before it
+    private void CountForward(int fromOffset, int fromLine, int fromColumn, int offset, out int line, out int column)
+    {
+        var text = GetSpan(fromOffset, offset - fromOffset);
+        var lastNewLine = text.LastIndexOf('\n');
+
+        if (lastNewLine < 0)
+        {
+            line = fromLine;
+            column = fromColumn + text.Length;
+        }
+        else
+        {
+            line = fromLine + CountNewLines(text.Slice(0, lastNewLine)) + 1;
+            column = text.Length - lastNewLine;
+        }
+    }
+
+    // The offsets before the origin, or after the end of the buffer, are not memoized such that the memoized position is
+    // always one the text can be counted from
+    private TextPosition GetPositionOutsideOrigin(int offset)
+    {
+        var end = _base + _textLength;
+
+        if (offset > end)
+        {
+            // Only after ResetPosition moved the cursor past the end of the text: the extra chars are counted as columns
+            var last = GetPosition(end);
+            return new TextPosition(offset, last.Line, last.Column + (offset - end));
+        }
+
+        if (offset < _base)
+        {
+            // The text was discarded by a compacting stream, the origin is at the start of the buffer
+            return new TextPosition(offset, _originLine, Math.Max(1, _originColumn - (_originOffset - offset)));
+        }
+
+        var line = _originLine;
+        var column = _originColumn;
+        var newLines = CountNewLines(GetSpan(offset, _originOffset - offset));
+
+        if (newLines == 0)
+        {
+            column = Math.Max(1, _originColumn - (_originOffset - offset));
+        }
+        else
+        {
+            var before = GetSpan(_base, offset - _base);
+
+            line = _originLine - newLines;
+            column = before.Length - before.LastIndexOf('\n');
+        }
+
+        return new TextPosition(offset, line, column);
+    }
+
+    private static int CountNewLines(ReadOnlySpan<char> text)
+    {
+#if NET8_0_OR_GREATER
+        return text.Count('\n');
+#else
+        var count = 0;
+        int index;
+
+        while ((index = text.IndexOf('\n')) >= 0)
+        {
+            count++;
+            text = text.Slice(index + 1);
+        }
+
+        return count;
+#endif
+    }
 
     /// <summary>
     /// Returns the <see cref="ReadOnlySpan{T}"/> value of the <see cref="Buffer" /> at the current offset.
@@ -151,6 +301,16 @@ public class Cursor
     {
         var offset = _offset + _base;
 
+        // The lines are counted from the origin, the text before the new window is dropped: its lines are counted first
+        if (bufferStart > _originOffset)
+        {
+            var start = GetPosition(bufferStart);
+
+            _originOffset = _lastOffset = bufferStart;
+            _originLine = _lastLine = start.Line;
+            _originColumn = _lastColumn = start.Column;
+        }
+
         Buffer = buffer;
         _textLength = buffer.Length;
         _base = bufferStart;
@@ -177,44 +337,24 @@ public class Cursor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance()
     {
-        var previous = Current;
+        var offset = _offset + 1;
 
-        _offset++;
-
-        if (_offset >= _textLength)
+        if (offset < _textLength)
         {
-            // Stays at the end of the text when already there, otherwise leaves the last char
-            _offset = _textLength;
-
-            if (Eof)
-            {
-                return;
-            }
-
-            Eof = true;
-            _flags |= HitEndFlag;
-            Current = NullChar;
+            _offset = offset;
+            Current = Buffer[offset];
         }
         else
         {
-            Current = Buffer[_offset];
-        }
-
-        // The char that was left either ended its line or occupied a column
-        if (previous == '\n')
-        {
-            _line++;
-            _column = 1;
-        }
-        else
-        {
-            _column++;
+            AdvanceToEnd();
         }
     }
 
     /// <summary>
-    /// Advances the cursor by <paramref name="count"/> characters, or to the end of the text, and tracks its current location (line and column).
+    /// Advances the cursor by <paramref name="count"/> characters, or to the end of the text.
+    /// Nothing happens when the cursor is already at the end of the text, or when <paramref name="count"/> is negative.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance(int count)
     {
         if (Eof)
@@ -222,125 +362,106 @@ public class Cursor
             return;
         }
 
-#if NET8_0_OR_GREATER
-        // Keep vector setup off the common short-token path.
-        if (count >= 64 && TryAdvanceWithoutNewLines(count))
+        // A single unsigned compare selects a count which doesn't reach the end of the text, and isn't negative
+        if (unchecked((uint)count < (uint)(_textLength - _offset)))
         {
-            return;
+            _offset += count;
+            Current = Buffer[_offset];
         }
-#endif
-
-        var end = _offset + count;
-
-        // Detect if the cursor will be over Eof
-        if (end >= _textLength)
+        else if (count > 0)
         {
-            Eof = true;
-            _flags |= HitEndFlag;
-            end = _textLength;
+            AdvanceToEnd();
         }
-
-        // Keep the loop state in locals and publish them once, as in Sep's block parsers.
-        var offset = _offset;
-        var line = _line;
-        var column = _column;
-        var buffer = Buffer;
-
-        // Each char that is left counts as a column, or starts a new line
-        while (offset < end)
-        {
-            if (buffer[offset] == '\n')
-            {
-                line++;
-                column = 1;
-            }
-            else
-            {
-                column++;
-            }
-
-            offset++;
-        }
-
-        _offset = offset;
-        _line = line;
-        _column = column;
-        Current = Eof ? NullChar : buffer[offset];
     }
-
-#if NET8_0_OR_GREATER
-    private bool TryAdvanceWithoutNewLines(int count)
-    {
-        var offset = _offset;
-        var end = Math.Min(offset + count, _textLength);
-
-        // Only the chars that are left matter, not the one the cursor moves to. Guard overflow too.
-        if (end < offset || Buffer.AsSpan(offset, end - offset).Contains('\n'))
-        {
-            return false;
-        }
-
-        _column += end - offset;
-        _offset = end;
-
-        if (end == _textLength)
-        {
-            Eof = true;
-            _flags |= HitEndFlag;
-            Current = NullChar;
-        }
-        else
-        {
-            Current = Buffer[end];
-        }
-
-        return true;
-    }
-#endif
 
     /// <summary>
-    /// Advances the cursor and tracks its current location (line and column) with the knowledge that the
-    /// <paramref name="offset"/> chars it leaves contain no <c>'\n'</c>.
+    /// Advances the cursor by <paramref name="offset"/> characters, or to the end of the text.
     /// </summary>
+    /// <remarks>
+    /// Lines and columns are computed from the text when <see cref="Position"/> is read, so the chars the cursor leaves can
+    /// contain <c>'\n'</c> too: this is <see cref="Advance(int)"/>, which it predates, except that it doesn't check that
+    /// <paramref name="offset"/> isn't negative.
+    /// </remarks>
     public void AdvanceNoNewLines(int offset)
     {
         var newOffset = _offset + offset;
-        var length = _textLength - 1;
 
-        // Detect if the cursor will be over Eof
-        if (newOffset > length)
+        if (newOffset >= _textLength)
         {
-            Eof = true;
-            _flags |= HitEndFlag;
-            // Only the chars up to the end are counted, like Advance(int) does
-            _column += _textLength - _offset;
-            _offset = _textLength;
-            Current = NullChar;
+            AdvanceToEnd();
             return;
         }
 
         Current = Buffer[newOffset];
         _offset = newOffset;
-        _column += offset;
     }
 
     /// <summary>
-    /// Moves the cursor to the specific position
+    /// Advances the cursor by <paramref name="count"/> chars which are in the buffer, up to its end included.
     /// </summary>
+    /// <remarks>
+    /// This is <see cref="AdvanceNoNewLines(int)"/> inlined: generated parsers which read the text through a span call it
+    /// once the text matched, with the number of chars they read.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ResetPosition(in TextPosition position)
+    internal void AdvanceWithinBuffer(int count)
     {
-        if (position.Offset - _base != _offset)
+        var offset = _offset + count;
+        var buffer = Buffer;
+
+        // The length of the buffer, rather than _textLength which is the same, lets the JIT remove the bounds check
+        if ((uint)offset < (uint)buffer.Length)
         {
-            ResetPositionNotInlined(position);
+            _offset = offset;
+            Current = buffer[offset];
+        }
+        else
+        {
+            AdvanceToEnd();
         }
     }
 
-    private void ResetPositionNotInlined(in TextPosition position)
+    // Moving to the end of the text, or staying there, which records that the end of the buffer was reached
+    private void AdvanceToEnd()
     {
-        _offset = position.Offset - _base;
-        _line = position.Line;
-        _column = position.Column;
+        _offset = _textLength;
+        Eof = true;
+        _flags |= HitEndFlag;
+        Current = NullChar;
+    }
+
+    /// <summary>
+    /// Moves the cursor to an absolute offset, usually a value of <see cref="Offset"/> read before the cursor advanced.
+    /// </summary>
+    /// <param name="offset">The absolute offset to move to.</param>
+    /// <remarks>
+    /// This is the way for a parser to move the cursor back when it doesn't match: saving <see cref="Offset"/> costs nothing
+    /// whereas reading <see cref="Position"/> computes the line and the column.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ResetPosition(int offset)
+    {
+        if (offset - _base != _offset)
+        {
+            ResetPositionNotInlined(offset);
+        }
+    }
+
+    /// <summary>
+    /// Moves the cursor to the offset of a position.
+    /// </summary>
+    /// <param name="position">The position to move to.</param>
+    /// <remarks>
+    /// Only <see cref="TextPosition.Offset"/> is used: the line and the column of the cursor are always computed from the
+    /// text, so a position whose line or column don't match its offset doesn't change them. Prefer saving <see cref="Offset"/>
+    /// and calling <see cref="ResetPosition(int)"/>, which doesn't compute the line and the column.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ResetPosition(in TextPosition position) => ResetPosition(position.Offset);
+
+    private void ResetPositionNotInlined(int offset)
+    {
+        _offset = offset - _base;
 
         // A single unsigned compare covers both the end of the buffer and, in compacting mode, a discarded position.
         // Unchecked since the offset is negative for a discarded position, and generated parsers embed this file in
@@ -408,11 +529,12 @@ public class Cursor
     }
 
     /// <summary>
-    /// Advances the cursor by a precomputed amount, applying known line/column deltas.
+    /// Advances the cursor by <paramref name="consumedLength"/> characters, or to the end of the text.
     /// </summary>
     /// <param name="consumedLength">How many characters were consumed.</param>
-    /// <param name="newLines">Number of <c>'\n'</c> characters in the consumed span.</param>
-    /// <param name="trailingSegmentLength">Number of characters after the last <c>'\n'</c> of the consumed span (or the full length when there is none).</param>
+    /// <param name="newLines">Ignored: lines and columns are computed from the text when <see cref="Position"/> is read.</param>
+    /// <param name="trailingSegmentLength">Ignored: lines and columns are computed from the text when <see cref="Position"/> is read.</param>
+    /// <remarks>Prefer <see cref="Advance(int)"/>, the line and column arguments are only kept for compatibility.</remarks>
     public void AdvanceBy(int consumedLength, int newLines, int trailingSegmentLength)
     {
         _offset += consumedLength;
@@ -428,16 +550,6 @@ public class Cursor
         {
             Eof = false;
             Current = Buffer[_offset];
-        }
-
-        if (newLines == 0)
-        {
-            _column += consumedLength;
-        }
-        else
-        {
-            _line += newLines;
-            _column = 1 + trailingSegmentLength;
         }
     }
 

@@ -3,20 +3,21 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly bool _includeNewLines;
 
     // Shared by the parsers, which only read them (ExpectedChars is exposed as char[] to the lookup tables).
-    // They are the default set, which contains the chars of every WhiteSpaceSet.
+    // They are the chars of the default set (Character.WhiteSpaces and Character.WhiteSpaceOrNewLines), which contains the
+    // chars of every WhiteSpaceSet.
     private static readonly char[] _whiteSpaceChars =
     [
-        '\u0009', '\u000C', '\u0020', '\u00A0', '\u1680', '\u180E', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF'
+        '\u0009', '\u000C', '\u0020', '\u00A0', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000'
     ];
 
     private static readonly char[] _whiteSpaceOrNewLineChars =
     [
-        '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0020', '\u00A0', '\u1680', '\u180E', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000', '\uFEFF'
+        '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0020', '\u0085', '\u00A0', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005', '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u2028', '\u2029', '\u202F', '\u205F', '\u3000'
     ];
 
     public bool CanSeek { get; } = true;
@@ -33,6 +34,8 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
 
         Name = "WhiteSpaceLiteral";
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

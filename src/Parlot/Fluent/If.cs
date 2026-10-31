@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable where C : ParseContext
+public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable where C : ParseContext
 {
     private readonly Func<C, bool>? _contextCondition;
     private readonly Func<bool>? _condition;
@@ -81,6 +81,18 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable where C : Parse
         _thenParser = thenParser ?? throw new ArgumentNullException(nameof(thenParser));
         _elseParser = elseParser ?? throw new ArgumentNullException(nameof(elseParser));
         (CanSeek, ExpectedChars, SkipWhitespace) = SeekableHints.Union(_thenParser, _elseParser);
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_thenParser);
+
+        if (_elseParser is not null)
+        {
+            nullable |= analysis.Invoke(_elseParser);
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

@@ -50,6 +50,7 @@ public static partial class Grammar
     public static partial bool TryParseTextChoiceDiscarded(string text, out char value);
     public static partial bool TryParseTextChoicePosition(string text, out (int Offset, int Line, int Column) value);
     public static partial bool TryParseScanPosition(string text, out (string Text, int Offset, int Line, int Column) value);
+    public static partial bool TryParseContextLoopDetection(string text, out string value);
     public static partial bool TryParsePrefixKeywords(string text, out (int Value, int Offset) value);
     public static partial bool TryParsePrefixOperators(string text, out (int Value, int Offset) value);
     public static partial bool TryParsePrefixOperatorSequences(string text, out (int Value, int Offset) value);

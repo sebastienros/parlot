@@ -1046,6 +1046,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // A TextReader entry point reads a compacting stream buffer
         sgContext.IsCompacting = standalone.IsReader;
 
+        // The diagnostics report each parser and each move of the cursor, which span code would hide
+        sgContext.GenerateSpanCode = !standalone.Diagnostics;
+
         // Invoke GenerateSource via reflection
         object? sourceResultObj;
         try

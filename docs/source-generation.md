@@ -187,6 +187,10 @@ invoked, in their order, and each one still matches its own text. Choices read f
 `TextReader` keep the first-char dispatch. See
 [Keyword lookup investigation](keyword-lookups.md#prefix-dispatch-for-wrapped-and-mixed-choices).
 
+An `Operators()` table (see [Operator tables](parsers.md#operator-tables)) is emitted as a single precedence climbing
+loop: recursive local functions which look for the operator following an operand once, through the
+generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
+
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
 allocation. The scanner, cursor, and context use the shared runtime implementations.
@@ -307,9 +311,9 @@ Allocations were unchanged between the two builds.
 | JSON long | 26.640 us | 26.93 us | +1.1% |
 | JSON wide | 13.593 us | 13.21 us | -2.8% |
 
-Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
-larger results grow into a list, and an empty `ZeroOrMany` result uses an empty array. Public results should
-normally use `IReadOnlyList<T>`.
+Generated collection parsers preserve the runtime collection behavior: the first four items are kept in a local and
+longer lists are accumulated on a scratch stack of the thread, shared by nested lists, and each non-empty result is one array of its exact size; an empty result is
+`Array.Empty<T>()`. Public results should normally use `IReadOnlyList<T>`.
 
 ## Configuration and captures
 
@@ -614,6 +618,11 @@ Direct generated parsers avoid runtime graph construction, parser-instance cachi
 generated callbacks, and an application dependency on the Parlot runtime assembly. Configuration is supplied
 per call without allocating a bound parser object.
 
+Besides what the grammar's callbacks and results allocate, a `string` entry point allocates two objects: the
+internal context, which also holds the configuration and the state of the grammar's deferred parsers, and a
+scanner that is its own cursor. The context's loop detection and recursion limit members, which generated
+parsers don't use, only allocate their state when a callback calls them.
+
 Generated parser helpers and callbacks use normal JIT inlining heuristics. Forcing inlining based only
 on a helper's local statement count can duplicate large parser chains, increasing native code size and
 stack initialization costs. A bounded hint is retained only for the entry core, which can inline into
@@ -643,9 +652,46 @@ skip its execution, required input values, or exceptions.
 Higher-arity `SkipAnd` keeps the preceding tuple value-producing when some of its members are returned;
 individual dropped tuple members are not independently optimized.
 
+### Span code
+
+Parsers which only read the text are generated as *span code*, the way the .NET regular expression source
+generator emits a pattern. The text after the cursor is read through a `ReadOnlySpan<char>` local indexed by a
+position local, the parsers of the subgraph are emitted inline in a single method, with jumps to failure labels, and
+the cursor is moved once, when the subgraph matches. A failure leaves the cursor where it was: a sequence doesn't
+move it back, and choices, optional parsers and loops move the position local back rather than the cursor.
+
+`Char`, ordinal `Text`, `Pattern`, `AnyOf`, `NoneOf`, `Identifier` and the decimal number parsers (`Number<T>`,
+`Integer`, `Decimal`) are generated as span code inside the composite parsers whose parsers all are: `Terms` parsers
+(`SkipWhiteSpace`), `Then` with a callback receiving the value or with a constant, `Capture`, `OneOf` with less than 8
+alternatives (more texts or keywords use their lookups), `ZeroOrMany`, `OneOrMany`, `Optional`, `ZeroOrOne`,
+`Between` and the sequences (`And`, `AndSkip`, `SkipAnd`). The outermost such parser becomes one method, of up to 64
+parsers, a parser used twice counting twice and a number 8 times. The other parsers, like `Deferred`, `Separated`, lookaheads or callbacks
+receiving the context, invoke the span code of their parts. A literal alone keeps its code.
+
+```csharp
+// One method, which moves the cursor once. The JIT inlines the 'w' callbacks and drops their TextSpan.
+var wordChar = Literals.Pattern(char.IsLetterOrDigit);
+var email = Capture(
+    OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('.'), Literals.Char('+'), Literals.Char('-')))
+        .And(Literals.Char('@'))
+        .And(OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('-'))))
+        .And(Literals.Char('.'))
+        .And(OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('.'), Literals.Char('-')))));
+```
+
+The white space before a `Terms` parser is skipped by the execution context, which can run a custom white space
+parser. Span code checks the next char first, and only moves the cursor to skip white space when there is some, then
+moves it to the end of the match, or back to where it was, from there.
+
+The results are the ones of the other generated code, and of the runtime parsers: values, failures, positions, and
+the `Cursor.HitEnd` marks a non-final buffer depends on. A check of the char at the end of the span marks it, so does
+a callback invoked there, and moving the cursor to the end does. `TextReader` entry points don't use span code, their
+literals are tokens which refill the buffer, except inside a token, like the delimiter of `AnyCharBefore`.
+
 ### Parser Explorer diagnostics
 
 Set `Diagnostics = true` on a factory's `GenerateParser` attribute to emit diagnostic entry/exit and
 cursor-reset events for the local [Parser Explorer](explorer.md). This mode is intended for debugging;
-ordinary generated parsers contain no tracing calls. The explorer supports private entry points,
+ordinary generated parsers contain no tracing calls. It doesn't generate span code, so that each parser that is invoked
+and each move of the cursor is reported. The explorer supports private entry points,
 Monaco input editing, replay, rebuild detection, and result inspection without uploading assemblies.

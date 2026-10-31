@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
+public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T, T> Factory)[] _operators;
@@ -25,6 +25,22 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        // The operators follow the first operand
+        if (nullable)
+        {
+            foreach (var (op, _) in _operators)
+            {
+                analysis.Invoke(op);
+            }
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -41,63 +57,71 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
         var end = result.End;
 
         // a (op1) b (op2) c is applied as op1(a, op2(b, c)), so the pairs are kept until the end
-        HybridList<(Func<T, T, T> Factory, T Operand)>? operations = null;
+        var operations = new ListBuilder<(Func<T, T, T> Factory, T Operand)>();
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin();
 
-        while (true)
+        try
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
-            context.MovePin(pin);
-            var operatorResult = new ParseResult<TInput>();
-            Func<T, T, T>? matchedFactory = null;
-
-            foreach (var (op, factory) in _operators)
+            while (true)
             {
-                if (op.Parse(context, ref operatorResult))
+                var operatorPosition = context.Scanner.Cursor.Offset;
+                context.MovePin(pin);
+                var operatorResult = new ParseResult<TInput>();
+                Func<T, T, T>? matchedFactory = null;
+
+                foreach (var (op, factory) in _operators)
                 {
-                    matchedFactory = factory;
+                    if (op.Parse(context, ref operatorResult))
+                    {
+                        matchedFactory = factory;
+                        break;
+                    }
+                }
+
+                if (matchedFactory == null)
+                {
                     break;
                 }
+
+                var rightResult = new ParseResult<T>();
+                if (!_parser.Parse(context, ref rightResult))
+                {
+                    // Operator matched but no right operand - rollback operator consumption.
+                    context.Scanner.Cursor.ResetPosition(operatorPosition);
+                    break;
+                }
+
+                // Neither the operator nor the operand read anything, so they would match forever
+                if (context.Scanner.Cursor.Offset == operatorPosition)
+                {
+                    break;
+                }
+
+                operations.Add((matchedFactory, rightResult.Value));
+                end = rightResult.End;
             }
 
-            if (matchedFactory == null)
+            context.Unpin(pin);
+
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            var count = operations.Count;
+            if (count > 0)
             {
-                break;
-            }
+                var accumulated = operations[count - 1].Operand;
 
-            var rightResult = new ParseResult<T>();
-            if (!_parser.Parse(context, ref rightResult))
-            {
-                // Operator matched but no right operand - rollback operator consumption.
-                context.Scanner.Cursor.ResetPosition(operatorPosition);
-                break;
-            }
+                for (var i = count - 1; i > 0; i--)
+                {
+                    accumulated = operations[i].Factory(operations[i - 1].Operand, accumulated);
+                }
 
-            // Neither the operator nor the operand read anything, so they would match forever
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
-            {
-                break;
+                value = operations[0].Factory(value, accumulated);
             }
-
-            operations ??= [];
-            operations.Add((matchedFactory, rightResult.Value));
-            end = rightResult.End;
         }
-
-        context.Unpin(pin);
-
-        if (operations is { Count: > 0 })
+        finally
         {
-            var accumulated = operations[operations.Count - 1].Operand;
-
-            for (var i = operations.Count - 1; i > 0; i--)
-            {
-                accumulated = operations[i].Factory(operations[i - 1].Operand, accumulated);
-            }
-
-            value = operations[0].Factory(value, accumulated);
+            operations.Release();
         }
 
         result = new ParseResult<T>(result.Start, end, value);
@@ -128,7 +152,7 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourceable
+public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T, T> Factory)[] _operators;
@@ -144,6 +168,22 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourcea
         }
     }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        // The operators follow the first operand
+        if (nullable)
+        {
+            foreach (var (op, _) in _operators)
+            {
+                analysis.Invoke(op);
+            }
+        }
+
+        return nullable;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
@@ -157,62 +197,71 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourcea
         var value = result.Value;
         var end = result.End;
 
-        HybridList<(Func<ParseContext, T, T, T> Factory, T Operand)>? operations = null;
+        var operations = new ListBuilder<(Func<ParseContext, T, T, T> Factory, T Operand)>();
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin();
 
-        while (true)
+        try
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
-            context.MovePin(pin);
-            var operatorResult = new ParseResult<TInput>();
-            Func<ParseContext, T, T, T>? matchedFactory = null;
-
-            foreach (var (op, factory) in _operators)
+            while (true)
             {
-                if (op.Parse(context, ref operatorResult))
+                var operatorPosition = context.Scanner.Cursor.Offset;
+                context.MovePin(pin);
+                var operatorResult = new ParseResult<TInput>();
+                Func<ParseContext, T, T, T>? matchedFactory = null;
+
+                foreach (var (op, factory) in _operators)
                 {
-                    matchedFactory = factory;
+                    if (op.Parse(context, ref operatorResult))
+                    {
+                        matchedFactory = factory;
+                        break;
+                    }
+                }
+
+                if (matchedFactory == null)
+                {
                     break;
                 }
+
+                var rightResult = new ParseResult<T>();
+                if (!_parser.Parse(context, ref rightResult))
+                {
+                    // Operator matched but no right operand - rollback operator consumption.
+                    context.Scanner.Cursor.ResetPosition(operatorPosition);
+                    break;
+                }
+
+                // Neither the operator nor the operand read anything, so they would match forever
+                if (context.Scanner.Cursor.Offset == operatorPosition)
+                {
+                    break;
+                }
+
+                operations.Add((matchedFactory, rightResult.Value));
+                end = rightResult.End;
             }
 
-            if (matchedFactory == null)
+            context.Unpin(pin);
+
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            var count = operations.Count;
+            if (count > 0)
             {
-                break;
-            }
+                var accumulated = operations[count - 1].Operand;
 
-            var rightResult = new ParseResult<T>();
-            if (!_parser.Parse(context, ref rightResult))
-            {
-                context.Scanner.Cursor.ResetPosition(operatorPosition);
-                break;
-            }
+                for (var i = count - 1; i > 0; i--)
+                {
+                    accumulated = operations[i].Factory(context, operations[i - 1].Operand, accumulated);
+                }
 
-            // Neither the operator nor the operand read anything, so they would match forever
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
-            {
-                break;
+                value = operations[0].Factory(context, value, accumulated);
             }
-
-            operations ??= [];
-            operations.Add((matchedFactory, rightResult.Value));
-            end = rightResult.End;
         }
-
-        context.Unpin(pin);
-
-        if (operations is { Count: > 0 })
+        finally
         {
-            var accumulated = operations[operations.Count - 1].Operand;
-
-            for (var i = operations.Count - 1; i > 0; i--)
-            {
-                accumulated = operations[i].Factory(context, operations[i - 1].Operand, accumulated);
-            }
-
-            value = operations[0].Factory(context, value, accumulated);
+            operations.Release();
         }
 
         result = new ParseResult<T>(result.Start, end, value);
@@ -296,7 +345,6 @@ internal static class RightAssociativeSource
         var matchedName = $"matched{uniqueId}";
         var positionName = $"opPos{uniqueId}";
         var rightName = $"right{uniqueId}";
-        var listTypeName = $"global::Parlot.Fluent.HybridList<(int, {valueTypeName})>";
 
         string Apply(string index, string left, string right)
         {
@@ -317,13 +365,14 @@ internal static class RightAssociativeSource
 
         result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("{");
-        result.Body.Add($"    {listTypeName}? {operationsName} = null;");
+        result.Body.Add($"    {ListBuilderSource.Declare(operationsName, $"(int, {valueTypeName})")}");
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
-        result.Body.Add($"        var {positionName} = {cursorName}.Position;");
+        result.Body.Add($"        var {positionName} = {cursorName}.Offset;");
         context.MovePin(result, pin, "        ");
         result.Body.Add($"        var {matchedName} = -1;");
 
@@ -339,15 +388,15 @@ internal static class RightAssociativeSource
         result.Body.Add($"            {cursorName}.ResetPosition({positionName});");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        if ({cursorName}.Offset == {positionName}.Offset) break;");
-        result.Body.Add($"        {operationsName} ??= new {listTypeName}();");
+        result.Body.Add($"        if ({cursorName}.Offset == {positionName}) break;");
         result.Body.Add($"        {operationsName}.Add(({matchedName}, {rightName}));");
         result.Body.Add("    }");
         context.Unpin(result, pin, "    ");
 
         var accumulatedName = $"accumulated{uniqueId}";
         var indexName = $"index{uniqueId}";
-        result.Body.Add($"    if ({operationsName} is {{ Count: > 0 }})");
+        // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+        result.Body.Add($"    if ({operationsName}.Count > 0)");
         result.Body.Add("    {");
         result.Body.Add($"        var {accumulatedName} = {operationsName}[{operationsName}.Count - 1].Item2;");
         result.Body.Add($"        for (var {indexName} = {operationsName}.Count - 1; {indexName} > 0; {indexName}--)");
@@ -356,6 +405,7 @@ internal static class RightAssociativeSource
         result.Body.Add("        }");
         result.Body.Add($"        {result.ValueVariable} = {Apply($"{operationsName}[0].Item1", result.ValueVariable, accumulatedName)};");
         result.Body.Add("    }");
+        ListBuilderSource.ReleaseInFinally(result, bodyStart, operationsName, "    ");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

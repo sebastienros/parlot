@@ -160,6 +160,32 @@ public class HitEndTests
         Assert.True(s.Cursor.HitEnd);
     }
 
+    [Theory]
+    [InlineData("1,", NumberOptions.Number, "1", true)]
+    [InlineData("1,5", NumberOptions.Number, "1,5", true)]
+    [InlineData("1,a", NumberOptions.Number, "1", false)]
+    [InlineData("1,,2.5", NumberOptions.Number, "1,,2.5", true)]
+    [InlineData("1,,2.5 ", NumberOptions.Number, "1,,2.5", false)]
+    [InlineData("1e5x", NumberOptions.Float, "1e5", false)]
+    [InlineData("1ex", NumberOptions.Float, "1", false)]
+    [InlineData("1.e", NumberOptions.Float, "1.", true)]
+    [InlineData(".", NumberOptions.Float, null, true)]
+    [InlineData(".x", NumberOptions.Float, null, false)]
+    [InlineData("-x", NumberOptions.Float, null, false)]
+    [InlineData("12", NumberOptions.Integer, "12", true)]
+    [InlineData("12.", NumberOptions.Integer, "12", false)]
+    [InlineData("", NumberOptions.Integer, null, true)]
+    public void ReadDecimalHitsEndWhenItReadsTheEnd(string text, NumberOptions options, string expected, bool hitEnd)
+    {
+        var s = new Scanner(text, isFinal: false);
+
+        // A group separator which isn't followed by digits isn't part of the number
+        Assert.Equal(expected != null, s.ReadDecimal(options, out var number));
+        Assert.Equal(expected ?? "", number.ToString());
+        Assert.Equal(expected?.Length ?? 0, s.Cursor.Offset);
+        Assert.Equal(hitEnd, s.Cursor.HitEnd);
+    }
+
     [Fact]
     public void ReadDecimalBeforeEndDoesNotHitEnd()
     {

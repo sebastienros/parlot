@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 /// Doesn't parse anything and return the default value.
 /// </summary>
 [Obsolete("Use the Then parser instead.")]
-public sealed class Discard<T, U> : Parser<U>, ISourceable
+public sealed class Discard<T, U> : Parser<U>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly U _value;
@@ -17,6 +17,8 @@ public sealed class Discard<T, U> : Parser<U>, ISourceable
         _parser = parser;
         _value = value;
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {

@@ -245,4 +245,23 @@ public static partial class Grammar
             return size;
         }).Then(static (context, span) =>
             (span.ToString(), context.Scanner.Cursor.Offset, context.Scanner.Cursor.Position.Line, context.Scanner.Cursor.Position.Column));
+
+    // Generated parsers detect their cycles without the context's loop detection, which still works for the callbacks
+    [GenerateParser(nameof(TryParseContextLoopDetection))]
+    private static Parser<string> ContextLoopDetection() =>
+        Literals.Char('x').Then(static (context, _) =>
+        {
+            var offset = context.Scanner.Cursor.Offset;
+            var first = context.PushParserAtPosition("a");
+            var again = context.PushParserAtPosition("a");
+            var second = context.PushParserAtPosition("b");
+            var active = context.IsParserActiveAtPosition("a") && context.IsParserActiveAtPosition("b");
+
+            context.PopParserAtPosition("b", offset);
+            context.PopParserAtPosition("a", offset);
+            context.EnterRecursion();
+            context.ExitRecursion();
+
+            return $"{first} {again} {second} {active} {context.IsParserActiveAtPosition("a")} {context.MaxRecursionDepth} {context.DisableLoopDetection}";
+        }).Eof();
 }
