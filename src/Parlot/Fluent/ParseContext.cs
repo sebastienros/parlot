@@ -53,7 +53,8 @@ public class ParseContext
     /// </summary>
     public readonly CancellationToken CancellationToken;
 
-    private int _cancellationCheckCount;
+    // A byte is enough since only its low bits are tested, and it wraps around at a multiple of the check interval
+    private byte _cancellationCheckCount;
     private int _recursionDepth;
 
     // TODO: For backward compatibility only, remove in future versions
@@ -682,7 +683,8 @@ public class ParseContext
         // This keeps cancellation responsive while reducing overhead for large inputs.
         const int mask = 0x3F; // check ~every 64 calls
 
-        if ((_cancellationCheckCount++ & mask) == 0)
+        // Unchecked since the byte wraps around, and generated parsers embed this file in assemblies which can check for overflows
+        if ((unchecked(_cancellationCheckCount++) & mask) == 0)
         {
             CancellationToken.ThrowIfCancellationRequested();
         }

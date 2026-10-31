@@ -291,6 +291,42 @@ public class StandaloneGeneratorTests
             && source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Cancellable_Entry_Points_Check_The_Token_Repeatedly_In_Checked_Assemblies()
+    {
+        // The context counts its cancellation checks in a byte, which must wrap around when the consuming
+        // assembly checks for arithmetic overflows
+        const string declaration = "public static partial class Grammar { public static partial bool TryParse(string text, System.Threading.CancellationToken cancellationToken, out int value); }";
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build()
+                {
+                    var nested = Deferred<int>();
+                    nested.Parser = Between(Literals.Char('('), nested, Literals.Char(')')).Then(static depth => depth + 1)
+                        .Or(Literals.Char('x').Then(0));
+                    return nested.Eof();
+                }
+            }
+            """;
+        var (result, compilation) = Generate(declaration, grammar, warningsAsErrors: true, checkOverflow: true);
+        AssertNoErrors(result, compilation);
+
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var parse = Assembly.Load(stream.ToArray()).GetType("Grammar").GetMethod("TryParse");
+        using var source = new CancellationTokenSource();
+
+        // Each nested Deferred invocation checks the token
+        object[] arguments = [new string('(', 300) + "x" + new string(')', 300), source.Token, null];
+        Assert.True((bool)parse.Invoke(null, arguments));
+        Assert.Equal(300, arguments[2]);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
