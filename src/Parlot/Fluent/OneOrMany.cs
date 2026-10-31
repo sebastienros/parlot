@@ -113,17 +113,24 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var result = context.CreateResult(typeof(IReadOnlyList<T>));
 
+        result.Body.Add($"{result.SuccessVariable} = false;");
+
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        if (!context.DiscardResult && !context.IsCompacting)
+        {
+            ListBuilderSource.EmitFirstItemThenRest(context, result, helperName, elementTypeName, _max);
+            return result;
+        }
+
         var listName = $"list{context.NextNumber()}";
 
         if (!context.DiscardResult)
         {
             result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
         }
-        result.Body.Add($"{result.SuccessVariable} = false;");
-
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var itemValueName = $"itemValue{context.NextNumber()}";
         var countName = $"count{context.NextNumber()}";

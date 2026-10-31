@@ -103,16 +103,22 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         var result = context.CreateResult(typeof(IReadOnlyList<T>), defaultSuccess: true, defaultValueExpression: $"global::System.Array.Empty<{elementTypeName}>()");
         var ctx = context.ParseContextName;
 
+        var helperName = context.Helpers
+            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
+            .MethodName;
+
+        if (!context.DiscardResult && !context.IsCompacting)
+        {
+            ListBuilderSource.EmitFirstItemThenRest(context, result, helperName, elementTypeName, _max);
+            return result;
+        }
+
         var listName = $"list{context.NextNumber()}";
 
         if (!context.DiscardResult)
         {
             result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
         }
-
-        var helperName = context.Helpers
-            .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
-            .MethodName;
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var itemValueName = $"itemValue{context.NextNumber()}";
         var countName = $"count{context.NextNumber()}";
