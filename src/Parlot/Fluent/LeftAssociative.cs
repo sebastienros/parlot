@@ -1,5 +1,6 @@
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
@@ -9,11 +10,15 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
+public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable, IOperatorLevels<T>
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T, T> Factory)[] _operators;
     private readonly OneOf<int> _choice;
+
+    // The levels of the operand are parsed together with these operators, see IOperatorLevels<T>
+    private readonly bool _canFlatten;
+    private PrecedenceParser<T>? _flattened;
 
     public LeftAssociative(Parser<T> parser, (Parser<TInput> op, Func<T, T, T> factory)[] operators)
     {
@@ -35,11 +40,25 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         }
 
         _choice = new OneOf<int>(choices);
+        _canFlatten = OperatorLevels.CanFlatten(_parser);
     }
+
+    Parser<T> IOperatorLevels<T>.Operand => _parser;
+
+    void IOperatorLevels<T>.AddLevels(List<OperatorLevel<T>> levels) =>
+        levels.Add(OperatorLevel<T>.Create(OperatorKind.LeftAssociative, OperatorLevel<T>.NextIndex(levels), _operators, "operators"));
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
+
+        if (_canFlatten && !context.IsInstrumented)
+        {
+            var success = OperatorLevels.GetFlattened(ref _flattened, this).ParseExpression(context, ref result);
+
+            context.ExitParser(this);
+            return success;
+        }
 
         // Parse the first operand (e.g., multiplicative)
         if (!_parser.Parse(context, ref result))
@@ -106,6 +125,12 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         if (context.DiscardResult)
         {
             return context.WithDiscardResult(false, () => GenerateSource(context));
+        }
+
+        // The generated parser is never instrumented
+        if (_canFlatten)
+        {
+            return OperatorLevels.GetFlattened(ref _flattened, this).GenerateSource(context);
         }
 
         if (_parser is not ISourceable parserSourceable)

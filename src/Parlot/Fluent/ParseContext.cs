@@ -151,6 +151,14 @@ public class ParseContext
     private const byte InTokenFlag = 16;
     private const byte CompactingMask = CompactingFlag | InTokenFlag;
 
+    // Whether hooks observe each parser or the recursion depth is limited. Parsers which run a whole chain of parsers
+    // as one, like the flattened operator levels, run the chain itself instead so that both see every parser of it.
+    internal bool IsInstrumented
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & (EnterHookFlag | ExitHookFlag)) != 0 || MaxRecursionDepth > 0;
+    }
+
     private void SetFlag(byte flag, bool value)
     {
         _flags = value ? (byte)(_flags | flag) : (byte)(_flags & ~flag);

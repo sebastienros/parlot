@@ -1,5 +1,6 @@
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
@@ -10,10 +11,14 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class Unary<T, TInput> : Parser<T>, ISourceable
+public sealed class Unary<T, TInput> : Parser<T>, ISourceable, IOperatorLevels<T>
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T> Factory)[] _operators;
+
+    // The levels of the operand are parsed together with these operators, see IOperatorLevels<T>
+    private readonly bool _canFlatten;
+    private PrecedenceParser<T>? _flattened;
 
     public Unary(Parser<T> parser, (Parser<TInput> op, Func<T, T> factory)[] operators)
     {
@@ -24,11 +29,23 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+
+        _canFlatten = OperatorLevels.CanFlatten(_parser);
     }
+
+    Parser<T> IOperatorLevels<T>.Operand => _parser;
+
+    void IOperatorLevels<T>.AddLevels(List<OperatorLevel<T>> levels) =>
+        levels.Add(OperatorLevel<T>.Create(OperatorKind.Prefix, OperatorLevel<T>.NextIndex(levels), _operators, "operators"));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (_canFlatten && !context.IsInstrumented)
+        {
+            return ParseFlattened(context, ref result);
+        }
+
         if (context.MaxRecursionDepth > 0)
         {
             context.EnterRecursion();
@@ -44,6 +61,16 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         }
 
         return ParseCore(context, ref result);
+    }
+
+    private bool ParseFlattened(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var success = OperatorLevels.GetFlattened(ref _flattened, this).ParseExpression(context, ref result);
+
+        context.ExitParser(this);
+        return success;
     }
 
     private bool ParseCore(ParseContext context, ref ParseResult<T> result)
@@ -104,6 +131,12 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         if (context.DiscardResult)
         {
             return context.WithDiscardResult(false, () => GenerateSource(context));
+        }
+
+        // The generated parser is never instrumented
+        if (_canFlatten)
+        {
+            return OperatorLevels.GetFlattened(ref _flattened, this).GenerateSource(context);
         }
 
         if (_parser is not ISourceable parserSourceable)
