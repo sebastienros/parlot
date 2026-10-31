@@ -31,6 +31,17 @@ public static partial class Grammars
         return expression;
     }
 
+    // Two patterns of docs/grammar-rules.md, which the Suggestions panel shows: "<" hides "<=", and both alternatives of
+    // the expression start with the same operand
+    [GenerateParser(nameof(Comparison), Diagnostics = true)]
+    public static Parser<string> BuildComparison()
+    {
+        var operand = Terms.Identifier().Then(static name => name.ToString()).Named("operand");
+        var comparison = Terms.Text("<").Or(Terms.Text("<=")).Named("operator");
+        return operand.And(comparison).And(operand).Then(static parts => $"{parts.Item1} {parts.Item2} {parts.Item3}").Named("comparison")
+            .Or(operand).Named("expression");
+    }
+
     [GenerateParser(nameof(Throws), Diagnostics = true)]
     public static Parser<char> BuildThrows() => Literals.Char('a').Named("a").Then<char>(static _ => throw new System.InvalidOperationException("Sample callback exception"));
 }

@@ -1,3 +1,4 @@
+using Parlot.Analysis;
 using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
@@ -14,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable /**/, ISpanSourceable /**/
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -393,6 +394,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     public IReadOnlyList<Parser<T>> OriginalParsers { get; }
 
     public IReadOnlyList<Parser<T>> Parsers { get; private set; }
+
+    IReadOnlyList<object> IChoiceParser.Alternatives => _originalParsers;
+
+    void IChoiceParser.Resolve() => EnsureResolved();
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {

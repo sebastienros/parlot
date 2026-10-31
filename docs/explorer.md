@@ -68,6 +68,7 @@ Try these sample entry points:
 | `Recursive` | `((a))` | Nested calls to the same rule |
 | `Throws` | `a` | A callback exception and frame unwinding |
 | `Json` | `{"rows":[{"id":1,"values":[true,null,1.25e-5]}]}` | Recursive objects/arrays, alternatives, named rules, and a structured result |
+| `Comparison` | `a <= b` | Grammar suggestions: `"<"` hides `"<="`, both alternatives start with the same operand, and the work the trace repeats |
 
 ## Explore and replay
 
@@ -82,6 +83,10 @@ Try these sample entry points:
   Successful zero-width calls remain visible. **Callers** follows the current call outward to the root.
 - The inspector shows entry/return positions, observed reach, explicit cursor resets, the buffer window,
   and `HitEnd`. Offsets are UTF-16 code-unit offsets, matching .NET strings and Monaco.
+- **Suggestions** lists the [grammar rules](grammar-rules.md) the source generator found in the grammar, and two that
+  the current trace shows: the rules parsed again at the same position, and the chars read again after backtracking,
+  with the rules responsible. A rule's button moves the replay to it. A build of an earlier version of the generator
+  has no grammar suggestions.
 - Results can be inspected as a tree or JSON. **Export JSON** saves the capture, original input, buffers,
   and result snapshot. Exported files can contain sensitive input; export is an explicit local action.
 

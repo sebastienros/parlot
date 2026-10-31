@@ -967,6 +967,8 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
         var valueType = baseType.GetGenericArguments()[0];
 
+        ReportGrammarFindings(context, methodSymbol, parserInstance, valueType, standalone);
+
         // Ensure the parser supports source generation
         // We check by interface name because the assembly loaded at runtime may have
         // a different type identity than the one referenced by the source generator

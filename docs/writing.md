@@ -209,3 +209,9 @@ var a = Terms.Text("a");
 var b = Terms.Text("b");
 var p = Select(c => c.OptionA ? 0 : 1, a, b);
 ```
+
+## Grammar rules
+
+[Grammar rules](grammar-rules.md) lists the patterns that make a grammar slower than it could be or keep it from parsing
+what it seems to, which the source generator and Parser Explorer report. `GrammarAnalyzer.Analyze` finds them in a
+grammar built at runtime.

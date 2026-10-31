@@ -103,3 +103,22 @@ test('exclusion patterns handle wildcards, whitespace, literal punctuation, and 
   assert.equal(allows('aaac','a*b'),true);
   assert.equal(allows('root','*root*'),false);
 });
+
+test('trace insights count rules parsed again and chars given back, once per repeated call', async () => {
+  const { traceInsights } = await import('./replay.js');
+  // choice(ab | ac) on "ac": "ab" reads 'a', fails on 'c' and resets; "ac" reads 'a' again
+  const trace = [
+    {kind:'enter',id:1,parent:0,rule:'choice',offset:0},
+    {kind:'enter',id:2,parent:1,rule:'ab',offset:0}, {kind:'enter',id:3,parent:2,rule:'a',offset:0}, {kind:'success',id:3,offset:1},
+    {kind:'enter',id:4,parent:2,rule:'b',offset:1}, {kind:'failure',id:4,offset:1}, {kind:'reset',id:2,offset:1,target:0}, {kind:'failure',id:2,offset:0},
+    {kind:'enter',id:5,parent:1,rule:'ac',offset:0}, {kind:'enter',id:6,parent:5,rule:'a',offset:0}, {kind:'enter',id:7,parent:6,rule:'char',offset:0},
+    {kind:'success',id:7,offset:1}, {kind:'success',id:6,offset:1},
+    {kind:'enter',id:8,parent:5,rule:'c',offset:1}, {kind:'success',id:8,offset:2}, {kind:'success',id:5,offset:2}, {kind:'success',id:1,offset:2}
+  ];
+  const insights = traceInsights(trace, 2);
+  assert.deepEqual(insights.repeated, [{ rule: 'a', chars: 1, count: 1, offset: 0, step: 9 }]);
+  assert.deepEqual(insights.backtracking, { chars: 1, ratio: .5, rules: [{ rule: 'ab', chars: 1, count: 1, step: 6 }] });
+  // A parse that never goes back has nothing to report
+  const clean = traceInsights([{kind:'enter',id:1,parent:0,rule:'a',offset:0}, {kind:'success',id:1,offset:1}], 1);
+  assert.deepEqual(clean, { repeated: [], backtracking: { chars: 0, ratio: 0, rules: [] } });
+});

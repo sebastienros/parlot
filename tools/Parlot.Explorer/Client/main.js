@@ -2,7 +2,7 @@ import { h, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import * as monaco from 'monaco-editor/editor/editor.api.js';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
-import { indexTrace, visibleFrames, ruleMatcher, callers, rowWindow, rowHeight, headerHeight } from './replay';
+import { indexTrace, visibleFrames, ruleMatcher, callers, rowWindow, rowHeight, headerHeight, traceInsights } from './replay';
 import './style.css';
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 const token = location.hash.slice(1) || sessionStorage.getItem('parlot-token');
@@ -24,6 +24,37 @@ function ObjectTree({ value, name = 'result', depth = 0 }) {
     h('div', { class: 'object-children' }, Object.entries(value).map(([key, child]) => h(ObjectTree, { key, name: key, value: child, depth: depth + 1 }))));
   return h('div', { class: 'object-leaf' }, h('b', {}, name + ': '), h('code', {}, JSON.stringify(value)));
 }
+const rules = 'https://github.com/sebastienros/parlot/blob/main/docs/grammar-rules.md#';
+const count = (value, word) => `${value.toLocaleString()} ${word}${value === 1 ? '' : 's'}`;
+function Suggestion({ id, category, title, children }) {
+  return h('article', { class: 'suggestion' }, h('div', { class: 'suggestion-title' },
+    h('a', { class: 'badge ' + category.toLowerCase(), href: rules + id.toLowerCase(), target: '_blank', rel: 'noreferrer', title: 'Read the rule' }, id), h('b', {}, title)), children);
+}
+function RuleList({ items, describe, onShow }) {
+  return h('ul', { class: 'suggestion-list' }, items.map(item => h('li', { key: item.rule },
+    button(item.rule, () => onShow(item.step), { title: `Jump to ${item.rule}` }), h('span', {}, describe(item)))));
+}
+// What the build found in the grammar, and the work this parse repeated
+function Suggestions({ parser, insights, stale, truncated, onShow }) {
+  const found = parser?.suggestions || [], repeated = insights?.repeated || [], backtracking = insights?.backtracking;
+  const total = found.length + repeated.length + (backtracking?.chars ? 1 : 0);
+  return h('section', { class: 'panel suggestions-panel' },
+    h('div', { class: 'panel-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, '04 / SUGGESTIONS'), h('h2', {}, 'Improve the grammar')), badge(String(total))),
+    h('div', { class: 'suggestions-body' },
+      h('h3', {}, 'Grammar'),
+      !parser ? h('p', { class: 'hint' }, 'Load an assembly to see what its build found in the grammar.')
+        : !found.length ? h('p', { class: 'hint' }, 'The build found nothing to suggest in this grammar.')
+        : found.map(item => h(Suggestion, { ...item }, h('p', {}, item.message))),
+      h('h3', {}, 'This input', stale && badge('Input changed', 'failure'), truncated && badge('Partial recording')),
+      !insights ? h('p', { class: 'hint' }, 'Run the parser to look for the work it repeats.')
+        : !total || (!repeated.length && !backtracking.chars) ? h('p', { class: 'hint' }, 'This parse gave nothing back and parsed no rule twice at the same position.')
+        : [backtracking.chars > 0 && h(Suggestion, { key: 'PARLOT202', id: 'PARLOT202', category: 'Performance', title: 'Input read again after backtracking' },
+            h('p', {}, `Rules gave back ${count(backtracking.chars, 'char')} they had read, ${backtracking.ratio.toFixed(2)}× the input.`),
+            h(RuleList, { items: backtracking.rules, onShow, describe: item => `${count(item.chars, 'char')} in ${count(item.count, 'reset')}` })),
+          repeated.length > 0 && h(Suggestion, { key: 'PARLOT201', id: 'PARLOT201', category: 'Performance', title: 'Rule parsed again at the same position' },
+            h('p', {}, 'These rules matched a text that an earlier call had already matched at the same position.'),
+            h(RuleList, { items: repeated, onShow, describe: item => `${count(item.count, 'more time')}, ${count(item.chars, 'char')}, first at offset ${item.offset}` }))]));
+}
 function App() {
   const [path, setPath] = useState(''), [loadedPath, setLoadedPath] = useState('');
   const [catalog, setCatalog] = useState([]), [parser, setParser] = useState('');
@@ -38,6 +69,7 @@ function App() {
   const table = useRef();
   const events = useMemo(() => capture?.events || [], [capture]), event = events[step];
   const trace = useMemo(() => indexTrace(events, capture?.truncated), [events, capture?.truncated]);
+  const insights = useMemo(() => capture && traceInsights(events, capture.input.length), [capture, events]);
   const frames = useMemo(() => trace.at(step), [trace, step]);
   const rows = useMemo(() => visibleFrames(frames, collapsed, filter, exclude), [frames, collapsed, filter, exclude]);
   const focus = frames.get(selected) || frames.get(event?.id);
@@ -147,7 +179,8 @@ function App() {
       h('section', { class: 'panel result-panel' }, h('div', { class: 'panel-heading' }, h('h2', {}, 'Result'), h('div', { class: 'tabs' }, ['Tree', 'JSON'].map(value => button(value, () => setResultMode(value), { class: resultMode === value ? 'active' : '' })))),
         capture ? h('div', { class: 'result-body' }, h('div', { class: 'result-status' }, badge(capture.error ? 'Exception' : capture.success ? 'Matched' : 'No match', capture.error ? 'exception' : capture.success ? 'success' : 'failure'), h('span', {}, `${capture.elapsedMs.toFixed(2)} ms · diagnostic capture`)),
           capture.error ? h('pre', { class: 'exception-text' }, capture.error) : resultMode === 'JSON' ? h('pre', {}, JSON.stringify(capture.value, null, 2)) : h(ObjectTree, { value: capture.value }))
-          : h('p', { class: 'empty' }, 'The returned object will appear here.'))),
+          : h('p', { class: 'empty' }, 'The returned object will appear here.')),
+        h(Suggestions, { parser: selectedParser, insights, stale, truncated: capture?.truncated, onShow: seek })),
       h('section', { class: 'panel trace-panel' }, h('div', { class: 'panel-heading' }, h('div', {}, h('span', { class: 'eyebrow' }, '03 / TRACE REPLAY'), h('h2', {}, 'Follow the parser')),
         h('div', { class: 'header-meta' }, stale && badge('Input changed', 'failure'), capture && button('Export JSON', exportCapture))),
         h('div', { class: 'toolbar' }, button('⏮', () => seek(0), { title: 'First event', disabled: !events.length }), button('←', () => seek(step - 1), { title: 'Previous event', disabled: !events.length || step === 0 }),

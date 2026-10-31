@@ -124,6 +124,9 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 
     public string Text { get; }
 
+    // How the text is compared, see GrammarAnalyzer
+    internal StringComparison ComparisonType => _comparisonType;
+
     internal StringComparison Comparison => _comparisonType;
 
     // Whether the canonical text is returned rather than the matched one

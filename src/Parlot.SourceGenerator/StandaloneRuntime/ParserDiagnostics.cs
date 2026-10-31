@@ -10,6 +10,10 @@ internal sealed class ParserDiagnosticsAttribute : Attribute
     public ParserDiagnosticsAttribute(int version) { Version = version; }
     public int Version { get; }
     public int CancellationTokenIndex { get; set; } = -1;
+
+    // What the grammar analysis found (docs/grammar-rules.md): for each finding, its rule id, category, title, help link and
+    // message, separated by '\n'
+    public string[]? Suggestions { get; set; }
 }
 
 internal static class ParserDiagnostics

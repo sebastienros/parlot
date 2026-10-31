@@ -145,6 +145,14 @@ and these skip the loop detection. A parser type without it is treated as invoki
 only plain data, so a new parser type must implement it, and must never report fewer parsers or return `false` when unsure.
 The analysis is redone when a `Deferred.Parser` is replaced (`LoopAnalysis.Invalidate`).
 
+`Parlot.Analysis.GrammarAnalyzer` checks a grammar against the rules of `docs/grammar-rules.md`, on top of `LoopAnalysis`.
+The source generator reports its findings as `Info` diagnostics `PARLOT1xx` and keeps them in diagnostic builds for
+Parser Explorer, whose client adds the trace rules `PARLOT2xx` (`replay.js`). It names Parlot's types to tell which
+parsers wrap, never fail or start with a fixed text (the sets at the top of `GrammarAnalysis`): add a new wrapper there.
+A new rule gets an id in `GrammarRule`, a section in `docs/grammar-rules.md`, positive and negative tests, and, for
+performance, a pattern/fix pair in `GrammarRulesBenchmarks`. Report only what Parlot's types prove, and don't add a rule
+for a rewrite that preserves what a grammar parses: do the rewrite instead.
+
 `ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
 scanned with a vectorized `IndexOf` rather than a hash set, only used by the `Deferred` parsers `LoopAnalysis` can't

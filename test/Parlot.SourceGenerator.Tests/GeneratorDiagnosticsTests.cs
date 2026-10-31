@@ -607,6 +607,84 @@ public class GeneratorDiagnosticsTests
         Assert.DoesNotContain(tree.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
+    private const string ShadowedGrammar = """
+        using Parlot.Fluent;
+        using Parlot.SourceGenerator;
+        public static partial class Grammar
+        {
+            [GenerateParser(nameof(TryParse))]
+            private static Parser<string> Build() => Parsers.Terms.Text("<").Or(Parsers.Terms.Text("<="));
+        }
+        """;
+
+    [Fact]
+    public void Grammar_Rules_Are_Reported_As_Suggestions_On_The_Factory()
+    {
+        var (result, compilation) = RunStandalone(Declaration, ShadowedGrammar);
+
+        AssertNoErrors(result, compilation);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id.StartsWith("PARLOT1", StringComparison.Ordinal));
+        Assert.Equal("PARLOT113", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Info, diagnostic.Severity);
+        Assert.Equal("Parlot.Correctness", diagnostic.Descriptor.Category);
+        Assert.Equal("https://github.com/sebastienros/parlot/blob/main/docs/grammar-rules.md#parlot113", diagnostic.Descriptor.HelpLinkUri);
+        Assert.Contains("alternative 2 (Terms.Text(\"<=\")) never matches", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("Grammar.parlot.cs", diagnostic.Location.GetLineSpan().Path);
+        Assert.Equal(5, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
+    }
+
+    [Fact]
+    public void Grammar_Without_Findings_Reports_No_Suggestion()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Parsers.Terms.Text("<=").Or(Parsers.Terms.Text("<"));
+            }
+            """;
+
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Id.StartsWith("PARLOT1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Grammar_Rule_Severity_Follows_The_Compilation_Options()
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12, preprocessorSymbols: ["NET", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+
+        foreach (var (option, expected) in new[] { (ReportDiagnostic.Warn, (DiagnosticSeverity?)DiagnosticSeverity.Warning), (ReportDiagnostic.Suppress, null) })
+        {
+            var compilation = CreateCompilation(Declaration, "RuleSeverity" + Guid.NewGuid().ToString("N"), parseOptions: parseOptions);
+            compilation = compilation.WithOptions(compilation.Options.WithSpecificDiagnosticOptions([new KeyValuePair<string, ReportDiagnostic>("PARLOT113", option)]));
+
+            var (result, _) = RunGenerator(compilation, DefaultOptions(), additionalTexts: [new StringAdditionalText("Grammar.parlot.cs", ShadowedGrammar)]);
+
+            Assert.Equal(expected, result.Diagnostics.SingleOrDefault(static diagnostic => diagnostic.Id == "PARLOT113")?.Severity);
+        }
+    }
+
+    [Fact]
+    public void Grammar_Findings_Are_Kept_For_The_Explorer_When_Diagnostics_Are_Requested()
+    {
+        var grammar = ShadowedGrammar.Replace("nameof(TryParse))", "nameof(TryParse), Diagnostics = true)", StringComparison.Ordinal);
+
+        var (result, compilation) = RunStandalone(Declaration, grammar);
+
+        AssertNoErrors(result, compilation);
+        var entryPoint = result.Results.SelectMany(static item => item.GeneratedSources)
+            .Single(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal)).SourceText.ToString();
+        Assert.Contains("Suggestions = new string[] { \"PARLOT113\\nCorrectness\\nChoice alternative shadowed by an earlier one\\nhttps://github.com/sebastienros/parlot/blob/main/docs/grammar-rules.md#parlot113\\nIn the choice Terms.Text(", entryPoint);
+
+        // Without diagnostics the generated parser carries nothing
+        (result, _) = RunStandalone(Declaration, ShadowedGrammar);
+        Assert.DoesNotContain(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.SourceText.ToString().Contains("Suggestions", StringComparison.Ordinal));
+    }
+
     private static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
         string declaration,
         string grammar,

@@ -89,3 +89,37 @@ export function rowWindow(length, scrollTop, height = 520) {
   const start = Math.min(Math.max(0, length - 1), Math.max(0, Math.floor(scrollTop / rowHeight) - 8));
   return { start, end: Math.min(length, start + Math.ceil(height / rowHeight) + 17) };
 }
+// Evidence of repeated work in a capture (docs/grammar-rules.md, PARLOT201 and PARLOT202), grouped by rule and sorted by
+// the chars read again. A call inside a call that is itself parsed again is part of that work, not counted twice.
+export function traceInsights(events, inputLength, limit = 5) {
+  const calls = new Map(), first = new Map(), resets = new Map();
+  let reread = 0;
+  events.forEach((event, index) => {
+    if (event.kind === 'enter') calls.set(event.id, { parent: event.parent, rule: event.rule, start: event.offset, enter: index });
+    else if (event.kind === 'reset') {
+      const call = calls.get(event.id), chars = event.offset - event.target;
+      if (!call || chars <= 0) return;
+      reread += chars;
+      const entry = resets.get(call.rule) || { rule: call.rule, chars: 0, count: 0, step: index };
+      entry.chars += chars; entry.count++; resets.set(call.rule, entry);
+    } else if (event.kind === 'success') {
+      const call = calls.get(event.id);
+      if (!call || event.offset <= call.start) return;
+      // The first success of a rule at a position is needed, the next ones read the same text again
+      const key = call.rule + '\u0000' + call.start;
+      call.chars = event.offset - call.start;
+      if (first.has(key)) call.repeated = true; else first.set(key, call);
+    }
+  });
+  const repeated = new Map();
+  for (const call of calls.values()) {
+    if (!call.repeated) continue;
+    let ancestor = calls.get(call.parent);
+    while (ancestor && !ancestor.repeated) ancestor = calls.get(ancestor.parent);
+    if (ancestor) continue;
+    const entry = repeated.get(call.rule) || { rule: call.rule, chars: 0, count: 0, offset: call.start, step: call.enter };
+    entry.chars += call.chars; entry.count++; repeated.set(call.rule, entry);
+  }
+  const top = values => [...values].sort((a, b) => b.chars - a.chars || a.step - b.step).slice(0, limit);
+  return { repeated: top(repeated.values()), backtracking: { chars: reread, ratio: reread / Math.max(1, inputLength), rules: top(resets.values()) } };
+}

@@ -612,6 +612,10 @@ Other factory diagnostics still apply. Common cases include:
 There is no runtime fallback for unsupported standalone code. Treat generator errors as compatibility issues
 in the grammar or callback and move runtime dependencies into supported application-owned helpers.
 
+The generator also analyzes each grammar it generates and reports the patterns of the
+[grammar rules](grammar-rules.md) (`PARLOT101`-`PARLOT113`) as `Info` diagnostics on the factory. They suggest
+changes and never fail a build unless the project asks for it, for instance with `WarningsAsErrors`.
+
 ## Performance characteristics
 
 Direct generated parsers avoid runtime graph construction, parser-instance caching, delegate invocation for
@@ -691,7 +695,7 @@ literals are tokens which refill the buffer, except inside a token, like the del
 ### Parser Explorer diagnostics
 
 Set `Diagnostics = true` on a factory's `GenerateParser` attribute to emit diagnostic entry/exit and
-cursor-reset events for the local [Parser Explorer](explorer.md). This mode is intended for debugging;
+cursor-reset events for the local [Parser Explorer](explorer.md), and the findings of the [grammar rules](grammar-rules.md). This mode is intended for debugging;
 ordinary generated parsers contain no tracing calls. It doesn't generate span code, so that each parser that is invoked
 and each move of the cursor is reported. The explorer supports private entry points,
 Monaco input editing, replay, rebuild detection, and result inspection without uploading assemblies.

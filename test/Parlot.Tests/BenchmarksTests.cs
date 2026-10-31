@@ -5,6 +5,7 @@ using Parlot.Benchmarks.PidginParsers;
 using Parlot.Tests.Calc;
 using Parlot.Tests.Json;
 using System;
+using System.Linq;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
 
@@ -14,6 +15,35 @@ public class BenchmarksTests
 {
     const decimal _expected1 = (decimal)3.5;
     const decimal _expected2 = (decimal)-64.5;
+
+    [Fact]
+    public void GrammarRulesBenchmarksCompareEachPatternWithItsFix()
+    {
+        var benchmark = new GrammarRulesBenchmarks();
+        benchmark.Setup();
+
+        // Each pattern is the one its rule reports, and the suggested grammar has no finding
+        foreach (var (pattern, fix, rule) in new[]
+        {
+            ("_mixedWhiteSpace", "_sameWhiteSpace", Analysis.GrammarRule.MixedWhiteSpaceChoice),
+            ("_unseekable", "_seekable", Analysis.GrammarRule.UnseekableAlternative),
+            ("_sharedLeadingParser", "_factored", Analysis.GrammarRule.SharedLeadingParser),
+            ("_loopDetection", "_loopDetectionElided", Analysis.GrammarRule.LoopDetection),
+        })
+        {
+            Assert.Equal([rule], Analyze(pattern).Select(static finding => finding.Rule));
+            Assert.Empty(Analyze(fix));
+        }
+
+        static System.Collections.Generic.IEnumerable<Analysis.GrammarFinding> Analyze(string field)
+        {
+            var parser = typeof(GrammarRulesBenchmarks).GetField(field, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+            var valueType = parser.GetType().BaseType!.GetGenericArguments()[0];
+
+            return (System.Collections.Generic.IEnumerable<Analysis.GrammarFinding>)typeof(Analysis.GrammarAnalyzer).GetMethod(nameof(Analysis.GrammarAnalyzer.Analyze))!
+                .MakeGenericMethod(valueType).Invoke(null, [parser])!;
+        }
+    }
 
     [Fact]
     public void DiscardedTextGrammar()
