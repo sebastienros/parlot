@@ -48,7 +48,7 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
 
         while (true)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             context.MovePin(pin);
             var operatorResult = new ParseResult<TInput>();
             Func<T, T, T>? matchedFactory = null;
@@ -76,7 +76,7 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
             }
 
             // Neither the operator nor the operand read anything, so they would match forever
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            if (context.Scanner.Cursor.Offset == operatorPosition)
             {
                 break;
             }
@@ -164,7 +164,7 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourcea
 
         while (true)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             context.MovePin(pin);
             var operatorResult = new ParseResult<TInput>();
             Func<ParseContext, T, T, T>? matchedFactory = null;
@@ -191,7 +191,7 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourcea
             }
 
             // Neither the operator nor the operand read anything, so they would match forever
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            if (context.Scanner.Cursor.Offset == operatorPosition)
             {
                 break;
             }
@@ -323,7 +323,7 @@ internal static class RightAssociativeSource
         var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
-        result.Body.Add($"        var {positionName} = {cursorName}.Position;");
+        result.Body.Add($"        var {positionName} = {cursorName}.Offset;");
         context.MovePin(result, pin, "        ");
         result.Body.Add($"        var {matchedName} = -1;");
 
@@ -339,7 +339,7 @@ internal static class RightAssociativeSource
         result.Body.Add($"            {cursorName}.ResetPosition({positionName});");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        if ({cursorName}.Offset == {positionName}.Offset) break;");
+        result.Body.Add($"        if ({cursorName}.Offset == {positionName}) break;");
         result.Body.Add($"        {operationsName} ??= new {listTypeName}();");
         result.Body.Add($"        {operationsName}.Add(({matchedName}, {rightName}));");
         result.Body.Add("    }");

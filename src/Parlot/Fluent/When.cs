@@ -50,7 +50,7 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         var valid = _parser.Parse(context, ref result) && _action(context, result.Value);
 
@@ -77,7 +77,7 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper instead of inlining
         var helperName = context.WithDiscardResult(false, () => context.Helpers

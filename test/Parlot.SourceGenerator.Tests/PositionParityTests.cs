@@ -38,6 +38,9 @@ public class PositionParityTests
             Terms.Keyword("break"),
             Terms.Keyword("continue")).Then(static (c, _) => Position(c)), PositionGrammars.TryParseKeywordChoice),
         ["pattern"] = (Literals.Pattern(static c => c != ' ').Then(static (c, _) => Position(c)), PositionGrammars.TryParsePattern),
+        ["backtrack"] = (OneOf(
+            Terms.Identifier().SkipAnd(Terms.Char('=').Then(static (c, _) => Position(c))).AndSkip(Terms.Char('(')),
+            Terms.Identifier().Then(static (c, _) => Position(c))), PositionGrammars.TryParseBacktrack),
     };
 
     private static (int, int, int) Position(ParseContext context)
@@ -90,6 +93,12 @@ public class PositionParityTests
         { "pattern", "ab\r\ncd ", 6, 2, 3 },
         { "pattern", "a\n\nb c", 4, 3, 2 },
         { "pattern", " a", -1, 0, 0 },
+        { "backtrack", "abc", 3, 1, 4 },
+        { "backtrack", "abc\n =\n (", 6, 2, 3 },
+        { "backtrack", "abc\n =\n x", 3, 1, 4 },
+        { "backtrack", "a\r\n=\r\n(", 4, 2, 2 },
+        { "backtrack", "\n\n abc \n = x", 6, 3, 5 },
+        { "backtrack", "1", -1, 0, 0 },
     };
 
     [Theory]
@@ -121,4 +130,5 @@ public static partial class PositionGrammars
     public static partial bool TryParseTextChoice(string text, out (int Offset, int Line, int Column) value);
     public static partial bool TryParseKeywordChoice(string text, out (int Offset, int Line, int Column) value);
     public static partial bool TryParsePattern(string text, out (int Offset, int Line, int Column) value);
+    public static partial bool TryParseBacktrack(string text, out (int Offset, int Line, int Column) value);
 }

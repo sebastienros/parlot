@@ -20,7 +20,7 @@ internal static class TextChoiceSource
         var body = result.Body;
         if (skipWhitespace)
         {
-            body.Add($"var start = {cursor}.Position;");
+            body.Add($"var start = {cursor}.Offset;");
             body.Add($"{context.ParseContextName}.SkipWhiteSpace();");
         }
 

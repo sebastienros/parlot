@@ -182,7 +182,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(string));
 
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper for the text literal
         var helperName = context.Helpers

@@ -45,7 +45,7 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 
         var cursor = context.Scanner.Cursor;
 
-        var start = cursor.Position;
+        var start = cursor.Offset;
 
         var parsedA = new ParseResult<A>();
 
@@ -92,7 +92,7 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)

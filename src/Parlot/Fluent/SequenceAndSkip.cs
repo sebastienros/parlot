@@ -36,7 +36,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
 
         var parseResult1 = new ParseResult<T1>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser1.Parse(context, ref parseResult1))
         {
@@ -70,7 +70,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -142,7 +142,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
 
         var tupleResult = new ParseResult<ValueTuple<T1, T2>>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser.Parse(context, ref tupleResult))
         {
@@ -182,7 +182,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>));
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -252,7 +252,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
 
         var tupleResult = new ParseResult<ValueTuple<T1, T2, T3>>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser.Parse(context, ref tupleResult))
         {
@@ -293,7 +293,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3>));
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -362,7 +362,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
 
         var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4>>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser.Parse(context, ref tupleResult))
         {
@@ -404,7 +404,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4>));
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -474,7 +474,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
 
         var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5>>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser.Parse(context, ref tupleResult))
         {
@@ -518,7 +518,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5>));
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -587,7 +587,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
         var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser.Parse(context, ref tupleResult))
         {
@@ -632,7 +632,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>));
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)
@@ -702,7 +702,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
 
         var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (_parser.Parse(context, ref tupleResult))
         {
@@ -748,7 +748,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
         var startName = $"start{context.NextNumber()}";
         var tupleTypeName = SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>));
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
         result.Body.Add($"{result.SuccessVariable} = false;");
 
         string Helper(ISourceable p, Type valueType, string suffix)

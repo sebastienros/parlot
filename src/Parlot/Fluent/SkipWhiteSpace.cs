@@ -40,7 +40,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
             return Parser.Parse(context, ref result);
         }
 
-        var start = cursor.Position;
+        var start = cursor.Offset;
 
         // Use the scanner's logic to ignore whitespaces since it knows about multi-line grammars
         context.SkipWhiteSpace();
@@ -86,7 +86,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
 
         result.Body.Add($"if (!{shortcutName})");
         result.Body.Add("{");
-        result.Body.Add($"    var start = {cursorName}.Position;");
+        result.Body.Add($"    var start = {cursorName}.Offset;");
         result.Body.Add($"    {ctx}.SkipWhiteSpace();");
         result.Body.Add($"    {contentStartOffsetName} = {cursorName}.Offset;");
         if (context.DiscardResult)

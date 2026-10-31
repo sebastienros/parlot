@@ -60,7 +60,7 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable
         // If index == -1 the whole input is a match
         var size = index == -1 ? span.Length : index + 1;
 
-        var start = context.Scanner.Cursor.Position.Offset;
+        var start = context.Scanner.Cursor.Offset;
         context.Scanner.Cursor.AdvanceNoNewLines(size);
         result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 

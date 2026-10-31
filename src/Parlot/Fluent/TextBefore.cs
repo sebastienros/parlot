@@ -50,7 +50,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         var parsed = new ParseResult<T>();
 
@@ -65,7 +65,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 #endif
             }
 
-            var previous = context.Scanner.Cursor.Position;
+            var previous = context.Scanner.Cursor.Offset;
 
             if (context.Scanner.Cursor.Eof)
             {
@@ -85,7 +85,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
                     return false;
                 }
 
-                result.Set(start.Offset, previous.Offset, context.Scanner.Cursor.CreateSpan(start.Offset, length));
+                result.Set(start, previous, context.Scanner.Cursor.CreateSpan(start, length));
 
                 context.ExitParser(this);
                 return true;
@@ -112,7 +112,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
                 }
 
                 // The result ends where the cursor is: after the delimiter when it is consumed
-                result.Set(start.Offset, context.Scanner.Cursor.Offset, context.Scanner.Cursor.CreateSpan(start.Offset, length));
+                result.Set(start, context.Scanner.Cursor.Offset, context.Scanner.Cursor.CreateSpan(start, length));
 
                 context.ExitParser(this);
                 return true;
@@ -201,7 +201,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         var previousName = $"previous{context.NextNumber()}";
         var lengthName = $"length{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         var delimiterValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
@@ -218,7 +218,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
             GenerateJumpToNextExpectedChar(context, result, _expectedChars!);
         }
 
-        result.Body.Add($"    var {previousName} = {cursorName}.Position;");
+        result.Body.Add($"    var {previousName} = {cursorName}.Offset;");
         result.Body.Add($"    if ({cursorName}.Eof)");
         result.Body.Add("    {");
 
@@ -229,7 +229,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         }
         else
         {
-            result.Body.Add($"        var {lengthName} = {previousName}.Offset - {startName}.Offset;");
+            result.Body.Add($"        var {lengthName} = {previousName} - {startName};");
             if (!_canBeEmpty)
             {
                 result.Body.Add($"        if ({lengthName} == 0)");
@@ -240,7 +240,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
             }
             if (!context.DiscardResult)
             {
-                result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, {lengthName});");
+                result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {lengthName});");
             }
             result.Body.Add($"        {result.SuccessVariable} = true;");
         }
@@ -252,7 +252,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
         // Try to parse delimiter
         result.Body.Add($"    if ({delimiterHelperName}({context.ParseContextName}, out _))");
         result.Body.Add("    {");
-        result.Body.Add($"        var {lengthName} = {previousName}.Offset - {startName}.Offset;");
+        result.Body.Add($"        var {lengthName} = {previousName} - {startName};");
 
         if (!_consumeDelimiter)
         {
@@ -274,7 +274,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}.Offset, {lengthName});");
+            result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {lengthName});");
         }
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("        break;");

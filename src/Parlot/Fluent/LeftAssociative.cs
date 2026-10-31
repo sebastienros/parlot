@@ -57,7 +57,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         // Parse zero or more (operator operand) pairs
         while (true)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             context.MovePin(pin);
             var operatorResult = new ParseResult<int>();
 
@@ -80,7 +80,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
             }
 
             // Neither the operator nor the operand read anything, so they would match forever
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            if (context.Scanner.Cursor.Offset == operatorPosition)
             {
                 break;
             }
@@ -157,7 +157,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
-        result.Body.Add($"        var {operatorPositionName} = {cursorName}.Position;");
+        result.Body.Add($"        var {operatorPositionName} = {cursorName}.Offset;");
         context.MovePin(result, pin, "        ");
         result.Body.Add($"        if (!{operatorHelperName}({ctx}, out var {operatorName})) break;");
         result.Body.Add($"        if (!{baseHelperName}({ctx}, out var {rightName}))");
@@ -165,7 +165,7 @@ public sealed class LeftAssociative<T, TInput> : Parser<T>, ISourceable
         result.Body.Add($"            {cursorName}.ResetPosition({operatorPositionName});");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        if ({cursorName}.Offset == {operatorPositionName}.Offset) break;");
+        result.Body.Add($"        if ({cursorName}.Offset == {operatorPositionName}) break;");
         result.Body.Add($"        switch ({operatorName})");
         result.Body.Add("        {");
 
@@ -234,7 +234,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
 
         while (true)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             context.MovePin(pin);
             var operatorResult = new ParseResult<int>();
 
@@ -254,7 +254,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
             }
 
             // Neither the operator nor the operand read anything, so they would match forever
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            if (context.Scanner.Cursor.Offset == operatorPosition)
             {
                 break;
             }
@@ -326,7 +326,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
         var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
-        result.Body.Add($"        var {operatorPositionName} = {cursorName}.Position;");
+        result.Body.Add($"        var {operatorPositionName} = {cursorName}.Offset;");
         context.MovePin(result, pin, "        ");
         result.Body.Add($"        if (!{operatorHelperName}({ctx}, out var {operatorName})) break;");
         result.Body.Add($"        if (!{baseHelperName}({ctx}, out var {rightName}))");
@@ -334,7 +334,7 @@ public sealed class LeftAssociativeWithContext<T, TInput> : Parser<T>, ISourceab
         result.Body.Add($"            {cursorName}.ResetPosition({operatorPositionName});");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        if ({cursorName}.Offset == {operatorPositionName}.Offset) break;");
+        result.Body.Add($"        if ({cursorName}.Offset == {operatorPositionName}) break;");
         result.Body.Add($"        switch ({operatorName})");
         result.Body.Add("        {");
 

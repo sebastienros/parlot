@@ -80,8 +80,8 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
 
         context.EnterParser(this);
 
-        var reset = context.Scanner.Cursor.Position;
-        var start = reset.Offset;
+        var reset = context.Scanner.Cursor.Offset;
+        var start = reset;
 
         if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
         {
@@ -132,7 +132,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
             valueVariable: "value",
             valueTypeName: valueTypeName);
 
-        result.Body.Add($"var {resetName} = {cursorName}.Position;");
+        result.Body.Add($"var {resetName} = {cursorName}.Offset;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
         if (!context.DiscardResult)
         {
