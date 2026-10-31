@@ -145,4 +145,34 @@ public static partial class CollectionGrammars
         Separated(Literals.Char(','), Literals.Char('x'), min: 2, max: 2,
             removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true)
             .SkipAnd(Literals.Text(",,x")).Then('x').Eof();
+
+    // Nested ZeroOrMany, Separated and OneOrMany lists of the same element type share the scratch stack
+    [GenerateParser(nameof(TryParseTree))]
+    [IncludeUsings("Parlot.SourceGenerator.Tests")]
+    private static Parser<TreeNode> BuildTree()
+    {
+        var node = Deferred<TreeNode>();
+        var name = Terms.Identifier().Then(static span => span.ToString());
+
+        var zeroOrMany = name.AndSkip(Terms.Char('(')).And(ZeroOrMany(node)).AndSkip(Terms.Char(')'))
+            .Then(static x => new TreeNode(x.Item1, x.Item2));
+        var separated = name.AndSkip(Terms.Char('[')).And(Separated(Terms.Char(','), node, min: 0)).AndSkip(Terms.Char(']'))
+            .Then(static x => new TreeNode(x.Item1, x.Item2));
+        var oneOrMany = name.AndSkip(Terms.Char('{')).And(OneOrMany(node)).AndSkip(Terms.Char('}'))
+            .Then(static x => new TreeNode(x.Item1, x.Item2));
+
+        node.Parser = OneOf(zeroOrMany, separated, oneOrMany, name.Then(static name => TreeNode.Leaf(name)));
+
+        return node;
+    }
+
+    [GenerateParser(nameof(TryParseRightFold))]
+    [IncludeUsings("Parlot.SourceGenerator.Tests")]
+    private static Parser<long> BuildRightFold() =>
+        Terms.Integer().RightAssociative((Terms.Char('^'), static (a, b) => TreeNode.Fold(a, b))).Eof();
+
+    [GenerateParser(nameof(TryParseRightFoldWithOperator))]
+    [IncludeUsings("Parlot.SourceGenerator.Tests")]
+    private static Parser<long> BuildRightFoldWithOperator() =>
+        Terms.Integer().RightAssociative(new[] { Terms.Char('^') }, static (a, b, _) => TreeNode.Fold(a, b)).Eof();
 }

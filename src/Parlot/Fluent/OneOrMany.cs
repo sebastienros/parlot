@@ -60,32 +60,37 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
 
         var start = parsed.Start;
         var end = parsed.End;
-        var results = new HybridList<T>
-        {
-            parsed.Value
-        };
+        var results = new ListBuilder<T>();
+        results.Add(parsed.Value);
 
         // The start of the current element is read again when it fails
         var pin = context.Pin();
 
-        while (_max == 0 || results.Count < _max)
+        try
         {
-            previousOffset = context.Scanner.Cursor.Offset;
-            if (!_parser.Parse(context, ref parsed)
-                || context.Scanner.Cursor.Offset == previousOffset)
+            while (_max == 0 || results.Count < _max)
             {
-                break;
+                previousOffset = context.Scanner.Cursor.Offset;
+                if (!_parser.Parse(context, ref parsed)
+                    || context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
+                }
+
+                context.MovePin(pin);
+
+                end = parsed.End;
+                results.Add(parsed.Value);
             }
 
-            context.MovePin(pin);
+            context.Unpin(pin);
 
-            end = parsed.End;
-            results.Add(parsed.Value);
+            result.Set(start, end, results.ToArray());
         }
-
-        context.Unpin(pin);
-
-        result.Set(start, end, results.AsReadOnlyList());
+        finally
+        {
+            results.Release();
+        }
 
         context.ExitParser(this);
         return true;
@@ -107,7 +112,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
+            result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
         }
         result.Body.Add($"{result.SuccessVariable} = false;");
 
@@ -124,6 +129,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         }
         // Each element is read again from its start when it fails
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
@@ -134,11 +140,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         context.MovePin(result, pin, "    ");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    if ({listName} == null)");
-            result.Body.Add("    {");
-            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
-            result.Body.Add("    }");
-            result.Body.Add($"    {listName}!.Add({itemValueName});");
+            result.Body.Add($"    {listName}.Add({itemValueName});");
         }
         result.Body.Add($"    {result.SuccessVariable} = true;");
         if (_max > 0)
@@ -149,10 +151,11 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         context.Unpin(result, pin);
         if (!context.DiscardResult)
         {
-            result.Body.Add($"if ({listName} != null)");
+            result.Body.Add($"if ({result.SuccessVariable})");
             result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {listName}.AsReadOnlyList();");
+            result.Body.Add($"    {result.ValueVariable} = {listName}.ToArray();");
             result.Body.Add("}");
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, listName);
         }
 
         return result;

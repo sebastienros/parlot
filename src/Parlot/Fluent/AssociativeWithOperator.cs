@@ -62,9 +62,13 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
             return false;
         }
 
+        if (_rightAssociative)
+        {
+            return ParseRightAssociative(context, ref result);
+        }
+
         var value = result.Value;
         var end = result.End;
-        HybridList<(TOperator Operator, T Operand)>? operations = null;
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin();
@@ -91,30 +95,74 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
                 break;
             }
 
-            if (_rightAssociative)
-            {
-                operations ??= [];
-                operations.Add((operatorResult.Value, rightResult.Value));
-            }
-            else
-            {
-                value = Apply(context, value, rightResult.Value, operatorResult.Value);
-            }
-
+            value = Apply(context, value, rightResult.Value, operatorResult.Value);
             end = rightResult.End;
         }
 
         context.Unpin(pin);
 
-        if (operations is { Count: > 0 })
+        result.Set(result.Start, end, value);
+        context.ExitParser(this);
+        return true;
+    }
+
+    private bool ParseRightAssociative(ParseContext context, ref ParseResult<T> result)
+    {
+        var value = result.Value;
+        var end = result.End;
+
+        // a (op1) b (op2) c is applied as op1(a, op2(b, c)), so the pairs are kept until the end
+        var operations = new ListBuilder<(TOperator Operator, T Operand)>();
+
+        // The operator is read again by the caller when it isn't followed by an operand
+        var pin = context.Pin();
+
+        try
         {
-            var accumulated = operations[operations.Count - 1].Operand;
-            for (var i = operations.Count - 1; i > 0; i--)
+            while (true)
             {
-                accumulated = Apply(context, operations[i - 1].Operand, accumulated, operations[i].Operator);
+                var operatorPosition = context.Scanner.Cursor.Offset;
+                context.MovePin(pin);
+                var operatorResult = new ParseResult<TOperator>();
+                if (!_operators.Parse(context, ref operatorResult))
+                {
+                    break;
+                }
+
+                var rightResult = new ParseResult<T>();
+                if (!_parser.Parse(context, ref rightResult))
+                {
+                    context.Scanner.Cursor.ResetPosition(operatorPosition);
+                    break;
+                }
+
+                if (context.Scanner.Cursor.Offset == operatorPosition)
+                {
+                    break;
+                }
+
+                operations.Add((operatorResult.Value, rightResult.Value));
+                end = rightResult.End;
             }
 
-            value = Apply(context, value, accumulated, operations[0].Operator);
+            context.Unpin(pin);
+
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            var count = operations.Count;
+            if (count > 0)
+            {
+                var accumulated = operations[count - 1].Operand;
+                for (var i = count - 1; i > 0; i--)
+                {
+                    accumulated = Apply(context, operations[i - 1].Operand, accumulated, operations[i].Operator);
+                }
+
+                value = Apply(context, value, accumulated, operations[0].Operator);
+            }
+        }
+        finally
+        {
+            operations.Release();
         }
 
         result.Set(result.Start, end, value);
@@ -170,11 +218,12 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         result.Body.Add("{");
         if (_rightAssociative)
         {
-            result.Body.Add($"    global::Parlot.Fluent.HybridList<({operatorType}, {valueType})>? {operations} = null;");
+            result.Body.Add($"    {ListBuilderSource.Declare(operations, $"({operatorType}, {valueType})")}");
         }
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        var {position} = {cursor}.Offset;");
@@ -189,7 +238,6 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
 
         if (_rightAssociative)
         {
-            result.Body.Add($"        {operations} ??= new global::Parlot.Fluent.HybridList<({operatorType}, {valueType})>();");
             result.Body.Add($"        {operations}.Add(({operationValue}, {rightValue}));");
         }
         else
@@ -204,7 +252,8 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         {
             var accumulated = $"accumulated{id}";
             var index = $"index{id}";
-            result.Body.Add($"    if ({operations} is {{ Count: > 0 }})");
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            result.Body.Add($"    if ({operations}.Count > 0)");
             result.Body.Add("    {");
             result.Body.Add($"        var {accumulated} = {operations}[{operations}.Count - 1].Item2;");
             result.Body.Add($"        for (var {index} = {operations}.Count - 1; {index} > 0; {index}--)");
@@ -213,6 +262,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
             result.Body.Add("        }");
             result.Body.Add($"        {result.ValueVariable} = {Call(result.ValueVariable, accumulated, $"{operations}[0].Item1")};");
             result.Body.Add("    }");
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, operations, "    ");
         }
 
         result.Body.Add($"    {result.SuccessVariable} = true;");

@@ -32,44 +32,47 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
     {
         context.EnterParser(this);
 
-        HybridList<T>? results = null;
-
         // An empty result is at the current position
         var start = context.Scanner.Cursor.Offset;
         var end = start;
 
-        var first = true;
         var parsed = new ParseResult<T>();
+        var results = new ListBuilder<T>();
 
         // The start of the current element is read again when it fails
         var pin = context.Pin();
 
-        while (_max == 0 || (results?.Count ?? 0) < _max)
+        try
         {
-            var previousOffset = context.Scanner.Cursor.Offset;
-            if (!_parser.Parse(context, ref parsed)
-                || context.Scanner.Cursor.Offset == previousOffset)
+            while (_max == 0 || results.Count < _max)
             {
-                break;
+                var previousOffset = context.Scanner.Cursor.Offset;
+                if (!_parser.Parse(context, ref parsed)
+                    || context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
+                }
+
+                context.MovePin(pin);
+
+                if (results.Count == 0)
+                {
+                    start = parsed.Start;
+                }
+
+                end = parsed.End;
+
+                results.Add(parsed.Value);
             }
 
-            context.MovePin(pin);
+            context.Unpin(pin);
 
-            if (first)
-            {
-                results = [];
-                first = false;
-                start = parsed.Start;
-            }
-
-            end = parsed.End;
-
-            results!.Add(parsed.Value);
+            result.Set(start, end, results.ToArray());
         }
-
-        context.Unpin(pin);
-
-        result.Set(start, end, results?.AsReadOnlyList() ?? (IReadOnlyList<T>)[]);
+        finally
+        {
+            results.Release();
+        }
 
         context.ExitParser(this);
         return true;
@@ -91,12 +94,10 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         var ctx = context.ParseContextName;
 
         var listName = $"list{context.NextNumber()}";
-        var firstName = $"first{context.NextNumber()}";
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
-            result.Body.Add($"bool {firstName} = true;");
+            result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
         }
 
         var helperName = context.Helpers
@@ -112,6 +113,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         }
         // Each element is read again from its start when it fails
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {context.CursorName}.Offset;");
@@ -122,12 +124,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         context.MovePin(result, pin, "    ");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    if ({firstName})");
-            result.Body.Add("    {");
-            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
-            result.Body.Add($"        {firstName} = false;");
-            result.Body.Add("    }");
-            result.Body.Add($"    {listName}!.Add({itemValueName});");
+            result.Body.Add($"    {listName}.Add({itemValueName});");
         }
         if (_max > 0)
         {
@@ -137,7 +134,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         context.Unpin(result, pin);
         if (!context.DiscardResult)
         {
-            result.Body.Add($"{result.ValueVariable} = {listName}?.AsReadOnlyList() ?? global::System.Array.Empty<{elementTypeName}>();");
+            result.Body.Add($"{result.ValueVariable} = {listName}.ToArray();");
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, listName);
         }
 
         return result;
