@@ -45,7 +45,7 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
 
             if (_parser2.Parse(context, ref parseResult2))
             {
-                result.Set(parseResult1.Start, parseResult2.End, new ValueTuple<T1, T2>(parseResult1.Value, parseResult2.Value));
+                result.Set(parseResult1.Start, parseResult2.End, (parseResult1.Value, parseResult2.Value));
 
                 context.ExitParser(this);
                 return true;
@@ -187,11 +187,11 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
 
             if (_lastParser.Parse(context, ref lastResult))
             {
-                var tuple = new ValueTuple<T1, T2, T3>(
+                var tuple = (
                     tupleResult.Value.Item1,
                     tupleResult.Value.Item2,
                     lastResult.Value
-                    );
+                );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
 
@@ -325,12 +325,12 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
 
             if (_lastParser.Parse(context, ref lastResult))
             {
-                var tuple = new ValueTuple<T1, T2, T3, T4>(
+                var tuple = (
                     tupleResult.Value.Item1,
                     tupleResult.Value.Item2,
                     tupleResult.Value.Item3,
                     lastResult.Value
-                    );
+                );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
 
@@ -462,13 +462,13 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
 
             if (_lastParser.Parse(context, ref lastResult))
             {
-                var tuple = new ValueTuple<T1, T2, T3, T4, T5>(
+                var tuple = (
                     tupleResult.Value.Item1,
                     tupleResult.Value.Item2,
                     tupleResult.Value.Item3,
                     tupleResult.Value.Item4,
                     lastResult.Value
-                    );
+                );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
 
@@ -600,21 +600,20 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
 
             if (_lastParser.Parse(context, ref lastResult))
             {
-                var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6>(
+                var tuple = (
                     tupleResult.Value.Item1,
                     tupleResult.Value.Item2,
                     tupleResult.Value.Item3,
                     tupleResult.Value.Item4,
                     tupleResult.Value.Item5,
                     lastResult.Value
-                    );
+                );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
             }
-
         }
 
         context.Scanner.Cursor.ResetPosition(start);
@@ -740,7 +739,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
 
             if (_lastParser.Parse(context, ref lastResult))
             {
-                var tuple = new ValueTuple<T1, T2, T3, T4, T5, T6, T7>(
+                var tuple = (
                     tupleResult.Value.Item1,
                     tupleResult.Value.Item2,
                     tupleResult.Value.Item3,
@@ -748,14 +747,13 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
                     tupleResult.Value.Item5,
                     tupleResult.Value.Item6,
                     lastResult.Value
-                    );
+                );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
             }
-
         }
 
         context.Scanner.Cursor.ResetPosition(start);
