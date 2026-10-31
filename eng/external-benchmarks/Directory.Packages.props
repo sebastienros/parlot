@@ -1,6 +1,0 @@
-<Project>
-  <!-- Stops the lookup of Parlot's central package versions: the harness pins its own. -->
-  <PropertyGroup>
-    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-  </PropertyGroup>
-</Project>

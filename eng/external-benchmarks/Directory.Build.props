@@ -1,6 +1,0 @@
-<Project>
-  <!-- Keeps the harness out of Parlot's repo-wide build settings (warnings as errors, analysis level, versioning). -->
-  <PropertyGroup>
-    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-  </PropertyGroup>
-</Project>
