@@ -38,8 +38,20 @@ public class BenchmarksTests
         var benchmark = new KeywordParserBenchmarks { Vocabulary = vocabulary, Scenario = scenario };
         benchmark.Setup();
         var expected = scenario switch { "Hit" => 64, "Mixed" => 16, _ => 0 };
+        Assert.Equal(expected, benchmark.RuntimeOneOf());
+        Assert.Equal(expected, benchmark.RuntimeWrappedOneOf());
         Assert.Equal(expected, benchmark.GeneratedWrappedPrefixDispatch());
         Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
+    }
+
+    [Fact]
+    public void OperatorChoiceGrammar()
+    {
+        var benchmark = new OperatorChoiceBenchmarks();
+        benchmark.Setup();
+
+        // The sum of the indexes of the operators the inputs start with
+        Assert.Equal(566, benchmark.RuntimeOneOf());
     }
 
     [Theory]

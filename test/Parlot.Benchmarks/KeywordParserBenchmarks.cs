@@ -19,6 +19,7 @@ public partial class KeywordParserBenchmarks
     private TryParse _wrappedPrefixDispatch;
     private TryParse _wrappedFirstCharacterLookup;
     private Parser<string> _parser;
+    private Parser<string> _wrappedParser;
     private KeywordLookupBenchmarks.CharMatcher _tree;
     private FrozenDictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> _frozen;
     private string[] _inputs;
@@ -34,6 +35,7 @@ public partial class KeywordParserBenchmarks
     {
         var words = KeywordLookupBenchmarks.Words(Vocabulary);
         _parser = OneOf(words.Select(static word => Literals.Keyword(word)).ToArray());
+        _wrappedParser = OneOf(words.Select(static word => Literals.Keyword(word).Then(word)).ToArray());
         _generated = Vocabulary switch
         {
             "Small" => TryParseSmall,
@@ -86,6 +88,7 @@ public partial class KeywordParserBenchmarks
         {
             var success = _parser.TryParse(input, out var expected);
             if (Scenario == "Miss" && success || Scenario == "Hit" && !success
+                || _wrappedParser.TryParse(input, out var runtimeWrapped) != success || success && runtimeWrapped != expected
                 || _generated(input, out var actual) != success || success && actual != expected
                 || _firstCharacterLookup(input, out var baseline) != success || success && baseline != expected
                 || _wrappedPrefixDispatch(input, out var wrapped) != success || success && wrapped != expected
@@ -104,6 +107,18 @@ public partial class KeywordParserBenchmarks
         foreach (var input in _inputs)
         {
             count += _parser.TryParse(input, out _) ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    [Benchmark(OperationsPerInvoke = 64)]
+    public int RuntimeWrappedOneOf()
+    {
+        var count = 0;
+        foreach (var input in _inputs)
+        {
+            count += _wrappedParser.TryParse(input, out _) ? 1 : 0;
         }
 
         return count;
