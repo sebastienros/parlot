@@ -295,7 +295,6 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                         identifier.GetLocation()));
                 }
             }
-
         }
 
         return captures;

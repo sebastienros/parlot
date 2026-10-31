@@ -112,7 +112,6 @@ public class KeywordLookupTests
                 Assert.Equal(expected, byteChain(Encoding.ASCII.GetBytes(input)));
                 Assert.Equal(expected, bigEndian.ByteTree(Encoding.ASCII.GetBytes(input)));
             }
-
         }
 
         int Reference(string input)
