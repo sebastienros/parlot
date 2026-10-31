@@ -14,7 +14,11 @@ public class ParseContext
     /// When <c>true</c>, loop detection is disabled. This may be needed when the ParseContext itself is mutated
     /// during loops and can change the end result of parsing at the same location.
     /// </remarks>
-    public bool DisableLoopDetection { get; }
+    public bool DisableLoopDetection
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & DisableLoopDetectionFlag) != 0;
+    }
 
     /// <summary>
     /// The maximum number of nested recursive parser invocations, or <c>0</c> for no limit.
@@ -28,7 +32,11 @@ public class ParseContext
     /// When <c>false</c>, new lines will be skipped like any other white space.
     /// Otherwise new lines need to be read explicitly by a rule.
     /// </remarks>
-    public bool UseNewLines { get; }
+    public bool UseNewLines
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & UseNewLinesFlag) != 0;
+    }
 
     /// <summary>
     /// The scanner used for the parsing session.
@@ -53,7 +61,8 @@ public class ParseContext
     /// </summary>
     public readonly CancellationToken CancellationToken;
 
-    private int _cancellationCheckCount;
+    // A byte is enough since only its low bits are tested, and it wraps around at a multiple of the check interval
+    private byte _cancellationCheckCount;
     private int _recursionDepth;
 
     // TODO: For backward compatibility only, remove in future versions
@@ -83,11 +92,11 @@ public class ParseContext
         ThrowHelper.ThrowIfNegative(maxRecursionDepth, nameof(maxRecursionDepth));
 
         Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
-        UseNewLines = useNewLines;
         _skipMask = useNewLines ? (byte)CharacterMask.WhiteSpace : (byte)CharacterMask.WhiteSpaceOrNewLine;
         CancellationToken = cancellationToken;
-        _flags = cancellationToken.CanBeCanceled ? CancellableFlag : (byte)0;
-        DisableLoopDetection = disableLoopDetection;
+        _flags = (byte)((cancellationToken.CanBeCanceled ? CancellableFlag : 0)
+            | (useNewLines ? UseNewLinesFlag : 0)
+            | (disableLoopDetection ? DisableLoopDetectionFlag : 0));
         MaxRecursionDepth = maxRecursionDepth;
     }
 
@@ -138,7 +147,8 @@ public class ParseContext
     private ColdState GetColdState() => _coldState ??= new ColdState();
 
     // What a parse does besides reading a string, so that EnterParser, ExitParser and the compacting checks of a
-    // string parse each test a single byte.
+    // string parse each test a single byte. The options of the constructor are stored here too, the context is
+    // allocated for each parse.
     private byte _flags;
     private const byte CancellableFlag = 1;
     private const byte EnterHookFlag = 2;
@@ -150,6 +160,10 @@ public class ParseContext
     private const byte CompactingFlag = 8;
     private const byte InTokenFlag = 16;
     private const byte CompactingMask = CompactingFlag | InTokenFlag;
+
+    // Constructor options, never changed afterwards
+    private const byte UseNewLinesFlag = 32;
+    private const byte DisableLoopDetectionFlag = 64;
 
     private void SetFlag(byte flag, bool value)
     {
@@ -228,8 +242,24 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is not null || Character.HasMask(ch, _skipMask);
 
+    // The white space skipped from _cacheOffset ends at the cached position. The position is stored as three ints
+    // rather than a TextPosition since the runtime aligns struct fields to 8 bytes after the other fields, which
+    // would grow the context.
     private int _cacheOffset = -1;
-    private TextPosition _cachePosition;
+    private int _cachedOffset;
+    private int _cachedLine;
+    private int _cachedColumn;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void CacheWhiteSpaceEnd(int offset, Cursor cursor)
+    {
+        var position = cursor.Position;
+
+        _cacheOffset = offset;
+        _cachedOffset = position.Offset;
+        _cachedLine = position.Line;
+        _cachedColumn = position.Column;
+    }
 
     public void SkipWhiteSpace()
     {
@@ -237,7 +267,7 @@ public class ParseContext
 
         if (offset == _cacheOffset)
         {
-            Scanner.Cursor.ResetPosition(_cachePosition);
+            Scanner.Cursor.ResetPosition(new TextPosition(_cachedOffset, _cachedLine, _cachedColumn));
             return;
         }
 
@@ -259,8 +289,7 @@ public class ParseContext
             WhiteSpaceParser.Parse(this, ref _);
         }
 
-        _cacheOffset = offset;
-        _cachePosition = Scanner.Cursor.Position;
+        CacheWhiteSpaceEnd(offset, Scanner.Cursor);
     }
 
     // Skips the white space of the set, with the scanner's constant mask loops for the default set
@@ -474,8 +503,7 @@ public class ParseContext
             ParseToken(WhiteSpaceParser, ref _);
         }
 
-        _cacheOffset = offset;
-        _cachePosition = cursor.Position;
+        CacheWhiteSpaceEnd(offset, cursor);
     }
 
     private void Refill(int floor)
@@ -632,7 +660,8 @@ public class ParseContext
         // This keeps cancellation responsive while reducing overhead for large inputs.
         const int mask = 0x3F; // check ~every 64 calls
 
-        if ((_cancellationCheckCount++ & mask) == 0)
+        // Unchecked since the byte wraps around, and generated parsers embed this file in assemblies which can check for overflows
+        if ((unchecked(_cancellationCheckCount++) & mask) == 0)
         {
             CancellationToken.ThrowIfCancellationRequested();
         }
