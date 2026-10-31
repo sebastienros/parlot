@@ -212,9 +212,10 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         return (tryParseMethod, numberStylesFieldName, cultureExpr);
     }
 
-    // Only the built-in number parsers can be generated, see GenerateSource
+    // Only the built-in number parsers can be generated, see GenerateSource. The code parsing the value is large, a
+    // subgraph only inlines a few.
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context)
-        => GetType().Assembly == typeof(NumberLiteralBase<T>).Assembly ? 1 : -1;
+        => GetType().Assembly == typeof(NumberLiteralBase<T>).Assembly ? 8 : -1;
 
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
     {

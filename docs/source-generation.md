@@ -656,7 +656,7 @@ move it back, and choices, optional parsers and loops move the position local ba
 (`SkipWhiteSpace`), `Then` with a callback receiving the value or with a constant, `Capture`, `OneOf` with less than 8
 alternatives (more texts or keywords use their lookups), `ZeroOrMany`, `OneOrMany`, `Optional`, `ZeroOrOne`,
 `Between` and the sequences (`And`, `AndSkip`, `SkipAnd`). The outermost such parser becomes one method, of up to 64
-parsers, a parser used twice counting twice. The other parsers, like `Deferred`, `Separated`, lookaheads or callbacks
+parsers, a parser used twice counting twice and a number 8 times. The other parsers, like `Deferred`, `Separated`, lookaheads or callbacks
 receiving the context, invoke the span code of their parts. A literal alone keeps its code.
 
 ```csharp

@@ -10,8 +10,9 @@ namespace Parlot.SourceGeneration;
 internal interface ISpanSourceable
 {
     /// <summary>
-    /// Returns the number of parsers the span code of this parser contains, counting each use of a shared parser, or
-    /// -1 when this parser or one it invokes can't generate span code in this context.
+    /// Returns the size of the span code of this parser, the number of parsers it contains counting each use of a shared
+    /// parser, and more for parsers with large code, or -1 when this parser or one it invokes can't generate span code in
+    /// this context.
     /// </summary>
     int GetSpanSourceWeight(SourceGenerationContext context);
 
@@ -232,7 +233,8 @@ internal sealed class SpanSourceWriter
 /// </summary>
 internal static class SpanSource
 {
-    // The maximum number of parsers inlined in a span subgraph, which bounds the code duplicated for shared parsers
+    // The maximum size of a span subgraph, about the number of parsers it inlines, which bounds the code duplicated for
+    // shared parsers
     internal const int MaxWeight = 64;
 
     /// <summary>
