@@ -1,9 +1,9 @@
 # Writing parsers, best practices
 
-## When to call or not to call `Cursor.ResetPosition(TextPosition)`
+## When to call or not to call `Cursor.ResetPosition`
 
 `ResetPosition` is called when a parser advances the cursor but finally didn't match what it was supposed to.
-In that case the cursor position needs to be reset to its initial position.
+In that case the cursor position needs to be reset to its initial position, saved from `Cursor.Offset`.
 
 > ✔️ DO: Always return from a non-successful parser with the position of the cursor as when it was invoked.
 
@@ -16,7 +16,7 @@ public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, 
 
     var parseResult1 = new ParseResult<T1>();
 
-    var start = context.Scanner.Cursor.Position;
+    var start = context.Scanner.Cursor.Offset;
 
     if (_parser1.Parse(context, ref parseResult1))
     {
@@ -68,6 +68,9 @@ In this case it is never necessary to invoke `ResetPosition` since as soon as a 
 
 > ✔️ DO: Create a unit test to ensure that the parser resets the position when it's failing.
 
+> ❌ DON'T: Save `Cursor.Position` to move back to it. The cursor only tracks its offset, reading `Position` computes the
+> line and the column (see [Moving the cursor](#moving-the-cursor)). Save `Cursor.Offset` and call `ResetPosition(int)`.
+
 ## Reading the text directly
 
 When parsing a stream, the parser runs on a window of the text which more text may follow (see [Parsing streams](streaming.md)).
@@ -99,17 +102,28 @@ it is one more than the number of chars between the previous `'\n'` (or the star
 position at the end of the text follows the same rule, so after `"ab\n"` the cursor is at line 2, column 1, and after
 `"ab\r"` at line 1, column 4. This is also what source generated parsers report.
 
-All the ways of moving the cursor forward apply that rule; they differ in what they assume about the chars they leave:
+The cursor only tracks its offset. The line and the column are computed when `Position` is read, by counting the `'\n'`
+chars between the last position read and this one (vectorized on .NET 8 and later), as Roslyn computes the lines of a
+`SourceText` only when they are asked for. Reading a position thus costs a scan of the text moved over since the last
+read, which is why parsers save `Cursor.Offset` rather than `Cursor.Position` to move back. Read `Position` where it is
+reported: in an error, or in a callback which records it in a result.
 
-- `Advance()` moves by one char and `Advance(count)` by `count` chars, looking at each of them. Both stop at the end of
-  the text, where `Advance()` does nothing.
-- `AdvanceNoNewLines(count)` is for text known not to contain `'\n'`, such as an identifier or digits.
-- `AdvanceBy(consumed, newLines, trailingSegmentLength)` is for text whose number of `'\n'` chars, and number of chars
-  after the last of them, were counted while matching, or at build time for a literal. The source generator emits it for
-  `Text` and `Char` literals.
+All the ways of moving the cursor forward only move the offset, so the chars they leave can contain `'\n'`:
 
-A parser which counts the chars of a match before moving the cursor should note whether it saw a `'\n'` and call
-`Advance(size)` when it did, or `AdvanceBy(size, 0, size)` otherwise, as `Pattern` does.
+- `Advance()` moves by one char and `Advance(count)` by `count` chars. Both stop at the end of the text, where they do
+  nothing. A negative `count` is ignored.
+- `AdvanceNoNewLines(count)` is `Advance(count)` for chars which are known to be in the buffer, such as a match. Its name
+  dates from when the cursor tracked the lines as it moved.
+- `AdvanceBy(consumed, newLines, trailingSegmentLength)` moves by `consumed` chars. The other arguments were the line
+  and column deltas of the text when the cursor tracked them, they are ignored.
+
+`ResetPosition(int)` moves the cursor to an offset. `ResetPosition(TextPosition)` only uses the offset of the position
+and ignores its line and column. That only makes a difference for a position created by the caller with a line or a
+column which don't match its offset: the cursor then reports the ones counted from the text. The line and column of the
+initial position given to the `Cursor` or `Scanner` constructor are kept, and the positions after it are counted from it.
+
+A parser which counts the chars of a match before moving the cursor should move it once, with `AdvanceNoNewLines(size)`,
+as `Pattern` does.
 
 > ✔️ DO: Assert the line and the column of the cursor after a match, not only its offset, including after a `"\r\n"` and when the match ends the text.
 
