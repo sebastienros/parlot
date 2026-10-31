@@ -72,6 +72,19 @@ Set `TreatWarningsAsErrors` to report warnings as errors. A promoted warning fai
 `Error(...)`: it throws when `CollectDiagnostics` is disabled, and is otherwise recorded with the `Error`
 severity so that the grammar can try another alternative.
 
+To collect the diagnostics of a `TextReader`, create the context in `StreamParseOptions.ContextFactory`:
+
+```csharp
+ParseContext? context = null;
+var options = new StreamParseOptions
+{
+    ContextFactory = (scanner, cancellationToken) =>
+        context = new ParseContext(scanner, cancellationToken) { CollectDiagnostics = true },
+};
+var success = parser.TryParse(reader, out var value, out var fatalError, options);
+// context.Diagnostics
+```
+
 ## Associative operators
 
 `LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:

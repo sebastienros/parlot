@@ -238,13 +238,20 @@ public static partial bool TryParse(
 
 The diagnostics overload enables collection in its per-call context; the ordinary overload
 retains the exception-to-`false` behavior. The returned list is empty when no grammar errors or
-warnings occur, and `IsWarning` distinguishes warnings reported by `Warning(...)` from errors. The boolean still reflects whether the grammar matched, so a successful
-parse can contain diagnostics from absorbed failures. Failed choices keep only the errors
-from the furthest-reaching failed alternative, while a successful later alternative discards
-diagnostics from earlier failed alternatives. Generated entry points do not expose
-`TreatWarningsAsErrors`; callers can reject results containing warnings instead. A `CancellationToken`, if declared, remains immediately
-before `out MyValue value`. The tuple result avoids exposing the generated parser's internal
-runtime support types or adding a dependency on the Parlot runtime package.
+warnings occur, and `IsWarning` distinguishes warnings reported by `Warning(...)` from errors. The
+boolean still reflects whether the grammar matched, so a successful parse can contain diagnostics
+from absorbed failures. Failed choices keep only the errors from the furthest-reaching failed
+alternative, while a successful later alternative discards diagnostics from earlier failed
+alternatives. Generated entry points do not expose `TreatWarningsAsErrors`; callers can reject
+results containing warnings instead. A `CancellationToken`, if declared, remains immediately before
+`out MyValue value`. The tuple result avoids exposing the generated parser's internal runtime
+support types or adding a dependency on the Parlot runtime package.
+
+A `TextReader` entry point can return the diagnostics the same way. Each overload is generated as a
+parser of its own, like the `TextReader` ones: only the overloads returning diagnostics contain the
+code collecting them, so the code generated for the other overloads is unchanged, and declaring both
+generates the grammar twice. The [Parser Explorer](explorer.md) traces the overloads that don't
+return diagnostics.
 
 ### Cancellation
 

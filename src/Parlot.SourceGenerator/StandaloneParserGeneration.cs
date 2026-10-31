@@ -36,24 +36,33 @@ public sealed partial class ParserSourceGenerator
 
     private sealed class StandaloneEntryPoint
     {
-        public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory, bool isReader)
+        public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory, bool isReader, bool collectsDiagnostics)
         {
             Method = method;
             Factory = factory;
             IsReader = isReader;
+            CollectsDiagnostics = collectsDiagnostics;
         }
 
         public IMethodSymbol Method { get; }
 
         // Whether the entry point parses a TextReader with a compacting buffer instead of a string
         public bool IsReader { get; }
-        public bool Diagnostics => Factory.Method.GetAttributes().Any(static attribute =>
+
+        // Whether the entry point returns the grammar errors and warnings, in an out parameter after the result
+        public bool CollectsDiagnostics { get; }
+
+        // The Parser Explorer traces the entry points whose result is the last parameter
+        public bool Diagnostics => !CollectsDiagnostics && Factory.Method.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
             attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
         public MethodToGenerate Factory { get; }
-        public IParameterSymbol? CancellationTokenParameter => Method.Parameters.Length == Factory.Method.Parameters.Length + 3
-            ? Method.Parameters[Method.Parameters.Length - 2]
-            : null;
+        public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - (CollectsDiagnostics ? 2 : 1)];
+        public IParameterSymbol? DiagnosticsParameter => CollectsDiagnostics ? Method.Parameters[Method.Parameters.Length - 1] : null;
+        public IParameterSymbol? CancellationTokenParameter
+            => Method.Parameters.Length == Factory.Method.Parameters.Length + (CollectsDiagnostics ? 4 : 3)
+                ? Method.Parameters[ResultParameter.Ordinal - 1]
+                : null;
         public string? Source { get; set; }
     }
 
@@ -430,7 +439,8 @@ public sealed partial class ParserSourceGenerator
     {
         error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
             + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result. "
-            + "A second overload with the same name may take a TextReader instead of the string.";
+            + "Other overloads with the same name may take a TextReader instead of the string, or add a last "
+            + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics.";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -446,32 +456,65 @@ public sealed partial class ParserSourceGenerator
             return null;
         }
 
-        var candidates = type.GetMembers(name!).OfType<IMethodSymbol>().Where(method =>
-            method.IsStatic && method.IsPartialDefinition && method.PartialImplementationPart is null
-            && !method.IsGenericMethod && !method.ReturnsByRef && method.ReturnType.SpecialType == SpecialType.System_Boolean
-            && (method.Parameters.Length == factory.Method.Parameters.Length + 2
-                || method.Parameters.Length == factory.Method.Parameters.Length + 3
-                    && method.Parameters[method.Parameters.Length - 2].RefKind == RefKind.None
-                    && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 2].Type, cancellationTokenType))
-            && (method.Parameters[0].Type.SpecialType == SpecialType.System_String
-                || SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, textReaderType))
-            && method.Parameters[0].RefKind == RefKind.None
-            && method.Parameters[method.Parameters.Length - 1].RefKind == RefKind.Out
-            && SymbolEqualityComparer.Default.Equals(method.Parameters[method.Parameters.Length - 1].Type, resultType)
-            && method.DeclaringSyntaxReferences.All(reference => !grammarTrees.Contains(reference.SyntaxTree))
-            && factory.Method.Parameters.Select((parameter, index) =>
-                method.Parameters[index + 1].RefKind == RefKind.None
-                && SymbolEqualityComparer.Default.Equals(parameter.Type, method.Parameters[index + 1].Type)).All(static matches => matches))
+        var candidates = type.GetMembers(name!).OfType<IMethodSymbol>()
+            .Select(method => (Method: method, Collects: HasDiagnosticsOutput(method, factory.Method, resultType)))
+            .Where(candidate =>
+            {
+                var method = candidate.Method;
+                var resultIndex = method.Parameters.Length - (candidate.Collects ? 2 : 1);
+                var extra = candidate.Collects ? 1 : 0;
+                return method.IsStatic && method.IsPartialDefinition && method.PartialImplementationPart is null
+                    && !method.IsGenericMethod && !method.ReturnsByRef && method.ReturnType.SpecialType == SpecialType.System_Boolean
+                    && (method.Parameters.Length == factory.Method.Parameters.Length + 2 + extra
+                        || method.Parameters.Length == factory.Method.Parameters.Length + 3 + extra
+                            && method.Parameters[resultIndex - 1].RefKind == RefKind.None
+                            && SymbolEqualityComparer.Default.Equals(method.Parameters[resultIndex - 1].Type, cancellationTokenType))
+                    && (method.Parameters[0].Type.SpecialType == SpecialType.System_String
+                        || SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, textReaderType))
+                    && method.Parameters[0].RefKind == RefKind.None
+                    && method.Parameters[resultIndex].RefKind == RefKind.Out
+                    && SymbolEqualityComparer.Default.Equals(method.Parameters[resultIndex].Type, resultType)
+                    && method.DeclaringSyntaxReferences.All(reference => !grammarTrees.Contains(reference.SyntaxTree))
+                    && factory.Method.Parameters.Select((parameter, index) =>
+                        method.Parameters[index + 1].RefKind == RefKind.None
+                        && SymbolEqualityComparer.Default.Equals(parameter.Type, method.Parameters[index + 1].Type)).All(static matches => matches);
+            })
             .ToArray();
 
-        var strings = candidates.Count(static method => method.Parameters[0].Type.SpecialType == SpecialType.System_String);
-        if (candidates.Length == 0 || strings > 1 || candidates.Length - strings > 1)
+        // At most one entry point of each kind: string or TextReader input, returning the diagnostics or not
+        if (candidates.Length == 0 || candidates
+            .GroupBy(static candidate => (candidate.Method.Parameters[0].Type.SpecialType == SpecialType.System_String, candidate.Collects))
+            .Any(static group => group.Count() > 1))
         {
             return null;
         }
 
-        return candidates.Select(method => new StandaloneEntryPoint(method, factory,
-            isReader: method.Parameters[0].Type.SpecialType != SpecialType.System_String)).ToArray();
+        return candidates.Select(candidate => new StandaloneEntryPoint(candidate.Method, factory,
+            isReader: candidate.Method.Parameters[0].Type.SpecialType != SpecialType.System_String,
+            collectsDiagnostics: candidate.Collects)).ToArray();
+    }
+
+    // Whether the entry point ends with the out result followed by an
+    // out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics
+    private static bool HasDiagnosticsOutput(IMethodSymbol method, IMethodSymbol factory, ITypeSymbol resultType)
+    {
+        if (method.Parameters.Length < factory.Parameters.Length + 3)
+        {
+            return false;
+        }
+
+        var result = method.Parameters[method.Parameters.Length - 2];
+        var diagnostics = method.Parameters[method.Parameters.Length - 1];
+
+        return result.RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(result.Type, resultType)
+            && diagnostics.RefKind == RefKind.Out
+            && diagnostics.Type is INamedTypeSymbol { Name: "IReadOnlyList", Arity: 1 } list
+            && list.ContainingNamespace.ToDisplayString() == "System.Collections.Generic"
+            && list.TypeArguments[0] is INamedTypeSymbol { IsTupleType: true } tuple
+            && tuple.TupleElements.Length == 5
+            && tuple.TupleElements[0].Type.SpecialType == SpecialType.System_String
+            && tuple.TupleElements[1].Type.SpecialType == SpecialType.System_Boolean
+            && tuple.TupleElements.Skip(2).All(static element => element.Type.SpecialType == SpecialType.System_Int32);
     }
 
     private static bool UsesParlotType(ITypeSymbol type)
@@ -484,8 +527,8 @@ public sealed partial class ParserSourceGenerator
         var entry = standalone.Method;
         var factory = standalone.Factory.Method;
         var input = EscapeIdentifier(entry.Parameters[0].Name);
-        var value = EscapeIdentifier(entry.Parameters[entry.Parameters.Length - 1].Name);
-        var valueType = GetParameterTypeName(entry.Parameters[entry.Parameters.Length - 1]);
+        var value = EscapeIdentifier(standalone.ResultParameter.Name);
+        var valueType = GetParameterTypeName(standalone.ResultParameter);
         var arguments = string.Join(", ", entry.Parameters.Skip(1).Take(factory.Parameters.Length)
             .Select(static parameter => EscapeIdentifier(parameter.Name)));
         // Keep the common names "context" and "result" available to entry point parameters.
@@ -522,6 +565,16 @@ public sealed partial class ParserSourceGenerator
                 ? $"new {wrapper}({scanner}{cancellationArgument})"
                 : $"new global::Parlot.Fluent.ParseContext({scanner}{cancellationArgument})";
         source.AppendLine($"            var {context} = {contextCreation};");
+        var diagnostics = standalone.DiagnosticsParameter is { } diagnosticsParameter ? EscapeIdentifier(diagnosticsParameter.Name) : null;
+        var diagnosticType = standalone.DiagnosticsParameter is { Type: INamedTypeSymbol { TypeArguments: [var element] } }
+            ? element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+                SymbolDisplayFormat.FullyQualifiedFormat.MiscellaneousOptions | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier))
+            : null;
+        if (diagnostics is not null)
+        {
+            source.AppendLine($"            {context}.CollectDiagnostics = true;");
+            source.AppendLine($"            {diagnostics} = global::System.Array.Empty<{diagnosticType}>();");
+        }
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");
         source.AppendLine("            {");
@@ -547,11 +600,33 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine($"                {value} = default!;");
         source.AppendLine("                return false;");
         source.AppendLine("            }");
-        if (standalone.IsReader)
+        if (standalone.IsReader || diagnostics is not null)
         {
             source.AppendLine("            finally");
             source.AppendLine("            {");
-            source.AppendLine($"                {context}.StopCompacting();");
+            if (standalone.IsReader)
+            {
+                source.AppendLine($"                {context}.StopCompacting();");
+            }
+            if (diagnostics is not null)
+            {
+                // The diagnostics recorded before an exception propagates are returned too
+                var collected = prefix + "_collected";
+                var array = prefix + "_diagnostics";
+                var index = prefix + "_index";
+                var item = prefix + "_item";
+                source.AppendLine($"                var {collected} = {context}.Diagnostics;");
+                source.AppendLine($"                if ({collected}.Count > 0)");
+                source.AppendLine("                {");
+                source.AppendLine($"                    var {array} = new {diagnosticType}[{collected}.Count];");
+                source.AppendLine($"                    for (var {index} = 0; {index} < {array}.Length; {index}++)");
+                source.AppendLine("                    {");
+                source.AppendLine($"                        var {item} = {collected}[{index}];");
+                source.AppendLine($"                        {array}[{index}] = ({item}.Message, {item}.IsWarning, {item}.Position.Offset, {item}.Position.Line, {item}.Position.Column);");
+                source.AppendLine("                    }");
+                source.AppendLine($"                    {diagnostics} = {array};");
+                source.AppendLine("                }");
+            }
             source.AppendLine("            }");
         }
         source.AppendLine($"            {value} = default!;");

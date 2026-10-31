@@ -223,6 +223,17 @@ public class ParameterizedParserTests
     }
 
     [Fact]
+    public void Opt_In_Generated_Choice_Discards_Warnings_Of_The_Only_Alternative_Of_A_Char()
+    {
+        Assert.False(ParameterizedGrammars.TryParseAbandonedWarning("a?", out _, out var diagnostics));
+        Assert.Empty(diagnostics);
+
+        Assert.True(ParameterizedGrammars.TryParseAbandonedWarning("a!", out var value, out diagnostics));
+        Assert.Equal("a", value);
+        Assert.Equal(("abandoned", true, 0, 1, 1), Assert.Single(diagnostics));
+    }
+
+    [Fact]
     public void Opt_In_Generated_Reader_Overload_Reports_Diagnostics()
     {
         Assert.True(ParameterizedGrammars.TryParseWarning(new StringReader(" var"), out var value, out var diagnostics));
@@ -341,6 +352,8 @@ public static partial class ParameterizedGrammars
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
     public static partial bool TryParseRequiredBang(TextReader text, out string value,
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
+    public static partial bool TryParseAbandonedWarning(string text, out string value,
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> diagnostics);
     public static partial bool TryParseOverloadedDefault(string text, out string value);
     public static partial bool TryParseOverloadedBoolean(string text, bool enabled, out string value);
     public static partial bool TryParseOverloadedInteger(string text, int number, out string value);

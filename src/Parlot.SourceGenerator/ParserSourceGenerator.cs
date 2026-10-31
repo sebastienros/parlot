@@ -1049,6 +1049,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // The diagnostics report each parser and each move of the cursor, which span code would hide
         sgContext.GenerateSpanCode = !standalone.Diagnostics;
 
+        // An entry point returning the grammar errors and warnings collects them rather than throwing
+        sgContext.CollectDiagnostics = standalone.CollectsDiagnostics;
+
         // Invoke GenerateSource via reflection
         object? sourceResultObj;
         try
@@ -1658,7 +1661,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
     // The string and TextReader entry points of a factory are generated separately
     private static string GetEntryIdentifier(IMethodSymbol method, StandaloneEntryPoint standalone)
-        => standalone.IsReader ? GetGeneratedIdentifier(method) + "_Reader" : GetGeneratedIdentifier(method);
+        => GetGeneratedIdentifier(method) + (standalone.IsReader ? "_Reader" : "") + (standalone.CollectsDiagnostics ? "_Collecting" : "");
 
     private static string GetGeneratedIdentifier(IMethodSymbol method)
     {
