@@ -307,9 +307,9 @@ Allocations were unchanged between the two builds.
 | JSON long | 26.640 us | 26.93 us | +1.1% |
 | JSON wide | 13.593 us | 13.21 us | -2.8% |
 
-Generated collection parsers preserve the runtime collection behavior: small results use inline storage,
-larger results grow into a list, and an empty `ZeroOrMany` result uses an empty array. Public results should
-normally use `IReadOnlyList<T>`.
+Generated collection parsers preserve the runtime collection behavior: the items are accumulated on a scratch stack
+of the thread, shared by nested lists, and each non-empty result is one array of its exact size; an empty result is
+`Array.Empty<T>()`. Public results should normally use `IReadOnlyList<T>`.
 
 ## Configuration and captures
 

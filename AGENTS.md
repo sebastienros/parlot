@@ -202,9 +202,13 @@ Full reference: `docs/source-generation.md`.
   the constructor, never in `Parse`. Never construct parsers from a lambda per parse — use
   `Parsers.Select(selector, a, b)` with an index into a fixed list (`docs/writing.md`, "Parser factories").
 - No allocations in `Parse`. No LINQ, no closures, no `params` arrays on hot paths; mark lambdas `static`.
-- Prefer `ReadOnlySpan<char>` / `TextSpan` over `string`; `HybridList<T>` (4 items inline) over `List<T>`
-  for result lists; `[MethodImpl(MethodImplOptions.AggressiveInlining)]` on tiny hot helpers, as in
-  `Character`, `Scanner` and `ParseContext`.
+- Prefer `ReadOnlySpan<char>` / `TextSpan` over `string`; `[MethodImpl(MethodImplOptions.AggressiveInlining)]`
+  on tiny hot helpers, as in `Character`, `Scanner` and `ParseContext`.
+- Accumulate list results with the internal `ListBuilder<T>` (`src/Parlot/Fluent/ListBuilder.cs`, embedded in
+  generated parsers too), not `List<T>` or `HybridList<T>`: items go on a per-thread scratch stack shared by nested
+  lists, and the result is one array of the exact size. Declare it as a local, never copy it, and call `Release()`
+  in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters) so that an exception can't leave items on
+  the stack. Read its items through the builder after a callback, which can parse and grow the stack.
 - Modern APIs (`SearchValues`, vectorization) go behind `#if NET8_0_OR_GREATER` with a downlevel path;
   PolySharp and `src/Parlot/Polyfill.cs` cover the rest.
 - Measure. Add or extend a benchmark in `test/Parlot.Benchmarks` for any hot-path change and put the
