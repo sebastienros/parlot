@@ -4,8 +4,11 @@
 
 Use a generated length/discriminator tree for sufficiently large, compatible keyword-only
 `OneOf`/`Or` choices. Ordinal text-only choices use a separate ordered-prefix recognizer.
-Keep the runtime `CharMap` lookup, small generated choices, and mixed or unsupported
-parser types unchanged. No new public parser or byte-input API is introduced.
+Generated choices of wrapped or mixed alternatives refine their first-char dispatch with
+the prefixes the alternatives tell, see
+[Prefix dispatch for wrapped and mixed choices](#prefix-dispatch-for-wrapped-and-mixed-choices).
+Keep the runtime `CharMap` lookup and small generated choices unchanged. No new public
+parser, interface or byte-input API is introduced.
 
 The automatic specialization accepts 8-256 ordinal, nonempty ASCII-letter keywords, each
 at most 64 characters, with at most 4096 characters in the vocabulary, all with the default
@@ -380,6 +383,94 @@ DOTNET_TieredCompilation=0 dotnet run --no-build \
 
 For `IgnoreCase=true`, `CharSpanSwitch` uses the original comparison-chain fallback,
 not an ordinal span switch. The switch strategy table above uses only the ordinal rows.
+
+## Prefix dispatch for wrapped and mixed choices
+
+The specializations above only apply when every alternative is a bare `Keyword` or `Text`.
+A grammar usually maps them to its own values, `Terms.Keyword("select").Then(...)`, mixes
+them with an identifier, or builds operators through `LeftAssociative`, whose operators are
+wrapped to return their index. These choices kept the first-char `switch`, invoking every
+alternative that shares the input's first char.
+
+An internal `ISeekablePrefixes` refines `ISeekable`: a parser tells the texts the input
+starts with when it matches, not only their first chars. Ordinal `Text` and `Keyword`
+parsers tell their text. `Then`, `When`, `Error`, `Capture`, `Commit`, `Switch`,
+`SkipWhiteSpace`, `WhenFollowedBy`, `WhenNotFollowedBy`, `Between`, `OneOrMany`,
+`Separated`, the sequences, `OperatorIndex` and `Deferred` forward the prefixes of the
+parser that reads first, and a `OneOf` tells those of its alternatives. A parser that
+doesn't implement it, including any custom `ISeekable`, tells its expected chars as
+prefixes of one char. Like the expected chars, a prefix is only a condition for the parser
+to match: the parser still reads its text, so a shorter prefix is always valid. The
+interface stays internal until the runtime uses it too.
+
+For each char of the lookup table with at least three alternatives, the generator collects
+their prefixes that start with the char, shortened to 64 chars. The input selects the
+alternatives of the **longest** prefix it starts with: these are the alternatives with a
+prefix this one starts with, which are exactly the ones with a prefix the input starts
+with. An alternative that can start with any char has the char itself as prefix, so it is
+selected for every input. Since `KnownStringLookup.GeneratePrefixes` returns the first
+prefix in order, the prefixes are given longest first, and each one returns the index of
+its group of alternatives. The `case` of the char then invokes that group, in the original
+order:
+
+```csharp
+case 'i':
+{
+    switch (DispatchPrefix12(cursor.Span.Slice(1)))
+    {
+        // "interface..." selects the alternatives with the prefixes "in", "int" and "interface", and the identifier
+        case 0: success = In(context, out value) || Int(context, out value) || Interface(context, out value) || Identifier(context, out value); break;
+        // "if..."
+        case 1: success = If(context, out value) || Identifier(context, out value); break;
+        // ...
+    }
+    break;
+}
+```
+
+A char is not refined when every prefix selects all of its alternatives, when it has more
+than 256 prefixes or 4096 chars of them, or when the parser reads from a `TextReader`: the
+compacting buffer may not hold the text after the current char.
+
+Prefixes don't carry the keyword boundary. For `interface`, the `in` and `int` keywords are
+still invoked before `interface`, and fail on their boundary. Choices of bare keywords keep
+the exact recognizer above.
+
+`KeywordParserBenchmarks` compares, **in the same build**, keywords wrapped in
+`Then(word)`, which tell their prefixes, with `BaselineKeyword` wrapped the same way, which
+only tells its first char and keeps the first-char dispatch. Both entry points return the
+canonical keyword, and setup checks them against the runtime parser.
+
+Measured on an Apple M4 Pro, macOS 15.8.2, .NET 10.0.11 Arm64, BenchmarkDotNet 0.15.8, with
+normal tiering, one launch, three warmups and ten 250 ms iterations. Means in ns/call; all
+methods allocate the same **176 B/call**, the context of the entry point:
+
+| Vocabulary | Input | First-char dispatch | Prefix dispatch | Time reduction |
+|---|---|---:|---:|---:|
+| 4 keywords | Hit | 31.76 | 31.90 | none emitted |
+| 4 keywords | Mixed | 30.21 | 30.93 | none emitted |
+| 16 keywords | Hit | 40.97 | 34.92 | 14.8% |
+| 16 keywords | Miss | 38.43 | 32.72 | 14.9% |
+| 16 keywords | Mixed | 41.65 | 33.74 | 19.0% |
+| 77 keywords | Hit | 42.62 | 35.40 | 16.9% |
+| 77 keywords | Miss | 40.35 | 33.47 | 17.1% |
+| 77 keywords | Mixed | 44.15 | 32.91 | 25.5% |
+| 128 shared-prefix tokens | Hit | 214.84 | 35.13 | 83.6% |
+| 128 shared-prefix tokens | Miss | 224.30 | 24.19 | 89.2% |
+| 128 shared-prefix tokens | Mixed | 270.17 | 27.41 | 89.9% |
+
+The four keywords start with different chars, so no dispatch is emitted: their rows are
+the same code, and show the noise of the run. The bare keyword recognizer remains faster,
+20-24 ns/call in the same run, since it invokes no helper for the keyword it recognized.
+
+Reproduce with:
+
+```bash
+dotnet build -c Release
+dotnet run --no-build --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- \
+  --filter '*KeywordParserBenchmarks.Generated*' \
+  --warmupCount 3 --iterationCount 10 --iterationTime 250 --launchCount 1
+```
 
 ## Generated shapes
 

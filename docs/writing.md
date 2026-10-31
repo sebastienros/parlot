@@ -143,6 +143,10 @@ The expected chars have to include every char the parser can start with, since a
 
 A `Deferred` parser reads the hints from its `Parser` whenever they are asked for, so they are known once the grammar is complete. A `OneOf` which held an alternative that couldn't tell when it was built, a `Deferred` set later or another `OneOf` holding one, builds its table again from the current hints the first time it parses (once, under a lock shared by every parser). A `Deferred` that reaches itself while its hints are read reports `CanSeek == false`, so a left-recursive alternative is tried for any char. The source generator runs the factory to completion before emitting, so generated choices use the same table.
 
+Parlot's ordinal text and keyword parsers, and the parsers that start with one, also tell the source generator their
+whole text, so that a generated choice can skip the alternatives that share a first char with the input but not the
+rest of their text. A custom `ISeekable` parser only tells its first chars.
+
 Source generation can additionally specialize compatible keyword-only choices using
 length and discriminating characters. This does not replace the runtime lookup table
 or alter ordered-choice semantics. See [Keyword lookup investigation](keyword-lookups.md)

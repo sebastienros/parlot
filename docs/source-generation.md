@@ -179,6 +179,14 @@ Callbacks, mixed parser kinds, other comparisons, and choices outside those boun
 the existing dispatch. Larger keyword recognizers separate length buckets into helpers
 to keep the length dispatcher small; helper inlining remains a JIT decision.
 
+Other choices dispatch on the first char, then again on the rest of the input when at least
+three of the alternatives for a char tell longer prefixes: ordinal `Text` and `Keyword`
+parsers, and the parsers which start with one, like `Then`, `When`, `Error`, `Capture`,
+sequences and nested choices. Only the alternatives whose prefix the input starts with are
+invoked, in their order, and each one still matches its own text. Choices read from a
+`TextReader` keep the first-char dispatch. See
+[Keyword lookup investigation](keyword-lookups.md#prefix-dispatch-for-wrapped-and-mixed-choices).
+
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
 allocation. The scanner, cursor, and context use the shared runtime implementations.
