@@ -34,6 +34,9 @@ public class StreamingTests
         ["log-record"] = new Grammar<int>(LogParser.Record),
         ["log"] = new Grammar<int>(LogParser.Log),
         ["sql"] = new Grammar<StatementList>(CreateSqlParser(), static scanner => new ParseContext(scanner, disableLoopDetection: true)),
+        // Operators are read again by the looser levels when they are not followed by an operand
+        ["operators"] = new Grammar<string>(CreateOperators()),
+        ["operators-eof"] = new Grammar<string>(CreateOperators().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
@@ -141,6 +144,15 @@ public class StreamingTests
         ];
         Add("log-record", log);
         Add("log", log);
+
+        string[] operators =
+        [
+            "", "a", "-a", "- -a", "a!", "-a!", "a + b * c", "a ** b ** c", "a << b < c <= d", "a <= b", "a < = b", "a & b && c",
+            "a &", "a & &", "a ** -", "(a + b) * -(c - d)!", "(a + b", "a + (b", "a == b = c", "a = = b", "not a < b", "a + not b",
+            "a ++ b", "a << << b", " a  <<  b  <=  c  ", "a\n<=\nb",
+        ];
+        Add("operators", operators);
+        Add("operators-eof", operators);
 
         Add("sql",
             "SELECT * FROM users",
@@ -662,6 +674,26 @@ public class StreamingTests
         }
 
         return items;
+    }
+
+    private static Parser<string> CreateOperators()
+    {
+        static Func<string, string, string> Binary(string op) => (a, b) => $"({a}{op}{b})";
+
+        var expression = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Terms.Char('!'), static x => $"({x}!)"))
+            .Unary((Terms.Char('-'), static x => $"(-{x})"))
+            .RightAssociative((Terms.Text("**"), Binary("**")))
+            .LeftAssociative((Terms.Text("*"), Binary("*")), (Terms.Text("+"), Binary("+")))
+            .LeftAssociative((Terms.Text("<<"), Binary("<<")), (Terms.Text("&"), Binary("&")), (Terms.Text("="), Binary("=")))
+            .LeftAssociative((Terms.Text("<"), Binary("<")), (Terms.Text("<="), Binary("<=")))
+            .Unary((Terms.Text("not"), static x => $"(not {x})"))
+            .LeftAssociative((Terms.Text("&&"), Binary("&&")), (Terms.Text("=="), Binary("==")));
+
+        return expression;
     }
 
     private static Parser<StatementList> CreateSqlParser()
