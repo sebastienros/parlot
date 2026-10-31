@@ -19,7 +19,21 @@ public class ParseContext
     /// <summary>
     /// The maximum number of nested recursive parser invocations, or <c>0</c> for no limit.
     /// </summary>
+#if PARLOT_STANDALONE
+    public int MaxRecursionDepth
+    {
+        get => _coldState?.MaxRecursionDepth ?? 0;
+        private set
+        {
+            if (value != 0)
+            {
+                GetColdState().MaxRecursionDepth = value;
+            }
+        }
+    }
+#else
     public int MaxRecursionDepth { get; }
+#endif
 
     /// <summary>
     /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
@@ -44,9 +58,18 @@ public class ParseContext
     /// which was allocating several intermediate tables for deeply nested grammars, and a lookup is a vectorized
     /// scan over the recorded positions since two entries rarely share the same one.
     /// </remarks>
+#if PARLOT_STANDALONE
+    // Generated parsers detect the cycles of their deferred parsers with fields of their own context, and can't limit
+    // their recursion. The state of loop detection and of the recursion limit, kept for the callbacks, is then stored
+    // in ColdState rather than in the context that each generated parse allocates. The algorithms are the same.
+    private int[]? _activePositions { get => _coldState?.ActivePositions; set => GetColdState().ActivePositions = value; }
+    private object[]? _activeParsers { get => _coldState?.ActiveParsers; set => GetColdState().ActiveParsers = value; }
+    private int _activeCount { get => _coldState?.ActiveCount ?? 0; set => GetColdState().ActiveCount = value; }
+#else
     private int[]? _activePositions;
     private object[]? _activeParsers;
     private int _activeCount;
+#endif
 
     /// <summary>
     /// The cancellation token used to stop the parsing operation.
@@ -55,7 +78,12 @@ public class ParseContext
 
     // A byte is enough since only its low bits are tested, and it wraps around at a multiple of the check interval
     private byte _cancellationCheckCount;
+
+#if PARLOT_STANDALONE
+    private int _recursionDepth { get => _coldState?.RecursionDepth ?? 0; set => GetColdState().RecursionDepth = value; }
+#else
     private int _recursionDepth;
+#endif
 
     // TODO: For backward compatibility only, remove in future versions
     public ParseContext(Scanner scanner, bool useNewLines)
@@ -139,6 +167,15 @@ public class ParseContext
 
         // The offset of the last Commit(), no parser can read the text before it again
         public int CommitOffset;
+
+#if PARLOT_STANDALONE
+        // Loop detection and recursion limit, see _activePositions
+        public int[]? ActivePositions;
+        public object[]? ActiveParsers;
+        public int ActiveCount;
+        public int MaxRecursionDepth;
+        public int RecursionDepth;
+#endif
     }
 
     private ColdState GetColdState() => _coldState ??= new ColdState();
