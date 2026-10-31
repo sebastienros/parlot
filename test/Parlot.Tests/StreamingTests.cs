@@ -87,6 +87,13 @@ public class StreamingTests
         ["position-pattern"] = new Grammar<(int, int, int)>(Literals.Pattern(static c => c != ' ').Then(static (c, _) => Position(c))),
         ["position-scan"] = new Grammar<(int, int, int)>(Literals.Scan(static span => span.IndexOf(' ') is var i and >= 0 ? i : span.Length).Then(static (c, _) => Position(c))),
         ["position-textbefore"] = new Grammar<(int, int, int)>(AnyCharBefore(Literals.Text("--"), consumeDelimiter: true).Then(static (c, _) => Position(c))),
+        // The line and column are computed when they are read: the error is reported where the assignment started, which a
+        // compacting buffer has discarded when the assignment spans a refill
+        ["position-elseerror"] = new Grammar<(int, int, int)>(Terms.Text("begin").SkipAnd(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer()).ElseError("Expected an assignment")).Then(static (c, _) => Position(c))),
+        // A position read after one read further, by an alternative which failed
+        ["position-backtrack"] = new Grammar<(int, int, int)>(OneOf(
+            Terms.Identifier().And(Terms.Char('=').Then(static (c, _) => Position(c))).And(Terms.Char('(')).Then(static (c, x) => x.Item2),
+            Terms.Identifier().Then(static (c, _) => Position(c)))),
     };
 
     private static (int Offset, int Line, int Column) Position(ParseContext context)
@@ -213,6 +220,11 @@ public class StreamingTests
         Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", "\n\n\nab c", new string('a', 70) + "\r\n" + new string('b', 70) + " x",
             new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x");
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
+        Add("position-elseerror", "", "begin", "begin x = 1", "begin x = y", "begin\n", "begin\n x\n =\n 12", "begin\n\n x\n =\n y", "\n\nbegin\r\n  x =\n\n y",
+            "begin\r\n" + new string(' ', 70) + "x\n" + new string(' ', 70) + "= z", "\n begin abc\n\n=\n\n\n", "begin 1");
+        Add("position-backtrack", "", "abc", "abc\n =\n (", "abc\n =\n x", "a\r\n=\r\n(", "\n\n abc \n = x", "abc =", "abc\n\n", "1");
+        Add("elseerror", "(\n1\n x", "( 12\n )", "\n(\n\n1 \n x", "(1\r\n\r\n");
+        Add("integer-eof-error", " 42\n\n x", "\n\n42\n");
 
         return data;
     }
@@ -455,6 +467,38 @@ public class StreamingTests
         Assert.Equal(10, exception.Position.Offset);
         Assert.Equal(3, exception.Position.Line);
         Assert.Equal(3, exception.Position.Column);
+    }
+
+    [Theory]
+    [InlineData("a b\nc\n\n  d\r\n e", false)]
+    [InlineData("a\n(b)\n  c (\n d )", false)]
+    [InlineData("a\n bb\n\n ccc\r\n (dd", true)]
+    [InlineData("\n\n\n a", false)]
+    public async Task ParseManyAsyncReportsTheLinesAndColumnsOfTheWholeText(string text, bool fails)
+    {
+        // Each item reports its position, and a failed one the position of its error. The offsets are relative to the window.
+        var item = Terms.Identifier().Then(static (c, _) => (c.Scanner.Cursor.Position.Line, c.Scanner.Cursor.Position.Column))
+            .Or(Terms.Char('(').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(')').ElseError("Expected ')'")).Then(static (c, _) => (-c.Scanner.Cursor.Position.Line, -c.Scanner.Cursor.Position.Column)));
+
+        Assert.Equal(!fails, ZeroOrMany(item).Eof().TryParse(text, out var expected, out var error));
+
+        var expectedError = error == null ? null : $"{error.Message} {error.Position}";
+
+        foreach (var (chunk, bufferSize) in new[] { (1, 1), (1, 4096), (3, 2), (7, 5), (int.MaxValue, 1) })
+        {
+            var items = new List<(int, int)>();
+
+            try
+            {
+                await ToListAsync(item.ParseManyAsync(new ChunkedReader(text, () => chunk, yield: false), new StreamParseOptions { BufferSize = bufferSize }), items);
+                Assert.Null(expectedError);
+                Assert.Equal(expected, items);
+            }
+            catch (ParseException e)
+            {
+                Assert.Equal(expectedError, $"{e.Message} {e.Position}");
+            }
+        }
     }
 
     [Fact]

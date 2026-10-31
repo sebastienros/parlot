@@ -143,7 +143,7 @@ public abstract partial class Parser<T>
                 case StreamingStep.End:
                     yield break;
                 default:
-                    await driver.GrowAsync(items.RetryPosition).ConfigureAwait(false);
+                    await driver.GrowAsync(items.RetryOffset).ConfigureAwait(false);
                     break;
             }
         }
@@ -171,7 +171,7 @@ public abstract partial class Parser<T>
             }
         }
 
-        var start = cursor.Position;
+        var start = cursor.Offset;
         var result = new ParseResult<T>();
         bool success;
 
@@ -186,7 +186,7 @@ public abstract partial class Parser<T>
 
         if (!success)
         {
-            throw new ParseException("The input could not be parsed.", driver.ToAbsolute(start));
+            throw new ParseException("The input could not be parsed.", driver.ToAbsolute(cursor.GetPosition(start)));
         }
 
         if (skipWhiteSpace)
