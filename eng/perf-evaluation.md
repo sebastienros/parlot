@@ -4,6 +4,8 @@ Seven techniques were implemented on separate branches from `main` (8a5f6b1) and
 benchmarks and with two libraries built from source against each branch: Fluid (runtime grammar) and NCalc
 (source-generated parser, plus the same grammar on the runtime). A UTF-8 input mode was not attempted, see the end.
 
+Six of them were then merged on `ccr-2d630000-0z83na`, see [Merged branch](#merged-branch).
+
 ## Summary
 
 Time is the ratio to `main` (lower is faster), the mean of two rounds. Allocations are per parse.
@@ -151,12 +153,49 @@ Fluid and NCalc take `string`, so they would have to transcode first, and Parlot
 token). It would only pay for byte-oriented inputs (HTTP bodies, files) with long runs, through a generated
 `ReadOnlySpan<byte>` entry point; a spike on the JSON grammar would be the way to size it.
 
-## Merging
+## Merged branch
 
-- Suggested order: static loop detection, lazy line and column, per-parse allocations (rebased), the precedence table
-  (with restricted flattening), pooled lists (after the regression), then generated span code.
-- `ParseContext.cs` is changed by static loop detection, per-parse allocations, lazy line and column, the precedence
-  table and memoize; the list emitters by pooled lists and span code: expect conflicts in those files.
+`ccr-2d630000-0z83na` merges, in this order and with the follow-ups the evaluation called for:
+
+1. `perf/static-loop-detection`, unchanged.
+2. `perf/lazy-line-column`, unchanged.
+3. `perf/per-parse-allocations` without its inline first loop-detection entry, which static loop detection makes
+   redundant, nor the packing of two options into the context's flags, whose bits the loop analysis uses: the byte
+   cancellation counter, the generated scanner that is its own cursor, and the generated loop state in the cold state.
+4. `perf/pratt-expressions` **without the automatic flattening**: `Operators()` is merged, existing chains of operator
+   levels parse level by level as before (it made the calculator's runtime chain slower and called factories in a
+   different order). The precedence parser saves offsets, and reports its start to the loop analysis.
+5. `perf/pooled-lists`, after keeping the first four items inline in the builder (a014020): short lists no longer touch
+   the thread static stack, which turned runtime Big JSON from 7% slower into 1% faster.
+6. `perf/generated-local-position`, after fixing a bug of span code found while merging it (9427828): a loop in an
+   enclosing loop kept the count and the items of its previous run, so `OneOrMany` could match nothing and the items
+   of an outer list shared one inner list. Span code loops accumulate with the list builder.
+
+`perf/memoize` isn't merged. Each step was built for every target framework and tested; the final state passes 4,321
+runtime tests (net10.0 and net8.0), 796 generator tests and the standalone tests.
+
+Against `main`, with the same harness (`eng/external-benchmarks/results/merged-*.md`):
+
+| | Time | Allocations |
+|---|---|---|
+| Fluid | **0.85–0.89** | **−15 to −22%** |
+| NCalc runtime grammar | **0.94–0.98** | 0 to −30% |
+| NCalc runtime grammar ported to `Operators()` | **0.65–0.79** | 0 to −42% |
+| NCalc generated parser | **0.85–0.92**, long expression **1.07** (see below) | 0 to −30% |
+| NCalc generated parser ported to `Operators()` | **0.61–0.71**, long expression 0.98 | 0 to −46% |
+| Parlot expressions (runtime and generated) | **0.81–0.86** | −4 to −25% |
+| Parlot JSON (runtime and generated) | **0.77–0.86** | −4 to −25% |
+| Parlot email (runtime / generated) | **0.91 / 0.48** | −5 / −27% |
+| Parlot SQL (runtime / generated) | **0.89 / 0.94** | −38 / −20% |
+
+**The long NCalc expression:** each branch alone was neutral or faster on it, and the slowdown appears with the merge of
+pooled lists over the previous merges (0.93 before, 1.11 after, 1.07 with span code). It isn't the code the generator
+emits being slower: with dynamic PGO disabled, the merged branch is faster than `main` on every NCalc expression, the
+long one included (0.89), and 0.97 with tiered compilation disabled. `main`'s generated parser gains much more from
+dynamic PGO on that expression (62 µs with it, 92 µs without), and the list loops, whose helpers hold a builder and a
+`try`/`finally` even when they stay empty, as NCalc's operator levels do for each operand, reduce that gain. Removing the
+`try`/`finally` alone recovers 4 of the 19 points. A follow-up: emit list loops whose empty path has no builder and no
+exception handling, and measure with PGO on.
 
 ## Reproducing
 
