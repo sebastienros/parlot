@@ -3,7 +3,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
+public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
     where A : T
     where B : T
 {
@@ -15,6 +15,8 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable
         _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
         _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parserA) | analysis.Invoke(_parserB);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

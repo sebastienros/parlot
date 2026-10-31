@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable
+public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
@@ -36,6 +36,14 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // It fails when the first element doesn't move the cursor
+        return false;
+    }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {

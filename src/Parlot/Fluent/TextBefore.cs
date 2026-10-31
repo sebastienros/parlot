@@ -7,7 +7,7 @@ using System.Buffers;
 
 namespace Parlot.Fluent;
 
-public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
+public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _delimiter;
     private readonly bool _canBeEmpty;
@@ -39,6 +39,13 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable
 #endif
             _canJumpToNextExpectedChar = true;
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_delimiter);
+
+        return _canBeEmpty;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)

@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 
 internal delegate bool TryParseRadix<T>(ReadOnlySpan<char> span, int radix, out int charsRead, [MaybeNullWhen(false)] out T value);
 
-internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
+internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly int _radix;
     private readonly TryParseRadix<T> _tryParse;
@@ -31,6 +31,8 @@ internal sealed class RadixNumberLiteral<T> : Parser<T>, ISeekable, ISourceable
     public char[] ExpectedChars { get; }
 
     public bool SkipWhitespace => false;
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

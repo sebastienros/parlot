@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class ElseError<T> : Parser<T>, ISourceable
+public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -14,6 +14,8 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message;
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
@@ -78,7 +80,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
     public override string ToString() => $"{_parser} (ElseError)";
 }
 
-public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
+public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -106,6 +108,14 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // It throws when the parser succeeds
+        return false;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -157,7 +167,7 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
     public override string ToString() => $"{_parser} (Error)";
 }
 
-public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
+public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -181,6 +191,14 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
             ExpectedChars = seekable.ExpectedChars;
             SkipWhitespace = seekable.SkipWhitespace;
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // It throws when the parser succeeds
+        return false;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)

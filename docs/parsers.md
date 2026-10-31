@@ -26,6 +26,10 @@ if (!parser.TryParse(context, out var result, out var error))
 }
 ```
 
+A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
+instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
+[Left recursion](writing.md#left-recursion). `disableLoopDetection: true` on the `ParseContext` disables it for every parser.
+
 ## Associative operators
 
 `LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:

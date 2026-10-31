@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
@@ -19,6 +19,13 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         ThrowHelper.ThrowIfNegative(max, nameof(max));
         _max = max;
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)

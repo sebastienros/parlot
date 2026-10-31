@@ -5,7 +5,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
+internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly CharMap<object> _map = new();
     private readonly string _values;
@@ -42,6 +42,8 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
             CanSeek = true;
         }
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _minSize <= 0;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

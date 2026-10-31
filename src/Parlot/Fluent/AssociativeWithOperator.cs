@@ -3,7 +3,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISourceable
+internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly OneOf<TOperator> _operators;
@@ -37,6 +37,19 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         }
 
         return new OneOf<TOperator>(operators);
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        // The operators follow the first operand
+        if (nullable)
+        {
+            analysis.Invoke(_operators);
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

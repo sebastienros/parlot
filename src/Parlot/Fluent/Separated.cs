@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable
+public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<U> _separator;
     private readonly Parser<T> _parser;
@@ -74,6 +74,20 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        // Otherwise the separator only follows an element that moved the cursor
+        if (_allowLeadingSeparator)
+        {
+            analysis.Invoke(_separator);
+        }
+
+        // The first element must move the cursor
+        return _min == 0;
+    }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {

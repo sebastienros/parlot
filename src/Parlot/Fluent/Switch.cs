@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Routes the parsing based on a custom delegate.
 /// </summary>
-public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
+public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _previousParser;
     private readonly Parser<U>[] _parsers;
@@ -48,6 +48,23 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_previousParser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        if (!analysis.Invoke(_previousParser))
+        {
+            return false;
+        }
+
+        var nullable = false;
+
+        foreach (var parser in _parsers)
+        {
+            nullable |= analysis.Invoke(parser);
+        }
+
+        return nullable;
+    }
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {

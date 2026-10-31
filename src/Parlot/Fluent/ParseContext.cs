@@ -89,6 +89,11 @@ public class ParseContext
         _flags = cancellationToken.CanBeCanceled ? CancellableFlag : (byte)0;
         DisableLoopDetection = disableLoopDetection;
         MaxRecursionDepth = maxRecursionDepth;
+
+        if (maxRecursionDepth > 0)
+        {
+            _flags |= LimitRecursionFlag;
+        }
     }
 
     /// <summary>
@@ -151,6 +156,45 @@ public class ParseContext
     private const byte InTokenFlag = 16;
     private const byte CompactingMask = CompactingFlag | InTokenFlag;
 
+    // Why a Deferred parser tracks its invocations even when it can't be invoked again at the position where it is active:
+    // the recursion is limited, or the white space parser can invoke a deferred parser.
+    private const byte LimitRecursionFlag = 32;
+    private const byte ReentrantWhiteSpaceFlag = 64;
+    private const byte DeferredTrackingMask = LimitRecursionFlag | ReentrantWhiteSpaceFlag;
+
+    /// <summary>
+    /// Whether a <see cref="Deferred{T}"/> parser that can't be invoked again at the position where it is active still tracks
+    /// its invocations, as <see cref="MaxRecursionDepth"/> is set or <see cref="HasReentrantWhiteSpaceParser"/>.
+    /// </summary>
+    internal bool TracksDeferredParsers
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & DeferredTrackingMask) != 0;
+    }
+
+    /// <summary>
+    /// Whether <see cref="WhiteSpaceParser"/> can invoke a deferred parser before it reads anything. The parsers that skip white
+    /// space invoke it where they are invoked, so the deferred parsers can't tell whether it invokes them again at the position
+    /// where they are active.
+    /// </summary>
+    internal bool HasReentrantWhiteSpaceParser => (_flags & ReentrantWhiteSpaceFlag) != 0;
+
+    /// <summary>
+    /// Sets <see cref="WhiteSpaceParser"/> with whether it can invoke a deferred parser, which the caller already knows.
+    /// </summary>
+    internal void SetWhiteSpaceParser(Parser<TextSpan>? parser, bool reentrant)
+    {
+        if (!ReferenceEquals(_whiteSpaceParser, parser))
+        {
+            _whiteSpaceParser = parser;
+
+            // The white spaces skipped by the previous parser are not the ones this one skips
+            _cacheOffset = -1;
+        }
+
+        SetFlag(ReentrantWhiteSpaceFlag, reentrant);
+    }
+
     private void SetFlag(byte flag, bool value)
     {
         _flags = value ? (byte)(_flags | flag) : (byte)(_flags & ~flag);
@@ -171,6 +215,11 @@ public class ParseContext
                 // The white spaces skipped by the previous parser are not the ones this one skips
                 _cacheOffset = -1;
             }
+
+#if !PARLOT_STANDALONE
+            // Generated parsers don't use Deferred
+            SetFlag(ReentrantWhiteSpaceFlag, value is not null && LoopAnalysis.CanReachDeferred(value));
+#endif
         }
     }
 

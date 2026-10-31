@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// A parser that sets the <see cref="ParseContext.WhiteSpaceSet"/> of its inner parser.
 /// </summary>
-public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable
+public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly WhiteSpaceSet _whiteSpaceSet;
@@ -36,6 +36,8 @@ public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

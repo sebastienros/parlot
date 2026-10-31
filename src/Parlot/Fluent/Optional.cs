@@ -9,12 +9,19 @@ namespace Parlot.Fluent;
 /// <remarks>
 /// This parser will always succeed. If the inner parser fails, it will return an option without a value.
 /// </remarks>
-public sealed class Optional<T> : Parser<Option<T>>, ISourceable
+public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     public Optional(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<Option<T>> result)

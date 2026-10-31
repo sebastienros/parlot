@@ -3,13 +3,20 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Not<T> : Parser<T>, ISourceable
+public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
     public Not(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        analysis.Invoke(_parser);
+
+        return true;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

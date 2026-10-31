@@ -5,12 +5,14 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Doesn't parse anything and fails parsing.
 /// </summary>
-public sealed class Fail<T> : Parser<T>, ISourceable
+public sealed class Fail<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     public Fail()
     {
         Name = "Fail";
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

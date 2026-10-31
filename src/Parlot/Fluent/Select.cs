@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="C">The concrete <see cref="ParseContext" /> type to use.</typeparam>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable where C : ParseContext
+public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable where C : ParseContext
 {
     private readonly Parser<T>[] _parsers;
     private readonly Func<C, int>? _contextSelector;
@@ -64,6 +64,18 @@ public sealed class Select<C, T> : Parser<T>, ISeekable, ISourceable where C : P
         }
 
         (CanSeek, ExpectedChars, SkipWhitespace) = SeekableHints.Union(_parsers);
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = false;
+
+        foreach (var parser in _parsers)
+        {
+            nullable |= analysis.Invoke(parser);
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

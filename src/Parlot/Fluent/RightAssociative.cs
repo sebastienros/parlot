@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
+public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T, T> Factory)[] _operators;
@@ -25,6 +25,22 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        // The operators follow the first operand
+        if (nullable)
+        {
+            foreach (var (op, _) in _operators)
+            {
+                analysis.Invoke(op);
+            }
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
@@ -128,7 +144,7 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourceable
+public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T, T> Factory)[] _operators;
@@ -142,6 +158,22 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourcea
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        // The operators follow the first operand
+        if (nullable)
+        {
+            foreach (var (op, _) in _operators)
+            {
+                analysis.Invoke(op);
+            }
+        }
+
+        return nullable;
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

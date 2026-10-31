@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser does NOT match at the current position without consuming input (negative lookahead).
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable
+public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<object> _lookahead;
@@ -34,6 +34,18 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        var nullable = analysis.Invoke(_parser);
+
+        if (nullable)
+        {
+            analysis.Invoke(_lookahead);
+        }
+
+        return nullable;
+    }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
