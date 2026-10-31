@@ -52,10 +52,11 @@ for round in $(seq 1 "$rounds"); do
         root="$(cd "${variant#*=}" && pwd)"
         echo "== Round $round: $name"
         rm -rf "$out/$name/round$round"
-        dotnet run --project "$root/test/Parlot.Benchmarks/Parlot.Benchmarks.csproj" -c Release --no-build -- \
+        # BenchmarkDotNet rebuilds the benchmark project it finds from the current directory: run from the checkout
+        (cd "$root" && dotnet run --project "$root/test/Parlot.Benchmarks/Parlot.Benchmarks.csproj" -c Release --no-build -- \
             --warmupCount "${BENCH_WARMUP:-6}" --iterationCount "${BENCH_ITERATIONS:-20}" --launchCount 1 \
             --memory --exporters json --artifacts "$out/$name/round$round" "${bdn[@]}" \
-            > "$out-$name-round$round.log" 2>&1 || echo "!! $name failed, see $out-$name-round$round.log"
+            > "$out-$name-round$round.log" 2>&1) || echo "!! $name failed, see $out-$name-round$round.log"
     done
 done
 
