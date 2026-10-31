@@ -134,7 +134,9 @@ public static partial bool TryParse(TextReader reader, out IJson value);
 ```
 
 The emitters generate the token loops and pins described above in the reader variant only, so
-the `string` variant of the same factory is unchanged. See
+the `string` variant of the same factory is unchanged. The `string` variant reads the subgraphs of literals as
+[span code](source-generation.md#span-code), which moves the cursor once per subgraph; the reader variant only does
+inside a token, whose buffer isn't replaced while it's read. See
 [TextReader entry points](source-generation.md#textreader-entry-points).
 
 ## Window driver

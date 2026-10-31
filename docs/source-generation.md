@@ -643,9 +643,46 @@ skip its execution, required input values, or exceptions.
 Higher-arity `SkipAnd` keeps the preceding tuple value-producing when some of its members are returned;
 individual dropped tuple members are not independently optimized.
 
+### Span code
+
+Parsers which only read the text are generated as *span code*, the way the .NET regular expression source
+generator emits a pattern. The text after the cursor is read through a `ReadOnlySpan<char>` local indexed by a
+position local, the parsers of the subgraph are emitted inline in a single method, with jumps to failure labels, and
+the cursor is moved once, when the subgraph matches. A failure leaves the cursor where it was: a sequence doesn't
+move it back, and choices, optional parsers and loops move the position local back rather than the cursor.
+
+`Char`, ordinal `Text`, `Pattern`, `AnyOf`, `NoneOf`, `Identifier` and the decimal number parsers (`Number<T>`,
+`Integer`, `Decimal`) are generated as span code inside the composite parsers whose parsers all are: `Terms` parsers
+(`SkipWhiteSpace`), `Then` with a callback receiving the value or with a constant, `Capture`, `OneOf` with less than 8
+alternatives (more texts or keywords use their lookups), `ZeroOrMany`, `OneOrMany`, `Optional`, `ZeroOrOne`,
+`Between` and the sequences (`And`, `AndSkip`, `SkipAnd`). The outermost such parser becomes one method, of up to 64
+parsers, a parser used twice counting twice. The other parsers, like `Deferred`, `Separated`, lookaheads or callbacks
+receiving the context, invoke the span code of their parts. A literal alone keeps its code.
+
+```csharp
+// One method, which moves the cursor once. The JIT inlines the 'w' callbacks and drops their TextSpan.
+var wordChar = Literals.Pattern(char.IsLetterOrDigit);
+var email = Capture(
+    OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('.'), Literals.Char('+'), Literals.Char('-')))
+        .And(Literals.Char('@'))
+        .And(OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('-'))))
+        .And(Literals.Char('.'))
+        .And(OneOrMany(OneOf(wordChar.Then(static _ => 'w'), Literals.Char('.'), Literals.Char('-')))));
+```
+
+The white space before a `Terms` parser is skipped by the execution context, which can run a custom white space
+parser. Span code checks the next char first, and only moves the cursor to skip white space when there is some, then
+moves it to the end of the match, or back to where it was, from there.
+
+The results are the ones of the other generated code, and of the runtime parsers: values, failures, positions, and
+the `Cursor.HitEnd` marks a non-final buffer depends on. A check of the char at the end of the span marks it, so does
+a callback invoked there, and moving the cursor to the end does. `TextReader` entry points don't use span code, their
+literals are tokens which refill the buffer, except inside a token, like the delimiter of `AnyCharBefore`.
+
 ### Parser Explorer diagnostics
 
 Set `Diagnostics = true` on a factory's `GenerateParser` attribute to emit diagnostic entry/exit and
 cursor-reset events for the local [Parser Explorer](explorer.md). This mode is intended for debugging;
-ordinary generated parsers contain no tracing calls. The explorer supports private entry points,
+ordinary generated parsers contain no tracing calls. It doesn't generate span code, so that each parser that is invoked
+and each move of the cursor is reported. The explorer supports private entry points,
 Monaco input editing, replay, rebuild detection, and result inspection without uploading assemblies.
