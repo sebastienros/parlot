@@ -1176,6 +1176,20 @@ public class FluentTests
     }
 
     [Fact]
+    public void WarningsShouldBeDiscardedWithTheOnlyAlternativeOfAChar()
+    {
+        // 'a' selects a single alternative, which fails after its warning
+        var parser = OneOf(
+            Terms.Text("a").Warning("abandoned").AndSkip(Terms.Char('!')),
+            Terms.Text("b"));
+        var context = new ParseContext(new Scanner("a?")) { CollectDiagnostics = true };
+
+        Assert.False(parser.TryParse(context, out _, out _));
+        Assert.Empty(context.Diagnostics);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void FailedAlternativeShouldKeepWarningsAlongWithItsErrors()
     {
         var parser = OneOf(

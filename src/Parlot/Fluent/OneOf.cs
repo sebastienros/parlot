@@ -856,17 +856,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         // (value may be assigned by failed helpers; callers only read it when success==true)
         var firstHelper = getHelper(parsers[0]);
 
-        if (parsers.Count == 1)
-        {
-            outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget});");
-            return;
-        }
-
         if (context.CollectDiagnostics)
         {
-            // The diagnostics of the alternatives that aren't used are discarded, see ParseCompacting()
+            // The diagnostics of the alternatives that aren't used are discarded, see ParseCompacting(). This includes the
+            // warnings of a single alternative which fails.
             var alternativesName = $"alternatives{context.NextNumber()}";
-            var collectingPinName = context.IsCompacting ? $"pin{context.NextNumber()}" : null;
+            var collectingPinName = context.IsCompacting && parsers.Count > 1 ? $"pin{context.NextNumber()}" : null;
 
             outerResult.Body.Add($"{indent}if ({contextVariableName}.CollectDiagnostics)");
             outerResult.Body.Add($"{indent}{{");
@@ -918,6 +913,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         string outTarget)
     {
         var successVar = outerResult.SuccessVariable;
+
+        if (parsers.Count == 1)
+        {
+            outerResult.Body.Add($"{indent}{successVar} = {firstHelper}({contextVariableName}, out {outTarget});");
+            return;
+        }
 
         if (context.IsCompacting)
         {

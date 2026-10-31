@@ -109,6 +109,12 @@ public static partial class ParameterizedGrammars
             Terms.Text("var").Warning("'var' is deprecated"),
             Terms.Identifier().Then(static x => x.ToString()!));
 
+    [GenerateParser(nameof(TryParseAbandonedWarning))]
+    private static Parser<string> BuildAbandonedWarning() =>
+        OneOf(
+            Terms.Text("a").Warning("abandoned").AndSkip(Terms.Char('!')),
+            Terms.Text("b"));
+
     [GenerateParser(nameof(TryParseOverloadedDefault))]
     private static Parser<string> BuildOverloaded() => Literals.Text("default").Eof();
 
