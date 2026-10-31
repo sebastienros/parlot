@@ -9,9 +9,16 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
-    # Ignore Abstractions packages - these should not be updated
     ignore:
-      - dependency-name: "*Abstractions"
+      # The source generator must load in the compiler of the oldest supported SDK (CS9057),
+      # see Directory.Packages.props.
+      - dependency-name: "Microsoft.CodeAnalysis.CSharp"
+      # Dependencies of the net472 and netstandard2.0 builds: a new major version would raise
+      # the minimum version for every consumer, so only take servicing updates.
+      - dependency-name: "Microsoft.Bcl.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]
     groups:
        # Grouped version updates configuration
        all-dependencies:
