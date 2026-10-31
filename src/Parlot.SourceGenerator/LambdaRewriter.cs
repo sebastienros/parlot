@@ -31,16 +31,22 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     private readonly Dictionary<int, LambdaInfo> _lambdas = new();
     private int _nextPointer;
 
-    public LambdaRewriter(SemanticModel semanticModel, IMethodSymbol factory)
+    public LambdaRewriter(SemanticModel semanticModel, IMethodSymbol factory, int firstPointer = 0)
     {
         _semanticModel = semanticModel;
         _factory = factory;
+        _nextPointer = firstPointer;
     }
 
     /// <summary>
     /// Gets all recorded lambdas with their pointers and source code.
     /// </summary>
     public IReadOnlyDictionary<int, LambdaInfo> Lambdas => _lambdas;
+
+    /// <summary>
+    /// Gets the pointer the next rewritten lambda would receive.
+    /// </summary>
+    public int NextPointer => _nextPointer;
 
     /// <summary>
     /// Information about a captured variable in a lambda (closure).

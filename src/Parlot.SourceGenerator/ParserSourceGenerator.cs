@@ -10,6 +10,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Emit;
 using Parlot.SourceGeneration;
 using RoslynCompilation = Microsoft.CodeAnalysis.Compilation;
 
@@ -428,16 +429,46 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         return display == "global::Parlot.Fluent.Parser<T>";
     }
 
-    [SuppressMessage("Build", "RS1035", Justification = "The generator must execute parser descriptors to produce source output.")]
-    private static void GenerateForMethod(
+    /// <summary>
+    /// A factory whose syntax tree had its lambdas rewritten into stubs that register their pointers.
+    /// </summary>
+    private sealed class PreparedFactory
+    {
+        public PreparedFactory(
+            MethodToGenerate methodInfo,
+            StandaloneEntryPoint standalone,
+            SyntaxTree originalTree,
+            SyntaxTree rewrittenTree,
+            LambdaRewriter rewriter)
+        {
+            MethodInfo = methodInfo;
+            Standalone = standalone;
+            OriginalTree = originalTree;
+            RewrittenTree = rewrittenTree;
+            Rewriter = rewriter;
+
+            // Get the source code map from pointers to original lambda source
+            LambdaSourceMap = rewriter.Lambdas.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value.OriginalSource);
+        }
+
+        public MethodToGenerate MethodInfo { get; }
+        public StandaloneEntryPoint Standalone { get; }
+        public SyntaxTree OriginalTree { get; }
+        public SyntaxTree RewrittenTree { get; }
+        public LambdaRewriter Rewriter { get; }
+        public Dictionary<int, string> LambdaSourceMap { get; }
+        public CSharpParseOptions ParseOptions => (CSharpParseOptions)OriginalTree.Options;
+    }
+
+    private static PreparedFactory? PrepareFactory(
         SourceProductionContext context,
         RoslynCompilation hostCompilation,
-        TargetFrameworkInfo targetFramework,
         MethodToGenerate methodInfo,
-        string projectDirectory,
-        bool isDesignTimeBuild,
         StandaloneEntryPoint standalone,
-        ISet<string> entryPointKeys)
+        int firstPointer,
+        Dictionary<SyntaxTree, SemanticModel>? semanticModels = null)
     {
         var methodSymbol = methodInfo.Method;
 
@@ -445,18 +476,22 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         var methodSyntaxRef = methodSymbol.DeclaringSyntaxReferences.FirstOrDefault();
         if (methodSyntaxRef is null)
         {
-            return;
+            return null;
         }
         var originalSyntaxTree = methodSyntaxRef.SyntaxTree;
         var methodSyntax = methodSyntaxRef.GetSyntax() as MethodDeclarationSyntax;
 
         if (methodSyntax is null)
         {
-            return;
+            return null;
         }
 
-        // Get semantic model for the syntax tree
-        var semanticModel = hostCompilation.GetSemanticModel(originalSyntaxTree);
+        // Get semantic model for the syntax tree. The factories of one file share it, so its lambdas are bound once.
+        if (semanticModels is null || !semanticModels.TryGetValue(originalSyntaxTree, out var semanticModel))
+        {
+            semanticModel = hostCompilation.GetSemanticModel(originalSyntaxTree);
+            semanticModels?.Add(originalSyntaxTree, semanticModel);
+        }
 
         // Use LambdaRewriter to rewrite lambdas into stubs for execution
         // The rewriter replaces each lambda/method group with a stub that contains a unique pointer
@@ -473,28 +508,48 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     methodSymbol.Name,
                     use.ParameterName));
             }
-            return;
+            return null;
         }
 
-        var rewriter = new LambdaRewriter(semanticModel, methodSymbol);
+        // Only the recorded lambda sources depend on the factory, not the rewritten tree, so the
+        // factories of one file share the tree when their rewriters start from the same pointer.
+        var rewriter = new LambdaRewriter(semanticModel, methodSymbol, firstPointer);
         var rewrittenRoot = rewriter.Visit(originalSyntaxTree.GetRoot());
 
         // Create a new syntax tree with the rewritten code
-        var parseOptions = (CSharpParseOptions)originalSyntaxTree.Options;
         var rewrittenTree = CSharpSyntaxTree.Create(
             (CSharpSyntaxNode)rewrittenRoot,
-            parseOptions,
+            (CSharpParseOptions)originalSyntaxTree.Options,
             originalSyntaxTree.FilePath);
 
-        // Get the source code map from pointers to original lambda source
-        var lambdaSourceMap = rewriter.Lambdas.ToDictionary(
-            kv => kv.Key,
-            kv => kv.Value.OriginalSource);
+        return new PreparedFactory(methodInfo, standalone, originalSyntaxTree, rewrittenTree, rewriter);
+    }
+
+    [SuppressMessage("Build", "RS1035", Justification = "The generator must execute parser descriptors to produce source output.")]
+    private static void GenerateForMethod(
+        SourceProductionContext context,
+        RoslynCompilation hostCompilation,
+        TargetFrameworkInfo targetFramework,
+        MethodToGenerate methodInfo,
+        string projectDirectory,
+        bool isDesignTimeBuild,
+        StandaloneEntryPoint standalone,
+        ISet<string> entryPointKeys)
+    {
+        var prepared = PrepareFactory(context, hostCompilation, methodInfo, standalone, firstPointer: 0);
+        if (prepared is null)
+        {
+            return;
+        }
+
+        var methodSymbol = methodInfo.Method;
+        var originalSyntaxTree = prepared.OriginalTree;
+        var parseOptions = prepared.ParseOptions;
 
         // Replace the original syntax tree with the rewritten one in the host compilation
         // This allows us to execute the parser with lambda stubs while keeping all other files intact
         var tempCompilation = hostCompilation
-            .ReplaceSyntaxTree(originalSyntaxTree, rewrittenTree);
+            .ReplaceSyntaxTree(originalSyntaxTree, prepared.RewrittenTree);
 
         tempCompilation = StubStandaloneEntryPoints(tempCompilation, entryPointKeys);
 
@@ -526,12 +581,27 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             tempCompilation = RunAdditionalGenerators(context, tempCompilation, methodInfo.AdditionalGenerators, parseOptions, methodSymbol, isDesignTimeBuild);
         }
 
+        using var peStream = new MemoryStream();
+        var emitResult = EmitFactoryAssembly(ref tempCompilation, peStream, out var partialBypassedMethods);
+        if (!emitResult.Success)
+        {
+            ReportEmitFailure(context, methodSymbol, emitResult, partialBypassedMethods);
+            return;
+        }
+
+        ExecuteFactories(context, hostCompilation, targetFramework, peStream, [prepared]);
+    }
+
+    private static EmitResult EmitFactoryAssembly(
+        ref RoslynCompilation tempCompilation,
+        MemoryStream peStream,
+        out List<string>? partialBypassedMethods)
+    {
         // Some generators (e.g. Logging, Regex) generate partial method implementations.
         // During this generator's execution, those implementations might not be present in the compilation snapshot.
         // If emit fails with CS8795/CS0759, rewrite the affected partial methods in-memory into non-partial stubs and retry once.
-        List<string>? partialBypassedMethods = null;
+        partialBypassedMethods = null;
 
-        using var peStream = new MemoryStream();
         var emitResult = tempCompilation.Emit(peStream);
 
         if (!emitResult.Success && emitResult.Diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error && (d.Id == "CS8795" || d.Id == "CS0759")))
@@ -542,50 +612,69 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             emitResult = tempCompilation.Emit(peStream);
         }
 
-        if (!emitResult.Success)
+        return emitResult;
+    }
+
+    private static void ReportEmitFailure(
+        SourceProductionContext context,
+        IMethodSymbol methodSymbol,
+        EmitResult emitResult,
+        List<string>? partialBypassedMethods)
+    {
+        // Check if errors are likely due to missing outputs from other source generators.
+        // - CS8795: partial method missing implementation (common with LoggerMessage/GeneratedRegex)
+        // - CS0246/CS0234: type/namespace not found (also common when generated types aren't present yet)
+        var missingGeneratorOutputErrors = emitResult.Diagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error &&
+                        (d.Id == "CS0246" || d.Id == "CS0234" || d.Id == "CS8795" || d.Id == "CS0759"))
+            .ToList();
+
+        // Output a diagnostic about emit failure with the error messages
+        var errorMessages = string.Join("; ", emitResult.Diagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Take(5)
+            .Select(d =>
+            {
+                var location = d.Location;
+                var lineSpan = location.GetLineSpan();
+                var fileName = Path.GetFileName(lineSpan.Path);
+                var line = lineSpan.StartLinePosition.Line + 1;
+                return $"{fileName}({line}): {d.GetMessage(CultureInfo.InvariantCulture)}";
+            }));
+
+        if (missingGeneratorOutputErrors.Count > 0)
         {
-            // Check if errors are likely due to missing outputs from other source generators.
-            // - CS8795: partial method missing implementation (common with LoggerMessage/GeneratedRegex)
-            // - CS0246/CS0234: type/namespace not found (also common when generated types aren't present yet)
-            var missingGeneratorOutputErrors = emitResult.Diagnostics
-                .Where(d => d.Severity == DiagnosticSeverity.Error &&
-                            (d.Id == "CS0246" || d.Id == "CS0234" || d.Id == "CS8795" || d.Id == "CS0759"))
-                .ToList();
-
-            // Output a diagnostic about emit failure with the error messages
-            var errorMessages = string.Join("; ", emitResult.Diagnostics
-                .Where(d => d.Severity == DiagnosticSeverity.Error)
-                .Take(5)
-                .Select(d =>
-                {
-                    var location = d.Location;
-                    var lineSpan = location.GetLineSpan();
-                    var fileName = Path.GetFileName(lineSpan.Path);
-                    var line = lineSpan.StartLinePosition.Line + 1;
-                    return $"{fileName}({line}): {d.GetMessage(CultureInfo.InvariantCulture)}";
-                }));
-
-            if (missingGeneratorOutputErrors.Count > 0)
+            var detail = errorMessages;
+            if (partialBypassedMethods is { Count: > 0 })
             {
-                var detail = errorMessages;
-                if (partialBypassedMethods is { Count: > 0 })
-                {
-                    detail += $" | Rewrote {partialBypassedMethods.Count} partial method(s) into stubs, but emit still failed.";
-                }
-                detail += " | NOTE: This commonly happens when other source generators (e.g., logging/regex) haven't produced required code in the current generator pass. A rebuild usually resolves it.";
+                detail += $" | Rewrote {partialBypassedMethods.Count} partial method(s) into stubs, but emit still failed.";
+            }
+            detail += " | NOTE: This commonly happens when other source generators (e.g., logging/regex) haven't produced required code in the current generator pass. A rebuild usually resolves it.";
 
-                context.ReportDiagnostic(Diagnostic.Create(
-                    EmitFailedDescriptor,
-                    GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name, detail));
-            }
-            else
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    EmitFailedDescriptor,
-                    GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name, errorMessages));
-            }
+            context.ReportDiagnostic(Diagnostic.Create(
+                EmitFailedDescriptor,
+                GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name, detail));
             return;
         }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            EmitFailedDescriptor,
+            GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name, errorMessages));
+    }
+
+    /// <summary>
+    /// Loads the emitted private assembly once, then runs each factory from it.
+    /// </summary>
+    [SuppressMessage("Build", "RS1035", Justification = "The generator must execute parser descriptors to produce source output.")]
+    private static void ExecuteFactories(
+        SourceProductionContext context,
+        RoslynCompilation hostCompilation,
+        TargetFrameworkInfo targetFramework,
+        MemoryStream peStream,
+        IReadOnlyList<PreparedFactory> factories)
+    {
+        // Assembly load problems are reported once, on the first factory
+        var methodSymbol = factories[0].MethodInfo.Method;
 
         peStream.Position = 0;
 
@@ -751,266 +840,291 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         try
         {
             var assembly = Assembly.Load(peStream.ToArray());
-
-            // Locate the generated type and method via reflection
-            var containingTypeName = methodSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            const string globalPrefix = "global::";
-            if (containingTypeName.StartsWith(globalPrefix, StringComparison.Ordinal))
+            foreach (var factory in factories)
             {
-                containingTypeName = containingTypeName.Substring(globalPrefix.Length);
-            }
-
-            var type = assembly.GetType(containingTypeName);
-            if (type is null)
-            {
-                // This happens in the editor when the emitted assembly can't be loaded correctly
-                // context.ReportDiagnostic(Diagnostic.Create(
-                //     new DiagnosticDescriptor("PARLOT002", "Type not found", "Could not find type '{0}' in emitted assembly", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
-                //     methodSymbol.Locations.FirstOrDefault(), containingTypeName));
-                return;
-            }
-
-            var method = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                .SingleOrDefault(candidate => MatchesFactoryMethod(candidate, methodSymbol));
-
-            if (method is null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    MethodNotFoundDescriptor,
-                    GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name, containingTypeName));
-                return;
-            }
-
-            // Parameters may only be read by deferred callbacks, so placeholders cannot affect the graph.
-            object? parserInstance;
-            LambdaPointer.Reset();
-            try
-            {
-                var arguments = method.GetParameters()
-                    .Select(static parameter => parameter.ParameterType.IsValueType
-                        ? Array.CreateInstance(parameter.ParameterType, 1).GetValue(0)
-                        : null)
-                    .ToArray();
-                parserInstance = method.Invoke(null, arguments);
-            }
-            catch (TargetInvocationException ex)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT004",
-                        "Parser factory threw",
-                        "Method '{0}' threw an exception: {1}",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
-                    methodSymbol.Name,
-                    ex.InnerException?.Message ?? ex.Message));
-                return;
-            }
-            catch (Exception ex)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT004",
-                        "Parser factory failed",
-                        "Method '{0}' could not be invoked: {1}",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
-                    methodSymbol.Name,
-                    ex.Message));
-                return;
-            }
-
-            if (ReportEagerCapture(context, methodInfo))
-            {
-                return;
-            }
-
-            if (parserInstance is null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor("PARLOT004", "Null parser", "Method '{0}' returned null", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name));
-                return;
-            }
-
-            // The runtime type will be something like Parlot.Fluent.Then`2 or similar,
-            // whose base type is Parser<T>.
-            var parserType = parserInstance.GetType();
-            var baseType = parserType.BaseType;
-            if (baseType is null || !baseType.IsGenericType)
-            {
-                return;
-            }
-
-            var valueType = baseType.GetGenericArguments()[0];
-
-            // Ensure the parser supports source generation
-            // We check by interface name because the assembly loaded at runtime may have
-            // a different type identity than the one referenced by the source generator
-            var sourceableInterface = parserInstance.GetType().GetInterfaces()
-                .FirstOrDefault(i => i.FullName == "Parlot.SourceGeneration.ISourceable");
-
-            if (sourceableInterface is null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT001",
-                        "Parser does not implement ISourceable",
-                        "Parser type '{0}' does not implement ISourceable. Implemented interfaces: {1}",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
-                    parserInstance.GetType().FullName,
-                    string.Join(", ", parserInstance.GetType().GetInterfaces().Select(i => i.FullName))));
-                return;
-            }
-
-            // Get the GenerateSource method via reflection since we can't cast across assembly boundaries
-            var generateSourceMethod = sourceableInterface.GetMethod("GenerateSource");
-            if (generateSourceMethod is null)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT001",
-                        "ISourceable.GenerateSource not found",
-                        "Parser type '{0}' implements ISourceable but GenerateSource method not found",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
-                    parserInstance.GetType().FullName));
-                return;
-            }
-
-            static int GetCSharpLanguageMajorVersion(IMethodSymbol symbol)
-            {
-                var syntaxRef = symbol.DeclaringSyntaxReferences.FirstOrDefault();
-                if (syntaxRef?.SyntaxTree.Options is not CSharpParseOptions csharpOptions)
+                try
                 {
-                    return 0;
+                    ExecuteFactory(context, assembly, factory, targetFramework);
                 }
-
-                var lv = csharpOptions.LanguageVersion;
-
-                // Normalize common Roslyn values to a major integer.
-                if (lv == LanguageVersion.Latest || lv == LanguageVersion.Preview)
+                catch (Exception exception) when (IsStandaloneOutputException(exception))
                 {
-                    return int.MaxValue;
+                    ReportStandaloneOutputException(context, factory.Standalone, exception);
                 }
-
-                // Roslyn uses enum values like CSharp9, CSharp10, ...
-                var name = lv.ToString();
-                const string prefix = "CSharp";
-                if (name.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(name.Substring(prefix.Length), out var major))
-                {
-                    return major;
-                }
-
-                return 0;
             }
-
-            var sgContext = new SourceGenerationContext(
-                parseContextName: "context",
-                methodNamePrefix: GetEntryIdentifier(methodSymbol, standalone),
-                targetFramework: targetFramework,
-                csharpLanguageMajorVersion: GetCSharpLanguageMajorVersion(methodSymbol));
-
-            // Set the lambda source map before invoking GenerateSource
-            // This allows the LambdaRegistry to map runtime lambda pointers back to their original source
-            sgContext.SetLambdaSourceMap(lambdaSourceMap);
-
-            // A TextReader entry point reads a compacting stream buffer
-            sgContext.IsCompacting = standalone.IsReader;
-
-            // The diagnostics report each parser and each move of the cursor, which span code would hide
-            sgContext.GenerateSpanCode = !standalone.Diagnostics;
-
-            // Invoke GenerateSource via reflection
-            object? sourceResultObj;
-            try
-            {
-                sourceResultObj = generateSourceMethod.Invoke(parserInstance, new object[] { sgContext });
-            }
-            catch (TargetInvocationException ex)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT005",
-                        "GenerateSource threw",
-                        "GenerateSource for '{0}' threw an exception: {1}",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
-                    parserInstance.GetType().FullName,
-                    ex.InnerException?.Message ?? ex.Message));
-                return;
-            }
-
-            if (sourceResultObj is not SourceResult sourceResult)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT005",
-                        "GenerateSource returned invalid result",
-                        "GenerateSource for '{0}' returned '{1}' instead of SourceResult",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Error,
-                        isEnabledByDefault: true),
-                    methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
-                    parserInstance.GetType().FullName,
-                    sourceResultObj?.GetType().FullName ?? "null"));
-                return;
-            }
-
-            // Generate C# code using the new pointer-based lambda system
-            var (sourceText, failedLambdas, capturedVariables) = GenerateParserCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, rewriter.Lambdas, methodInfo.AdditionalUsings, standalone);
-
-            if (ReportEagerCapture(context, methodInfo))
-            {
-                return;
-            }
-
-            foreach (var captured in capturedVariables)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    ClosureNotSupportedDescriptor,
-                    GrammarDiagnosticLocation(captured.Location),
-                    methodSymbol.Name,
-                    captured.VariableName));
-            }
-
-            // Report errors for lambdas that couldn't be extracted
-            foreach (var failedLambda in failedLambdas)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    LambdaExtractionFailedDescriptor,
-                    GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
-                    methodSymbol.Name,
-                    failedLambda));
-            }
-
-            // Only report success and add source if there were no failed lambdas
-            if (failedLambdas.Count > 0 || capturedVariables.Count > 0)
-            {
-                return;
-            }
-
-            if (standalone.Diagnostics)
-            {
-                sourceText = DiagnosticsRewriter.Rewrite(sourceText, parseOptions, standalone.Method.Name);
-            }
-            standalone.Source = StandaloneRuntimeSources.RewriteGeneratedSource(sourceText, parseOptions);
         }
         finally
         {
             AppDomain.CurrentDomain.AssemblyResolve -= resolver;
         }
+    }
+
+    [SuppressMessage("Build", "RS1035", Justification = "The generator must execute parser descriptors to produce source output.")]
+    private static void ExecuteFactory(
+        SourceProductionContext context,
+        Assembly assembly,
+        PreparedFactory prepared,
+        TargetFrameworkInfo targetFramework)
+    {
+        var methodInfo = prepared.MethodInfo;
+        var methodSymbol = methodInfo.Method;
+        var standalone = prepared.Standalone;
+        var lambdaSourceMap = prepared.LambdaSourceMap;
+        var parseOptions = prepared.ParseOptions;
+
+        // Locate the generated type and method via reflection
+        var containingTypeName = methodSymbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        const string globalPrefix = "global::";
+        if (containingTypeName.StartsWith(globalPrefix, StringComparison.Ordinal))
+        {
+            containingTypeName = containingTypeName.Substring(globalPrefix.Length);
+        }
+
+        var type = assembly.GetType(containingTypeName);
+        if (type is null)
+        {
+            // This happens in the editor when the emitted assembly can't be loaded correctly
+            // context.ReportDiagnostic(Diagnostic.Create(
+            //     new DiagnosticDescriptor("PARLOT002", "Type not found", "Could not find type '{0}' in emitted assembly", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
+            //     methodSymbol.Locations.FirstOrDefault(), containingTypeName));
+            return;
+        }
+
+        var method = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .SingleOrDefault(candidate => MatchesFactoryMethod(candidate, methodSymbol));
+
+        if (method is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                MethodNotFoundDescriptor,
+                GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()), methodSymbol.Name, containingTypeName));
+            return;
+        }
+
+        // Parameters may only be read by deferred callbacks, so placeholders cannot affect the graph.
+        object? parserInstance;
+        LambdaPointer.Reset();
+        try
+        {
+            var arguments = method.GetParameters()
+                .Select(static parameter => parameter.ParameterType.IsValueType
+                    ? Array.CreateInstance(parameter.ParameterType, 1).GetValue(0)
+                    : null)
+                .ToArray();
+            parserInstance = method.Invoke(null, arguments);
+        }
+        catch (TargetInvocationException ex)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT004",
+                    "Parser factory threw",
+                    "Method '{0}' threw an exception: {1}",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodSymbol.Name,
+                ex.InnerException?.Message ?? ex.Message));
+            return;
+        }
+        catch (Exception ex)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT004",
+                    "Parser factory failed",
+                    "Method '{0}' could not be invoked: {1}",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                methodSymbol.Name,
+                ex.Message));
+            return;
+        }
+
+        if (ReportEagerCapture(context, methodInfo))
+        {
+            return;
+        }
+
+        if (parserInstance is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor("PARLOT004", "Null parser", "Method '{0}' returned null", "Parlot.SourceGenerator", DiagnosticSeverity.Warning, true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(), methodSymbol.Name));
+            return;
+        }
+
+        // The runtime type will be something like Parlot.Fluent.Then`2 or similar,
+        // whose base type is Parser<T>.
+        var parserType = parserInstance.GetType();
+        var baseType = parserType.BaseType;
+        if (baseType is null || !baseType.IsGenericType)
+        {
+            return;
+        }
+
+        var valueType = baseType.GetGenericArguments()[0];
+
+        // Ensure the parser supports source generation
+        // We check by interface name because the assembly loaded at runtime may have
+        // a different type identity than the one referenced by the source generator
+        var sourceableInterface = parserInstance.GetType().GetInterfaces()
+            .FirstOrDefault(i => i.FullName == "Parlot.SourceGeneration.ISourceable");
+
+        if (sourceableInterface is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT001",
+                    "Parser does not implement ISourceable",
+                    "Parser type '{0}' does not implement ISourceable. Implemented interfaces: {1}",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                parserInstance.GetType().FullName,
+                string.Join(", ", parserInstance.GetType().GetInterfaces().Select(i => i.FullName))));
+            return;
+        }
+
+        // Get the GenerateSource method via reflection since we can't cast across assembly boundaries
+        var generateSourceMethod = sourceableInterface.GetMethod("GenerateSource");
+        if (generateSourceMethod is null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT001",
+                    "ISourceable.GenerateSource not found",
+                    "Parser type '{0}' implements ISourceable but GenerateSource method not found",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                parserInstance.GetType().FullName));
+            return;
+        }
+
+        static int GetCSharpLanguageMajorVersion(IMethodSymbol symbol)
+        {
+            var syntaxRef = symbol.DeclaringSyntaxReferences.FirstOrDefault();
+            if (syntaxRef?.SyntaxTree.Options is not CSharpParseOptions csharpOptions)
+            {
+                return 0;
+            }
+
+            var lv = csharpOptions.LanguageVersion;
+
+            // Normalize common Roslyn values to a major integer.
+            if (lv == LanguageVersion.Latest || lv == LanguageVersion.Preview)
+            {
+                return int.MaxValue;
+            }
+
+            // Roslyn uses enum values like CSharp9, CSharp10, ...
+            var name = lv.ToString();
+            const string prefix = "CSharp";
+            if (name.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(name.Substring(prefix.Length), out var major))
+            {
+                return major;
+            }
+
+            return 0;
+        }
+
+        var sgContext = new SourceGenerationContext(
+            parseContextName: "context",
+            methodNamePrefix: GetEntryIdentifier(methodSymbol, standalone),
+            targetFramework: targetFramework,
+            csharpLanguageMajorVersion: GetCSharpLanguageMajorVersion(methodSymbol));
+
+        // Set the lambda source map before invoking GenerateSource
+        // This allows the LambdaRegistry to map runtime lambda pointers back to their original source
+        sgContext.SetLambdaSourceMap(lambdaSourceMap);
+
+        // A TextReader entry point reads a compacting stream buffer
+        sgContext.IsCompacting = standalone.IsReader;
+
+        // The diagnostics report each parser and each move of the cursor, which span code would hide
+        sgContext.GenerateSpanCode = !standalone.Diagnostics;
+
+        // Invoke GenerateSource via reflection
+        object? sourceResultObj;
+        try
+        {
+            sourceResultObj = generateSourceMethod.Invoke(parserInstance, new object[] { sgContext });
+        }
+        catch (TargetInvocationException ex)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT005",
+                    "GenerateSource threw",
+                    "GenerateSource for '{0}' threw an exception: {1}",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                parserInstance.GetType().FullName,
+                ex.InnerException?.Message ?? ex.Message));
+            return;
+        }
+
+        if (sourceResultObj is not SourceResult sourceResult)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT005",
+                    "GenerateSource returned invalid result",
+                    "GenerateSource for '{0}' returned '{1}' instead of SourceResult",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true),
+                methodInfo.AttributeLocation ?? methodSymbol.Locations.FirstOrDefault(),
+                parserInstance.GetType().FullName,
+                sourceResultObj?.GetType().FullName ?? "null"));
+            return;
+        }
+
+        // Generate C# code using the new pointer-based lambda system
+        var (sourceText, failedLambdas, capturedVariables) = GenerateParserCore(methodSymbol, valueType, sourceResult, sgContext, lambdaSourceMap, prepared.Rewriter.Lambdas, methodInfo.AdditionalUsings, standalone);
+
+        if (ReportEagerCapture(context, methodInfo))
+        {
+            return;
+        }
+
+        foreach (var captured in capturedVariables)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                ClosureNotSupportedDescriptor,
+                GrammarDiagnosticLocation(captured.Location),
+                methodSymbol.Name,
+                captured.VariableName));
+        }
+
+        // Report errors for lambdas that couldn't be extracted
+        foreach (var failedLambda in failedLambdas)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                LambdaExtractionFailedDescriptor,
+                GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault()),
+                methodSymbol.Name,
+                failedLambda));
+        }
+
+        // Only report success and add source if there were no failed lambdas
+        if (failedLambdas.Count > 0 || capturedVariables.Count > 0)
+        {
+            return;
+        }
+
+        if (standalone.Diagnostics)
+        {
+            sourceText = DiagnosticsRewriter.Rewrite(sourceText, parseOptions, standalone.Method.Name);
+        }
+        standalone.Source = StandaloneRuntimeSources.RewriteGeneratedSource(sourceText, parseOptions);
     }
 
     private static (string SourceText, List<string> FailedLambdas, List<LambdaRewriter.CapturedVariableInfo> CapturedVariables) GenerateParserCore(
