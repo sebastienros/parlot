@@ -26,6 +26,23 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("Small", "Mixed")]
+    [InlineData("Medium", "Mixed")]
+    [InlineData("Language", "Hit")]
+    [InlineData("Language", "Miss")]
+    [InlineData("Language", "Mixed")]
+    [InlineData("SharedPrefix", "Mixed")]
+    public void KeywordChoiceGrammar(string vocabulary, string scenario)
+    {
+        // The setup checks every parser against the runtime one
+        var benchmark = new KeywordParserBenchmarks { Vocabulary = vocabulary, Scenario = scenario };
+        benchmark.Setup();
+        var expected = scenario switch { "Hit" => 64, "Mixed" => 16, _ => 0 };
+        Assert.Equal(expected, benchmark.GeneratedWrappedPrefixDispatch());
+        Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
+    }
+
+    [Theory]
     [InlineData("Language", "Hit")]
     [InlineData("Language", "Miss")]
     [InlineData("Language", "Mixed")]
