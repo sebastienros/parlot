@@ -51,9 +51,15 @@ public class ParseContext
     /// kept in a plain stack rather than a hash set. A stack doesn't need to rehash its content while it grows,
     /// which was allocating several intermediate tables for deeply nested grammars, and a lookup is a vectorized
     /// scan over the recorded positions since two entries rarely share the same one.
+    /// <para>
+    /// The context is allocated for each parse and a grammar often has a single recursive parser active at a time,
+    /// so the first pair is kept in these fields until a second one is pushed: while <see cref="_activePositions"/>
+    /// is <see langword="null"/>, <see cref="_activeParsers"/> is the active parser, if any, and <see cref="_activeCount"/>
+    /// its position. Afterwards they hold the stack's arrays and its size, until the context is discarded.
+    /// </para>
     /// </remarks>
     private int[]? _activePositions;
-    private object[]? _activeParsers;
+    private object? _activeParsers;
     private int _activeCount;
 
     /// <summary>
@@ -722,12 +728,21 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsParserActiveAtPosition(object parser)
     {
-        return IndexOfActiveParser(parser, Scanner.Cursor.Offset) >= 0;
+        var position = Scanner.Cursor.Offset;
+
+        if (_activePositions is null)
+        {
+            // At most one parser is active, see _activePositions
+            return _activeParsers is not null && _activeCount == position && ReferenceEquals(_activeParsers, parser);
+        }
+
+        return IndexOfActiveParser(parser, position) >= 0;
     }
 
     /// <summary>
     /// Returns the index of an active parser at the specified position, or <c>-1</c> when it's not active.
     /// </summary>
+    /// <remarks>Only valid once the active parsers are stored in arrays, see <see cref="_activePositions"/>.</remarks>
     private int IndexOfActiveParser(object parser, int position)
     {
         var count = _activeCount;
@@ -741,7 +756,7 @@ public class ParseContext
         // A parser that consumed something has a different position, so matches are rare.
 
         var positions = _activePositions!.AsSpan(0, count);
-        var parsers = _activeParsers!;
+        var parsers = (object[])_activeParsers!;
         var start = 0;
 
         while (true)
@@ -774,37 +789,73 @@ public class ParseContext
     {
         var position = Scanner.Cursor.Offset;
 
-        if (IndexOfActiveParser(parser, position) >= 0)
+        if (_activePositions is null)
+        {
+            var active = _activeParsers;
+
+            if (active is null && parser is not null)
+            {
+                // The first parser is kept inline, see _activePositions
+                _activeParsers = parser;
+                _activeCount = position;
+                return true;
+            }
+
+            if (active is not null && _activeCount == position && ReferenceEquals(active, parser))
+            {
+                return false;
+            }
+
+            SpillActiveParsers();
+        }
+        else if (IndexOfActiveParser(parser, position) >= 0)
         {
             return false;
         }
 
         var count = _activeCount;
+        var positions = _activePositions!;
+        var parsers = (object[])_activeParsers!;
 
-        if (_activePositions is null)
-        {
-            _activePositions = new int[InitialActiveParsersCapacity];
-            _activeParsers = new object[InitialActiveParsersCapacity];
-        }
-        else if (count == _activePositions.Length)
+        if (count == positions.Length)
         {
             // Both arrays are allocated before either field is assigned, such that a failed
             // allocation can't leave them with different lengths
-            var positions = new int[count * 2];
-            var parsers = new object[count * 2];
+            var newPositions = new int[count * 2];
+            var newParsers = new object[count * 2];
 
-            Array.Copy(_activePositions, positions, count);
-            Array.Copy(_activeParsers!, parsers, count);
+            Array.Copy(positions, newPositions, count);
+            Array.Copy(parsers, newParsers, count);
 
-            _activePositions = positions;
-            _activeParsers = parsers;
+            _activePositions = positions = newPositions;
+            _activeParsers = parsers = newParsers;
         }
 
-        _activePositions[count] = position;
-        _activeParsers![count] = parser;
+        positions[count] = position;
+        parsers[count] = parser!;
         _activeCount = count + 1;
 
         return true;
+    }
+
+    // Moves the inline parser, if any, to the arrays that store the active parsers from then on
+    private void SpillActiveParsers()
+    {
+        // Both arrays are allocated before any field is assigned, such that a failed allocation keeps the inline parser
+        var positions = new int[InitialActiveParsersCapacity];
+        var parsers = new object[InitialActiveParsersCapacity];
+        var count = 0;
+
+        if (_activeParsers is not null)
+        {
+            positions[0] = _activeCount;
+            parsers[0] = _activeParsers;
+            count = 1;
+        }
+
+        _activePositions = positions;
+        _activeParsers = parsers;
+        _activeCount = count;
     }
 
     // Kept small since most grammars only nest a few parsers, the arrays grow for the deeper ones
@@ -818,6 +869,17 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PopParserAtPosition(object parser, int position)
     {
+        if (_activePositions is null)
+        {
+            if (_activeParsers is not null && _activeCount == position && ReferenceEquals(_activeParsers, parser))
+            {
+                // Released so the context doesn't keep the parser it is done with alive
+                _activeParsers = null;
+            }
+
+            return;
+        }
+
         var count = _activeCount;
 
         if (count == 0)
@@ -828,11 +890,12 @@ public class ParseContext
         // Parsers are entered and left in LIFO order, so the entry to remove is the last one
 
         var last = count - 1;
+        var parsers = (object[])_activeParsers!;
 
-        if (_activePositions![last] == position && ReferenceEquals(_activeParsers![last], parser))
+        if (_activePositions[last] == position && ReferenceEquals(parsers[last], parser))
         {
             // Released so the context doesn't keep the parsers it is done with alive
-            _activeParsers[last] = null!;
+            parsers[last] = null!;
             _activeCount = last;
             return;
         }
@@ -853,14 +916,15 @@ public class ParseContext
         }
 
         var remaining = _activeCount - index - 1;
+        var parsers = (object[])_activeParsers!;
 
         Array.Copy(_activePositions!, index + 1, _activePositions!, index, remaining);
-        Array.Copy(_activeParsers!, index + 1, _activeParsers!, index, remaining);
+        Array.Copy(parsers, index + 1, parsers, index, remaining);
 
         _activeCount--;
 
         // Released so the context doesn't keep the parsers it is done with alive
-        _activeParsers![_activeCount] = null!;
+        parsers[_activeCount] = null!;
     }
 }
 

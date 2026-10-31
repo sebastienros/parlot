@@ -2329,6 +2329,126 @@ public class FluentTests
     }
 
     [Fact]
+    public void ActiveParsersShouldBeTrackedWhenTheFirstOneMovesToTheArrays()
+    {
+        // The first active parser is stored in the context's fields, a second one moves it to arrays
+        var context = new ParseContext(new Scanner("ab"));
+        var a = new object();
+        var b = new object();
+
+        Assert.True(context.PushParserAtPosition(a));
+        Assert.False(context.PushParserAtPosition(a));
+        Assert.True(context.IsParserActiveAtPosition(a));
+        Assert.False(context.IsParserActiveAtPosition(b));
+
+        Assert.True(context.PushParserAtPosition(b));
+        Assert.False(context.PushParserAtPosition(a));
+        Assert.False(context.PushParserAtPosition(b));
+        Assert.True(context.IsParserActiveAtPosition(a));
+        Assert.True(context.IsParserActiveAtPosition(b));
+
+        // Out of order
+        context.PopParserAtPosition(a, 0);
+        Assert.False(context.IsParserActiveAtPosition(a));
+        Assert.True(context.IsParserActiveAtPosition(b));
+
+        context.PopParserAtPosition(b, 0);
+        Assert.False(context.IsParserActiveAtPosition(b));
+
+        // The arrays are used from then on
+        Assert.True(context.PushParserAtPosition(a));
+        Assert.False(context.PushParserAtPosition(a));
+        context.PopParserAtPosition(a, 0);
+        Assert.True(context.PushParserAtPosition(a));
+    }
+
+    [Fact]
+    public void FirstActiveParserShouldOnlyMatchItsPosition()
+    {
+        var context = new ParseContext(new Scanner("ab"));
+        var a = new object();
+        var b = new object();
+
+        Assert.True(context.PushParserAtPosition(a));
+
+        // Neither another position nor another parser removes it
+        context.PopParserAtPosition(a, 1);
+        context.PopParserAtPosition(b, 0);
+        Assert.True(context.IsParserActiveAtPosition(a));
+
+        context.Scanner.Cursor.Advance();
+        Assert.False(context.IsParserActiveAtPosition(a));
+        Assert.True(context.PushParserAtPosition(a));
+        Assert.True(context.IsParserActiveAtPosition(a));
+
+        context.PopParserAtPosition(a, 1);
+        Assert.False(context.IsParserActiveAtPosition(a));
+
+        context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+        Assert.True(context.IsParserActiveAtPosition(a));
+
+        context.PopParserAtPosition(a, 0);
+        Assert.False(context.IsParserActiveAtPosition(a));
+    }
+
+    [Fact]
+    public void NullParserShouldBeTrackedLikeAnyOther()
+    {
+        // Not a meaningful value, but the context accepted it before the first parser was stored in its fields
+        var context = new ParseContext(new Scanner("ab"));
+
+        Assert.True(context.PushParserAtPosition(null!));
+        Assert.True(context.IsParserActiveAtPosition(null!));
+        Assert.False(context.PushParserAtPosition(null!));
+
+        context.PopParserAtPosition(null!, 0);
+        Assert.False(context.IsParserActiveAtPosition(null!));
+    }
+
+    [Fact]
+    public void LoopDetectionShouldWorkWhenTheContextIsReused()
+    {
+        // Left recursive, the cycle is detected and the second alternative is used
+        var loop = Deferred<string>();
+        loop.Parser = loop.Or(Literals.Text("a"));
+
+        var context = new ParseContext(new Scanner("a"));
+
+        for (var i = 0; i < 3; i++)
+        {
+            context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+
+            Assert.True(loop.TryParse(context, out var result, out var error));
+            Assert.Equal("a", result);
+            Assert.Null(error);
+            Assert.False(context.IsParserActiveAtPosition(loop));
+        }
+    }
+
+    [Fact]
+    public void LoopDetectionShouldBeResetWhenAParserThrows()
+    {
+        var shouldThrow = true;
+        var inner = Deferred<string>();
+        var outer = Deferred<string>();
+
+        inner.Parser = Literals.Text("a").Then(x => shouldThrow ? throw new InvalidOperationException() : x.ToString());
+        outer.Parser = inner;
+
+        var context = new ParseContext(new Scanner("a"));
+
+        // Both parsers are active at the same position when the exception is thrown
+        Assert.Throws<InvalidOperationException>(() => outer.Parse(context));
+        Assert.False(context.IsParserActiveAtPosition(outer));
+        Assert.False(context.IsParserActiveAtPosition(inner));
+
+        shouldThrow = false;
+        context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+
+        Assert.Equal("a", outer.Parse(context));
+    }
+
+    [Fact]
     public void WhiteSpaceParserShouldUseParseContextParser()
     {
         // Test that the whitespace parser respects the ParseContext settings
