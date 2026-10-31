@@ -12,7 +12,6 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
     private readonly int _minSize;
     private readonly int _maxSize;
     private readonly bool _negate;
-    private readonly bool _hasNewLine;
 
     public bool CanSeek { get; }
 
@@ -32,9 +31,6 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
-
-        // A negated set matches every char but its values, so it reads new lines unless '\n' is one of them
-        _hasNewLine = (values.IndexOf('\n') >= 0) != negate;
 
         if (minSize > 0 && !negate)
         {
@@ -81,14 +77,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
             return false;
         }
 
-        if (_hasNewLine)
-        {
-            cursor.Advance(size);
-        }
-        else
-        {
-            cursor.AdvanceNoNewLines(size);
-        }
+        cursor.AdvanceNoNewLines(size);
 
         result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 
@@ -259,15 +248,7 @@ internal sealed class ListOfChars : Parser<TextSpan>, ISeekable, ISourceable
         result.Body.Add("    return false;");
         result.Body.Add("}");
 
-        // Advance cursor - use Advance if there might be newlines, otherwise AdvanceNoNewLines
-        if (_hasNewLine)
-        {
-            result.Body.Add($"{cursorName}.Advance({sizeVar});");
-        }
-        else
-        {
-            result.Body.Add($"{cursorName}.AdvanceNoNewLines({sizeVar});");
-        }
+        result.Body.Add($"{cursorName}.AdvanceNoNewLines({sizeVar});");
 
         result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
         result.Body.Add("return true;");

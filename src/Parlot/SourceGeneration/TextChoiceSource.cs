@@ -30,34 +30,8 @@ internal static class TextChoiceSource
         body.Add("var text = MatchText(textSpan);");
         body.Add("if (text != null)");
         body.Add("{");
-        var newLineGroups = texts.Distinct(StringComparer.Ordinal)
-            .Select(static text => (Text: text, NewLines: TextLiteral.CountNewLines(text), Trailing: TextLiteral.TrailingSegmentLength(text)))
-            .Where(static text => text.NewLines > 0)
-            .GroupBy(static text => (text.NewLines, text.Trailing)).ToArray();
-        if (newLineGroups.Length == 0)
-        {
-            body.Add($"    {cursor}.AdvanceBy(text.Length, 0, text.Length);");
-        }
-        else
-        {
-            body.Add("    switch (text)");
-            body.Add("    {");
-            foreach (var group in newLineGroups)
-            {
-                foreach (var literal in group)
-                {
-                    body.Add($"        case {LiteralHelper.StringToLiteral(literal.Text)}:");
-                }
-
-                body.Add($"            {cursor}.AdvanceBy(text.Length, {group.Key.NewLines}, {group.Key.Trailing});");
-                body.Add("            break;");
-            }
-
-            body.Add("        default:");
-            body.Add($"            {cursor}.AdvanceBy(text.Length, 0, text.Length);");
-            body.Add("            break;");
-            body.Add("    }");
-        }
+        // The text is in the buffer, and the cursor computes the line and column of the texts with new lines when asked
+        body.Add($"    {cursor}.AdvanceNoNewLines(text.Length);");
 
         body.Add("    value = text;");
         body.Add("    return true;");

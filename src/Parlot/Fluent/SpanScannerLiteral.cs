@@ -81,43 +81,15 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
         }
 
         var start = cursor.Offset;
-        var token = span.Slice(0, size);
-        var lastNewLine = token.LastIndexOf('\n');
 
-        // Reaching the end of the span marks the cursor such that the token is scanned again with more text
-        if (lastNewLine < 0)
-        {
-            cursor.AdvanceNoNewLines(size);
-        }
-        else
-        {
-            // The new lines are counted at once rather than char by char, the last one is already found
-            cursor.AdvanceBy(size, CountNewLines(token.Slice(0, lastNewLine)) + 1, size - lastNewLine - 1);
-        }
+        // Reaching the end of the span marks the cursor such that the token is scanned again with more text.
+        // The token can contain new lines, the cursor counts them when its position is read.
+        cursor.AdvanceNoNewLines(size);
 
         result.Set(start, start + size, cursor.CreateSpan(start, size));
 
         context.ExitParser(this);
         return true;
-    }
-
-    private static int CountNewLines(ReadOnlySpan<char> span)
-    {
-#if NET8_0_OR_GREATER
-        return span.Count('\n');
-#else
-        var count = 0;
-
-        foreach (var c in span)
-        {
-            if (c == '\n')
-            {
-                count++;
-            }
-        }
-
-        return count;
-#endif
     }
 
     private static void ThrowInvalidSize(int size, int length)
@@ -141,10 +113,6 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
         var spanName = $"span{context.NextNumber()}";
         var sizeName = $"size{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
-        var tokenName = $"token{context.NextNumber()}";
-        var lastNewLineName = $"lastNewLine{context.NextNumber()}";
-        var newLinesName = $"newLines{context.NextNumber()}";
-        var iName = $"i{context.NextNumber()}";
 
         result.Body.Add($"var {spanName} = {cursorName}.Span;");
         result.Body.Add($"var {sizeName} = {scannerName}({spanName});");
@@ -155,28 +123,7 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
         result.Body.Add($"        throw new global::System.InvalidOperationException($\"The scanner returned a token of {{{sizeName}}} chars while only {{{spanName}.Length}} were available.\");");
         result.Body.Add("    }");
         result.Body.Add($"    var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"    var {tokenName} = {spanName}.Slice(0, {sizeName});");
-        result.Body.Add($"    var {lastNewLineName} = {tokenName}.LastIndexOf('\\n');");
-        result.Body.Add($"    if ({lastNewLineName} < 0)");
-        result.Body.Add("    {");
-        result.Body.Add($"        {cursorName}.AdvanceNoNewLines({sizeName});");
-        result.Body.Add("    }");
-        result.Body.Add("    else");
-        result.Body.Add("    {");
-        result.Body.Add("#if NET8_0_OR_GREATER");
-        result.Body.Add($"        var {newLinesName} = {tokenName}.Slice(0, {lastNewLineName}).Count('\\n') + 1;");
-        result.Body.Add("#else");
-        result.Body.Add($"        var {newLinesName} = 1;");
-        result.Body.Add($"        for (var {iName} = 0; {iName} < {lastNewLineName}; {iName}++)");
-        result.Body.Add("        {");
-        result.Body.Add($"            if ({tokenName}[{iName}] == '\\n')");
-        result.Body.Add("            {");
-        result.Body.Add($"                {newLinesName}++;");
-        result.Body.Add("            }");
-        result.Body.Add("        }");
-        result.Body.Add("#endif");
-        result.Body.Add($"        {cursorName}.AdvanceBy({sizeName}, {newLinesName}, {sizeName} - {lastNewLineName} - 1);");
-        result.Body.Add("    }");
+        result.Body.Add($"    {cursorName}.AdvanceNoNewLines({sizeName});");
         if (!context.DiscardResult)
         {
             result.Body.Add($"    {result.ValueVariable} = {cursorName}.CreateSpan({startName}, {sizeName});");

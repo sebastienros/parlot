@@ -390,30 +390,14 @@ public class Scanner
 
         var span = Cursor.Span;
         var size = 1;
-        var newLines = span[0] == '\n';
 
-        while (size < span.Length)
+        while (size < span.Length && predicate(span[size]))
         {
-            var c = span[size];
-
-            if (!predicate(c))
-            {
-                break;
-            }
-
-            newLines |= c == '\n';
             size++;
         }
 
-        // The line and column only need to be tracked char by char when there are new lines
-        if (newLines)
-        {
-            Cursor.Advance(size);
-        }
-        else
-        {
-            Cursor.AdvanceBy(size, 0, size);
-        }
+        // The lines of the chars, which can be new lines, are counted when the position is read
+        Cursor.AdvanceNoNewLines(size);
 
         // The span was read before the cursor moved, the buffer is the same
         result = span.Slice(0, size);
@@ -443,7 +427,6 @@ public class Scanner
     internal bool ReadNonWhiteSpace(byte mask, out ReadOnlySpan<char> result)
     {
         var span = Cursor.Span;
-        var orNewLine = (mask & ((byte)CharacterMask.WhiteSpaceOrNewLine | (byte)CharacterMask.AsciiWhiteSpaceOrNewLine)) != 0;
 #if NET8_0_OR_GREATER
         var tableLength = Math.Min(span.Length, NonWhiteSpaceTableLength);
 #else
@@ -473,17 +456,7 @@ public class Scanner
         }
 
         result = span.Slice(0, size);
-
-        // New lines are not white space when orNewLine is not set, the run can then contain some and the line and
-        // column only need to be tracked char by char in that case
-        if (!orNewLine && result.IndexOf('\n') >= 0)
-        {
-            Cursor.Advance(size);
-        }
-        else
-        {
-            Cursor.AdvanceBy(size, 0, size);
-        }
+        Cursor.AdvanceNoNewLines(size);
 
         return true;
     }

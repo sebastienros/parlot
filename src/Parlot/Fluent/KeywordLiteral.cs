@@ -13,7 +13,6 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
 {
     // The text parser is kept for the source generator, which emits it as a helper; the runtime matches the text inline
     private readonly TextLiteral _textLiteral;
-    private readonly bool _hasNewLines;
     private readonly bool _returnText;
 
     // The chars that continue an identifier, which a keyword must not be followed by: a bitset of the ASCII chars,
@@ -29,7 +28,6 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
     public KeywordLiteral(string text, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
     {
         _textLiteral = new TextLiteral(text, comparison, returnMatchedText: returnMatchedText);
-        _hasNewLines = _textLiteral.HasNewLines;
         _returnText = _textLiteral.ReturnsText;
         Text = text;
         Comparison = comparison;
@@ -129,14 +127,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
 
             var start = cursor.Offset;
 
-            if (_hasNewLines)
-            {
-                cursor.Advance(length);
-            }
-            else
-            {
-                cursor.AdvanceNoNewLines(length);
-            }
+            cursor.AdvanceNoNewLines(length);
 
             if (_returnText)
             {
