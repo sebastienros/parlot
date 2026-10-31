@@ -997,7 +997,15 @@ internal sealed class GrammarAnalysis
                 return $"Char({QuoteChar(literal.Char)})";
         }
 
-        return ParlotTypeName(parser) switch
+        var name = ParlotTypeName(parser);
+
+        // Below .NET 8, each number type has a literal of its own, like LongNumberLiteral
+        if (name is not null && name.EndsWith("NumberLiteral", StringComparison.Ordinal))
+        {
+            return "Number(...)";
+        }
+
+        return name switch
         {
             "PatternLiteral" => "Pattern(...)",
             "SpanScannerLiteral" => "Scan(...)",
@@ -1006,7 +1014,6 @@ internal sealed class GrammarAnalysis
             "WhiteSpaceLiteral" => "WhiteSpace(...)",
             "NonWhiteSpaceLiteral" => "NonWhiteSpace(...)",
             "ListOfCharsLiteral" or "SearchValuesCharLiteral" => "AnyOf(...)",
-            "NumberLiteral" or "RadixNumberLiteral" => "Number(...)",
             _ => null,
         };
     }
