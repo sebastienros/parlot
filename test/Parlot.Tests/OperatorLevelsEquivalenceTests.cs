@@ -222,7 +222,8 @@ public class OperatorLevelsEquivalenceTests
         {
             var expected = Run(nested, input);
 
-            if (expected.StartsWith('('))
+            // string.StartsWith(char) doesn't exist on .NET Framework
+            if (expected.Length > 0 && expected[0] == '(')
             {
                 operations++;
             }
