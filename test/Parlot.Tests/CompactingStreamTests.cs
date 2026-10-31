@@ -282,6 +282,47 @@ public class CompactingStreamTests
         Assert.InRange(peak(), 1, 64);
     }
 
+    [Theory]
+    [InlineData("var a; let b var c;\n  var d")]
+    [InlineData("let a; const b; let c;")]
+    [InlineData("  var")]
+    [InlineData("let a;\nlet ;")]
+    public void CollectedDiagnosticsMatchTheWholeText(string text)
+    {
+        // Choices discard the diagnostics of their alternatives, optional parsers absorb the errors of the missing tokens
+        var keyword = OneOf(
+            Terms.Text("const").Error("'const' is not supported"),
+            Terms.Text("var").Warning("'var' is deprecated"),
+            Terms.Text("let"));
+        var statement = keyword
+            .And(Terms.Identifier().ElseError("Expected a name"))
+            .AndSkip(Terms.Char(';').ElseError("Expected ';'").Optional());
+        var parser = ZeroOrMany(statement);
+
+        var expectedContext = new ParseContext(new Scanner(text)) { CollectDiagnostics = true };
+        var expected = parser.TryParse(expectedContext, out var expectedValue, out _);
+        var expectedDiagnostics = expectedContext.Diagnostics.Select(Describe).ToArray();
+
+        Assert.NotEmpty(expectedDiagnostics);
+
+        foreach (var (chunk, bufferSize) in new[] { (1, 1), (3, 4), (int.MaxValue, 4096) })
+        {
+            ParseContext? context = null;
+            var options = new StreamParseOptions
+            {
+                BufferSize = bufferSize,
+                ContextFactory = (scanner, ct) => context = new ParseContext(scanner, ct) { CollectDiagnostics = true },
+            };
+
+            Assert.Equal(expected, parser.TryParse(new ChunkedReader(text, chunk), out var value, out _, options));
+            Assert.Equal(expectedValue?.Count, value?.Count);
+            Assert.Equal(expectedDiagnostics, context!.Diagnostics.Select(Describe).ToArray());
+        }
+
+        static string Describe(ParseDiagnostic diagnostic)
+            => $"{diagnostic.Severity} {diagnostic.Position.Offset} {diagnostic.Position.Line}:{diagnostic.Position.Column} {diagnostic.Message}";
+    }
+
 #if NET10_0_OR_GREATER
     [Theory]
     [InlineData("_bigJson")]

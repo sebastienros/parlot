@@ -414,7 +414,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
             EnsureResolved();
         }
 
-        if (context.IsCompacting)
+        if (context.IsCompactingOrCollectingDiagnostics)
         {
             return ParseCompacting(context, ref result);
         }
@@ -492,9 +492,14 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     [MethodImpl(MethodImplOptions.NoInlining)]
     private Parser<T>[] SelectByPrefix(Cursor cursor) => _prefixMap![cursor.Current]!.Select(cursor);
 
+    // Also invoked when the diagnostics are collected, which discards those of the alternatives that aren't used. Its pins
+    // do nothing when the input is a string.
     private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
+
+        var collecting = context.CollectDiagnostics;
+        var alternatives = collecting ? context.BeginAlternatives() : default;
 
         var cursor = context.Scanner.Cursor;
         var start = 0;
@@ -529,7 +534,17 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
                     context.ExitParser(this);
                     return true;
                 }
+
+                if (collecting)
+                {
+                    context.RejectAlternative(ref alternatives);
+                }
             }
+        }
+
+        if (collecting)
+        {
+            context.RestoreAlternatives(in alternatives);
         }
 
         if (SkipWhitespace)
@@ -840,6 +855,64 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         // success = Helper1(ctx, out value) || Helper2(ctx, out value) || ...;
         // (value may be assigned by failed helpers; callers only read it when success==true)
         var firstHelper = getHelper(parsers[0]);
+
+        if (context.CollectDiagnostics)
+        {
+            // The diagnostics of the alternatives that aren't used are discarded, see ParseCompacting(). This includes the
+            // warnings of a single alternative which fails.
+            var alternativesName = $"alternatives{context.NextNumber()}";
+            var collectingPinName = context.IsCompacting && parsers.Count > 1 ? $"pin{context.NextNumber()}" : null;
+
+            outerResult.Body.Add($"{indent}if ({contextVariableName}.CollectDiagnostics)");
+            outerResult.Body.Add($"{indent}{{");
+            outerResult.Body.Add($"{indent}    var {alternativesName} = {contextVariableName}.BeginAlternatives();");
+            if (collectingPinName != null)
+            {
+                outerResult.Body.Add($"{indent}    var {collectingPinName} = {contextVariableName}.Pin();");
+            }
+            outerResult.Body.Add($"{indent}    {successVar} = {firstHelper}({contextVariableName}, out {outTarget});");
+
+            for (var i = 1; i < parsers.Count; i++)
+            {
+                outerResult.Body.Add($"{indent}    if (!{successVar})");
+                outerResult.Body.Add($"{indent}    {{");
+                outerResult.Body.Add($"{indent}        {contextVariableName}.RejectAlternative(ref {alternativesName});");
+                outerResult.Body.Add($"{indent}        {successVar} = {getHelper(parsers[i])}({contextVariableName}, out {outTarget});");
+                outerResult.Body.Add($"{indent}    }}");
+            }
+
+            outerResult.Body.Add($"{indent}    if (!{successVar})");
+            outerResult.Body.Add($"{indent}    {{");
+            outerResult.Body.Add($"{indent}        {contextVariableName}.RejectAlternative(ref {alternativesName});");
+            outerResult.Body.Add($"{indent}        {contextVariableName}.RestoreAlternatives(in {alternativesName});");
+            outerResult.Body.Add($"{indent}    }}");
+            if (collectingPinName != null)
+            {
+                outerResult.Body.Add($"{indent}    {contextVariableName}.Unpin({collectingPinName});");
+            }
+            outerResult.Body.Add($"{indent}}}");
+            outerResult.Body.Add($"{indent}else");
+            outerResult.Body.Add($"{indent}{{");
+            EmitChain(parsers, outerResult, contextVariableName, indent + "    ", getHelper, context, firstHelper, outTarget);
+            outerResult.Body.Add($"{indent}}}");
+            return;
+        }
+
+        EmitChain(parsers, outerResult, contextVariableName, indent, getHelper, context, firstHelper, outTarget);
+    }
+
+    // The alternatives tried in order, until one matches
+    private static void EmitChain(
+        IReadOnlyList<Parser<T>> parsers,
+        SourceResult outerResult,
+        string contextVariableName,
+        string indent,
+        Func<Parser<T>, string> getHelper,
+        SourceGenerationContext context,
+        string firstHelper,
+        string outTarget)
+    {
+        var successVar = outerResult.SuccessVariable;
 
         if (parsers.Count == 1)
         {

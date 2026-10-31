@@ -112,6 +112,16 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<U> Error<U>(string message) => new Error<T, U>(this, message);
 
     /// <summary>
+    /// Builds a parser that reports a warning when the previous parser succeeds, keeping its result.
+    /// </summary>
+    /// <remarks>
+    /// Warnings are recorded in <see cref="ParseContext.Diagnostics"/> when <see cref="ParseContext.CollectDiagnostics"/>
+    /// is enabled. When <see cref="ParseContext.TreatWarningsAsErrors"/> is enabled the warning is reported as an error
+    /// and the parser fails.
+    /// </remarks>
+    public Parser<T> Warning(string message) => new Warning<T>(this, message);
+
+    /// <summary>
     /// Names a parser.
     /// </summary>
     public Parser<T> Named(string name)

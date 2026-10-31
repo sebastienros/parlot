@@ -151,6 +151,17 @@ public sealed class SourceGenerationContext
     public bool GenerateSpanCode { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether the generated parser can be invoked with <c>ParseContext.CollectDiagnostics</c> set, for an entry
+    /// point returning the diagnostics.
+    /// </summary>
+    /// <remarks>
+    /// The parsers reporting errors and warnings then generate the code recording them, and the choices the code discarding
+    /// those of the alternatives they don't use. Otherwise errors throw and warnings are ignored, like when
+    /// <c>ParseContext.CollectDiagnostics</c> isn't set.
+    /// </remarks>
+    public bool CollectDiagnostics { get; set; }
+
+    /// <summary>
     /// Generates the code of a token, a parser that reads the cursor directly, when <see cref="IsCompacting"/> is set.
     /// </summary>
     /// <remarks>

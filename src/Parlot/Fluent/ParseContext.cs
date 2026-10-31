@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -48,6 +49,117 @@ public class ParseContext
     /// The scanner used for the parsing session.
     /// </summary>
     public readonly Scanner Scanner;
+
+    /// <summary>
+    /// When enabled, explicit grammar errors and warnings are recorded in <see cref="Diagnostics"/>, and an error
+    /// fails the parser that reported it instead of throwing a <see cref="ParseException"/>. Defaults to <c>false</c>.
+    /// </summary>
+    /// <remarks>
+    /// When disabled, errors throw and warnings are ignored.
+    /// </remarks>
+    public bool CollectDiagnostics
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & CollectDiagnosticsFlag) != 0;
+        set => SetFlag(CollectDiagnosticsFlag, value);
+    }
+
+    /// <summary>
+    /// When enabled, grammar warnings are reported as errors: the parser that reported the warning fails, and
+    /// the error is either recorded or thrown depending on <see cref="CollectDiagnostics"/>. Defaults to <c>false</c>.
+    /// </summary>
+    public bool TreatWarningsAsErrors
+    {
+        get => _coldState?.TreatWarningsAsErrors == true;
+        set
+        {
+            if (value || _coldState is not null)
+            {
+                GetColdState().TreatWarningsAsErrors = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Grammar errors and warnings recorded during this parsing session, in the order they were reported.
+    /// </summary>
+    /// <remarks>
+    /// Only populated when <see cref="CollectDiagnostics"/> is enabled. Diagnostics reported by an alternative
+    /// of a choice are discarded when another alternative is used.
+    /// </remarks>
+    public IReadOnlyList<ParseDiagnostic> Diagnostics
+        => (IReadOnlyList<ParseDiagnostic>?)_coldState?.Diagnostics ?? Array.Empty<ParseDiagnostic>();
+
+    /// <summary>
+    /// Records a diagnostic without allocating until one occurs.
+    /// </summary>
+    internal void AddDiagnostic(string message, TextPosition position, ParseDiagnosticSeverity severity)
+    {
+        (GetColdState().Diagnostics ??= new List<ParseDiagnostic>()).Add(new ParseDiagnostic(message, position, severity));
+    }
+
+    /// <summary>
+    /// Tracks the best failed branch of a choice while other branches are tried.
+    /// </summary>
+    internal struct AlternativeDiagnostics
+    {
+        internal int Checkpoint;
+        internal int FarthestOffset;
+        internal ParseDiagnostic[]? Best;
+    }
+
+    /// <summary>
+    /// Starts an ordered choice's diagnostic checkpoint.
+    /// </summary>
+    internal AlternativeDiagnostics BeginAlternatives() => new()
+    {
+        Checkpoint = _coldState?.Diagnostics?.Count ?? 0,
+        FarthestOffset = -1
+    };
+
+    /// <summary>
+    /// Drops a failed branch's diagnostics, saving the branch whose errors reach furthest for total failure.
+    /// </summary>
+    /// <remarks>
+    /// A failed branch that only reported warnings is not retained, since none of its input is used.
+    /// </remarks>
+    internal void RejectAlternative(ref AlternativeDiagnostics alternatives)
+    {
+        if (_coldState?.Diagnostics is not { } diagnostics || diagnostics.Count == alternatives.Checkpoint)
+        {
+            return;
+        }
+
+        var farthest = -1;
+        for (var i = alternatives.Checkpoint; i < diagnostics.Count; i++)
+        {
+            if (diagnostics[i].Severity == ParseDiagnosticSeverity.Error)
+            {
+                farthest = Math.Max(farthest, diagnostics[i].Position.Offset);
+            }
+        }
+
+        if (farthest > alternatives.FarthestOffset)
+        {
+            alternatives.FarthestOffset = farthest;
+            var best = new ParseDiagnostic[diagnostics.Count - alternatives.Checkpoint];
+            diagnostics.CopyTo(alternatives.Checkpoint, best, 0, best.Length);
+            alternatives.Best = best;
+        }
+
+        diagnostics.RemoveRange(alternatives.Checkpoint, diagnostics.Count - alternatives.Checkpoint);
+    }
+
+    /// <summary>
+    /// Restores the best failed branch when none of the alternatives matched.
+    /// </summary>
+    internal void RestoreAlternatives(in AlternativeDiagnostics alternatives)
+    {
+        if (alternatives.Best is { } best)
+        {
+            (GetColdState().Diagnostics ??= new List<ParseDiagnostic>()).AddRange(best);
+        }
+    }
 
     /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.
@@ -161,6 +273,10 @@ public class ParseContext
 
         public StreamRefillSource? RefillSource;
 
+        // Recorded when CollectDiagnostics is set, see AddDiagnostic
+        public List<ParseDiagnostic>? Diagnostics;
+        public bool TreatWarningsAsErrors;
+
         // Backtrack points of the active parsers, as absolute offsets. Pushed and popped in LIFO order.
         public int[]? Pins;
         public int PinCount;
@@ -199,6 +315,20 @@ public class ParseContext
     private const byte LimitRecursionFlag = 32;
     private const byte ReentrantWhiteSpaceFlag = 64;
     private const byte DeferredTrackingMask = LimitRecursionFlag | ReentrantWhiteSpaceFlag;
+
+    // Errors are recorded rather than thrown, see CollectDiagnostics
+    private const byte CollectDiagnosticsFlag = 128;
+
+    /// <summary>
+    /// Whether the input is streamed through a compacting buffer, or <see cref="CollectDiagnostics"/> is set: the choices then
+    /// take a path which pins their position and tracks the diagnostics of their alternatives, so a string parse tests a
+    /// single byte.
+    /// </summary>
+    internal bool IsCompactingOrCollectingDiagnostics
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & (CompactingFlag | CollectDiagnosticsFlag)) != 0;
+    }
 
     /// <summary>
     /// Whether a <see cref="Deferred{T}"/> parser that can't be invoked again at the position where it is active still tracks

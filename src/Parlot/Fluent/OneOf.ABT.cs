@@ -20,6 +20,11 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.CollectDiagnostics)
+        {
+            return ParseCollecting(context, ref result);
+        }
+
         context.EnterParser(this);
 
         var resultA = new ParseResult<A>();
@@ -46,6 +51,45 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
             context.ExitParser(this);
             return true;
         }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    // Like Parse, discarding the diagnostics of the alternative which isn't used
+    private bool ParseCollecting(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var alternatives = context.BeginAlternatives();
+        var resultA = new ParseResult<A>();
+
+        var pin = context.Pin();
+        var successA = _parserA.Parse(context, ref resultA);
+        context.Unpin(pin);
+
+        if (successA)
+        {
+            result.Set(resultA.Start, resultA.End, resultA.Value);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.RejectAlternative(ref alternatives);
+
+        var resultB = new ParseResult<B>();
+
+        if (_parserB.Parse(context, ref resultB))
+        {
+            result.Set(resultB.Start, resultB.End, resultB.Value);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.RejectAlternative(ref alternatives);
+        context.RestoreAlternatives(in alternatives);
 
         context.ExitParser(this);
         return false;
@@ -78,6 +122,14 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
         var valueBName = $"valueB{context.NextNumber()}";
 
         var successAName = $"successA{context.NextNumber()}";
+        var ctx = context.ParseContextName;
+        string? alternativesName = null;
+
+        if (context.CollectDiagnostics)
+        {
+            alternativesName = $"alternatives{context.NextNumber()}";
+            result.Body.Add($"var {alternativesName} = {ctx}.CollectDiagnostics ? {ctx}.BeginAlternatives() : default;");
+        }
 
         // The second parser reads from the same position
         var pin = context.Pin(result);
@@ -93,6 +145,10 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
+        if (alternativesName != null)
+        {
+            result.Body.Add($"    if ({ctx}.CollectDiagnostics) {ctx}.RejectAlternative(ref {alternativesName});");
+        }
         result.Body.Add($"    if ({helperNameB}({context.ParseContextName}, out var {valueBName}))");
         result.Body.Add("    {");
         result.Body.Add($"        {result.SuccessVariable} = true;");
@@ -101,6 +157,14 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
             result.Body.Add($"        {result.ValueVariable} = ({valueTypeNameT}){valueBName};");
         }
         result.Body.Add("    }");
+        if (alternativesName != null)
+        {
+            result.Body.Add($"    else if ({ctx}.CollectDiagnostics)");
+            result.Body.Add("    {");
+            result.Body.Add($"        {ctx}.RejectAlternative(ref {alternativesName});");
+            result.Body.Add($"        {ctx}.RestoreAlternatives(in {alternativesName});");
+            result.Body.Add("    }");
+        }
         result.Body.Add("}");
 
         return result;
