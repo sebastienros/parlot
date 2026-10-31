@@ -453,7 +453,19 @@ internal sealed class LoopAnalysis
 
         if (!s_leafTypes.TryGetValue(type, out var leaf))
         {
-            leaf = HoldsPlainData(type) ? s_true : s_false;
+            bool holdsPlainData;
+
+            try
+            {
+                holdsPlainData = HoldsPlainData(type);
+            }
+            catch
+            {
+                // A field whose type can't be loaded, for instance, could hold anything
+                holdsPlainData = false;
+            }
+
+            leaf = holdsPlainData ? s_true : s_false;
             s_leafTypes.Add(type, leaf);
         }
 
