@@ -76,7 +76,7 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ILoop
                     size++;
                 }
 
-                cursor.AdvanceBy(size, 0, size);
+                cursor.AdvanceNoNewLines(size);
             }
 
             var end = cursor.Offset;
@@ -157,7 +157,7 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ILoop
             GenerateCountLoop(context, result, indent, spanName, sizeName, extraPartLambda);
         }
 
-        result.Body.Add($"{indent}{cursorName}.AdvanceBy({sizeName}, 0, {sizeName});");
+        result.Body.Add($"{indent}{cursorName}.AdvanceNoNewLines({sizeName});");
 
         if (_extraStart != null)
         {

@@ -51,7 +51,7 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         // First, parse with the main parser
         var mainSuccess = _parser.Parse(context, ref result);
@@ -63,7 +63,7 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         }
 
         // Save position before lookahead check
-        var beforeLookahead = context.Scanner.Cursor.Position;
+        var beforeLookahead = context.Scanner.Cursor.Offset;
 
         // Now check if the lookahead parser matches at the current position
         var lookaheadResult = new ParseResult<object>();
@@ -106,7 +106,7 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         var startName = $"start{context.NextNumber()}";
         var beforeLookaheadName = $"beforeLookahead{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         var mainValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var lookaheadValueTypeName = SourceGenerationContext.GetTypeName(typeof(object));
@@ -133,7 +133,7 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
-        result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Position;");
+        result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Offset;");
         var lookahead = context.PinnedCall(result, $"{lookaheadHelperName}({context.ParseContextName}, out _)", "    ");
         result.Body.Add($"    if ({lookahead})");
         result.Body.Add("    {");

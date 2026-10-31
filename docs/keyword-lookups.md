@@ -149,9 +149,9 @@ shorter alternative. For `Text("if1"), Text("if"), Text("if12")`, input `if12` r
 `if1`, while `ifx` returns `if`. For `Text("if"), Text("if1")`, both return `if`.
 Canonical strings are returned without allocating substrings.
 
-The cursor advances once on success, using the same precomputed `AdvanceBy` line/column
-deltas as `TextLiteral.GenerateSource`. Newline metadata is computed during generation,
-not by scanning the matched text during parsing. On failure, no text has been consumed,
+The cursor advances once on success, by the length of the matched text, like
+`TextLiteral.GenerateSource`. The cursor only tracks its offset: the line and column are
+computed from the text when a position is read. On failure, no text has been consumed,
 and any skipped whitespace is restored. Capture, discarded results, custom whitespace,
 and later sequence failure continue to compose with the existing generated contracts.
 

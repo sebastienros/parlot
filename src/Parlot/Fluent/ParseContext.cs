@@ -277,8 +277,9 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is not null || Character.HasMask(ch, _skipMask);
 
+    // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
-    private TextPosition _cachePosition;
+    private int _cacheEndOffset;
 
     public void SkipWhiteSpace()
     {
@@ -286,7 +287,7 @@ public class ParseContext
 
         if (offset == _cacheOffset)
         {
-            Scanner.Cursor.ResetPosition(_cachePosition);
+            Scanner.Cursor.ResetPosition(_cacheEndOffset);
             return;
         }
 
@@ -309,7 +310,7 @@ public class ParseContext
         }
 
         _cacheOffset = offset;
-        _cachePosition = Scanner.Cursor.Position;
+        _cacheEndOffset = Scanner.Cursor.Offset;
     }
 
     // Skips the white space of the set, with the scanner's constant mask loops for the default set
@@ -452,7 +453,7 @@ public class ParseContext
 
     // A token is read between BeginToken and EndToken, and read again from its start while RetryToken returns true.
     // Generated parsers use these directly, see SourceGenerationContext.GenerateToken.
-    internal TextPosition BeginToken()
+    internal int BeginToken()
     {
         var cursor = Scanner.Cursor;
 
@@ -467,11 +468,11 @@ public class ParseContext
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
 
-        return cursor.Position;
+        return cursor.Offset;
     }
 
     // Whether the token read to the end of the buffer, in which case it's moved back to its start with more text
-    internal bool RetryToken(in TextPosition start)
+    internal bool RetryToken(int start)
     {
         var cursor = Scanner.Cursor;
 
@@ -481,7 +482,7 @@ public class ParseContext
         }
 
         cursor.ResetPosition(start);
-        Refill(start.Offset);
+        Refill(start);
         cursor.ResetHitEnd();
 
         return true;
@@ -524,7 +525,7 @@ public class ParseContext
         }
 
         _cacheOffset = offset;
-        _cachePosition = cursor.Position;
+        _cacheEndOffset = cursor.Offset;
     }
 
     private void Refill(int floor)

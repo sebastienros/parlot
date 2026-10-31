@@ -23,7 +23,7 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         // The text is read again when the parser fails
         var pin = context.Pin();
@@ -56,7 +56,7 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper instead of inlining
         var helperName = context.WithDiscardResult(true, () => context.Helpers

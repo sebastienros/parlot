@@ -37,7 +37,9 @@ There are two modes:
 
 The cursor reads a window of the input, a `string` which starts at an absolute offset of the input.
 `Cursor.Offset`, `Cursor.Position` and `ParseResult` offsets are absolute: they are the ones in the whole text, so
-positions saved by parsers stay valid when the window is replaced. Lines and columns are the ones of the whole text.
+offsets saved by parsers stay valid when the window is replaced. Lines and columns are the ones of the whole text: the
+cursor computes them from the text when a position is read, and counts the lines of the text a refill drops before
+discarding it.
 
 ### Tokens
 
@@ -110,6 +112,11 @@ parsing a `string`. Pins are released in the reverse order.
 `Cursor.Buffer` is the current window, don't index it with an offset. Use `Cursor.Span`, `Cursor.GetSpan(start, length)`
 and `Cursor.CreateSpan(start, length)`, which take absolute offsets. A `TextSpan` created by `CreateSpan` references
 its window string, which remains valid after a refill; its `Offset` is relative to its `Buffer`.
+
+The line and column of a position can only be computed while its text is buffered. A parser which reports an error at
+the position it moved back to, when what it parsed doesn't match, must read that position before parsing: a sequence
+doesn't pin its start, so its text may have been discarded by then. `ElseError` does so in compacting mode. The position
+of discarded text has the line of the first buffered char, and a column counted as if no line ended in between.
 
 ### Asynchronous parsing
 

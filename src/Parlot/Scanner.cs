@@ -230,7 +230,7 @@ public class Scanner
     {
         // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
 
-        var start = Cursor.Position;
+        var start = Cursor.Offset;
 
         if (allowLeadingSign)
         {
@@ -253,7 +253,7 @@ public class Scanner
         // Number can be empty if we have a decimal separator directly, in this case don't expect group separators
         if (!number.IsEmpty && allowGroupSeparator && Cursor.Current == groupSeparator)
         {
-            var beforeGroupPosition = Cursor.Position;
+            var beforeGroupPosition = Cursor.Offset;
 
             // Group separators can be repeated as many times
             while (true)
@@ -270,15 +270,13 @@ public class Scanner
                 }
                 else
                 {
-                    beforeGroupPosition = Cursor.Position;
+                    beforeGroupPosition = Cursor.Offset;
                 }
             }
         }
 
         if (allowDecimalSeparator && Cursor.Current == decimalSeparator)
         {
-            var beforeDecimalSeparator = Cursor.Position;
-
             Cursor.AdvanceNoNewLines(1);
 
             var numberIsEmpty = number.IsEmpty;
@@ -295,7 +293,7 @@ public class Scanner
 
         if (allowExponent && (Cursor.Current is 'e' or 'E'))
         {
-            var beforeExponent = Cursor.Position;
+            var beforeExponent = Cursor.Offset;
 
             Cursor.AdvanceNoNewLines(1);
 
@@ -308,12 +306,12 @@ public class Scanner
             if (!ReadInteger(out _))
             {
                 Cursor.ResetPosition(beforeExponent);
-                number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
+                number = Cursor.GetSpan(start, Cursor.Offset - start);
                 return true;
             }
         }
 
-        number = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
+        number = Cursor.GetSpan(start, Cursor.Offset - start);
         return true;
     }
 
@@ -392,30 +390,14 @@ public class Scanner
 
         var span = Cursor.Span;
         var size = 1;
-        var newLines = span[0] == '\n';
 
-        while (size < span.Length)
+        while (size < span.Length && predicate(span[size]))
         {
-            var c = span[size];
-
-            if (!predicate(c))
-            {
-                break;
-            }
-
-            newLines |= c == '\n';
             size++;
         }
 
-        // The line and column only need to be tracked char by char when there are new lines
-        if (newLines)
-        {
-            Cursor.Advance(size);
-        }
-        else
-        {
-            Cursor.AdvanceBy(size, 0, size);
-        }
+        // The lines of the chars, which can be new lines, are counted when the position is read
+        Cursor.AdvanceNoNewLines(size);
 
         // The span was read before the cursor moved, the buffer is the same
         result = span.Slice(0, size);
@@ -445,7 +427,6 @@ public class Scanner
     internal bool ReadNonWhiteSpace(byte mask, out ReadOnlySpan<char> result)
     {
         var span = Cursor.Span;
-        var orNewLine = (mask & ((byte)CharacterMask.WhiteSpaceOrNewLine | (byte)CharacterMask.AsciiWhiteSpaceOrNewLine)) != 0;
 #if NET8_0_OR_GREATER
         var tableLength = Math.Min(span.Length, NonWhiteSpaceTableLength);
 #else
@@ -475,17 +456,7 @@ public class Scanner
         }
 
         result = span.Slice(0, size);
-
-        // New lines are not white space when orNewLine is not set, the run can then contain some and the line and
-        // column only need to be tracked char by char in that case
-        if (!orNewLine && result.IndexOf('\n') >= 0)
-        {
-            Cursor.Advance(size);
-        }
-        else
-        {
-            Cursor.AdvanceBy(size, 0, size);
-        }
+        Cursor.AdvanceNoNewLines(size);
 
         return true;
     }
@@ -761,8 +732,8 @@ public class Scanner
             return false;
         }
 
-        // Decoding the escape sequences needs to restore the line and the column when it fails
-        var start = Cursor.Position;
+        // Decoding the escape sequences moves the cursor, which is moved back when it fails
+        var start = Cursor.Offset;
 
         while (nextEscape != -1)
         {
@@ -945,7 +916,7 @@ public class Scanner
             }
         }
 
-        result = Cursor.GetSpan(start.Offset, Cursor.Offset - start.Offset);
+        result = Cursor.GetSpan(start, Cursor.Offset - start);
 
         // Only a string with escape sequences gets here, the others returned before decoding anything
         hasEscape = true;

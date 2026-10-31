@@ -67,13 +67,13 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
         // Try each unary operator
         foreach (var (op, factory) in _operators)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             var operatorResult = new ParseResult<TInput>();
             if (op.Parse(context, ref operatorResult))
             {
                 // An operator that didn't read anything would be matched again by the recursion, forever.
                 // It is treated as no operator, and the next ones are tried at the same position.
-                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                if (context.Scanner.Cursor.Offset == operatorPosition)
                 {
                     continue;
                 }
@@ -163,16 +163,16 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
             var indent = "";
             if (i == 0)
             {
-                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
+                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Offset;");
                 // An operator that didn't read anything is treated as no operator, like at runtime
-                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Offset;");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
@@ -289,14 +289,14 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable, ILoopA
 
         foreach (var (op, factory) in _operators)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             var operatorResult = new ParseResult<TInput>();
 
             if (op.Parse(context, ref operatorResult))
             {
                 // An operator that didn't read anything would be matched again by the recursion, forever.
                 // It is treated as no operator, and the next ones are tried at the same position.
-                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                if (context.Scanner.Cursor.Offset == operatorPosition)
                 {
                     continue;
                 }
@@ -375,16 +375,16 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable, ILoopA
             var indent = "";
             if (i == 0)
             {
-                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
+                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Offset;");
                 // An operator that didn't read anything is treated as no operator, like at runtime
-                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Offset;");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";

@@ -19,12 +19,36 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        if (context.IsCompacting)
+        {
+            return ParseCompacting(context, ref result);
+        }
+
         context.EnterParser(this);
 
         if (!_parser.Parse(context, ref result))
         {
             context.ExitParser(this);
             throw new ParseException(_message, context.Scanner.Cursor.Position);
+        }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        // A parser which fails moves the cursor back to its start, whose text might have been discarded from the buffer by then.
+        // The line and column are computed from the text, so the position is read while the text is buffered.
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Position;
+
+        if (!_parser.Parse(context, ref result))
+        {
+            context.ExitParser(this);
+            throw new ParseException(_message, cursor.Offset == start.Offset ? start : cursor.Position);
         }
 
         context.ExitParser(this);

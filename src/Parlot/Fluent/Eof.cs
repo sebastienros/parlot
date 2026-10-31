@@ -97,7 +97,7 @@ public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
-        var start = cursor.Position;
+        var start = cursor.Offset;
 
         if (_parser.Parse(context, ref result))
         {
@@ -138,7 +138,7 @@ public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
         //     value = innerValue;
         // }
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {context.CursorName}.Position;");
+        result.Body.Add($"var {startName} = {context.CursorName}.Offset;");
 
         if (context.DiscardResult)
         {

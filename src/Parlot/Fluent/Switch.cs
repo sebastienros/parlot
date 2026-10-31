@@ -72,7 +72,7 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
 
         var previousResult = new ParseResult<T>();
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         if (!_previousParser.Parse(context, ref previousResult))
         {
@@ -144,7 +144,7 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
 
         var startName = $"start{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {context.CursorName}.Position;");
+        result.Body.Add($"var {startName} = {context.CursorName}.Offset;");
         result.Body.Add($"if ({helperName}({ctx}, out var {previousValueName}))");
         result.Body.Add("{");
         result.Body.Add($"    var {indexName} = {selectorLambda}({ctx}, {previousValueName});");

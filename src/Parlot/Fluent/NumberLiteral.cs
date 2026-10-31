@@ -78,8 +78,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
 
         context.EnterParser(this);
 
-        var reset = context.Scanner.Cursor.Position;
-        var start = reset.Offset;
+        var reset = context.Scanner.Cursor.Offset;
+        var start = reset;
 
         if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
         {
@@ -120,7 +120,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         var endName = $"end{context.NextNumber()}";
         var parsedValueName = $"parsedValue{context.NextNumber()}";
 
-        result.Body.Add($"var {resetName} = default(global::Parlot.TextPosition);");
+        result.Body.Add($"var {resetName} = 0;");
         result.Body.Add($"var {startName} = 0;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
         if (!context.DiscardResult)
@@ -129,8 +129,8 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         }
 
         result.Body.Add($"{result.SuccessVariable} = false;");
-        result.Body.Add($"{resetName} = {cursorName}.Position;");
-        result.Body.Add($"{startName} = {resetName}.Offset;");
+        result.Body.Add($"{resetName} = {cursorName}.Offset;");
+        result.Body.Add($"{startName} = {resetName};");
 
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
         var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";

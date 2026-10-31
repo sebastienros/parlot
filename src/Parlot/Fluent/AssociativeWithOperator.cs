@@ -71,7 +71,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
 
         while (true)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             context.MovePin(pin);
             var operatorResult = new ParseResult<TOperator>();
             if (!_operators.Parse(context, ref operatorResult))
@@ -86,7 +86,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
                 break;
             }
 
-            if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+            if (context.Scanner.Cursor.Offset == operatorPosition)
             {
                 break;
             }
@@ -177,7 +177,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         var pin = context.Pin(result);
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
-        result.Body.Add($"        var {position} = {cursor}.Position;");
+        result.Body.Add($"        var {position} = {cursor}.Offset;");
         context.MovePin(result, pin, "        ");
         result.Body.Add($"        if (!{operatorHelper}({ctx}, out var {operationValue})) break;");
         result.Body.Add($"        if (!{baseHelper}({ctx}, out var {rightValue}))");
@@ -185,7 +185,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         result.Body.Add($"            {cursor}.ResetPosition({position});");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        if ({cursor}.Offset == {position}.Offset) break;");
+        result.Body.Add($"        if ({cursor}.Offset == {position}) break;");
 
         if (_rightAssociative)
         {

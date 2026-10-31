@@ -54,18 +54,9 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         var span = cursor.Span;
         var limit = _maxSize > 0 && _maxSize < span.Length ? _maxSize : span.Length;
         var size = 1;
-        var newLines = span[0] == '\n';
 
-        while (size < limit)
+        while (size < limit && predicate(span[size]))
         {
-            var c = span[size];
-
-            if (!predicate(c))
-            {
-                break;
-            }
-
-            newLines |= c == '\n';
             size++;
         }
 
@@ -73,15 +64,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         {
             var start = cursor.Offset;
 
-            // The line and column only need to be tracked char by char when there are new lines
-            if (newLines)
-            {
-                cursor.Advance(size);
-            }
-            else
-            {
-                cursor.AdvanceBy(size, 0, size);
-            }
+            cursor.AdvanceNoNewLines(size);
 
             result.Set(start, start + size, cursor.CreateSpan(start, size));
 
@@ -113,7 +96,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
 
         var spanName = $"span{context.NextNumber()}";
         var sizeName = $"size{context.NextNumber()}";
-        var newLinesName = $"newLines{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
         var cName = $"c{context.NextNumber()}";
 
@@ -151,7 +133,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         }
 
         result.Body.Add($"    var {sizeName} = 1;");
-        result.Body.Add($"    var {newLinesName} = {spanName}[0] == '\\n';");
         result.Body.Add($"    while ({sizeName} < {limitName})");
         result.Body.Add("    {");
         result.Body.Add($"        var {cName} = {spanName}[{sizeName}];");
@@ -159,7 +140,6 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         result.Body.Add("        {");
         result.Body.Add("            break;");
         result.Body.Add("        }");
-        result.Body.Add($"        {newLinesName} |= {cName} == '\\n';");
         result.Body.Add($"        {sizeName}++;");
         result.Body.Add("    }");
 
@@ -173,14 +153,7 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         }
 
         result.Body.Add($"{indent}var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{indent}if ({newLinesName})");
-        result.Body.Add($"{indent}{{");
-        result.Body.Add($"{indent}    {cursorName}.Advance({sizeName});");
-        result.Body.Add($"{indent}}}");
-        result.Body.Add($"{indent}else");
-        result.Body.Add($"{indent}{{");
-        result.Body.Add($"{indent}    {cursorName}.AdvanceBy({sizeName}, 0, {sizeName});");
-        result.Body.Add($"{indent}}}");
+        result.Body.Add($"{indent}{cursorName}.AdvanceNoNewLines({sizeName});");
         if (!context.DiscardResult)
         {
             result.Body.Add($"{indent}{result.ValueVariable} = {cursorName}.CreateSpan({startName}, {sizeName});");

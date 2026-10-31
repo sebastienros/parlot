@@ -424,13 +424,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         var cursor = context.Scanner.Cursor;
 
         // The position is only needed to revert the whitespaces this parser skipped, the sub-parsers
-        // revert their own state. Reading it is not free as it also tracks the line and column.
-        var start = default(TextPosition);
+        // revert their own state.
+        var start = 0;
 
         // If all sub-parsers skip whitespaces, do it once here
         if (SkipWhitespace)
         {
-            start = cursor.Position;
+            start = cursor.Offset;
             context.SkipWhiteSpace();
         }
 
@@ -497,11 +497,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
-        var start = default(TextPosition);
+        var start = 0;
 
         if (SkipWhitespace)
         {
-            start = cursor.Position;
+            start = cursor.Offset;
             context.SkipWhiteSpace();
         }
 
@@ -591,7 +591,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         if (SkipWhitespace)
         {
             startName = $"start{context.NextNumber()}";
-            result.Body.Add($"var {startName} = {cursorName}.Position;");
+            result.Body.Add($"var {startName} = {cursorName}.Offset;");
             result.Body.Add($"{ctx}.SkipWhiteSpace();");
         }
 

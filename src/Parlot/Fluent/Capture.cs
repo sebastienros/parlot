@@ -34,7 +34,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Position;
+        var start = context.Scanner.Cursor.Offset;
 
         ParseResult<T> _ = new();
 
@@ -46,9 +46,9 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
         if (success)
         {
             var end = context.Scanner.Cursor.Offset;
-            var length = end - start.Offset;
+            var length = end - start;
 
-            result.Set(start.Offset, end, context.Scanner.Cursor.CreateSpan(start.Offset, length));
+            result.Set(start, end, context.Scanner.Cursor.CreateSpan(start, length));
 
             context.ExitParser(this);
             return true;
@@ -76,7 +76,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
         var endName = $"end{context.NextNumber()}";
         var lengthName = $"length{context.NextNumber()}";
 
-        result.Body.Add($"var {startName} = {cursorName}.Position;");
+        result.Body.Add($"var {startName} = {cursorName}.Offset;");
 
         // Use helper instead of inlining
         var helperName = context.WithDiscardResult(true, () => context.Helpers
@@ -94,8 +94,8 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
         result.Body.Add($"if ({success})");
         result.Body.Add("{");
         result.Body.Add($"    var {endName} = {cursorName}.Offset;");
-        result.Body.Add($"    var {lengthName} = {endName} - {startName}.Offset;");
-        result.Body.Add($"    {result.ValueVariable} = {cursorName}.CreateSpan({startName}.Offset, {lengthName});");
+        result.Body.Add($"    var {lengthName} = {endName} - {startName};");
+        result.Body.Add($"    {result.ValueVariable} = {cursorName}.CreateSpan({startName}, {lengthName});");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

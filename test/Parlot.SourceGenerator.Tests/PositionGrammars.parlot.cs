@@ -85,4 +85,19 @@ public static partial class PositionGrammars
             var position = context.Scanner.Cursor.Position;
             return (position.Offset, position.Line, position.Column);
         });
+
+    // The first alternative reads the position after '=' then fails, the second reads an earlier position
+    [GenerateParser(nameof(TryParseBacktrack))]
+    private static Parser<(int Offset, int Line, int Column)> BuildBacktrack() =>
+        OneOf(
+            Terms.Identifier().SkipAnd(Terms.Char('=').Then(static (ParseContext context, char _) =>
+            {
+                var position = context.Scanner.Cursor.Position;
+                return (position.Offset, position.Line, position.Column);
+            })).AndSkip(Terms.Char('(')),
+            Terms.Identifier().Then(static (ParseContext context, TextSpan _) =>
+            {
+                var position = context.Scanner.Cursor.Position;
+                return (position.Offset, position.Line, position.Column);
+            }));
 }

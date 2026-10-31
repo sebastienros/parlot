@@ -9,7 +9,6 @@ namespace Parlot.Fluent;
 public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly StringComparison _comparisonType;
-    private readonly bool _hasNewLines;
     private readonly bool _returnMatchedText;
     private readonly bool _returnText;
     private readonly string[]? _expectedPrefixes;
@@ -23,7 +22,6 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
         _returnMatchedText = returnMatchedText;
-        _hasNewLines = text.AsSpan().IndexOf('\n') >= 0;
 
         // An ordinal match is the text itself, and case-insensitive matches return the canonical text by default.
         _returnText = comparisonType == StringComparison.Ordinal || (!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
@@ -128,9 +126,6 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 
     internal StringComparison Comparison => _comparisonType;
 
-    // Whether the text contains '\n', which then needs to be tracked for the line and column
-    internal bool HasNewLines => _hasNewLines;
-
     // Whether the canonical text is returned rather than the matched one
     internal bool ReturnsText => _returnText;
 
@@ -161,14 +156,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         {
             var start = cursor.Offset;
 
-            if (_hasNewLines)
-            {
-                cursor.Advance(Text.Length);
-            }
-            else
-            {
-                cursor.AdvanceNoNewLines(Text.Length);
-            }
+            // The text was matched so it is in the buffer. It can contain new lines, the cursor counts them when its position is read.
+            cursor.AdvanceNoNewLines(Text.Length);
 
             var end = cursor.Offset;
 
@@ -213,8 +202,6 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         var textLiteral = LiteralHelper.StringToLiteral(Text);
         var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
         var comparison = $"global::System.StringComparison.{_comparisonType}";
-        var newLines = CountNewLines(Text);
-        var trailingSegmentLength = TrailingSegmentLength(Text);
         var isNotOrdinal = _comparisonType != StringComparison.Ordinal;
         var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
             or StringComparison.CurrentCultureIgnoreCase
@@ -235,7 +222,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         {
             result.Body.Add($"    var {startName} = {cursorName}.Offset;");
         }
-        result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
+        result.Body.Add($"    {cursorName}.AdvanceNoNewLines({lengthLiteral});");
 
         // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
         if (context.DiscardResult)
@@ -265,32 +252,4 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     }
 
 public override string ToString() => $"Text(\"{Text}\")";
-
-    // The cursor only ends a line on '\n'; '\r' and '\v' are ordinary chars for it
-    internal static int CountNewLines(string value)
-    {
-        var count = 0;
-
-        foreach (var c in value)
-        {
-            if (c == '\n')
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    internal static int TrailingSegmentLength(string value)
-    {
-        var lastNewLine = value.LastIndexOf('\n');
-
-        if (lastNewLine < 0)
-        {
-            return value.Length;
-        }
-
-        return value.Length - lastNewLine - 1;
-    }
 }

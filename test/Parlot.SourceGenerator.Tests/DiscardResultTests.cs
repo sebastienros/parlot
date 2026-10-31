@@ -24,7 +24,7 @@ public class DiscardResultTests
         var body = string.Join("\n", source.Body);
 
         Assert.Contains("cursor.Match(", body, StringComparison.Ordinal);
-        Assert.Contains("cursor.AdvanceBy(", body, StringComparison.Ordinal);
+        Assert.Contains("cursor.AdvanceNoNewLines(7);", body, StringComparison.Ordinal);
         Assert.Contains("value = default;", body, StringComparison.Ordinal);
         Assert.DoesNotContain("GetSpan(", body, StringComparison.Ordinal);
         Assert.DoesNotContain("scanner.Buffer", body, StringComparison.Ordinal);

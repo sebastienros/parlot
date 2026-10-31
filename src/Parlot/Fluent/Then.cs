@@ -135,7 +135,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
                     .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
                     .MethodName;
                 resetName = $"reset{context.NextNumber()}";
-                result.Body.Add($"var {resetName} = {cursorName}.Position;");
+                result.Body.Add($"var {resetName} = {cursorName}.Offset;");
                 result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
                 result.Body.Add("{");
                 result.Body.Add($"    {ctx}.SkipWhiteSpace();");
