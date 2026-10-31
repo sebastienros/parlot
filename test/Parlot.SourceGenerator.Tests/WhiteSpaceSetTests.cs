@@ -35,11 +35,35 @@ public class WhiteSpaceSetTests
         Assert.True(WhiteSpaceSetGrammars.TryParseSeparated("1 ,\n\t2", out var value));
         Assert.Equal("1,2", value);
 
-        foreach (var space in Character.WhiteSpaces.Where(static c => c > 127))
+        foreach (var space in Character.WhiteSpaceOrNewLines.Where(static c => c > 127))
         {
             Assert.True(WhiteSpaceSetGrammars.TryParseSeparated($"1 ,{space}2", out value));
             Assert.Equal("1", value);
         }
+    }
+
+    [Theory]
+    [InlineData("1 , 2")]
+    [InlineData("1\u2028,\u20292\u0085,\u00A03")]
+    [InlineData("1,\uFEFF2")]
+    [InlineData("1,\u180E2")]
+    [InlineData("\uFEFF1")]
+    public void Terms_Skip_The_Default_Set(string text)
+    {
+        var parser = Separated(Terms.Char(','), Terms.Integer()).Then(static list => string.Join(",", list));
+        Check(parser, WhiteSpaceSetGrammars.TryParseDefaultSeparated, WhiteSpaceSetGrammars.TryParseDefaultSeparated, text);
+    }
+
+    [Fact]
+    public void Generated_Terms_Skip_Unicode_White_Space()
+    {
+        Assert.True(WhiteSpaceSetGrammars.TryParseDefaultSeparated("1\u2028,\u20292\u0085,\u00A03", out var value));
+        Assert.Equal("1,2,3", value);
+
+        // The byte order mark and U+180E are not white space
+        Assert.True(WhiteSpaceSetGrammars.TryParseDefaultSeparated("1,\uFEFF2", out value));
+        Assert.Equal("1", value);
+        Assert.False(WhiteSpaceSetGrammars.TryParseDefaultSeparated("\uFEFF1", out _));
     }
 
     [Theory]
@@ -166,6 +190,8 @@ public class WhiteSpaceSetTests
 
 public static partial class WhiteSpaceSetGrammars
 {
+    public static partial bool TryParseDefaultSeparated(string text, out string value);
+    public static partial bool TryParseDefaultSeparated(TextReader reader, out string value);
     public static partial bool TryParseSeparated(string text, out string value);
     public static partial bool TryParseSeparated(TextReader reader, out string value);
     public static partial bool TryParseChoice(string text, out string value);

@@ -151,7 +151,9 @@ scanned with a vectorized `IndexOf` rather than a hash set, only used by the `De
 prove, or when the white space parser can invoke a `Deferred`), cancellation checks throttled to every 64
 parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is the context's `WhiteSpaceSet`, a bit
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
-one-argument `Character.IsWhiteSpace*`, which only know the default set. Runtime grammars that need external state
+one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
+(`char.IsWhiteSpace`, asserted by `CharMaskGeneratorTest`); another set is a new `WhiteSpaceSet` bit pair, not an edit of the
+default one, and the char table has room for one more. Runtime grammars that need external state
 can subclass it; generated entry points instead accept application-owned configuration parameters.
 
 ### Source generation
