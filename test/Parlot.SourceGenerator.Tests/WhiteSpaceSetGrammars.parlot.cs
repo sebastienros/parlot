@@ -8,10 +8,15 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.SourceGenerator.Tests;
 
-// Grammars selecting the ASCII white space set. Each has a string and a TextReader entry point, compared with the
-// runtime parser in WhiteSpaceSetTests.
+// Grammars selecting the ASCII white space set, and one with the default set. Each has a string and a TextReader entry
+// point, compared with the runtime parser in WhiteSpaceSetTests.
 public static partial class WhiteSpaceSetGrammars
 {
+    // The default set, the Unicode White_Space chars
+    [GenerateParser(nameof(TryParseDefaultSeparated))]
+    private static Parser<string> BuildDefaultSeparated() =>
+        Separated(Terms.Char(','), Terms.Integer()).Then(static list => string.Join(",", list));
+
     [GenerateParser(nameof(TryParseSeparated))]
     private static Parser<string> BuildSeparated() =>
         Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)

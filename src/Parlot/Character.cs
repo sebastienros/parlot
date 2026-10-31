@@ -178,11 +178,18 @@ public static partial class Character
 
     private static int HexValue(char ch) => HexConverter.FromChar(ch);
 
+    /// <summary>
+    /// Whether a char is white space, but not a new line, in the default set: one of <see cref="WhiteSpaces"/>.
+    /// </summary>
     public static bool IsWhiteSpace(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpace) != 0;
     }
 
+    /// <summary>
+    /// Whether a char is white space or a new line in the default set: one of <see cref="WhiteSpaceOrNewLines"/>, the chars
+    /// <see cref="char.IsWhiteSpace(char)"/> accepts.
+    /// </summary>
     public static bool IsWhiteSpaceOrNewLine(char ch)
     {
         return (_characterData[ch] & (byte)CharacterMask.WhiteSpaceOrNewLine) != 0;
@@ -223,5 +230,8 @@ public static partial class Character
     private static byte ThrowInvalidWhiteSpaceSet(WhiteSpaceSet set)
         => throw new ArgumentOutOfRangeException(nameof(set), set, "Unknown white space set.");
 
-    public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v';
+    /// <summary>
+    /// Whether a char is a new line of the default set: one of <see cref="NewLines"/>.
+    /// </summary>
+    public static bool IsNewLine(char ch) => ch is '\n' or '\r' or '\v' or '\u0085' or '\u2028' or '\u2029';
 }

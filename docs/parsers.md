@@ -995,8 +995,27 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 
 | Set | White space | New lines |
 |---|---|---|
-| `WhiteSpaceSet.Default` | `\t`, `\f`, space, U+00A0, U+1680, U+180E, U+2000-U+200A, U+202F, U+205F, U+3000, U+FEFF (`Character.WhiteSpaces`) | `\n`, `\r`, `\v` |
-| `WhiteSpaceSet.Ascii` | `\t`, `\f`, space (`Character.AsciiWhiteSpaces`) | `\n`, `\r`, `\v` |
+| `WhiteSpaceSet.Default` | `\t`, `\f`, space, U+00A0, U+1680, U+2000-U+200A, U+202F, U+205F, U+3000 (`Character.WhiteSpaces`) | `\n`, `\r`, `\v`, U+0085, U+2028, U+2029 (`Character.NewLines`) |
+| `WhiteSpaceSet.Ascii` | `\t`, `\f`, space (`Character.AsciiWhiteSpaces`) | `\n`, `\r`, `\v` (`Character.AsciiNewLines`) |
+
+`Default` is the Unicode `White_Space` property: the chars `char.IsWhiteSpace` and the `\s` of .NET regular expressions accept.
+Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
+U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLines` is set. Positions only start a new line at
+`\n`, so like `\r` and `\v` these count as a column, and single line comments end at `\n` only.
+
+> **Changed after Parlot 2.1.** The default set used to be `\t`, `\f`, space, U+00A0, U+1680, U+180E, U+2000-U+200A, U+202F,
+> U+205F, U+3000 and U+FEFF, with `\n`, `\r` and `\v` as new lines. It now follows Unicode:
+>
+> - U+FEFF, the byte order mark, is no longer white space. A text that starts with one now fails to parse with a `Terms`
+>   parser. `File.ReadAllText` and `StreamReader` remove it, but `Encoding.UTF8.GetString` keeps it: decode with a
+>   `StreamReader`, or remove it with `text.TrimStart('\uFEFF')`.
+> - U+180E, the Mongolian vowel separator, is no longer white space, as in Unicode since version 6.3.
+> - U+0085, U+2028 and U+2029 are new lines of the set: `Terms` parsers skip them, unless `UseNewLines` is set.
+> - `Character.WhiteSpaces`, `Character.NewLines` and `Character.WhiteSpaceOrNewLines` changed accordingly, and so did
+>   `Character.IsWhiteSpace(char)`, `Character.IsWhiteSpaceOrNewLine(char)` and `Character.IsNewLine(char)`. The constants are
+>   compiled into the assemblies that use them, which keep the previous values until they are rebuilt.
+>
+> The `Ascii` set didn't change. Its new lines are in the new `Character.AsciiNewLines`.
 
 `Ascii` is the white space of C's `isspace` and Ruby's `\s`: a no-break space or another Unicode space is then a char like any
 other, which a grammar can match or reject.
