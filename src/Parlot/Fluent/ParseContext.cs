@@ -646,6 +646,30 @@ public class ParseContext
         }
     }
 
+    // Pins a position the cursor already moved past, which is still buffered since no text was read after it
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int PinAt(int offset)
+    {
+        if ((_flags & CompactingFlag) == 0)
+        {
+            return -1;
+        }
+
+        var pin = PinNotInlined();
+        _coldState!.Pins![pin] = offset;
+        return pin;
+    }
+
+    // Moves a pin to a position the cursor already moved past, which is still buffered since no text was read after it
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void MovePin(int pin, int offset)
+    {
+        if (pin >= 0)
+        {
+            _coldState!.Pins![pin] = offset;
+        }
+    }
+
     /// <summary>
     /// Releases a pin returned by <see cref="Pin"/>, and the pins created after it.
     /// </summary>

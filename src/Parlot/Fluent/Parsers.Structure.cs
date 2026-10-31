@@ -135,6 +135,35 @@ public static partial class Parsers
     }
 
     /// <summary>
+    /// Builds a parser applying a table of operators to the values of <paramref name="operand"/>, with a single loop for
+    /// all its precedence levels. Levels are added from the one which binds the tightest, with the
+    /// <see cref="PrecedenceParser{T}.Unary{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>,
+    /// <see cref="PrecedenceParser{T}.Postfix{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>,
+    /// <see cref="PrecedenceParser{T}.LeftAssociative{TInput}(ValueTuple{Parser{TInput}, Func{T, T, T}}[])"/> and
+    /// <see cref="PrecedenceParser{T}.RightAssociative{TInput}(ValueTuple{Parser{TInput}, Func{T, T, T}}[])"/> methods
+    /// of the returned parser.
+    /// </summary>
+    /// <remarks>
+    /// The result parses the same values as the chain of <c>Unary</c>, <c>LeftAssociative</c> and <c>RightAssociative</c>
+    /// parsers with the same levels, but looks for the operator following an operand once, whatever the number of levels.
+    /// </remarks>
+    /// <typeparam name="T">The type of the operands and of the result.</typeparam>
+    /// <param name="operand">The parser of the operands, which binds tighter than any operator.</param>
+    /// <returns>A parser with no operators yet.</returns>
+    /// <example>
+    /// <code>
+    /// var expression = primary.Operators()
+    ///     .Unary((Terms.Char('-'), static x => -x))
+    ///     .LeftAssociative((Terms.Char('*'), static (a, b) => a * b), (Terms.Char('/'), static (a, b) => a / b))
+    ///     .LeftAssociative((Terms.Char('+'), static (a, b) => a + b), (Terms.Char('-'), static (a, b) => a - b));
+    /// </code>
+    /// </example>
+    public static PrecedenceParser<T> Operators<T>(this Parser<T> operand)
+    {
+        return new PrecedenceParser<T>(operand);
+    }
+
+    /// <summary>
     /// Builds a parser that creates a unary operation.
     /// </summary>
     /// <typeparam name="T">The type of the returned parser.</typeparam>

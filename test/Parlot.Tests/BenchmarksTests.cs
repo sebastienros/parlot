@@ -44,6 +44,20 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
     }
 
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Arithmetic", 7)]
+    [InlineData("Mixed", 1)]
+    [InlineData("Nested", 0)]
+    public void PrecedenceGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the nested runtime one
+        var benchmark = new PrecedenceBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.NestedRuntime());
+        Assert.Equal(expected, benchmark.ChainGenerated());
+    }
+
     [Fact]
     public void OperatorChoiceGrammar()
     {
