@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<T> _parser;
 
@@ -13,6 +13,8 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public Capture(Parser<T> parser)
     {

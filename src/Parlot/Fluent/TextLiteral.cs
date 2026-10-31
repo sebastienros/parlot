@@ -6,12 +6,13 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
+public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _hasNewLines;
     private readonly bool _returnMatchedText;
     private readonly bool _returnText;
+    private readonly string[]? _expectedPrefixes;
 
     // The invariant upper case of each char of the BMP, at the index of the char. It is only built for a
     // case-insensitive text which doesn't start with an ASCII char.
@@ -37,6 +38,12 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
             ExpectedChars = comparisonType == StringComparison.OrdinalIgnoreCase
                 ? OrdinalIgnoreCaseChars(Text)
                 : [Text[0]];
+
+            // An ordinal comparison only matches the text itself
+            if (comparisonType == StringComparison.Ordinal)
+            {
+                _expectedPrefixes = [Text];
+            }
         }
     }
 
@@ -132,6 +139,8 @@ public sealed class TextLiteral : Parser<string>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => _expectedPrefixes;
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {

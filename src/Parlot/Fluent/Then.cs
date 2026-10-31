@@ -10,7 +10,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The input parser type.</typeparam>
 /// <typeparam name="U">The output parser type.</typeparam>
-public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
+public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
 {
     private readonly Func<T, U>? _action1;
     private readonly Func<ParseContext, T, U>? _action2;
@@ -55,6 +55,8 @@ public sealed class Then<T, U> : Parser<U>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {

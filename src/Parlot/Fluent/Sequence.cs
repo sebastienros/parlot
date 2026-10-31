@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekable, ISourceable
+public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -26,6 +26,8 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekable, IS
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser1);
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
     {
@@ -126,7 +128,7 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekable, IS
     public override string ToString() => $"{_parser1} & {_parser2}";
 }
 
-public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekable, ISourceable
+public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
@@ -152,6 +154,8 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
     {
@@ -251,7 +255,7 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
     }
 }
 
-public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekable, ISourceable
+public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
@@ -274,6 +278,8 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
     {
@@ -372,7 +378,7 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekable, ISourceable
+public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
@@ -395,6 +401,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
     {
@@ -494,7 +502,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekable, ISourceable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
@@ -517,6 +525,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
     {
@@ -618,7 +628,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekable, ISourceable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
@@ -641,6 +651,8 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
     {

@@ -244,12 +244,20 @@ internal static class KnownStringLookup
         int Shift(int index) => index * (bytes ? 8 : 16);
     }
 
-    internal static string GeneratePrefixes(IReadOnlyList<string> words)
+    /// <summary>
+    /// Emits the body of a method returning the first of <paramref name="words"/> the <c>text</c> span starts with, as
+    /// <paramref name="matchExpression"/> gives it for its index (the word itself by default), or
+    /// <paramref name="failureExpression"/> when it starts with none.
+    /// </summary>
+    internal static string GeneratePrefixes(IReadOnlyList<string> words, Func<int, string>? matchExpression = null,
+        string failureExpression = "null", string resultType = "string")
     {
         var helpers = new StringBuilder();
         var number = 0;
-        var body = Emit(words.Select((text, index) => new Candidate(text, index)).ToArray(), "null");
+        var body = Emit(words.Select((text, index) => new Candidate(text, index)).ToArray(), failureExpression);
         return body + helpers;
+
+        string Match(int index) => matchExpression?.Invoke(index) ?? LiteralHelper.StringToLiteral(words[index]);
 
         string Emit(Candidate[] candidates, string failure)
         {
@@ -257,7 +265,7 @@ internal static class KnownStringLookup
             var terminal = Array.FindIndex(candidates, static candidate => candidate.Text.Length == 0);
             if (terminal >= 0)
             {
-                failure = LiteralHelper.StringToLiteral(words[candidates[terminal].Index]);
+                failure = Match(candidates[terminal].Index);
                 candidates = candidates.Take(terminal).ToArray();
             }
 
@@ -274,14 +282,14 @@ internal static class KnownStringLookup
                 var suffixes = groups[i].Select(candidate => new Candidate(candidate.Text.Substring(length), candidate.Index)).ToArray();
                 if (suffixes[0].Text.Length == 0)
                 {
-                    matches[i] = LiteralHelper.StringToLiteral(words[suffixes[0].Index]);
+                    matches[i] = Match(suffixes[0].Index);
                 }
                 else
                 {
                     var name = $"MatchPrefix{number++}";
                     matches[i] = $"{name}(text.Slice({length}))";
                     var helper = Emit(suffixes, failure);
-                    helpers.AppendLine(FormattableString.Invariant($"static string {name}(System.ReadOnlySpan<char> text) {{"));
+                    helpers.AppendLine(FormattableString.Invariant($"static {resultType} {name}(System.ReadOnlySpan<char> text) {{"));
                     helpers.AppendLine(helper);
                     helpers.AppendLine("}");
                 }
@@ -289,7 +297,7 @@ internal static class KnownStringLookup
 
             return $"if (text.Length < {length}) return {failure};\nvar input = text.Slice(0, {length});\n"
                 + Generate(groups.Select(static group => group.Key).ToArray(), bytes: false, ignoreCase: false,
-                    matchExpression: index => matches[index], failureExpression: failure, splitByLength: false);
+                    matchExpression: index => matches[index], failureExpression: failure, splitByLength: false, resultType: resultType);
         }
     }
 
