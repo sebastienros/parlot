@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// Ensure the given parser is valid based on a condition, and backtracks if not.
 /// </summary>
 /// <typeparam name="T">The output parser type.</typeparam>
-public sealed class When<T> : Parser<T>, ISeekable, ISourceable
+public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable
 {
     private readonly Func<ParseContext, T, bool> _action;
     private readonly Parser<T> _parser;
@@ -43,6 +43,8 @@ public sealed class When<T> : Parser<T>, ISeekable, ISourceable
     public char[] ExpectedChars { get; private set; } = [];
 
     public bool SkipWhitespace { get; private set; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

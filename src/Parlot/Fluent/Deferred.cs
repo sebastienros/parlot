@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Deferred<T> : Parser<T>, ISeekable, ISourceable
+public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable
 {
 
     private readonly object _lockObject = new();
@@ -30,6 +30,34 @@ public sealed class Deferred<T> : Parser<T>, ISeekable, ISourceable
 
     /// <inheritdoc />
     public bool SkipWhitespace => Resolve().SkipWhitespace;
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes
+    {
+        get
+        {
+            // The same guard as Resolve(): a parser that reaches itself gives no prefixes
+            lock (SeekableResolution.SyncRoot)
+            {
+                var parser = _parser;
+
+                if (parser is null || _resolving)
+                {
+                    return null;
+                }
+
+                _resolving = true;
+
+                try
+                {
+                    return SeekableHints.Prefixes(parser);
+                }
+                finally
+                {
+                    _resolving = false;
+                }
+            }
+        }
+    }
 
     private (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Resolve()
     {

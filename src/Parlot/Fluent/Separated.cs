@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISourceable
+public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<U> _separator;
     private readonly Parser<T> _parser;
@@ -72,6 +72,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekable, ISour
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {

@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// can select the operator and the factory to apply with it.
 /// </summary>
 /// <typeparam name="T">The type of the operator parser.</typeparam>
-internal sealed class OperatorIndex<T> : Parser<int>, ISeekable, ISourceable
+internal sealed class OperatorIndex<T> : Parser<int>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly int _index;
@@ -32,6 +32,8 @@ internal sealed class OperatorIndex<T> : Parser<int>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<int> result)
     {

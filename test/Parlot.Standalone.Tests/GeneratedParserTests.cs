@@ -327,6 +327,111 @@ public class GeneratedParserTests
         }
     }
 
+    [Fact]
+    public void Prefix_Dispatched_Keywords_Agree_With_An_Ordered_Reference()
+    {
+        var words = Grammar.PrefixKeywordWords;
+
+        foreach (var input in PrefixInputs(words, seed: 431))
+        {
+            var text = " \r\n" + input;
+            var trimmed = text.TrimStart();
+            var offset = text.Length - trimmed.Length;
+            (int Value, int Offset)? expected = null;
+
+            for (var i = 0; i <= words.Length && expected == null; i++)
+            {
+                if (i == Grammar.PrefixKeywordFallback)
+                {
+                    var length = trimmed.TakeWhile(static c => c is >= 'a' and <= 'z').Count();
+                    expected = length > 0 ? (-1, offset + length) : null;
+                    continue;
+                }
+
+                var index = i < Grammar.PrefixKeywordFallback ? i : i - 1;
+                var word = words[index];
+
+                if (trimmed.StartsWith(word, StringComparison.Ordinal)
+                    && (trimmed.Length == word.Length || trimmed[word.Length] is not (>= 'a' and <= 'z' or >= 'A' and <= 'Z')))
+                {
+                    expected = (index, offset + word.Length);
+                }
+            }
+
+            Assert.Equal(expected.HasValue, Grammar.TryParsePrefixKeywords(text, out var value));
+            Assert.Equal(expected ?? default, value);
+        }
+    }
+
+    [Fact]
+    public void Prefix_Dispatched_Texts_Agree_With_An_Ordered_Reference()
+    {
+        var operators = Grammar.PrefixOperatorTexts;
+
+        foreach (var input in PrefixInputs(operators, seed: 577))
+        {
+            var text = " \r\n" + input;
+            var trimmed = text.TrimStart();
+            var index = Array.FindIndex(operators, op => trimmed.StartsWith(op, StringComparison.Ordinal));
+            (int Value, int Offset) expected = index < 0 ? default : (index, text.Length - trimmed.Length + operators[index].Length);
+
+            Assert.Equal(index >= 0, Grammar.TryParsePrefixOperators(text, out var value));
+            Assert.Equal(expected, value);
+
+            index = Array.FindIndex(operators, op => input.StartsWith(op + " ", StringComparison.Ordinal));
+            expected = index < 0 ? default : (index, operators[index].Length + 1);
+
+            Assert.Equal(index >= 0, Grammar.TryParsePrefixOperatorSequences(input, out value));
+            Assert.Equal(expected, value);
+        }
+    }
+
+    // Each alternative, shortened, extended and with each of its chars replaced, then random texts of their chars
+    private static string[] PrefixInputs(string[] words, int seed)
+    {
+        var inputs = new System.Collections.Generic.List<string> { "", " ", "x" };
+        var alphabet = string.Concat(words) + " xX9\u00e9\0";
+
+        foreach (var word in words)
+        {
+            foreach (var other in words)
+            {
+                inputs.Add(word + other);
+                inputs.Add(word + " " + other);
+            }
+
+            inputs.Add(word.Substring(0, word.Length - 1));
+            inputs.Add(word.Substring(1));
+            inputs.Add(word + "x");
+            inputs.Add(word + "9");
+            inputs.Add(word + "\u00e9");
+
+            for (var offset = 0; offset < word.Length; offset++)
+            {
+                for (var c = 0; c < 128; c++)
+                {
+                    inputs.Add(word.Substring(0, offset) + (char)c + word.Substring(offset + 1));
+                }
+            }
+        }
+
+        var random = new Random(seed);
+
+        for (var i = 0; i < 5000; i++)
+        {
+            var input = new char[random.Next(0, 16)];
+
+            for (var j = 0; j < input.Length; j++)
+            {
+                input[j] = random.Next(8) == 0 ? (char)random.Next(0, 65536) : alphabet[random.Next(alphabet.Length)];
+            }
+
+            inputs.Add(new string(input));
+        }
+
+        return inputs.ToArray();
+    }
+
     [Theory]
     [InlineData(" 42", true, 42)]
     [InlineData("-17", true, -17)]

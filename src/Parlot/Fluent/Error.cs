@@ -78,7 +78,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable
     public override string ToString() => $"{_parser} (ElseError)";
 }
 
-public sealed class Error<T> : Parser<T>, ISeekable, ISourceable
+public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -91,6 +91,8 @@ public sealed class Error<T> : Parser<T>, ISeekable, ISourceable
 
     /// <inheritdoc />
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public Error(Parser<T> parser, string message)
     {
@@ -155,7 +157,7 @@ public sealed class Error<T> : Parser<T>, ISeekable, ISourceable
     public override string ToString() => $"{_parser} (Error)";
 }
 
-public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
+public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -165,6 +167,8 @@ public sealed class Error<T, U> : Parser<U>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public Error(Parser<T> parser, string message)
     {

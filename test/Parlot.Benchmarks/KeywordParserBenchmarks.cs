@@ -16,7 +16,10 @@ public partial class KeywordParserBenchmarks
 
     private TryParse _generated;
     private TryParse _firstCharacterLookup;
+    private TryParse _wrappedPrefixDispatch;
+    private TryParse _wrappedFirstCharacterLookup;
     private Parser<string> _parser;
+    private Parser<string> _wrappedParser;
     private KeywordLookupBenchmarks.CharMatcher _tree;
     private FrozenDictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> _frozen;
     private string[] _inputs;
@@ -32,6 +35,7 @@ public partial class KeywordParserBenchmarks
     {
         var words = KeywordLookupBenchmarks.Words(Vocabulary);
         _parser = OneOf(words.Select(static word => Literals.Keyword(word)).ToArray());
+        _wrappedParser = OneOf(words.Select(static word => Literals.Keyword(word).Then(word)).ToArray());
         _generated = Vocabulary switch
         {
             "Small" => TryParseSmall,
@@ -46,6 +50,24 @@ public partial class KeywordParserBenchmarks
             "Medium" => TryParseMediumBaseline,
             "Language" => TryParseLanguageBaseline,
             "SharedPrefix" => TryParseSharedPrefixBaseline,
+            _ => throw new InvalidOperationException(),
+        };
+        // Keywords behind a wrapper, which hides them from the keyword specialization: the prefix dispatch, and the
+        // first char lookup of a keyword that tells no prefix
+        _wrappedPrefixDispatch = Vocabulary switch
+        {
+            "Small" => TryParseSmallWrapped,
+            "Medium" => TryParseMediumWrapped,
+            "Language" => TryParseLanguageWrapped,
+            "SharedPrefix" => TryParseSharedPrefixWrapped,
+            _ => throw new InvalidOperationException(),
+        };
+        _wrappedFirstCharacterLookup = Vocabulary switch
+        {
+            "Small" => TryParseSmallWrappedBaseline,
+            "Medium" => TryParseMediumWrappedBaseline,
+            "Language" => TryParseLanguageWrappedBaseline,
+            "SharedPrefix" => TryParseSharedPrefixWrappedBaseline,
             _ => throw new InvalidOperationException(),
         };
         _tree = KeywordLookupBenchmarks.Compile(words, ignoreCase: false).Narrow;
@@ -66,8 +88,11 @@ public partial class KeywordParserBenchmarks
         {
             var success = _parser.TryParse(input, out var expected);
             if (Scenario == "Miss" && success || Scenario == "Hit" && !success
+                || _wrappedParser.TryParse(input, out var runtimeWrapped) != success || success && runtimeWrapped != expected
                 || _generated(input, out var actual) != success || success && actual != expected
                 || _firstCharacterLookup(input, out var baseline) != success || success && baseline != expected
+                || _wrappedPrefixDispatch(input, out var wrapped) != success || success && wrapped != expected
+                || _wrappedFirstCharacterLookup(input, out var wrappedBaseline) != success || success && wrappedBaseline != expected
                 || (MatchTree(input) >= 0) != success || _frozen.TryGetValue(Token(input), out _) != success)
             {
                 throw new InvalidOperationException($"Incorrect keyword parsing of '{input}'.");
@@ -82,6 +107,18 @@ public partial class KeywordParserBenchmarks
         foreach (var input in _inputs)
         {
             count += _parser.TryParse(input, out _) ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    [Benchmark(OperationsPerInvoke = 64)]
+    public int RuntimeWrappedOneOf()
+    {
+        var count = 0;
+        foreach (var input in _inputs)
+        {
+            count += _wrappedParser.TryParse(input, out _) ? 1 : 0;
         }
 
         return count;
@@ -106,6 +143,30 @@ public partial class KeywordParserBenchmarks
         foreach (var input in _inputs)
         {
             count += _firstCharacterLookup(input, out _) ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    [Benchmark(OperationsPerInvoke = 64)]
+    public int GeneratedWrappedPrefixDispatch()
+    {
+        var count = 0;
+        foreach (var input in _inputs)
+        {
+            count += _wrappedPrefixDispatch(input, out _) ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    [Benchmark(OperationsPerInvoke = 64)]
+    public int GeneratedWrappedFirstCharacterLookup()
+    {
+        var count = 0;
+        foreach (var input in _inputs)
+        {
+            count += _wrappedFirstCharacterLookup(input, out _) ? 1 : 0;
         }
 
         return count;
@@ -156,6 +217,14 @@ public partial class KeywordParserBenchmarks
     private static partial bool TryParseMediumBaseline(string input, out string value);
     private static partial bool TryParseLanguageBaseline(string input, out string value);
     private static partial bool TryParseSharedPrefixBaseline(string input, out string value);
+    private static partial bool TryParseSmallWrapped(string input, out string value);
+    private static partial bool TryParseMediumWrapped(string input, out string value);
+    private static partial bool TryParseLanguageWrapped(string input, out string value);
+    private static partial bool TryParseSharedPrefixWrapped(string input, out string value);
+    private static partial bool TryParseSmallWrappedBaseline(string input, out string value);
+    private static partial bool TryParseMediumWrappedBaseline(string input, out string value);
+    private static partial bool TryParseLanguageWrappedBaseline(string input, out string value);
+    private static partial bool TryParseSharedPrefixWrappedBaseline(string input, out string value);
 
     // Hide only the concrete keyword type from the optimization, retaining the original
     // seek table and exactly the same emitted keyword body (no extra generated wrapper).

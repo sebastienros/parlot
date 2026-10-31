@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// are the ASCII letters; a custom set can be given, e.g. to also reject digits, <c>_</c> or <c>-</c>.
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
-public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
+public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 {
     // The text parser is kept for the source generator, which emits it as a helper; the runtime matches the text inline
     private readonly TextLiteral _textLiteral;
@@ -88,6 +88,9 @@ public sealed class KeywordLiteral : Parser<string>, ISeekable, ISourceable
     public char[] ExpectedChars { get; }
 
     public bool SkipWhitespace { get; }
+
+    // The keyword starts with its text, the boundary is checked after it
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_textLiteral);
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {

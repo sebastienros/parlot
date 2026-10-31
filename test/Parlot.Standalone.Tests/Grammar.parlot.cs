@@ -1,3 +1,4 @@
+using System.Linq;
 using Parlot.Fluent;
 using Parlot.SourceGenerator;
 using static Parlot.Fluent.Parsers;
@@ -207,6 +208,27 @@ public static partial class Grammar
     private static Parser<(int Offset, int Line, int Column)> TextChoicePosition() =>
         TextChoice().Then(static (context, _) =>
             (context.Scanner.Cursor.Offset, context.Scanner.Cursor.Position.Line, context.Scanner.Cursor.Position.Column));
+
+    // Wrapped keywords are dispatched on their prefixes. The run of lowercase letters is tried between them, so the
+    // keywords after it only match when the input doesn't start with one.
+    [GenerateParser(nameof(TryParsePrefixKeywords))]
+    private static Parser<(int Value, int Offset)> PrefixKeywords() =>
+        OneOf([
+            .. PrefixKeywordWords.Take(PrefixKeywordFallback).Select(static (word, index) => Terms.Keyword(word).Then(index)),
+            Terms.Pattern(static c => c is >= 'a' and <= 'z').Then(-1),
+            .. PrefixKeywordWords.Skip(PrefixKeywordFallback).Select(static (word, index) => Terms.Keyword(word).Then(PrefixKeywordFallback + index)),
+        ]).Then(static (context, value) => (value, context.Scanner.Cursor.Offset));
+
+    [GenerateParser(nameof(TryParsePrefixOperators))]
+    private static Parser<(int Value, int Offset)> PrefixOperators() =>
+        OneOf(PrefixOperatorTexts.Select(static (op, index) => Terms.Text(op).Then(index)).ToArray())
+            .Then(static (context, value) => (value, context.Scanner.Cursor.Offset));
+
+    // An operator not followed by a space gives way to the next one
+    [GenerateParser(nameof(TryParsePrefixOperatorSequences))]
+    private static Parser<(int Value, int Offset)> PrefixOperatorSequences() =>
+        OneOf(PrefixOperatorTexts.Select(static (op, index) => Literals.Text(op).AndSkip(Literals.Char(' ')).Then(index)).ToArray())
+            .Then(static (context, value) => (value, context.Scanner.Cursor.Offset));
 
     // Matches up to the first space, new lines included
     [GenerateParser(nameof(TryParseScanPosition))]

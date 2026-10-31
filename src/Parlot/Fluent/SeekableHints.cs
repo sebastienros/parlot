@@ -1,4 +1,5 @@
 using Parlot.Rewriting;
+using System;
 using System.Collections.Generic;
 
 namespace Parlot.Fluent;
@@ -42,5 +43,44 @@ internal static class SeekableHints
         }
 
         return (true, expectedChars.ToArray(), skipWhitespace);
+    }
+
+    /// <summary>
+    /// Gets the prefixes a parser forwards from the parser which reads first, see <see cref="ISeekablePrefixes"/>.
+    /// </summary>
+    public static string[]? Prefixes(object parser) => parser is ISeekablePrefixes seekable ? seekable.ExpectedPrefixes : null;
+
+    /// <summary>
+    /// Gets the texts the input starts with when <paramref name="parser"/> matches it from <paramref name="c"/>. It is only
+    /// <paramref name="c"/> when the parser can't tell more, or when it can start with any char.
+    /// </summary>
+    /// <remarks>
+    /// A choice only invokes the parser for the chars it expects, so the prefixes which start with other chars are ignored,
+    /// as are the ones a shorter prefix already covers.
+    /// </remarks>
+    public static List<string> Prefixes(object parser, char c)
+    {
+        var result = new List<string>();
+
+        if (parser is ISeekable { CanSeek: true } seekable
+            && Array.IndexOf(seekable.ExpectedChars, OneOf<object>.OtherSeekableChar) < 0
+            && Prefixes(parser) is { } prefixes)
+        {
+            foreach (var prefix in prefixes)
+            {
+                if (prefix.Length > 0 && prefix[0] == c && !Array.Exists(prefixes, other => other.Length > 0
+                    && other.Length < prefix.Length && prefix.StartsWith(other, StringComparison.Ordinal)) && !result.Contains(prefix))
+                {
+                    result.Add(prefix);
+                }
+            }
+        }
+
+        if (result.Count == 0)
+        {
+            result.Add(c.ToString());
+        }
+
+        return result;
     }
 }

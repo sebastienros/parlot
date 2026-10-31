@@ -50,6 +50,19 @@ public static partial class Grammar
     public static partial bool TryParseTextChoiceDiscarded(string text, out char value);
     public static partial bool TryParseTextChoicePosition(string text, out (int Offset, int Line, int Column) value);
     public static partial bool TryParseScanPosition(string text, out (string Text, int Offset, int Line, int Column) value);
+    public static partial bool TryParsePrefixKeywords(string text, out (int Value, int Offset) value);
+    public static partial bool TryParsePrefixOperators(string text, out (int Value, int Offset) value);
+    public static partial bool TryParsePrefixOperatorSequences(string text, out (int Value, int Offset) value);
+
+    // The alternatives of the prefix dispatch grammars: the keywords from PrefixKeywordFallback come after a run of
+    // lowercase letters. Some operators can't match, as an earlier shorter one does.
+    internal static readonly string[] PrefixKeywordWords =
+        ["if", "implicit", "in", "int", "interface", "internal", "is", "case", "catch", "char", "class", "In", "Int", "Interface", "INT"];
+
+    internal const int PrefixKeywordFallback = 11;
+
+    internal static readonly string[] PrefixOperatorTexts =
+        ["<<=", "<=", "<", "<<", "<>", ">>=", ">=", ">>", ">", "==", "=", "!=", "!", "\u00e9\u00e9", "\u00e9x", "\u00e9", "\ud800\udc00", "\ud800\udc01", "\ud800"];
 
     // TextReader entry points parse with a compacting buffer.
     public static partial bool TryParseNumber(TextReader reader, out int value);

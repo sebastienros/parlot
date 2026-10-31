@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// <typeparam name="A">The type of the parser before the main parser.</typeparam>
 /// <typeparam name="T">The type of the value parsed by the main parser.</typeparam>
 /// <typeparam name="B">The type of the parser after the main parser.</typeparam>
-public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
+public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<A> _before;
@@ -36,6 +36,8 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_before);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
