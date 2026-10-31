@@ -743,9 +743,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ISpanS
     {
         EnsureResolved();
 
-        // The alternatives are tried in order. A choice of 8 texts or keywords or more is generated as a lookup instead,
-        // and the white space a choice skips once isn't read through the span.
-        if (Parsers.Count == 0 || SkipWhitespace || CountAlternatives(this) >= 8)
+        // The alternatives are tried in order. A choice of 8 texts or keywords or more is generated as a lookup instead.
+        if (Parsers.Count == 0 || CountAlternatives(this) >= 8)
         {
             return -1;
         }
@@ -772,6 +771,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ISpanS
         var pos = writer.Pos;
         var done = writer.NewLabel("choiceDone");
         var start = parsers.Count > 1 ? writer.DeclareLocal("int", "choiceStart", "0") : null;
+
+        // The white space is skipped once for all the alternatives, like at runtime
+        if (SkipWhitespace)
+        {
+            writer.SkipWhiteSpace();
+        }
 
         if (start != null)
         {

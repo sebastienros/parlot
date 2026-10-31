@@ -71,6 +71,12 @@ internal sealed class SpanLabel
 /// cursor to the end does when the subgraph matches. A loop which stops at the end of the span needs no mark: what
 /// follows it checks the next char, invokes a callback or moves the cursor.
 /// </para>
+/// <para>
+/// White space is skipped by the context, which reads the cursor, and can invoke a custom white space parser. The span
+/// code checks the current char first, and only when it can be skipped moves the cursor to the position, skips the
+/// white space and reads the position back. The span remains valid since the buffer is only replaced in compacting mode.
+/// The cursor is then moved to the end of the match, or back to the start of the span, from wherever it is.
+/// </para>
 /// </remarks>
 internal sealed class SpanSourceWriter
 {
@@ -90,6 +96,12 @@ internal sealed class SpanSourceWriter
     }
 
     public SourceGenerationContext Context { get; }
+
+    /// <summary>
+    /// The name of the <c>bool</c> local recording that the cursor was moved to skip white space, or <see langword="null"/>
+    /// when the span code doesn't skip white space.
+    /// </summary>
+    public string? Moved { get; private set; }
 
     /// <summary>
     /// The name of the <c>ReadOnlySpan&lt;char&gt;</c> local holding the text after the cursor.
@@ -187,6 +199,24 @@ internal sealed class SpanSourceWriter
     }
 
     /// <summary>
+    /// Emits the code skipping the white space at the current position, like <c>SkipWhiteSpace</c> does.
+    /// </summary>
+    public void SkipWhiteSpace()
+    {
+        var ctx = Context.ParseContextName;
+        Moved ??= DeclareLocal("bool", "moved", "false");
+
+        // The check of ParseContext.MaySkipWhiteSpace, with the constant mask of the default set first like SkipWhiteSpace.
+        // There is no white space at the end of the span.
+        BeginBlock($"if ({ctx}.WhiteSpaceParser is not null || ((uint){Pos} < (uint){Span}.Length && global::Parlot.Character.HasMask({Span}[{Pos}], (byte)global::Parlot.CharacterMask.WhiteSpaceOrNewLine) && global::Parlot.Character.HasMask({Span}[{Pos}], {ctx}._skipMask)))");
+        Add($"{Cursor}.ResetPosition({SpanStart} + {Pos});");
+        Add($"{ctx}.SkipWhiteSpace();");
+        Add($"{Pos} = {Cursor}.Offset - {SpanStart};");
+        Add($"{Moved} = true;");
+        EndBlock();
+    }
+
+    /// <summary>
     /// Emits the mark a callback needs before it's invoked at the end of the span: the cursor would already have marked
     /// that it reached the end, and a <c>ParseException</c> thrown while it's marked lets a token be parsed again with
     /// more text.
@@ -270,9 +300,26 @@ internal static class SpanSource
         writer.Generate(parser, context.DiscardResult ? null : result.ValueVariable, fail);
 
         // The cursor moves once, which marks that it reached the end of the span when it does
-        writer.Add($"{cursor}.AdvanceNoNewLines({writer.Pos});");
-        writer.Add($"{result.SuccessVariable} = true;");
-        writer.PlaceLabel(fail);
+        if (writer.Moved == null)
+        {
+            writer.Add($"{cursor}.AdvanceWithinBuffer({writer.Pos});");
+            writer.Add($"{result.SuccessVariable} = true;");
+            writer.PlaceLabel(fail);
+        }
+        else
+        {
+            // Skipping white space moved the cursor, which is moved from where it is
+            writer.Add($"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart} + {writer.Pos}); else {cursor}.AdvanceWithinBuffer({writer.Pos});");
+            writer.Add($"{result.SuccessVariable} = true;");
+
+            if (fail.IsUsed)
+            {
+                var done = writer.NewLabel("done");
+                writer.Add(done.Goto());
+                writer.PlaceLabel(fail, $"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});");
+                writer.PlaceLabel(done);
+            }
+        }
 
         return result;
     }
@@ -388,6 +435,53 @@ internal static class SpanSource
             }
 
             writer.PlaceLabel(done);
+        }
+    }
+}
+
+/// <summary>
+/// Generates the span code of the number parsers.
+/// </summary>
+internal static class NumberSource
+{
+    /// <summary>
+    /// Emits the span code reading a decimal number like <c>Scanner.ReadDecimal</c>, then parsing it.
+    /// </summary>
+    internal static void GenerateSpanSource(
+        SpanSourceWriter writer,
+        string? valueVariable,
+        SpanLabel fail,
+        Type valueType,
+        string tryParseMethod,
+        string numberStyles,
+        string culture,
+        bool allowLeadingSign,
+        bool allowDecimalSeparator,
+        bool allowGroupSeparator,
+        bool allowExponent,
+        char decimalSeparator,
+        char groupSeparator)
+    {
+        var text = writer.DeclareLocal("global::System.ReadOnlySpan<char>", "numberText");
+        var length = writer.DeclareLocal("int", "numberLength", "0");
+        var reachedEnd = writer.DeclareLocal("bool", "numberReachedEnd", "false");
+        var number = writer.DeclareLocal(valueType, "number");
+
+        static string Bool(bool value) => value ? "true" : "false";
+
+        writer.Add($"{text} = {writer.Span}.Slice({writer.Pos});");
+        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, {Bool(allowLeadingSign)}, {Bool(allowDecimalSeparator)}, {Bool(allowGroupSeparator)}, {Bool(allowExponent)}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
+
+        // More digits could follow the end of the span
+        writer.Add($"if ({reachedEnd}) {writer.MarkHitEnd}");
+
+        // The value is parsed even when it's not used, since a number its type can't represent doesn't match
+        writer.Add($"if ({length} == 0 || !{tryParseMethod}({text}.Slice(0, {length}), {numberStyles}, {culture}, out {number})) {fail.Goto()}");
+        writer.Add($"{writer.Pos} += {length};");
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {number};");
         }
     }
 }

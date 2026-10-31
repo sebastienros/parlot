@@ -396,6 +396,31 @@ public class Cursor
         _offset = newOffset;
     }
 
+    /// <summary>
+    /// Advances the cursor by <paramref name="count"/> chars which are in the buffer, up to its end included.
+    /// </summary>
+    /// <remarks>
+    /// This is <see cref="AdvanceNoNewLines(int)"/> inlined: generated parsers which read the text through a span call it
+    /// once the text matched, with the number of chars they read.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void AdvanceWithinBuffer(int count)
+    {
+        var offset = _offset + count;
+        var buffer = Buffer;
+
+        // The length of the buffer, rather than _textLength which is the same, lets the JIT remove the bounds check
+        if ((uint)offset < (uint)buffer.Length)
+        {
+            _offset = offset;
+            Current = buffer[offset];
+        }
+        else
+        {
+            AdvanceToEnd();
+        }
+    }
+
     // Moving to the end of the text, or staying there, which records that the end of the buffer was reached
     private void AdvanceToEnd()
     {

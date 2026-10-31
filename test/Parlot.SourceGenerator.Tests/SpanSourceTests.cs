@@ -186,6 +186,55 @@ public class SpanSourceTests
         Check(parser, SpanSourceGrammars.TryParseQuoted, SpanSourceGrammars.TryParseQuoted, text);
     }
 
+    [Theory]
+    [InlineData("(1, 2.5)")]
+    [InlineData("( -12 ,\n 3.25e-2 ) 1,000.5")]
+    [InlineData("(+0,.5)x")]
+    [InlineData("(1, 5.)")]
+    [InlineData("(1, 1e)")]
+    [InlineData("(1, 1E+)")]
+    [InlineData("(1, 1e+3) 12")]
+    [InlineData("(1, 1,5)")]
+    [InlineData("(99999999999999999999, 1)")]
+    [InlineData("(1,)")]
+    [InlineData("(1, -)")]
+    [InlineData("(1, 2.5")]
+    [InlineData(" ( 1 , 2 ) ")]
+    [InlineData("(")]
+    [InlineData("")]
+    public void Numbers_And_White_Space_Match_The_Runtime(string text)
+    {
+        var parser = Terms.Char('(')
+            .SkipAnd(Terms.Integer())
+            .AndSkip(Terms.Char(','))
+            .And(Terms.Decimal())
+            .AndSkip(Terms.Char(')'))
+            .And(Terms.Number<double>(NumberOptions.Any).ZeroOrOne())
+            .Then(static t => $"{t.Item1}|{t.Item2}|{string.Join(",", t.Item3)}");
+
+        Check(parser, SpanSourceGrammars.TryParseNumbers, SpanSourceGrammars.TryParseNumbers, text);
+    }
+
+    [Theory]
+    [InlineData("[ abc ]")]
+    [InlineData("[ # comment\n abc # more\n ]")]
+    [InlineData("[#\n_a1#\n]")]
+    [InlineData("[ abc")]
+    [InlineData("[ 1 ]")]
+    [InlineData("#\n[a]")]
+    [InlineData("[ abc # ]")]
+    [InlineData("")]
+    public void Custom_White_Space_Matches_The_Runtime(string text)
+    {
+        var parser = Terms.Char('[')
+            .SkipAnd(Terms.Identifier())
+            .AndSkip(Terms.Char(']'))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
+            .Then(static span => span.ToString());
+
+        Check(parser, SpanSourceGrammars.TryParseCommented, SpanSourceGrammars.TryParseCommented, text);
+    }
+
     private static Parser<string> Delimited() =>
         AnyCharBefore(Literals.Char('-').And(Literals.Char('-')).And(Literals.AnyOf(">!", minSize: 1, maxSize: 1)), consumeDelimiter: true)
             .Then(static span => span.ToString());
@@ -219,12 +268,12 @@ public class SpanSourceTests
         // The whole grammar is one method, which moves the cursor once and never moves it back
         Assert.Empty(context.Helpers.Enumerate());
         Assert.Contains("= cursor.Span;", body, StringComparison.Ordinal);
-        Assert.Contains("cursor.AdvanceNoNewLines(pos", body, StringComparison.Ordinal);
+        Assert.Contains("cursor.AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Contains("cursor.MarkHitEnd();", body, StringComparison.Ordinal);
         Assert.DoesNotContain("ResetPosition", body, StringComparison.Ordinal);
         Assert.DoesNotContain("cursor.Advance()", body, StringComparison.Ordinal);
         Assert.DoesNotContain("cursor.Current", body, StringComparison.Ordinal);
-        Assert.Single(body.Split('\n'), static line => line.Contains("AdvanceNoNewLines", StringComparison.Ordinal));
+        Assert.Single(body.Split('\n'), static line => line.Contains("cursor.Advance", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -242,7 +291,7 @@ public class SpanSourceTests
         var context = new SourceGenerationContext { GenerateSpanCode = false };
         var body = Generate(Literals.Char('a').And(Literals.Text("bc")), context);
 
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Equal(2, context.Helpers.Enumerate().Count());
     }
 
@@ -253,8 +302,22 @@ public class SpanSourceTests
         var context = new SourceGenerationContext { IsCompacting = true };
         var body = Generate(Literals.Char('a').And(Literals.Text("bc")), context);
 
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Contains(context.Helpers.Enumerate(), static helper => helper.MethodName.Contains("_Token", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void White_Space_Is_Skipped_By_The_Context()
+    {
+        var context = new SourceGenerationContext();
+        var body = Generate(Terms.Char('a').And(Terms.Text("bc")), context);
+
+        // The cursor is moved to skip white space, then to the end of the match, or back to the start
+        Assert.Empty(context.Helpers.Enumerate());
+        Assert.Contains("context.WhiteSpaceParser is not null", body, StringComparison.Ordinal);
+        Assert.Contains("context.SkipWhiteSpace();", body, StringComparison.Ordinal);
+        Assert.Contains("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
+        Assert.Contains("cursor.ResetPosition(spanStart", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -262,19 +325,17 @@ public class SpanSourceTests
     {
         var context = new SourceGenerationContext();
 
-        // White space is skipped by the context, and a callback receiving the context can read the cursor
-        var terms = Generate(Terms.Char('a').And(Terms.Char('b')), context);
+        // A callback receiving the context can read the cursor
         var callback = Generate(Literals.Char('a').Then(static (ParseContext c, char x) => x), context);
         var caseInsensitive = Generate(Literals.Char('a').And(Literals.Text("bc", caseInsensitive: true)), context);
 
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", terms, StringComparison.Ordinal);
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", callback, StringComparison.Ordinal);
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", caseInsensitive, StringComparison.Ordinal);
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", callback, StringComparison.Ordinal);
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", caseInsensitive, StringComparison.Ordinal);
 
         // The sequence of literals the callback receives is span code
         var sequence = Generate(Literals.Char('a').And(Literals.Char('b')).Then(static (ParseContext c, (char, char) x) => x.Item1), context);
-        Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("AdvanceNoNewLines(pos", StringComparison.Ordinal)));
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", sequence, StringComparison.Ordinal);
+        Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("AdvanceWithinBuffer(pos", StringComparison.Ordinal)));
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", sequence, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -286,7 +347,7 @@ public class SpanSourceTests
 
         var body = Generate(texts.And(Literals.Char('!')), context);
 
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("MatchText(", StringComparison.Ordinal)));
     }
 
@@ -304,8 +365,8 @@ public class SpanSourceTests
 
         var body = Generate(parser, context);
 
-        Assert.DoesNotContain("AdvanceNoNewLines(pos", body, StringComparison.Ordinal);
-        Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("AdvanceNoNewLines(pos", StringComparison.Ordinal)));
+        Assert.DoesNotContain("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
+        Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("AdvanceWithinBuffer(pos", StringComparison.Ordinal)));
     }
 
     private static string Generate<T>(Parser<T> parser, SourceGenerationContext context) =>
@@ -356,4 +417,8 @@ public static partial class SpanSourceGrammars
     public static partial bool TryParseQuoted(TextReader reader, out string value);
     public static partial bool TryParseDelimited(string text, out string value);
     public static partial bool TryParseDelimited(TextReader reader, out string value);
+    public static partial bool TryParseNumbers(string text, out string value);
+    public static partial bool TryParseNumbers(TextReader reader, out string value);
+    public static partial bool TryParseCommented(string text, out string value);
+    public static partial bool TryParseCommented(TextReader reader, out string value);
 }

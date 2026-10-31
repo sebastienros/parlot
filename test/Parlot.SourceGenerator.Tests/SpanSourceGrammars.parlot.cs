@@ -96,6 +96,26 @@ public static partial class SpanSourceGrammars
             .Then(static values => string.Concat(values));
     }
 
+    // Numbers, and the white space skipped by the context before each token
+    [GenerateParser(nameof(TryParseNumbers))]
+    private static Parser<string> BuildNumbers() =>
+        Terms.Char('(')
+            .SkipAnd(Terms.Integer())
+            .AndSkip(Terms.Char(','))
+            .And(Terms.Decimal())
+            .AndSkip(Terms.Char(')'))
+            .And(Terms.Number<double>(NumberOptions.Any).ZeroOrOne())
+            .Then(static t => $"{t.Item1}|{t.Item2}|{string.Join(",", t.Item3)}");
+
+    // A custom white space parser skips comments
+    [GenerateParser(nameof(TryParseCommented))]
+    private static Parser<string> BuildCommented() =>
+        Terms.Char('[')
+            .SkipAnd(Terms.Identifier())
+            .AndSkip(Terms.Char(']'))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
+            .Then(static span => span.ToString());
+
     // The delimiter is span code inside the code of a token, which is parsed again when it reads the end of the buffer
     [GenerateParser(nameof(TryParseDelimited))]
     private static Parser<string> BuildDelimited() =>

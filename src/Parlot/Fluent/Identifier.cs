@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ISpanSourceable
 {
     private readonly Func<char, bool>? _extraStart;
     private readonly Func<char, bool>? _extraPart;
@@ -170,6 +170,67 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable
         result.Body.Add("}");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => 1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var span = writer.Span;
+        var pos = writer.Pos;
+        var first = writer.DeclareLocal("char", "identifierFirst");
+        var start = writer.DeclareLocal("int", "identifierStart", "0");
+
+        // At the end of the text the char is the null char, like Cursor.Current, which an extra start predicate can accept
+        writer.Add($"{first} = (uint){pos} < (uint){span}.Length ? {span}[{pos}] : '\\0';");
+
+        var startCondition = $"global::Parlot.Character.IsIdentifierStart({first})";
+
+        if (_extraStart != null)
+        {
+            startCondition = $"{startCondition} || {writer.Context.RegisterLambda(_extraStart)}({first})";
+        }
+
+        writer.BeginBlock($"if (!({startCondition}))");
+        writer.Fail(fail);
+        writer.EndBlock();
+        writer.Add($"{start} = {pos};");
+
+        if (_extraStart != null)
+        {
+            // An extra start predicate which accepts the end of the text matches nothing
+            writer.BeginBlock($"if ({pos} < {span}.Length)");
+        }
+
+        writer.Add($"{pos}++;");
+
+        if (_extraPart == null)
+        {
+            // The default identifier part chars are searched with SearchValues on .NET 8+, like the parser's code
+            writer.Add("#if NET8_0_OR_GREATER");
+            writer.BeginBlock();
+            writer.Add($"var index = {span}.Slice({pos}).IndexOfAnyExcept(global::Parlot.Character._identifierPart);");
+            writer.Add($"{pos} = index < 0 ? {span}.Length : {pos} + index;");
+            writer.EndBlock();
+            writer.Add("#else");
+            writer.Add($"while ({pos} < {span}.Length && global::Parlot.Character.IsIdentifierPart({span}[{pos}])) {pos}++;");
+            writer.Add("#endif");
+        }
+        else
+        {
+            var extraPart = writer.Context.RegisterLambda(_extraPart);
+            writer.Add($"while ({pos} < {span}.Length && (global::Parlot.Character.IsIdentifierPart({span}[{pos}]) || {extraPart}({span}[{pos}]))) {pos}++;");
+        }
+
+        if (_extraStart != null)
+        {
+            writer.EndBlock();
+        }
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {writer.CreateSpan(start, $"{pos} - {start}")};");
+        }
     }
 
     // Counts the identifier part chars following the first one
