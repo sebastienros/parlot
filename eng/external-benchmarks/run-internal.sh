@@ -27,6 +27,12 @@ fi
 
 mkdir -p "$out"
 
+# The benchmarks load Parlot.dll as an analyzer. A compiler server shared by the builds of several checkouts can
+# reuse the analyzer of another checkout, which has the same assembly identity: compile without it, including in
+# the builds BenchmarkDotNet starts (MSBuild reads environment variables as properties).
+export UseSharedCompilation=false
+dotnet build-server shutdown > /dev/null 2>&1 || true
+
 for variant in "${variants[@]}"; do
     root="$(cd "${variant#*=}" && pwd)"
     echo "== Building ${variant%%=*} ($root @ $(git -C "$root" rev-parse --short HEAD))"
