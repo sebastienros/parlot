@@ -187,6 +187,11 @@ invoked, in their order, and each one still matches its own text. Choices read f
 `TextReader` keep the first-char dispatch. See
 [Keyword lookup investigation](keyword-lookups.md#prefix-dispatch-for-wrapped-and-mixed-choices).
 
+An `Operators()` table, and a chain of `Unary`, `LeftAssociative` and `RightAssociative` levels which reads its
+operands directly from the next level (see [Operator tables](parsers.md#operator-tables)), is emitted as a single
+precedence climbing loop: recursive local functions which look for the operator following an operand once, through the
+generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
+
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
 allocation. The scanner, cursor, and context use the shared runtime implementations.

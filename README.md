@@ -111,6 +111,10 @@ static FluentParser()
 }
 ```
 
+The chain of operator levels is parsed by a single precedence climbing loop, which looks for the operator following an
+operand once whatever the number of levels. The same table can be declared at once with `primary.Operators()`, which
+also supports postfix operators, see [Operator tables](docs/parsers.md#operator-tables).
+
 ## Documentation
 
 - [Existing parsers and usage examples](docs/parsers.md)
