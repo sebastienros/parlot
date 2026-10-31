@@ -25,6 +25,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
     internal CharMap<Parser<T>[]>? _map;
     internal Parser<T>[]? _otherParsers;
 
+    // The lookup table of Parse(): _map itself, or a copy where the chars whose alternatives tell longer prefixes have an
+    // empty group, and the trie of _prefixMap selects their alternatives on the rest of the input. No other char has an
+    // empty group, so Parse() only tests the length it reads anyway.
+    private CharMap<Parser<T>[]>? _parseMap;
+    private CharMap<PrefixNode>? _prefixMap;
+
+    // The prefixes of a resolved table, see ISeekablePrefixes.ExpectedPrefixes
+    private string[]? _expectedPrefixes;
+    private bool _expectedPrefixesComputed;
+
     // Parsers as an array, to iterate over it without the interface calls of IReadOnlyList<T>
     private Parser<T>[] _parsers;
     private readonly Parser<T>[] _originalParsers;
@@ -106,6 +116,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         Parsers = _parsers = parsers;
         _map = null;
         _otherParsers = null;
+        _parseMap = null;
+        _prefixMap = null;
         CanSeek = false;
         ExpectedChars = [];
         SkipWhitespace = false;
@@ -282,8 +294,39 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
                     ExpectedChars = [.. _map.ExpectedChars, OtherSeekableChar];
                     _map.Set(OtherSeekableChar, _otherParsers);
                 }
+
+                BuildPrefixMaps(_map);
             }
         }
+    }
+
+    private void BuildPrefixMaps(CharMap<Parser<T>[]> map)
+    {
+        _parseMap = map;
+
+        List<KeyValuePair<char, PrefixNode>>? nodes = null;
+
+        foreach (var c in map.ExpectedChars)
+        {
+            // Every choice is built through here, and most chars have fewer alternatives than a dispatch needs
+            if (c != OtherSeekableChar && map[c] is { Length: >= PrefixDispatch.MinimumAlternatives } parsers && PrefixDispatch.TryCreate(c, parsers) is { } dispatch)
+            {
+                nodes ??= [];
+                nodes.Add(new KeyValuePair<char, PrefixNode>(c, dispatch.CreateNode()));
+            }
+        }
+
+        if (nodes != null)
+        {
+            _prefixMap = new CharMap<PrefixNode>(nodes);
+            _parseMap = WithoutAlternatives(map, nodes);
+        }
+    }
+
+    // A method of its own, so that the closures are only allocated for the choices which have a prefix map
+    private static CharMap<Parser<T>[]> WithoutAlternatives(CharMap<Parser<T>[]> map, List<KeyValuePair<char, PrefixNode>> nodes)
+    {
+        return new CharMap<Parser<T>[]>(map.ExpectedChars.Select(c => new KeyValuePair<char, Parser<T>[]>(c, nodes.Exists(node => node.Key == c) ? [] : map[c]!)));
     }
 
     public bool CanSeek { get; private set; }
@@ -304,32 +347,44 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
                 return null;
             }
 
-            var map = _map;
-
-            // The choice can start with any text when one of its alternatives can
-            if (!CanSeek || map == null || _otherParsers != null)
+            // A resolved table doesn't change, and the prefixes of nested choices are read by each choice that holds them
+            if (!Volatile.Read(ref _expectedPrefixesComputed))
             {
-                return null;
+                _expectedPrefixes = ComputeExpectedPrefixes();
+                Volatile.Write(ref _expectedPrefixesComputed, true);
             }
 
-            var prefixes = new List<string>();
+            return _expectedPrefixes;
+        }
+    }
 
-            foreach (var c in map.ExpectedChars)
+    private string[]? ComputeExpectedPrefixes()
+    {
+        var map = _map;
+
+        // The choice can start with any text when one of its alternatives can
+        if (!CanSeek || map == null || _otherParsers != null)
+        {
+            return null;
+        }
+
+        var prefixes = new List<string>();
+
+        foreach (var c in map.ExpectedChars)
+        {
+            foreach (var parser in map[c]!)
             {
-                foreach (var parser in map[c]!)
+                foreach (var prefix in SeekableHints.Prefixes(parser, c))
                 {
-                    foreach (var prefix in SeekableHints.Prefixes(parser, c))
+                    if (!prefixes.Contains(prefix))
                     {
-                        if (!prefixes.Contains(prefix))
-                        {
-                            prefixes.Add(prefix);
-                        }
+                        prefixes.Add(prefix);
                     }
                 }
             }
-
-            return [.. prefixes];
         }
+
+        return [.. prefixes];
     }
 
     /// <summary>
@@ -366,13 +421,21 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
             context.SkipWhiteSpace();
         }
 
-        if (_map != null)
+        var map = _parseMap;
+
+        if (map != null)
         {
             // Each lookup entry also contains the non-seekable parsers
-            var seekableParsers = _map[cursor.Current] ?? _otherParsers;
+            var seekableParsers = map[cursor.Current] ?? _otherParsers;
 
             if (seekableParsers != null)
             {
+                if (seekableParsers.Length == 0)
+                {
+                    seekableParsers = SelectByPrefix(cursor);
+                }
+
+                // The length is read after the selection, so that the loop doesn't check the bounds of the array
                 var length = seekableParsers.Length;
 
                 for (var i = 0; i < length; i++)
@@ -411,6 +474,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         return false;
     }
 
+    // The alternatives of the char are selected again by the prefix the input starts with. Inlined, the lookup would grow
+    // the frame of Parse(), which every choice pays for.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private Parser<T>[] SelectByPrefix(Cursor cursor) => _prefixMap![cursor.Current]!.Select(cursor);
+
     private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
@@ -424,7 +492,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
             context.SkipWhiteSpace();
         }
 
-        // The lookup map releases the text as soon as a single alternative remains
+        // The lookup map releases the text as soon as a single alternative remains. The window may not hold the text
+        // after the current char, so the alternatives aren't selected again by their prefixes.
         var parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : _parsers;
 
         if (parsers != null)
@@ -806,7 +875,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
 
     /// <summary>
     /// The alternatives of a char of the lookup table, selected again by the prefixes they tell (see
-    /// <see cref="ISeekablePrefixes"/>), when the generated code can skip some of them for the rest of the input.
+    /// <see cref="ISeekablePrefixes"/>), when some of them can be skipped for the rest of the input. The generated code
+    /// emits it as a lookup, the runtime walks it as a <see cref="PrefixNode"/>.
     /// </summary>
     /// <remarks>
     /// The input selects the alternatives of the longest prefix it starts with: these are the alternatives with a prefix
@@ -816,7 +886,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
     private sealed class PrefixDispatch
     {
         // Fewer alternatives cost less to invoke than a dispatch
-        private const int MinimumAlternatives = 3;
+        public const int MinimumAlternatives = 3;
 
         // The bounds of the generated text choices, see TextChoiceSource. A prefix is still one when it is shortened.
         private const int MaximumPrefixLength = 64;
@@ -840,13 +910,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
 
         public List<Parser<T>[]> Groups { get; } = [];
 
-        public static PrefixDispatch? TryCreate(char c, Parser<T>[] parsers)
-        {
-            if (parsers.Length < MinimumAlternatives)
-            {
-                return null;
-            }
+        // Every choice calls it for each char of its lookup table when it is built, so the closures of Create are only
+        // allocated for the chars that may be dispatched
+        public static PrefixDispatch? TryCreate(char c, Parser<T>[] parsers) => parsers.Length < MinimumAlternatives ? null : Create(c, parsers);
 
+        private static PrefixDispatch? Create(char c, Parser<T>[] parsers)
+        {
             var alternativePrefixes = new List<string>[parsers.Length];
             var prefixes = new List<string>();
 
@@ -899,6 +968,156 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
 
             // Nothing to skip when every prefix selects all the alternatives
             return narrowed ? dispatch : null;
+        }
+
+        /// <summary>
+        /// Creates the trie of the suffixes, which selects the same alternatives as the generated lookup.
+        /// </summary>
+        public PrefixNode CreateNode()
+        {
+            var root = new SuffixNode();
+
+            for (var i = 0; i < Suffixes.Count; i++)
+            {
+                var node = root;
+
+                foreach (var c in Suffixes[i])
+                {
+                    if (!node.Children.TryGetValue(c, out var child))
+                    {
+                        child = new SuffixNode();
+                        node.Children.Add(c, child);
+                    }
+
+                    node = child;
+                }
+
+                node.Group = GroupIndexes[i];
+            }
+
+            // An input that starts with no prefix, not even the char of the lookup table, selects no alternative
+            return Convert(root, string.Empty, []);
+
+            PrefixNode Convert(SuffixNode node, string segment, Parser<T>[] inherited)
+            {
+                // A node on the way to longer prefixes selects the alternatives of the longest one before it
+                var parsers = node.Group >= 0 ? Groups[node.Group] : inherited;
+                var edges = new char[node.Children.Count];
+                var children = new PrefixNode[node.Children.Count];
+                var index = 0;
+
+                foreach (var entry in node.Children)
+                {
+                    var chain = new List<char>();
+                    var child = entry.Value;
+
+                    // The chars that only lead to a single longer prefix are compared at once
+                    while (child.Group < 0 && child.Children.Count == 1)
+                    {
+                        var next = child.Children.First();
+                        chain.Add(next.Key);
+                        child = next.Value;
+                    }
+
+                    edges[index] = entry.Key;
+                    children[index] = Convert(child, new string(chain.ToArray()), parsers);
+                    index++;
+                }
+
+                return new PrefixNode(segment, new string(edges), children, parsers);
+            }
+        }
+
+        private sealed class SuffixNode
+        {
+            public Dictionary<char, SuffixNode> Children { get; } = [];
+
+            // The index in Groups of the alternatives the suffix ending here selects, or -1 when none ends here
+            public int Group { get; set; } = -1;
+        }
+    }
+
+    /// <summary>
+    /// A node of the trie that selects the alternatives of a char of the lookup table from the rest of the input, see
+    /// <see cref="PrefixDispatch"/>.
+    /// </summary>
+    private sealed class PrefixNode
+    {
+        // The chars after the one of the edge from the parent node
+        private readonly string _segment;
+
+        // The char of the edge to each child
+        private readonly string _edges;
+        private readonly PrefixNode[] _children;
+
+        // The alternatives of an input which only starts with the prefix of this node
+        private readonly Parser<T>[] _parsers;
+
+        public PrefixNode(string segment, string edges, PrefixNode[] children, Parser<T>[] parsers)
+        {
+            _segment = segment;
+            _edges = edges;
+            _children = children;
+            _parsers = parsers;
+        }
+
+        /// <summary>
+        /// Returns the alternatives of the longest prefix at the cursor, whose current char is the one of this root node.
+        /// </summary>
+        public Parser<T>[] Select(Cursor cursor)
+        {
+            var text = cursor.Span;
+            var node = this;
+            var offset = 1;
+
+            while (node._edges.Length > 0)
+            {
+                if (offset >= text.Length)
+                {
+                    // A longer prefix may follow the end of a streamed window
+                    cursor.MarkHitEnd();
+                    break;
+                }
+
+                var c = text[offset];
+                var edges = node._edges;
+                var index = 0;
+
+                while (index < edges.Length && edges[index] != c)
+                {
+                    index++;
+                }
+
+                if (index == edges.Length)
+                {
+                    break;
+                }
+
+                var child = node._children[index];
+                var segment = child._segment;
+                offset++;
+
+                if (segment.Length > 0)
+                {
+                    var rest = text.Slice(offset);
+
+                    if (!rest.StartsWith(segment.AsSpan()))
+                    {
+                        if (rest.Length < segment.Length && segment.AsSpan().StartsWith(rest))
+                        {
+                            cursor.MarkHitEnd();
+                        }
+
+                        break;
+                    }
+
+                    offset += segment.Length;
+                }
+
+                node = child;
+            }
+
+            return node._parsers;
         }
     }
 
