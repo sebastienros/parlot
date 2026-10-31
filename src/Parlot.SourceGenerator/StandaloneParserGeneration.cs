@@ -220,8 +220,8 @@ public sealed partial class ParserSourceGenerator
             return;
         }
 
-        var generated = new List<(string HintName, SyntaxTree Tree)>();
         var entryPointKeys = new HashSet<string>(entries.Select(static entry => GetMethodKey(entry.Method)), StringComparer.Ordinal);
+        var pending = new List<StandaloneEntryPoint>();
         foreach (var entry in entries)
         {
             if (entries.Count(other => SymbolEqualityComparer.Default.Equals(other.Method, entry.Method)) > 1)
@@ -238,21 +238,17 @@ public sealed partial class ParserSourceGenerator
             if (designTime)
             {
                 entry.Source = GenerateStandaloneDesignTimeStub(entry.Method);
-            }
-            else
-            {
-                try
-                {
-                    GenerateForMethod(output, compilation, target, entry.Factory,
-                        projectDirectory, isDesignTimeBuild: false, entry, entryPointKeys);
-                }
-                catch (Exception exception) when (exception is NotSupportedException or InvalidOperationException or ArgumentException)
-                {
-                    output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
-                        ExternalLocation(entry.Factory.AttributeLocation), entry.Factory.Method.Name, exception.Message));
-                }
+                continue;
             }
 
+            pending.Add(entry);
+        }
+
+        GenerateStandaloneEntryPoints(output, compilation, target, pending, projectDirectory, entryPointKeys);
+
+        var generated = new List<(string HintName, SyntaxTree Tree)>();
+        foreach (var entry in entries)
+        {
             if (entry.Source is not null)
             {
                 var hintName = $"StandaloneParser{generated.Count}.g.cs";
@@ -310,6 +306,114 @@ public sealed partial class ParserSourceGenerator
             output.AddSource(source.HintName, source.Tree.GetText(output.CancellationToken));
         }
     }
+
+    /// <summary>
+    /// Runs the factories of all the entry points from one private build of the host compilation, rather than
+    /// emitting and loading the whole project once per factory.
+    /// </summary>
+    private static void GenerateStandaloneEntryPoints(
+        SourceProductionContext output,
+        Compilation compilation,
+        TargetFrameworkInfo target,
+        List<StandaloneEntryPoint> entries,
+        string projectDirectory,
+        ISet<string> entryPointKeys)
+    {
+        var shared = new List<PreparedFactory>();
+        var rewrittenTrees = new Dictionary<SyntaxTree, (int FirstPointer, SyntaxTree Rewritten)>();
+        var semanticModels = new Dictionary<SyntaxTree, SemanticModel>();
+        var nextPointer = 0;
+        foreach (var entry in entries)
+        {
+            // Included files and generators change the compilation, so these factories keep a build of their own
+            if (entry.Factory.AdditionalFiles.Length > 0 || entry.Factory.AdditionalGenerators.Length > 0)
+            {
+                GenerateStandaloneEntryPoint(output, compilation, target, entry, projectDirectory, entryPointKeys);
+                continue;
+            }
+
+            try
+            {
+                // Pointers are unique across files, so a lambda from another file is never mistaken for one of the factory's
+                var tree = entry.Factory.Method.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+                var firstPointer = nextPointer;
+                if (tree is not null && rewrittenTrees.TryGetValue(tree, out var known))
+                {
+                    firstPointer = known.FirstPointer;
+                }
+
+                var prepared = PrepareFactory(output, compilation, entry.Factory, entry, firstPointer, semanticModels);
+                if (prepared is null)
+                {
+                    continue;
+                }
+
+                if (!rewrittenTrees.ContainsKey(prepared.OriginalTree))
+                {
+                    rewrittenTrees.Add(prepared.OriginalTree, (firstPointer, prepared.RewrittenTree));
+                    nextPointer = prepared.Rewriter.NextPointer;
+                }
+
+                shared.Add(prepared);
+            }
+            catch (Exception exception) when (IsStandaloneOutputException(exception))
+            {
+                ReportStandaloneOutputException(output, entry, exception);
+            }
+        }
+
+        if (shared.Count == 0)
+        {
+            return;
+        }
+
+        var tempCompilation = compilation;
+        foreach (var pair in rewrittenTrees)
+        {
+            tempCompilation = tempCompilation.ReplaceSyntaxTree(pair.Key, pair.Value.Rewritten);
+        }
+
+        tempCompilation = StubStandaloneEntryPoints(tempCompilation, entryPointKeys);
+
+        using var peStream = new MemoryStream();
+        if (!EmitFactoryAssembly(ref tempCompilation, peStream, out _).Success)
+        {
+            // Rewriting one file can break the build of all of them, so each factory retries alone and reports its own errors
+            foreach (var prepared in shared)
+            {
+                GenerateStandaloneEntryPoint(output, compilation, target, prepared.Standalone, projectDirectory, entryPointKeys);
+            }
+            return;
+        }
+
+        ExecuteFactories(output, compilation, target, peStream, shared);
+    }
+
+    private static void GenerateStandaloneEntryPoint(
+        SourceProductionContext output,
+        Compilation compilation,
+        TargetFrameworkInfo target,
+        StandaloneEntryPoint entry,
+        string projectDirectory,
+        ISet<string> entryPointKeys)
+    {
+        try
+        {
+            GenerateForMethod(output, compilation, target, entry.Factory,
+                projectDirectory, isDesignTimeBuild: false, entry, entryPointKeys);
+        }
+        catch (Exception exception) when (IsStandaloneOutputException(exception))
+        {
+            ReportStandaloneOutputException(output, entry, exception);
+        }
+    }
+
+    private static bool IsStandaloneOutputException(Exception exception)
+        => exception is NotSupportedException or InvalidOperationException or ArgumentException;
+
+    private static void ReportStandaloneOutputException(SourceProductionContext output, StandaloneEntryPoint entry, Exception exception)
+        => output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
+            ExternalLocation(entry.Factory.AttributeLocation), entry.Factory.Method.Name, exception.Message));
 
     private static string? GetStandaloneEntryPointName(IMethodSymbol factory)
     {
