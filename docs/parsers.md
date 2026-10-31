@@ -1176,9 +1176,9 @@ The member access is parsed once, by the first alternative, and its result is re
   replacing the one at an offset sharing its entry. A result is returned again, failures included, with its value and end
   position, as long as it's in the table: it suits the alternatives which parse the same prefix one after the other,
   not reusing results anywhere in the input like a packrat parser.
-- Looking a result up and recording it costs about as much as parsing a short token, and the table is allocated for
-  each context, so memoize a parser that is parsed again and costs more than that: a prefix made of several tokens or
-  a recursive parser, rather than a single literal. `MemoizeBenchmarks` measures both cases.
+- Each invocation looks a result up, and records one when it parses, and the table is allocated for each context: memoize
+  a parser that is parsed again and costs more than that, like a prefix made of several tokens or a recursive parser,
+  rather than a single literal. `MemoizeBenchmarks` measures a grammar where it pays and one where it doesn't.
 - The parser's result must only depend on the text at its position. A memoized result is returned without invoking
   the callbacks of the parser again (`Then`, `When`, ...), the same value is returned to each parser using it, so it
   shouldn't be modified, and a parser which depends on the state of a custom `ParseContext`, like an `If`, shouldn't be
