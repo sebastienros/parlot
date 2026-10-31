@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Clones the libraries benchmarked against Parlot at pinned commits, and points their Parlot references
 # at the checkout passed to the build as $(ParlotRoot) instead of the NuGet packages.
+#
+# Environment: EXTERNAL_REPOS (default ./.repos), APPLY_PATCHES (patch files to apply to the clones).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -27,3 +29,15 @@ clone fluid https://github.com/sebastienros/fluid "$FLUID_SHA"
 clone ncalc https://github.com/ncalc/ncalc "$NCALC_SHA"
 
 python3 "$here/patch.py" "$repos"
+
+# Optional source changes to the libraries, e.g. APPLY_PATCHES="patches/fluid-string-literal-offset.patch":
+# fluid-*.patch files apply to Fluid, ncalc-*.patch files to NCalc
+for patch in ${APPLY_PATCHES:-}; do
+    case "$(basename "$patch")" in
+        fluid-*) target="$repos/fluid" ;;
+        ncalc-*) target="$repos/ncalc" ;;
+        *) echo "Unknown patch target: $patch"; exit 1 ;;
+    esac
+    git -C "$target" apply "$(cd "$(dirname "$patch")" && pwd)/$(basename "$patch")"
+    echo "applied $patch"
+done

@@ -3,8 +3,9 @@
 # as the first one, then runs the benchmarks ROUNDS times, reversing the order of the variants every other round
 # so that a drift of the machine doesn't favor one variant. Compare the results with compare.py.
 #
-# Usage: run.sh name=/path/to/parlot [name=/path/to/parlot ...] [-- BenchmarkDotNet arguments]
+# Usage: run.sh name=/path/to/parlot[,/path/to/repos] [...] [-- BenchmarkDotNet arguments]
 # Example: run.sh main=/src/parlot lazy=/src/parlot-lazy -- --filter '*Fluid*'
+# A variant can use other clones of the libraries, e.g. patched ones made with EXTERNAL_REPOS=... setup.sh.
 #
 # Environment: ROUNDS (default 2), BENCH_OUT (default ./artifacts), BENCH_WARMUP, BENCH_ITERATIONS, SKIP_BUILD=1.
 set -euo pipefail
@@ -36,16 +37,19 @@ export NBGV_GitEngine=Disabled
 if [ "${SKIP_BUILD:-}" != "1" ]; then
     for variant in "${variants[@]}"; do
         name="${variant%%=*}"
-        root="$(cd "${variant#*=}" && pwd)"
+        spec="${variant#*=}"
+        root="$(cd "${spec%%,*}" && pwd)"
+        repos="$here/.repos"
+        [ "$spec" != "${spec#*,}" ] && repos="$(cd "${spec#*,}" && pwd)"
         commit="$(git -C "$root" rev-parse --short HEAD)"
-        echo "== Building $name ($root @ $commit)"
+        echo "== Building $name ($root @ $commit, libraries from $repos)"
 
         # The source generator executes the grammar factories with Parlot's netstandard2.0 assembly
         dotnet build "$root/src/Parlot/Parlot.csproj" -c Release -f netstandard2.0 -nologo -v q
 
         # No compiler server: the analyzer assemblies of the previous variant must not be reused
         dotnet build "$project" -c Release -nologo -v q -p:UseSharedCompilation=false \
-            -p:ParlotRoot="$root" -p:ParlotCommit="$commit" -p:ParlotVariant="$name"
+            -p:ParlotRoot="$root" -p:ParlotCommit="$commit" -p:ParlotVariant="$name" -p:ExternalRepos="$repos"
 
         rm -rf "$out/bin/$name"
         mkdir -p "$out/bin/$name"

@@ -34,3 +34,13 @@ Checkouts are typically git worktrees: `git worktree add ../parlot-lazy perf/laz
   of the per-round ratios of the medians to the baseline, so a drift of the machine between rounds cancels out,
   with the range of the ratios as a noise indicator.
 - `BENCH_WARMUP` and `BENCH_ITERATIONS` override the warmup and measured iteration counts (6 and 20).
+- A variant can use patched clones of the libraries, to measure a change that needs their cooperation:
+
+  ```bash
+  EXTERNAL_REPOS=$PWD/eng/external-benchmarks/.repos-offset \
+  APPLY_PATCHES=eng/external-benchmarks/patches/fluid-string-literal-offset.patch eng/external-benchmarks/setup.sh
+  eng/external-benchmarks/run.sh main=../parlot lazy=../parlot-lazy lazy-offset=../parlot-lazy,eng/external-benchmarks/.repos-offset
+  ```
+
+  `patches/fluid-string-literal-offset.patch` makes Fluid's string literal parser save the cursor's offset rather
+  than its `Position`, which costs a line count once line and column are computed lazily.
