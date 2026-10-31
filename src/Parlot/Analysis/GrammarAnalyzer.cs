@@ -269,8 +269,28 @@ internal sealed class GrammarAnalysis
                 ? "Move it last, or make it fail when nothing matches."
                 : "Report the error after the choice, with ElseError on the choice itself.";
 
+            // The alternative that never fails is tried last. An ElseError belongs on the choice, which only the code can say.
+            GrammarFix? last = null;
+
+            if (outcome == Outcome.NeverFails)
+            {
+                var order = new List<int>();
+
+                for (var k = 0; k < alternatives.Count; k++)
+                {
+                    if (k != i)
+                    {
+                        order.Add(k);
+                    }
+                }
+
+                order.Add(i);
+                last = new GrammarFix(GrammarFixKind.Reorder, order, $"Try {Describe(alternatives[i])} last");
+            }
+
             Report(GrammarRule.UnreachableAlternative, choice,
-                $"In {DescribeChoice(choice, alternatives)}, alternative {i + 1} ({Describe(alternatives[i])}) {why}, so {Plural(skipped.Count, "the alternative", "the alternatives")} after it ({Join(skipped)}) {Plural(skipped.Count, "is", "are")} never tried. {fix}");
+                $"In {DescribeChoice(choice, alternatives)}, alternative {i + 1} ({Describe(alternatives[i])}) {why}, so {Plural(skipped.Count, "the alternative", "the alternatives")} after it ({Join(skipped)}) {Plural(skipped.Count, "is", "are")} never tried. {fix}",
+                i, last);
 
             break;
         }
@@ -293,8 +313,25 @@ internal sealed class GrammarAnalysis
             {
                 if (FindShadowing(alternatives[i], alternatives[j]) is { } detail)
                 {
+                    // The shadowed alternative is tried just before the one that shadows it
+                    var order = new List<int>();
+
+                    for (var k = 0; k < alternatives.Count; k++)
+                    {
+                        if (k == i)
+                        {
+                            order.Add(j);
+                        }
+
+                        if (k != j)
+                        {
+                            order.Add(k);
+                        }
+                    }
+
                     Report(GrammarRule.ShadowedAlternative, choice,
-                        $"In {DescribeChoice(choice, alternatives)}, alternative {j + 1} ({Describe(alternatives[j])}) never matches: {detail}, which alternative {i + 1} ({Describe(alternatives[i])}) matches first. Try the longer alternative first, or remove the one that can't match.");
+                        $"In {DescribeChoice(choice, alternatives)}, alternative {j + 1} ({Describe(alternatives[j])}) never matches: {detail}, which alternative {i + 1} ({Describe(alternatives[i])}) matches first. Try the longer alternative first, or remove the one that can't match.",
+                        j, new GrammarFix(GrammarFixKind.Reorder, order, $"Try {Describe(alternatives[j])} before {Describe(alternatives[i])}"));
 
                     shadowed = true;
                     break;
@@ -327,7 +364,11 @@ internal sealed class GrammarAnalysis
     {
         var skipping = new List<string>();
         var others = new List<string>();
+        var otherIndexes = new List<int>();
         var stale = new List<string>();
+
+        // An alternative that can start with white space would never match once white space is skipped before it
+        var fixable = true;
 
         foreach (var index in candidates)
         {
@@ -340,6 +381,8 @@ internal sealed class GrammarAnalysis
             else
             {
                 others.Add(Describe(alternative));
+                otherIndexes.Add(index);
+                fixable &= !(FixedText(alternative) is { } text && char.IsWhiteSpace(text.Text[0])) && ParlotTypeName(alternative) != "WhiteSpaceLiteral";
 
                 if (FindStaleDeferred(alternative) is { } deferred)
                 {
@@ -354,7 +397,8 @@ internal sealed class GrammarAnalysis
         }
 
         Report(GrammarRule.MixedWhiteSpaceChoice, choice,
-            $"{Capitalize(DescribeChoice(choice, alternatives))} has no lookup table, so it tries each alternative in order whatever the next char is: {Join(skipping)} {Plural(skipping.Count, "skips", "skip")} white space and {Join(others)} {Plural(others.Count, "doesn't", "don't")}, or can't tell.{string.Concat(stale)} Make every alternative skip white space, with Terms parsers, SkipWhiteSpace or Lookup(skipWhiteSpace: true, ...), or none of them.");
+            $"{Capitalize(DescribeChoice(choice, alternatives))} has no lookup table, so it tries each alternative in order whatever the next char is: {Join(skipping)} {Plural(skipping.Count, "skips", "skip")} white space and {Join(others)} {Plural(others.Count, "doesn't", "don't")}, or can't tell.{string.Concat(stale)} Make every alternative skip white space, with Terms parsers, SkipWhiteSpace or Lookup(skipWhiteSpace: true, ...), or none of them.",
+            null, fixable ? new GrammarFix(GrammarFixKind.SkipWhiteSpace, otherIndexes, $"Skip white space in {Join(others)}") : null);
 
         return true;
     }
@@ -405,7 +449,8 @@ internal sealed class GrammarAnalysis
             }
 
             Report(GrammarRule.UnseekableAlternative, choice,
-                $"In {DescribeChoice(choice, alternatives)}, alternative {index + 1} ({Describe(alternative)}) is tried whatever the next char is: {cause}. Wrap the alternative in Lookup with the chars it can start with, or use a parser that tells them.");
+                $"In {DescribeChoice(choice, alternatives)}, alternative {index + 1} ({Describe(alternative)}) is tried whatever the next char is: {cause}. Wrap the alternative in Lookup with the chars it can start with, or use a parser that tells them.",
+                index);
         }
     }
 
@@ -525,8 +570,17 @@ internal sealed class GrammarAnalysis
                 numbers.Add((index + 1).ToString(CultureInfo.InvariantCulture));
             }
 
+            // Factoring alternatives that aren't consecutive would try the ones between them in another order
+            var consecutive = true;
+
+            for (var k = 1; k < indexes.Count; k++)
+            {
+                consecutive &= indexes[k] == indexes[k - 1] + 1;
+            }
+
             Report(GrammarRule.SharedLeadingParser, choice,
-                $"In {DescribeChoice(choice, alternatives)}, alternatives {Join(numbers)} start with {Describe(parser)}, which is parsed again at the same position when an alternative fails after it. Parse it once before choosing what follows it, like a.And(b.Or(c)) instead of a.And(b).Or(a.And(c)), or use LeftAssociative for operators.");
+                $"In {DescribeChoice(choice, alternatives)}, alternatives {Join(numbers)} start with {Describe(parser)}, which is parsed again at the same position when an alternative fails after it. Parse it once before choosing what follows it, like a.And(b.Or(c)) instead of a.And(b).Or(a.And(c)), or use LeftAssociative for operators.",
+                null, consecutive ? new GrammarFix(GrammarFixKind.FactorLeadingParser, indexes, $"Parse {Describe(parser)} once, then choose what follows it") : null);
         }
     }
 
@@ -853,7 +907,8 @@ internal sealed class GrammarAnalysis
 
     private bool IsNullable(object parser) => _starts.TryGetValue(parser, out var node) && node.Nullable;
 
-    private void Report(GrammarRule rule, object parser, string message) => _findings.Add(new GrammarFinding(rule, parser, message));
+    private void Report(GrammarRule rule, object parser, string message, int? alternative = null, GrammarFix? fix = null)
+        => _findings.Add(new GrammarFinding(rule, parser, message, alternative, fix));
 
     private string DescribeChoice(object choice, IReadOnlyList<object> alternatives)
     {

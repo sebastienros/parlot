@@ -439,13 +439,15 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             StandaloneEntryPoint standalone,
             SyntaxTree originalTree,
             SyntaxTree rewrittenTree,
-            LambdaRewriter rewriter)
+            LambdaRewriter rewriter,
+            SemanticModel semanticModel)
         {
             MethodInfo = methodInfo;
             Standalone = standalone;
             OriginalTree = originalTree;
             RewrittenTree = rewrittenTree;
             Rewriter = rewriter;
+            SemanticModel = semanticModel;
 
             // Get the source code map from pointers to original lambda source
             LambdaSourceMap = rewriter.Lambdas.ToDictionary(
@@ -458,6 +460,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         public SyntaxTree OriginalTree { get; }
         public SyntaxTree RewrittenTree { get; }
         public LambdaRewriter Rewriter { get; }
+
+        // The model of the original tree, which locates the findings of the grammar rules and checks their fixes
+        public SemanticModel SemanticModel { get; }
         public Dictionary<int, string> LambdaSourceMap { get; }
         public CSharpParseOptions ParseOptions => (CSharpParseOptions)OriginalTree.Options;
     }
@@ -522,7 +527,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             (CSharpParseOptions)originalSyntaxTree.Options,
             originalSyntaxTree.FilePath);
 
-        return new PreparedFactory(methodInfo, standalone, originalSyntaxTree, rewrittenTree, rewriter);
+        return new PreparedFactory(methodInfo, standalone, originalSyntaxTree, rewrittenTree, rewriter, semanticModel);
     }
 
     [SuppressMessage("Build", "RS1035", Justification = "The generator must execute parser descriptors to produce source output.")]
@@ -903,6 +908,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // Parameters may only be read by deferred callbacks, so placeholders cannot affect the graph.
         object? parserInstance;
         LambdaPointer.Reset();
+        ParserSites.Reset();
         try
         {
             var arguments = method.GetParameters()
@@ -967,7 +973,14 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
 
         var valueType = baseType.GetGenericArguments()[0];
 
-        ReportGrammarFindings(context, methodSymbol, parserInstance, valueType, standalone);
+        try
+        {
+            ReportGrammarFindings(prepared, parserInstance, valueType);
+        }
+        finally
+        {
+            ParserSites.Reset();
+        }
 
         // Ensure the parser supports source generation
         // We check by interface name because the assembly loaded at runtime may have

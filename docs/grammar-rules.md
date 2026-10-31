@@ -20,9 +20,10 @@ The rules up to PARLOT113 read the grammar. PARLOT201 and PARLOT202 read what on
 
 ## Where the rules are reported
 
-**The source generator** analyzes each grammar it generates, and reports what it finds as `Info` diagnostics on the
-factory, with a link to this page. They never fail a build, `TreatWarningsAsErrors` included. Use the usual compiler
-options to change that, for instance in the project file:
+**The source generator** analyzes each grammar it generates, and reports what it finds as `Info` diagnostics on the code
+that builds the parsers concerned, like the alternative that never matches, with a link to this page and, when there is
+one, the [fix](#fixes). They never fail a build, `TreatWarningsAsErrors` included. Use the usual compiler options to
+change that, for instance in the project file:
 
 ```xml
 <PropertyGroup>
@@ -55,8 +56,9 @@ public void GrammarParsesWhatItSeemsTo()
 ```
 
 Each `GrammarFinding` has the `Rule` it found (`Id`, `Title`, `Category`, `HelpLink`), the `Parser` where it found it,
-like the choice whose alternatives are concerned, and a `Message`. A message names the parsers with their `Named()`
-name, and the others with the call that built them, like `Terms.Text("<")`, which makes named grammars easier to fix.
+like the choice whose alternatives are concerned, the index of the `Alternative` it is about, if any, a `Message`, and
+the `Fix` that removes it when there is a mechanical one. A message names the parsers with their `Named()` name, and the
+others with the call that built them, like `Terms.Text("<")`, which makes named grammars easier to fix.
 `GrammarRule.All` lists the rules.
 
 ### How the rules are chosen
@@ -67,6 +69,41 @@ name, and the others with the call that built them, like `Terms.Text("<")`, whic
   `ShortRunJob` on an Apple M4 Pro with .NET 10.0.11; compare them with each other rather than with other machines.
 - When a grammar can be made faster without changing what it parses, Parlot does it when the grammar is built, and no
   rule reports it. The rules are about the changes only the author of a grammar can make.
+
+## Fixes
+
+Some findings come with a change of the choice that removes them, which a tool can apply:
+
+| Rule | Fix | Same results |
+|---|---|---|
+| [PARLOT101](#parlot101) | `Literals.X(...)` becomes `Terms.X(...)` | No: the alternatives accept white space before them. Not offered when one can start with white space |
+| [PARLOT103](#parlot103) | `p.And(a).Or(p.And(b))` becomes `p.And(a.Or(b))`, for consecutive alternatives | Yes |
+| [PARLOT112](#parlot112) | The alternative that never fails is tried last | No: the alternatives after it are tried |
+| [PARLOT113](#parlot113) | The shadowed alternative is tried before the one that shadows it | No: it can match |
+
+`GrammarFinding.Fix` describes the change on the grammar: its `Kind`, the `Alternatives` concerned (the new order of a
+reordering), a `Title` and whether it `PreservesBehavior`.
+
+The source generator writes it in the code when it can tell where each alternative is: the arguments of `OneOf(...)`,
+a chain of `.Or(...)`, or the operators of `LeftAssociative` and `RightAssociative`. It checks that the code it
+produces compiles and has the type it had, and offers nothing otherwise, like for alternatives built in a loop or a
+choice extended through a variable. The diagnostic then carries the edit in its properties, which a tool applies to
+the grammar file after checking that the text there is still `FixOldText`:
+
+| Property | Value |
+|---|---|
+| `FixTitle` | The description of the change, like `Try Terms.Text("<=") before Terms.Text("<")` |
+| `FixKind` | `Reorder`, `SkipWhiteSpace` or `FactorLeadingParser` |
+| `FixPreservesBehavior` | `true` when the grammar parses the same texts with the same results |
+| `FixStart`, `FixLength` | The span of the text to replace, in chars from the start of the file |
+| `FixOldText`, `FixNewText` | The text to replace, and the text replacing it |
+
+The message ends with the rewritten choice when it fits on a line, like
+`Suggested: Terms.Text("<=").Or(Terms.Text("<"))`, and with the title of the fix otherwise. The compiler's SARIF log,
+written with `-p:ErrorLog=path.sarif%2Cversion=2.1`, has the properties in the `customProperties` of each result.
+
+The editors don't show these fixes as quick actions yet: the source generator only runs factories in real builds, not
+while code is edited.
 
 ## PARLOT101
 

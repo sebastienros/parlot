@@ -618,7 +618,7 @@ public class GeneratorDiagnosticsTests
         """;
 
     [Fact]
-    public void Grammar_Rules_Are_Reported_As_Suggestions_On_The_Factory()
+    public void Grammar_Rules_Are_Reported_As_Suggestions_On_The_Alternative()
     {
         var (result, compilation) = RunStandalone(Declaration, ShadowedGrammar);
 
@@ -628,9 +628,127 @@ public class GeneratorDiagnosticsTests
         Assert.Equal(DiagnosticSeverity.Info, diagnostic.Severity);
         Assert.Equal("Parlot.Correctness", diagnostic.Descriptor.Category);
         Assert.Equal("https://github.com/sebastienros/parlot/blob/main/docs/grammar-rules.md#parlot113", diagnostic.Descriptor.HelpLinkUri);
-        Assert.Contains("alternative 2 (Terms.Text(\"<=\")) never matches", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
-        Assert.Equal("Grammar.parlot.cs", diagnostic.Location.GetLineSpan().Path);
-        Assert.Equal(5, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
+        Assert.EndsWith("alternative 2 (Terms.Text(\"<=\")) never matches: it only matches a text that starts with \"<\", which alternative 1 (Terms.Text(\"<\")) matches first. Try the longer alternative first, or remove the one that can't match. Suggested: Parsers.Terms.Text(\"<=\").Or(Parsers.Terms.Text(\"<\"))",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+
+        // On Parsers.Terms.Text("<="), the alternative that never matches
+        var span = diagnostic.Location.GetLineSpan();
+        Assert.Equal("Grammar.parlot.cs", span.Path);
+        Assert.Equal(ShadowedGrammar.IndexOf("Parsers.Terms.Text(\"<=\")", StringComparison.Ordinal), diagnostic.Location.SourceSpan.Start);
+        Assert.Equal("Parsers.Terms.Text(\"<=\")".Length, diagnostic.Location.SourceSpan.Length);
+        Assert.Equal(5, span.StartLinePosition.Line);
+
+        Assert.Equal("Reorder", diagnostic.Properties["FixKind"]);
+        Assert.Equal("false", diagnostic.Properties["FixPreservesBehavior"]);
+        Assert.Equal("Try Terms.Text(\"<=\") before Terms.Text(\"<\")", diagnostic.Properties["FixTitle"]);
+        Assert.Equal("Parsers.Terms.Text(\"<\").Or(Parsers.Terms.Text(\"<=\")", diagnostic.Properties["FixOldText"]);
+        Assert.Equal("Parsers.Terms.Text(\"<=\").Or(Parsers.Terms.Text(\"<\")", diagnostic.Properties["FixNewText"]);
+    }
+
+    // Each fix applied to the grammar removes its finding, and the grammar still compiles
+    [Theory]
+    [InlineData("PARLOT113", "Reorder", "string", "Parsers.OneOf(Parsers.Terms.Text(\"a\"), Parsers.Terms.Text(\"<\"), Parsers.Terms.Text(\"<=\"), Parsers.Terms.Text(\"b\"))",
+        "Parsers.OneOf(Parsers.Terms.Text(\"a\"), Parsers.Terms.Text(\"<=\"), Parsers.Terms.Text(\"<\"), Parsers.Terms.Text(\"b\"))")]
+    [InlineData("PARLOT113", "Reorder", "string", "Parsers.Terms.Text(\"a\").Or(Parsers.Terms.Text(\"<\")).Or(Parsers.Terms.Text(\"b\")).Or(Parsers.Terms.Text(\"<=\"))",
+        "Parsers.Terms.Text(\"a\").Or(Parsers.Terms.Text(\"<=\")).Or(Parsers.Terms.Text(\"<\")).Or(Parsers.Terms.Text(\"b\"))")]
+    [InlineData("PARLOT112", "Reorder", "string", "Parsers.Terms.Text(\"a\").Else(\"none\").Or(Parsers.Terms.Text(\"b\"))",
+        "Parsers.Terms.Text(\"b\").Or(Parsers.Terms.Text(\"a\").Else(\"none\"))")]
+    [InlineData("PARLOT101", "SkipWhiteSpace", "string", "Parsers.Terms.Text(\"a\").Or(Parsers.Literals.Text(\"b\"))",
+        "Parsers.Terms.Text(\"a\").Or(Parsers.Terms.Text(\"b\"))")]
+    [InlineData("PARLOT103", "FactorLeadingParser", "long", "Number.AndSkip(Parsers.Terms.Char('+')).Or(Number.AndSkip(Parsers.Terms.Char('-'))).Or(Parsers.Terms.Text(\"x\").Then(0L))",
+        "Number.AndSkip(Parsers.Terms.Char('+').Or(Parsers.Terms.Char('-'))).Or(Parsers.Terms.Text(\"x\").Then(0L))")]
+    [InlineData("PARLOT103", "FactorLeadingParser", "long", "Parsers.Terms.Text(\"x\").Then(0L).Or(Number.AndSkip(Parsers.Terms.Char('+'))).Or(Number.AndSkip(Parsers.Terms.Char('-')))",
+        "Parsers.Terms.Text(\"x\").Then(0L).Or(Number.AndSkip(Parsers.Terms.Char('+').Or(Parsers.Terms.Char('-'))))")]
+    [InlineData("PARLOT113", "Reorder", "long", "Number.LeftAssociative((Parsers.Terms.Text(\"<\"), static (a, b) => a), (Parsers.Terms.Text(\"<=\"), static (a, b) => b))",
+        "Number.LeftAssociative((Parsers.Terms.Text(\"<=\"), static (a, b) => b), (Parsers.Terms.Text(\"<\"), static (a, b) => a))")]
+    public void Grammar_Rule_Fixes_Remove_Their_Finding(string id, string kind, string type, string choice, string fixedChoice)
+    {
+        var declaration = Declaration.Replace("out string value", $"out {type} value", StringComparison.Ordinal);
+        var grammar = $$"""
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                private static readonly Parser<long> Number = Parsers.Terms.Integer();
+
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<{{type}}> Build() => {{choice}};
+            }
+            """;
+
+        var (result, _) = RunStandalone(declaration, grammar);
+
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Id == id);
+        Assert.Equal(kind, diagnostic.Properties["FixKind"]);
+        Assert.Equal(kind == "FactorLeadingParser" ? "true" : "false", diagnostic.Properties["FixPreservesBehavior"]);
+
+        var start = int.Parse(diagnostic.Properties["FixStart"]!, System.Globalization.CultureInfo.InvariantCulture);
+        var length = int.Parse(diagnostic.Properties["FixLength"]!, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(diagnostic.Properties["FixOldText"], grammar.Substring(start, length));
+
+        var fixedGrammar = grammar.Remove(start, length).Insert(start, diagnostic.Properties["FixNewText"]!);
+        Assert.Contains(fixedChoice, fixedGrammar, StringComparison.Ordinal);
+
+        var (fixedResult, fixedCompilation) = RunStandalone(declaration, fixedGrammar);
+        AssertNoErrors(fixedResult, fixedCompilation);
+        Assert.DoesNotContain(fixedResult.Diagnostics, diagnostic => diagnostic.Id == id);
+    }
+
+    [Fact]
+    public void Grammar_Rule_Without_A_Safe_Edit_Has_No_Fix()
+    {
+        // A choice extended through a variable can't be rewritten, and Terms can't replace a text starting with white space
+        foreach (var body in new[]
+        {
+            "{ var head = Parsers.Terms.Text(\"<\").Or(Parsers.Terms.Text(\"a\")); return head.Or(Parsers.Terms.Text(\"<=\")); }",
+            "=> Parsers.Terms.Text(\"a\").Or(Parsers.Literals.Text(\" b\"));",
+        })
+        {
+            var grammar = $$"""
+                using Parlot.Fluent;
+                using Parlot.SourceGenerator;
+                public static partial class Grammar
+                {
+                    [GenerateParser(nameof(TryParse))]
+                    private static Parser<string> Build() {{body}}
+                }
+                """;
+
+            var (result, _) = RunStandalone(Declaration, grammar);
+
+            var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id.StartsWith("PARLOT1", StringComparison.Ordinal));
+            Assert.False(diagnostic.Properties.ContainsKey("FixNewText"));
+            Assert.DoesNotContain("Suggested:", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            Assert.Equal("Grammar.parlot.cs", diagnostic.Location.GetLineSpan().Path);
+        }
+    }
+
+    [Fact]
+    public void Grammar_Rule_In_A_Shared_Helper_Is_Reported_Once()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                private static Parser<string> Comparison() => Parsers.Terms.Text("<").Or(Parsers.Terms.Text("<="));
+
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Comparison();
+
+                [GenerateParser(nameof(TryParseAgain))]
+                private static Parser<string> BuildAgain() => Comparison();
+            }
+            """;
+        var declaration = Declaration.Replace(
+            "public static partial bool TryParse(string text, out string value);",
+            "public static partial bool TryParse(string text, out string value);\n    public static partial bool TryParseAgain(string text, out string value);",
+            StringComparison.Ordinal);
+
+        var (result, _) = RunStandalone(declaration, grammar);
+
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT113");
+        Assert.Equal(4, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
     }
 
     [Fact]

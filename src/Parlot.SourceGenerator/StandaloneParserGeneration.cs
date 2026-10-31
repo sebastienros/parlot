@@ -58,6 +58,9 @@ public sealed partial class ParserSourceGenerator
 
         // What the grammar analysis found, which a factory that opts into diagnostics hands to Parlot Explorer
         public List<GrammarFinding> GrammarFindings { get; set; } = [];
+
+        // The diagnostics of these findings, reported once all the factories of the build ran
+        public List<Diagnostic> GrammarDiagnostics { get; } = [];
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
@@ -248,6 +251,7 @@ public sealed partial class ParserSourceGenerator
         }
 
         GenerateStandaloneEntryPoints(output, compilation, target, pending, projectDirectory, entryPointKeys);
+        ReportGrammarDiagnostics(output, pending);
 
         var generated = new List<(string HintName, SyntaxTree Tree)>();
         foreach (var entry in entries)

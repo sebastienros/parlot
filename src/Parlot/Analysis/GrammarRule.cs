@@ -108,15 +108,78 @@ public sealed class GrammarRule
 }
 
 /// <summary>
+/// The kind of change a <see cref="GrammarFix"/> makes to the alternatives of a choice.
+/// </summary>
+public enum GrammarFixKind
+{
+    /// <summary>
+    /// Tries the alternatives in another order. The grammar then parses what the finding says it doesn't.
+    /// </summary>
+    Reorder,
+
+    /// <summary>
+    /// Makes the alternatives that don't skip white space skip it, like the other ones. They then accept white space
+    /// before them.
+    /// </summary>
+    SkipWhiteSpace,
+
+    /// <summary>
+    /// Parses the parser that consecutive alternatives start with once, then chooses between what follows it. The
+    /// grammar parses the same texts, with the same results.
+    /// </summary>
+    FactorLeadingParser,
+}
+
+/// <summary>
+/// A change of a choice that removes a <see cref="GrammarFinding"/>, which a tool can apply to the code of the grammar.
+/// </summary>
+public sealed class GrammarFix
+{
+    internal GrammarFix(GrammarFixKind kind, IReadOnlyList<int> alternatives, string title)
+    {
+        Kind = kind;
+        Alternatives = alternatives;
+        Title = title;
+    }
+
+    /// <summary>
+    /// Gets the kind of change.
+    /// </summary>
+    public GrammarFixKind Kind { get; }
+
+    /// <summary>
+    /// Gets the indexes of the alternatives of the choice concerned: all of them in their new order for
+    /// <see cref="GrammarFixKind.Reorder"/>, the ones to change for <see cref="GrammarFixKind.SkipWhiteSpace"/>, and the
+    /// consecutive ones that start with the same parser for <see cref="GrammarFixKind.FactorLeadingParser"/>.
+    /// </summary>
+    public IReadOnlyList<int> Alternatives { get; }
+
+    /// <summary>
+    /// Gets a short description of the change, like <c>Try Terms.Text("&lt;=") before Terms.Text("&lt;")</c>.
+    /// </summary>
+    public string Title { get; }
+
+    /// <summary>
+    /// Gets whether the grammar parses the same texts with the same results once the change is made.
+    /// </summary>
+    public bool PreservesBehavior => Kind == GrammarFixKind.FactorLeadingParser;
+
+    /// <inheritdoc />
+    public override string ToString() => Title;
+}
+
+/// <summary>
 /// A place in a grammar where <see cref="GrammarAnalyzer"/> found the pattern of a <see cref="GrammarRule"/>.
 /// </summary>
 public sealed class GrammarFinding
 {
-    internal GrammarFinding(GrammarRule rule, object parser, string message)
+    internal GrammarFinding(GrammarRule rule, object parser, string message, int? alternative, GrammarFix? fix)
     {
         Rule = rule;
         Parser = parser;
         Message = message;
+        Alternative = alternative;
+        Fix = fix;
     }
 
     /// <summary>
@@ -133,6 +196,16 @@ public sealed class GrammarFinding
     /// Gets what was found and how to change the grammar, naming the parsers with <see cref="Fluent.Parser{T}.Name"/> when they have one.
     /// </summary>
     public string Message { get; }
+
+    /// <summary>
+    /// Gets the index of the alternative of the choice <see cref="Parser"/> the finding is about, when it is about one.
+    /// </summary>
+    public int? Alternative { get; }
+
+    /// <summary>
+    /// Gets a change of the choice that removes the finding, when the rule has a mechanical one.
+    /// </summary>
+    public GrammarFix? Fix { get; }
 
     /// <inheritdoc />
     public override string ToString() => $"{Rule.Id}: {Message}";

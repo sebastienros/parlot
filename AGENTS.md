@@ -147,7 +147,9 @@ The analysis is redone when a `Deferred.Parser` is replaced (`LoopAnalysis.Inval
 
 `Parlot.Analysis.GrammarAnalyzer` checks a grammar against the rules of `docs/grammar-rules.md`, on top of `LoopAnalysis`.
 The source generator reports its findings as `Info` diagnostics `PARLOT1xx` and keeps them in diagnostic builds for
-Parser Explorer, whose client adds the trace rules `PARLOT2xx` (`replay.js`). It names Parlot's types to tell which
+Parser Explorer, whose client adds the trace rules `PARLOT2xx` (`replay.js`). To locate them, the factory rewrite wraps
+each expression that builds or reads a parser in `ParserSites.Track`; `GrammarFindings.cs` maps a finding's parsers back
+to that code and turns a `GrammarFix` into a text edit, offered only when the rewritten choice still binds to its type. It names Parlot's types to tell which
 parsers wrap, never fail or start with a fixed text (the sets at the top of `GrammarAnalysis`): add a new wrapper there.
 A new rule gets an id in `GrammarRule`, a section in `docs/grammar-rules.md`, positive and negative tests, and, for
 performance, a pattern/fix pair in `GrammarRulesBenchmarks`. Report only what Parlot's types prove, and don't add a rule

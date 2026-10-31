@@ -56,6 +56,9 @@ public class GrammarAnalyzerTests
 
         Assert.Same(parser, finding.Parser);
         Assert.Contains("Terms.Text(\"a\") and Terms.Text(\"c\") skip white space and Literals.Text(\"b\") doesn't", finding.Message);
+        Assert.Null(finding.Alternative);
+        Assert.Equal(GrammarFixKind.SkipWhiteSpace, finding.Fix!.Kind);
+        Assert.Equal([1], finding.Fix.Alternatives);
     }
 
     [Fact]
@@ -74,6 +77,8 @@ public class GrammarAnalyzerTests
         var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
 
         Assert.Contains("alternative 2 (Terms.Pattern(...))", finding.Message);
+        Assert.Equal(1, finding.Alternative);
+        Assert.Null(finding.Fix);
         Assert.Contains("Literals.Pattern(...) tests the chars with a predicate", finding.Message);
         Assert.Contains("AnyOf, NoneOf and Identifier", finding.Message);
     }
@@ -156,6 +161,19 @@ public class GrammarAnalyzerTests
 
         Assert.Contains("alternatives 1, 2 and 3 start", finding.Message);
         Assert.Contains("start with 'number'", finding.Message);
+        Assert.Equal(GrammarFixKind.FactorLeadingParser, finding.Fix!.Kind);
+        Assert.Equal([0, 1, 2], finding.Fix.Alternatives);
+        Assert.True(finding.Fix.PreservesBehavior);
+        Assert.Equal("Parse 'number' once, then choose what follows it", finding.Fix.Title);
+    }
+
+    [Fact]
+    public void AlternativesThatArentConsecutiveHaveNoFactoringFix()
+    {
+        var number = Terms.Integer();
+        var parser = number.AndSkip(Terms.Char('+')).Or(Terms.Text("x").Then(0L)).Or(number.AndSkip(Terms.Char('-')));
+
+        Assert.Null(Single(GrammarAnalyzer.Analyze(parser), GrammarRule.SharedLeadingParser).Fix);
     }
 
     [Fact]
@@ -246,6 +264,11 @@ public class GrammarAnalyzerTests
         Assert.Contains("alternative 1 (Else(Terms.Text(\"a\")))", finding.Message);
         Assert.Contains("never fails, so the alternatives after it (Terms.Text(\"b\") and Terms.Text(\"c\")) are never tried", finding.Message);
         Assert.Equal("none", parser.Parse("b"));
+
+        Assert.Equal(0, finding.Alternative);
+        Assert.Equal([1, 2, 0], finding.Fix!.Alternatives);
+        Assert.Equal("Try Else(Terms.Text(\"a\")) last", finding.Fix.Title);
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(Reorder(parser, finding.Fix)), static finding => finding.Rule == GrammarRule.UnreachableAlternative);
     }
 
     [Fact]
@@ -256,6 +279,7 @@ public class GrammarAnalyzerTests
         var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnreachableAlternative);
 
         Assert.Contains("reports an error instead of failing", finding.Message);
+        Assert.Null(finding.Fix);
         Assert.Throws<ParseException>(() => parser.Parse("b"));
     }
 
@@ -268,6 +292,13 @@ public class GrammarAnalyzerTests
 
         Assert.Equal("In the choice Terms.Text(\"<\").Or(Terms.Text(\"<=\")), alternative 2 (Terms.Text(\"<=\")) never matches: it only matches a text that starts with \"<\", which alternative 1 (Terms.Text(\"<\")) matches first. Try the longer alternative first, or remove the one that can't match.", finding.Message);
         Assert.Equal("<", parser.Parse("<="));
+
+        Assert.Equal(1, finding.Alternative);
+        Assert.Equal(GrammarFixKind.Reorder, finding.Fix!.Kind);
+        Assert.Equal([1, 0], finding.Fix.Alternatives);
+        Assert.Equal("Try Terms.Text(\"<=\") before Terms.Text(\"<\")", finding.Fix.Title);
+        Assert.False(finding.Fix.PreservesBehavior);
+        Assert.Empty(GrammarAnalyzer.Analyze(Reorder(parser, finding.Fix)));
     }
 
     [Fact]
@@ -321,6 +352,14 @@ public class GrammarAnalyzerTests
         GrammarAnalyzer.Analyze(expression);
 
         Assert.Equal(12, expression.Parse("((12))"));
+    }
+
+    // The choice with the alternatives of a choice in the order of a fix
+    private static Parser<T> Reorder<T>(Parser<T> choice, GrammarFix fix)
+    {
+        var alternatives = ((OneOf<T>)choice).OriginalParsers;
+
+        return OneOf(fix.Alternatives.Select(index => alternatives[index]).ToArray());
     }
 
     // A parser type the analysis can't read, which invokes another parser

@@ -613,8 +613,9 @@ There is no runtime fallback for unsupported standalone code. Treat generator er
 in the grammar or callback and move runtime dependencies into supported application-owned helpers.
 
 The generator also analyzes each grammar it generates and reports the patterns of the
-[grammar rules](grammar-rules.md) (`PARLOT101`-`PARLOT113`) as `Info` diagnostics on the factory. They suggest
-changes and never fail a build unless the project asks for it, for instance with `WarningsAsErrors`.
+[grammar rules](grammar-rules.md) (`PARLOT101`-`PARLOT113`) as `Info` diagnostics on the code that builds the parsers
+concerned, with the edit that [fixes](grammar-rules.md#fixes) it when there is a mechanical one. They suggest changes
+and never fail a build unless the project asks for it, for instance with `WarningsAsErrors`.
 
 ## Performance characteristics
 
