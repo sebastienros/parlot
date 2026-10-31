@@ -271,6 +271,9 @@ public class SpanSourceTests
         Assert.Contains("cursor.AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Contains("cursor.MarkHitEnd();", body, StringComparison.Ordinal);
         Assert.DoesNotContain("ResetPosition", body, StringComparison.Ordinal);
+
+        // Each element of a loop checks cancellation, like the helper of each element did
+        Assert.Equal(3, body.Split('\n').Count(static line => line.Contains("context.CheckCancellation();", StringComparison.Ordinal)));
         Assert.DoesNotContain("cursor.Advance()", body, StringComparison.Ordinal);
         Assert.DoesNotContain("cursor.Current", body, StringComparison.Ordinal);
         Assert.Single(body.Split('\n'), static line => line.Contains("cursor.Advance", StringComparison.Ordinal));

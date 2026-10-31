@@ -373,6 +373,10 @@ internal static class SpanSource
         var pos = writer.Pos;
 
         writer.BeginBlock(max > 0 ? $"while ({count} < {max})" : "while (true)");
+
+        // Cancellation is checked for each element, like when each one was a helper method: the loop is the only part of
+        // span code whose length depends on the input
+        writer.Add($"{writer.Context.ParseContextName}.CheckCancellation();");
         writer.Add($"{itemStart} = {pos};");
         writer.Generate(parser, item, itemFail);
 
