@@ -138,9 +138,17 @@ A parser that matches a fixed ordinal text implements it, and a parser that copi
 first forwards its prefixes with `SeekableHints.Prefixes`. Choices use them, at runtime and in generated code, to skip
 the alternatives that only share a first char with the input (`docs/keyword-lookups.md`).
 
+`ILoopAnalyzable` (internal, `Parlot.Fluent`) tells `LoopAnalysis` which parsers a parser invokes before it reads
+anything and whether it can succeed without reading; every built-in parser implements it. From that, the first parse of a
+grammar proves which `Deferred` parsers can't be invoked again at the position where they are active (no left recursion),
+and these skip the loop detection. A parser type without it is treated as invoking any parser, unless its fields hold
+only plain data, so a new parser type must implement it, and must never report fewer parsers or return `false` when unsure.
+The analysis is redone when a `Deferred.Parser` is replaced (`LoopAnalysis.Invalidate`).
+
 `ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
-scanned with a vectorized `IndexOf` rather than a hash set), cancellation checks throttled to every 64
+scanned with a vectorized `IndexOf` rather than a hash set, only used by the `Deferred` parsers `LoopAnalysis` can't
+prove, or when the white space parser can invoke a `Deferred`), cancellation checks throttled to every 64
 parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is the context's `WhiteSpaceSet`, a bit
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
 one-argument `Character.IsWhiteSpace*`, which only know the default set. Runtime grammars that need external state

@@ -113,6 +113,31 @@ A parser which counts the chars of a match before moving the cursor should note 
 
 > ✔️ DO: Assert the line and the column of the cursor after a match, not only its offset, including after a `"\r\n"` and when the match ends the text.
 
+## Left recursion
+
+A `Deferred` parser that is invoked again at the position where it is already active, like `expression` in
+`expression.And(plus).And(term).Or(term)`, fails there instead of overflowing the stack. Looking for itself in the active
+parsers costs every invocation of a `Deferred`, so the first parse of a grammar proves which ones can't be invoked again
+where they are active, and only these skip it. This is the well-formedness check of parsing expression grammars: a
+`Deferred` keeps the check when it is in a cycle of parsers that each invoke the next one before reading anything, like
+the alternatives of a choice, the parser after an optional one, or a lookahead. The other ones, as in most grammars, behave
+the same without it. The proof runs once and again when a `Deferred.Parser` is replaced. `MaxRecursionDepth` still applies
+to every `Deferred`.
+
+The proof assumes that a parser doesn't move the cursor before the position where it was invoked, and that the callbacks
+of a grammar (conversions, predicates, selectors) don't invoke parsers.
+
+A custom parser can be invoked before anything is read and can then invoke any parser, so a `Deferred` which can invoke one
+before reading anything keeps the check. A custom parser whose fields only hold plain data (numbers, enums, strings, and
+arrays or structs of these), and whose enclosing types too, is assumed not to invoke other parsers, like a parser that reads
+a token. This can't be known in a native AOT application, where every custom parser keeps the check.
+
+The parser a context skips white space with, `ParseContext.WhiteSpaceParser` or `WithWhiteSpaceParser`, is invoked by every
+parser that skips white space. When it can invoke a `Deferred` parser before reading anything, every `Deferred` keeps the
+check while it is used.
+
+> ✔️ DO: Never move the cursor before the position where the parser was invoked.
+
 ## Lookup tables
 
 The `OneOf` parser, which can also be created using `a.Or(b)`, is able to create a lookup table to optimize parsing.
