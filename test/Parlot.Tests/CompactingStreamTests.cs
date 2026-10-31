@@ -134,6 +134,41 @@ public class CompactingStreamTests
         Assert.Contains("Commit()", exception.Message);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(64)]
+    [InlineData(4096)]
+    public void PositionsAreTheOnesOfTheWholeTextAcrossRefills(int bufferSize)
+    {
+        // The lines of the text dropped by each refill are counted before it's discarded
+        var position = static (ParseContext c) => (c.Scanner.Cursor.Position.Offset, c.Scanner.Cursor.Position.Line, c.Scanner.Cursor.Position.Column);
+        var assignment = Terms.Identifier().AndSkip(Terms.Char('=')).And(Terms.Integer()).AndSkip(Terms.Char(';')).Then((c, _) => position(c));
+        var parser = ZeroOrMany(assignment).AndSkip(Terms.Text("end").ElseError("Expected end"));
+
+        var text = new StringBuilder();
+
+        for (var i = 0; i < 2_000; i++)
+        {
+            text.Append(i % 3 == 0 ? "\r\n" : "\n").Append(' ', i % 5).Append('a').Append(i).Append(i % 7 == 0 ? "\n=\n" : " = ").Append(i).Append(';');
+        }
+
+        var valid = text + "\n end";
+        var expected = parser.Parse(valid)!;
+
+        Assert.Equal(2_000, expected.Count);
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(valid, 5), new StreamParseOptions { BufferSize = bufferSize }));
+
+        // The error is reported where the text which isn't an assignment starts, after the white space it was skipped from
+        var invalid = text + "\n\n  a = 1 ; \n x";
+        var stringError = Assert.Throws<ParseException>(() => parser.Parse(invalid));
+        var streamError = Assert.Throws<ParseException>(() => parser.Parse(new ChunkedReader(invalid, 5), new StreamParseOptions { BufferSize = bufferSize }));
+
+        Assert.Equal("Expected end", streamError.Message);
+        Assert.Equal(stringError.Position, streamError.Position);
+        Assert.Equal(invalid.Length - 4, streamError.Position.Offset);
+    }
+
     [Fact]
     public void CapturesSpanRefills()
     {

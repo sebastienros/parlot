@@ -26,6 +26,10 @@ if (!parser.TryParse(context, out var result, out var error))
 }
 ```
 
+A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
+instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
+[Left recursion](writing.md#left-recursion). `disableLoopDetection: true` on the `ParseContext` disables it for every parser.
+
 ## Associative operators
 
 `LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:
@@ -43,6 +47,54 @@ expression.Parse("10 - 4 - 2"); // 4
 ```
 
 Replace `LeftAssociative` with `RightAssociative` to obtain `8` for the same input. The factory can also receive `ParseContext` as its first argument: `(context, left, right, operation)`. Existing overloads accepting `(operatorParser, factory)` tuples remain available when each operator needs a distinct factory. Both forms try the operators through a `OneOf`, so only the operators that can start with the next char are tried, in order, and white space is skipped once when they all skip it. If an operator matches but the next operand does not, the operator is rolled back and the expression parsed so far is returned.
+
+## Operator tables
+
+`Operators()` builds a single parser for a whole table of operators, from the level which binds the tightest. Each level
+is added with the same tuples as the combinators above: `Unary` for prefix operators, `Postfix`, `LeftAssociative` and
+`RightAssociative`:
+
+```csharp
+var expression = Deferred<Expression>();
+var primary = number.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+expression.Parser = primary.Operators()
+    .Postfix((Terms.Char('!'), static x => new Factorial(x)))
+    .Unary((Terms.Char('-'), static x => new Negate(x)), (Terms.Text("not"), static x => new Not(x)))
+    .RightAssociative((Terms.Text("**"), static (a, b) => new Power(a, b)))
+    .LeftAssociative((Terms.Char('*'), static (a, b) => new Multiply(a, b)), (Terms.Char('/'), static (a, b) => new Divide(a, b)))
+    .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)), (Terms.Char('-'), static (a, b) => new Subtract(a, b)))
+    .LeftAssociative((Terms.Text("<<"), static (a, b) => new ShiftLeft(a, b)))
+    .LeftAssociative((Terms.Text("<="), static (a, b) => new LessOrEqual(a, b)), (Terms.Char('<'), static (a, b) => new Less(a, b)));
+
+expression.Parse("-2 ** 3! * 4 << 1 < 5"); // ((((-2) ** (3!)) * 4) << 1) < 5
+```
+
+The table parses exactly what the chain of `Unary`, `LeftAssociative` and `RightAssociative` parsers with the same
+levels parses, each one reading its operands with the previous one, with the same results, spans and cursor positions.
+The chain tries the operators of each of its levels after each operand, and every operand goes through every level. The
+table instead looks for the operator following an operand once, through a `OneOf` of all its operators, so that only the
+operators that can start with the next char are tried, and climbs the levels from there (precedence climbing). The cost
+of an operand doesn't depend on the number of levels.
+
+- Within a level the first operator that matches applies, even when a later one would match more text, as in the chain.
+- An operator that is not followed by an operand is not read, and the looser levels try their operators at its position:
+  with `<` in a tighter level and `<=` in a looser one, `a <= b` reads the `<` of the tighter level, which isn't followed
+  by an operand, then the `<=` of the looser one.
+- A prefix operator that is not followed by an operand fails the parser, like `Unary`. The first prefix operator which
+  reads some text applies, and its operand can start with another prefix operator of the same level.
+- A postfix level applies its operators to the value of the tighter levels as long as one of them reads some text. After
+  a postfix operator only the operators of its level and of the looser ones are tried: `a! ** b`, with `**` tighter than
+  `!`, is `a!`.
+- An operator and an operand that both read nothing stop the level, as in the chain.
+- With a `maxRecursionDepth`, each prefix operator applied counts as one level of recursion. Chains of binary operators
+  don't recurse, whatever their length.
+- The parser is seekable from its operand and its prefix operators, so it can be an alternative of a lookup table.
+- Each call of `Unary`, `Postfix`, `LeftAssociative` or `RightAssociative` returns a new parser, the table is not modified.
+  `Named()` returns a `Parser<T>`, call it last.
+
+A chain of `Unary`, `LeftAssociative` and `RightAssociative` parsers still parses level by level: build it with
+`Operators()` to parse it with a single precedence parser.
 
 ## Terms and Literals
 
@@ -705,6 +757,11 @@ Assert.Equal(12, result.Item2);
 ```
 
 ## Cardinality Parsers
+
+`ZeroOrMany`, `OneOrMany` and `Separated` return an array of the exact number of items, or `Array.Empty<T>()` when
+there is none, typed as `IReadOnlyList<T>`. The first four items are kept by the parser and longer lists are
+accumulated on a scratch stack of the thread, shared by nested lists, so a list only allocates its result. Rely on `IReadOnlyList<T>` rather than on the concrete type:
+earlier versions returned a `HybridList<T>` or a `List<T>`.
 
 ### ZeroOrOne
 

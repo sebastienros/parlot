@@ -138,9 +138,17 @@ A parser that matches a fixed ordinal text implements it, and a parser that copi
 first forwards its prefixes with `SeekableHints.Prefixes`. Choices use them, at runtime and in generated code, to skip
 the alternatives that only share a first char with the input (`docs/keyword-lookups.md`).
 
+`ILoopAnalyzable` (internal, `Parlot.Fluent`) tells `LoopAnalysis` which parsers a parser invokes before it reads
+anything and whether it can succeed without reading; every built-in parser implements it. From that, the first parse of a
+grammar proves which `Deferred` parsers can't be invoked again at the position where they are active (no left recursion),
+and these skip the loop detection. A parser type without it is treated as invoking any parser, unless its fields hold
+only plain data, so a new parser type must implement it, and must never report fewer parsers or return `false` when unsure.
+The analysis is redone when a `Deferred.Parser` is replaced (`LoopAnalysis.Invalidate`).
+
 `ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
-scanned with a vectorized `IndexOf` rather than a hash set), cancellation checks throttled to every 64
+scanned with a vectorized `IndexOf` rather than a hash set, only used by the `Deferred` parsers `LoopAnalysis` can't
+prove, or when the white space parser can invoke a `Deferred`), cancellation checks throttled to every 64
 parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is the context's `WhiteSpaceSet`, a bit
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
 one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
@@ -179,6 +187,12 @@ and `TextReaderRefillSource` for the whole assembly.
   than exposing Parlot context types in entry point signatures.
 - Inspect output via `EmitCompilerGeneratedFiles` (both test/benchmark projects already set it; look under
   `obj/.../GeneratedFiles`).
+- Subgraphs of parsers which only read the text are generated as *span code* (`SourceGeneration/SpanSource.cs`, the
+  internal `ISpanSourceable`): one method reads a span local through a position local and moves the cursor once, when
+  it matches. Composite emitters call `SpanSource.TryGenerate` first. Span code leaves the position anywhere when it
+  jumps to a failure label, whose owner moves it back; it marks `HitEnd` when a check looks at the end of the span and
+  before a callback invoked there. It's not generated when `IsCompacting` is set, nor for diagnostics
+  (`GenerateSpanCode`). A new literal whose code only reads the text should implement `ISpanSourceable`.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
@@ -204,9 +218,13 @@ Full reference: `docs/source-generation.md`.
   the constructor, never in `Parse`. Never construct parsers from a lambda per parse — use
   `Parsers.Select(selector, a, b)` with an index into a fixed list (`docs/writing.md`, "Parser factories").
 - No allocations in `Parse`. No LINQ, no closures, no `params` arrays on hot paths; mark lambdas `static`.
-- Prefer `ReadOnlySpan<char>` / `TextSpan` over `string`; `HybridList<T>` (4 items inline) over `List<T>`
-  for result lists; `[MethodImpl(MethodImplOptions.AggressiveInlining)]` on tiny hot helpers, as in
-  `Character`, `Scanner` and `ParseContext`.
+- Prefer `ReadOnlySpan<char>` / `TextSpan` over `string`; `[MethodImpl(MethodImplOptions.AggressiveInlining)]`
+  on tiny hot helpers, as in `Character`, `Scanner` and `ParseContext`.
+- Accumulate list results with the internal `ListBuilder<T>` (`src/Parlot/Fluent/ListBuilder.cs`, embedded in
+  generated parsers too), not `List<T>` or `HybridList<T>`: it keeps four items inline, longer lists go on a per-thread
+  scratch stack shared by nested lists, and the result is one array of the exact size. Declare it as a local, never copy it, and call `Release()`
+  in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters) so that an exception can't leave items on
+  the stack. Read its items through the builder after a callback, which can parse and grow the stack.
 - Modern APIs (`SearchValues`, vectorization) go behind `#if NET8_0_OR_GREATER` with a downlevel path;
   PolySharp and `src/Parlot/Polyfill.cs` cover the rest.
 - Measure. Add or extend a benchmark in `test/Parlot.Benchmarks` for any hot-path change and put the

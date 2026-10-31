@@ -14,7 +14,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable /**/, ISpanSourceable /**/
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -394,6 +394,19 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
 
     public IReadOnlyList<Parser<T>> Parsers { get; private set; }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        // The lookup tables only hold these parsers, or the ones they invoke at their start
+        var nullable = false;
+
+        foreach (var parser in _originalParsers)
+        {
+            nullable |= analysis.Invoke(parser);
+        }
+
+        return nullable;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         if (!Volatile.Read(ref _resolved))
@@ -411,13 +424,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         var cursor = context.Scanner.Cursor;
 
         // The position is only needed to revert the whitespaces this parser skipped, the sub-parsers
-        // revert their own state. Reading it is not free as it also tracks the line and column.
-        var start = default(TextPosition);
+        // revert their own state.
+        var start = 0;
 
         // If all sub-parsers skip whitespaces, do it once here
         if (SkipWhitespace)
         {
-            start = cursor.Position;
+            start = cursor.Offset;
             context.SkipWhiteSpace();
         }
 
@@ -484,11 +497,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
-        var start = default(TextPosition);
+        var start = 0;
 
         if (SkipWhitespace)
         {
-            start = cursor.Position;
+            start = cursor.Offset;
             context.SkipWhiteSpace();
         }
 
@@ -537,6 +550,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         // The factory has run to completion, so every alternative can declare its hints
         EnsureResolved();
 
+        if (SpanSource.TryGenerate(this, typeof(T), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var choiceResult = KeywordChoiceSource.TryGenerate(Parsers, SkipWhitespace, context)
             ?? TextChoiceSource.TryGenerate(Parsers, SkipWhitespace, context);
 
@@ -578,7 +596,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         if (SkipWhitespace)
         {
             startName = $"start{context.NextNumber()}";
-            result.Body.Add($"var {startName} = {cursorName}.Position;");
+            result.Body.Add($"var {startName} = {cursorName}.Offset;");
             result.Body.Add($"{ctx}.SkipWhiteSpace();");
         }
 
@@ -732,6 +750,72 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable /**/
         }
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context)
+    {
+        EnsureResolved();
+
+        // The alternatives are tried in order. A choice of 8 texts or keywords or more is generated as a lookup instead.
+        if (Parsers.Count == 0 || CountAlternatives(this) >= 8)
+        {
+            return -1;
+        }
+
+        return SpanSource.GetWeight(context, Parsers.ToArray<object>());
+
+        // The choices of texts and keywords are flattened like they are
+        static int CountAlternatives(OneOf<T> oneOf)
+        {
+            var count = 0;
+
+            foreach (var parser in oneOf.Parsers)
+            {
+                count += parser is OneOf<T> nested && nested.SkipWhitespace == oneOf.SkipWhitespace ? CountAlternatives(nested) : 1;
+            }
+
+            return count;
+        }
+    }
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var parsers = Parsers;
+        var pos = writer.Pos;
+        var done = writer.NewLabel("choiceDone");
+        var start = parsers.Count > 1 ? writer.DeclareLocal("int", "choiceStart", "0") : null;
+
+        // The white space is skipped once for all the alternatives, like at runtime
+        if (SkipWhitespace)
+        {
+            writer.SkipWhiteSpace();
+        }
+
+        if (start != null)
+        {
+            writer.Add($"{start} = {pos};");
+        }
+
+        for (var i = 0; i < parsers.Count - 1; i++)
+        {
+            var next = writer.NewLabel("alternative");
+
+            writer.Generate(parsers[i], valueVariable, next);
+
+            if (!next.IsUsed)
+            {
+                // The alternative always matches, the next ones are never tried
+                writer.PlaceLabel(done);
+                return;
+            }
+
+            writer.Add(done.Goto());
+            writer.PlaceLabel(next, $"{pos} = {start};");
+        }
+
+        // The failure of the last alternative is the failure of the choice, whose owner moves the position back
+        writer.Generate(parsers[parsers.Count - 1], valueVariable, fail);
+        writer.PlaceLabel(done);
     }
 
     private static void EmitParsers(

@@ -19,7 +19,21 @@ public class ParseContext
     /// <summary>
     /// The maximum number of nested recursive parser invocations, or <c>0</c> for no limit.
     /// </summary>
+#if PARLOT_STANDALONE
+    public int MaxRecursionDepth
+    {
+        get => _coldState?.MaxRecursionDepth ?? 0;
+        private set
+        {
+            if (value != 0)
+            {
+                GetColdState().MaxRecursionDepth = value;
+            }
+        }
+    }
+#else
     public int MaxRecursionDepth { get; }
+#endif
 
     /// <summary>
     /// Whether new lines are treated as normal chars or white spaces. Default is <c>false</c>.
@@ -44,17 +58,32 @@ public class ParseContext
     /// which was allocating several intermediate tables for deeply nested grammars, and a lookup is a vectorized
     /// scan over the recorded positions since two entries rarely share the same one.
     /// </remarks>
+#if PARLOT_STANDALONE
+    // Generated parsers detect the cycles of their deferred parsers with fields of their own context, and can't limit
+    // their recursion. The state of loop detection and of the recursion limit, kept for the callbacks, is then stored
+    // in ColdState rather than in the context that each generated parse allocates. The algorithms are the same.
+    private int[]? _activePositions { get => _coldState?.ActivePositions; set => GetColdState().ActivePositions = value; }
+    private object[]? _activeParsers { get => _coldState?.ActiveParsers; set => GetColdState().ActiveParsers = value; }
+    private int _activeCount { get => _coldState?.ActiveCount ?? 0; set => GetColdState().ActiveCount = value; }
+#else
     private int[]? _activePositions;
     private object[]? _activeParsers;
     private int _activeCount;
+#endif
 
     /// <summary>
     /// The cancellation token used to stop the parsing operation.
     /// </summary>
     public readonly CancellationToken CancellationToken;
 
-    private int _cancellationCheckCount;
+    // A byte is enough since only its low bits are tested, and it wraps around at a multiple of the check interval
+    private byte _cancellationCheckCount;
+
+#if PARLOT_STANDALONE
+    private int _recursionDepth { get => _coldState?.RecursionDepth ?? 0; set => GetColdState().RecursionDepth = value; }
+#else
     private int _recursionDepth;
+#endif
 
     // TODO: For backward compatibility only, remove in future versions
     public ParseContext(Scanner scanner, bool useNewLines)
@@ -89,6 +118,11 @@ public class ParseContext
         _flags = cancellationToken.CanBeCanceled ? CancellableFlag : (byte)0;
         DisableLoopDetection = disableLoopDetection;
         MaxRecursionDepth = maxRecursionDepth;
+
+        if (maxRecursionDepth > 0)
+        {
+            _flags |= LimitRecursionFlag;
+        }
     }
 
     /// <summary>
@@ -133,6 +167,15 @@ public class ParseContext
 
         // The offset of the last Commit(), no parser can read the text before it again
         public int CommitOffset;
+
+#if PARLOT_STANDALONE
+        // Loop detection and recursion limit, see _activePositions
+        public int[]? ActivePositions;
+        public object[]? ActiveParsers;
+        public int ActiveCount;
+        public int MaxRecursionDepth;
+        public int RecursionDepth;
+#endif
     }
 
     private ColdState GetColdState() => _coldState ??= new ColdState();
@@ -150,6 +193,45 @@ public class ParseContext
     private const byte CompactingFlag = 8;
     private const byte InTokenFlag = 16;
     private const byte CompactingMask = CompactingFlag | InTokenFlag;
+
+    // Why a Deferred parser tracks its invocations even when it can't be invoked again at the position where it is active:
+    // the recursion is limited, or the white space parser can invoke a deferred parser.
+    private const byte LimitRecursionFlag = 32;
+    private const byte ReentrantWhiteSpaceFlag = 64;
+    private const byte DeferredTrackingMask = LimitRecursionFlag | ReentrantWhiteSpaceFlag;
+
+    /// <summary>
+    /// Whether a <see cref="Deferred{T}"/> parser that can't be invoked again at the position where it is active still tracks
+    /// its invocations, as <see cref="MaxRecursionDepth"/> is set or <see cref="HasReentrantWhiteSpaceParser"/>.
+    /// </summary>
+    internal bool TracksDeferredParsers
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_flags & DeferredTrackingMask) != 0;
+    }
+
+    /// <summary>
+    /// Whether <see cref="WhiteSpaceParser"/> can invoke a deferred parser before it reads anything. The parsers that skip white
+    /// space invoke it where they are invoked, so the deferred parsers can't tell whether it invokes them again at the position
+    /// where they are active.
+    /// </summary>
+    internal bool HasReentrantWhiteSpaceParser => (_flags & ReentrantWhiteSpaceFlag) != 0;
+
+    /// <summary>
+    /// Sets <see cref="WhiteSpaceParser"/> with whether it can invoke a deferred parser, which the caller already knows.
+    /// </summary>
+    internal void SetWhiteSpaceParser(Parser<TextSpan>? parser, bool reentrant)
+    {
+        if (!ReferenceEquals(_whiteSpaceParser, parser))
+        {
+            _whiteSpaceParser = parser;
+
+            // The white spaces skipped by the previous parser are not the ones this one skips
+            _cacheOffset = -1;
+        }
+
+        SetFlag(ReentrantWhiteSpaceFlag, reentrant);
+    }
 
     private void SetFlag(byte flag, bool value)
     {
@@ -171,6 +253,11 @@ public class ParseContext
                 // The white spaces skipped by the previous parser are not the ones this one skips
                 _cacheOffset = -1;
             }
+
+#if !PARLOT_STANDALONE
+            // Generated parsers don't use Deferred
+            SetFlag(ReentrantWhiteSpaceFlag, value is not null && LoopAnalysis.CanReachDeferred(value));
+#endif
         }
     }
 
@@ -228,8 +315,9 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is not null || Character.HasMask(ch, _skipMask);
 
+    // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
-    private TextPosition _cachePosition;
+    private int _cacheEndOffset;
 
     public void SkipWhiteSpace()
     {
@@ -237,7 +325,7 @@ public class ParseContext
 
         if (offset == _cacheOffset)
         {
-            Scanner.Cursor.ResetPosition(_cachePosition);
+            Scanner.Cursor.ResetPosition(_cacheEndOffset);
             return;
         }
 
@@ -260,7 +348,7 @@ public class ParseContext
         }
 
         _cacheOffset = offset;
-        _cachePosition = Scanner.Cursor.Position;
+        _cacheEndOffset = Scanner.Cursor.Offset;
     }
 
     // Skips the white space of the set, with the scanner's constant mask loops for the default set
@@ -403,7 +491,7 @@ public class ParseContext
 
     // A token is read between BeginToken and EndToken, and read again from its start while RetryToken returns true.
     // Generated parsers use these directly, see SourceGenerationContext.GenerateToken.
-    internal TextPosition BeginToken()
+    internal int BeginToken()
     {
         var cursor = Scanner.Cursor;
 
@@ -418,11 +506,11 @@ public class ParseContext
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
 
-        return cursor.Position;
+        return cursor.Offset;
     }
 
     // Whether the token read to the end of the buffer, in which case it's moved back to its start with more text
-    internal bool RetryToken(in TextPosition start)
+    internal bool RetryToken(int start)
     {
         var cursor = Scanner.Cursor;
 
@@ -432,7 +520,7 @@ public class ParseContext
         }
 
         cursor.ResetPosition(start);
-        Refill(start.Offset);
+        Refill(start);
         cursor.ResetHitEnd();
 
         return true;
@@ -475,7 +563,7 @@ public class ParseContext
         }
 
         _cacheOffset = offset;
-        _cachePosition = cursor.Position;
+        _cacheEndOffset = cursor.Offset;
     }
 
     private void Refill(int floor)
@@ -558,6 +646,30 @@ public class ParseContext
         }
     }
 
+    // Pins a position the cursor already moved past, which is still buffered since no text was read after it
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int PinAt(int offset)
+    {
+        if ((_flags & CompactingFlag) == 0)
+        {
+            return -1;
+        }
+
+        var pin = PinNotInlined();
+        _coldState!.Pins![pin] = offset;
+        return pin;
+    }
+
+    // Moves a pin to a position the cursor already moved past, which is still buffered since no text was read after it
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void MovePin(int pin, int offset)
+    {
+        if (pin >= 0)
+        {
+            _coldState!.Pins![pin] = offset;
+        }
+    }
+
     /// <summary>
     /// Releases a pin returned by <see cref="Pin"/>, and the pins created after it.
     /// </summary>
@@ -632,7 +744,8 @@ public class ParseContext
         // This keeps cancellation responsive while reducing overhead for large inputs.
         const int mask = 0x3F; // check ~every 64 calls
 
-        if ((_cancellationCheckCount++ & mask) == 0)
+        // Unchecked since the byte wraps around, and generated parsers embed this file in assemblies which can check for overflows
+        if ((unchecked(_cancellationCheckCount++) & mask) == 0)
         {
             CancellationToken.ThrowIfCancellationRequested();
         }

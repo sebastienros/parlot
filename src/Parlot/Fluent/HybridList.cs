@@ -15,6 +15,8 @@ namespace Parlot.Fluent;
 /// <remarks>
 /// This type is public to support source-generated parsers in consumer assemblies.
 /// Parser consumers should use <see cref="IReadOnlyList{T}"/> rather than depending on this implementation.
+/// The built-in list parsers no longer return it: they accumulate their items on a scratch stack and return an
+/// array of the exact size.
 /// </remarks>
 /// <typeparam name="T">The element type.</typeparam>
 #nullable enable

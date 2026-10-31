@@ -37,7 +37,9 @@ There are two modes:
 
 The cursor reads a window of the input, a `string` which starts at an absolute offset of the input.
 `Cursor.Offset`, `Cursor.Position` and `ParseResult` offsets are absolute: they are the ones in the whole text, so
-positions saved by parsers stay valid when the window is replaced. Lines and columns are the ones of the whole text.
+offsets saved by parsers stay valid when the window is replaced. Lines and columns are the ones of the whole text: the
+cursor computes them from the text when a position is read, and counts the lines of the text a refill drops before
+discarding it.
 
 ### Tokens
 
@@ -65,6 +67,7 @@ The parsers which move back to read again keep their position with `ParseContext
 | `ZeroOrMany`, `OneOrMany`, `Separated` | The start of the current element only: a root array or list streams. |
 | `LeftAssociative`, `RightAssociative` | The start of the current operator, which isn't part of the match when no operand follows it. |
 | `Unary` | Its start, while its operators are tried. |
+| `Operators()` | The start of each operator being applied, until its operand is read, and the start of the prefix operators while they are tried. |
 | `Capture` | Its start, until the captured text is created. |
 
 Sequences (`And`, `SkipAnd`, `AndSkip`, `Between`, ...) don't pin: they only move back to report a failure, and their
@@ -111,6 +114,11 @@ parsing a `string`. Pins are released in the reverse order.
 and `Cursor.CreateSpan(start, length)`, which take absolute offsets. A `TextSpan` created by `CreateSpan` references
 its window string, which remains valid after a refill; its `Offset` is relative to its `Buffer`.
 
+The line and column of a position can only be computed while its text is buffered. A parser which reports an error at
+the position it moved back to, when what it parsed doesn't match, must read that position before parsing: a sequence
+doesn't pin its start, so its text may have been discarded by then. `ElseError` does so in compacting mode. The position
+of discarded text has the line of the first buffered char, and a column counted as if no line ended in between.
+
 ### Asynchronous parsing
 
 The parse is synchronous. `ParseAsync` and `TryParseAsync` read the first `BufferSize` chars asynchronously. When the
@@ -127,7 +135,9 @@ public static partial bool TryParse(TextReader reader, out IJson value);
 ```
 
 The emitters generate the token loops and pins described above in the reader variant only, so
-the `string` variant of the same factory is unchanged. See
+the `string` variant of the same factory is unchanged. The `string` variant reads the subgraphs of literals as
+[span code](source-generation.md#span-code), which moves the cursor once per subgraph; the reader variant only does
+inside a token, whose buffer isn't replaced while it's read. See
 [TextReader entry points](source-generation.md#textreader-entry-points).
 
 ## Window driver

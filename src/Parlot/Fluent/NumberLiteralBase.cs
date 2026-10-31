@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// This class is used as a base class for custom number parsers which don't implement INumber<typeparamref name="T"/> after .NET 7.0.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
+public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -71,6 +71,9 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
         Name = "NumberLiteral";
     }
 
+    // A derived type can override Parse()
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => GetType().Assembly == typeof(NumberLiteralBase<T>).Assembly ? false : analysis.AnalyzeUnknown(this);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         if (context.IsCompacting)
@@ -80,8 +83,8 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
 
         context.EnterParser(this);
 
-        var reset = context.Scanner.Cursor.Position;
-        var start = reset.Offset;
+        var reset = context.Scanner.Cursor.Offset;
+        var start = reset;
 
         if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
         {
@@ -132,17 +135,49 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
             valueVariable: "value",
             valueTypeName: valueTypeName);
 
-        result.Body.Add($"var {resetName} = {cursorName}.Position;");
+        result.Body.Add($"var {resetName} = {cursorName}.Offset;");
         result.Body.Add($"global::System.ReadOnlySpan<char> {numberSpanName} = default;");
         if (!context.DiscardResult)
         {
             result.Body.Add($"{valueTypeName} {parsedValueName} = default;");
         }
 
+        var (tryParseMethod, numberStylesFieldName, cultureExpr) = GetParseExpressions(context);
+
         var allowLeadingSign = _allowLeadingSign ? "true" : "false";
         var allowDecimalSeparator = _allowDecimalSeparator ? "true" : "false";
         var allowGroupSeparator = _allowGroupSeparator ? "true" : "false";
         var allowExponent = _allowExponent ? "true" : "false";
+        var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
+        var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        result.Body.Add("{");
+        var outTarget = context.DiscardResult ? $"{valueTypeName} _" : parsedValueName;
+        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {outTarget}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.ValueVariable} = {(context.DiscardResult ? "default" : parsedValueName)};");
+        result.Body.Add("        return true;");
+        result.Body.Add("    }");
+        result.Body.Add("}");
+        result.Body.Add($"{cursorName}.ResetPosition({resetName});");
+        result.Body.Add($"{result.ValueVariable} = default;");
+        result.Body.Add("return false;");
+
+        return result;
+    }
+
+    // The fields registered in the last context, which span code uses each time the parser is inlined
+    private (SourceGenerationContext Context, string TryParseMethod, string NumberStyles, string Culture)? _parseExpressions;
+
+    // Returns the method parsing the number, and the expressions of its styles and culture
+    private (string TryParseMethod, string NumberStyles, string Culture) GetParseExpressions(SourceGenerationContext context)
+    {
+        if (_parseExpressions is { } expressions && ReferenceEquals(expressions.Context, context))
+        {
+            return (expressions.TryParseMethod, expressions.NumberStyles, expressions.Culture);
+        }
+
+        var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         // Emit NumberStyles as a static readonly field
         var numberStylesFieldName = context.RegisterStaticField(
@@ -164,10 +199,6 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
                 $"new global::System.Func<global::System.Globalization.CultureInfo>(() => {{ var c = (global::System.Globalization.CultureInfo)global::System.Globalization.CultureInfo.InvariantCulture.Clone(); c.NumberFormat.NumberDecimalSeparator = {decimalSeparator}; c.NumberFormat.NumberGroupSeparator = {groupSeparator}; return c; }})()");
         }
 
-        var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
-        var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
-        result.Body.Add("{");
         // The helper is available in Parlot's net8.0+ assets. A net7.0 consumer selects
         // the netstandard2.0 asset, which cannot expose generic-math APIs.
         var supportsFastNumberParsing =
@@ -178,18 +209,23 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable
             : Numbers.HasTryParseOverload(typeof(T))
                 ? "global::Parlot.Numbers.TryParse"
                 : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later.");
-        var outTarget = context.DiscardResult ? $"{valueTypeName} _" : parsedValueName;
-        result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {outTarget}))");
-        result.Body.Add("    {");
-        result.Body.Add($"        {result.ValueVariable} = {(context.DiscardResult ? "default" : parsedValueName)};");
-        result.Body.Add("        return true;");
-        result.Body.Add("    }");
-        result.Body.Add("}");
-        result.Body.Add($"{cursorName}.ResetPosition({resetName});");
-        result.Body.Add($"{result.ValueVariable} = default;");
-        result.Body.Add("return false;");
 
-        return result;
+        _parseExpressions = (context, tryParseMethod, numberStylesFieldName, cultureExpr);
+
+        return (tryParseMethod, numberStylesFieldName, cultureExpr);
+    }
+
+    // Only the built-in number parsers can be generated, see GenerateSource. The code parsing the value is large, a
+    // subgraph only inlines a few.
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context)
+        => GetType().Assembly == typeof(NumberLiteralBase<T>).Assembly ? 8 : -1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var (tryParseMethod, numberStyles, culture) = GetParseExpressions(writer.Context);
+
+        NumberSource.GenerateSpanSource(writer, valueVariable, fail, typeof(T), tryParseMethod, numberStyles, culture,
+            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _decimalSeparator, _groupSeparator);
     }
 }
 

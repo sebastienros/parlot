@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// Adapts an IParser&lt;T&gt; to a Parser&lt;T&gt; for use in contexts that require Parser.
 /// This is used internally to support covariance.
 /// </summary>
-internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
+internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly IParser<T> _parser;
 
@@ -34,6 +34,8 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

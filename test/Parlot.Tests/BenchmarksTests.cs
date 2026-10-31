@@ -44,6 +44,20 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
     }
 
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Arithmetic", 7)]
+    [InlineData("Mixed", 1)]
+    [InlineData("Nested", 0)]
+    public void PrecedenceGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the nested runtime one
+        var benchmark = new PrecedenceBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.NestedRuntime());
+        Assert.Equal(expected, benchmark.ChainGenerated());
+    }
+
     [Fact]
     public void OperatorChoiceGrammar()
     {
@@ -157,6 +171,16 @@ public class BenchmarksTests
 
         Assert.Equal(success, benchmarks.Lookup());
         Assert.Equal(success, benchmarks.Lookup());
+    }
+
+    [Fact]
+    public void PositionBenchmarks()
+    {
+        var benchmarks = new PositionBenchmarks();
+
+        Assert.Equal(2000, benchmarks.Identifiers());
+        Assert.Equal(400, benchmarks.PositionAfterEachIdentifier());
+        Assert.Equal(400, benchmarks.ErrorPositionAtTheEnd());
     }
 
     [Fact]

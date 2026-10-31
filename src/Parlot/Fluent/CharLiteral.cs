@@ -3,7 +3,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
+public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     public CharLiteral(char c)
     {
@@ -18,6 +18,8 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
     public char[] ExpectedChars { get; }
 
     public bool SkipWhitespace { get; }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<char> result)
     {
@@ -58,10 +60,6 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
         var cursorName = context.CursorName;
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(char));
 
-        // Precalculate line tracking values for the character: only '\n' ends a line
-        var newLines = Char == '\n' ? 1 : 0;
-        var trailingSegmentLength = Char == '\n' ? 0 : 1;
-
         // Use direct SourceResult construction for early return optimization
         var result = new SourceResult(
             successVariable: "success",  // Not used with early returns
@@ -72,7 +70,7 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
 
         result.Body.Add($"if ({cursorName}.Match({charExpression}))");
         result.Body.Add("{");
-        result.Body.Add($"    {cursorName}.AdvanceBy(1, {newLines}, {trailingSegmentLength});");
+        result.Body.Add($"    {cursorName}.Advance();");
         result.Body.Add($"    {result.ValueVariable} = {charExpression};");
         result.Body.Add("    return true;");
         result.Body.Add("}");
@@ -80,5 +78,23 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
         result.Body.Add("return false;");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => 1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var charExpression = $"(char){(int)Char}";
+
+        // The unsigned compare of the position lets the JIT remove the bounds check of the span
+        writer.BeginBlock($"if ((uint){writer.Pos} >= (uint){writer.Span}.Length || {writer.Span}[{writer.Pos}] != {charExpression})");
+        writer.Fail(fail);
+        writer.EndBlock();
+        writer.Add($"{writer.Pos}++;");
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {charExpression};");
+        }
     }
 }

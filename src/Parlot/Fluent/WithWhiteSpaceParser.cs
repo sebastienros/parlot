@@ -7,10 +7,17 @@ namespace Parlot.Fluent;
 /// <summary>
 /// A parser that temporarily sets a custom whitespace parser for its inner parser.
 /// </summary>
-public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
+public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly Parser<TextSpan> _whiteSpaceParser;
+
+    // Whether the white space parser can invoke a deferred parser, see ParseContext.HasReentrantWhiteSpaceParser.
+    // Unknown until the first parse, which needs the grammar to be complete.
+    private int _reentrantWhiteSpaceParser = Unknown;
+    private const int Unknown = 0;
+    private const int NotReentrant = 1;
+    private const int Reentrant = 2;
 
     public WithWhiteSpaceParser(Parser<T> parser, Parser<TextSpan> whiteSpaceParser)
     {
@@ -38,11 +45,12 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
 
         // Save the current whitespace parser
         var previousWhiteSpaceParser = context.WhiteSpaceParser;
+        var previousReentrant = context.HasReentrantWhiteSpaceParser;
 
         try
         {
             // Set the custom whitespace parser
-            context.WhiteSpaceParser = _whiteSpaceParser;
+            context.SetWhiteSpaceParser(_whiteSpaceParser, IsWhiteSpaceParserReentrant());
 
             // Parse with the custom whitespace parser
             var success = _parser.Parse(context, ref result);
@@ -53,9 +61,26 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable
         finally
         {
             // Restore the previous whitespace parser
-            context.WhiteSpaceParser = previousWhiteSpaceParser;
+            context.SetWhiteSpaceParser(previousWhiteSpaceParser, previousReentrant);
         }
     }
+
+    private bool IsWhiteSpaceParserReentrant()
+    {
+        var reentrant = _reentrantWhiteSpaceParser;
+
+        if (reentrant == Unknown)
+        {
+            // The answer doesn't change once the parser can't reach a deferred parser
+            reentrant = LoopAnalysis.CanReachDeferred(_whiteSpaceParser) ? Reentrant : NotReentrant;
+            _reentrantWhiteSpaceParser = reentrant;
+        }
+
+        return reentrant == Reentrant;
+    }
+
+    // The white space parser is invoked by the parsers that skip white space, see LoopAnalysis.CanReachDeferred()
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Parlot.Fluent;
 
-internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable
+internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable, ILoopAnalyzable
 {
     private readonly SearchValues<char> _startSearchValues;
     private readonly SearchValues<char> _partSearchValues;
@@ -38,6 +38,8 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable
 
     public bool SkipWhitespace { get; }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
         if (context.IsCompacting)
@@ -60,7 +62,7 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable
         // If index == -1 the whole input is a match
         var size = index == -1 ? span.Length : index + 1;
 
-        var start = context.Scanner.Cursor.Position.Offset;
+        var start = context.Scanner.Cursor.Offset;
         context.Scanner.Cursor.AdvanceNoNewLines(size);
         result.Set(start, start + size, context.Scanner.Cursor.CreateSpan(start, size));
 

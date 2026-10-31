@@ -156,6 +156,13 @@ public class GeneratedParserTests
     }
 
     [Fact]
+    public void Callbacks_Can_Use_The_Loop_Detection_Of_The_Context()
+    {
+        Assert.True(Grammar.TryParseContextLoopDetection("x", out var value));
+        Assert.Equal("True False True True False 0 False", value);
+    }
+
+    [Fact]
     public void Scanned_Tokens_Track_New_Lines()
     {
         string[] inputs =

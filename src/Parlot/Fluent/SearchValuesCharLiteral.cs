@@ -6,16 +6,13 @@ using System.Buffers;
 
 namespace Parlot.Fluent;
 
-internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable
+internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly SearchValues<char> _searchValues;
     private readonly string? _valuesString;
     private readonly int _minSize;
     private readonly int _maxSize;
     private readonly bool _negate;
-
-    // Whether the matched chars can contain '\n', which then needs to be tracked for the line and column
-    private readonly bool _hasNewLine;
 
     public bool CanSeek { get; }
 
@@ -30,9 +27,6 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
-
-        // A negated set matches every char but its values, so it reads new lines unless '\n' is one of them
-        _hasNewLine = searchValues.Contains('\n') != negate;
     }
 
     public SearchValuesCharLiteral(ReadOnlySpan<char> searchValues, int minSize = 1, int maxSize = 0, bool negate = false)
@@ -42,7 +36,6 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         _minSize = minSize;
         _maxSize = maxSize;
         _negate = negate;
-        _hasNewLine = (searchValues.IndexOf('\n') >= 0) != negate;
 
         if (minSize > 0 && !_negate)
         {
@@ -50,6 +43,8 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
             ExpectedChars = searchValues.ToArray();
         }
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _minSize <= 0;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
@@ -90,15 +85,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
 
         var start = cursor.Offset;
 
-        // The line and column only need to be tracked char by char when there are new lines
-        if (_hasNewLine)
-        {
-            cursor.Advance(size);
-        }
-        else
-        {
-            cursor.AdvanceNoNewLines(size);
-        }
+        cursor.AdvanceNoNewLines(size);
 
         result.Set(start, start + size, cursor.CreateSpan(start, size));
 
@@ -213,7 +200,7 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
         result.Body.Add("    return false;");
         result.Body.Add("}");
 
-        result.Body.Add($"{cursorName}.Advance({sizeVar});");
+        result.Body.Add($"{cursorName}.AdvanceNoNewLines({sizeVar});");
         result.Body.Add($"{result.ValueVariable} = {context.CursorName}.CreateSpan({startVar}, {sizeVar});");
         result.Body.Add("return true;");
 

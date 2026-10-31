@@ -37,6 +37,7 @@ internal static class StandaloneRuntimeSources
         "Polyfills.ArgumentNullException.cs",
         "Fluent.ParseContext.cs",
         "Fluent.HybridList.cs",
+        "Fluent.ListBuilder.cs",
         "Fluent.NumberOptions.cs",
         "Fluent.DelegateParser.cs",
         "Fluent.Parser.cs",
@@ -314,7 +315,7 @@ internal static class StandaloneRuntimeSources
                     or "ParseError" or "Character" or "CharacterMask" or "WhiteSpaceSet" or "Numbers" or "HexConverter" or "ThrowHelper", 0) => true,
                 (false, "ParseResult" or "Option", 1) => true,
                 (true, "ParseContext" or "NumberOptions" or "StreamRefillSource" or "TextReaderRefillSource", 0) => true,
-                (true, "Parser" or "HybridList" or "DelegateParser", 1) => true,
+                (true, "Parser" or "HybridList" or "ListBuilder" or "ListScratch" or "DelegateParser", 1) => true,
                 _ => false,
             };
         }

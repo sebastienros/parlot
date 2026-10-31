@@ -46,12 +46,14 @@ internal static class ParserDiagnostics
         _stack!.RemoveAt(_stack.Count - 1);
     }
 
-    public static void Reset(global::Parlot.Cursor cursor, global::Parlot.TextPosition position)
+    public static void Reset(global::Parlot.Cursor cursor, int offset)
     {
         if (_sink is not null && _stack!.Count > 0)
-            Emit("reset", _stack[_stack.Count - 1], 0, "", cursor, position.Offset);
-        cursor.ResetPosition(position);
+            Emit("reset", _stack[_stack.Count - 1], 0, "", cursor, offset);
+        cursor.ResetPosition(offset);
     }
+
+    public static void Reset(global::Parlot.Cursor cursor, global::Parlot.TextPosition position) => Reset(cursor, position.Offset);
 
     private static void Emit(string kind, int id, int parent, string rule, global::Parlot.Cursor cursor, int target)
     {

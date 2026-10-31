@@ -7,8 +7,10 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Matches the end of the input without consuming text or skipping whitespace.
 /// </summary>
-public sealed class Eof : Parser<object?>, ISourceable
+public sealed class Eof : Parser<object?>, ISourceable, ILoopAnalyzable
 {
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => true;
+
     /// <inheritdoc />
     public override bool Parse(ParseContext context, ref ParseResult<object?> result)
     {
@@ -62,7 +64,7 @@ public sealed class Eof : Parser<object?>, ISourceable
 /// <summary>
 /// Successful when the cursor is at the end of the string.
 /// </summary>
-public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable
+public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
@@ -88,12 +90,14 @@ public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable
     /// <inheritdoc />
     public bool SkipWhitespace { get; }
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
-        var start = cursor.Position;
+        var start = cursor.Offset;
 
         if (_parser.Parse(context, ref result))
         {
@@ -134,7 +138,7 @@ public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable
         //     value = innerValue;
         // }
         var startName = $"start{context.NextNumber()}";
-        result.Body.Add($"var {startName} = {context.CursorName}.Position;");
+        result.Body.Add($"var {startName} = {context.CursorName}.Offset;");
 
         if (context.DiscardResult)
         {

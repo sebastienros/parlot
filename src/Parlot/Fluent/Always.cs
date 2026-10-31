@@ -6,7 +6,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Doesn't parse anything and return the default value.
 /// </summary>
-public sealed class Always<T> : Parser<T>, ISourceable
+public sealed class Always<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly T _value;
 
@@ -15,6 +15,8 @@ public sealed class Always<T> : Parser<T>, ISourceable
         Name = "Always";
         _value = value;
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

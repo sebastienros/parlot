@@ -3,7 +3,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
+public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly bool _includeNewLines;
 
@@ -34,6 +34,8 @@ public sealed class WhiteSpaceLiteral : Parser<TextSpan>, ISeekable, ISourceable
 
         Name = "WhiteSpaceLiteral";
     }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

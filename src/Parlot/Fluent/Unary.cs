@@ -10,7 +10,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class Unary<T, TInput> : Parser<T>, ISourceable
+public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T> Factory)[] _operators;
@@ -24,6 +24,17 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        foreach (var (op, _) in _operators)
+        {
+            analysis.Invoke(op);
+        }
+
+        // An operator is followed by an operand only when it moved the cursor
+        return analysis.Invoke(_parser);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -56,13 +67,13 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
         // Try each unary operator
         foreach (var (op, factory) in _operators)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             var operatorResult = new ParseResult<TInput>();
             if (op.Parse(context, ref operatorResult))
             {
                 // An operator that didn't read anything would be matched again by the recursion, forever.
                 // It is treated as no operator, and the next ones are tried at the same position.
-                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                if (context.Scanner.Cursor.Offset == operatorPosition)
                 {
                     continue;
                 }
@@ -152,16 +163,16 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
             var indent = "";
             if (i == 0)
             {
-                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
+                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Offset;");
                 // An operator that didn't read anything is treated as no operator, like at runtime
-                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Offset;");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";
@@ -222,7 +233,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable
     public override string ToString() => Name ?? $"Unary({_parser})";
 }
 
-public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
+public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T> Factory)[] _operators;
@@ -236,6 +247,17 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
         {
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
+    }
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        foreach (var (op, _) in _operators)
+        {
+            analysis.Invoke(op);
+        }
+
+        // An operator is followed by an operand only when it moved the cursor
+        return analysis.Invoke(_parser);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -267,14 +289,14 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
 
         foreach (var (op, factory) in _operators)
         {
-            var operatorPosition = context.Scanner.Cursor.Position;
+            var operatorPosition = context.Scanner.Cursor.Offset;
             var operatorResult = new ParseResult<TInput>();
 
             if (op.Parse(context, ref operatorResult))
             {
                 // An operator that didn't read anything would be matched again by the recursion, forever.
                 // It is treated as no operator, and the next ones are tried at the same position.
-                if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                if (context.Scanner.Cursor.Offset == operatorPosition)
                 {
                     continue;
                 }
@@ -353,16 +375,16 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable
             var indent = "";
             if (i == 0)
             {
-                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Position;");
+                result.Body.Add($"{indent}var {opPositionName} = {cursorName}.Offset;");
                 // An operator that didn't read anything is treated as no operator, like at runtime
-                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
             else
             {
                 result.Body.Add($"{indent}if (!{operatorMatchedName})");
                 result.Body.Add($"{indent}{{");
-                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Position;");
-                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName}.Offset)");
+                result.Body.Add($"{indent}    var {opPositionName} = {cursorName}.Offset;");
+                result.Body.Add($"{indent}    if ({opHelperName}({ctx}, out _) && {cursorName}.Offset != {opPositionName})");
             }
 
             var innerIndent = i == 0 ? indent : $"{indent}    ";

@@ -140,6 +140,17 @@ public sealed class SourceGenerationContext
     public bool IsCompacting { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the parsers which only read the text, like literals and the sequences, choices and loops of
+    /// literals, are generated as span code: inline in the code of the parser invoking them, reading the text through a
+    /// span and a position local, and moving the cursor once when they match. <see langword="true"/> by default.
+    /// </summary>
+    /// <remarks>
+    /// Span code isn't generated when <see cref="IsCompacting"/> is set. The diagnostics of the Parser Explorer disable
+    /// it, such that they report each parser that is invoked and each move of the cursor.
+    /// </remarks>
+    public bool GenerateSpanCode { get; set; } = true;
+
+    /// <summary>
     /// Generates the code of a token, a parser that reads the cursor directly, when <see cref="IsCompacting"/> is set.
     /// </summary>
     /// <remarks>

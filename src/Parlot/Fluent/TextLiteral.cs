@@ -6,10 +6,9 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
+public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly StringComparison _comparisonType;
-    private readonly bool _hasNewLines;
     private readonly bool _returnMatchedText;
     private readonly bool _returnText;
     private readonly string[]? _expectedPrefixes;
@@ -23,7 +22,6 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         Text = text ?? throw new ArgumentNullException(nameof(text));
         _comparisonType = comparisonType;
         _returnMatchedText = returnMatchedText;
-        _hasNewLines = text.AsSpan().IndexOf('\n') >= 0;
 
         // An ordinal match is the text itself, and case-insensitive matches return the canonical text by default.
         _returnText = comparisonType == StringComparison.Ordinal || (!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
@@ -128,9 +126,6 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 
     internal StringComparison Comparison => _comparisonType;
 
-    // Whether the text contains '\n', which then needs to be tracked for the line and column
-    internal bool HasNewLines => _hasNewLines;
-
     // Whether the canonical text is returned rather than the matched one
     internal bool ReturnsText => _returnText;
 
@@ -141,6 +136,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     public bool SkipWhitespace { get; }
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => _expectedPrefixes;
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => Text.Length == 0;
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {
@@ -159,14 +156,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         {
             var start = cursor.Offset;
 
-            if (_hasNewLines)
-            {
-                cursor.Advance(Text.Length);
-            }
-            else
-            {
-                cursor.AdvanceNoNewLines(Text.Length);
-            }
+            // The text was matched so it is in the buffer. It can contain new lines, the cursor counts them when its position is read.
+            cursor.AdvanceNoNewLines(Text.Length);
 
             var end = cursor.Offset;
 
@@ -211,8 +202,6 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         var textLiteral = LiteralHelper.StringToLiteral(Text);
         var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
         var comparison = $"global::System.StringComparison.{_comparisonType}";
-        var newLines = CountNewLines(Text);
-        var trailingSegmentLength = TrailingSegmentLength(Text);
         var isNotOrdinal = _comparisonType != StringComparison.Ordinal;
         var ignoreCase = _comparisonType is StringComparison.OrdinalIgnoreCase
             or StringComparison.CurrentCultureIgnoreCase
@@ -233,7 +222,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         {
             result.Body.Add($"    var {startName} = {cursorName}.Offset;");
         }
-        result.Body.Add($"    {cursorName}.AdvanceBy({lengthLiteral}, {newLines}, {trailingSegmentLength});");
+        result.Body.Add($"    {cursorName}.AdvanceNoNewLines({lengthLiteral});");
 
         // Default behavior for case-insensitive comparisons is to return the canonical source text (no allocation).
         if (context.DiscardResult)
@@ -262,33 +251,41 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         return result;
     }
 
+    // Only ordinal texts, whose value is the text itself
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => _comparisonType == StringComparison.Ordinal ? 1 : -1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var span = writer.Span;
+        var pos = writer.Pos;
+        var textLiteral = LiteralHelper.StringToLiteral(Text);
+
+        if (Text.Length == 1)
+        {
+            // The unsigned compare of the position lets the JIT remove the bounds check of the span
+            writer.BeginBlock($"if ((uint){pos} >= (uint){span}.Length || {span}[{pos}] != {LiteralHelper.CharToLiteral(Text[0])})");
+            writer.Fail(fail);
+            writer.EndBlock();
+            writer.Add($"{pos}++;");
+        }
+        else if (Text.Length > 1)
+        {
+            var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
+
+            // The JIT compares the span with the constant text without a loop
+            writer.BeginBlock($"if (!global::System.MemoryExtensions.StartsWith({span}.Slice({pos}), {textLiteral}.AsSpan()))");
+            // A shorter remainder only proves a mismatch when it already differs from the text, like Cursor.Match
+            writer.Add($"if ({span}.Length - {pos} < {lengthLiteral} && global::System.MemoryExtensions.StartsWith({textLiteral}.AsSpan(), {span}.Slice({pos}))) {writer.MarkHitEnd}");
+            writer.Add(fail.Goto());
+            writer.EndBlock();
+            writer.Add($"{pos} += {lengthLiteral};");
+        }
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {textLiteral};");
+        }
+    }
+
 public override string ToString() => $"Text(\"{Text}\")";
-
-    // The cursor only ends a line on '\n'; '\r' and '\v' are ordinary chars for it
-    internal static int CountNewLines(string value)
-    {
-        var count = 0;
-
-        foreach (var c in value)
-        {
-            if (c == '\n')
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
-    internal static int TrailingSegmentLength(string value)
-    {
-        var lastNewLine = value.LastIndexOf('\n');
-
-        if (lastNewLine < 0)
-        {
-            return value.Length;
-        }
-
-        return value.Length - lastNewLine - 1;
-    }
 }

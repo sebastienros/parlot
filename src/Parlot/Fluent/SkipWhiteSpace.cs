@@ -4,7 +4,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable
+public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     public Parser<T> Parser { get; }
 
@@ -27,6 +27,8 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(Parser);
 
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(Parser);
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
@@ -40,7 +42,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
             return Parser.Parse(context, ref result);
         }
 
-        var start = cursor.Position;
+        var start = cursor.Offset;
 
         // Use the scanner's logic to ignore whitespaces since it knows about multi-line grammars
         context.SkipWhiteSpace();
@@ -69,6 +71,11 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
             throw new NotSupportedException("SkipWhiteSpace requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(T), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         // Register helper for the inner parser
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var helperName = context.Helpers
@@ -86,7 +93,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
 
         result.Body.Add($"if (!{shortcutName})");
         result.Body.Add("{");
-        result.Body.Add($"    var start = {cursorName}.Position;");
+        result.Body.Add($"    var start = {cursorName}.Offset;");
         result.Body.Add($"    {ctx}.SkipWhiteSpace();");
         result.Body.Add($"    {contentStartOffsetName} = {cursorName}.Offset;");
         if (context.DiscardResult)
@@ -118,6 +125,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         result.ContentStartOffsetVariable = contentStartOffsetName;
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, Parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        writer.SkipWhiteSpace();
+        writer.Generate(Parser, valueVariable, fail);
     }
 
 public override string ToString() => $"{Parser} (Skip WS)";
