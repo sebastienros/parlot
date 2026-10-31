@@ -18,7 +18,7 @@ public class FluidParse
         "{% assign total = items | map: 'price' | sum %}{{ total | format_number: '0.00' }}",
         "{% capture title %}{{ page.title }} - {{ site.name }}{% endcapture %}<title>{{ title | strip }}</title>",
         "{% case status %}{% when 'draft' %}Draft{% when 'published', 'live' %}Live{% else %}Unknown{% endcase %}",
-        "{{ 'now' | date: '%Y-%m-%d %H:%M' }} {% comment %}ignored {{ text }}{% endcomment %}",
+        "{{ '2024-01-15T10:30:00Z' | date: '%Y-%m-%d %H:%M' }} {% comment %}ignored {{ text }}{% endcomment %}",
         "{% unless items == empty %}{{ items | size }} items: {{ items | join: ', ' }}{% endunless %}",
         "{% raw %}{{ not parsed }}{% endraw %}{%- if x > 1 -%} {{- x | minus: 1 -}} {%- endif -%}",
     ];
