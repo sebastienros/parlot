@@ -185,6 +185,12 @@ and `TextReaderRefillSource` for the whole assembly.
   than exposing Parlot context types in entry point signatures.
 - Inspect output via `EmitCompilerGeneratedFiles` (both test/benchmark projects already set it; look under
   `obj/.../GeneratedFiles`).
+- Subgraphs of parsers which only read the text are generated as *span code* (`SourceGeneration/SpanSource.cs`, the
+  internal `ISpanSourceable`): one method reads a span local through a position local and moves the cursor once, when
+  it matches. Composite emitters call `SpanSource.TryGenerate` first. Span code leaves the position anywhere when it
+  jumps to a failure label, whose owner moves it back; it marks `HitEnd` when a check looks at the end of the span and
+  before a callback invoked there. It's not generated when `IsCompacting` is set, nor for diagnostics
+  (`GenerateSpanCode`). A new literal whose code only reads the text should implement `ISpanSourceable`.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.

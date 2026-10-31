@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
@@ -105,6 +105,11 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
             throw new NotSupportedException("OneOrMany requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(IReadOnlyList<T>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var result = context.CreateResult(typeof(IReadOnlyList<T>));
 
@@ -160,6 +165,11 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
 
         return result;
     }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateLoop(writer, _parser, typeof(T), _max, oneOrMore: true, valueVariable, fail);
 
     public override string ToString() => $"{_parser}+";
 }

@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
 
@@ -67,6 +67,11 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
             throw new NotSupportedException("Capture requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(TextSpan), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
         var scannerName = context.ScannerName;
@@ -100,6 +105,25 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
         result.Body.Add("}");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        if (valueVariable == null)
+        {
+            writer.Generate(_parser, null, fail);
+            return;
+        }
+
+        var start = writer.DeclareLocal("int", "captureStart", "0");
+
+        writer.Add($"{start} = {writer.Pos};");
+
+        // Only the text is captured, not the value
+        writer.Generate(_parser, null, fail);
+        writer.Add($"{valueVariable} = {writer.CreateSpan(start, $"{writer.Pos} - {start}")};");
     }
 
     public override string ToString() => $"{_parser} (Capture)";

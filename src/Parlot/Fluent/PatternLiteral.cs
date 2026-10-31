@@ -3,7 +3,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable
+public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Func<char, bool> _predicate;
     private readonly int _minSize;
@@ -173,5 +173,65 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         result.Body.Add("}");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => 1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var span = writer.Span;
+        var pos = writer.Pos;
+        var predicateLambda = writer.Context.RegisterLambda(_predicate);
+        var start = writer.DeclareLocal("int", "patternStart", "0");
+
+        writer.Add($"{start} = {pos};");
+
+        // The same shape as Parse: the first char, then the following ones up to the maximum size
+        var firstChar = $"(uint){pos} < (uint){span}.Length && {predicateLambda}({span}[{pos}])";
+
+        if (_minSize <= 0)
+        {
+            // A pattern without a minimum size matches nothing
+            writer.BeginBlock($"if ({firstChar})");
+        }
+        else
+        {
+            writer.BeginBlock($"if (!({firstChar}))");
+            writer.Fail(fail);
+            writer.EndBlock();
+        }
+
+        writer.Add($"{pos}++;");
+
+        if (_maxSize != 1)
+        {
+            var limit = $"{span}.Length";
+
+            if (_maxSize > 0)
+            {
+                limit = writer.DeclareLocal("int", "patternLimit", "0");
+                writer.Add($"{limit} = {span}.Length - {start} > {_maxSize} ? {start} + {_maxSize} : {span}.Length;");
+            }
+
+            writer.Add($"while ({pos} < {limit} && {predicateLambda}({span}[{pos}])) {pos}++;");
+        }
+
+        if (_minSize <= 0)
+        {
+            writer.EndBlock();
+            writer.Add($"else if ({writer.AtEnd}) {writer.MarkHitEnd}");
+        }
+        else if (_minSize > 1)
+        {
+            writer.BeginBlock($"if ({pos} - {start} < {_minSize})");
+            // More matching chars could follow the end of the span
+            writer.Fail(fail);
+            writer.EndBlock();
+        }
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {writer.CreateSpan(start, $"{pos} - {start}")};");
+        }
     }
 }

@@ -74,7 +74,8 @@ public class SourceableParsersTests
     [Fact]
     public void Sequence_Emitter_Registers_Both_Children()
     {
-        var context = new SourceGenerationContext("context", "Sequence");
+        // Span code would inline the chars
+        var context = new SourceGenerationContext("context", "Sequence") { GenerateSpanCode = false };
         var parser = Literals.Char('a').And(Literals.Char('b'));
 
         var source = Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context);

@@ -4,7 +4,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     public Parser<T> Parser { get; }
 
@@ -71,6 +71,11 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
             throw new NotSupportedException("SkipWhiteSpace requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(T), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         // Register helper for the inner parser
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var helperName = context.Helpers
@@ -120,6 +125,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         result.ContentStartOffsetVariable = contentStartOffsetName;
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, Parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        writer.SkipWhiteSpace();
+        writer.Generate(Parser, valueVariable, fail);
     }
 
 public override string ToString() => $"{Parser} (Skip WS)";
