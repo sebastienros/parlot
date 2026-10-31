@@ -220,6 +220,18 @@ public static partial class Grammars
     [GenerateParser(nameof(TryParseCaptureChar))]
     private static Parser<string> BuildCaptureChar() => Capture(Terms.Char('z')).Then(static value => value.ToString());
 
+    [GenerateParser(nameof(TryParseMemoizedAssignment))]
+    private static Parser<string> BuildMemoizedAssignment()
+    {
+        // Generated parsers parse the memoized prefix in each alternative
+        var prefix = Terms.Identifier().AndSkip(Terms.Char('=')).Then(static x => x.ToString()).Memoize();
+
+        return OneOf(
+            prefix.And(Terms.Integer()).Then(static x => x.Item1 + "=int:" + x.Item2),
+            prefix.And(Terms.Identifier()).Then(static x => x.Item1 + "=id:" + x.Item2),
+            Terms.Text("x"));
+    }
+
     [GenerateParser(nameof(TryParseOneOfChar))]
     private static Parser<char> BuildOneOfChar() => OneOf(Terms.Char('a'), Terms.Char('b'));
 

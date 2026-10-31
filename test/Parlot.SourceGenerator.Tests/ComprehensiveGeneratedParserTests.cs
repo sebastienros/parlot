@@ -184,6 +184,18 @@ public class ComprehensiveGeneratedParserTests
         Assert.Equal("value", identifier);
     }
 
+    [Theory]
+    [InlineData("a=1", true, "a=int:1")]
+    [InlineData(" a = b ", true, "a=id:b")]
+    [InlineData("x", true, "x")]
+    [InlineData("a b", false, null)]
+    [InlineData("a=", false, null)]
+    public void Memoize_Parses_The_Memoized_Parser(string input, bool success, string? expected)
+    {
+        Assert.Equal(success, Grammars.TryParseMemoizedAssignment(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
     [Fact]
     public void Separated_Unary_And_LeftAssociative_Work()
     {

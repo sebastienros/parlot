@@ -208,6 +208,15 @@ public class SourceableParsersTests
         Assert.Equal("+-.0123456789".ToCharArray(), ((ISeekable)choice).ExpectedChars.Where(static c => c != 'x').OrderBy(static c => c));
     }
 
+    [Fact]
+    public void Memoize_Emits_The_Memoized_Parser()
+    {
+        var parser = Terms.Text("a").AndSkip(Terms.Char('='));
+
+        Assert.Equal(Generate(parser).Body, Generate(parser.Memoize()).Body);
+        Assert.Throws<NotSupportedException>(() => Generate(new RuntimeOnlyParser().Memoize()));
+    }
+
     private static SourceResult Generate<T>(Parser<T> parser) =>
         Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext());
 

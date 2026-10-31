@@ -49,6 +49,7 @@ public static partial class Grammars
     public static partial bool TryParseZeroOrOneEmpty(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseEofText(string text, out string value);
     public static partial bool TryParseCaptureChar(string text, out string value);
+    public static partial bool TryParseMemoizedAssignment(string text, out string value);
     public static partial bool TryParseOneOfChar(string text, out char value);
     public static partial bool TryParseBetweenIdentifier(string text, out string value);
     public static partial bool TryParseSeparatedDecimals(string text, out IReadOnlyList<decimal> value);
