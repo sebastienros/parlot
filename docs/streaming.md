@@ -278,24 +278,24 @@ GeneratedReader=true dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmar
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| Document, `ReadToEnd` + `Parse` | 1000 | 239.9 us | 1.00 | 422.46 KB | 1.00 |
-| Document, `Parse(TextReader)` | 1000 | 289.7 us | 1.21 | 212.55 KB | 0.50 |
-| Document, `TryParseAsync(TextReader)` | 1000 | 295.9 us | 1.23 | 213.39 KB | 0.51 |
-| Document, `ReadToEnd` + `Parse` | 10000 | 2.48 ms | 1.00 | 4.09 MB | 1.00 |
-| Document, `Parse(TextReader)` | 10000 | 2.90 ms | 1.17 | 2.15 MB | 0.53 |
-| Document, `TryParseAsync(TextReader)` | 10000 | 2.85 ms | 1.15 | 2.15 MB | 0.53 |
-| Document, `ReadToEnd` + `Parse` | 100000 | 26.4 ms | 1.00 | 41.04 MB | 1.00 |
-| Document, `Parse(TextReader)` | 100000 | 29.1 ms | 1.10 | 21.49 MB | 0.52 |
-| Document, `TryParseAsync(TextReader)` | 100000 | 29.1 ms | 1.10 | 21.49 MB | 0.52 |
-| Lines, `ReadLine` + `Parse` | 1000 | 257.4 us | 1.00 | 395.49 KB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 1000 | 245.8 us | 0.96 | 207.02 KB | 0.52 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 284.3 us | 1.10 | 395.99 KB | 1.00 |
-| Lines, `ReadLine` + `Parse` | 10000 | 2.61 ms | 1.00 | 3.89 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 10000 | 2.41 ms | 0.92 | 2.03 MB | 0.52 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 10000 | 2.82 ms | 1.08 | 3.89 MB | 1.00 |
-| Lines, `ReadLine` + `Parse` | 100000 | 26.6 ms | 1.00 | 39.20 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 100000 | 24.3 ms | 0.91 | 20.61 MB | 0.53 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 28.3 ms | 1.06 | 39.20 MB | 1.00 |
+| Document, `ReadToEnd` + `Parse` | 1000 | 234.3 us | 1.00 | 422.46 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1000 | 280.3 us | 1.20 | 212.55 KB | 0.50 |
+| Document, `TryParseAsync(TextReader)` | 1000 | 288.2 us | 1.23 | 213.38 KB | 0.51 |
+| Document, `ReadToEnd` + `Parse` | 10000 | 2.40 ms | 1.00 | 4.09 MB | 1.00 |
+| Document, `Parse(TextReader)` | 10000 | 2.78 ms | 1.16 | 2.15 MB | 0.53 |
+| Document, `TryParseAsync(TextReader)` | 10000 | 2.67 ms | 1.11 | 2.15 MB | 0.53 |
+| Document, `ReadToEnd` + `Parse` | 100000 | 25.4 ms | 1.00 | 41.04 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100000 | 27.8 ms | 1.09 | 21.49 MB | 0.52 |
+| Document, `TryParseAsync(TextReader)` | 100000 | 27.6 ms | 1.08 | 21.49 MB | 0.52 |
+| Lines, `ReadLine` + `Parse` | 1000 | 255.6 us | 1.00 | 395.49 KB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 1000 | 233.8 us | 0.91 | 207.02 KB | 0.52 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 270.6 us | 1.06 | 395.99 KB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 10000 | 2.52 ms | 1.00 | 3.89 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 10000 | 2.33 ms | 0.92 | 2.03 MB | 0.52 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 10000 | 2.71 ms | 1.07 | 3.89 MB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 100000 | 26.0 ms | 1.00 | 39.20 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100000 | 23.4 ms | 0.90 | 20.61 MB | 0.53 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 26.9 ms | 1.03 | 39.20 MB | 1.00 |
 
 The cost of a single value is a constant ratio of reading the text first, whatever its size, and the buffer stays flat.
 Peak buffered characters for the same logs, whose longest record has 122 characters:
@@ -329,15 +329,15 @@ the same run:
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| `ReadToEnd` + generated `TryParse(string)` | 1000 | 208.7 us | 0.87 | 418.04 KB | 0.99 |
-| Generated `TryParse(TextReader)` | 1000 | 249.8 us | 1.04 | 208.13 KB | 0.49 |
-| `ReadToEnd` + generated `TryParse(string)` | 10000 | 2.09 ms | 0.84 | 4.05 MB | 0.99 |
-| Generated `TryParse(TextReader)` | 10000 | 2.61 ms | 1.06 | 2.11 MB | 0.52 |
-| `ReadToEnd` + generated `TryParse(string)` | 100000 | 22.7 ms | 0.86 | 40.61 MB | 0.99 |
-| Generated `TryParse(TextReader)` | 100000 | 24.8 ms | 0.94 | 21.06 MB | 0.51 |
+| `ReadToEnd` + generated `TryParse(string)` | 1000 | 198.9 us | 0.85 | 418.04 KB | 0.99 |
+| Generated `TryParse(TextReader)` | 1000 | 241.2 us | 1.03 | 208.13 KB | 0.49 |
+| `ReadToEnd` + generated `TryParse(string)` | 10000 | 2.01 ms | 0.84 | 4.05 MB | 0.99 |
+| Generated `TryParse(TextReader)` | 10000 | 2.41 ms | 1.01 | 2.11 MB | 0.52 |
+| `ReadToEnd` + generated `TryParse(string)` | 100000 | 21.7 ms | 0.85 | 40.61 MB | 0.99 |
+| Generated `TryParse(TextReader)` | 100000 | 24.1 ms | 0.95 | 21.06 MB | 0.51 |
 
 The generated grammar skips quoted message values, avoiding decoding allocations for escaped messages.
-The 100,000-record cases are retained: the complete 24-case streaming group took about 3 minutes 18 seconds,
+The 100,000-record cases are retained: the complete 24-case streaming group took about 3 minutes 16 seconds,
 and the large-count cases did not dominate its runtime.
 
 The generated reader uses the same buffer algorithm, so it buffers the same peak characters. The generated
