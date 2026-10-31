@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a list containing zero or one result from the inner parser.
 /// </summary>
-public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
+public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
 
@@ -52,6 +52,11 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
             throw new NotSupportedException("ZeroOrOne requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(IReadOnlyList<T>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var result = context.CreateResult(typeof(IReadOnlyList<T>), defaultSuccess: true,
             defaultValueExpression: $"global::System.Array.Empty<{elementTypeName}>()");
@@ -78,6 +83,18 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable
         }
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
+        var item = valueVariable != null ? writer.DeclareLocal(typeof(T), "item") : null;
+
+        SpanSource.GenerateOptional(writer, _parser, item,
+            valueVariable != null ? $"{valueVariable} = new {elementTypeName}[] {{ {item} }};" : null,
+            valueVariable != null ? $"{valueVariable} = global::System.Array.Empty<{elementTypeName}>();" : null);
     }
 
     public override string ToString() => $"{_parser}?";

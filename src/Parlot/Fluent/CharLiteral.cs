@@ -3,7 +3,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
+public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable, ISpanSourceable
 {
     public CharLiteral(char c)
     {
@@ -76,5 +76,23 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable
         result.Body.Add("return false;");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => 1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var charExpression = $"(char){(int)Char}";
+
+        // The unsigned compare of the position lets the JIT remove the bounds check of the span
+        writer.BeginBlock($"if ((uint){writer.Pos} >= (uint){writer.Span}.Length || {writer.Span}[{writer.Pos}] != {charExpression})");
+        writer.Fail(fail);
+        writer.EndBlock();
+        writer.Add($"{writer.Pos}++;");
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {charExpression};");
+        }
     }
 }

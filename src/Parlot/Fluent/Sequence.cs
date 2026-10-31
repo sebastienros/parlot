@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable
+public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -63,6 +63,11 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
         if (_parser1 is not ISourceable parser1 || _parser2 is not ISourceable parser2)
         {
             throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2>), context) is { } spanResult)
+        {
+            return spanResult;
         }
 
         var result = context.CreateResult(typeof(ValueTuple<T1, T2>));
@@ -125,10 +130,17 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
         return result;
     }
 
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser1, _parser2);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_parser1, typeof(T1), true), (_parser2, typeof(T2), true)],
+            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>))}({values[0]}, {values[1]})");
+
     public override string ToString() => $"{_parser1} & {_parser2}";
 }
 
-public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable
+public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
@@ -190,6 +202,13 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
         return false;
     }
 
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_parser, typeof(ValueTuple<T1, T2>), true), (_lastParser, typeof(T3), true)],
+            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3>))}({values[0]}.Item1, {values[0]}.Item2, {values[1]})");
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 
 
@@ -201,6 +220,11 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
         if (_parser is not ISourceable parser || _lastParser is not ISourceable lastParser)
         {
             throw new NotSupportedException("Sequence requires source-generatable parsers.");
+        }
+
+        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3>), context) is { } spanResult)
+        {
+            return spanResult;
         }
 
         var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3>));
@@ -255,7 +279,7 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
     }
 }
 
-public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable
+public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
@@ -324,6 +348,11 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
             throw new NotSupportedException("Sequence requires source-generatable parsers.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4>));
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
@@ -375,10 +404,17 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
         return result;
     }
 
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_parser, typeof(ValueTuple<T1, T2, T3>), true), (_lastParser, typeof(T4), true)],
+            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[1]})");
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable
+public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
@@ -448,6 +484,11 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
             throw new NotSupportedException("Sequence requires source-generatable parsers.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5>));
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
@@ -499,10 +540,17 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
         return result;
     }
 
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_parser, typeof(ValueTuple<T1, T2, T3, T4>), true), (_lastParser, typeof(T5), true)],
+            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[1]})");
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
@@ -574,6 +622,11 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
             throw new NotSupportedException("Sequence requires source-generatable parsers.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>));
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
@@ -625,10 +678,17 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
         return result;
     }
 
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5>), true), (_lastParser, typeof(T6), true)],
+            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[0]}.Item5, {values[1]})");
+
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
@@ -701,6 +761,11 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
             throw new NotSupportedException("Sequence requires source-generatable parsers.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>));
         var cursorName = context.CursorName;
         var startName = $"start{context.NextNumber()}";
@@ -751,6 +816,13 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
 
         return result;
     }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+        => SpanSource.GenerateSequence(writer, valueVariable, fail,
+            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), true), (_lastParser, typeof(T7), true)],
+            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[0]}.Item5, {values[0]}.Item6, {values[1]})");
 
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }

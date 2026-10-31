@@ -6,7 +6,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
+public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ISpanSourceable
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _returnMatchedText;
@@ -247,6 +247,42 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         result.Body.Add("return false;");
 
         return result;
+    }
+
+    // Only ordinal texts, whose value is the text itself
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => _comparisonType == StringComparison.Ordinal ? 1 : -1;
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var span = writer.Span;
+        var pos = writer.Pos;
+        var textLiteral = LiteralHelper.StringToLiteral(Text);
+
+        if (Text.Length == 1)
+        {
+            // The unsigned compare of the position lets the JIT remove the bounds check of the span
+            writer.BeginBlock($"if ((uint){pos} >= (uint){span}.Length || {span}[{pos}] != {LiteralHelper.CharToLiteral(Text[0])})");
+            writer.Fail(fail);
+            writer.EndBlock();
+            writer.Add($"{pos}++;");
+        }
+        else if (Text.Length > 1)
+        {
+            var lengthLiteral = Text.Length.ToString(CultureInfo.InvariantCulture);
+
+            // The JIT compares the span with the constant text without a loop
+            writer.BeginBlock($"if (!global::System.MemoryExtensions.StartsWith({span}.Slice({pos}), {textLiteral}.AsSpan()))");
+            // A shorter remainder only proves a mismatch when it already differs from the text, like Cursor.Match
+            writer.Add($"if ({span}.Length - {pos} < {lengthLiteral} && global::System.MemoryExtensions.StartsWith({textLiteral}.AsSpan(), {span}.Slice({pos}))) {writer.MarkHitEnd}");
+            writer.Add(fail.Goto());
+            writer.EndBlock();
+            writer.Add($"{pos} += {lengthLiteral};");
+        }
+
+        if (valueVariable != null)
+        {
+            writer.Add($"{valueVariable} = {textLiteral};");
+        }
     }
 
 public override string ToString() => $"Text(\"{Text}\")";

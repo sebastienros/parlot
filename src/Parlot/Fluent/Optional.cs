@@ -9,7 +9,7 @@ namespace Parlot.Fluent;
 /// <remarks>
 /// This parser will always succeed. If the inner parser fails, it will return an option without a value.
 /// </remarks>
-public sealed class Optional<T> : Parser<Option<T>>, ISourceable
+public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
     public Optional(Parser<T> parser)
@@ -53,6 +53,11 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
             throw new NotSupportedException("Optional requires a source-generatable parser.");
         }
 
+        if (SpanSource.TryGenerate(this, typeof(Option<T>), context) is { } spanResult)
+        {
+            return spanResult;
+        }
+
         var result = context.CreateResult(typeof(Option<T>), defaultSuccess: true);
         var elementTypeName = SourceGenerationContext.GetTypeName(typeof(T));
         var innerValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
@@ -90,6 +95,18 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable
         result.Body.Add($"{result.SuccessVariable} = true;");
 
         return result;
+    }
+
+    int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser);
+
+    void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
+    {
+        var optionTypeName = SourceGenerationContext.GetTypeName(typeof(Option<T>));
+        var item = valueVariable != null ? writer.DeclareLocal(typeof(T), "item") : null;
+
+        SpanSource.GenerateOptional(writer, _parser, item,
+            valueVariable != null ? $"{valueVariable} = new {optionTypeName}({item});" : null,
+            valueVariable != null ? $"{valueVariable} = new {optionTypeName}();" : null);
     }
 
     public override string ToString() => $"{_parser}?";
