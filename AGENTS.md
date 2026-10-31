@@ -135,8 +135,8 @@ A new parser type should implement each one that applies:
 
 `ISeekable` has an internal refinement, `ISeekablePrefixes`: the texts the input starts with when the parser matches.
 A parser that matches a fixed ordinal text implements it, and a parser that copies the hints of the parser it reads
-first forwards its prefixes with `SeekableHints.Prefixes`. Generated choices use them to skip the alternatives that
-only share a first char with the input (`docs/keyword-lookups.md`).
+first forwards its prefixes with `SeekableHints.Prefixes`. Choices use them, at runtime and in generated code, to skip
+the alternatives that only share a first char with the input (`docs/keyword-lookups.md`).
 
 `ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
