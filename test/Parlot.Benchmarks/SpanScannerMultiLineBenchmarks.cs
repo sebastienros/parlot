@@ -7,7 +7,8 @@ using static Parlot.Fluent.Parsers;
 namespace Parlot.Benchmarks;
 
 // Parses tokens containing new lines with Terms.Scan: 100 block comments of 10 lines of 60 chars, and 1,000 tokens
-// of two short lines. The cursor tracks the lines and columns of each token.
+// of two short lines. The cursor tracked the lines and columns of each token when these were measured, it now only
+// moves its offset and counts the lines when a position is read (PositionBenchmarks).
 
 // BenchmarkDotNet v0.15.8, Windows 11 (10.0.28000.3365/26H1/2026Update)
 // Intel Core Ultra X7 358H 1.90GHz, pinned to a performance core (--affinity 4)

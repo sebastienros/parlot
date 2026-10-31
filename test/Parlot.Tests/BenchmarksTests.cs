@@ -160,6 +160,16 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void PositionBenchmarks()
+    {
+        var benchmarks = new PositionBenchmarks();
+
+        Assert.Equal(2000, benchmarks.Identifiers());
+        Assert.Equal(400, benchmarks.PositionAfterEachIdentifier());
+        Assert.Equal(400, benchmarks.ErrorPositionAtTheEnd());
+    }
+
+    [Fact]
     public void CursorMatchHello()
     {
         var benchmarks = new ParlotBenchmarks();
