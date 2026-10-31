@@ -181,21 +181,22 @@ Against `main`, with the same harness (`eng/external-benchmarks/results/merged-*
 | Fluid | **0.85–0.89** | **−15 to −22%** |
 | NCalc runtime grammar | **0.94–0.98** | 0 to −30% |
 | NCalc runtime grammar ported to `Operators()` | **0.65–0.79** | 0 to −42% |
-| NCalc generated parser | **0.85–0.92**, long expression **1.07** (see below) | 0 to −30% |
-| NCalc generated parser ported to `Operators()` | **0.61–0.71**, long expression 0.98 | 0 to −46% |
+| NCalc generated parser | **0.83–0.87** | 0 to −30% |
+| NCalc generated parser ported to `Operators()` | **0.60–0.78** | 0 to −46% |
 | Parlot expressions (runtime and generated) | **0.81–0.86** | −4 to −25% |
 | Parlot JSON (runtime and generated) | **0.77–0.86** | −4 to −25% |
 | Parlot email (runtime / generated) | **0.91 / 0.48** | −5 / −27% |
 | Parlot SQL (runtime / generated) | **0.89 / 0.94** | −38 / −20% |
 
-**The long NCalc expression:** each branch alone was neutral or faster on it, and the slowdown appears with the merge of
-pooled lists over the previous merges (0.93 before, 1.11 after, 1.07 with span code). It isn't the code the generator
-emits being slower: with dynamic PGO disabled, the merged branch is faster than `main` on every NCalc expression, the
-long one included (0.89), and 0.97 with tiered compilation disabled. `main`'s generated parser gains much more from
-dynamic PGO on that expression (62 µs with it, 92 µs without), and the list loops, whose helpers hold a builder and a
-`try`/`finally` even when they stay empty, as NCalc's operator levels do for each operand, reduce that gain. Removing the
-`try`/`finally` alone recovers 4 of the 19 points. A follow-up: emit list loops whose empty path has no builder and no
-exception handling, and measure with PGO on.
+**The long NCalc expression** was first 7% slower than on `main` with the merged branch: each branch alone was neutral or
+faster on it, and the slowdown appeared with the merge of pooled lists (0.93 before, 1.11 after). It wasn't the emitted
+code being slower: with dynamic PGO disabled, the merged branch was faster on every NCalc expression (0.89 on the long
+one). `main`'s generated parser gains much more from dynamic PGO on that expression (62 µs with it, 92 µs without), and
+the helpers of the list loops, which held a builder and a `try`/`finally` even when the list stays empty, as NCalc's
+operator levels do after most operands, reduced that gain. Generated `ZeroOrMany` and `OneOrMany` now read their first
+item without a builder, and the following ones in a static local function holding the builder and its `try`/`finally`
+(c6c6473): the long expression went from 1.10 to 0.87, the arithmetic one from 0.94 to 0.84, and Parlot's generated
+benchmarks are unchanged (`eng/external-benchmarks/results/merged-listfix.md`, `merged-diagnostics.md`).
 
 ## Reproducing
 
