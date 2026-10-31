@@ -614,6 +614,11 @@ Direct generated parsers avoid runtime graph construction, parser-instance cachi
 generated callbacks, and an application dependency on the Parlot runtime assembly. Configuration is supplied
 per call without allocating a bound parser object.
 
+Besides what the grammar's callbacks and results allocate, a `string` entry point allocates two objects: the
+internal context, which also holds the configuration and the state of the grammar's deferred parsers, and a
+scanner that is its own cursor. The context's loop detection and recursion limit members, which generated
+parsers don't use, only allocate their state when a callback calls them.
+
 Generated parser helpers and callbacks use normal JIT inlining heuristics. Forcing inlining based only
 on a helper's local statement count can duplicate large parser chains, increasing native code size and
 stack initialization costs. A bounded hint is retained only for the entry core, which can inline into
