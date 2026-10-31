@@ -1205,15 +1205,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         }
     }
 
-    private sealed class ParserReferenceComparer : IEqualityComparer<Parser<T>>
-    {
-        public static readonly ParserReferenceComparer Instance = new();
-
-        public bool Equals(Parser<T>? x, Parser<T>? y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(Parser<T> obj) => RuntimeHelpers.GetHashCode(obj);
-    }
-
     private sealed class ParserListKeyComparer : IEqualityComparer<ParserListKey>
     {
         public static readonly ParserListKeyComparer Instance = new();
