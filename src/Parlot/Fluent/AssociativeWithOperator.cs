@@ -205,11 +205,12 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         result.Body.Add("{");
         if (_rightAssociative)
         {
-            result.Body.Add($"    global::Parlot.Fluent.HybridList<({operatorType}, {valueType})>? {operations} = null;");
+            result.Body.Add($"    {ListBuilderSource.Declare(operations, $"({operatorType}, {valueType})")}");
         }
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        var {position} = {cursor}.Position;");
@@ -224,7 +225,6 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
 
         if (_rightAssociative)
         {
-            result.Body.Add($"        {operations} ??= new global::Parlot.Fluent.HybridList<({operatorType}, {valueType})>();");
             result.Body.Add($"        {operations}.Add(({operationValue}, {rightValue}));");
         }
         else
@@ -239,7 +239,8 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
         {
             var accumulated = $"accumulated{id}";
             var index = $"index{id}";
-            result.Body.Add($"    if ({operations} is {{ Count: > 0 }})");
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            result.Body.Add($"    if ({operations}.Count > 0)");
             result.Body.Add("    {");
             result.Body.Add($"        var {accumulated} = {operations}[{operations}.Count - 1].Item2;");
             result.Body.Add($"        for (var {index} = {operations}.Count - 1; {index} > 0; {index}--)");
@@ -248,6 +249,7 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
             result.Body.Add("        }");
             result.Body.Add($"        {result.ValueVariable} = {Call(result.ValueVariable, accumulated, $"{operations}[0].Item1")};");
             result.Body.Add("    }");
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, operations, "    ");
         }
 
         result.Body.Add($"    {result.SuccessVariable} = true;");

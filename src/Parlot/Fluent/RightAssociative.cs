@@ -313,7 +313,6 @@ internal static class RightAssociativeSource
         var matchedName = $"matched{uniqueId}";
         var positionName = $"opPos{uniqueId}";
         var rightName = $"right{uniqueId}";
-        var listTypeName = $"global::Parlot.Fluent.HybridList<(int, {valueTypeName})>";
 
         string Apply(string index, string left, string right)
         {
@@ -334,10 +333,11 @@ internal static class RightAssociativeSource
 
         result.Body.Add($"if ({baseHelperName}({ctx}, out {result.ValueVariable}))");
         result.Body.Add("{");
-        result.Body.Add($"    {listTypeName}? {operationsName} = null;");
+        result.Body.Add($"    {ListBuilderSource.Declare(operationsName, $"(int, {valueTypeName})")}");
 
         // The operator is read again by the caller when it isn't followed by an operand
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add("    while (true)");
         result.Body.Add("    {");
         result.Body.Add($"        var {positionName} = {cursorName}.Position;");
@@ -357,14 +357,14 @@ internal static class RightAssociativeSource
         result.Body.Add("            break;");
         result.Body.Add("        }");
         result.Body.Add($"        if ({cursorName}.Offset == {positionName}.Offset) break;");
-        result.Body.Add($"        {operationsName} ??= new {listTypeName}();");
         result.Body.Add($"        {operationsName}.Add(({matchedName}, {rightName}));");
         result.Body.Add("    }");
         context.Unpin(result, pin, "    ");
 
         var accumulatedName = $"accumulated{uniqueId}";
         var indexName = $"index{uniqueId}";
-        result.Body.Add($"    if ({operationsName} is {{ Count: > 0 }})");
+        // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+        result.Body.Add($"    if ({operationsName}.Count > 0)");
         result.Body.Add("    {");
         result.Body.Add($"        var {accumulatedName} = {operationsName}[{operationsName}.Count - 1].Item2;");
         result.Body.Add($"        for (var {indexName} = {operationsName}.Count - 1; {indexName} > 0; {indexName}--)");
@@ -373,6 +373,7 @@ internal static class RightAssociativeSource
         result.Body.Add("        }");
         result.Body.Add($"        {result.ValueVariable} = {Apply($"{operationsName}[0].Item1", result.ValueVariable, accumulatedName)};");
         result.Body.Add("    }");
+        ListBuilderSource.ReleaseInFinally(result, bodyStart, operationsName, "    ");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

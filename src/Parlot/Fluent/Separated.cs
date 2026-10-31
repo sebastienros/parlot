@@ -321,15 +321,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         var listName = $"list{context.NextNumber()}";
         var firstName = $"first{context.NextNumber()}";
         var endName = $"end{context.NextNumber()}";
-        var startName = $"start{context.NextNumber()}";
         var previousOffsetName = $"previousOffset{context.NextNumber()}";
         var countName = $"count{context.NextNumber()}";
         var initialPositionName = $"initialPosition{context.NextNumber()}";
+        var itemName = $"item{context.NextNumber()}";
         var needsCount = _max > 0 || _min > 1;
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"global::Parlot.Fluent.HybridList<{elementTypeName}>? {listName} = null;");
+            result.Body.Add(ListBuilderSource.Declare(listName, elementTypeName));
         }
         result.Body.Add($"bool {firstName} = true;");
         result.Body.Add($"var {endName} = {cursorName}.Position;");
@@ -340,10 +340,6 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         if (needsCount)
         {
             result.Body.Add($"int {countName} = 0;");
-        }
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"int {startName} = 0;");
         }
 
         var parserValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
@@ -360,6 +356,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
         // The end of the last element is read again when a separator isn't followed by an element
         var pin = context.Pin(result);
+        var bodyStart = result.Body.Count;
         result.Body.Add(_max == 0 ? "while (true)" : $"while ({countName} < {_max})");
         result.Body.Add("{");
         result.Body.Add($"    var {previousOffsetName} = {cursorName}.Offset;");
@@ -374,7 +371,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         result.Body.Add("    }");
 
         // Try to parse element
-        result.Body.Add($"    if (!{parserHelperName}({context.ParseContextName}, out var item{context.NextNumber()}))");
+        result.Body.Add($"    if (!{parserHelperName}({context.ParseContextName}, out var {itemName}))");
         result.Body.Add("    {");
         result.Body.Add($"        if (!{firstName})");
         result.Body.Add("        {");
@@ -395,19 +392,11 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         result.Body.Add("        break;");
         result.Body.Add("    }");
 
-        result.Body.Add($"    if ({firstName})");
-        result.Body.Add("    {");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"        {listName} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
-            result.Body.Add($"        {startName} = {endName}.Offset;");
-        }
-        result.Body.Add($"        {firstName} = false;");
-        result.Body.Add("    }");
+        result.Body.Add($"    {firstName} = false;");
 
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {listName}!.Add(item{context.NextNumber() - 1});");
+            result.Body.Add($"    {listName}.Add({itemName});");
         }
         if (needsCount)
         {
@@ -424,31 +413,24 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             result.Body.Add("}");
         }
 
+        // Separated requires at least one element, unless its minimum is zero
+        result.Body.Add($"if (!{firstName})");
+        result.Body.Add("{");
+        result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{countName} >= {_min}" : "true")};");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"if ({listName} != null)");
-            result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = {listName}.AsReadOnlyList();");
-            result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{countName} >= {_min}" : "true")};");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-            result.Body.Add($"    {result.ValueVariable} = global::System.Array.Empty<{elementTypeName}>();");
+            result.Body.Add(_min > 1 ? $"    if ({result.SuccessVariable}) {result.ValueVariable} = {listName}.ToArray();" : $"    {result.ValueVariable} = {listName}.ToArray();");
         }
-        else
-        {
-            // When discarding result, success depends on whether we parsed at least one item
-            result.Body.Add($"if (!{firstName})");
-            result.Body.Add("{");
-            result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{countName} >= {_min}" : "true")};");
-            result.Body.Add("}");
-            result.Body.Add("else");
-            result.Body.Add("{");
-        }
-
-        // No items parsed - Separated requires at least one element
+        result.Body.Add("}");
+        result.Body.Add("else");
+        result.Body.Add("{");
         result.Body.Add($"    {result.SuccessVariable} = {(_min == 0 ? "true" : "false")};");
         result.Body.Add("}");
+
+        if (!context.DiscardResult)
+        {
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, listName);
+        }
 
         return result;
     }
@@ -531,10 +513,12 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         {
             result.Body.Add($"    int {count} = 1;");
         }
+        var bodyStart = -1;
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    var {list} = new global::Parlot.Fluent.HybridList<{elementTypeName}>();");
+            result.Body.Add($"    {ListBuilderSource.Declare(list, elementTypeName)}");
             result.Body.Add($"    {list}.Add({firstItem});");
+            bodyStart = result.Body.Count;
         }
         if (!_allowTrailingSeparator)
         {
@@ -595,10 +579,6 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             result.Body.Add($"        {count}++;");
         }
         result.Body.Add("    }");
-        if (!context.DiscardResult)
-        {
-            result.Body.Add($"    {result.ValueVariable} = {list}.AsReadOnlyList();");
-        }
         if (_min > 1)
         {
             result.Body.Add($"    if ({count} < {_min})");
@@ -607,6 +587,13 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             result.Body.Add("    }");
         }
         result.Body.Add($"    {result.SuccessVariable} = {(_min > 1 ? $"{count} >= {_min}" : "true")};");
+        if (!context.DiscardResult)
+        {
+            result.Body.Add(_min > 1
+                ? $"    if ({result.SuccessVariable}) {result.ValueVariable} = {list}.ToArray();"
+                : $"    {result.ValueVariable} = {list}.ToArray();");
+            ListBuilderSource.ReleaseInFinally(result, bodyStart, list, "    ");
+        }
         result.Body.Add("}");
         context.Unpin(result, pin);
 
