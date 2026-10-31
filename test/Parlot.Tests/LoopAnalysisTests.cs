@@ -162,6 +162,39 @@ public class LoopAnalysisTests
     }
 
     [Fact]
+    public void OperatorTableElidesDetection()
+    {
+        var expression = Deferred<string>();
+        var primary = Terms.Text("1").Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-'), static x => "-" + x))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => "(" + a + "+" + b + ")"));
+
+        Assert.True(IsElided(expression));
+        Assert.True(expression.TryParse("-(1+1)+1", out var result));
+        Assert.Equal("(-(1+1)+1)", result);
+    }
+
+    [Fact]
+    public void LeftRecursionThroughOperatorTableKeepsDetection()
+    {
+        // The operand is the expression itself, at the position of the table
+        var operand = Deferred<string>();
+        operand.Parser = operand.Operators().LeftAssociative((Terms.Char('+'), static (a, b) => a + "+" + b)).Or(Terms.Text("1"));
+
+        Assert.False(IsElided(operand));
+        Assert.True(operand.TryParse("1", out var result));
+        Assert.Equal("1", result);
+
+        // A prefix operator which can read nothing invokes the operand at the position of the table
+        var prefixed = Deferred<string>();
+        prefixed.Parser = Terms.Text("1").Operators().Unary((ZeroOrOne(Terms.Char('-')).Then(static _ => 0).Or(prefixed.Then(static _ => 0)), static x => x));
+
+        Assert.False(IsElided(prefixed));
+    }
+
+    [Fact]
     public void ParserAfterInputIsReadDoesNotPreventElision()
     {
         // The custom parser holds a parser, so it can invoke anything, but only after a char is read

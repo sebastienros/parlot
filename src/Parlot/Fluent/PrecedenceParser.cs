@@ -27,7 +27,7 @@ namespace Parlot.Fluent;
 /// </para>
 /// </remarks>
 /// <typeparam name="T">The type of the operands and of the result.</typeparam>
-public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable
+public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _operand;
     private readonly OperatorLevel<T>[] _levels;
@@ -217,6 +217,34 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable
     }
 
     /// <inheritdoc />
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
+    {
+        // The prefix operators are tried first, one is followed by an operand only when it moved the cursor
+        foreach (var level in _levels)
+        {
+            if (level.Kind == OperatorKind.Prefix)
+            {
+                analysis.Invoke(level.Choice);
+            }
+        }
+
+        var nullable = analysis.Invoke(_operand);
+
+        // The other operators follow the first operand
+        if (nullable)
+        {
+            foreach (var level in _levels)
+            {
+                if (level.Kind != OperatorKind.Prefix)
+                {
+                    analysis.Invoke(level.Choice);
+                }
+            }
+        }
+
+        return nullable;
+    }
+
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
         context.EnterParser(this);
