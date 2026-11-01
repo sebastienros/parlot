@@ -23,21 +23,20 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _whiteSpaceParser = whiteSpaceParser ?? throw new ArgumentNullException(nameof(whiteSpaceParser));
-
-        // A parser skipping white spaces does it with the custom parser, which a OneOf doesn't know about:
-        // it would skip them with its own before looking up the first char.
-        if (parser is ISeekable seekable && !seekable.SkipWhitespace)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-        }
     }
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later. A parser
+    // skipping white spaces does it with the custom parser, which a OneOf doesn't know about: it would skip them with its own
+    // before looking up the first char.
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => Hints.CanSeek;
+
+    public char[] ExpectedChars => Hints.ExpectedChars;
 
     public bool SkipWhitespace { get; }
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _parser, static parser => SeekableHints.Of(parser) is { SkipWhitespace: false } hints ? hints : (false, [], false));
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

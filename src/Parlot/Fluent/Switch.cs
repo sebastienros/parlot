@@ -28,24 +28,19 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
         {
             _parsers[i] = _parsers[i] ?? throw new ArgumentException("Parsers array must not contain null elements.", nameof(parsers));
         }
-
-        // The previous parser always reads first
-        if (_previousParser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
-    /// <inheritdoc />
-    public bool CanSeek { get; }
+    // The previous parser always reads first. Its hints are read when they are asked for since it can be a Deferred set later.
+    private ForwardedHints? _hints;
 
     /// <inheritdoc />
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _previousParser).CanSeek;
 
     /// <inheritdoc />
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _previousParser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _previousParser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_previousParser);
 

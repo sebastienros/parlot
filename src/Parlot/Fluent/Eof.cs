@@ -71,24 +71,20 @@ public sealed class Eof<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
     public Eof(Parser<T> parser)
     {
         _parser = parser;
-
-        // The parser reads first, the end of the input is only checked after it
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
-    /// <inheritdoc />
-    public bool CanSeek { get; }
+    // The parser reads first, the end of the input is only checked after it. Its hints are read when they are asked for
+    // since it can be a Deferred set later.
+    private ForwardedHints? _hints;
 
     /// <inheritdoc />
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
 
     /// <inheritdoc />
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 

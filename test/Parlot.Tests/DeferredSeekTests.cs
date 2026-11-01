@@ -263,4 +263,185 @@ public class DeferredSeekTests
         Assert.Equal('a', choice.Parse("a"));
         Assert.Equal("Char('a') (Deferred) | Char('b') on [a b]", choice.ToString());
     }
+
+    [Fact]
+    public void ParsersBuiltBeforeTheirDeferredIsSetShouldForwardItsHints()
+    {
+        var deferred = Deferred<string>();
+
+        object[] parsers =
+        [
+            deferred.And(Literals.Char(';')),
+            deferred.And(Literals.Char(';')).And(Literals.Char(';')),
+            deferred.And(Literals.Char(';')).And(Literals.Char(';')).And(Literals.Char(';')),
+            deferred.AndSkip(Literals.Char(';')),
+            deferred.And(Literals.Char(';')).AndSkip(Literals.Char(';')),
+            deferred.SkipAnd(Literals.Char(';')),
+            deferred.And(Literals.Char(';')).SkipAnd(Literals.Char(';')),
+            deferred.Then(static x => x.Length),
+            Between(deferred, Literals.Char(';'), Literals.Char(';')),
+            deferred.When(static (_, x) => x.Length > 0),
+            Capture(deferred),
+            deferred.Error("unexpected"),
+            deferred.Error<int>("unexpected"),
+            deferred.Eof(),
+            deferred.Commit(),
+            deferred.Switch(static (_, _) => 0, Literals.Char(';')),
+            deferred.WhenFollowedBy(Literals.Char(';')),
+            deferred.WhenNotFollowedBy(Literals.Char(';')),
+            Separated(Literals.Char(','), deferred),
+            OneOrMany(deferred),
+            If(static () => true, deferred),
+            Select(static () => 0, deferred),
+        ];
+
+        Assert.All(parsers, static parser => Assert.False(((ISeekable)parser).CanSeek));
+
+        deferred.Parser = Terms.Text("a");
+
+        Assert.All(parsers, static parser =>
+        {
+            var seekable = (ISeekable)parser;
+
+            Assert.True(seekable.CanSeek);
+            Assert.Contains('a', seekable.ExpectedChars);
+            Assert.DoesNotContain(OtherSeekableChar, seekable.ExpectedChars);
+            Assert.True(seekable.SkipWhitespace);
+        });
+
+        // They follow the parser when it is replaced
+        deferred.Parser = Literals.Text("c");
+
+        var sequence = (ISeekable)parsers[0];
+
+        Assert.Equal(['c'], sequence.ExpectedChars);
+        Assert.False(sequence.SkipWhitespace);
+    }
+
+    [Fact]
+    public void WrappersBuiltBeforeTheirDeferredIsSetShouldKeepTheirConditions()
+    {
+        var deferred = Deferred<string>();
+
+        var empty = (ISeekable)Separated(Literals.Char(','), deferred, min: 0);
+        var leading = (ISeekable)Separated(Literals.Char(','), deferred, allowLeadingSeparator: true);
+        var set = (ISeekable)deferred.WithWhiteSpaceSet(WhiteSpaceSet.Default);
+        var skip = (ISeekable)SkipWhiteSpace(deferred);
+
+        deferred.Parser = Terms.Text("a");
+
+        // A list can be empty or start with a separator, and a choice doesn't know the white space of another set
+        Assert.False(empty.CanSeek);
+        Assert.False(leading.CanSeek);
+        Assert.False(set.CanSeek);
+        Assert.True(skip.CanSeek);
+        Assert.True(skip.SkipWhitespace);
+
+        deferred.Parser = Literals.Text("a");
+
+        Assert.True(set.CanSeek);
+        Assert.Equal(['a'], set.ExpectedChars);
+        Assert.False(set.SkipWhitespace);
+        Assert.True(skip.SkipWhitespace);
+    }
+
+    [Fact]
+    public void SequenceBuiltBeforeItsDeferredIsSetShouldBeInTheLookupTable()
+    {
+        var deferred = Deferred<string>();
+        var statement = deferred.AndSkip(Terms.Char(';'));
+        var choice = OneOf(statement, Terms.Text("b"));
+
+        // The sequence can't tell whether it skips white space yet, so the choice has no lookup table
+        Assert.False(((ISeekable)choice).CanSeek);
+
+        deferred.Parser = Terms.Text("a");
+
+        var invocations = 0;
+
+        (string Value, int Offset) Parse(string input)
+        {
+            var context = new ParseContext(new Scanner(input))
+            {
+                OnEnterParser = (parser, _) =>
+                {
+                    if (ReferenceEquals(parser, statement))
+                    {
+                        invocations++;
+                    }
+                },
+            };
+
+            var result = new ParseResult<string>();
+            return (choice.Parse(context, ref result) ? result.Value : null, context.Scanner.Cursor.Offset);
+        }
+
+        Assert.Equal(("b", 2), Parse(" b"));
+        Assert.Equal((null, 0), Parse(" c"));
+        Assert.Equal(0, invocations);
+
+        Assert.Equal(("a", 4), Parse(" a ;"));
+        Assert.Equal(1, invocations);
+
+        // The sequence is tried, and fails without its ';'
+        Assert.Equal((null, 0), Parse(" a"));
+        Assert.Equal(2, invocations);
+
+        var seekable = (ISeekable)choice;
+
+        Assert.Equal(['a', 'b'], seekable.ExpectedChars.OrderBy(static c => c));
+        Assert.True(seekable.SkipWhitespace);
+    }
+
+    [Fact]
+    public void ChoiceStartingASequenceShouldBeResolvedWithTheOuterOne()
+    {
+        var deferred = Deferred<string>();
+        var inner = OneOf(deferred, Literals.Text("b"));
+        var outer = OneOf(inner.AndSkip(Literals.Char(';')), Literals.Text("c"));
+
+        Assert.Contains(OtherSeekableChar, ((ISeekable)outer).ExpectedChars);
+
+        deferred.Parser = Literals.Text("a");
+
+        Assert.Equal("c", outer.Parse("c"));
+        Assert.Equal("a", outer.Parse("a;"));
+        Assert.Equal("b", outer.Parse("b;"));
+        Assert.False(outer.TryParse("a", out _));
+        Assert.False(outer.TryParse("d", out _));
+
+        // The inner choice built its table when the outer one did, rather than when it first parsed
+        Assert.Equal(['a', 'b', 'c'], ((ISeekable)outer).ExpectedChars.OrderBy(static c => c));
+        Assert.Equal(['a', 'b'], ((ISeekable)inner).ExpectedChars.OrderBy(static c => c));
+    }
+
+    [Fact]
+    public void ChoiceStartingASequenceShouldNotBeResolvedBeforeTheGrammarIsComplete()
+    {
+        // Reading the hints while the grammar is built doesn't build the table of a choice that holds a deferred not set yet
+        var deferred = Deferred<string>();
+        var inner = OneOf(deferred, Literals.Text("b"));
+        var sequence = inner.AndSkip(Literals.Char(';'));
+
+        Assert.Contains(OtherSeekableChar, ((ISeekable)sequence).ExpectedChars);
+
+        deferred.Parser = Literals.Text("a");
+
+        Assert.Equal("a", sequence.Parse("a;"));
+        Assert.Equal(['a', 'b'], ((ISeekable)sequence).ExpectedChars.OrderBy(static c => c));
+    }
+
+    [Fact]
+    public void SequenceStartingWithItsOwnDeferredShouldNotSeek()
+    {
+        // expr = expr ';' | 'x' is left-recursive: the sequence can only tell the hints of the deferred while it is resolved
+        var expression = Deferred<string>();
+        var statement = expression.AndSkip(Literals.Char(';'));
+        var choice = OneOf(statement, Literals.Text("x"));
+        expression.Parser = choice;
+
+        Assert.Equal("x", choice.Parse("x"));
+        Assert.False(choice.TryParse("y", out _));
+        Assert.Contains('x', ((ISeekable)choice).ExpectedChars);
+    }
 }

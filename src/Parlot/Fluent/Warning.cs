@@ -17,14 +17,20 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     private readonly Parser<T> _parser;
     private readonly string _message;
 
-    /// <inheritdoc />
-    public bool CanSeek { get; }
+    // Whether the parser skipped white space when this one was built, which is where the warning is located
+    private readonly bool _skipWhitespace;
+
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
     /// <inheritdoc />
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
 
     /// <inheritdoc />
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
@@ -33,12 +39,7 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
 
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
+        _skipWhitespace = _parser is ISeekable { SkipWhitespace: true };
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
@@ -60,7 +61,7 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
 
         // The warning is located after the white space the parser skips. It's skipped first, and the position read before
         // the parser runs, since a compacting buffer can discard the text the parser reads.
-        if (SkipWhitespace)
+        if (_skipWhitespace)
         {
             context.SkipWhiteSpace();
         }
@@ -128,7 +129,7 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
         result.Body.Add($"var {locationName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"if ({reportName})");
         result.Body.Add("{");
-        if (SkipWhitespace)
+        if (_skipWhitespace)
         {
             result.Body.Add($"    {ctx}.SkipWhiteSpace();");
         }

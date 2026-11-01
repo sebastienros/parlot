@@ -115,26 +115,22 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
-    public void SequenceBuiltBeforeItsDeferredParserIsReported()
+    public void SequenceBuiltBeforeItsDeferredParserIsNotReported()
     {
+        // The sequence reads the hints of the deferred parser when the choice builds its table, so the choice can use them
         var term = Deferred<long>();
         term.Named("term");
         var parser = Literals.Text("x").Then(0L).Or(term.AndSkip(Literals.Char('!')));
         term.Parser = Literals.Integer();
 
-        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+        Assert.Empty(GrammarAnalyzer.Analyze(parser));
 
-        Assert.Contains("'term'.AndSkip(...) was built before the parser of 'term' was set, and kept the hints it had then", finding.Message);
-
-        // The same hints keep the choice from skipping white space once
         var terms = Deferred<long>();
         terms.Named("term");
         var choice = Terms.Text("x").Then(0L).Or(terms.AndSkip(Terms.Char('!')));
         terms.Parser = Terms.Integer();
 
-        finding = Single(GrammarAnalyzer.Analyze(choice), GrammarRule.MixedWhiteSpaceChoice);
-
-        Assert.Contains("'term'.AndSkip(...) was built before the parser of 'term' was set", finding.Message);
+        Assert.Empty(GrammarAnalyzer.Analyze(choice));
     }
 
     [Fact]

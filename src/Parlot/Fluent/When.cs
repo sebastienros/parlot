@@ -18,31 +18,22 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     {
         _action = action != null ? (c, t) => action(t) : throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        InitializeSeekable();
     }
 
     public When(Parser<T> parser, Func<ParseContext, T, bool> action)
     {
         _action = action ?? throw new ArgumentNullException(nameof(action));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        InitializeSeekable();
     }
 
-    private void InitializeSeekable()
-    {
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
-    }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
-    public bool CanSeek { get; private set; }
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
 
-    public char[] ExpectedChars { get; private set; } = [];
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
 
-    public bool SkipWhitespace { get; private set; }
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 

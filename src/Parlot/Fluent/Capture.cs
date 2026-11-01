@@ -8,24 +8,22 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
 {
     private readonly Parser<T> _parser;
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => Hints.CanSeek;
 
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => Hints.ExpectedChars;
+
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _parser, static parser => SeekableHints.Of(parser) is { CanSeek: true } hints ? hints : (false, [], false));
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     public Capture(Parser<T> parser)
     {
         _parser = parser;
-
-        if (parser is ISeekable seekable && seekable.CanSeek)
-        {
-            CanSeek = true;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);

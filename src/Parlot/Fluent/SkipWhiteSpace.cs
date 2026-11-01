@@ -11,17 +11,14 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
     public SkipWhiteSpace(Parser<T> parser)
     {
         Parser = parser ?? throw new ArgumentNullException(nameof(parser));
-
-        if (parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-        }
     }
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, Parser).CanSeek;
+
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, Parser).ExpectedChars;
 
     public bool SkipWhitespace { get; } = true;
 

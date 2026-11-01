@@ -35,6 +35,9 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
                 _parser = value;
                 LoopAnalysis.Invalidate(this);
             }
+
+            // The parsers that start with this one read its hints again
+            SeekableResolution.Invalidate();
         }
     }
 
@@ -129,14 +132,8 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
 
             try
             {
-                if (parser is OneOf<T> oneOf)
-                {
-                    oneOf.EnsureResolved();
-                }
-
-                return parser is ISeekable seekable
-                    ? (seekable.CanSeek, seekable.ExpectedChars, seekable.SkipWhitespace)
-                    : (false, [], false);
+                // A choice builds its lookup table first, since this lock is held
+                return SeekableHints.Of(parser);
             }
             finally
             {
