@@ -86,6 +86,12 @@ public sealed class SourceGenerationContext
     public bool SupportsCSharp9SwitchPatterns => CSharpLanguageMajorVersion >= 9;
 
     /// <summary>
+    /// Whether the consuming project can use static abstract interface members (C# 11), which the generic math
+    /// helpers like <c>Numbers.TryParseNumber&lt;T&gt;</c> require. An unknown version is assumed to support them.
+    /// </summary>
+    public bool SupportsStaticAbstractMembers => CSharpLanguageMajorVersion is 0 or >= 11;
+
+    /// <summary>
     /// Global locals (as code lines) for the generated root method.
     /// </summary>
     public IList<string> GlobalLocals { get; } = new List<string>();
@@ -160,6 +166,17 @@ public sealed class SourceGenerationContext
     /// <c>ParseContext.CollectDiagnostics</c> isn't set.
     /// </remarks>
     public bool CollectDiagnostics { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of nested recursive parser invocations of the generated parser, or <c>0</c> for no
+    /// limit, like <c>ParseContext.MaxRecursionDepth</c>.
+    /// </summary>
+    /// <remarks>
+    /// Parsers that recurse without a <c>Deferred</c> parser, like prefix operators, generate the code counting their
+    /// recursion when it is set, such that a parse which exceeds it throws a <c>ParseException</c>. Recursive parsers check
+    /// the stack of the thread whether it is set or not.
+    /// </remarks>
+    public int MaxRecursionDepth { get; set; }
 
     /// <summary>
     /// Generates the code of a token, a parser that reads the cursor directly, when <see cref="IsCompacting"/> is set.

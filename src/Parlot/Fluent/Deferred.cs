@@ -160,6 +160,9 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
             throw new InvalidOperationException("Parser has not been initialized");
         }
 
+        // Deep input fails instead of overflowing the stack
+        context.EnsureSufficientStack();
+
         // A parser which can't be invoked again where it is active has nothing to track, unless the context limits the
         // recursion or skips white space with a parser that can invoke it
         if (_loopDetection == LoopAnalysis.Elided && !context.TracksDeferredParsers)

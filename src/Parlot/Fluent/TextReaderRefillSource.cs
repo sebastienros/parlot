@@ -27,7 +27,7 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
 
     private const int DefaultBufferSize = 4096;
 
-    private char[] _chars = [];
+    private char[] _chars = Array.Empty<char>();
 
 #if !PARLOT_STANDALONE
     /// <param name="reader">The reader.</param>
@@ -203,7 +203,7 @@ internal sealed class TextReaderRefillSource : StreamRefillSource, IDisposable
         if (_chars.Length > 0)
         {
             ArrayPool<char>.Shared.Return(_chars);
-            _chars = [];
+            _chars = Array.Empty<char>();
         }
     }
 

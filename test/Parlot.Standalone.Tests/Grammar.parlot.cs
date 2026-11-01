@@ -216,11 +216,10 @@ public static partial class Grammar
     // keywords after it only match when the input doesn't start with one.
     [GenerateParser(nameof(TryParsePrefixKeywords))]
     private static Parser<(int Value, int Offset)> PrefixKeywords() =>
-        OneOf([
-            .. PrefixKeywordWords.Take(PrefixKeywordFallback).Select(static (word, index) => Terms.Keyword(word).Then(index)),
-            Terms.Pattern(static c => c is >= 'a' and <= 'z').Then(-1),
-            .. PrefixKeywordWords.Skip(PrefixKeywordFallback).Select(static (word, index) => Terms.Keyword(word).Then(PrefixKeywordFallback + index)),
-        ]).Then(static (context, value) => (value, context.Scanner.Cursor.Offset));
+        OneOf(PrefixKeywordWords.Take(PrefixKeywordFallback).Select(static (word, index) => Terms.Keyword(word).Then(index))
+            .Append(Terms.Pattern(static c => c is >= 'a' and <= 'z').Then(-1))
+            .Concat(PrefixKeywordWords.Skip(PrefixKeywordFallback).Select(static (word, index) => Terms.Keyword(word).Then(PrefixKeywordFallback + index)))
+            .ToArray()).Then(static (context, value) => (value, context.Scanner.Cursor.Offset));
 
     [GenerateParser(nameof(TryParsePrefixOperators))]
     private static Parser<(int Value, int Offset)> PrefixOperators() =>

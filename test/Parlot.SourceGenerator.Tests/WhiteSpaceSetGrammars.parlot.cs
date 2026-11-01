@@ -8,7 +8,7 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.SourceGenerator.Tests;
 
-// Grammars selecting the ASCII white space set, and one with the default set. Each has a string and a TextReader entry
+// Grammars selecting the ASCII and SpaceTabCrLf white space sets, and one with the default set. Each has a string and a TextReader entry
 // point, compared with the runtime parser in WhiteSpaceSetTests.
 public static partial class WhiteSpaceSetGrammars
 {
@@ -54,4 +54,37 @@ public static partial class WhiteSpaceSetGrammars
     [GenerateParser(nameof(TryParseOffsets))]
     private static Parser<(int, int)> BuildOffsets() =>
         Terms.Identifier().Then(static (context, start, end, value) => (start, end)).WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
+
+    // The SpaceTabCrLf set: space, tab, \r and \n
+    [GenerateParser(nameof(TryParseSpaceTabCrLfSeparated))]
+    private static Parser<string> BuildSpaceTabCrLfSeparated() =>
+        Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
+            .Then(static list => string.Join(",", list));
+
+    [GenerateParser(nameof(TryParseSpaceTabCrLfChoice))]
+    private static Parser<string> BuildSpaceTabCrLfChoice() =>
+        ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
+            .Then(static list => string.Join("|", list));
+
+    [GenerateParser(nameof(TryParseSpaceTabCrLfWhiteSpace))]
+    private static Parser<string> BuildSpaceTabCrLfWhiteSpace() =>
+        Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static span => span.ToString());
+
+    [GenerateParser(nameof(TryParseSpaceTabCrLfNonWhiteSpace))]
+    private static Parser<string> BuildSpaceTabCrLfNonWhiteSpace() =>
+        Literals.NonWhiteSpace(includeNewLines: false).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static span => span.ToString());
+
+    [GenerateParser(nameof(TryParseSpaceTabCrLfComments))]
+    private static Parser<string> BuildSpaceTabCrLfComments() =>
+        ZeroOrMany(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
+            .WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+    // The ASCII set selected inside the SpaceTabCrLf one
+    [GenerateParser(nameof(TryParseSpaceTabCrLfNested))]
+    private static Parser<long> BuildSpaceTabCrLfNested() =>
+        Terms.Char('[').SkipAnd(Terms.Integer().WithWhiteSpaceSet(WhiteSpaceSet.Ascii)).AndSkip(Terms.Char(']'))
+            .WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf);
 }

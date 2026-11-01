@@ -470,6 +470,14 @@ internal static class UnarySource
             .GetOrCreate(parser, $"{context.MethodNamePrefix}{helperPrefix}", valueTypeName, () => parser.GenerateSource(context))
             .MethodName;
 
+        // Like at runtime, the parser counts as one level of recursion, and each operator as one more
+        var limitRecursion = context.MaxRecursionDepth > 0;
+
+        if (limitRecursion)
+        {
+            result.Body.Add($"{ctx}.EnterRecursion();");
+        }
+
         // The first operator is matched inline: most operands have none, and their code then has no call to set up
         result.Body.Add($"var {startName} = {cursor}.Offset;");
         result.Body.Add($"var {opName} = -1;");
@@ -486,6 +494,12 @@ internal static class UnarySource
         result.Body.Add($"    {result.SuccessVariable} = {chain}({ctx}, {opName}, {startName}, out {result.ValueVariable});");
         result.Body.Add("}");
 
+        // An exception fails the whole parse, and the context isn't used again, so the levels are only left on a return
+        if (limitRecursion)
+        {
+            result.Body.Add($"{ctx}.ExitRecursion();");
+        }
+
         // The operators following the first one, then their operand, applied from the last operator. The local function receives
         // the context rather than capturing it, which would move the locals of the parser's method to a closure. It is a single
         // statement, so that its returns are not taken for the parser's own.
@@ -499,10 +513,16 @@ internal static class UnarySource
             "    {",
             "        do",
             "        {",
-            "            operators.Add(op);",
-            $"            var position = {cursor}.Offset;",
-            "            op = -1;",
         };
+
+        if (limitRecursion)
+        {
+            lines.Add($"            {ctx}.EnterRecursion();");
+        }
+
+        lines.Add("            operators.Add(op);");
+        lines.Add($"            var position = {cursor}.Offset;");
+        lines.Add("            op = -1;");
 
         EmitMatch(context, lines, "            ", operatorHelpers, ctx, cursor, "op", "position");
 
@@ -530,6 +550,12 @@ internal static class UnarySource
         lines.Add("    }");
         lines.Add("    finally");
         lines.Add("    {");
+
+        if (limitRecursion)
+        {
+            lines.Add($"        for (var i = 0; i < operators.Count; i++) {ctx}.ExitRecursion();");
+        }
+
         lines.Add("        operators.Release();");
         lines.Add("    }");
         lines.Add("}");

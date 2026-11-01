@@ -69,7 +69,7 @@ build-time trust guidance, hardened GitHub Actions, release validation, and pack
 | ID | Threat | Risk | Implemented controls | Residual action |
 |---|---|---|---|---|
 | T1 | Pathological input or grammar consumes excessive CPU. | High | Cooperative cancellation, recursion limits, seekable parsing, adversarial tests. | Consumers must set deadlines and isolate hostile workloads. |
-| T2 | Recursive or zero-width cycles exhaust CPU or stack. | Medium | Parser-position loop detection, recursion limits, and zero-progress termination in runtime and generated repetition. | Custom parser and callback code can still fail to terminate. |
+| T2 | Recursive or zero-width cycles exhaust CPU or stack. | Medium | Parser-position loop detection, recursion limits, stack checks in `Deferred`, prefix operator chains read in a loop, and zero-progress termination in runtime and generated repetition. | Custom parser and callback code can still fail to terminate or overflow the stack. |
 | T3 | Large input or results exhaust memory. | High | Span-based scanning limits copies; guidance requires input and result bounds. | Consumers must define safe input, AST, collection, and decoded-value limits. |
 | T4 | Failure-path cursor corruption changes branch behavior. | Medium | Cursor-restoration contract and adversarial failure-path tests. | Custom parsers must preserve the contract. |
 | T5 | A parser factory executes arbitrary code in the compiler host. | High | Explicit build-time execution and isolated-build guidance. | Build only trusted code or use disposable isolation. |
@@ -112,7 +112,7 @@ build-time trust guidance, hardened GitHub Actions, release validation, and pack
 Consumers should:
 
 - reject input over an application-specific limit before creating a `Scanner`;
-- use cancellation deadlines and `ParseContext.MaxRecursionDepth`;
+- use cancellation deadlines and `ParseContext.MaxRecursionDepth` (`[GenerateParser(MaxRecursionDepth = n)]` for generated parsers);
 - bound repeated elements, AST depth, decoded strings, and collection growth;
 - treat semantic actions, custom parsers, and `ParseContext` hooks as arbitrary trusted code;
 - redact input, source excerpts, tokens, and paths from user-visible errors;

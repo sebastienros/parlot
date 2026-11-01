@@ -721,7 +721,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             var idText = id.ToString(CultureInfo.InvariantCulture);
             result.Body.Add(GeneratePrefixes(idText, ctx, compacting));
-            result.Body.Add(GeneratePrefixed(climb, idText, valueType, operandHelper, factories, levelsField, ctx, cursor));
+            result.Body.Add(GeneratePrefixed(climb, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, context.MaxRecursionDepth > 0));
 
             foreach (var level in _prefixLevels)
             {
@@ -1005,7 +1005,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     // The prefix operators following the first one, then their operand, applied from the last operator like at runtime
-    private string GeneratePrefixed(string climb, string id, string valueType, string operandHelper, string[] factories, string levelsField, string ctx, string cursor)
+    private string GeneratePrefixed(string climb, string id, string valueType, string operandHelper, string[] factories, string levelsField, string ctx, string cursor, bool limitRecursion)
     {
         var sb = new StringBuilder();
 
@@ -1028,6 +1028,13 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("    {");
         Line("        do");
         Line("        {");
+
+        // Like at runtime, each operator counts as one level of recursion
+        if (limitRecursion)
+        {
+            Line($"            {ctx}.EnterRecursion();");
+        }
+
         Line("            operators.Add(op);");
 
         // The next operator is of the level of this one or of a tighter one
@@ -1061,6 +1068,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("    }");
         Line("    finally");
         Line("    {");
+
+        if (limitRecursion)
+        {
+            Line($"        for (var i = 0; i < operators.Count; i++) {ctx}.ExitRecursion();");
+        }
+
         Line("        operators.Release();");
         Line("    }");
         sb.Append('}');

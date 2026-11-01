@@ -164,11 +164,16 @@ for a rewrite that preserves what a grammar parses: do the rewrite instead.
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
 scanned with a vectorized `IndexOf` rather than a hash set, only used by the `Deferred` parsers `LoopAnalysis` can't
 prove, or when the white space parser can invoke a `Deferred`), cancellation checks throttled to every 64
-parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is the context's `WhiteSpaceSet`, a bit
+parser entries, and the `OnEnterParser` / `OnExitParser` hooks. `Deferred`, through which grammars recurse, calls the
+internal `EnsureSufficientStack()` on each entry, which throws a `ParseException` rather than letting deep input overflow
+the stack, and counts a level with `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the
+same, the counting only when `SourceGenerationContext.MaxRecursionDepth` is set. Parsers that would repeat themselves, like
+`Unary` and the prefix operators of `PrecedenceParser`, read in a loop with a `ListBuilder` instead, and only count the
+levels: a new parser type does the same, or checks the stack if it must recurse. White space is the context's `WhiteSpaceSet`, a bit
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
 one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
 (`char.IsWhiteSpace`, asserted by `CharMaskGeneratorTest`); another set is a new `WhiteSpaceSet` bit pair, not an edit of the
-default one, and the char table has room for one more. Runtime grammars that need external state
+default one, and the byte char table is full (`Default`, `Ascii`, `SpaceTabCrLf` and the identifier bits): one more set needs a wider table. Runtime grammars that need external state
 can subclass it; generated entry points instead accept application-owned configuration parameters.
 
 ### Source generation
@@ -178,9 +183,14 @@ annotated `[GenerateParser(nameof(TryParse))]` builds the graph using Parlot ins
 The analyzer implements a matching static partial `bool TryParse(string text, [configuration], out T value)`
 method and emits shared internal support sources into the application assembly. No interceptors,
 public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Generated consumers support
-`net472`, `netstandard2.0`, `net8.0`, and `net10.0`, using C# 12+ even on older runtimes. Downlevel
+`net472`, `netstandard2.0`, `net8.0`, and `net10.0`, using C# 10+ even on older runtimes. Downlevel
 compatibility packages do not introduce a Parlot dependency. Factory files must be excluded from
 `Compile`; the analyzer package's build targets do this.
+The embedded runtime files and the code emitters write must compile with C# 10: no collection expressions
+(`default` for an empty span, `Array.Empty<T>()`, `new[] { ... }`), raw strings, `required`, `file` types or other
+later syntax. The generic math helpers of `Numbers.cs` need C# 11: they are compiled out under
+`PARLOT_NO_GENERIC_MATH`, and emitters check `SourceGenerationContext.SupportsStaticAbstractMembers` before
+calling them. `Parlot.Standalone.Tests` and `Parlot.Standalone.NetStandard` build with `LangVersion` 10 to catch this.
 The analyzer requires a Roslyn 5.0+ compiler host regardless of the consumer's runtime target.
 An entry point may take a `TextReader` instead of the `string`; it is emitted as a separate parser with
 `SourceGenerationContext.IsCompacting` set (token loops, `CreateSpan`, pins). Emitters gate that code on
@@ -208,12 +218,17 @@ and `TextReaderRefillSource` for the whole assembly.
   jumps to a failure label, whose owner moves it back; it marks `HitEnd` when a check looks at the end of the span and
   before a callback invoked there. It's not generated when `IsCompacting` is set, nor for diagnostics
   (`GenerateSpanCode`). A new literal whose code only reads the text should implement `ISpanSourceable`.
+- An entry point overload with a last `out int` or `out (int Offset, int Line, int Column)` returns the furthest failure.
+  It calls the parser generated for the overload without it, rather than generating a second one. The cursor keeps the
+  furthest offset it was moved back from (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only), and span
+  code calls `Cursor.RecordFailure` at its failure label since it doesn't move the cursor. Other parsers that read past the
+  cursor without moving it report the failure at their start; keep any new `RecordFailure` on failure paths only.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
 - The analyzer-only `Parlot.SourceGenerator` package bundles its build-time Parlot dependency.
   `StandaloneRuntimeSources` embeds shared runtime files and maps them to internal `Parlot.Generated`
-  types. It lowers the shared downlevel polyfills' static extension syntax to C# 12 helpers; consumers
+  types. It lowers the shared downlevel polyfills' static extension syntax to C# 10 helpers; consumers
   do not need PolySharp. Library packages targeting older frameworks must reference System.Memory
   explicitly (not privately) to propagate that dependency. Do not fork algorithms into separately
   maintained copies. The embedded files are compiled with `#define PARLOT_STANDALONE`: generated parsers

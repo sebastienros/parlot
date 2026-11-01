@@ -301,12 +301,17 @@ internal static class SpanSource
 
         writer.Generate(parser, context.DiscardResult ? null : result.ValueVariable, fail);
 
+        // The cursor doesn't move when the span code fails: the position the failing check read is recorded instead, for the
+        // entry points returning the furthest failure. A single parser, with at most one wrapper such as a white space skip,
+        // fails where it started, which the cursor records already.
+        var recordFailure = weight > 2 ? $"{cursor}.RecordFailure({writer.SpanStart} + {writer.Pos});" : ";";
+
         // The cursor moves once, which marks that it reached the end of the span when it does
         if (writer.Moved == null)
         {
             writer.Add($"{cursor}.AdvanceWithinBuffer({writer.Pos});");
             writer.Add($"{result.SuccessVariable} = true;");
-            writer.PlaceLabel(fail);
+            writer.PlaceLabel(fail, recordFailure);
         }
         else
         {
@@ -318,7 +323,15 @@ internal static class SpanSource
             {
                 var done = writer.NewLabel("done");
                 writer.Add(done.Goto());
-                writer.PlaceLabel(fail, $"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});");
+                if (weight > 2)
+                {
+                    writer.PlaceLabel(fail, recordFailure);
+                    writer.Add($"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});");
+                }
+                else
+                {
+                    writer.PlaceLabel(fail, $"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});");
+                }
                 writer.PlaceLabel(done);
             }
         }

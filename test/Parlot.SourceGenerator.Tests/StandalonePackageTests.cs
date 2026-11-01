@@ -58,6 +58,7 @@ public class StandalonePackageTests
                 var dependencies = XDocument.Load(manifest).Descendants().Where(static element => element.Name.LocalName == "dependency").ToArray();
                 Assert.Equal(2, dependencies.Length);
                 Assert.All(dependencies, static dependency => Assert.Equal("System.Memory", dependency.Attribute("id").Value));
+                Assert.All(dependencies, static dependency => Assert.Equal("4.5.5", dependency.Attribute("version").Value));
                 Assert.Equal([".NETFramework4.7.2", ".NETStandard2.0"],
                     dependencies.Select(static dependency => dependency.Parent.Attribute("targetFramework").Value));
             }
@@ -66,7 +67,7 @@ public class StandalonePackageTests
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup>
                     <TargetFrameworks>{{targetFramework}}</TargetFrameworks>
-                    <LangVersion>12</LangVersion>
+                    <LangVersion>10</LangVersion>
                     <PackageId>Standalone.Author</PackageId>
                     <Version>{{version}}</Version>
                     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -94,6 +95,7 @@ public class StandalonePackageTests
                 public static partial class Grammar
                 {
                     public static partial bool TryParse(string text, out int value);
+                    public static partial bool TryParse(System.IO.TextReader reader, out int value);
                     public static partial bool TryParseLong(string text, System.Threading.CancellationToken cancellationToken, out long value);
                     public static partial bool TryParseDecimal(string text, out decimal value);
                     public static partial bool TryParseDouble(string text, out double value);
@@ -201,7 +203,7 @@ public class StandalonePackageTests
                   <PropertyGroup>
                     <TargetFramework>{{consumerFramework}}</TargetFramework>
                     <OutputType>Exe</OutputType>
-                    <LangVersion>12</LangVersion>
+                    <LangVersion>10</LangVersion>
                     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
                   </PropertyGroup>
                   <ItemGroup><PackageReference Include="Standalone.Author" Version="{{version}}" /></ItemGroup>
@@ -212,6 +214,9 @@ public class StandalonePackageTests
                     throw new System.InvalidOperationException("Generated parser failed.");
                 if (Standalone.Author.Grammar.TryParse("42x", out _))
                     throw new System.InvalidOperationException("Generated EOF check failed.");
+                if (!Standalone.Author.Grammar.TryParse(new System.IO.StringReader(" 42"), out var read) || read != 42
+                    || Standalone.Author.Grammar.TryParse(new System.IO.StringReader("42x"), out _))
+                    throw new System.InvalidOperationException("Generated reader parser failed.");
                 if (Standalone.Author.Grammar.TryParse("2147483648", out _))
                     throw new System.InvalidOperationException("Generated overflow check failed.");
                 if (!Standalone.Author.Grammar.TryParseLong("-9223372036854775808", default, out var integer) || integer != long.MinValue)
@@ -263,6 +268,121 @@ public class StandalonePackageTests
             }
         }
 
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Packaged_Generator_Builds_A_Library_Pinned_To_Older_Compatibility_Packages()
+    {
+        // A netstandard2.0 library that can't move its shipped dependencies past System.Memory 4.5.5,
+        // System.Buffers 4.5.1, System.Numerics.Vectors 4.5.0 and System.Runtime.CompilerServices.Unsafe 6.0.0.
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent.Name;
+        var directory = Directory.CreateDirectory(Path.Combine(
+            Path.GetTempPath(), "Parlot.StandalonePackage.Tests", Guid.NewGuid().ToString("N"))).FullName;
+        try
+        {
+            var feed = Directory.CreateDirectory(Path.Combine(directory, "feed")).FullName;
+            var author = Directory.CreateDirectory(Path.Combine(directory, "author")).FullName;
+            var consumer = Directory.CreateDirectory(Path.Combine(directory, "consumer")).FullName;
+            var version = "0.0.0-standalone." + Guid.NewGuid().ToString("N");
+            File.Copy(Path.Combine(root, "global.json"), Path.Combine(directory, "global.json"));
+            File.WriteAllText(Path.Combine(directory, "NuGet.config"), $"""
+                <configuration><packageSources><clear />
+                  <add key="local" value="{feed}" />
+                  <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                </packageSources></configuration>
+                """);
+
+            await BuildContextIntegrationTests.RunDotnet(root, "pack", "src/Parlot.SourceGenerator/Parlot.SourceGenerator.csproj",
+                "--no-build", "--no-restore", "--configuration", configuration, "--output", feed,
+                "-p:PackageVersion=" + version);
+
+            File.WriteAllText(Path.Combine(author, "Author.csproj"), $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>netstandard2.0</TargetFramework>
+                    <LangVersion>12</LangVersion>
+                    <PackageId>Standalone.Author</PackageId>
+                    <Version>{{version}}</Version>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                  </PropertyGroup>
+                  <ItemGroup>
+                    <PackageReference Include="Parlot.SourceGenerator" Version="{{version}}" PrivateAssets="all" />
+                    <PackageReference Include="System.Memory" Version="4.5.5" />
+                    <PackageReference Include="System.Buffers" Version="4.5.1" />
+                    <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
+                    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+                  </ItemGroup>
+                </Project>
+                """);
+            File.WriteAllText(Path.Combine(author, "Grammar.cs"), """
+                namespace Standalone.Author;
+                public static partial class Grammar
+                {
+                    public static partial bool TryParse(string text, out int value);
+                    public static partial bool TryParseWord(string text, out string value);
+                }
+                """);
+            File.WriteAllText(Path.Combine(author, "Grammar.parlot.cs"), """
+                using Parlot.Fluent;
+                using Parlot.SourceGenerator;
+                using static Parlot.Fluent.Parsers;
+                namespace Standalone.Author;
+                public static partial class Grammar
+                {
+                    [GenerateParser(nameof(TryParse))]
+                    private static Parser<int> Build() => Terms.Number<int>(NumberOptions.Integer).Eof();
+
+                    [GenerateParser(nameof(TryParseWord))]
+                    private static Parser<string> BuildWord() =>
+                        Terms.Identifier().Then(static value => value.ToString()).Eof();
+                }
+                """);
+
+            // NU1605 would fail the restore, CS1705 in the factory compilation the build (PARLOT001).
+            await BuildContextIntegrationTests.RunDotnet(author, "restore", "--packages", Path.Combine(directory, "packages"), "-p:NuGetAudit=false");
+            await BuildContextIntegrationTests.RunDotnet(author, "pack", "--no-restore", "--output", feed,
+                "--configuration", configuration, "-p:UseSharedCompilation=false");
+            using (var package = ZipFile.OpenRead(Path.Combine(feed, $"Standalone.Author.{version}.nupkg")))
+            {
+                using var stream = package.Entries.Single(static entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal)).Open();
+                var dependencies = XDocument.Load(stream).Descendants()
+                    .Where(static element => element.Name.LocalName == "dependency")
+                    .ToDictionary(static dependency => dependency.Attribute("id").Value, static dependency => dependency.Attribute("version").Value);
+                Assert.Equal("4.5.5", dependencies["System.Memory"]);
+                Assert.DoesNotContain(dependencies.Keys, static id => id.StartsWith("Parlot", StringComparison.Ordinal));
+            }
+
+            File.WriteAllText(Path.Combine(consumer, "Consumer.csproj"), $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                    <OutputType>Exe</OutputType>
+                    <LangVersion>12</LangVersion>
+                    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                  </PropertyGroup>
+                  <ItemGroup><PackageReference Include="Standalone.Author" Version="{{version}}" /></ItemGroup>
+                </Project>
+                """);
+            File.WriteAllText(Path.Combine(consumer, "Program.cs"), """
+                if (!Standalone.Author.Grammar.TryParse(" 42", out var value) || value != 42)
+                    throw new System.InvalidOperationException("Generated parser failed.");
+                if (Standalone.Author.Grammar.TryParse("42x", out _))
+                    throw new System.InvalidOperationException("Generated EOF check failed.");
+                if (!Standalone.Author.Grammar.TryParseWord(" hello", out var word) || word != "hello")
+                    throw new System.InvalidOperationException("Generated identifier parser failed.");
+                System.Console.WriteLine(value);
+                """);
+            await BuildContextIntegrationTests.RunDotnet(consumer, "restore", "--packages",
+                Path.Combine(directory, "consumer-packages"), "-p:NuGetAudit=false");
+            var output = await BuildContextIntegrationTests.RunDotnet(consumer, "run", "--no-restore",
+                "--configuration", configuration, "-p:UseSharedCompilation=false");
+            Assert.Equal("42", output.Trim());
+        }
         finally
         {
             Directory.Delete(directory, recursive: true);
