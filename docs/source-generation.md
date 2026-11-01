@@ -191,6 +191,8 @@ invoked, in their order, and each one still matches its own text. Choices read f
 An `Operators()` table (see [Operator tables](parsers.md#operator-tables)) is emitted as a single precedence climbing
 loop: recursive local functions which look for the operator following an operand once, through the
 generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
+The lookup stops at a level whose operators have a value (valued `Postfix`, `LeftAssociative`, `RightAssociative` and
+`Ternary`), and the case of the loop for that level parses them and passes their values to the factories.
 
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure

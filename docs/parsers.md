@@ -145,11 +145,58 @@ of an operand doesn't depend on the number of levels.
 - With a `maxRecursionDepth`, each prefix operator applied counts as one level of recursion. Chains of binary operators
   don't recurse, whatever their length.
 - The parser is seekable from its operand and its prefix operators, so it can be an alternative of a lookup table.
-- Each call of `Unary`, `Postfix`, `LeftAssociative` or `RightAssociative` returns a new parser, the table is not modified.
+- Each call of `Unary`, `Postfix`, `LeftAssociative`, `RightAssociative` or `Ternary` returns a new parser, the table is not modified.
   `Named()` returns a `Parser<T>`, call it last.
 
 A chain of `Unary`, `LeftAssociative` and `RightAssociative` parsers still parses level by level: build it with
 `Operators()` to parse it with a single precedence parser.
+
+### Operators with a value
+
+The factories of a level can also receive the value of the operator, so that member accesses, indexers, calls and
+conditionals are levels of the table rather than parsers around it:
+
+```csharp
+var expression = Deferred<Expression>();
+var primary = identifier.Or(number).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+expression.Parser = primary.Operators()
+    .Postfix(
+        (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => new Member(x, name.ToString())),
+        (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => new Index(x, index)))
+    .Unary((Terms.Char('-'), static x => new Negate(x)))
+    .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => new Binary(op, a, b))
+    .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)))
+    .LeftAssociative((Terms.Text("=="), static (a, b) => new Equal(a, b)))
+    .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => new Conditional(c, a, b), rightAssociative: false)
+    .LeftAssociative((Terms.Text("??"), static (a, b) => new Coalesce(a, b)));
+
+expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) ? d : e) ?? f
+```
+
+- `Postfix((op, (x, value) => ...))` passes the value of the operator to its factory. Each call takes operators of one
+  type; `Postfix(first, second)` takes two operators of different types in the same level, like a member access and an
+  indexer, which apply in any order: `a.b[c].d`.
+- `LeftAssociative(operators, (a, b, op) => ...)` and `RightAssociative(operators, (a, b, op) => ...)` are the levels of
+  the `LeftAssociative(Parser<TOperator>[], Func<T, T, TOperator, T>)` combinators, whose single factory receives the
+  value of the operator.
+- `Ternary(question, middle, colon, (condition, whenTrue, whenFalse) => ...)` is a level of conditionals. The condition
+  is a value of the tighter levels, and `middle`, usually the whole expression, is parsed between `question` and `colon`.
+  With `rightAssociative: true`, the default, the last operand can be another conditional: `a ? b : c ? d : e` is
+  `a ? b : (c ? d : e)`, as in C. With `rightAssociative: false` it is a value of the tighter levels only:
+  `a ? b : c ? d : e` is `(a ? b : c) ? d : e`. The looser levels apply to the whole conditional, so with `??` looser,
+  `a ? b : c ?? d` is `(a ? b : c) ?? d` and the last operand can't contain a `??`, while `a ?? b ? c : d` is
+  `a ?? (b ? c : d)`. A last operand that is a whole expression, as in C# where it can be an assignment, can't be a level.
+- These levels parse what the equivalent chain parses: a level whose operator is `question.SkipAnd(middle).AndSkip(colon)`
+  for a conditional, or `primary.And(ZeroOrMany(postfix))` folded for the postfix operators of the tightest level, with
+  the same results, spans and cursor positions. When `question`, `middle`, `colon` or the last operand doesn't match,
+  nothing is read and the looser levels are tried at the position of `question`: a `?` doesn't need to exclude the `??`
+  of a looser level.
+- The table looks up the operator following an operand through a single choice of the operators up to the next level
+  of valued operators, which starts with a check of the first chars of these: when the next char can start one of them,
+  the level that applies them parses them and passes their values to the factories right away, otherwise the looser
+  levels are tried in the same choice. An operator is parsed only once at a position, even when it parses an expression,
+  like an index or the middle of a conditional, and the values are never kept for a looser level.
 
 ## Terms and Literals
 
