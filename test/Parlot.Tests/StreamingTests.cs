@@ -68,6 +68,9 @@ public class StreamingTests
         ["scan-signature"] = new Grammar<TextSpan>(Literals.Scan(LiquidScanners.VariableSignature, LiquidScanners.StartChars)),
         ["scan-tag"] = new Grammar<IReadOnlyList<TextSpan>>(Terms.Text("{%").SkipAnd(ZeroOrMany(Terms.Scan(LiquidScanners.Identifier, LiquidScanners.StartChars))).AndSkip(Terms.Text("-%}").Or(Terms.Text("%}")))),
         ["string"] = new Grammar<TextSpan>(Terms.String()),
+        // Pooled strings copy the text out of the window, and string literals decode into the pool
+        ["pooled-strings"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Identifier().ToPooledString(), Terms.String().ToPooledString())).Eof()),
+        ["text-ci-matched"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("hello", caseInsensitive: true, returnMatchedText: true), Terms.Keyword("for", caseInsensitive: true, returnMatchedText: true)))),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["nul-string"] = new Grammar<TextSpan>(new StringLiteral('\0')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
@@ -248,6 +251,8 @@ public class StreamingTests
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
+        Add("pooled-strings", "", "a", "abc abc", "'abc' abc \"a\\nb\" 'a\\nb'", "abcdefghijklmnopqr abcdefghijklmnopqr x", "'unterminated");
+        Add("text-ci-matched", "", "HELLO hello Hello HELLO", "FOR for hello", "HeLLo FoR fore");
         Add("nested-lists", "", "1", "[", "[]", "()", "{}", "[1]", "(1)", "{1}", "[1,2,3,4,5,6]", "(1 2 3 4 5 6)", "[1,[2,[3,4],5],(6 7 (8 9 10 11 12) 13),{14 15}]",
             "(1 2 [3,4 (5 6)] 7", "[1,2,", "[1,(2 3", "{1 2", "((((((((1 2 3))))))))", "[" + string.Join(",", Enumerable.Range(0, 40)) + ",(" + string.Join(" ", Enumerable.Range(0, 30)) + ")]",
             "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");

@@ -145,7 +145,7 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
                     ? text
                     : start == cursor.BufferStart && length == buffer.Length
                         ? buffer
-                        : parsedText.ToString());
+                        : _textLiteral.Pool!.Get(parsedText));
             }
 
             context.ExitParser(this);

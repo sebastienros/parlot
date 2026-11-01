@@ -13,6 +13,10 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     private readonly bool _returnText;
     private readonly string[]? _expectedPrefixes;
 
+    // The strings of the matched texts that differ from the text, for a literal returning them: they are cases of the
+    // text, which are few, so each one is allocated once
+    private readonly StringPool? _pool;
+
     // The invariant upper case of each char of the BMP, at the index of the char. It is only built for a
     // case-insensitive text which doesn't start with an ASCII char.
     private static string? _invariantUpperCase;
@@ -27,6 +31,11 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
         _returnText = comparisonType == StringComparison.Ordinal || (!returnMatchedText && comparisonType is StringComparison.OrdinalIgnoreCase
             or StringComparison.CurrentCultureIgnoreCase
             or StringComparison.InvariantCultureIgnoreCase);
+
+        if (!_returnText)
+        {
+            _pool = new StringPool(Text.Length);
+        }
 
         // A culture comparison ignores some chars, like the soft hyphen, and the current culture is the one of the
         // thread that parses, not the one of this thread. The chars such a text can start with are not known, only
@@ -132,6 +141,9 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     // Whether the canonical text is returned rather than the matched one
     internal bool ReturnsText => _returnText;
 
+    // The pool of the matched texts, when they are returned
+    internal StringPool? Pool => _pool;
+
     public bool CanSeek { get; }
 
     public char[] ExpectedChars { get; } = [];
@@ -178,7 +190,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
                     ? Text
                     : start == cursor.BufferStart && end - start == buffer.Length
                         ? buffer
-                        : parsedText.ToString());
+                        : _pool!.Get(parsedText));
             }
 
             context.ExitParser(this);
@@ -240,7 +252,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
             result.Body.Add($"    var {parsedTextName} = {cursorName}.GetSpan({startName}, {lengthLiteral});");
             result.Body.Add($"    {result.ValueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
             result.Body.Add($"        ? {textLiteral}");
-            result.Body.Add($"        : {lengthLiteral} == {bufferName}.Length ? {bufferName} : {parsedTextName}.ToString();");
+            result.Body.Add($"        : {lengthLiteral} == {bufferName}.Length ? {bufferName} : {context.GetStringPoolField(_pool!)}.Get({parsedTextName});");
         }
         else
         {

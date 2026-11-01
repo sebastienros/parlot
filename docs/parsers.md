@@ -347,7 +347,8 @@ The case-insensitive comparison is ordinal. It doesn't depend on the current cul
 If you need to preserve the original casing from the input, set `returnMatchedText: true`.
 An exact-case match returns the requested text without allocating; if the matched text
 has different casing but covers the entire input, the input string itself is returned.
-Only a differently cased substring needs a new string.
+A differently cased substring is taken from a pool the parser keeps, so each casing the
+input uses is allocated once, also across parses. `Keyword` does the same.
 
 Usage:
 
@@ -555,6 +556,9 @@ Result:
 ```
 'hello\\nworld'
 ```
+
+The value is a `TextSpan` of the input when the string has no escape sequence, and of a new string otherwise. To get
+strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool.
 
 ### Identifier
 
@@ -1441,6 +1445,39 @@ Result:
 ```
 
 > **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects.
+
+### ToPooledString
+
+Returns the text of a `Parser<TextSpan>` as a string taken from a pool, such that a value the parser matches many times
+is allocated once, instead of once per `ToString()`.
+
+```c#
+Parser<string> ToPooledString(this Parser<TextSpan> parser)
+```
+
+Usage:
+
+```c#
+var identifiers = ZeroOrMany(Terms.Identifier().ToPooledString());
+var names = identifiers.Parse("foo bar foo");
+// ReferenceEquals(names[0], names[2]) == true
+```
+
+The pool belongs to the parser `ToPooledString()` returns and lives as long as it does: all its parses share it, also
+concurrent ones, finding a value takes no lock and adding one does. It is bounded. It holds up to 4096 values of up to 64
+chars, and longer values are created as usual. A full pool keeps its values. A pool whose values rarely repeat
+(ids, numbers, timestamps) switches itself off: when nearly all its first 512 values were new, or when most lookups miss
+once it is full.
+
+A lookup costs about as much as creating a short string, so pooling pays off when the strings are kept, like the
+identifiers or member names of a syntax tree held in memory, rather than when each one is used and dropped.
+
+On `Terms.String()` or `Literals.String()`, the string literal also decodes its escape sequences into the pool, so that
+an escaped value isn't allocated either when the pool has it. The literal it is called on is unchanged.
+
+`ToPooledString()` takes a `Parser<TextSpan>`: the string of a `Parser<string>` is already created, a pool would only
+share it. Case-insensitive `Text` and `Keyword` parsers returning the matched text pool the cases they return by
+themselves.
 
 ### Else
 

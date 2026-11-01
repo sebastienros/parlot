@@ -57,7 +57,7 @@ internal sealed class GrammarAnalysis
     // Parlot's parsers which succeed only when the first parser they invoke does, at the position where they are invoked
     private static readonly HashSet<string> s_firstMustSucceed = new(StringComparer.Ordinal)
     {
-        "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "Discard", "Capture", "SkipWhiteSpace", "When",
+        "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "When",
         "WhenFollowedBy", "WhenNotFollowedBy", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
         "Switch", "Seekable", "IParserAdapter", "OperatorIndex", "LeftAssociative", "LeftAssociativeWithContext", "RightAssociative",
         "RightAssociativeWithContext", "AssociativeWithOperator",
@@ -66,7 +66,7 @@ internal sealed class GrammarAnalysis
     // Parlot's parsers which succeed exactly when the parser they invoke does, at the same position
     private static readonly HashSet<string> s_transparent = new(StringComparer.Ordinal)
     {
-        "Then", "Discard", "Capture", "Deferred", "IParserAdapter", "OperatorIndex",
+        "Then", "PooledString", "Discard", "Capture", "Deferred", "IParserAdapter", "OperatorIndex",
     };
 
     // Parlot's parsers which never fail
@@ -780,7 +780,7 @@ internal sealed class GrammarAnalysis
                 return Outcome.ThrowsOnFailure;
 
             // A deferred parser fails where it is invoked again, so it isn't followed
-            case "Then" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex":
+            case "Then" or "PooledString" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex":
                 return FirstInvoked(parser) is { } inner ? GetOutcome(inner, depth + 1) : Outcome.CanFail;
 
             case "Sequence" or "SequenceAndSkip" or "SequenceSkipAnd":
@@ -850,7 +850,7 @@ internal sealed class GrammarAnalysis
                 return false;
             }
 
-            if (ParlotTypeName(parser) is "Then" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex" && FirstInvoked(parser) is { } inner)
+            if (ParlotTypeName(parser) is "Then" or "PooledString" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex" && FirstInvoked(parser) is { } inner)
             {
                 parser = inner;
                 continue;
@@ -939,7 +939,7 @@ internal sealed class GrammarAnalysis
         {
             case "SkipWhiteSpace" when first is not null && Literal(first) is { } term:
                 return "Terms." + term;
-            case "Then" or "Discard" or "IParserAdapter" or "OperatorIndex" when first is not null:
+            case "Then" or "PooledString" or "Discard" or "IParserAdapter" or "OperatorIndex" when first is not null:
                 return Describe(first, depth + 1);
             case "Sequence" when first is not null:
                 return Describe(first, depth + 1) + ".And(...)";

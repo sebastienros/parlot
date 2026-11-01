@@ -19,6 +19,7 @@ internal static class StandaloneRuntimeSources
         "Cursor.cs",
         "TextPosition.cs",
         "TextSpan.cs",
+        "StringPool.cs",
         "ParseResult.cs",
         "ParseException.cs",
         "ParseError.cs",
@@ -358,7 +359,7 @@ internal static class StandaloneRuntimeSources
             var arity = name is GenericNameSyntax generic ? generic.Arity : 0;
             return (fluent, name.Identifier.ValueText, arity) switch
             {
-                (false, "Scanner" or "Cursor" or "TextPosition" or "TextSpan" or "ParseException"
+                (false, "Scanner" or "Cursor" or "TextPosition" or "TextSpan" or "StringPool" or "ParseException"
                     or "ParseError" or "ParseDiagnostic" or "ParseDiagnosticSeverity" or "Character" or "CharacterMask" or "WhiteSpaceSet" or "Numbers" or "HexConverter" or "ThrowHelper", 0) => true,
                 (false, "ParseResult" or "Option", 1) => true,
                 (true, "ParseContext" or "NumberOptions" or "StreamRefillSource" or "TextReaderRefillSource", 0) => true,

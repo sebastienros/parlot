@@ -57,9 +57,14 @@ public static partial class Character
         return DecodeStringInternal(span).AsSpan();
     }
 
-    public static string DecodeStringInternal(ReadOnlySpan<char> span)
+    public static string DecodeStringInternal(ReadOnlySpan<char> span) => DecodeStringInternal(span, pool: null);
+
+    /// <summary>
+    /// Decodes a string with escape sequences, taking the result from <paramref name="pool"/> when there is one.
+    /// </summary>
+    internal static string DecodeStringInternal(ReadOnlySpan<char> span, StringPool? pool)
     {
-        // This method always allocates a new string. It is invoked when we know for sure that the string contains escape sequences.
+        // This method allocates a new string, unless the pool has it. It is invoked when we know for sure that the string contains escape sequences.
 
         // The assumption is that the new string will be shorter since escapes results are smaller than their source
         char[]? rentedBuffer = null;
@@ -133,7 +138,7 @@ public static partial class Character
                 buffer[dataIndex++] = c;
             }
 
-            return buffer.Slice(0, dataIndex).ToString();
+            return pool != null ? pool.Get(buffer.Slice(0, dataIndex)) : buffer.Slice(0, dataIndex).ToString();
         }
         finally
         {
