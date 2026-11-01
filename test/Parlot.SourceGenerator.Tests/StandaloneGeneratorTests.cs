@@ -612,6 +612,29 @@ public class StandaloneGeneratorTests
         Assert.DoesNotContain("\"Parlot.Generated.Scanner\"", source, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Embedded_Runtime_Compiles_In_Consumers_That_Generate_Documentation(bool streaming)
+    {
+        // GenerateDocumentationFile binds the crefs of every doc comment; those of the shared sources name runtime-only API
+        var declaration = """
+            /// <summary>Parses integers.</summary>
+            public static partial class Grammar
+            {
+                /// <summary>Parses an integer.</summary>
+                public static partial bool TryParse(string text, out int value);
+            }
+            """;
+        if (streaming)
+        {
+            declaration = declaration.Replace("string text", "System.IO.TextReader reader", StringComparison.Ordinal);
+        }
+        var (result, compilation) = Generate(declaration, Grammar, warningsAsErrors: true, documentationMode: DocumentationMode.Diagnose);
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity >= DiagnosticSeverity.Warning);
+        Assert.Empty(compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity >= DiagnosticSeverity.Warning));
+    }
+
     private static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
     {
         Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -621,9 +644,10 @@ public class StandaloneGeneratorTests
 
     private static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) Generate(
         string source, string grammar, bool designTime = false, bool referenceParlot = false,
-        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary, bool warningsAsErrors = false, bool checkOverflow = false)
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary, bool warningsAsErrors = false, bool checkOverflow = false,
+        DocumentationMode documentationMode = DocumentationMode.Parse)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12,
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12, documentationMode,
             preprocessorSymbols: ["NET", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")).Split(Path.PathSeparator)
             .Where(path => !Path.GetFileName(path).StartsWith("Parlot", StringComparison.Ordinal))
