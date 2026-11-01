@@ -3,6 +3,7 @@ using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 
@@ -42,6 +43,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
     // The segment of each level. A level of valued operators starts a segment.
     private readonly Segment[] _segments;
+
+    // The only segment of a table without valued operators, or null
+    private readonly Segment? _plainSegment;
 
     // The parsers that can read first, a prefix operator or an operand, whose hints are read when they are asked for since
     // they can be Deferred parsers set later
@@ -125,6 +129,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         _prefixLevels = prefixLevels.ToArray();
         _first = first.ToArray();
+        _plainSegment = levels.Length > 0 && _segments[0].End == levels.Length && _segments[0].Valued < 0 ? _segments[0] : null;
     }
 
     /// <inheritdoc />
@@ -533,12 +538,19 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             var op = next.Operator;
 
-            if (op == Lookahead.None)
+            if (op < 0)
             {
-                break;
+                // No operator, or the operators of a valued level
+                if (op == Lookahead.None || !ApplyValued(context, maxLevel, ref pin, ref result, ref next, ref lowest))
+                {
+                    break;
+                }
+
+                lookup = lowest >= 0;
+                continue;
             }
 
-            var level = op >= 0 ? _operatorLevels[op] : Lookahead.Valued(op);
+            var level = _operatorLevels[op];
 
             if (level > maxLevel)
             {
@@ -556,22 +568,6 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             else
             {
                 context.MovePin(pin, position);
-            }
-
-            var valued = _levels[level].Valued;
-
-            if (valued is not null)
-            {
-                // The operators of the level are parsed, their values are only used here
-                var from = valued.Apply(this, context, level, pin, ref result, ref next);
-
-                if (from >= 0)
-                {
-                    lowest = from;
-                    lookup = true;
-                }
-
-                continue;
             }
 
             var kind = _levels[level].Kind;
@@ -655,6 +651,37 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         context.Unpin(pin);
+        return true;
+    }
+
+    /// <summary>
+    /// Applies the operators of the valued level of <paramref name="next"/>, which are parsed by the level that applies
+    /// them, such that their values are only used here. Returns false when a looser level applies them, otherwise
+    /// <paramref name="lowest"/> is the level from which the operators are looked up next, or -1 when
+    /// <paramref name="next"/> is the operator that follows.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private bool ApplyValued(ParseContext context, int maxLevel, ref int pin, ref ParseResult<T> result, ref Lookahead next, ref int lowest)
+    {
+        var level = Lookahead.Valued(next.Operator);
+
+        if (level > maxLevel)
+        {
+            // A looser level applies them
+            return false;
+        }
+
+        // The operators are read again by the looser levels when they don't match
+        if (pin < 0)
+        {
+            pin = context.PinAt(next.Offset);
+        }
+        else
+        {
+            context.MovePin(pin, next.Offset);
+        }
+
+        lowest = _levels[level].Valued!.Apply(this, context, level, pin, ref result, ref next);
         return true;
     }
 
@@ -770,6 +797,31 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         next.Offset = context.Scanner.Cursor.Offset;
 
         var operatorResult = new ParseResult<int>();
+
+        if (_plainSegment is { } plain)
+        {
+            if (lowest <= plain.FirstLookupLevel)
+            {
+                // The choice returns the first operator which matches, from the tightest level
+                var plainChoice = Volatile.Read(ref plain.Choice) ?? GetChoice(plain, plain: true);
+
+                if (plainChoice is null || !plainChoice.Parse(context, ref operatorResult))
+                {
+                    next.Operator = Lookahead.None;
+                    return false;
+                }
+            }
+            else if (!LookupFrom(context, lowest, _levels.Length, ref operatorResult))
+            {
+                next.Operator = Lookahead.None;
+                return false;
+            }
+
+            next.Operator = operatorResult.Value;
+            next.End = operatorResult.End;
+            return true;
+        }
+
         var level = lowest;
 
         while (level < _levels.Length)
