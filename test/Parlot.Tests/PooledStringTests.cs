@@ -323,6 +323,16 @@ public class PooledStringTests
         // Each kept case has a single string
         Assert.True(parser.TryParse(input, out var first));
         Assert.True(parser.TryParse(input, out var second));
-        Assert.Equal(4, first.Zip(second).Where(static pair => !ReferenceEquals(pair.First, "hello") && ReferenceEquals(pair.First, pair.Second)).Select(static pair => pair.First).Distinct().Count());
+        var kept = new HashSet<string>();
+
+        for (var i = 0; i < first.Count; i++)
+        {
+            if (!ReferenceEquals(first[i], "hello") && ReferenceEquals(first[i], second[i]))
+            {
+                kept.Add(first[i]);
+            }
+        }
+
+        Assert.Equal(4, kept.Count);
     }
 }
