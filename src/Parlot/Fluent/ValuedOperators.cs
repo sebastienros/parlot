@@ -96,7 +96,7 @@ internal abstract class PostfixGroup<T>
 
 internal sealed class PostfixGroup<T, TOperator> : PostfixGroup<T>
 {
-    private readonly OneOf<(int Index, TOperator Value)> _choice;
+    private readonly Parser<(int Index, TOperator Value)> _choice;
     private readonly Func<T, TOperator, T>[] _factories;
 
     public PostfixGroup((Parser<TOperator> Op, Func<T, TOperator, T> Factory)[] operators, string parameterName)
@@ -121,7 +121,8 @@ internal sealed class PostfixGroup<T, TOperator> : PostfixGroup<T>
             _factories[i] = factory ?? throw new ArgumentException("Operators must not contain null factories.", parameterName);
         }
 
-        _choice = new OneOf<(int, TOperator)>(parsers);
+        // A choice of a single parser doesn't declare its hints
+        _choice = parsers.Length == 1 ? parsers[0] : new OneOf<(int, TOperator)>(parsers);
     }
 
     public override object Choice => _choice;
@@ -192,14 +193,15 @@ internal sealed class ValuedBinary<T, TOperator> : ValuedOperators<T>, IValuedBi
             }
         }
 
-        Choice = new OneOf<TOperator>(operators);
+        // A choice of a single parser doesn't declare its hints
+        Choice = operators.Length == 1 ? operators[0] : new OneOf<TOperator>(operators);
         Choices = [Choice];
         _factory = factory;
         _conditional = conditional;
         RightAssociative = rightAssociative;
     }
 
-    public OneOf<TOperator> Choice { get; }
+    public Parser<TOperator> Choice { get; }
 
     public override object[] Choices { get; }
 
@@ -301,4 +303,63 @@ internal sealed class ValuedBinary<T, TOperator> : ValuedOperators<T>, IValuedBi
         result.Set(result.Start, end, Apply(result.Value, value, op.Value));
         return from;
     }
+}
+
+/// <summary>
+/// Matches without reading anything when the next char can start an operator of a level of valued operators, so the
+/// choice of the lookup can skip the level otherwise. It returns the <see cref="PrecedenceParser{T}.Lookahead.Operator"/>
+/// of the level.
+/// </summary>
+internal sealed class ValuedProbe : Parser<int>, Rewriting.ISeekable, SourceGeneration.ISourceable, ILoopAnalyzable
+{
+    private readonly int _operator;
+    private readonly object[] _choices;
+
+    // The hints of the operators of the level, read when they are asked for since they can start with Deferred parsers
+    private ForwardedHints? _hints;
+
+    public ValuedProbe(int op, object[] choices)
+    {
+        _operator = op;
+        _choices = choices;
+    }
+
+    public bool CanSeek => Hints.CanSeek;
+
+    public char[] ExpectedChars => Hints.ExpectedChars;
+
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _choices, static choices => SeekableHints.Union(choices));
+
+    // It invokes nothing, and succeeds without reading
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => true;
+
+    public override bool Parse(ParseContext context, ref ParseResult<int> result)
+    {
+        context.EnterParser(this);
+
+        var offset = context.Scanner.Cursor.Offset;
+        result.Set(offset, offset, _operator);
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    public SourceGeneration.SourceResult GenerateSource(SourceGeneration.SourceGenerationContext context)
+    {
+        ThrowHelper.ThrowIfNull(context, nameof(context));
+
+        var result = context.CreateResult(typeof(int));
+        result.Body.Add($"{result.SuccessVariable} = true;");
+
+        if (!context.DiscardResult)
+        {
+            result.Body.Add($"{result.ValueVariable} = {_operator.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+        }
+
+        return result;
+    }
+
+    public override string ToString() => "ValuedProbe";
 }
