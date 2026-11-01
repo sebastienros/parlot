@@ -151,6 +151,14 @@ public class StandalonePackageTests
             {
                 Assert.Equal(config.Content, File.ReadAllText(config.Path));
             }
+            foreach (var framework in frameworks)
+            {
+                // [IncludeGenerators] finds analyzers where this restore put them, not only under ~/.nuget/packages
+                var config = File.ReadAllLines(Path.Combine(author, "obj", configuration, framework, "Author.GeneratedMSBuildEditorConfig.editorconfig"));
+                var analyzers = config.Single(static line => line.StartsWith("build_property._ParlotAnalyzers = ", StringComparison.Ordinal));
+                Assert.Contains(Path.Combine(directory, "packages", "parlot.sourcegenerator", version, "analyzers", "dotnet", "cs", "Parlot.SourceGenerator.dll"),
+                    analyzers.Split(" = ", 2)[1].Split('|'), StringComparer.OrdinalIgnoreCase);
+            }
             if (downlevel)
             {
                 var error = await Assert.ThrowsAsync<Xunit.Sdk.TrueException>(() =>

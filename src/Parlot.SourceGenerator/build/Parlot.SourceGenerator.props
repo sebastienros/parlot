@@ -8,5 +8,8 @@
     <CompilerVisibleProperty Include="BuildingProject" />
     <CompilerVisibleProperty Include="BuildingInsideVisualStudio" />
     <CompilerVisibleProperty Include="ParlotLineDirectives" />
+    <!-- Where [IncludeGenerators] finds generator assemblies, see CollectParlotAnalyzers. -->
+    <CompilerVisibleProperty Include="_ParlotAnalyzers" />
+    <CompilerVisibleProperty Include="NuGetPackageRoot" />
   </ItemGroup>
 </Project>
