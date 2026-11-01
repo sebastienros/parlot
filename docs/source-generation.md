@@ -493,9 +493,15 @@ Adds namespace imports needed by emitted callback or helper source:
 private static Parser<Expression> Build() => ...;
 ```
 
-Usings in the `.parlot.cs` file compile the build-time factory. `[IncludeUsings]` applies to the generated
-output, so add it when copied callback expressions require extension methods or unqualified application
-types that are not otherwise emitted with fully qualified names.
+Callbacks bind their names as they do in the `.parlot.cs` file. The generator copies them with the types,
+namespaces and static members they name fully qualified (`global::App.Models.SqlParameter.Create(...)`), so
+usings placed inside a `namespace` block, aliases and `using static` keep their meaning, and a type of the same
+name in an enclosing namespace of the generated class can't take over. Extension methods, and the methods of
+query and collection expressions, still bind by name: the generated file imports the namespaces of the
+factory's usings, file-level and from its enclosing `namespace` blocks, that exist in the application.
+
+`[IncludeUsings]` adds more namespaces to the generated output, for instance for the extension methods of a
+custom emitter's source.
 
 ### `[IncludeFiles]`
 
