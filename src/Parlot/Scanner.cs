@@ -197,7 +197,7 @@ public class Scanner
     {
         if (!first(Cursor.Current))
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -261,7 +261,7 @@ public class Scanner
 
         if (length == 0)
         {
-            number = [];
+            number = default;
             return false;
         }
 
@@ -404,7 +404,7 @@ public class Scanner
         // If first char is not a digit, fail
         if (noDigitIndex == 0 || span.IsEmpty)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -434,7 +434,7 @@ public class Scanner
         // Not digit was read
         if (next == 0)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -458,7 +458,7 @@ public class Scanner
     {
         if (Cursor.Eof || !predicate(Cursor.Current))
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -527,7 +527,7 @@ public class Scanner
         // Also the case at the end of the text
         if (size == 0)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -584,7 +584,7 @@ public class Scanner
     {
         if (!Cursor.Match(text, comparisonType))
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -607,7 +607,7 @@ public class Scanner
 
         if (index == -1)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -635,7 +635,7 @@ public class Scanner
 
         if (length == 0)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -660,7 +660,7 @@ public class Scanner
         // If first char is not in range
         if (notInRangeIndex == 0 || span.IsEmpty)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -732,14 +732,14 @@ public class Scanner
 
         if (!quoteChar.Contains( startChar ))
         {
-            result = [];
+            result = default;
             return false;
         }
 
         return ReadQuotedString(startChar, out result);
     }
 
-    private static readonly char[] _singleOrDoubleQuotes = ['\'', '\"'];
+    private static readonly char[] _singleOrDoubleQuotes = { '\'', '\"' };
 
     public bool ReadQuotedString(out ReadOnlySpan<char> result) => ReadQuotedString(_singleOrDoubleQuotes, out result);
 
@@ -765,7 +765,7 @@ public class Scanner
         // Current is also the null char at the end of the text, where there is no quote to read
         if (startChar != quoteChar || Cursor.Eof)
         {
-            result = [];
+            result = default;
             return false;
         }
 
@@ -781,7 +781,7 @@ public class Scanner
         {
             // There is no end quote nor an escape sequence, not a string
             Cursor.MarkHitEnd();
-            result = [];
+            result = default;
             return false;
         }
 
@@ -804,7 +804,7 @@ public class Scanner
         if (span.Slice(next + 2).IndexOf(startChar) == -1)
         {
             Cursor.MarkHitEnd();
-            result = [];
+            result = default;
             return false;
         }
 
@@ -820,7 +820,7 @@ public class Scanner
             {
                 Cursor.ResetPosition(start);
 
-                result = [];
+                result = default;
                 return false;
             }
 
@@ -861,7 +861,7 @@ public class Scanner
 
                             Cursor.ResetPosition(start);
 
-                            result = [];
+                            result = default;
                             return false;
                         }
 
@@ -893,7 +893,7 @@ public class Scanner
                         {
                             Cursor.ResetPosition(start);
 
-                            result = [];
+                            result = default;
                             return false;
                         }
 #endif
@@ -915,7 +915,7 @@ public class Scanner
 
                             Cursor.ResetPosition(start);
 
-                            result = [];
+                            result = default;
                             return false;
                         }
 
@@ -950,7 +950,7 @@ public class Scanner
                         {
                             Cursor.ResetPosition(start);
 
-                            result = [];
+                            result = default;
                             return false;
                         }
 #endif
@@ -968,7 +968,7 @@ public class Scanner
 
                         Cursor.ResetPosition(start);
 
-                        result = [];
+                        result = default;
                         return false;
                 }
             }
@@ -987,7 +987,7 @@ public class Scanner
                 Cursor.MarkHitEnd();
                 Cursor.ResetPosition(start);
 
-                result = [];
+                result = default;
                 return false;
             }
         }
