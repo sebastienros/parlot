@@ -28,6 +28,9 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
     private readonly Parser<TextSpan> _parser;
     private readonly StringPool _pool = new();
 
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     /// <summary>
     /// Creates a parser returning the text of <paramref name="parser"/> as a pooled string.
     /// </summary>
@@ -44,6 +47,8 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
             SkipWhiteSpace<TextSpan> { Parser: StringLiteral literal } skip => new SkipWhiteSpace<TextSpan>(new StringLiteral(literal, _pool)) { Name = skip.Name },
             _ => parser,
         };
+
+        _withoutValue = _parser.CanParseWithoutValue;
     }
 
     // The hints of the parser, the only one this one invokes, read when they are asked for since it can be a Deferred set later
@@ -72,6 +77,28 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
         if (_parser.Parse(context, ref parsed))
         {
             result.Set(parsed.Start, parsed.End, _pool.Get(parsed.Value));
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => true;
+
+    // Parse, without the string: the pool isn't read, and the parser is invoked without its value
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<string> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<TextSpan>();
+
+        if (_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
+        {
+            result.Start = parsed.Start;
+            result.End = parsed.End;
 
             context.ExitParser(this);
             return true;
