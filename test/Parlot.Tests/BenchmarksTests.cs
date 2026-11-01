@@ -46,6 +46,27 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void CommentsGrammar()
+    {
+        var benchmark = new CommentsBenchmarks();
+        benchmark.Setup();
+        Assert.Equal(-64.5m, benchmark.Expression_Spaces().Evaluate());
+        Assert.Equal(-64.5m, benchmark.Expression_Comments().Evaluate());
+    }
+
+    [Fact]
+    public void ParseWithoutValueGrammars()
+    {
+        var benchmark = new ParseWithoutValueBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.CapturedSequence().ToString());
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.CapturedSeparated().ToString());
+        Assert.Equal(["a", "b", "c", "d", "e", "f", "g"], benchmark.SkippedList().Select(static x => x.ToString()));
+        Assert.True(benchmark.TryParseSequence());
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.TryMatchSequence().ToString());
+    }
+
+    [Fact]
     public void DiscardedTextGrammar()
     {
         var benchmark = new DiscardResultBenchmarks();

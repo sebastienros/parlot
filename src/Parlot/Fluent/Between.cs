@@ -17,11 +17,19 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
     private readonly Parser<A> _before;
     private readonly Parser<B> _after;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _beforeWithoutValue;
+    private readonly bool _withoutValue;
+    private readonly bool _afterWithoutValue;
+
     public Between(Parser<A> before, Parser<T> parser, Parser<B> after)
     {
         _before = before ?? throw new ArgumentNullException(nameof(before));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _after = after ?? throw new ArgumentNullException(nameof(after));
+        _beforeWithoutValue = before.CanParseWithoutValue;
+        _withoutValue = parser.CanParseWithoutValue;
+        _afterWithoutValue = after.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -47,7 +55,7 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 
         var parsedA = new ParseResult<A>();
 
-        if (!_before.Parse(context, ref parsedA))
+        if (!(_beforeWithoutValue ? _before.ParseWithoutValue(context, ref parsedA) : _before.Parse(context, ref parsedA)))
         {
             context.ExitParser(this);
 
@@ -65,7 +73,50 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
 
         var parsedB = new ParseResult<B>();
 
-        if (!_after.Parse(context, ref parsedB))
+        if (!(_afterWithoutValue ? _after.ParseWithoutValue(context, ref parsedB) : _after.Parse(context, ref parsedB)))
+        {
+            cursor.ResetPosition(start);
+
+            context.ExitParser(this);
+            return false;
+        }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, with the parser invoked without its value
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+
+        var start = cursor.Offset;
+
+        var parsedA = new ParseResult<A>();
+
+        if (!(_beforeWithoutValue ? _before.ParseWithoutValue(context, ref parsedA) : _before.Parse(context, ref parsedA)))
+        {
+            context.ExitParser(this);
+
+            // Don't reset position since _before should do it
+            return false;
+        }
+
+        if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result)))
+        {
+            cursor.ResetPosition(start);
+
+            context.ExitParser(this);
+            return false;
+        }
+
+        var parsedB = new ParseResult<B>();
+
+        if (!(_afterWithoutValue ? _after.ParseWithoutValue(context, ref parsedB) : _after.Parse(context, ref parsedB)))
         {
             cursor.ResetPosition(start);
 

@@ -143,6 +143,14 @@ complete once the grammar is. The hints are those of the parsers one of which mu
 A parser has none when it can succeed without reading, or when skipping it changes the outcome, like `ElseError`, which
 reports an error instead of failing.
 
+The internal `Parser<T>.ParseWithoutValue` matches what `Parse` matches, with the same positions and the same parsers
+entered, without building the value. A parser whose value allocates (the lists), or which returns or combines the values of
+such parsers (sequences, choices, wrappers), overrides it and `CanParseWithoutValue`. A parser that doesn't use the value of a
+parser it invokes (`Capture`, the skipped parser of `AndSkip`, the delimiters of `Between`, a constant `Then`) reads
+`CanParseWithoutValue` once, in its constructor, and invokes `ParseWithoutValue` only when it is set, so the other parsers
+don't pay for the extra call. `ParseWithoutValueTests` compares both methods: add a new override there. It is the runtime
+counterpart of `SourceGenerationContext.DiscardResult`; callbacks still receive their values.
+
 `ILoopAnalyzable` (internal, `Parlot.Fluent`) tells `LoopAnalysis` which parsers a parser invokes before it reads
 anything and whether it can succeed without reading; every built-in parser implements it. From that, the first parse of a
 grammar proves which `Deferred` parsers can't be invoked again at the position where they are active (no left recursion),

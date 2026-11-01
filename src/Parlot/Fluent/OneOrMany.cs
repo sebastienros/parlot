@@ -10,6 +10,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
     private readonly Parser<T> _parser;
     private readonly int _max;
 
+    // Whether the elements are parsed without their value when the list isn't built
+    private readonly bool _withoutValue;
+
     public OneOrMany(Parser<T> parser) : this(parser, 0)
     {
     }
@@ -20,6 +23,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         ThrowHelper.ThrowIfNegative(max, nameof(max));
         _max = max;
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -87,6 +91,53 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         {
             results.Release();
         }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => true;
+
+    // The loop of Parse, without the list
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+        var previousOffset = context.Scanner.Cursor.Offset;
+        if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
+            || context.Scanner.Cursor.Offset == previousOffset)
+        {
+            context.ExitParser(this);
+            return false;
+        }
+
+        var start = parsed.Start;
+        var end = parsed.End;
+        var count = 1;
+
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
+        while (_max == 0 || count < _max)
+        {
+            previousOffset = context.Scanner.Cursor.Offset;
+            if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
+            context.MovePin(pin);
+
+            end = parsed.End;
+            count++;
+        }
+
+        context.Unpin(pin);
+
+        result.Start = start;
+        result.End = end;
 
         context.ExitParser(this);
         return true;

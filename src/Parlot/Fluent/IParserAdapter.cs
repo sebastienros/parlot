@@ -15,10 +15,14 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable, ILo
     // The wrapped parser when it is a Parser<T>, to call its typed Parse without boxing the value
     private readonly Parser<T>? _typedParser;
 
+    // Whether the typed parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     public IParserAdapter(IParser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _typedParser = parser as Parser<T>;
+        _withoutValue = _typedParser is not null && _typedParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -47,6 +51,11 @@ internal sealed class IParserAdapter<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
         return success;
     }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+        => _withoutValue ? _typedParser!.ParseWithoutValue(context, ref result) : Parse(context, ref result);
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

@@ -7,9 +7,13 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
 
+    // Whether the parser is invoked without its value, which isn't used
+    private readonly bool _withoutValue;
+
     public Not(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -27,7 +31,7 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
         // The text is read again when the parser fails
         var pin = context.Pin();
-        var success = _parser.Parse(context, ref result);
+        var success = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
         context.Unpin(pin);
 
         if (!success)

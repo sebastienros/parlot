@@ -109,4 +109,23 @@ public class CommentTests
 
         Assert.True(comments.TryParse(text, out _));
     }
+
+#if NET8_0_OR_GREATER
+    [Theory]
+    [InlineData("hello world")]
+    [InlineData("hello /* a */ -- b\n /* c */ # d\n world")]
+    public void ShouldNotAllocateWhenSkippingComments(string text)
+    {
+        var parser = Terms.Text("hello").And(Terms.Text("world"))
+            .WithComments(builder =>
+            {
+                builder.WithWhiteSpaceOrNewLine();
+                builder.WithSingleLine("--");
+                builder.WithSingleLine("#");
+                builder.WithMultiLine("/*", "*/");
+            });
+
+        Assert.Equal(0, CaptureTests.MeasureAllocations(parser, text));
+    }
+#endif
 }
