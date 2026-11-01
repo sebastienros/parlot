@@ -7,5 +7,6 @@
     <CompilerVisibleProperty Include="DesignTimeBuild" />
     <CompilerVisibleProperty Include="BuildingProject" />
     <CompilerVisibleProperty Include="BuildingInsideVisualStudio" />
+    <CompilerVisibleProperty Include="ParlotLineDirectives" />
   </ItemGroup>
 </Project>

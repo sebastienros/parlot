@@ -1468,7 +1468,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     invokeMethod,
                     originalSource,
                     isMethodGroup,
-                    lambdaInfo?.FilePath,
+                    standalone.LineDirectives.GetPath(lambdaInfo?.FilePath),
                     lambdaInfo?.StartLine ?? 0,
                     isStatic: !hasParameters);
                 sb.AppendLine(methodSource);

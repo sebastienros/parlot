@@ -628,7 +628,25 @@ Enable compiler-generated file output to inspect the direct parser and shared su
 ```
 
 Generated callbacks include `#line` mappings to their `.parlot.cs` source, so breakpoints and stack traces
-map back to the original lambda or method-group location.
+map back to the original lambda or method-group location. The `ParlotLineDirectives` MSBuild property
+chooses the paths of these directives:
+
+| Value | `#line` directives |
+|---|---|
+| `absolute` (default) | The full path of the `.parlot.cs` file, as the compiler has it. Breakpoints work. |
+| `relative` | The path relative to the project directory, with `/` separators, so the output is the same in every checkout. |
+| `none` | Not emitted. Callbacks are debugged in the generated code. |
+
+```xml
+<PropertyGroup>
+  <ParlotLineDirectives>relative</ParlotLineDirectives>
+</PropertyGroup>
+```
+
+Use `relative` or `none` to check generated files in or compare them between machines. The compiler resolves a
+relative `#line` path from the directory of the generated file, which isn't the project directory, so the
+debugger may not find the `.parlot.cs` file from it; keep the default for debugging. Another value is reported
+as the warning `PARLOT027`, and the default is used.
 
 ## Diagnostics
 
@@ -640,6 +658,7 @@ Standalone-specific diagnostics are:
 | `PARLOT024` | Generated code requires unsupported runtime code |
 | `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
 | `PARLOT026` | The project targets an unsupported framework or C# language version |
+| `PARLOT027` | `ParlotLineDirectives` is not `absolute`, `relative` or `none` (warning) |
 
 Other factory diagnostics still apply. Common cases include:
 

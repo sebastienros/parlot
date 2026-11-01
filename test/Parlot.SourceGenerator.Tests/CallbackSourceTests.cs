@@ -104,6 +104,78 @@ public class CallbackSourceTests
         Assert.Contains("global::System.Collections.Generic.Dictionary<string, global::App.Models.SqlParameter>", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Line_Directives_Use_Absolute_Paths_By_Default()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "checkout");
+        var path = Path.Combine(root, "Parsing", "Grammar.parlot.cs");
+
+        var source = Generate(root, path, lineDirectives: null);
+
+        Assert.Contains("#line 15 \"" + path.Replace("\\", "\\\\") + "\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Relative_Line_Directives_Are_The_Same_In_Every_Checkout()
+    {
+        var first = Path.Combine(Path.GetTempPath(), "first");
+        var second = Path.Combine(Path.GetTempPath(), "second", "nested");
+
+        var source = Generate(first, Path.Combine(first, "Parsing", "Grammar.parlot.cs"), "relative");
+
+        Assert.Contains("#line 15 \"Parsing/Grammar.parlot.cs\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(first, source, StringComparison.Ordinal);
+        Assert.Equal(source, Generate(second, Path.Combine(second, "Parsing", "Grammar.parlot.cs"), "Relative"));
+    }
+
+    [Fact]
+    public void Line_Directives_Can_Be_Omitted()
+    {
+        var first = Path.Combine(Path.GetTempPath(), "first");
+        var second = Path.Combine(Path.GetTempPath(), "second");
+
+        var source = Generate(first, Path.Combine(first, "Grammar.parlot.cs"), "none");
+
+        Assert.DoesNotContain("#line", source, StringComparison.Ordinal);
+        Assert.Equal(source, Generate(second, Path.Combine(second, "Grammar.parlot.cs"), "none"));
+    }
+
+    [Fact]
+    public void Invalid_Line_Directives_Value_Is_Reported()
+    {
+        var options = DefaultOptions();
+        options["build_property.ParlotLineDirectives"] = "everywhere";
+
+        var (result, compilation) = RunStandalone(Models, Grammar, options);
+
+        AssertNoErrors(result, compilation);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT027");
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+    }
+
+    [Fact]
+    public void Relative_Line_Directives_Reach_Grammars_Outside_The_Project()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "repository");
+
+        var source = Generate(Path.Combine(root, "project"), Path.Combine(root, "shared", "Grammar.parlot.cs"), "relative");
+
+        Assert.Contains("#line 15 \"../shared/Grammar.parlot.cs\"", source, StringComparison.Ordinal);
+    }
+
+    private static string Generate(string projectDirectory, string grammarPath, string? lineDirectives)
+    {
+        var options = DefaultOptions(projectDirectory);
+        if (lineDirectives is not null)
+        {
+            options["build_property.ParlotLineDirectives"] = lineDirectives;
+        }
+
+        var (result, compilation) = RunStandalone(Models, Grammar, options, grammarPath: grammarPath);
+        AssertNoErrors(result, compilation);
+        return GetEntryPointSource(result);
+    }
+
     private static string GetEntryPointSource(GeneratorDriverRunResult result)
         => result.Results.SelectMany(static item => item.GeneratedSources)
             .Single(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal)).SourceText.ToString();

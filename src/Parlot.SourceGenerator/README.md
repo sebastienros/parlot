@@ -201,5 +201,9 @@ To inspect generated files:
 </PropertyGroup>
 ```
 
+Callbacks carry `#line` directives with the absolute path of their `.parlot.cs` file, for breakpoints. Set
+`<ParlotLineDirectives>relative</ParlotLineDirectives>` (paths relative to the project directory) or `none` to
+get the same output in every checkout.
+
 For the complete contract, capture restrictions, diagnostics, and `IncludeFiles` containment limits, see
 the [Source Generation Guide](../../docs/source-generation.md).
