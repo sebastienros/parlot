@@ -191,6 +191,10 @@ public class ParseContext
     // A byte is enough since only its low bits are tested, and it wraps around at a multiple of the check interval
     private byte _cancellationCheckCount;
 
+    // The recursive parsers entered since the stack was last checked, see EnsureSufficientStack(). Starts at 0 so that the
+    // first entry checks it.
+    private byte _stackCheckCount;
+
 #if PARLOT_STANDALONE
     private int _recursionDepth { get => _coldState?.RecursionDepth ?? 0; set => GetColdState().RecursionDepth = value; }
 #else
@@ -921,8 +925,23 @@ public class ParseContext
     /// such that deeply nested input fails the parse instead of overflowing the stack. Called on each entry into a
     /// <see cref="Deferred{T}"/> or prefix operator parser, whether <see cref="MaxRecursionDepth"/> is set or not.
     /// </summary>
+    /// <remarks>
+    /// The stack is checked on every 16th entry: any 16 consecutive entries contain a check, so the parsers never recurse
+    /// more than 16 levels below the last one, which the margin of the runtime's check (64 KB or more) leaves room for.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnsureSufficientStack()
+    {
+        const int mask = 0xF;
+
+        if ((unchecked(_stackCheckCount++) & mask) == 0)
+        {
+            CheckStack();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void CheckStack()
     {
 #if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
         if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
@@ -930,13 +949,6 @@ public class ParseContext
             ThrowInsufficientStack();
         }
 #else
-        EnsureSufficientStackDownlevel();
-#endif
-    }
-
-#if !(NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER)
-    private void EnsureSufficientStackDownlevel()
-    {
         try
         {
             RuntimeHelpers.EnsureSufficientExecutionStack();
@@ -945,8 +957,8 @@ public class ParseContext
         {
             ThrowInsufficientStack();
         }
-    }
 #endif
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowInsufficientStack()

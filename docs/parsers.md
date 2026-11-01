@@ -36,8 +36,9 @@ Without a limit, the same parsers check the stack of the thread on each entry, w
 `RuntimeHelpers.TryEnsureSufficientExecutionStack()` (`EnsureSufficientExecutionStack()` below .NET Standard 2.1), and fail
 the whole parse the same way, with the error "The input is nested too deeply to be parsed on the remaining stack.", rather
 than overflowing the stack, which would end the process. How deep a grammar can go then depends on the stack of the thread
-and on the stack each level of the grammar takes; a limit makes it independent of both. The check costs about a nanosecond
-per entry, and the limit, when set, a few more.
+and on the stack each level of the grammar takes; a limit makes it independent of both. Each entry increments a counter
+and the stack is checked on every 16th one, so a grammar recurses at most 16 levels past a check, which the runtime's
+margin (64 KB or more) leaves room for.
 
 A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
