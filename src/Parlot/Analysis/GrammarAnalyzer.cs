@@ -350,8 +350,8 @@ internal sealed class GrammarAnalysis
             return;
         }
 
-        // The lookup tables of OneOf<T>
-        if (choice is ISeekable && !ReportMixedWhiteSpace(choice, alternatives, candidates))
+        // The lookup tables of OneOf<T>. A choice of two types tells its chars without building a table.
+        if (choice is IResolvableSeekable && !ReportMixedWhiteSpace(choice, alternatives, candidates))
         {
             ReportUnseekableAlternatives(choice, alternatives, candidates);
         }

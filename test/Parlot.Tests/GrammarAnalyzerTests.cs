@@ -139,6 +139,20 @@ public class GrammarAnalyzerTests
         Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("a").Then(static x => x.Length).Or(Terms.AnyOf("0123456789").Then(static x => x.Length))));
         Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("a").Then(static x => x.Length).Or(Terms.Pattern(char.IsDigit).Lookup(true, "0123456789").Then(static x => x.Length))));
         Assert.Empty(GrammarAnalyzer.Analyze(Literals.Text("a").Then(static x => x.Length).Or(Literals.Scan(static span => span[0] == 'b' ? 1 : 0, "b").Then(static x => x.Length))));
+
+        // The operator parsers tell the chars of their operand, and of their prefix operators
+        var number = Terms.Integer();
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("x").Then(0L).Or(number.Unary((Terms.Char('-'), static x => -x)))));
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("x").Then(0L).Or(number.LeftAssociative((Terms.Char('+'), static (a, b) => a + b)))));
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("x").Then(0L).Or(number.RightAssociative((Terms.Char('^'), static (a, b) => a + b)))));
+    }
+
+    [Fact]
+    public void ChoiceOfTwoTypesIsNotReportedForItsLookupTable()
+    {
+        // It tries its two parsers in order, without a lookup table
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("a").Or<string, char, object>(Literals.Char('b'))));
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("a").Or<string, TextSpan, object>(Terms.Pattern(static c => c == 'b'))));
     }
 
     [Fact]

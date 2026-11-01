@@ -59,6 +59,34 @@ public class PrefixDispatchSourceTests
         Assert.DoesNotContain("DispatchPrefix", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ChoicesOfWrappersDispatchOnTheirFirstChars()
+    {
+        var operators = Terms.Text("ab").Unary((Terms.Char('-'), static x => "-" + x)).LeftAssociative((Terms.Char('+'), static (x, y) => x + y));
+        AssertCharDispatched(OneOf(operators, Terms.Text("b")), '-', 'a', 'b');
+
+        // A sequence built before the deferred parser it starts with is set
+        var expression = Deferred<string>();
+        var statement = expression.AndSkip(Terms.Char(';'));
+        var choice = OneOf(statement, Terms.Text("b"));
+        expression.Parser = Terms.Text("a");
+        AssertCharDispatched(choice, 'a', 'b');
+    }
+
+    // The white space is skipped once, before a switch on the next char
+    private static void AssertCharDispatched<T>(Parser<T> parser, params char[] chars)
+    {
+        var source = Generate(parser, new SourceGenerationContext());
+
+        Assert.Single(source.Split('\n'), static line => line.Contains("SkipWhiteSpace()", StringComparison.Ordinal));
+        Assert.Contains("switch (current", source, StringComparison.Ordinal);
+
+        foreach (var c in chars)
+        {
+            Assert.Contains($"'{c}'", source, StringComparison.Ordinal);
+        }
+    }
+
     private static void AssertDispatched<T>(Parser<T> parser, bool expected) => AssertDispatched(parser, expected, new SourceGenerationContext());
 
     private static void AssertDispatched<T>(Parser<T> parser, bool expected, SourceGenerationContext context)

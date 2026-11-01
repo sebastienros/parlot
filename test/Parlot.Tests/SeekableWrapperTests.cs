@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Parlot.Fluent;
 using Parlot.Rewriting;
@@ -154,5 +155,171 @@ public class SeekableWrapperTests
 
         // The selector only ran when the next char was one of the branches'
         Assert.Equal(input is " a" or " b" ? 1 : 0, evaluations);
+    }
+
+    public static TheoryData<string, string, int> OperandWrappers =>
+    new()
+    {
+        { "LeftAssociative", "ab+ab", 8 },
+        { "LeftAssociativeWithContext", "ab+ab", 8 },
+        { "LeftAssociativeOperators", "ab+ab", 8 },
+        { "RightAssociative", "ab+ab", 8 },
+        { "RightAssociativeWithContext", "ab+ab", 8 },
+        { "RightAssociativeOperators", "ab+ab", 8 },
+        { "Discard", "discarded", 3 },
+    };
+
+    // A parser which starts with the operand, and only ends with it when it doesn't read an operator after it
+    private static Parser<string> WrapOperand(string wrapper, Parser<string> operand)
+    {
+        var plus = Terms.Char('+');
+
+        return wrapper switch
+        {
+            "LeftAssociative" => operand.LeftAssociative((plus, static (x, y) => x + "+" + y)),
+            "LeftAssociativeWithContext" => operand.LeftAssociative((plus, static (ParseContext _, string x, string y) => x + "+" + y)),
+            "LeftAssociativeOperators" => operand.LeftAssociative([plus], static (x, y, op) => x + op + y),
+            "RightAssociative" => operand.RightAssociative((plus, static (x, y) => x + "+" + y)),
+            "RightAssociativeWithContext" => operand.RightAssociative((plus, static (ParseContext _, string x, string y) => x + "+" + y)),
+            "RightAssociativeOperators" => operand.RightAssociative([plus], static (x, y, op) => x + op + y),
+#pragma warning disable CS0618 // Discard is obsolete, and still a parser
+            "Discard" => operand.Discard("discarded"),
+#pragma warning restore CS0618
+            _ => throw new ArgumentOutOfRangeException(nameof(wrapper)),
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(OperandWrappers))]
+    public void OperandWrappersShouldForwardTheHintsOfTheOperand(string wrapper, string expected, int end)
+    {
+        var parser = WrapOperand(wrapper, Terms.Text("ab"));
+        var seekable = Seekable(parser);
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['a'], seekable.ExpectedChars);
+        Assert.True(seekable.SkipWhitespace);
+
+        var literal = Seekable(WrapOperand(wrapper, Literals.Text("ab")));
+
+        Assert.True(literal.CanSeek);
+        Assert.Equal(['a'], literal.ExpectedChars);
+        Assert.False(literal.SkipWhitespace);
+
+        Assert.False(Seekable(WrapOperand(wrapper, Literals.Identifier(static c => c == '-').Then(static x => x.ToString()))).CanSeek);
+
+        // The choice only tries the parser for the chars of its operand, after skipping the white space once
+        var choice = OneOf(parser, Terms.Text("b"));
+
+        Assert.Equal(['a', 'b'], Seekable(choice).ExpectedChars.OrderBy(static c => c));
+        Assert.True(Seekable(choice).SkipWhitespace);
+
+        Assert.Equal((true, expected, 1, end), ParseCounting(choice, parser, " ab + ab"));
+        Assert.Equal((true, "b", 0, 2), ParseCounting(choice, parser, " b"));
+
+        // The cursor is back at the start when the parser isn't tried, and when it fails
+        Assert.Equal((false, null, 0, 0), ParseCounting(choice, parser, " c"));
+        Assert.Equal((false, null, 1, 0), ParseCounting(choice, parser, " ac"));
+    }
+
+    [Fact]
+    public void UnaryShouldDeclareTheUnionOfItsOperatorsAndOperand()
+    {
+        var parser = Terms.Text("ab").Unary((Terms.Char('-'), static x => "-" + x), (Terms.Char('!'), static x => "!" + x));
+        var seekable = Seekable(parser);
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['!', '-', 'a'], seekable.ExpectedChars.OrderBy(static c => c));
+        Assert.True(seekable.SkipWhitespace);
+
+        var contextual = Seekable(Literals.Text("ab").Unary((Literals.Char('-'), static (ParseContext _, string x) => "-" + x)));
+
+        Assert.True(contextual.CanSeek);
+        Assert.Equal(['-', 'a'], contextual.ExpectedChars.OrderBy(static c => c));
+        Assert.False(contextual.SkipWhitespace);
+
+        // An operator or an operand that disagree on white space, or can't seek, have no common hint
+        Assert.False(Seekable(Literals.Text("ab").Unary((Terms.Char('-'), static x => "-" + x))).CanSeek);
+        Assert.False(Seekable(Terms.Text("ab").Unary((Terms.Pattern(static c => c == '-'), static x => "-" + x))).CanSeek);
+        Assert.False(Seekable(Terms.Pattern(static c => c == 'a').Then(static x => x.ToString()).Unary((Terms.Char('-'), static x => "-" + x))).CanSeek);
+
+        var choice = OneOf(parser, Terms.Text("b"));
+
+        Assert.Equal(['!', '-', 'a', 'b'], Seekable(choice).ExpectedChars.OrderBy(static c => c));
+        Assert.True(Seekable(choice).SkipWhitespace);
+
+        // Each operator invokes the parser again for its operand
+        Assert.Equal((true, "-!ab", 3, 7), ParseCounting(choice, parser, " - ! ab"));
+        Assert.Equal((true, "ab", 1, 3), ParseCounting(choice, parser, " ab"));
+        Assert.Equal((true, "b", 0, 2), ParseCounting(choice, parser, " b"));
+        Assert.Equal((false, null, 0, 0), ParseCounting(choice, parser, " c"));
+
+        // An operator without an operand fails, and so does the choice
+        Assert.Equal((false, null, 2, 0), ParseCounting(choice, parser, " -c"));
+        Assert.Equal((false, null, 1, 0), ParseCounting(choice, parser, " ac"));
+    }
+
+    [Fact]
+    public void ChoiceOfTwoTypesShouldDeclareTheUnionOfItsParsers()
+    {
+        var parser = Terms.Text("ab").Or<string, char, object>(Terms.Char('c'));
+        var seekable = Seekable(parser);
+
+        Assert.True(seekable.CanSeek);
+        Assert.Equal(['a', 'c'], seekable.ExpectedChars.OrderBy(static c => c));
+        Assert.True(seekable.SkipWhitespace);
+
+        Assert.False(Seekable(Terms.Text("ab").Or<string, char, object>(Literals.Char('c'))).CanSeek);
+        Assert.False(Seekable(Terms.Text("ab").Or<string, TextSpan, object>(Terms.Pattern(static c => c == 'c'))).CanSeek);
+
+        var choice = OneOf(parser, Terms.Text("b").Then<object>(static x => x));
+
+        Assert.Equal(['a', 'b', 'c'], Seekable(choice).ExpectedChars.OrderBy(static c => c));
+        Assert.True(Seekable(choice).SkipWhitespace);
+        Assert.Equal('c', choice.Parse(" c"));
+        Assert.Equal("ab", choice.Parse(" ab"));
+
+        var context = new ParseContext(new Scanner(" ac"));
+        var result = new ParseResult<object>();
+
+        Assert.False(choice.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.False(choice.TryParse(" d", out _));
+    }
+
+    [Fact]
+    public void ElseErrorShouldBeTriedForAnyChar()
+    {
+        // Skipping it for a char its parser doesn't start with would fail instead of reporting the error
+        var parser = Terms.Text("a").ElseError("expected a");
+
+        Assert.False(parser is ISeekable);
+
+        var choice = OneOf(Terms.Text("b"), parser);
+
+        Assert.Equal("b", choice.Parse(" b"));
+        Assert.Equal("a", choice.Parse(" a"));
+        Assert.Equal("expected a", Assert.Throws<ParseException>(() => choice.Parse(" c")).Message);
+    }
+
+    // Parses the input with the choice, and tells how many times it invoked the parser and where it left the cursor
+    private static (bool Success, string Value, int Invocations, int Offset) ParseCounting(Parser<string> choice, object parser, string input)
+    {
+        var invocations = 0;
+        var context = new ParseContext(new Scanner(input))
+        {
+            OnEnterParser = (entered, _) =>
+            {
+                if (ReferenceEquals(entered, parser))
+                {
+                    invocations++;
+                }
+            },
+        };
+
+        var result = new ParseResult<string>();
+        var success = choice.Parse(context, ref result);
+
+        return (success, success ? result.Value : null, invocations, context.Scanner.Cursor.Offset);
     }
 }

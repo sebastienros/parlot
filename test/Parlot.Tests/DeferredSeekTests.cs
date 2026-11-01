@@ -268,7 +268,9 @@ public class DeferredSeekTests
     public void ParsersBuiltBeforeTheirDeferredIsSetShouldForwardItsHints()
     {
         var deferred = Deferred<string>();
+        var plus = Terms.Char('+');
 
+#pragma warning disable CS0618 // Discard is obsolete, and still a parser
         object[] parsers =
         [
             deferred.And(Literals.Char(';')),
@@ -286,6 +288,7 @@ public class DeferredSeekTests
             deferred.Error<int>("unexpected"),
             deferred.Eof(),
             deferred.Commit(),
+            deferred.Discard(0),
             deferred.Switch(static (_, _) => 0, Literals.Char(';')),
             deferred.WhenFollowedBy(Literals.Char(';')),
             deferred.WhenNotFollowedBy(Literals.Char(';')),
@@ -293,7 +296,13 @@ public class DeferredSeekTests
             OneOrMany(deferred),
             If(static () => true, deferred),
             Select(static () => 0, deferred),
+            deferred.Or<string, string, object>(Terms.Text("b")),
+            deferred.LeftAssociative((plus, static (x, y) => x + y)),
+            deferred.LeftAssociative([plus], static (x, y, _) => x + y),
+            deferred.RightAssociative((plus, static (x, y) => x + y)),
+            deferred.Unary((Terms.Char('-'), static x => "-" + x)),
         ];
+#pragma warning restore CS0618
 
         Assert.All(parsers, static parser => Assert.False(((ISeekable)parser).CanSeek));
 
