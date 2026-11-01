@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -29,6 +30,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     private readonly SemanticModel _semanticModel;
     private readonly IMethodSymbol _factory;
     private readonly Dictionary<int, LambdaInfo> _lambdas = new();
+    private readonly Dictionary<int, ExpressionSyntax> _sites = new();
     private int _nextPointer;
 
     public LambdaRewriter(SemanticModel semanticModel, IMethodSymbol factory, int firstPointer = 0)
@@ -47,6 +49,82 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
     /// Gets the pointer the next rewritten lambda would receive.
     /// </summary>
     public int NextPointer => _nextPointer;
+
+    /// <summary>
+    /// Gets the expressions of the original tree that build or reference parsers, by the site the rewritten code records
+    /// them with in <c>Parlot.SourceGeneration.ParserSites</c>. Sites share the numbering of lambda pointers, so they are
+    /// unique across the files of a build.
+    /// </summary>
+    public IReadOnlyDictionary<int, ExpressionSyntax> Sites => _sites;
+
+    [return: NotNullIfNotNull(nameof(node))]
+    public override SyntaxNode? Visit(SyntaxNode? node)
+    {
+        var visited = base.Visit(node);
+
+        if (node is not ExpressionSyntax expression || visited is not ExpressionSyntax rewritten || !IsParserSite(expression))
+        {
+            return visited;
+        }
+
+        var site = _nextPointer++;
+        _sites[site] = expression;
+
+        // global::Parlot.SourceGeneration.ParserSites.Track(expression, site), with the trivia of the expression
+        return SyntaxFactory.InvocationExpression(
+                SyntaxFactory.ParseExpression("global::Parlot.SourceGeneration.ParserSites.Track"),
+                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                {
+                    SyntaxFactory.Argument(rewritten.WithoutTrivia()),
+                    SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(site))),
+                })))
+            .WithTriviaFrom(rewritten);
+    }
+
+    // An expression that builds a parser, or reads one from a variable, a parameter, a field or a property where its value is used
+    private bool IsParserSite(ExpressionSyntax expression)
+    {
+        switch (expression)
+        {
+            case InvocationExpressionSyntax invocation when invocation.Expression is not MemberBindingExpressionSyntax:
+            case ObjectCreationExpressionSyntax:
+                break;
+            case IdentifierNameSyntax or MemberAccessExpressionSyntax when IsValuePosition(expression):
+                if (_semanticModel.GetSymbolInfo(expression).Symbol is not (ILocalSymbol or IParameterSymbol or IFieldSymbol or IPropertySymbol))
+                {
+                    return false;
+                }
+
+                break;
+            default:
+                return false;
+        }
+
+        if (expression.Ancestors().OfType<InvocationExpressionSyntax>().Any(static invocation => invocation.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" }))
+        {
+            return false;
+        }
+
+        for (var type = _semanticModel.GetTypeInfo(expression).Type as INamedTypeSymbol; type is not null; type = type.BaseType)
+        {
+            if (type.OriginalDefinition is { Name: "Parser", Arity: 1, ContainingNamespace: { Name: "Fluent", ContainingNamespace.Name: "Parlot" } })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsValuePosition(ExpressionSyntax expression) => expression.Parent switch
+    {
+        ArgumentSyntax argument => argument.RefKindKeyword.IsKind(SyntaxKind.None),
+        MemberAccessExpressionSyntax access => access.Expression == expression && access.Parent is InvocationExpressionSyntax invocation && invocation.Expression == access,
+        AssignmentExpressionSyntax assignment => assignment.Right == expression,
+        EqualsValueClauseSyntax or ArrowExpressionClauseSyntax or ReturnStatementSyntax or ExpressionElementSyntax => true,
+        InitializerExpressionSyntax initializer => initializer.IsKind(SyntaxKind.ArrayInitializerExpression) || initializer.IsKind(SyntaxKind.CollectionInitializerExpression),
+        _ => false,
+    };
 
     /// <summary>
     /// Information about a captured variable in a lambda (closure).

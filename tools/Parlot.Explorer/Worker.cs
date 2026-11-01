@@ -22,7 +22,7 @@ internal static class Worker
                 $"{method.DeclaringType!.FullName}.{method.Name}", method.GetParameters()[^1].ParameterType.GetElementType()!.ToString(),
                 method.GetParameters()[0].ParameterType == typeof(string) ? "string" : "reader",
                 method.GetParameters()[1..^1].Where(p => p.Position != CancellationParameterIndex(method))
-                    .Select(static p => $"{p.Name}: {p.ParameterType}").ToArray())).ToArray();
+                    .Select(static p => $"{p.Name}: {p.ParameterType}").ToArray(), Suggestions(method))).ToArray();
 
         var selected = methods.SingleOrDefault(method => ParserId(method) == request.Parser)
             ?? throw new InvalidOperationException("This parser is no longer available. Refresh the assembly.");
@@ -95,6 +95,17 @@ internal static class Worker
         var marker = method.GetCustomAttributesData().Single(static attribute => attribute.AttributeType.FullName == Protocol.Marker);
         var argument = marker.NamedArguments.FirstOrDefault(static item => item.MemberName == "CancellationTokenIndex");
         return argument.TypedValue.Value is int index ? index : -1;
+    }
+
+    // The findings of the grammar analysis, see ParserDiagnosticsAttribute.Suggestions. Older builds have none.
+    private static Suggestion[] Suggestions(MethodInfo method)
+    {
+        var marker = method.GetCustomAttributesData().Single(static attribute => attribute.AttributeType.FullName == Protocol.Marker);
+        var argument = marker.NamedArguments.FirstOrDefault(static item => item.MemberName == "Suggestions");
+        if (argument.TypedValue.Value is not IReadOnlyCollection<CustomAttributeTypedArgument> values) return [];
+        return values.Select(static value => ((string)value.Value!).Split('\n', 5))
+            .Where(static fields => fields.Length == 5)
+            .Select(static fields => new Suggestion(fields[0], fields[1], fields[2], fields[3], fields[4])).ToArray();
     }
 
     private static string ParserId(MethodInfo method) => method.DeclaringType!.FullName + "::" + method;

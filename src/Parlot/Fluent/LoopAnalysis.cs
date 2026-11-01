@@ -216,6 +216,28 @@ internal sealed class LoopAnalysis
     }
 
     /// <summary>
+    /// Explores the parsers that <paramref name="parsers"/> can invoke at their start and finds their cycles, without changing
+    /// the loop detection of the deferred parsers, for <see cref="Analysis.GrammarAnalyzer"/>.
+    /// </summary>
+    public static Dictionary<object, Node> ExploreStarts(IReadOnlyList<object> parsers)
+    {
+        lock (SyncRoot)
+        {
+            var analysis = new LoopAnalysis();
+
+            foreach (var parser in parsers)
+            {
+                analysis.GetNode(parser);
+            }
+
+            analysis.Explore();
+            analysis.FindCycles();
+
+            return analysis._nodesByParser;
+        }
+    }
+
+    /// <summary>
     /// Records that the parser being analyzed can invoke <paramref name="parser"/> while the cursor is still where it was
     /// invoked, and returns whether <paramref name="parser"/> can succeed without moving the cursor.
     /// </summary>
@@ -252,6 +274,11 @@ internal sealed class LoopAnalysis
     {
         GetNode(root);
 
+        Explore();
+    }
+
+    private void Explore()
+    {
         bool changed;
 
         do
@@ -531,7 +558,7 @@ internal sealed class LoopAnalysis
         return type.IsValueType && !type.IsPointer && depth < 4 && HasPlainFields(type, DeclaredInstanceFields, depth + 1);
     }
 
-    private sealed class Node
+    internal sealed class Node
     {
         public Node(object parser)
         {
@@ -561,7 +588,7 @@ internal sealed class LoopAnalysis
         public bool ReachesOpaque;
     }
 
-    private sealed class ReferenceComparer : IEqualityComparer<object>
+    internal sealed class ReferenceComparer : IEqualityComparer<object>
     {
         public static readonly ReferenceComparer Instance = new();
 

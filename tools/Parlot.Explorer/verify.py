@@ -42,7 +42,11 @@ try:
     rejected('session', None, {'Origin': 'https://unrelated.example'}, 403)
     rejected('session', None, {'Host': 'unrelated.example'}, 403)
     catalog = request('catalog', {'path': str(SAMPLE)})
-    assert {'Choice', 'Assignment', 'Optional', 'Recursive', 'Throws', 'Json'} <= {entry['name'].rsplit('.', 1)[-1] for entry in catalog}, catalog
+    assert {'Choice', 'Assignment', 'Optional', 'Recursive', 'Throws', 'Json', 'Comparison'} <= {entry['name'].rsplit('.', 1)[-1] for entry in catalog}, catalog
+    suggestions = {entry['name'].rsplit('.', 1)[-1]: entry['suggestions'] for entry in catalog}
+    assert [item['id'] for item in suggestions['Comparison']] == ['PARLOT103', 'PARLOT113'], suggestions['Comparison']
+    assert all(item['message'] and item['title'] and item['helpLink'].endswith('#' + item['id'].lower()) for item in suggestions['Comparison'])
+    assert not suggestions['Choice'] and not suggestions['Json'], suggestions
     def capture(name, source, path=SAMPLE):
         entries = catalog if path == SAMPLE else request('catalog', {'path': str(path)})
         parser = next(entry for entry in entries if entry['name'].endswith('.' + name))
@@ -52,6 +56,8 @@ try:
     assert 0 <= choice['parseElapsedMs'] <= choice['elapsedMs'], choice
     assert any(event['kind'] == 'reset' and event['offset'] == 1 and event['target'] == 0 for event in choice['events'])
     assert not capture('Choice', 'ax')['success']
+    comparison = capture('Comparison', 'a <= b')
+    assert comparison['success'] and comparison['value'] == 'a', comparison
     assert capture('Optional', 'a')['success']
     assert capture('Recursive', '((a))')['success']
     throwing = capture('Throws', 'a')

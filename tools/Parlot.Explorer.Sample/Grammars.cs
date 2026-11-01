@@ -8,4 +8,5 @@ public static partial class Grammars
     private static partial bool Optional(string text, out char value);
     private static partial bool Recursive(string text, out char value);
     private static partial bool Throws(string text, out char value);
+    private static partial bool Comparison(string text, out string value);
 }

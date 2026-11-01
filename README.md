@@ -121,6 +121,7 @@ operators, see [Operator tables](docs/parsers.md#operator-tables).
 - [Best practices for custom parsers](docs/writing.md)
 - [Source generation guide](docs/source-generation.md)
 - [Parser Explorer](docs/explorer.md) — local generated-parser diagnostics and replay
+- [Grammar rules](docs/grammar-rules.md) — the patterns Parlot reports as slow or wrong, and how to fix them
 - [Parsing streams](docs/streaming.md)
 - [Security guidance](docs/security.md)
 

@@ -64,6 +64,12 @@ public sealed partial class ParserSourceGenerator
                 ? Method.Parameters[ResultParameter.Ordinal - 1]
                 : null;
         public string? Source { get; set; }
+
+        // What the grammar analysis found, which a factory that opts into diagnostics hands to Parlot Explorer
+        public List<GrammarFinding> GrammarFindings { get; set; } = [];
+
+        // The diagnostics of these findings, reported once all the factories of the build ran
+        public List<Diagnostic> GrammarDiagnostics { get; } = [];
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
@@ -254,6 +260,7 @@ public sealed partial class ParserSourceGenerator
         }
 
         GenerateStandaloneEntryPoints(output, compilation, target, pending, projectDirectory, entryPointKeys);
+        ReportGrammarDiagnostics(output, pending);
 
         var generated = new List<(string HintName, SyntaxTree Tree)>();
         foreach (var entry in entries)
@@ -542,7 +549,8 @@ public sealed partial class ParserSourceGenerator
         if (standalone.Diagnostics)
         {
             var tokenIndex = standalone.CancellationTokenParameter?.Ordinal ?? -1;
-            source.AppendLine($"        [global::Parlot.Generated.ParserDiagnosticsAttribute(1, CancellationTokenIndex = {tokenIndex})]");
+            var suggestions = standalone.GrammarFindings.Count > 0 ? $", Suggestions = {FormatSuggestions(standalone.GrammarFindings)}" : "";
+            source.AppendLine($"        [global::Parlot.Generated.ParserDiagnosticsAttribute(1, CancellationTokenIndex = {tokenIndex}{suggestions})]");
         }
         source.AppendLine($"        {StandaloneSignature(entry)}");
         source.AppendLine("        {");

@@ -3,7 +3,9 @@ using System.Text.Json;
 namespace Parlot.Explorer;
 
 internal sealed record Request(string Path, string? Parser = null, string Input = "", JsonElement? Configuration = null);
-internal sealed record ParserInfo(string Id, string Name, string ResultType, string InputKind, string[] Configuration);
+internal sealed record ParserInfo(string Id, string Name, string ResultType, string InputKind, string[] Configuration, Suggestion[] Suggestions);
+// A pattern of docs/grammar-rules.md that the source generator found in the grammar
+internal sealed record Suggestion(string Id, string Category, string Title, string HelpLink, string Message);
 internal sealed record TraceEvent(string Kind, int Id, int Parent, string Rule, int Offset, int Buffer, bool HitEnd, int Target);
 internal sealed record BufferSnapshot(int Start, string Text);
 internal sealed record Capture(bool? Success, object? Value, string? Error, List<TraceEvent> Events,

@@ -1,9 +1,11 @@
+using Parlot.Analysis;
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
+public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable, IChoiceParser
     where A : T
     where B : T
 {
@@ -17,6 +19,13 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parserA) | analysis.Invoke(_parserB);
+
+    IReadOnlyList<object> IChoiceParser.Alternatives => [_parserA, _parserB];
+
+    void IChoiceParser.Resolve()
+    {
+        // No lookup table
+    }
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
