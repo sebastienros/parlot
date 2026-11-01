@@ -452,15 +452,25 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (i >= 0)
         {
             var start = context.Scanner.Cursor.Offset;
-            var operatorResult = new ParseResult<int>();
 
-            var top = MatchPrefixes(context, i, ref operatorResult);
+            // The operators of each level are tried from the same position
+            var pin = context.Pin();
 
-            if (top >= 0)
+            // The operators of the loosest level are tried first, as its parser in the chain runs first. The first operator is
+            // matched here rather than in MatchPrefixes(): most operands have none, and their code then has no call to set up.
+            for (; i >= 0; i--)
             {
-                lookup = false;
-                return ParsePrefixed(context, start, top, ref operatorResult, ref result, ref next);
+                var operatorResult = new ParseResult<int>();
+
+                if (MatchPrefix(context, _levels[prefixLevels[i]], start, ref operatorResult))
+                {
+                    context.Unpin(pin);
+                    lookup = false;
+                    return ParsePrefixed(context, start, i, ref operatorResult, ref result, ref next);
+                }
             }
+
+            context.Unpin(pin);
         }
 
         return _operand.Parse(context, ref result);
@@ -502,14 +512,63 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// </remarks>
     private bool ParsePrefixed(ParseContext context, int start, int top, ref ParseResult<int> operatorResult, ref ParseResult<T> result, ref Lookahead next)
     {
-        // Each operator counts as one level of recursion, as when the operand of each one was climbed recursively
-        var limitRecursion = context.MaxRecursionDepth > 0;
         var resultStart = operatorResult.Start;
+        var first = operatorResult.Value;
+
+        // With a limit, each operator counts as one level of recursion when it is read, see ParseChain()
+        if (context.MaxRecursionDepth > 0)
+        {
+            return ParseChain(context, start, resultStart, first, top, limitRecursion: true, ref operatorResult, ref result, ref next);
+        }
+
+        // The next operator is of the level of this one or of a tighter one
+        top = MatchPrefixes(context, top, ref operatorResult);
+
+        if (top >= 0)
+        {
+            return ParseChain(context, start, resultStart, first, top, limitRecursion: false, ref operatorResult, ref result, ref next);
+        }
+
+        // A single operator, the most common case, needs no list
+        if (!_operand.Parse(context, ref result))
+        {
+            // An operator not followed by an operand fails the parser
+            context.Scanner.Cursor.ResetPosition(start);
+            return false;
+        }
+
+        // Never fails once the operand is parsed
+        Climb(context, _operatorLevels[first], ref result, ref next, parsed: true);
+
+        // The result spans the operator and the operand
+        result.Set(resultStart, result.End, _unary[first]!(result.Value));
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a chain of prefix operators from <paramref name="first"/>. Without <paramref name="limitRecursion"/>, the second
+    /// operator was matched, in <paramref name="operatorResult"/> and the level <c>_prefixLevels[top]</c>. With it, only the
+    /// first one was, and each one counts as one level of recursion, as when the operand of each one was climbed recursively.
+    /// </summary>
+    private bool ParseChain(ParseContext context, int start, int resultStart, int first, int top, bool limitRecursion, ref ParseResult<int> operatorResult, ref ParseResult<T> result, ref Lookahead next)
+    {
         var operators = new ListBuilder<int>();
 
         try
         {
-            do
+            if (limitRecursion)
+            {
+                context.EnterRecursion();
+            }
+
+            operators.Add(first);
+
+            if (limitRecursion)
+            {
+                top = MatchPrefixes(context, top, ref operatorResult);
+            }
+
+            while (top >= 0)
             {
                 if (limitRecursion)
                 {
@@ -521,7 +580,6 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 // The next operator is of the level of this one or of a tighter one
                 top = MatchPrefixes(context, top, ref operatorResult);
             }
-            while (top >= 0);
 
             if (!_operand.Parse(context, ref result))
             {
@@ -792,8 +850,16 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (_prefixLevels.Length > 0)
         {
+            // The first operator is matched here rather than in prefixes(): most operands have none, and their code then has
+            // no call to set up
             Line($"        var start = {cursor}.Offset;");
-            Line($"        var prefixOperator = prefixes{id}(maxLevel);");
+            Line("        var prefixOperator = -1;");
+
+            foreach (var line in MatchPrefixLines("        ", id, ctx, compacting, "maxLevel", "prefixOperator"))
+            {
+                Line(line);
+            }
+
             Line("        if (prefixOperator >= 0)");
             Line("        {");
             Line($"            if (!prefixed{id}(prefixOperator, start, ref climbed, ref next, ref nextPosition)) return false;");
@@ -969,6 +1035,32 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return sb.ToString();
     }
 
+    // Sets target to the index of an operator of the prefix levels up to maxLevel which reads some text, or leaves it at -1
+    private List<string> MatchPrefixLines(string indent, string id, string ctx, bool compacting, string maxLevel, string target)
+    {
+        var lines = new List<string>();
+
+        if (compacting)
+        {
+            // The operators of each level are tried from the same position
+            lines.Add($"{indent}var prefixPin = {ctx}.Pin();");
+        }
+
+        // The operators of the loosest level are tried first, as its parser in the chain runs first
+        for (var i = _prefixLevels.Length - 1; i >= 0; i--)
+        {
+            var level = _prefixLevels[i].ToString(CultureInfo.InvariantCulture);
+            lines.Add($"{indent}if ({target} < 0 && {maxLevel} >= {level}) prefix{id}_{level}(out {target});");
+        }
+
+        if (compacting)
+        {
+            lines.Add($"{indent}{ctx}.Unpin(prefixPin);");
+        }
+
+        return lines;
+    }
+
     // The index of an operator of the prefix levels up to maxLevel which reads some text, or -1
     private string GeneratePrefixes(string id, string ctx, bool compacting)
     {
@@ -980,22 +1072,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("{");
         Line("    var prefixOperator = -1;");
 
-        if (compacting)
+        foreach (var line in MatchPrefixLines("    ", id, ctx, compacting, "maxLevel", "prefixOperator"))
         {
-            // The operators of each level are tried from the same position
-            Line($"    var prefixPin = {ctx}.Pin();");
-        }
-
-        // The operators of the loosest level are tried first, as its parser in the chain runs first
-        for (var i = _prefixLevels.Length - 1; i >= 0; i--)
-        {
-            var level = _prefixLevels[i];
-            Line($"    if (prefixOperator < 0 && maxLevel >= {level.ToString(CultureInfo.InvariantCulture)}) prefix{id}_{level.ToString(CultureInfo.InvariantCulture)}(out prefixOperator);");
-        }
-
-        if (compacting)
-        {
-            Line($"    {ctx}.Unpin(prefixPin);");
+            Line(line);
         }
 
         Line("    return prefixOperator;");
@@ -1021,23 +1100,71 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
+        void Apply(string indent, string op)
+        {
+            Line($"{indent}switch ({op})");
+            Line($"{indent}{{");
+
+            foreach (var prefixOperator in prefixOperators)
+            {
+                Line($"{indent}    case {prefixOperator.ToString(CultureInfo.InvariantCulture)}: climbed = {factories[prefixOperator]}(climbed); break;");
+            }
+
+            Line($"{indent}}}");
+        }
+
         Line($"bool prefixed{id}(int op, int start, ref {valueType} climbed, ref int next, ref int nextPosition)");
         Line("{");
+
+        // Like at runtime, each operator counts as one level of recursion. An exception fails the whole parse, and the context
+        // isn't used again, so the levels are only left on a return.
+        if (limitRecursion)
+        {
+            Line($"    {ctx}.EnterRecursion();");
+        }
+
+        // The next operator is of the level of this one or of a tighter one
+        Line($"    var second = prefixes{id}({levelsField}[op]);");
+        Line("    if (second < 0)");
+        Line("    {");
+
+        // A single operator, the most common case, needs no list. The operators of the levels up to its own that follow the
+        // operand apply to it first.
+        Line($"        if (!{operandHelper}({ctx}, out climbed))");
+        Line("        {");
+        Line($"            {cursor}.ResetPosition(start);");
+
+        if (limitRecursion)
+        {
+            Line($"            {ctx}.ExitRecursion();");
+        }
+
+        Line("            return false;");
+        Line("        }");
+        Line($"        {climb}({levelsField}[op], ref climbed, ref next, ref nextPosition, true, true);");
+        Apply("        ", "op");
+
+        if (limitRecursion)
+        {
+            Line($"        {ctx}.ExitRecursion();");
+        }
+
+        Line("        return true;");
+        Line("    }");
         Line($"    {ListBuilderSource.Declare("operators", "int")}");
         Line("    try");
         Line("    {");
+        Line("        operators.Add(op);");
+        Line("        op = second;");
         Line("        do");
         Line("        {");
 
-        // Like at runtime, each operator counts as one level of recursion
         if (limitRecursion)
         {
             Line($"            {ctx}.EnterRecursion();");
         }
 
         Line("            operators.Add(op);");
-
-        // The next operator is of the level of this one or of a tighter one
         Line($"            op = prefixes{id}({levelsField}[op]);");
         Line("        }");
         Line("        while (op >= 0);");
@@ -1050,18 +1177,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("        for (var i = operators.Count - 1; i >= 0; i--)");
         Line("        {");
         Line("            var prefixOperator = operators[i];");
-
-        // The operators of the levels up to its own that follow the operand apply to it first
         Line($"            {climb}({levelsField}[prefixOperator], ref climbed, ref next, ref nextPosition, true, lookup);");
-        Line("            switch (prefixOperator)");
-        Line("            {");
-
-        foreach (var op in prefixOperators)
-        {
-            Line($"                case {op.ToString(CultureInfo.InvariantCulture)}: climbed = {factories[op]}(climbed); break;");
-        }
-
-        Line("            }");
+        Apply("            ", "prefixOperator");
         Line("            lookup = false;");
         Line("        }");
         Line("        return true;");

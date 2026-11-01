@@ -302,10 +302,12 @@ public class GeneratorFixesTests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(unlimited, @"context\.EnsureSufficientStack\(\);"));
         Assert.DoesNotContain("EnterRecursion", unlimited, StringComparison.Ordinal);
 
-        // The Deferred helper, the Unary parser and the loop of its operators, and the loop of the prefix operators count
+        // The Deferred helper, the Unary parser and the loop of its operators, and the prefix operators (the first one, then the
+        // loop of the following ones) count. The first prefix operator leaves its level on both returns of its path without a
+        // list, the following ones in the finally block of the list.
         var limited = Source("nameof(TryParse), MaxRecursionDepth = 64");
-        Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.EnterRecursion\(\);").Count);
-        Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.ExitRecursion\(\);").Count);
+        Assert.Equal(5, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.EnterRecursion\(\);").Count);
+        Assert.Equal(6, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.ExitRecursion\(\);").Count);
         Assert.Contains(": base(__parlotScanner, 64)", limited, StringComparison.Ordinal);
     }
 
