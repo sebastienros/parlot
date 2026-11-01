@@ -33,9 +33,8 @@ public static partial class RecursionGrammars
     private static Parser<int> NegationGrammar() =>
         Literals.Char('a').Then(0).Unary((Literals.Char('-'), static count => count + 1));
 
-    // A table with only prefix levels emits an empty switch, hence the binary level
+    // A table with only prefix levels
     private static Parser<int> PrefixGrammar() =>
         Literals.Char('a').Then(0).Operators()
-            .Unary((Literals.Char('-'), static count => count + 1))
-            .LeftAssociative((Literals.Char('+'), static (left, right) => left + right));
+            .Unary((Literals.Char('-'), static count => count + 1));
 }

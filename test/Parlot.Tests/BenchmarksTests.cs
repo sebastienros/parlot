@@ -99,6 +99,18 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("Operand", 42)]
+    [InlineData("Prefixes", 1)]
+    public void PrefixTableGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the runtime Unary one
+        var benchmark = new PrefixTableBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.UnaryRuntime());
+        Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
+    [Theory]
     [InlineData("Atom", 1)]
     [InlineData("Members", 1254301)]
     [InlineData("Conditional", 993)]

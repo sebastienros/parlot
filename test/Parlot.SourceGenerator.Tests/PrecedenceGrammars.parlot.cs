@@ -42,6 +42,26 @@ public static partial class PrecedenceGrammars
                 (Literals.Char('+').Then(static _ => 0), static x => PrecedenceAst.Prefix("+", x)))
             .LeftAssociative((Literals.Char('*').Then(static _ => 0), static (a, b) => PrecedenceAst.Binary("*", a, b))));
 
+    // Only prefix levels, after which no operator is looked up, the same table as PrecedenceTests.RuntimePrefixOnly
+    [GenerateParser(nameof(TryParsePrefixOnly))]
+    private static Parser<string> BuildPrefixOnly()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)), (Terms.Char('~'), static x => PrecedenceAst.Prefix("~", x)))
+            .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)));
+
+        return WithRest(expression);
+    }
+
+    // A table without levels parses its operand
+    [GenerateParser(nameof(TryParseNoLevels))]
+    private static Parser<string> BuildNoLevels() =>
+        WithRest(Terms.Identifier().Then(static x => x.ToString()).Operators());
+
     [GenerateParser(nameof(TryParseEmptyOperators))]
     private static Parser<string> BuildEmptyOperators() =>
         WithRest(Literals.Text("x").Optional().Then(static x => x.HasValue ? "x" : "").Operators()

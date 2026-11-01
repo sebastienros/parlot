@@ -47,6 +47,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     // The only segment of a table without valued operators, or null
     private readonly Segment? _plainSegment;
 
+    // Whether operators can follow an operand, false when the table has only prefix levels, or none
+    private readonly bool _hasFollowingOperators;
+
     // The parsers that can read first, a prefix operator or an operand, whose hints are read when they are asked for since
     // they can be Deferred parsers set later
     private readonly object[] _first;
@@ -126,6 +129,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 segment.FirstLookupLevel = level;
             }
         }
+
+        _hasFollowingOperators = prefixLevels.Count < levels.Length;
 
         _prefixLevels = prefixLevels.ToArray();
         _first = first.ToArray();
@@ -506,6 +511,14 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (!ParseOperand(context, maxLevel, ref result, ref next, out var lookup))
         {
             return false;
+        }
+
+        if (!_hasFollowingOperators)
+        {
+            // There is nothing to look up after the operand
+            next.Operator = Lookahead.None;
+            next.Offset = context.Scanner.Cursor.Offset;
+            return true;
         }
 
         var cursor = context.Scanner.Cursor;
@@ -958,11 +971,14 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         var segmentHelpers = new Dictionary<Segment, (string? Choice, string? Plain)>();
 
-        foreach (var segment in Segments())
+        if (_hasFollowingOperators)
         {
-            var segmentChoice = GetChoice(segment, plain: false);
-            var plainChoice = segment.Valued >= 0 ? GetChoice(segment, plain: true) : null;
-            segmentHelpers[segment] = (segmentChoice is null ? null : ChoiceHelper(segmentChoice), plainChoice is null ? null : ChoiceHelper(plainChoice));
+            foreach (var segment in Segments())
+            {
+                var segmentChoice = GetChoice(segment, plain: false);
+                var plainChoice = segment.Valued >= 0 ? GetChoice(segment, plain: true) : null;
+                segmentHelpers[segment] = (segmentChoice is null ? null : ChoiceHelper(segmentChoice), plainChoice is null ? null : ChoiceHelper(plainChoice));
+            }
         }
 
         var factories = new string[_operatorLevels.Length];
@@ -972,9 +988,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             factories[i] = context.RegisterLambda((Delegate?)_unary[i] ?? _binary[i]!);
         }
 
-        var levelsField = context.RegisterStaticField(
-            "private static readonly int[]",
-            $"new int[] {{ {string.Join(", ", Array.ConvertAll(_operatorLevels, static level => level.ToString(CultureInfo.InvariantCulture)))} }}");
+        // The level of each operator, read by the climb when operators can follow an operand
+        var levelsField = _hasFollowingOperators
+            ? context.RegisterStaticField(
+                "private static readonly int[]",
+                $"new int[] {{ {string.Join(", ", Array.ConvertAll(_operatorLevels, static level => level.ToString(CultureInfo.InvariantCulture)))} }}")
+            : null;
 
         var climb = $"climb{id}";
         var lookupName = $"lookup{id}";
@@ -1000,7 +1019,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth > 0));
-        result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentHelpers, ctx, cursor));
+
+        if (_hasFollowingOperators)
+        {
+            result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentHelpers, ctx, cursor));
+        }
 
         foreach (var level in _prefixLevels)
         {
@@ -1010,7 +1033,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return result;
     }
 
-    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string levelsField, string ctx, string cursor, bool compacting, bool limitRecursion)
+    // The climb of the levels up to maxLevel. Without operators that can follow an operand, it parses the prefix operators
+    // and the operand only, and the lookup and levelsField aren't generated.
+    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, bool limitRecursion)
     {
         var id = climb.Substring("climb".Length);
         var sb = new StringBuilder();
@@ -1053,16 +1078,21 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             return $"({op} switch {{ {string.Join(", ", arms)} }})";
         }
 
+        var follows = _hasFollowingOperators;
+
         Line($"bool {climb}(int maxLevel, out {valueType} climbed, ref int next, ref int nextPosition)");
         Line("{");
 
-        if (compacting)
+        if (follows)
         {
-            Line("    var pin = -1;");
-        }
+            if (compacting)
+            {
+                Line("    var pin = -1;");
+            }
 
-        Line("    var lowest = 0;");
-        Line("    var lookup = true;");
+            Line("    var lowest = 0;");
+            Line("    var lookup = true;");
+        }
 
         if (_prefixLevels.Length > 0)
         {
@@ -1121,13 +1151,31 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
 
             Line(Switch("        ", "prefixOperator", prefixOperators, op => $"climbed = {factories[op]}(operand);"));
-            Line("        lookup = false;");
-            Line("    }");
-            Line($"    else if (!{operandHelper}({ctx}, out climbed))");
+
+            if (!follows)
+            {
+                Line("        return true;");
+                Line("    }");
+            }
+            else
+            {
+                Line("        lookup = false;");
+                Line("    }");
+                Line($"    else if (!{operandHelper}({ctx}, out climbed))");
+            }
         }
-        else
+        else if (follows)
         {
             Line($"    if (!{operandHelper}({ctx}, out climbed))");
+        }
+
+        if (!follows)
+        {
+            // No operator can follow the operand, and its switch would be empty
+            Line($"    return {operandHelper}({ctx}, out climbed);");
+            sb.Append('}');
+
+            return sb.ToString();
         }
 
         Line("    {");

@@ -221,6 +221,41 @@ public class PrecedenceParserTests
         Assert.Equal("(-(-a))", value);
     }
 
+#if NET8_0_OR_GREATER
+    [Theory]
+    [InlineData("5", 5)]
+    [InlineData("~ - -5", ~5)]
+    public void ShouldNotAllocateWithOnlyPrefixLevels(string input, long expected)
+    {
+        // No operator can follow an operand, and none is looked up
+        var parser = Terms.Integer().Operators()
+            .Unary((Terms.Char('-'), static x => -x))
+            .Unary((Terms.Char('~'), static x => ~x));
+
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<long>();
+
+        // Warm up, such that the tiering and the lazy initializations are not measured
+        for (var i = 0; i < 100; i++)
+        {
+            context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+            Assert.True(parser.Parse(context, ref result));
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        for (var i = 0; i < 100; i++)
+        {
+            context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+            parser.Parse(context, ref result);
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(expected, result.Value);
+        Assert.Equal(input.Length, context.Scanner.Cursor.Offset);
+    }
+#endif
+
     [Fact]
     public void ShouldDeclareTheCharsOfItsOperandAndPrefixOperators()
     {

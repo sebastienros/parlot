@@ -16,6 +16,10 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseTable(string text, out string value);
     public static partial bool TryParseTable(TextReader reader, out string value);
     public static partial bool TryParseZeroWidthPrefix(string text, out string value);
+    public static partial bool TryParsePrefixOnly(string text, out string value);
+    public static partial bool TryParsePrefixOnly(TextReader reader, out string value);
+    public static partial bool TryParseNoLevels(string text, out string value);
+    public static partial bool TryParseNoLevels(TextReader reader, out string value);
     public static partial bool TryParseEmptyOperators(string text, out string value);
     public static partial bool TryParseValued(string text, out string value);
     public static partial bool TryParseValued(TextReader reader, out string value);
@@ -92,6 +96,48 @@ public class PrecedenceTests
         foreach (var input in RandomExpressions(17, 2000))
         {
             Assert.Equal(Run(runtime, input), Run(PrecedenceGrammars.TryParseTable, input));
+        }
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("-a")]
+    [InlineData("- ~ -a + b")]
+    [InlineData("not -a")]
+    [InlineData("-not a")]
+    [InlineData("not not (- a)")]
+    [InlineData("-(not a)")]
+    [InlineData("nota")]
+    [InlineData("a -b")]
+    [InlineData("-")]
+    [InlineData("not")]
+    [InlineData("-(a")]
+    [InlineData("")]
+    public void Generated_Prefix_Only_Table_Parses_Like_The_Runtime(string input)
+    {
+        var expected = Run(RuntimePrefixOnly(), input);
+
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParsePrefixOnly, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParsePrefixOnly, input, chunk));
+        }
+    }
+
+    [Theory]
+    [InlineData("a", "a | ")]
+    [InlineData(" a b", "a |  b")]
+    [InlineData("-a", "<failed>")]
+    [InlineData("", "<failed>")]
+    public void Generated_Table_Without_Levels_Parses_Its_Operand(string input, string expected)
+    {
+        Assert.Equal(expected, Run(WithRest(Terms.Identifier().Then(static x => x.ToString()).Operators()), input));
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseNoLevels, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseNoLevels, input, chunk));
         }
     }
 
@@ -233,6 +279,19 @@ public class PrecedenceTests
             .LeftAssociative(Ops("<", "<="))
             .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)))
             .RightAssociative(Ops("<==", "="));
+
+        return WithRest(expression);
+    }
+
+    private static Parser<string> RuntimePrefixOnly()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)), (Terms.Char('~'), static x => PrecedenceAst.Prefix("~", x)))
+            .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)));
 
         return WithRest(expression);
     }
