@@ -99,6 +99,28 @@ var success = parser.TryParse(reader, out var value, out var fatalError, options
 // context.Diagnostics
 ```
 
+## Matching without a value
+
+`IsMatch` returns whether a parser matches the start of a text, and `TryMatch` also returns the text it matched, as a
+`TextSpan`. Neither builds the value: the lists, tuples and options of the parsers are skipped, which `TryParse` would
+allocate and discard.
+
+```c#
+var assignment = Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer());
+
+assignment.IsMatch("age = 12; next"); // true
+assignment.TryMatch("age = 12; next", out var match); // match is "age = 12"
+```
+
+- Like `TryParse`, the parser doesn't have to reach the end of the text. Add `.Eof()` to match the whole text.
+- The text is the one [`Capture`](#capture) returns, from the cursor to where the parser ended: it includes the white space
+  that a `Terms` parser skips before its first token.
+- Callbacks that read a value, like those of `Then` or `When`, still receive it, so the parsers below them build their
+  values.
+- A parse error, like the ones of `ElseError`, or a cancellation fails the match. `TryMatch(..., out error)` returns it.
+- The `ParseContext` overloads match at the cursor of the context and move it after the match, so a context can be reused
+  without allocating.
+
 ## Associative operators
 
 `LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:
@@ -1347,6 +1369,9 @@ var capture = Capture(parser);
 
 capture.Parse("age = 12");
 ```
+
+The parser doesn't build its value, for instance its lists, unless a callback reads it. `parser.TryMatch(text, out var match)`
+returns the same text without a `Capture` parser, see [Matching without a value](#matching-without-a-value).
 
 Result:
 
