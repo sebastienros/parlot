@@ -26,6 +26,9 @@
     <DefineConstants>$(DefineConstants);SOURCE_GENERATOR</DefineConstants>
     <!-- Dependency groups describe generated consumers; analyzer-only packages intentionally have no lib assets. -->
     <NoWarn>$(NoWarn);RS2007;RS2008;NU5128</NoWarn>
+    <!-- The lowest System.Memory generated downlevel parsers build against. Projects pinned to older packages,
+         like System.Memory 4.5.5 with System.Buffers 4.5.1, must not see a NU1605 downgrade. -->
+    <ParlotMinimumSystemMemoryVersion>4.5.5</ParlotMinimumSystemMemoryVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -79,7 +82,7 @@
 
   <Target Name="SetParlotNuspecProperties" BeforeTargets="_GetOutputItemsFromPack">
     <PropertyGroup>
-      <NuspecProperties>$(NuspecProperties);version=$(PackageVersion);configuration=$(Configuration);authors=$(Authors);description=$(Description);copyright=$(Copyright);memoryVersion=@(PackageVersion->WithMetadataValue('Identity', 'System.Memory')->Metadata('Version'))</NuspecProperties>
+      <NuspecProperties>$(NuspecProperties);version=$(PackageVersion);configuration=$(Configuration);authors=$(Authors);description=$(Description);copyright=$(Copyright);memoryVersion=$(ParlotMinimumSystemMemoryVersion)</NuspecProperties>
     </PropertyGroup>
   </Target>
   <Target Name="SetParlotNuspecRepository" BeforeTargets="GenerateNuspec" DependsOnTargets="SetParlotNuspecProperties">

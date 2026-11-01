@@ -213,6 +213,11 @@ and `TextReaderRefillSource` for the whole assembly.
   jumps to a failure label, whose owner moves it back; it marks `HitEnd` when a check looks at the end of the span and
   before a callback invoked there. It's not generated when `IsCompacting` is set, nor for diagnostics
   (`GenerateSpanCode`). A new literal whose code only reads the text should implement `ISpanSourceable`.
+- An entry point overload with a last `out int` or `out (int Offset, int Line, int Column)` returns the furthest failure.
+  It calls the parser generated for the overload without it, rather than generating a second one. The cursor keeps the
+  furthest offset it was moved back from (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only), and span
+  code calls `Cursor.RecordFailure` at its failure label since it doesn't move the cursor. Other parsers that read past the
+  cursor without moving it report the failure at their start; keep any new `RecordFailure` on failure paths only.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.

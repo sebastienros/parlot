@@ -867,7 +867,7 @@ public class GeneratorDiagnosticsTests
             static source => source.SourceText.ToString().Contains("Suggestions", StringComparison.Ordinal));
     }
 
-    private static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
+    internal static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
         string declaration,
         string grammar,
         IReadOnlyDictionary<string, string>? globalOptions = null,
@@ -911,7 +911,7 @@ public class GeneratorDiagnosticsTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     }
 
-    private static Dictionary<string, string> DefaultOptions(string? projectDirectory = null) =>
+    internal static Dictionary<string, string> DefaultOptions(string? projectDirectory = null) =>
         new(StringComparer.OrdinalIgnoreCase)
         {
             ["build_property.MSBuildProjectDirectory"] = projectDirectory ?? Directory.GetCurrentDirectory(),
@@ -921,7 +921,7 @@ public class GeneratorDiagnosticsTests
             ["build_property.DesignTimeBuild"] = "false"
         };
 
-    private static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
+    internal static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
     {
         Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(compilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
