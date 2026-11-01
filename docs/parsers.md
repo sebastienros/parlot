@@ -15,7 +15,8 @@
 
 Recursive grammars can limit the nesting depth accepted from untrusted input by setting
 `maxRecursionDepth` on the `ParseContext`. The default value is `0`, which applies no limit.
-The limit applies to both runtime and source-generated parsers.
+A source-generated parser takes the limit from its attribute instead,
+`[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` (see [Source generation](source-generation.md)).
 
 ```c#
 var context = new ParseContext(new Scanner(input), maxRecursionDepth: 128);
@@ -25,6 +26,19 @@ if (!parser.TryParse(context, out var result, out var error))
     // error reports when the configured recursion limit was exceeded
 }
 ```
+
+Each entry into a `Deferred` or `Recursive` parser counts as one level, and so does each invocation of a `Unary` parser
+and each prefix operator applied by an [operator table](#operator-tables). Exceeding the limit throws a `ParseException`,
+which fails the whole parse: a choice doesn't try its next alternative, `TryParse` returns `false` with the error and
+`Parse` throws.
+
+Without a limit, the same parsers check the stack of the thread on each entry, with
+`RuntimeHelpers.TryEnsureSufficientExecutionStack()` (`EnsureSufficientExecutionStack()` below .NET Standard 2.1), and fail
+the whole parse the same way, with the error "The input is nested too deeply to be parsed on the remaining stack.", rather
+than overflowing the stack, which would end the process. How deep a grammar can go then depends on the stack of the thread
+and on the stack each level of the grammar takes; a limit makes it independent of both. Each entry increments a counter
+and the stack is checked on every 16th one, so a grammar recurses at most 16 levels past a check, which the runtime's
+margin (64 KB or more) leaves room for.
 
 A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
@@ -1156,6 +1170,7 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 |---|---|---|
 | `WhiteSpaceSet.Default` | `\t`, `\f`, space, U+00A0, U+1680, U+2000-U+200A, U+202F, U+205F, U+3000 (`Character.WhiteSpaces`) | `\n`, `\r`, `\v`, U+0085, U+2028, U+2029 (`Character.NewLines`) |
 | `WhiteSpaceSet.Ascii` | `\t`, `\f`, space (`Character.AsciiWhiteSpaces`) | `\n`, `\r`, `\v` (`Character.AsciiNewLines`) |
+| `WhiteSpaceSet.SpaceTabCrLf` | `\t`, space (`Character.SpaceTabCrLfWhiteSpaces`) | `\n`, `\r` (`Character.SpaceTabCrLfNewLines`) |
 
 `Default` is the Unicode `White_Space` property: the chars `char.IsWhiteSpace` and the `\s` of .NET regular expressions accept.
 Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
@@ -1178,6 +1193,10 @@ U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLin
 
 `Ascii` is the white space of C's `isspace` and Ruby's `\s`: a no-break space or another Unicode space is then a char like any
 other, which a grammar can match or reject.
+
+`SpaceTabCrLf` is `Ascii` without `\f` and `\v`: the white space of JSON (RFC 8259), XML 1.0, YAML, TOML, Go, and many SQL
+dialects such as Azure Cosmos DB's. With `UseNewLines` it skips only space and `\t`.
+A grammar which would otherwise use `WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"))` selects it to keep the fast path described below.
 
 Usage:
 
@@ -1211,7 +1230,22 @@ var parser = grammar
 ```
 
 `WithWhiteSpaceSet` is part of the grammar, so a [source-generated](source-generation.md) parser honors it too.
-Use `WithWhiteSpaceParser` for any other set of chars.
+Each set is a bit pair of the char table `Character` reads, which has no room for another one: use `WithWhiteSpaceParser` for
+any other set of chars.
+
+On the JSON benchmark, whose text is indented with spaces and new lines, parsing with these options measured (Apple M4 Pro,
+.NET 10, `WhiteSpaceSetBenchmarks`):
+
+| White space | Runtime | Ratio | Generated | Ratio |
+|---|---:|---:|---:|---:|
+| `WhiteSpaceSet.Default` | 31.8 us | 1.00 | 31.9 us | 1.00 |
+| `WhiteSpaceSet.Ascii` | 32.0 us | 1.01 | 29.6 us | 0.93 |
+| `WhiteSpaceSet.SpaceTabCrLf` | 32.4 us | 1.02 | 29.0 us | 0.91 |
+| `WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"))` | 40.3 us | 1.27 | 39.7 us | 1.25 |
+| `WithWhiteSpaceParser(Literals.AnyOf(" \t\f\n\r\v"))` | 43.5 us | 1.37 | | |
+
+Every option allocates the same 64 KB. The sets measure the same, within the noise, and a white space parser skipping the same
+chars is 25% to 37% slower.
 
 ### WithComments
 

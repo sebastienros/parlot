@@ -273,6 +273,10 @@ public class StandaloneGeneratorTests
     [InlineData("public static partial bool TryParse(System.IO.Stream stream, out int value);")]
     [InlineData("public static partial bool TryParse(System.IO.StringReader reader, out int value);")]
     [InlineData("public static partial bool TryParse(System.IO.TextReader reader, out int value); public static partial bool TryParse(System.IO.TextReader reader, System.Threading.CancellationToken cancellationToken, out int value);")]
+    [InlineData("public static partial bool TryParse(string text, out int value); public static partial bool TryParse(string text, System.Threading.CancellationToken cancellationToken, out int value, out int failureOffset);")]
+    [InlineData("public static partial bool TryParse(string text, out int value, out int first); public static partial bool TryParse(string text, out int value, out int second);")]
+    [InlineData("public static partial bool TryParse(string text, out int value, out (int Offset, int Line) failure);")]
+    [InlineData("public static partial bool TryParse(string text, out int value, out long failureOffset);")]
     public void Invalid_Entry_Point_Is_Rejected(string declaration)
     {
         var (result, _) = Generate("public static partial class Grammar { " + declaration + " }", Grammar);
@@ -570,6 +574,49 @@ public class StandaloneGeneratorTests
         var sources = result.Results.SelectMany(static result => result.GeneratedSources).ToArray();
         Assert.Single(sources);
         Assert.Contains("Standalone parsers are generated during build.", sources[0].SourceText.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Failure_Overloads_Call_The_Parser_Of_The_Other_Overload(bool designTime)
+    {
+        const string declaration = """
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, out int value);
+                public static partial bool TryParse(string text, out int value, out int failureOffset);
+                public static partial bool TryParse(string text, out int value, out (int Offset, int Line, int Column) failure);
+                public static partial bool TryParse(System.IO.TextReader reader, out int value, out (int Offset, int Line, int Column) failure);
+            }
+            """;
+        var (result, compilation) = Generate(declaration, Grammar.Replace(".Eof()", ".AndSkip(Terms.Char(';')).Eof()", StringComparison.Ordinal), designTime);
+        AssertNoErrors(result, compilation);
+        var sources = result.Results.SelectMany(static result => result.GeneratedSources)
+            .Where(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal)).ToArray();
+
+        // One parser for the string overloads, one for the TextReader overload
+        Assert.Equal(2, sources.Length);
+        if (designTime)
+        {
+            return;
+        }
+
+        var cores = sources.SelectMany(static source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(static method => method.Identifier.ValueText.EndsWith("_Core", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, cores.Length);
+
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var methods = Assembly.Load(stream.ToArray()).GetType("Grammar").GetMethods().Where(static method => method.Name == "TryParse").ToArray();
+        Assert.Equal(4, methods.Length);
+        foreach (var method in methods.Where(static method => method.GetParameters().Length == 3))
+        {
+            object input = method.GetParameters()[0].ParameterType == typeof(string) ? "  12 ," : new StringReader("  12 ,");
+            object[] arguments = [input, null, null];
+            Assert.False((bool)method.Invoke(null, arguments));
+            Assert.Equal(arguments[2] is int ? 5 : (5, 1, 6), arguments[2]);
+        }
     }
 
     [Fact]

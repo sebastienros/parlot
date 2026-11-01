@@ -322,7 +322,7 @@ public class GeneratorDiagnosticsTests
     [InlineData(".NETStandard", "v1.6", LanguageVersion.CSharp12)]
     [InlineData(".NETFramework", "v4.7.1", LanguageVersion.CSharp12)]
     [InlineData("Unknown", "v10.0", LanguageVersion.CSharp12)]
-    [InlineData(".NETCoreApp", "v10.0", LanguageVersion.CSharp11)]
+    [InlineData(".NETCoreApp", "v10.0", LanguageVersion.CSharp9)]
     public void Unsupported_Target_Reports_A_Diagnostic(
         string identifier,
         string version,
@@ -344,6 +344,70 @@ public class GeneratorDiagnosticsTests
         var (result, _) = RunStandalone(Declaration, grammar, options, languageVersion);
 
         Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT026");
+    }
+
+    [Theory]
+    [InlineData(LanguageVersion.CSharp10, false)]
+    [InlineData(LanguageVersion.CSharp11, true)]
+    public void Numbers_Use_Generic_Math_From_CSharp_11(LanguageVersion languageVersion, bool genericMath)
+    {
+        const string declaration = """
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, out int value);
+                public static partial bool TryParse(System.IO.TextReader reader, out int value);
+                public static partial bool TryParseRadix(string text, out long value);
+            }
+            """;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build() => Terms.Number<int>(NumberOptions.Integer).Eof();
+
+                [GenerateParser(nameof(TryParseRadix))]
+                private static Parser<long> BuildRadix() => Literals.Text("0x").SkipAnd(Literals.Hexadecimal<long>()).Eof();
+            }
+            """;
+
+        var (result, compilation) = RunStandalone(declaration, grammar, languageVersion: languageVersion);
+
+        AssertNoErrors(result, compilation);
+        var sources = result.Results.SelectMany(static item => item.GeneratedSources).ToArray();
+        var parsers = string.Concat(sources.Where(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal))
+            .Select(static source => source.SourceText.ToString()));
+        Assert.Equal(genericMath, parsers.Contains("Numbers.TryParseNumber<", StringComparison.Ordinal));
+        Assert.Equal(!genericMath, sources.Single(static source => source.HintName == "Parlot.StandaloneRuntime.Numbers.g.cs")
+            .SourceText.ToString().Contains("#define PARLOT_NO_GENERIC_MATH", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Number_Without_A_Fixed_Overload_Requires_CSharp_11()
+    {
+        const string declaration = """
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, out System.Int128 value);
+            }
+            """;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<System.Int128> Build() => Terms.Number<System.Int128>(NumberOptions.Integer);
+            }
+            """;
+
+        var (result, _) = RunStandalone(declaration, grammar, languageVersion: LanguageVersion.CSharp10);
+
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+            && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("C# 11", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -803,7 +867,7 @@ public class GeneratorDiagnosticsTests
             static source => source.SourceText.ToString().Contains("Suggestions", StringComparison.Ordinal));
     }
 
-    private static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
+    internal static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
         string declaration,
         string grammar,
         IReadOnlyDictionary<string, string>? globalOptions = null,
@@ -847,7 +911,7 @@ public class GeneratorDiagnosticsTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     }
 
-    private static Dictionary<string, string> DefaultOptions(string? projectDirectory = null) =>
+    internal static Dictionary<string, string> DefaultOptions(string? projectDirectory = null) =>
         new(StringComparer.OrdinalIgnoreCase)
         {
             ["build_property.MSBuildProjectDirectory"] = projectDirectory ?? Directory.GetCurrentDirectory(),
@@ -857,7 +921,7 @@ public class GeneratorDiagnosticsTests
             ["build_property.DesignTimeBuild"] = "false"
         };
 
-    private static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
+    internal static void AssertNoErrors(GeneratorDriverRunResult result, CSharpCompilation compilation)
     {
         Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         Assert.DoesNotContain(compilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);

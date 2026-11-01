@@ -229,7 +229,7 @@ public class JsonBench
         return SuperpowerJsonParser.Parse(_wideJson);
     }
 
-    private static IJson BuildJson(int length, int depth, int width)
+    internal static IJson BuildJson(int length, int depth, int width)
         => new JsonArray(
             Enumerable.Repeat(1, length)
                 .Select(_ => BuildObject(depth, width))

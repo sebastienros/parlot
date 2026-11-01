@@ -38,4 +38,15 @@ sealed class GenerateParserAttribute : System.Attribute
     /// <summary>Gets or sets whether to emit replay diagnostics for the parser explorer.</summary>
     /// <remarks>Enable only in diagnostic builds. Disabled parsers contain no tracing calls.</remarks>
     public bool Diagnostics { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum number of nested recursive parser invocations, or <c>0</c> (the default) for no limit.
+    /// </summary>
+    /// <remarks>
+    /// Like <c>ParseContext.MaxRecursionDepth</c> at runtime, each entry into a <c>Deferred</c> or <c>Recursive</c> parser and
+    /// each prefix operator of <c>Unary</c> or <c>Operators()</c> counts as one level. A parse that exceeds it fails as a whole:
+    /// the entry point returns <c>false</c>. Without a limit, input nested too deeply for the remaining stack fails the same way
+    /// instead of overflowing the stack.
+    /// </remarks>
+    public int MaxRecursionDepth { get; set; }
 }

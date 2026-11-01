@@ -62,12 +62,12 @@ public static partial class Grammar
     // The alternatives of the prefix dispatch grammars: the keywords from PrefixKeywordFallback come after a run of
     // lowercase letters. Some operators can't match, as an earlier shorter one does.
     internal static readonly string[] PrefixKeywordWords =
-        ["if", "implicit", "in", "int", "interface", "internal", "is", "case", "catch", "char", "class", "In", "Int", "Interface", "INT"];
+        { "if", "implicit", "in", "int", "interface", "internal", "is", "case", "catch", "char", "class", "In", "Int", "Interface", "INT" };
 
     internal const int PrefixKeywordFallback = 11;
 
     internal static readonly string[] PrefixOperatorTexts =
-        ["<<=", "<=", "<", "<<", "<>", ">>=", ">=", ">>", ">", "==", "=", "!=", "!", "\u00e9\u00e9", "\u00e9x", "\u00e9", "\ud800\udc00", "\ud800\udc01", "\ud800"];
+        { "<<=", "<=", "<", "<<", "<>", ">>=", ">=", ">>", ">", "==", "=", "!=", "!", "\u00e9\u00e9", "\u00e9x", "\u00e9", "\ud800\udc00", "\ud800\udc01", "\ud800" };
 
     // TextReader entry points parse with a compacting buffer.
     public static partial bool TryParseNumber(TextReader reader, out int value);
