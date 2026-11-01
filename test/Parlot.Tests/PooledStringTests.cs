@@ -280,4 +280,49 @@ public class PooledStringTests
         Assert.Equal("HELLO", first);
         Assert.Same(first, second);
     }
+
+    [Fact]
+    public void CaseInsensitiveMatchedTextsKeepTheirFirstCases()
+    {
+        var parser = Terms.Keyword("select", caseInsensitive: true, returnMatchedText: true);
+        var cases = new[] { "SELECT", "Select", "sELECT", "SeLeCt", "sElEcT", "SELECt" };
+        var input = string.Join(" ", cases.Concat(cases));
+        var values = ParseAll(parser, input);
+
+        Assert.Equal(cases.Concat(cases), values);
+
+        // The first four cases are kept, the other ones are created each time
+        for (var i = 0; i < 4; i++)
+        {
+            Assert.Same(values[i], values[i + cases.Length]);
+        }
+
+        for (var i = 4; i < cases.Length; i++)
+        {
+            Assert.NotSame(values[i], values[i + cases.Length]);
+        }
+
+        // The text itself is never kept
+        Assert.Same("select", ParseAll(parser, "x select".Substring(1))[0]);
+    }
+
+    [Fact]
+    public void ConcurrentParsesShareTheCases()
+    {
+        var parser = ZeroOrMany(Terms.Text("hello", caseInsensitive: true, returnMatchedText: true)).Eof();
+        var cases = new[] { "HELLO", "Hello", "hELLO", "HeLLo", "hello", "HELLo" };
+        var input = string.Join(" ", Enumerable.Range(0, 600).Select(i => cases[i % cases.Length]));
+        var expected = Enumerable.Range(0, 600).Select(i => cases[i % cases.Length]).ToArray();
+
+        Parallel.For(0, 64, _ =>
+        {
+            Assert.True(parser.TryParse(input, out var values));
+            Assert.Equal(expected, values);
+        });
+
+        // Each kept case has a single string
+        Assert.True(parser.TryParse(input, out var first));
+        Assert.True(parser.TryParse(input, out var second));
+        Assert.Equal(4, first.Zip(second).Where(static pair => !ReferenceEquals(pair.First, "hello") && ReferenceEquals(pair.First, pair.Second)).Select(static pair => pair.First).Distinct().Count());
+    }
 }

@@ -264,7 +264,8 @@ Full reference: `docs/source-generation.md`.
 - Strings of the input that are kept and repeat come from the internal `StringPool` (`src/Parlot/StringPool.cs`, embedded in
   generated parsers too): one pool per parser, built with it, shared by its parses, bounded, lock-free to read. Emitters
   get its static field with `SourceGenerationContext.GetStringPoolField`, which keys it by the pool, so parsers sharing
-  a pool share the field. `ToPooledString()` and matched case-insensitive texts use it.
+  a pool share the field. `ToPooledString()` uses it. The cases a case-insensitive text returns are few: they go in the
+  four slots of the internal `CaseCache` instead (`GetCaseCacheField`), which costs a parser 48 bytes, not a pool.
 - Modern APIs (`SearchValues`, vectorization) go behind `#if NET8_0_OR_GREATER` with a downlevel path;
   PolySharp and `src/Parlot/Polyfill.cs` cover the rest.
 - Measure. Add or extend a benchmark in `test/Parlot.Benchmarks` for any hot-path change and put the
