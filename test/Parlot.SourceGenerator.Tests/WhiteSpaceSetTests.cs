@@ -151,21 +151,21 @@ public class WhiteSpaceSetTests
     [InlineData("1 ,\u00A02")]
     [InlineData("\f1")]
     [InlineData("")]
-    public void Terms_Skip_The_Json_Set(string text)
+    public void Terms_Skip_The_SpaceTabCrLf_Set(string text)
     {
-        var parser = Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Json).Then(static list => string.Join(",", list));
-        Check(parser, WhiteSpaceSetGrammars.TryParseJsonSeparated, WhiteSpaceSetGrammars.TryParseJsonSeparated, text);
+        var parser = Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static list => string.Join(",", list));
+        Check(parser, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfSeparated, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfSeparated, text);
     }
 
     [Fact]
-    public void Generated_Terms_Skip_Only_The_Json_Set()
+    public void Generated_Terms_Skip_Only_The_SpaceTabCrLf_Set()
     {
-        Assert.True(WhiteSpaceSetGrammars.TryParseJsonSeparated("1 ,\r\n\t2", out var value));
+        Assert.True(WhiteSpaceSetGrammars.TryParseSpaceTabCrLfSeparated("1 ,\r\n\t2", out var value));
         Assert.Equal("1,2", value);
 
-        foreach (var space in Character.WhiteSpaceOrNewLines.Where(static c => Character.JsonWhiteSpaceOrNewLines.IndexOf(c) < 0))
+        foreach (var space in Character.WhiteSpaceOrNewLines.Where(static c => Character.SpaceTabCrLfWhiteSpaceOrNewLines.IndexOf(c) < 0))
         {
-            Assert.True(WhiteSpaceSetGrammars.TryParseJsonSeparated($"1 ,{space}2", out value));
+            Assert.True(WhiteSpaceSetGrammars.TryParseSpaceTabCrLfSeparated($"1 ,{space}2", out value));
             Assert.Equal("1", value);
         }
     }
@@ -177,10 +177,10 @@ public class WhiteSpaceSetTests
     [InlineData("  \v")]
     [InlineData("if\tfor\r\nif")]
     [InlineData("")]
-    public void Choices_Skip_The_Json_Set(string text)
+    public void Choices_Skip_The_SpaceTabCrLf_Set(string text)
     {
-        var parser = ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.Json).Then(static list => string.Join("|", list));
-        Check(parser, WhiteSpaceSetGrammars.TryParseJsonChoice, WhiteSpaceSetGrammars.TryParseJsonChoice, text);
+        var parser = ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static list => string.Join("|", list));
+        Check(parser, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfChoice, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfChoice, text);
     }
 
     [Theory]
@@ -188,10 +188,10 @@ public class WhiteSpaceSetTests
     [InlineData(" \r\n\v")]
     [InlineData("\f")]
     [InlineData("x")]
-    public void WhiteSpace_Reads_The_Json_Set(string text)
+    public void WhiteSpace_Reads_The_SpaceTabCrLf_Set(string text)
     {
-        Check(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.Json).Then(static span => span.ToString()),
-            WhiteSpaceSetGrammars.TryParseJsonWhiteSpace, WhiteSpaceSetGrammars.TryParseJsonWhiteSpace, text);
+        Check(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static span => span.ToString()),
+            WhiteSpaceSetGrammars.TryParseSpaceTabCrLfWhiteSpace, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfWhiteSpace, text);
     }
 
     [Theory]
@@ -200,13 +200,13 @@ public class WhiteSpaceSetTests
     [InlineData("a\nb\rc d")]
     [InlineData(" x")]
     [InlineData("")]
-    public void NonWhiteSpace_Reads_Up_To_The_Json_Set(string text)
+    public void NonWhiteSpace_Reads_Up_To_The_SpaceTabCrLf_Set(string text)
     {
-        var parser = Literals.NonWhiteSpace(includeNewLines: false).WithWhiteSpaceSet(WhiteSpaceSet.Json).Then(static span => span.ToString());
-        Check(parser, WhiteSpaceSetGrammars.TryParseJsonNonWhiteSpace, WhiteSpaceSetGrammars.TryParseJsonNonWhiteSpace, text);
+        var parser = Literals.NonWhiteSpace(includeNewLines: false).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static span => span.ToString());
+        Check(parser, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfNonWhiteSpace, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfNonWhiteSpace, text);
 
         var longText = new string('a', 40) + text + new string('b', 40) + " c";
-        Check(parser, WhiteSpaceSetGrammars.TryParseJsonNonWhiteSpace, WhiteSpaceSetGrammars.TryParseJsonNonWhiteSpace, longText);
+        Check(parser, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfNonWhiteSpace, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfNonWhiteSpace, longText);
     }
 
     [Theory]
@@ -214,15 +214,15 @@ public class WhiteSpaceSetTests
     [InlineData("a # comment")]
     [InlineData("a\fb")]
     [InlineData("a\v# b")]
-    public void Comments_Skip_The_Json_Set(string text)
+    public void Comments_Skip_The_SpaceTabCrLf_Set(string text)
     {
         var parser = ZeroOrMany(Terms.Identifier())
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
-            .WithWhiteSpaceSet(WhiteSpaceSet.Json)
+            .WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
             .Eof()
             .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
 
-        Check(parser, WhiteSpaceSetGrammars.TryParseJsonComments, WhiteSpaceSetGrammars.TryParseJsonComments, text);
+        Check(parser, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfComments, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfComments, text);
     }
 
     [Theory]
@@ -230,10 +230,10 @@ public class WhiteSpaceSetTests
     [InlineData("[\f1 ]")]
     [InlineData("[1\f]")]
     [InlineData("\r\n[\v1\r]")]
-    public void Inner_Sets_Are_Restored_In_The_Json_Set(string text)
+    public void Inner_Sets_Are_Restored_In_The_SpaceTabCrLf_Set(string text)
     {
-        var parser = Terms.Char('[').SkipAnd(Terms.Integer().WithWhiteSpaceSet(WhiteSpaceSet.Ascii)).AndSkip(Terms.Char(']')).WithWhiteSpaceSet(WhiteSpaceSet.Json);
-        Check(parser, WhiteSpaceSetGrammars.TryParseJsonNested, WhiteSpaceSetGrammars.TryParseJsonNested, text);
+        var parser = Terms.Char('[').SkipAnd(Terms.Integer().WithWhiteSpaceSet(WhiteSpaceSet.Ascii)).AndSkip(Terms.Char(']')).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf);
+        Check(parser, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfNested, WhiteSpaceSetGrammars.TryParseSpaceTabCrLfNested, text);
     }
 
     private static void Check<T>(Parser<T> parser, StringParser<T> parseString, ReaderParser<T> parseReader, string input)
@@ -299,16 +299,16 @@ public static partial class WhiteSpaceSetGrammars
     public static partial bool TryParseNested(TextReader reader, out long value);
     public static partial bool TryParseOffsets(string text, out (int, int) value);
     public static partial bool TryParseOffsets(TextReader reader, out (int, int) value);
-    public static partial bool TryParseJsonSeparated(string text, out string value);
-    public static partial bool TryParseJsonSeparated(TextReader reader, out string value);
-    public static partial bool TryParseJsonChoice(string text, out string value);
-    public static partial bool TryParseJsonChoice(TextReader reader, out string value);
-    public static partial bool TryParseJsonWhiteSpace(string text, out string value);
-    public static partial bool TryParseJsonWhiteSpace(TextReader reader, out string value);
-    public static partial bool TryParseJsonNonWhiteSpace(string text, out string value);
-    public static partial bool TryParseJsonNonWhiteSpace(TextReader reader, out string value);
-    public static partial bool TryParseJsonComments(string text, out string value);
-    public static partial bool TryParseJsonComments(TextReader reader, out string value);
-    public static partial bool TryParseJsonNested(string text, out long value);
-    public static partial bool TryParseJsonNested(TextReader reader, out long value);
+    public static partial bool TryParseSpaceTabCrLfSeparated(string text, out string value);
+    public static partial bool TryParseSpaceTabCrLfSeparated(TextReader reader, out string value);
+    public static partial bool TryParseSpaceTabCrLfChoice(string text, out string value);
+    public static partial bool TryParseSpaceTabCrLfChoice(TextReader reader, out string value);
+    public static partial bool TryParseSpaceTabCrLfWhiteSpace(string text, out string value);
+    public static partial bool TryParseSpaceTabCrLfWhiteSpace(TextReader reader, out string value);
+    public static partial bool TryParseSpaceTabCrLfNonWhiteSpace(string text, out string value);
+    public static partial bool TryParseSpaceTabCrLfNonWhiteSpace(TextReader reader, out string value);
+    public static partial bool TryParseSpaceTabCrLfComments(string text, out string value);
+    public static partial bool TryParseSpaceTabCrLfComments(TextReader reader, out string value);
+    public static partial bool TryParseSpaceTabCrLfNested(string text, out long value);
+    public static partial bool TryParseSpaceTabCrLfNested(TextReader reader, out long value);
 }

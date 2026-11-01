@@ -87,11 +87,11 @@ public class StreamingTests
         ["ascii-whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
         ["ascii-nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace().WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
         ["ascii-comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//")).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
-        ["json-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Json)),
-        ["json-context"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.Json }),
-        ["json-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.Json)),
-        ["json-whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.Json)),
-        ["json-nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace().WithWhiteSpaceSet(WhiteSpaceSet.Json)),
+        ["spacetabcrlf-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
+        ["spacetabcrlf-context"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.SpaceTabCrLf }),
+        ["spacetabcrlf-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
+        ["spacetabcrlf-whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
+        ["spacetabcrlf-nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace().WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
         // The line and column after the match must not depend on how the text is split
         ["position-text"] = new Grammar<(int, int, int)>(Literals.Text("\r\n").Then(static (c, _) => Position(c))),
         ["position-char"] = new Grammar<(int, int, int)>(Literals.Char('\n').Then(static (c, _) => Position(c))),
@@ -248,11 +248,11 @@ public class StreamingTests
         Add("ascii-whitespace", "", " \t\n\r\v\f x", "\u00A0", " \u2000", "x");
         Add("ascii-nonwhitespace", "", "a\u00A0b c", "a\u3000b\tc", "ab\fc", " x");
         Add("ascii-comments", "", "a // b\n c", "a\u00A0b", "a\u00A0// b", "a \u00A0b");
-        Add("json-separated", separated);
-        Add("json-context", separated);
-        Add("json-choice", "", "for if", "for\fif", "\f\r\n if", "  \v", "if\tfor\r\nif");
-        Add("json-whitespace", "", " \t\n\r x", " \t\v", "\f", "x");
-        Add("json-nonwhitespace", "", "a\fb c", "a\vb\rc", "ab\u00A0c", " x");
+        Add("spacetabcrlf-separated", separated);
+        Add("spacetabcrlf-context", separated);
+        Add("spacetabcrlf-choice", "", "for if", "for\fif", "\f\r\n if", "  \v", "if\tfor\r\nif");
+        Add("spacetabcrlf-whitespace", "", " \t\n\r x", " \t\v", "\f", "x");
+        Add("spacetabcrlf-nonwhitespace", "", "a\fb c", "a\vb\rc", "ab\u00A0c", " x");
         Add("position-text", "", "\r", "\r\n", "\r\nx", "\n");
         Add("position-char", "", "\n", "\nx", "\r\n");
         Add("position-noneof", "", "\n", "\r\n", "\r", "x\ny\nz", "x\ny\nz\n", "x\r\ny\rz a", "a");

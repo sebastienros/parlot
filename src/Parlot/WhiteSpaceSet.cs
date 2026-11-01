@@ -24,9 +24,10 @@ public enum WhiteSpaceSet : byte
     Ascii = 1,
 
     /// <summary>
-    /// Space, <c>\t</c> and the new lines <c>\n</c> and <c>\r</c> (<see cref="Character.JsonNewLines"/>),
-    /// <see cref="Character.JsonWhiteSpaceOrNewLines"/>. These are the white space chars of JSON (RFC 8259), of XML, of Go, and of
-    /// many SQL dialects, which unlike <see cref="Ascii"/> don't accept <c>\f</c> and <c>\v</c>.
+    /// Space, <c>\t</c> and the new lines <c>\n</c> and <c>\r</c> (<see cref="Character.SpaceTabCrLfNewLines"/>),
+    /// <see cref="Character.SpaceTabCrLfWhiteSpaceOrNewLines"/>: <see cref="Ascii"/> without <c>\f</c> and <c>\v</c>.
+    /// These are the white space chars of JSON (RFC 8259), XML 1.0, YAML, TOML, Go, and many SQL dialects such as Azure Cosmos DB's.
+    /// With <see cref="Fluent.ParseContext.UseNewLines"/> only space and <c>\t</c> are skipped.
     /// </summary>
-    Json = 2,
+    SpaceTabCrLf = 2,
 }

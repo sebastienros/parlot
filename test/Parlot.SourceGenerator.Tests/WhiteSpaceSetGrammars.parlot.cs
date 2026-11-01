@@ -8,7 +8,7 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.SourceGenerator.Tests;
 
-// Grammars selecting the ASCII and JSON white space sets, and one with the default set. Each has a string and a TextReader entry
+// Grammars selecting the ASCII and SpaceTabCrLf white space sets, and one with the default set. Each has a string and a TextReader entry
 // point, compared with the runtime parser in WhiteSpaceSetTests.
 public static partial class WhiteSpaceSetGrammars
 {
@@ -55,36 +55,36 @@ public static partial class WhiteSpaceSetGrammars
     private static Parser<(int, int)> BuildOffsets() =>
         Terms.Identifier().Then(static (context, start, end, value) => (start, end)).WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
 
-    // The JSON set: space, tab, \r and \n
-    [GenerateParser(nameof(TryParseJsonSeparated))]
-    private static Parser<string> BuildJsonSeparated() =>
-        Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Json)
+    // The SpaceTabCrLf set: space, tab, \r and \n
+    [GenerateParser(nameof(TryParseSpaceTabCrLfSeparated))]
+    private static Parser<string> BuildSpaceTabCrLfSeparated() =>
+        Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
             .Then(static list => string.Join(",", list));
 
-    [GenerateParser(nameof(TryParseJsonChoice))]
-    private static Parser<string> BuildJsonChoice() =>
-        ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.Json)
+    [GenerateParser(nameof(TryParseSpaceTabCrLfChoice))]
+    private static Parser<string> BuildSpaceTabCrLfChoice() =>
+        ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
             .Then(static list => string.Join("|", list));
 
-    [GenerateParser(nameof(TryParseJsonWhiteSpace))]
-    private static Parser<string> BuildJsonWhiteSpace() =>
-        Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.Json).Then(static span => span.ToString());
+    [GenerateParser(nameof(TryParseSpaceTabCrLfWhiteSpace))]
+    private static Parser<string> BuildSpaceTabCrLfWhiteSpace() =>
+        Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static span => span.ToString());
 
-    [GenerateParser(nameof(TryParseJsonNonWhiteSpace))]
-    private static Parser<string> BuildJsonNonWhiteSpace() =>
-        Literals.NonWhiteSpace(includeNewLines: false).WithWhiteSpaceSet(WhiteSpaceSet.Json).Then(static span => span.ToString());
+    [GenerateParser(nameof(TryParseSpaceTabCrLfNonWhiteSpace))]
+    private static Parser<string> BuildSpaceTabCrLfNonWhiteSpace() =>
+        Literals.NonWhiteSpace(includeNewLines: false).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).Then(static span => span.ToString());
 
-    [GenerateParser(nameof(TryParseJsonComments))]
-    private static Parser<string> BuildJsonComments() =>
+    [GenerateParser(nameof(TryParseSpaceTabCrLfComments))]
+    private static Parser<string> BuildSpaceTabCrLfComments() =>
         ZeroOrMany(Terms.Identifier())
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
-            .WithWhiteSpaceSet(WhiteSpaceSet.Json)
+            .WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
             .Eof()
             .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
 
-    // The ASCII set selected inside the JSON one
-    [GenerateParser(nameof(TryParseJsonNested))]
-    private static Parser<long> BuildJsonNested() =>
+    // The ASCII set selected inside the SpaceTabCrLf one
+    [GenerateParser(nameof(TryParseSpaceTabCrLfNested))]
+    private static Parser<long> BuildSpaceTabCrLfNested() =>
         Terms.Char('[').SkipAnd(Terms.Integer().WithWhiteSpaceSet(WhiteSpaceSet.Ascii)).AndSkip(Terms.Char(']'))
-            .WithWhiteSpaceSet(WhiteSpaceSet.Json);
+            .WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf);
 }

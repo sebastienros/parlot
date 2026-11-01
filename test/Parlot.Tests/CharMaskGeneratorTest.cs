@@ -24,8 +24,8 @@ public class CharMaskGeneratorTest
         WhiteSpaceOrNewLine = 8,
         AsciiWhiteSpace = 16,
         AsciiWhiteSpaceOrNewLine = 32,
-        JsonWhiteSpace = 64,
-        JsonWhiteSpaceOrNewLine = 128
+        SpaceTabCrLfWhiteSpace = 64,
+        SpaceTabCrLfWhiteSpaceOrNewLine = 128
     }
 
     // Unicode v8.0.0 NonAsciiIdentifierStart
@@ -60,11 +60,11 @@ public class CharMaskGeneratorTest
             }
             if (c is ' ' or '\t')
             {
-                mask |= CharacterMask.JsonWhiteSpace;
+                mask |= CharacterMask.SpaceTabCrLfWhiteSpace;
             }
             if (c is ' ' or '\t' or '\n' or '\r')
             {
-                mask |= CharacterMask.JsonWhiteSpaceOrNewLine;
+                mask |= CharacterMask.SpaceTabCrLfWhiteSpaceOrNewLine;
             }
             if (IsIdentifierStart(c))
             {

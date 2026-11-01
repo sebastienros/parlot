@@ -410,7 +410,7 @@ public class ParseContext
         {
             (byte)CharacterMask.WhiteSpace => WhiteSpaceSet.Default,
             (byte)CharacterMask.AsciiWhiteSpace => WhiteSpaceSet.Ascii,
-            _ => WhiteSpaceSet.Json,
+            _ => WhiteSpaceSet.SpaceTabCrLf,
         };
         set
         {

@@ -1109,7 +1109,7 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 |---|---|---|
 | `WhiteSpaceSet.Default` | `\t`, `\f`, space, U+00A0, U+1680, U+2000-U+200A, U+202F, U+205F, U+3000 (`Character.WhiteSpaces`) | `\n`, `\r`, `\v`, U+0085, U+2028, U+2029 (`Character.NewLines`) |
 | `WhiteSpaceSet.Ascii` | `\t`, `\f`, space (`Character.AsciiWhiteSpaces`) | `\n`, `\r`, `\v` (`Character.AsciiNewLines`) |
-| `WhiteSpaceSet.Json` | `\t`, space (`Character.JsonWhiteSpaces`) | `\n`, `\r` (`Character.JsonNewLines`) |
+| `WhiteSpaceSet.SpaceTabCrLf` | `\t`, space (`Character.SpaceTabCrLfWhiteSpaces`) | `\n`, `\r` (`Character.SpaceTabCrLfNewLines`) |
 
 `Default` is the Unicode `White_Space` property: the chars `char.IsWhiteSpace` and the `\s` of .NET regular expressions accept.
 Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
@@ -1133,8 +1133,9 @@ U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLin
 `Ascii` is the white space of C's `isspace` and Ruby's `\s`: a no-break space or another Unicode space is then a char like any
 other, which a grammar can match or reject.
 
-`Json` is the white space of JSON (RFC 8259), of XML, of Go and of many SQL dialects: `Ascii` without `\f` and `\v`. A grammar
-which would otherwise use `WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"))` selects it to keep the fast path described below.
+`SpaceTabCrLf` is `Ascii` without `\f` and `\v`: the white space of JSON (RFC 8259), XML 1.0, YAML, TOML, Go, and many SQL
+dialects such as Azure Cosmos DB's. With `UseNewLines` it skips only space and `\t`.
+A grammar which would otherwise use `WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"))` selects it to keep the fast path described below.
 
 Usage:
 
@@ -1178,7 +1179,7 @@ On the JSON benchmark, whose text is indented with spaces and new lines, parsing
 |---|---:|---:|---:|---:|
 | `WhiteSpaceSet.Default` | 31.8 us | 1.00 | 31.9 us | 1.00 |
 | `WhiteSpaceSet.Ascii` | 32.0 us | 1.01 | 29.6 us | 0.93 |
-| `WhiteSpaceSet.Json` | 32.4 us | 1.02 | 29.0 us | 0.91 |
+| `WhiteSpaceSet.SpaceTabCrLf` | 32.4 us | 1.02 | 29.0 us | 0.91 |
 | `WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"))` | 40.3 us | 1.27 | 39.7 us | 1.25 |
 | `WithWhiteSpaceParser(Literals.AnyOf(" \t\f\n\r\v"))` | 43.5 us | 1.37 | | |
 

@@ -15,8 +15,8 @@ public static partial class Character
     internal static readonly SearchValues<char> _whiteSpaceOrNewLines = SearchValues.Create(WhiteSpaceOrNewLines);
     internal static readonly SearchValues<char> _asciiWhiteSpaces = SearchValues.Create(AsciiWhiteSpaces);
     internal static readonly SearchValues<char> _asciiWhiteSpaceOrNewLines = SearchValues.Create(AsciiWhiteSpaceOrNewLines);
-    internal static readonly SearchValues<char> _jsonWhiteSpaces = SearchValues.Create(JsonWhiteSpaces);
-    internal static readonly SearchValues<char> _jsonWhiteSpaceOrNewLines = SearchValues.Create(JsonWhiteSpaceOrNewLines);
+    internal static readonly SearchValues<char> _spaceTabCrLfWhiteSpaces = SearchValues.Create(SpaceTabCrLfWhiteSpaces);
+    internal static readonly SearchValues<char> _spaceTabCrLfWhiteSpaceOrNewLines = SearchValues.Create(SpaceTabCrLfWhiteSpaceOrNewLines);
 
     // The chars of a white space mask, see GetWhiteSpaceMask
     internal static SearchValues<char> GetWhiteSpaceSearchValues(byte mask) => mask switch
@@ -25,8 +25,8 @@ public static partial class Character
         (byte)CharacterMask.WhiteSpaceOrNewLine => _whiteSpaceOrNewLines,
         (byte)CharacterMask.AsciiWhiteSpace => _asciiWhiteSpaces,
         (byte)CharacterMask.AsciiWhiteSpaceOrNewLine => _asciiWhiteSpaceOrNewLines,
-        (byte)CharacterMask.JsonWhiteSpace => _jsonWhiteSpaces,
-        _ => _jsonWhiteSpaceOrNewLines,
+        (byte)CharacterMask.SpaceTabCrLfWhiteSpace => _spaceTabCrLfWhiteSpaces,
+        _ => _spaceTabCrLfWhiteSpaceOrNewLines,
     };
 
     // _decimalDigits and _hexDigits are still used for span-wide IndexOfAnyExcept scans in Scanner,
