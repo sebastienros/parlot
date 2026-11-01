@@ -98,6 +98,20 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmark.ChainGenerated());
     }
 
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Members", 1254301)]
+    [InlineData("Conditional", 993)]
+    [InlineData("Mixed", 1185)]
+    public void ValuedOperatorsGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the folded runtime one
+        var benchmark = new ValuedOperatorsBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.FoldRuntime());
+        Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
     [Fact]
     public void OperatorChoiceGrammar()
     {

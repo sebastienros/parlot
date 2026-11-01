@@ -3,6 +3,7 @@ using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 
@@ -40,10 +41,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     // The prefix levels, from the tightest one, which are tried before an operand
     private readonly int[] _prefixLevels;
 
-    // The tightest level whose operators follow an operand, int.MaxValue when there is none. A lookup from it, or from a
-    // tighter level, tries all these operators at once through _choice.
-    private readonly int _lowestLookupLevel;
-    private OneOf<int>? _choice;
+    // The segment of each level. A level of valued operators starts a segment.
+    private readonly Segment[] _segments;
+
+    // The only segment of a table without valued operators, or null
+    private readonly Segment? _plainSegment;
 
     // The parsers that can read first, a prefix operator or an operand, whose hints are read when they are asked for since
     // they can be Deferred parsers set later
@@ -73,7 +75,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         _binary = new Func<T, T, T>?[count];
 
         var prefixLevels = new List<int>();
-        _lowestLookupLevel = int.MaxValue;
+        _segments = new Segment[levels.Length];
+        Segment? segment = null;
 
         // The parser starts with a prefix operator or an operand
         var first = new List<object> { operand };
@@ -81,6 +84,22 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         for (var level = 0; level < levels.Length; level++)
         {
             var operatorLevel = levels[level];
+
+            if (operatorLevel.Valued is not null)
+            {
+                // The lookups stop at this level, which parses its operators
+                if (segment is not null)
+                {
+                    segment.End = level;
+                }
+
+                segment = new Segment { Valued = level, End = levels.Length };
+                _segments[level] = segment;
+                continue;
+            }
+
+            segment ??= new Segment { End = levels.Length };
+            _segments[level] = segment;
 
             for (var i = 0; i < operatorLevel.Operators.Length; i++)
             {
@@ -102,14 +121,15 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 prefixLevels.Add(level);
                 first.AddRange(operatorLevel.Operators);
             }
-            else if (_lowestLookupLevel == int.MaxValue)
+            else if (segment.FirstLookupLevel == int.MaxValue)
             {
-                _lowestLookupLevel = level;
+                segment.FirstLookupLevel = level;
             }
         }
 
         _prefixLevels = prefixLevels.ToArray();
         _first = first.ToArray();
+        _plainSegment = levels.Length > 0 && _segments[0].End == levels.Length && _segments[0].Valued < 0 ? _segments[0] : null;
     }
 
     /// <inheritdoc />
@@ -187,6 +207,136 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     public PrecedenceParser<T> RightAssociative<TInput>(params (Parser<TInput> op, Func<T, T, T> factory)[] list) =>
         Add(OperatorLevel<T>.Create(OperatorKind.RightAssociative, OperatorCount, list, nameof(list)));
 
+    /// <summary>
+    /// Returns a parser with an additional level of postfix operators whose factories receive the value of the operator,
+    /// which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The operators of the level are applied in turn to the value of the tighter levels, as long as one of them reads some
+    /// text, like <see cref="Postfix{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>. The level which applies an
+    /// operator parses it, after the operators of the tighter levels didn't match, so an operator can parse an expression
+    /// of the table, like an index.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="list">The operators of the level and the functions creating their result from the operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    /// <example>
+    /// <code>
+    /// var expression = Deferred&lt;Expression&gt;();
+    /// expression.Parser = primary.Operators()
+    ///     .Postfix(
+    ///         (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => new Member(x, name)),
+    ///         (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => new Index(x, index)))
+    ///     .LeftAssociative((Terms.Char('*'), static (a, b) => new Multiply(a, b)));
+    /// </code>
+    /// </example>
+    public PrecedenceParser<T> Postfix<TOperator>(params (Parser<TOperator> op, Func<T, TOperator, T> factory)[] list) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new PostfixGroup<T, TOperator>(list, nameof(list))])));
+
+    /// <summary>
+    /// Returns a parser with an additional level of two postfix operators whose values have different types, and whose
+    /// factories receive the value of the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="Postfix{TOperator}(ValueTuple{Parser{TOperator}, Func{T, TOperator, T}}[])"/>,
+    /// whose operators are <paramref name="first"/> then <paramref name="second"/>.
+    /// </remarks>
+    /// <typeparam name="TOperator1">The type of the first operator parser.</typeparam>
+    /// <typeparam name="TOperator2">The type of the second operator parser.</typeparam>
+    /// <param name="first">The first operator of the level and the function creating its result.</param>
+    /// <param name="second">The second operator of the level and the function creating its result.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> Postfix<TOperator1, TOperator2>((Parser<TOperator1> op, Func<T, TOperator1, T> factory) first, (Parser<TOperator2> op, Func<T, TOperator2, T> factory) second) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>(
+        [
+            new PostfixGroup<T, TOperator1>([first], nameof(first)),
+            new PostfixGroup<T, TOperator2>([second], nameof(second)),
+        ])));
+
+    /// <summary>
+    /// Returns a parser with an additional level of left-associative binary operators whose factory receives the value of
+    /// the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Parsers.LeftAssociative{T, TOperator}(Parser{T}, Parser{TOperator}[], Func{T, T, TOperator, T})"/>,
+    /// <c>a - b - c</c> is <c>(a - b) - c</c>. The level which applies an operator parses it, after the operators of the
+    /// tighter levels didn't match.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="operators">The operators of the level.</param>
+    /// <param name="factory">The function creating the result from the left operand, the right operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> LeftAssociative<TOperator>(Parser<TOperator>[] operators, Func<T, T, TOperator, T> factory) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.LeftAssociative, OperatorCount, new ValuedBinary<T, TOperator>(
+            operators, factory ?? throw new ArgumentNullException(nameof(factory)), null, rightAssociative: false, nameof(operators))));
+
+    /// <summary>
+    /// Returns a parser with an additional level of right-associative binary operators whose factory receives the value of
+    /// the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Parsers.RightAssociative{T, TOperator}(Parser{T}, Parser{TOperator}[], Func{T, T, TOperator, T})"/>,
+    /// <c>a ^ b ^ c</c> is <c>a ^ (b ^ c)</c>. The level which applies an operator parses it, after the operators of the
+    /// tighter levels didn't match.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="operators">The operators of the level.</param>
+    /// <param name="factory">The function creating the result from the left operand, the right operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> RightAssociative<TOperator>(Parser<TOperator>[] operators, Func<T, T, TOperator, T> factory) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.RightAssociative, OperatorCount, new ValuedBinary<T, TOperator>(
+            operators, factory ?? throw new ArgumentNullException(nameof(factory)), null, rightAssociative: true, nameof(operators))));
+
+    /// <summary>
+    /// Returns a parser with an additional level of a conditional operator <c>condition ? whenTrue : whenFalse</c>, which
+    /// binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The condition is a value of the tighter levels. <paramref name="middle"/> is parsed between
+    /// <paramref name="question"/> and <paramref name="colon"/>, and is usually the whole expression. The operand after
+    /// <paramref name="colon"/> is a value of the tighter levels when the level is left-associative,
+    /// <c>a ? b : c ? d : e</c> being <c>(a ? b : c) ? d : e</c>, and can be another conditional when it is
+    /// right-associative, <c>a ? b : c ? d : e</c> being <c>a ? b : (c ? d : e)</c>. The operators of the looser levels
+    /// apply to the conditional: <c>a ? b : c ?? d</c> is <c>(a ? b : c) ?? d</c> when <c>??</c> is looser.
+    /// </para>
+    /// <para>
+    /// It is the level of binary operators whose operator is <paramref name="question"/>, <paramref name="middle"/> and
+    /// <paramref name="colon"/>: when one of them, or the operand that follows, doesn't match, nothing is read, and the
+    /// looser levels are tried at the position of <paramref name="question"/>. A <c>?</c> doesn't need to exclude a looser
+    /// <c>??</c> operator, whose second char is not a middle operand.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TQuestion">The type of the parser before the middle operand.</typeparam>
+    /// <typeparam name="TMiddle">The type of the middle operand.</typeparam>
+    /// <typeparam name="TColon">The type of the parser after the middle operand.</typeparam>
+    /// <param name="question">The parser before the middle operand.</param>
+    /// <param name="middle">The parser of the middle operand.</param>
+    /// <param name="colon">The parser after the middle operand.</param>
+    /// <param name="factory">The function creating the result from the condition, the middle operand and the last operand.</param>
+    /// <param name="rightAssociative">Whether the last operand can be another conditional of the level.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    /// <example>
+    /// <code>
+    /// var expression = Deferred&lt;Expression&gt;();
+    /// expression.Parser = primary.Operators()
+    ///     .LeftAssociative((Terms.Text("=="), static (a, b) => new Equal(a, b)))
+    ///     .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (condition, whenTrue, whenFalse) => new Conditional(condition, whenTrue, whenFalse));
+    /// </code>
+    /// </example>
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Func<T, TMiddle, T, T> factory, bool rightAssociative = true)
+    {
+        ThrowHelper.ThrowIfNull(question, nameof(question));
+        ThrowHelper.ThrowIfNull(middle, nameof(middle));
+        ThrowHelper.ThrowIfNull(colon, nameof(colon));
+        ThrowHelper.ThrowIfNull(factory, nameof(factory));
+
+        var kind = rightAssociative ? OperatorKind.RightAssociative : OperatorKind.LeftAssociative;
+        Parser<TMiddle>[] operators = [question.SkipAnd(middle).AndSkip(colon)];
+
+        return Add(OperatorLevel<T>.CreateValued(kind, OperatorCount, new ValuedBinary<T, TMiddle>(operators, null, factory, rightAssociative, nameof(middle))));
+    }
+
     private int OperatorCount => _operatorLevels.Length;
 
     private PrecedenceParser<T> Add(OperatorLevel<T> level)
@@ -198,29 +348,82 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return new PrecedenceParser<T>(_operand, levels);
     }
 
-    // All the operators which can follow an operand, built when it is first used since a table is usually built
-    // level by level
-    private OneOf<int>? GetChoice()
+    /// <summary>
+    /// Consecutive levels whose operators are looked up through a single choice: a level of valued operators, if any, then
+    /// levels without valued operators.
+    /// </summary>
+    private sealed class Segment
     {
-        var choice = Volatile.Read(ref _choice);
+        // The level of valued operators the segment starts with, -1 when there is none
+        public int Valued = -1;
 
-        if (choice is null && _lowestLookupLevel != int.MaxValue)
+        // The tightest level without valued operators whose operators follow an operand, int.MaxValue when there is none. A
+        // lookup from it, or from a tighter level, tries all the operators of these levels at once through a choice.
+        public int FirstLookupLevel = int.MaxValue;
+
+        // The next level of valued operators, or the number of levels
+        public int End;
+
+        // The choice of a lookup from the start of the segment. When it starts with a level of valued operators, the choice
+        // starts with a probe of their first chars, which returns the operator of the level.
+        public OneOf<int>? Choice;
+
+        // The choice of the levels without valued operators, when the segment starts with a level of valued operators
+        public OneOf<int>? PlainChoice;
+    }
+
+    // The choice of the operators of the segment which can follow an operand, from the level of valued operators when
+    // plain is false, built when it is first used since a table is usually built level by level. Null when there are none.
+    private OneOf<int>? GetChoice(Segment segment, bool plain)
+    {
+        plain = plain && segment.Valued >= 0;
+        ref var field = ref plain ? ref segment.PlainChoice : ref segment.Choice;
+        var choice = Volatile.Read(ref field);
+
+        if (choice is null)
         {
             var operators = new List<Parser<int>>();
 
-            foreach (var level in _levels)
+            if (!plain && segment.Valued >= 0)
             {
-                if (level.Kind != OperatorKind.Prefix)
+                // The operators of the level are tried before the ones of the looser levels
+                operators.Add(new ValuedProbe(Lookahead.Valued(segment.Valued), _levels[segment.Valued].Valued!.Choices));
+            }
+
+            for (var level = segment.FirstLookupLevel; level < segment.End; level++)
+            {
+                if (_levels[level].Kind != OperatorKind.Prefix)
                 {
-                    operators.AddRange(level.Operators);
+                    operators.AddRange(_levels[level].Operators);
                 }
             }
 
+            if (operators.Count == 0)
+            {
+                return null;
+            }
+
             choice = new OneOf<int>(operators.ToArray());
-            choice = Interlocked.CompareExchange(ref _choice, choice, null) ?? choice;
+            choice = Interlocked.CompareExchange(ref field, choice, null) ?? choice;
         }
 
         return choice;
+    }
+
+    // The segments of the table, in order, for the source generator
+    private List<Segment> Segments()
+    {
+        var segments = new List<Segment>();
+
+        foreach (var segment in _segments)
+        {
+            if (segments.Count == 0 || segments[segments.Count - 1] != segment)
+            {
+                segments.Add(segment);
+            }
+        }
+
+        return segments;
     }
 
     /// <inheritdoc />
@@ -231,7 +434,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             if (level.Kind == OperatorKind.Prefix)
             {
-                analysis.Invoke(level.Choice);
+                analysis.Invoke(level.Choice!);
             }
         }
 
@@ -242,9 +445,16 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             foreach (var level in _levels)
             {
-                if (level.Kind != OperatorKind.Prefix)
+                if (level.Valued is not null)
                 {
-                    analysis.Invoke(level.Choice);
+                    foreach (var choice in level.Valued.Choices)
+                    {
+                        analysis.Invoke(choice);
+                    }
+                }
+                else if (level.Kind != OperatorKind.Prefix)
+                {
+                    analysis.Invoke(level.Choice!);
                 }
             }
         }
@@ -266,9 +476,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// <summary>
     /// The operator following an operand, which the climb of a looser level applies.
     /// </summary>
-    private struct Lookahead
+    internal struct Lookahead
     {
-        // The index of the operator, -1 when none follows
+        public const int None = -1;
+
+        // The index of the operator, None when none follows, or Valued(level) when the operators of a level of valued
+        // operators are next, with the cursor where they were looked up
         public int Operator;
 
         // Where the operator starts, or where none was found
@@ -276,6 +489,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         // Where the operator ends
         public int End;
+
+        /// <summary>
+        /// The <see cref="Operator"/> of the operators of a valued level, and the level of such an operator.
+        /// </summary>
+        public static int Valued(int level) => -2 - level;
     }
 
     /// <summary>
@@ -283,7 +501,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// of that level in the chain would. When it succeeds, <paramref name="next"/> is the operator which follows, of a looser
     /// level, with the cursor after it, or none with the cursor where it was looked for.
     /// </summary>
-    private bool Climb(ParseContext context, int maxLevel, ref ParseResult<T> result, ref Lookahead next)
+    internal bool Climb(ParseContext context, int maxLevel, ref ParseResult<T> result, ref Lookahead next)
     {
         if (!ParseOperand(context, maxLevel, ref result, ref next, out var lookup))
         {
@@ -322,7 +540,14 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             if (op < 0)
             {
-                break;
+                // No operator, or the operators of a valued level
+                if (op == Lookahead.None || !ApplyValued(context, maxLevel, ref pin, ref result, ref next, ref lowest))
+                {
+                    break;
+                }
+
+                lookup = lowest >= 0;
+                continue;
             }
 
             var level = _operatorLevels[op];
@@ -430,6 +655,37 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     /// <summary>
+    /// Applies the operators of the valued level of <paramref name="next"/>, which are parsed by the level that applies
+    /// them, such that their values are only used here. Returns false when a looser level applies them, otherwise
+    /// <paramref name="lowest"/> is the level from which the operators are looked up next, or -1 when
+    /// <paramref name="next"/> is the operator that follows.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private bool ApplyValued(ParseContext context, int maxLevel, ref int pin, ref ParseResult<T> result, ref Lookahead next, ref int lowest)
+    {
+        var level = Lookahead.Valued(next.Operator);
+
+        if (level > maxLevel)
+        {
+            // A looser level applies them
+            return false;
+        }
+
+        // The operators are read again by the looser levels when they don't match
+        if (pin < 0)
+        {
+            pin = context.PinAt(next.Offset);
+        }
+        else
+        {
+            context.MovePin(pin, next.Offset);
+        }
+
+        lowest = _levels[level].Valued!.Apply(this, context, level, pin, ref result, ref next);
+        return true;
+    }
+
+    /// <summary>
     /// Parses the prefix operators of the levels up to <paramref name="maxLevel"/> and the operand they apply to. When an
     /// operator applied, <paramref name="next"/> is the operator following its operand, and <paramref name="lookup"/> is false.
     /// </summary>
@@ -508,7 +764,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// </summary>
     private static bool MatchPrefix(ParseContext context, OperatorLevel<T> level, int offset, ref ParseResult<int> result)
     {
-        if (!level.Choice.Parse(context, ref result))
+        if (!level.Choice!.Parse(context, ref result))
         {
             return false;
         }
@@ -536,7 +792,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     /// <summary>
-    /// Looks for an operator following an operand, from the level <paramref name="lowest"/>.
+    /// Looks for an operator following an operand, from the level <paramref name="lowest"/>. The lookup stops at a level
+    /// of valued operators, which the level that applies them parses.
     /// </summary>
     private bool Lookup(ParseContext context, int lowest, ref Lookahead next)
     {
@@ -544,36 +801,88 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         var operatorResult = new ParseResult<int>();
 
-        if (lowest <= _lowestLookupLevel)
+        if (_plainSegment is { } plain)
         {
-            // The choice returns the first operator which matches, from the tightest level
-            var choice = Volatile.Read(ref _choice) ?? GetChoice();
-
-            if (choice is null || !choice.Parse(context, ref operatorResult))
+            if (lowest <= plain.FirstLookupLevel)
             {
-                next.Operator = -1;
+                // The choice returns the first operator which matches, from the tightest level
+                var plainChoice = Volatile.Read(ref plain.Choice) ?? GetChoice(plain, plain: true);
+
+                if (plainChoice is null || !plainChoice.Parse(context, ref operatorResult))
+                {
+                    next.Operator = Lookahead.None;
+                    return false;
+                }
+            }
+            else if (!LookupFrom(context, lowest, _levels.Length, ref operatorResult))
+            {
+                next.Operator = Lookahead.None;
                 return false;
             }
-        }
-        else if (!LookupFrom(context, lowest, ref operatorResult))
-        {
-            next.Operator = -1;
-            return false;
+
+            next.Operator = operatorResult.Value;
+            next.End = operatorResult.End;
+            return true;
         }
 
-        next.Operator = operatorResult.Value;
-        next.End = operatorResult.End;
-        return true;
+        var level = lowest;
+
+        while (level < _levels.Length)
+        {
+            var segment = _segments[level];
+            OneOf<int>? choice;
+
+            if (level == segment.Valued)
+            {
+                // The probe of the valued operators, then the operators of the looser levels of the segment
+                choice = Volatile.Read(ref segment.Choice) ?? GetChoice(segment, plain: false);
+            }
+            else if (level <= segment.FirstLookupLevel)
+            {
+                // The choice returns the first operator which matches, from the tightest level
+                choice = Volatile.Read(ref segment.Valued >= 0 ? ref segment.PlainChoice : ref segment.Choice) ?? GetChoice(segment, plain: true);
+            }
+            else
+            {
+                if (LookupFrom(context, level, segment.End, ref operatorResult))
+                {
+                    next.Operator = operatorResult.Value;
+                    next.End = operatorResult.End;
+                    return true;
+                }
+
+                level = segment.End;
+                continue;
+            }
+
+            if (choice is not null && choice.Parse(context, ref operatorResult))
+            {
+                if (operatorResult.Value < 0)
+                {
+                    // The probe of a level of valued operators, whose choice may have skipped white space
+                    context.Scanner.Cursor.ResetPosition(next.Offset);
+                }
+
+                next.Operator = operatorResult.Value;
+                next.End = operatorResult.End;
+                return true;
+            }
+
+            level = segment.End;
+        }
+
+        next.Operator = Lookahead.None;
+        return false;
     }
 
     // Only after an operator wasn't followed by an operand, or after a postfix operator
-    private bool LookupFrom(ParseContext context, int lowest, ref ParseResult<int> result)
+    private bool LookupFrom(ParseContext context, int lowest, int end, ref ParseResult<int> result)
     {
-        for (var level = lowest; level < _levels.Length; level++)
+        for (var level = lowest; level < end; level++)
         {
             var operatorLevel = _levels[level];
 
-            if (operatorLevel.Kind != OperatorKind.Prefix && operatorLevel.Choice.Parse(context, ref result))
+            if (operatorLevel.Kind != OperatorKind.Prefix && operatorLevel.Choice!.Parse(context, ref result))
             {
                 return true;
             }
@@ -621,20 +930,40 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             .GetOrCreate(operandSourceable, prefix, valueType, () => operandSourceable.GenerateSource(context))
             .MethodName;
 
-        // The choices return the index of the operator they matched
-        string ChoiceHelper(OneOf<int> choice) => context.WithDiscardResult(false, () => context.Helpers
-            .GetOrCreate(choice, prefix, "int", () => choice.GenerateSource(context))
-            .MethodName);
+        // The choices return the index of the operator they matched, or the value of a valued operator
+        string Helper(object choice, Type type)
+        {
+            if (choice is not ISourceable sourceable)
+            {
+                throw new NotSupportedException("Operators require all operator parsers to be source-generatable.");
+            }
 
-        var levelHelpers = new string[_levels.Length];
+            return context.WithDiscardResult(false, () => context.Helpers
+                .GetOrCreate(choice, prefix, SourceGenerationContext.GetTypeName(type), () => sourceable.GenerateSource(context))
+                .MethodName);
+        }
+
+        string ChoiceHelper(OneOf<int> choice) => Helper(choice, typeof(int));
+
+        var levelHelpers = new string?[_levels.Length];
+        var valuedCases = new string?[_levels.Length];
 
         for (var level = 0; level < _levels.Length; level++)
         {
-            levelHelpers[level] = ChoiceHelper(_levels[level].Choice);
+            if (_levels[level].Choice is { } levelChoice)
+            {
+                levelHelpers[level] = ChoiceHelper(levelChoice);
+            }
         }
 
-        var choice = GetChoice();
-        var choiceHelper = choice is null ? null : ChoiceHelper(choice);
+        var segmentHelpers = new Dictionary<Segment, (string? Choice, string? Plain)>();
+
+        foreach (var segment in Segments())
+        {
+            var segmentChoice = GetChoice(segment, plain: false);
+            var plainChoice = segment.Valued >= 0 ? GetChoice(segment, plain: true) : null;
+            segmentHelpers[segment] = (segmentChoice is null ? null : ChoiceHelper(segmentChoice), plainChoice is null ? null : ChoiceHelper(plainChoice));
+        }
 
         var factories = new string[_operatorLevels.Length];
 
@@ -657,18 +986,31 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         result.Body.Add($"{result.SuccessVariable} = {climb}({_levels.Length - 1}, out {result.ValueVariable}, ref {nextName}, ref {nextPositionName});");
 
         // The local functions are each a single statement, so that their returns are not taken for the parser's own
-        result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth > 0));
-        result.Body.Add(GenerateLookup(lookupName, levelHelpers, choiceHelper, ctx, cursor));
+        for (var level = 0; level < _levels.Length; level++)
+        {
+            switch (_levels[level].Valued)
+            {
+                case ValuedPostfix<T> postfix:
+                    valuedCases[level] = GenerateValuedPostfix(level, postfix, Helper, context);
+                    break;
+                case { } binary:
+                    valuedCases[level] = GenerateValuedBinary(level, binary, Helper, climb, valueType, context);
+                    break;
+            }
+        }
+
+        result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth > 0));
+        result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentHelpers, ctx, cursor));
 
         foreach (var level in _prefixLevels)
         {
-            result.Body.Add(GeneratePrefix(level, $"prefix{id}_{level}", levelHelpers[level], prefix, context));
+            result.Body.Add(GeneratePrefix(level, $"prefix{id}_{level}", levelHelpers[level]!, prefix, context));
         }
 
         return result;
     }
 
-    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string[] levelHelpers, string[] factories, string levelsField, string ctx, string cursor, bool compacting, bool limitRecursion)
+    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string levelsField, string ctx, string cursor, bool compacting, bool limitRecursion)
     {
         var id = climb.Substring("climb".Length);
         var sb = new StringBuilder();
@@ -805,8 +1147,10 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line($"            if (!{lookup}(lowest, ref next, ref nextPosition)) break;");
         Line("            lookup = false;");
         Line("        }");
-        Line("        if (next < 0) break;");
-        Line($"        var level = {levelsField}[next];");
+        Line("        if (next == -1) break;");
+
+        // The operators of a valued level are parsed by the level which applies them
+        Line($"        var level = next >= 0 ? {levelsField}[next] : -2 - next;");
         Line("        if (level > maxLevel) break;");
         Line("        var position = nextPosition;");
 
@@ -832,6 +1176,13 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             Line($"            case {levelText}:");
             Line("            {");
+
+            if (valuedCases[level] is { } valuedCase)
+            {
+                sb.Append(valuedCase);
+                Line("            }");
+                continue;
+            }
 
             if (kind == OperatorKind.Postfix)
             {
@@ -914,39 +1265,229 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return sb.ToString();
     }
 
-    private string GenerateLookup(string lookup, string[] levelHelpers, string? choiceHelper, string ctx, string cursor)
+    private string GenerateLookup(string lookup, string?[] levelHelpers, Dictionary<Segment, (string? Choice, string? Plain)> segmentHelpers, string ctx, string cursor)
     {
         var sb = new StringBuilder();
 
         void Line(string text) => sb.Append(text).Append('\n');
 
+        static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
+
         Line($"bool {lookup}(int lowest, ref int next, ref int nextPosition)");
         Line("{");
         Line($"    nextPosition = {cursor}.Offset;");
 
-        if (choiceHelper is not null)
+        foreach (var segment in Segments())
         {
+            var (choiceHelper, plainHelper) = segmentHelpers[segment];
+            var condition = "if";
+
+            if (segment.Valued >= 0)
+            {
+                // The probe of the valued operators, then the operators of the looser levels of the segment. The probe
+                // returns the operator of the level, and its choice may have skipped white space.
+                Line($"    if (lowest <= {Text(segment.Valued)})");
+                Line("    {");
+                Line($"        if ({choiceHelper}({ctx}, out next))");
+                Line("        {");
+                Line($"            if (next < 0) {cursor}.ResetPosition(nextPosition);");
+                Line("            return true;");
+                Line("        }");
+                Line("    }");
+                condition = "else if";
+            }
+            else
+            {
+                plainHelper = choiceHelper;
+            }
+
+            if (plainHelper is null)
+            {
+                continue;
+            }
+
             // The choice returns the first operator which matches, from the tightest level
-            Line($"    if (lowest <= {_lowestLookupLevel.ToString(CultureInfo.InvariantCulture)})");
+            Line($"    {condition} (lowest <= {Text(segment.FirstLookupLevel)})");
             Line("    {");
-            Line($"        if ({choiceHelper}({ctx}, out next)) return true;");
-            Line("        next = -1;");
-            Line("        return false;");
+            Line($"        if ({plainHelper}({ctx}, out next)) return true;");
             Line("    }");
 
             // Only after an operator wasn't followed by an operand, or after a postfix operator
-            for (var level = _lowestLookupLevel + 1; level < _levels.Length; level++)
+            var first = true;
+
+            for (var other = segment.FirstLookupLevel + 1; other < segment.End; other++)
             {
-                if (_levels[level].Kind != OperatorKind.Prefix)
+                if (_levels[other].Kind == OperatorKind.Prefix)
                 {
-                    Line($"    if (lowest <= {level.ToString(CultureInfo.InvariantCulture)} && {levelHelpers[level]}({ctx}, out next)) return true;");
+                    continue;
                 }
+
+                if (first)
+                {
+                    Line("    else");
+                    Line("    {");
+                    first = false;
+                }
+
+                Line($"        if (lowest <= {Text(other)} && {levelHelpers[other]}({ctx}, out next)) return true;");
+            }
+
+            if (!first)
+            {
+                Line("    }");
             }
         }
 
         Line("    next = -1;");
         Line("    return false;");
         sb.Append('}');
+
+        return sb.ToString();
+    }
+
+    // The case of the climb's switch for a level of valued postfix operators, which are parsed and applied there
+    private static string GenerateValuedPostfix(int level, ValuedPostfix<T> postfix, Func<object, Type, string> helper, SourceGenerationContext context)
+    {
+        var cursor = context.CursorName;
+        var ctx = context.ParseContextName;
+        var levelText = level.ToString(CultureInfo.InvariantCulture);
+        var nextLevelText = (level + 1).ToString(CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+
+        void Line(string text) => sb.Append(text).Append('\n');
+
+        for (var g = 0; g < postfix.Groups.Length; g++)
+        {
+            var group = postfix.Groups[g];
+            var name = $"postfix{g.ToString(CultureInfo.InvariantCulture)}";
+            var groupHelper = helper(group.Choice, group.ValueType);
+
+            Line($"                if ({groupHelper}({ctx}, out var {name}))");
+            Line("                {");
+
+            // An operator that didn't read anything would be matched again forever
+            Line($"                    if ({cursor}.Offset == position)");
+            Line("                    {");
+            Line($"                        lowest = {nextLevelText};");
+            Line("                        lookup = true;");
+            Line("                        continue;");
+            Line("                    }");
+
+            if (group.Factories.Length == 1)
+            {
+                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}(climbed, {name}.Item2);");
+            }
+            else
+            {
+                Line($"                    switch ({name}.Item1)");
+                Line("                    {");
+
+                for (var i = 0; i < group.Factories.Length; i++)
+                {
+                    Line($"                        case {i.ToString(CultureInfo.InvariantCulture)}: climbed = {context.RegisterLambda(group.Factories[i])}(climbed, {name}.Item2); break;");
+                }
+
+                Line("                    }");
+            }
+
+            Line($"                    lowest = {levelText};");
+            Line("                    lookup = true;");
+            Line("                    continue;");
+            Line("                }");
+        }
+
+        Line($"                lowest = {nextLevelText};");
+        Line("                lookup = true;");
+        Line("                continue;");
+
+        return sb.ToString();
+    }
+
+    // The case of the climb's switch for a level of valued binary operators, which are parsed and applied there
+    private static string GenerateValuedBinary(int level, ValuedOperators<T> valued, Func<object, Type, string> helper, string climb, string valueType, SourceGenerationContext context)
+    {
+        var binary = (IValuedBinary)valued;
+        var cursor = context.CursorName;
+        var ctx = context.ParseContextName;
+        var levelText = level.ToString(CultureInfo.InvariantCulture);
+        var tighterText = (level - 1).ToString(CultureInfo.InvariantCulture);
+        var nextLevelText = (level + 1).ToString(CultureInfo.InvariantCulture);
+        var operatorHelper = helper(valued.Choices[0], binary.OperatorType);
+        var factory = context.RegisterLambda(binary.Factory);
+        var sb = new StringBuilder();
+
+        void Line(string text) => sb.Append(text).Append('\n');
+
+        // A conditional's factory takes the middle operand before the last one
+        string Apply(string left, string right, string op) =>
+            binary.IsConditional ? $"{factory}({left}, {op}, {right})" : $"{factory}({left}, {right}, {op})";
+
+        Line($"                if (!{operatorHelper}({ctx}, out var op))");
+        Line("                {");
+        Line($"                    lowest = {nextLevelText};");
+        Line("                    lookup = true;");
+        Line("                    continue;");
+        Line("                }");
+        Line($"                if (!{climb}({tighterText}, out var right, ref next, ref nextPosition) || nextPosition == position)");
+        Line("                {");
+        Line($"                    {cursor}.ResetPosition(position);");
+        Line($"                    lowest = {nextLevelText};");
+        Line("                    lookup = true;");
+        Line("                    continue;");
+        Line("                }");
+
+        if (binary.RightAssociative)
+        {
+            var elementType = $"({SourceGenerationContext.GetTypeName(binary.OperatorType)}, {valueType})";
+
+            Line($"                {ListBuilderSource.Declare("operations", elementType)}");
+            Line("                try");
+            Line("                {");
+            Line($"                    while (next == {Lookahead.Valued(level).ToString(CultureInfo.InvariantCulture)})");
+            Line("                    {");
+            Line("                        var operationPosition = nextPosition;");
+
+            if (context.IsCompacting)
+            {
+                Line($"                        {ctx}.MovePin(pin, operationPosition);");
+            }
+
+            Line($"                        if (!{operatorHelper}({ctx}, out var operation))");
+            Line("                        {");
+            Line($"                            lowest = {nextLevelText};");
+            Line("                            lookup = true;");
+            Line("                            break;");
+            Line("                        }");
+            Line($"                        if (!{climb}({tighterText}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
+            Line("                        {");
+            Line($"                            {cursor}.ResetPosition(operationPosition);");
+            Line($"                            lowest = {nextLevelText};");
+            Line("                            lookup = true;");
+            Line("                            break;");
+            Line("                        }");
+            Line("                        operations.Add((operation, operand));");
+            Line("                    }");
+
+            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+            Line("                    var count = operations.Count;");
+            Line("                    if (count > 0)");
+            Line("                    {");
+            Line("                        var accumulated = operations[count - 1].Item2;");
+            Line("                        for (var i = count - 1; i > 0; i--)");
+            Line("                        {");
+            Line($"                            accumulated = {Apply("operations[i - 1].Item2", "accumulated", "operations[i].Item1")};");
+            Line("                        }");
+            Line($"                        right = {Apply("right", "accumulated", "operations[0].Item1")};");
+            Line("                    }");
+            Line("                }");
+            Line("                finally");
+            Line("                {");
+            Line("                    operations.Release();");
+            Line("                }");
+        }
+
+        Line($"                climbed = {Apply("climbed", "right", "op")};");
+        Line("                continue;");
 
         return sb.ToString();
     }

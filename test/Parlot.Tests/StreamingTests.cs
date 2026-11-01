@@ -39,6 +39,9 @@ public class StreamingTests
         ["operators-eof"] = new Grammar<string>(CreateOperators().Eof()),
         // A chain of operator levels is parsed by a single precedence parser
         ["operator-levels"] = new Grammar<string>(CreateOperatorLevels()),
+        // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
+        ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
+        ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
@@ -180,6 +183,15 @@ public class StreamingTests
         Add("operators", operators);
         Add("operators-eof", operators);
         Add("operator-levels", operators);
+
+        string[] valuedOperators =
+        [
+            "", "a", "a.b", "a.b.c", "a[b]", "a[b][c].d", "a.", "a[", "a[b", "-a.b", "a ? b : c", "a ? b : c ? d : e", "a ?? b",
+            "a ? b ?? c : d", "a ? b : c ?? d", "a ? b", "a ? b :", "a ?? ", "a = b = c", "a = b ? c : d", "a = b = ", "a * b / c",
+            "a[b ? c : d].e", " a . b [ c ] ? d : e ", "a\n?\nb\n:\nc",
+        ];
+        Add("valued-operators", valuedOperators);
+        Add("valued-operators-eof", valuedOperators);
 
         Add("sql",
             "SELECT * FROM users",
@@ -783,6 +795,24 @@ public class StreamingTests
             .LeftAssociative((Terms.Text("<"), Binary("<")), (Terms.Text("<="), Binary("<=")))
             .Unary((Terms.Text("not"), static x => $"(not {x})"))
             .LeftAssociative((Terms.Text("&&"), Binary("&&")), (Terms.Text("=="), Binary("==")));
+
+        return expression;
+    }
+
+    private static Parser<string> CreateValuedOperators()
+    {
+        var expression = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix(
+                (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => $"{x}.{name}"),
+                (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => $"{x}[{index}]"))
+            .Unary((Terms.Char('-'), static x => $"(-{x})"))
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => $"({a}{op}{b})")
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => $"({c}?{a}:{b})", rightAssociative: false)
+            .LeftAssociative((Terms.Text("??"), static (a, b) => $"({a}??{b})"))
+            .RightAssociative([Terms.Text("=")], static (a, b, op) => $"({a}{op}{b})");
 
         return expression;
     }

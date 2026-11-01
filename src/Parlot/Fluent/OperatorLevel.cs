@@ -31,6 +31,15 @@ internal sealed class OperatorLevel<T>
         Choice = new OneOf<int>(operators);
     }
 
+    private OperatorLevel(OperatorKind kind, int first, ValuedOperators<T> valued)
+    {
+        Kind = kind;
+        First = first;
+        Operators = [];
+        Factories = [];
+        Valued = valued;
+    }
+
     public OperatorKind Kind { get; }
 
     /// <summary>
@@ -45,7 +54,17 @@ internal sealed class OperatorLevel<T>
     /// </summary>
     public Delegate[] Factories { get; }
 
-    public OneOf<int> Choice { get; }
+    /// <summary>
+    /// The choice of <see cref="Operators"/>, <see langword="null"/> for the levels of <see cref="Valued"/> operators.
+    /// </summary>
+    public OneOf<int>? Choice { get; }
+
+    /// <summary>
+    /// The operators whose values are passed to their factories, which have no index in the table.
+    /// </summary>
+    public ValuedOperators<T>? Valued { get; }
+
+    public static OperatorLevel<T> CreateValued(OperatorKind kind, int first, ValuedOperators<T> valued) => new(kind, first, valued);
 
     public static OperatorLevel<T> Create<TInput, TFactory>(OperatorKind kind, int first, (Parser<TInput> Op, TFactory Factory)[] operators, string parameterName)
         where TFactory : Delegate
