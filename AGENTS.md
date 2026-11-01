@@ -122,7 +122,7 @@ depended on text past the end of a non-final `Cursor` window sets `Cursor.HitEnd
 `Parse(string)`) for both modes, and `CompactingStreamTests.cs` covers pins and memory bounds; add grammars there
 when touching scanning or backtracking. See `docs/streaming.md`.
 
-### The optimization surface — three opt-in interfaces
+### The optimization surface — two opt-in interfaces
 
 Most of Parlot's speed comes from parsers advertising capabilities rather than from the `Parse` bodies.
 A new parser type should implement each one that applies:
@@ -130,7 +130,6 @@ A new parser type should implement each one that applies:
 | Interface | Namespace | Effect |
 |---|---|---|
 | `ISeekable` | `Parlot.Rewriting` | Declares the first chars that can match, so `OneOf` builds a char lookup table, skips branches that cannot match, and hoists the whitespace skip. About two thirds of the parser types implement it. |
-| `IRewritable<T>` | `Parlot.Rewriting` | Lets a parser replace itself with a faster equivalent when the graph is built. |
 | `ISourceable` | `Parlot.SourceGeneration` | Emits C# for the source generator. Nearly every parser type implements it. Generated parsers must be self-contained; unsupported runtime code is rejected rather than falling back to Parlot execution. |
 
 `ISeekable` has an internal refinement, `ISeekablePrefixes`: the texts the input starts with when the parser matches.
