@@ -917,6 +917,44 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Throws a <see cref="ParseException"/> when the stack of the thread is too deep to enter a recursive parser safely,
+    /// such that deeply nested input fails the parse instead of overflowing the stack. Called on each entry into a
+    /// <see cref="Deferred{T}"/> or prefix operator parser, whether <see cref="MaxRecursionDepth"/> is set or not.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EnsureSufficientStack()
+    {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
+        {
+            ThrowInsufficientStack();
+        }
+#else
+        EnsureSufficientStackDownlevel();
+#endif
+    }
+
+#if !(NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER)
+    private void EnsureSufficientStackDownlevel()
+    {
+        try
+        {
+            RuntimeHelpers.EnsureSufficientExecutionStack();
+        }
+        catch (InsufficientExecutionStackException)
+        {
+            ThrowInsufficientStack();
+        }
+    }
+#endif
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowInsufficientStack()
+    {
+        throw new ParseException("The input is nested too deeply to be parsed on the remaining stack.", Scanner.Cursor.Position);
+    }
+
+    /// <summary>
     /// Records exit from a recursive parser.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

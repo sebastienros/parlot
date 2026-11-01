@@ -68,6 +68,9 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        // Each operator recurses into this parser, deep input fails instead of overflowing the stack
+        context.EnsureSufficientStack();
+
         if (context.MaxRecursionDepth > 0)
         {
             context.EnterRecursion();
@@ -318,6 +321,9 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
+        // Each operator recurses into this parser, deep input fails instead of overflowing the stack
+        context.EnsureSufficientStack();
+
         if (context.MaxRecursionDepth > 0)
         {
             context.EnterRecursion();

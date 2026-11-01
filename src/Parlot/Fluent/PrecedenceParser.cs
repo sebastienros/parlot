@@ -466,6 +466,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                     // The operand can start with another operator of the level
                     var operand = new ParseResult<T>();
 
+                    // Deep input fails instead of overflowing the stack
+                    context.EnsureSufficientStack();
+
                     if (!(context.MaxRecursionDepth > 0 ? ClimbRecursion(context, level, ref operand, ref next) : Climb(context, level, ref operand, ref next)))
                     {
                         // Operator matched but no operand - fail
