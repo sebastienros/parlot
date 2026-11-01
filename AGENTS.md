@@ -9,9 +9,6 @@ until a benchmark says otherwise.
 
 ## Build, test, benchmark
 
-The SDK is pinned by `global.json` (10.0.100, `rollForward: latestMajor`). Tests run on
-Microsoft.Testing.Platform (also configured in `global.json`) with xunit v3.
-
 ```bash
 dotnet build                       # all TFMs: net472, netstandard2.0, net8.0, net10.0 (~3s incremental)
 dotnet test test/Parlot.Tests/Parlot.Tests.csproj -f net10.0
@@ -26,52 +23,27 @@ Develop and validate against `net10.0` first; only widen to the other TFMs once 
 the root fail with `NETSDK1005`, because `Parlot.SourceGenerator` targets `netstandard2.0` only. Pass `-f`
 to an individual project, or build everything without `-f`.
 
-### CI build pipeline
+`Parlot.Explorer` stays out of `Parlot.sln` (its native shells need one runner per platform) and is built by
+`explorer.yml`. Keep every NuGet push in `publish.yml`: the trusted-publishing policy names that file.
 
-CI restores once with `dotnet restore`, builds Release with `--no-restore`, and reuses the outputs
-for test and pack with `--no-build`. NuGet packages live at `/mnt/nuget/packages` on Linux, with
-the directory created and owned by the runner before restore, and under `.nuget/packages/` in the
-workspace on Windows. Other NuGet caches live under `.nuget/` in the workspace. No GitHub Actions
-cache is enabled.
-`setup-dotnet` keeps `check-latest: false` to prefer installed matching SDKs, but still installs an
-SDK if the runner has no match.
-
-`Parlot.Explorer` is not in `Parlot.sln`, so the root `dotnet pack` never includes it: its native shells
-need one runner per platform. `explorer.yml` pushes its previews to Feedz, and `publish.yml` calls
-`explorer.yml` as a reusable workflow on release tags, then pushes its package through the same NuGet
-trusted-publishing login. Keep NuGet pushes in `publish.yml`, as the trusted-publishing policy names that file.
-
-### Running a single test
-
-Microsoft.Testing.Platform has no VSTest `--filter`. Use xunit v3's filters, after `--`:
+Tests run on Microsoft.Testing.Platform, which has no VSTest `--filter`. Use xunit v3's filters after `--`, or run
+the test host directly (it is an `Exe`) to skip the MSBuild pass:
 
 ```bash
 dotnet test test/Parlot.Tests/Parlot.Tests.csproj -f net10.0 -- --filter-method "*.ShouldReturnElse*"
+test/Parlot.Tests/bin/Debug/net10.0/Parlot.Tests.exe --filter-method "*.ShouldReturnElse*"   # after a build; drop .exe on Unix
 ```
 
-Faster inner loop — run the test host directly (it is an `Exe`), no MSBuild pass:
+Benchmarks (`--project` needs the full `.csproj` path):
 
 ```bash
-dotnet build test/Parlot.Tests/Parlot.Tests.csproj -f net10.0
-test/Parlot.Tests/bin/Debug/net10.0/Parlot.Tests.exe --filter-method "*.ShouldReturnElse*"   # drop .exe on Unix
-```
-
-Also available: `--filter-class`, `--filter-namespace`, `--filter-trait`, `--filter-query`,
-`--filter-not-*`, `--list-tests`. Simple filters and query filters cannot be mixed.
-
-### Benchmarks
-
-```bash
-dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- --list flat
 dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release -- --filter "*Json*"
 ```
 
-`-p` no longer resolves a project directory; pass `--project` with the full `.csproj` path.
-
 ### Two things that will waste your time
 
-- `TreatWarningsAsErrors` is on repo-wide (`Directory.Build.props`) with `AnalysisLevel=latest-Recommended`
-  for `src`. An unused variable fails the build.
+- `TreatWarningsAsErrors` is on repo-wide with `AnalysisLevel=latest-Recommended` for `src`. An unused variable
+  fails the build.
 - `Parlot.Benchmarks` and `Parlot.SourceGenerator.Tests` load `src/Parlot/bin/$(Configuration)/netstandard2.0/Parlot.dll`
   as an `<Analyzer>`, because the generator *executes* your parser code at compile time. After changing
   `src/Parlot`, run a plain `dotnet build` in the **same configuration** before trusting generated output —
@@ -80,18 +52,9 @@ dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmarks.csproj -c Release 
 
 ## Architecture
 
-Two layers, plus a compile-time path that mirrors the runtime one.
-
-**Scanning layer** (`src/Parlot`): `Scanner` owns the input `string` and a `Cursor`; `TextSpan` carries
-buffer + offset + length so no substring is ever allocated. `Character` is a partial class split by
-technique: `Character.SearchValues.cs` for net8.0+, `Character.Mask.cs` plus the byte table in
-`Character.Generated.cs` for everything below. That table is **generated** — don't hand-edit it; rerun
-`CanGenerateMasks` in `test/Parlot.Tests/CharMaskGeneratorTest.cs` with `PARLOT_CHARACTER_MASK_OUTPUT` set to the absolute path of `src/Parlot/Character.Generated.cs`.
-
-**Combinator layer** (`src/Parlot/Fluent`): `Parser<T>` is the abstract base; the whole library is
-instances of it composed into a graph. `Parsers` is the static entry point exposing the `Literals` and
-`Terms` builder structs; the combinators are spread over `Parsers.*.cs` / `ParserExtensions.*.cs` by
-concern. `Deferred<T>` closes recursive grammars.
+`Character.Generated.cs` (the byte char table behind `Character` below net8.0) is **generated** — don't hand-edit it;
+rerun `CanGenerateMasks` in `test/Parlot.Tests/CharMaskGeneratorTest.cs` with `PARLOT_CHARACTER_MASK_OUTPUT` set to
+the absolute path of `src/Parlot/Character.Generated.cs`.
 
 `Parser<T>.Parse(ParseContext, ref ParseResult<T>)` is the hot method and carries a contract
 (see `docs/writing.md`, read it before writing a parser):
@@ -101,152 +64,88 @@ concern. `Deferred<T>` closes recursive grammars.
   advanced it, but not when a sub-parser failed (that one already reset itself);
 - write a test that asserts the cursor position is restored on failure.
 
-**Streaming** reuses that same synchronous `Parse` in two modes. Both rely on one invariant: a result that
-depended on text past the end of a non-final `Cursor` window sets `Cursor.HitEnd`. Reaching the end through any
-`Advance*` sets it centrally; a parser (or `ISourceable` emitter) that fails or stops by *looking* at the end of
-`Cursor.Span`/`Buffer` without advancing must call `MarkHitEnd()`. Keep these marks on cold end-of-buffer paths only.
+**Streaming** (`docs/streaming.md`) reuses that same `Parse`, for `Parse(TextReader)`/`ParseAsync` (a compacting
+buffer) and `ParseManyAsync` (a window driver). Both rely on `Cursor.HitEnd`: a parser (or `ISourceable` emitter)
+that fails or stops by *looking* at the end of `Cursor.Span`/`Buffer` without advancing must call `MarkHitEnd()`,
+on cold end-of-buffer paths only. In compacting mode, new leaf parsers that read the cursor start with
+`if (context.IsCompacting) return context.ParseToken(this, ref result);`, and parsers that reset the cursor *and read
+again* (choices, optionals, loops per element, lookaheads, `Capture`) `Pin()`; sequences that reset only to report a
+failure don't. `Offset`/`Position` are absolute there: index `Buffer` with `offset - BufferStart` (or
+`GetSpan`/`CreateSpan`), never with `Offset`. When touching scanning or backtracking, add grammars to the differential
+harness `test/Parlot.Tests/StreamingTests.cs` and to `CompactingStreamTests.cs` (pins, memory bounds).
 
-- *Compacting buffer* (`Parser.Compacting.cs`, `TextReaderRefillSource.cs`, the compacting part of `ParseContext`),
-  for single values (`Parse(TextReader)`, `ParseAsync`, `TryParseAsync`). The cursor reads an immutable string
-  window starting at an absolute offset (`Cursor.BufferStart`, internal); `Offset`/`Position` are absolute. Leaf parsers that
-  read the cursor are *tokens*: they start with `if (context.IsCompacting) return context.ParseToken(this, ref result);`,
-  and `ParseToken` refills the window and reruns the token when it set `HitEnd`. A refill drops the text below the
-  backtrack floor, the lowest `ParseContext.Pin()`. Parsers that reset the cursor *and read again* (choices,
-  optionals, loops per element, lookaheads, `Capture`) pin; sequences that reset only to report a failure don't.
-  `Commit()` is a cut. Index `Buffer` with `offset - BufferStart` (or `GetSpan`/`CreateSpan`), never with `Offset`.
-  New leaf parsers need the token line, new backtracking parsers a pin.
-- *Window driver* (`StreamingDriver.cs`, `Parser.Streaming.cs`), for `ParseManyAsync`: parses each value from a
-  window and retries it on a larger window when `HitEnd` is set.
+### A new parser type
 
-`test/Parlot.Tests/StreamingTests.cs` is a differential harness (1-char reads and `BufferSize = 1` vs
-`Parse(string)`) for both modes, and `CompactingStreamTests.cs` covers pins and memory bounds; add grammars there
-when touching scanning or backtracking. See `docs/streaming.md`.
+Most of Parlot's speed comes from parsers advertising capabilities rather than from the `Parse` bodies. A new parser
+type implements each of these that applies:
 
-### The optimization surface — two opt-in interfaces
+- `ISeekable` (`Parlot.Rewriting`): the first chars that can match, so `OneOf` builds a char lookup table, skips
+  branches and hoists the whitespace skip. A parser that matches a fixed ordinal text also implements the internal
+  `ISeekablePrefixes`; one that copies the hints of the parser it reads first forwards them with
+  `SeekableHints.Prefixes` (`docs/keyword-lookups.md`).
+- A parser that takes its hints from the parsers it starts with reads them when they are asked for, through the
+  internal `ForwardedHints`, never in its constructor: those can be `Deferred` parsers set later, or choices whose table
+  is only complete once the grammar is. A parser has no hints when it can succeed without reading, or when skipping it
+  changes the outcome, like `ElseError`.
+- `ISourceable` (`Parlot.SourceGeneration`): emits C# for the source generator. Generated parsers must be
+  self-contained; unsupported runtime code is rejected rather than falling back to Parlot execution.
+- `ILoopAnalyzable` (internal): which parsers it invokes before reading anything and whether it can succeed without
+  reading. `LoopAnalysis` uses it to skip loop detection for `Deferred` parsers it proves can't left-recurse; a type
+  without it is treated as invoking any parser. Never report fewer parsers or return `false` when unsure.
+- `ParseWithoutValue` / `CanParseWithoutValue` (internal): override them when the value allocates (lists) or returns
+  or combines such values (sequences, choices, wrappers); same positions and parsers entered as `Parse`, no value. A
+  parser that ignores the value of a parser it invokes (`Capture`, `AndSkip`'s skipped parser, `Between`'s delimiters,
+  a constant `Then`) reads `CanParseWithoutValue` once, in its constructor. Add each override to
+  `ParseWithoutValueTests`.
+- A wrapper, a parser that never fails, or one that starts with a fixed text goes in the sets at the top of
+  `GrammarAnalysis`.
+- A parser that recurses (`Deferred`, `Unary`, prefix operators) calls the internal `EnsureSufficientStack()` on each
+  entry and counts a level with `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the
+  same, counting only when `SourceGenerationContext.MaxRecursionDepth` is set.
 
-Most of Parlot's speed comes from parsers advertising capabilities rather than from the `Parse` bodies.
-A new parser type should implement each one that applies:
+White space is the context's `WhiteSpaceSet`, a bit of `Character`'s char table: test it with
+`context.MaySkipWhiteSpace(ch)` or the context's masks, never the one-argument `Character.IsWhiteSpace*`, which only
+know the default set. The default set is exactly Unicode `White_Space` (asserted by `CharMaskGeneratorTest`); another
+set is a new `WhiteSpaceSet` bit pair, not an edit of the default one, and the byte table is full: one more set needs a
+wider table. Runtime grammars that need external state can subclass `ParseContext`; generated entry points accept
+application-owned configuration parameters instead.
 
-| Interface | Namespace | Effect |
-|---|---|---|
-| `ISeekable` | `Parlot.Rewriting` | Declares the first chars that can match, so `OneOf` builds a char lookup table, skips branches that cannot match, and hoists the whitespace skip. About two thirds of the parser types implement it. |
-| `ISourceable` | `Parlot.SourceGeneration` | Emits C# for the source generator. Nearly every parser type implements it. Generated parsers must be self-contained; unsupported runtime code is rejected rather than falling back to Parlot execution. |
+### Grammar analysis
 
-`ISeekable` has an internal refinement, `ISeekablePrefixes`: the texts the input starts with when the parser matches.
-A parser that matches a fixed ordinal text implements it, and a parser that copies the hints of the parser it reads
-first forwards its prefixes with `SeekableHints.Prefixes`. Choices use them, at runtime and in generated code, to skip
-the alternatives that only share a first char with the input (`docs/keyword-lookups.md`).
-
-A parser that takes its hints from the parsers it starts with reads them when they are asked for, through the internal
-`ForwardedHints`, never in its constructor: these parsers can be `Deferred` parsers set later, or choices whose table is only
-complete once the grammar is. The hints are those of the parsers one of which must match at the start for this one to match.
-A parser has none when it can succeed without reading, or when skipping it changes the outcome, like `ElseError`, which
-reports an error instead of failing.
-
-The internal `Parser<T>.ParseWithoutValue` matches what `Parse` matches, with the same positions and the same parsers
-entered, without building the value. A parser whose value allocates (the lists), or which returns or combines the values of
-such parsers (sequences, choices, wrappers), overrides it and `CanParseWithoutValue`. A parser that doesn't use the value of a
-parser it invokes (`Capture`, the skipped parser of `AndSkip`, the delimiters of `Between`, a constant `Then`) reads
-`CanParseWithoutValue` once, in its constructor, and invokes `ParseWithoutValue` only when it is set, so the other parsers
-don't pay for the extra call. `ParseWithoutValueTests` compares both methods: add a new override there. It is the runtime
-counterpart of `SourceGenerationContext.DiscardResult`; callbacks still receive their values.
-
-`ILoopAnalyzable` (internal, `Parlot.Fluent`) tells `LoopAnalysis` which parsers a parser invokes before it reads
-anything and whether it can succeed without reading; every built-in parser implements it. From that, the first parse of a
-grammar proves which `Deferred` parsers can't be invoked again at the position where they are active (no left recursion),
-and these skip the loop detection. A parser type without it is treated as invoking any parser, unless its fields hold
-only plain data, so a new parser type must implement it, and must never report fewer parsers or return `false` when unsure.
-The analysis is redone when a `Deferred.Parser` is replaced (`LoopAnalysis.Invalidate`).
-
-`Parlot.Analysis.GrammarAnalyzer` checks a grammar against the rules of `docs/grammar-rules.md`, on top of `LoopAnalysis`.
-The source generator reports its findings as `Info` diagnostics `PARLOT1xx` and keeps them in diagnostic builds for
-Parser Explorer, whose client adds the trace rules `PARLOT2xx` (`replay.js`). To locate them, the factory rewrite wraps
-each expression that builds or reads a parser in `ParserSites.Track`; `GrammarFindings.cs` maps a finding's parsers back
-to that code and turns a `GrammarFix` into a text edit, offered only when the rewritten choice still binds to its type. It names Parlot's types to tell which
-parsers wrap, never fail or start with a fixed text (the sets at the top of `GrammarAnalysis`): add a new wrapper there.
-A new rule gets an id in `GrammarRule`, a section in `docs/grammar-rules.md`, positive and negative tests, and, for
-performance, a pattern/fix pair in `GrammarRulesBenchmarks`. Report only what Parlot's types prove, and don't add a rule
-for a rewrite that preserves what a grammar parses: do the rewrite instead.
-
-`ParseContext` is where per-parse state and several optimizations live: memoized whitespace skipping
-(`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
-scanned with a vectorized `IndexOf` rather than a hash set, only used by the `Deferred` parsers `LoopAnalysis` can't
-prove, or when the white space parser can invoke a `Deferred`), cancellation checks throttled to every 64
-parser entries, and the `OnEnterParser` / `OnExitParser` hooks. A parser that recurses (`Deferred`, `Unary`, prefix
-operators) calls the internal `EnsureSufficientStack()` on each entry, which throws a `ParseException` rather than letting
-deep input overflow the stack, and counts a level with `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set;
-its emitter does the same, the counting only when `SourceGenerationContext.MaxRecursionDepth` is set. White space is the context's `WhiteSpaceSet`, a bit
-of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
-one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
-(`char.IsWhiteSpace`, asserted by `CharMaskGeneratorTest`); another set is a new `WhiteSpaceSet` bit pair, not an edit of the
-default one, and the byte char table is full (`Default`, `Ascii`, `SpaceTabCrLf` and the identifier bits): one more set needs a wider table. Runtime grammars that need external state
-can subclass it; generated entry points instead accept application-owned configuration parameters.
+`Parlot.Analysis.GrammarAnalyzer` checks grammars against `docs/grammar-rules.md`; the source generator reports
+findings as `Info` diagnostics `PARLOT1xx`, and Parser Explorer adds trace rules `PARLOT2xx` (`replay.js`). A new rule
+gets an id in `GrammarRule`, a section in `docs/grammar-rules.md`, positive and negative tests, and, for performance,
+a pattern/fix pair in `GrammarRulesBenchmarks`. Report only what Parlot's types prove, and don't add a rule for a
+rewrite that preserves what a grammar parses: do the rewrite instead.
 
 ### Source generation
 
-`src/Parlot.SourceGenerator` (netstandard2.0) reads build-only `.parlot.cs` AdditionalFiles. A factory
-annotated `[GenerateParser(nameof(TryParse))]` builds the graph using Parlot inside the compiler host.
-The analyzer implements a matching static partial `bool TryParse(string text, [configuration], out T value)`
-method and emits shared internal support sources into the application assembly. No interceptors,
-public `Parser<T>` wrapper, or runtime Parlot assembly reference is needed. Generated consumers support
-`net472`, `netstandard2.0`, `net8.0`, and `net10.0`, using C# 10+ even on older runtimes. Downlevel
-compatibility packages do not introduce a Parlot dependency. Factory files must be excluded from
-`Compile`; the analyzer package's build targets do this.
-The embedded runtime files and the code emitters write must compile with C# 10: no collection expressions
-(`default` for an empty span, `Array.Empty<T>()`, `new[] { ... }`), raw strings, `required`, `file` types or other
-later syntax. The generic math helpers of `Numbers.cs` need C# 11: they are compiled out under
-`PARLOT_NO_GENERIC_MATH`, and emitters check `SourceGenerationContext.SupportsStaticAbstractMembers` before
-calling them. `Parlot.Standalone.Tests` and `Parlot.Standalone.NetStandard` build with `LangVersion` 10 to catch this.
-The analyzer requires a Roslyn 5.0+ compiler host regardless of the consumer's runtime target.
-An entry point may take a `TextReader` instead of the `string`; it is emitted as a separate parser with
-`SourceGenerationContext.IsCompacting` set (token loops, `CreateSpan`, pins). Emitters gate that code on
-`IsCompacting` so `string` output is unchanged. Assemblies without reader entry points embed the runtime with
-`PARLOT_STRING_ONLY`, which fixes the cursor's buffer base to 0; any reader entry point embeds the streaming runtime
-and `TextReaderRefillSource` for the whole assembly.
+Full reference: `docs/source-generation.md`. Inspect output under `obj/.../GeneratedFiles`
+(`EmitCompilerGeneratedFiles` is set in the test and benchmark projects).
 
-- `ParserSourceGenerator.cs` drives it; `LambdaRewriter.cs` lifts lambdas into generated methods
-  with `#line` mappings so breakpoints still land in the original source.
-- An extra by-value `CancellationToken` immediately before the entry point's `out` result initializes
-  the internal context's cancellation token. It is not a factory parameter. Tokens in the factory's
-  configuration list remain ordinary application state; cancellation throws rather than returning false.
-- Registries in `src/Parlot/SourceGeneration` (`LambdaRegistry`, `DeferredRegistry`, `ParserHelperRegistry`,
-  `TargetFrameworkInfo`, `SourceGenerationContext`, `SourceResult`) are the emission API.
-- `PARLOT015` rejects captured locals or other methods' parameters. Inline parse-time callbacks in
-  `If`, `Select`, `Then`, `ThenElse`, `When`, `Switch`, and `Else` may capture their factory's by-value
-  parameters. `PARLOT021` rejects eager argument use or reassignment: keep the graph fixed and use
-  `If`/`Select` for runtime branches. Pass application state through configuration parameters rather
-  than exposing Parlot context types in entry point signatures.
-- Inspect output via `EmitCompilerGeneratedFiles` (both test/benchmark projects already set it; look under
-  `obj/.../GeneratedFiles`).
-- Subgraphs of parsers which only read the text are generated as *span code* (`SourceGeneration/SpanSource.cs`, the
-  internal `ISpanSourceable`): one method reads a span local through a position local and moves the cursor once, when
-  it matches. Composite emitters call `SpanSource.TryGenerate` first. Span code leaves the position anywhere when it
-  jumps to a failure label, whose owner moves it back; it marks `HitEnd` when a check looks at the end of the span and
-  before a callback invoked there. It's not generated when `IsCompacting` is set, nor for diagnostics
-  (`GenerateSpanCode`). A new literal whose code only reads the text should implement `ISpanSourceable`.
-- An entry point overload with a last `out int` or `out (int Offset, int Line, int Column)` returns the furthest failure.
-  It calls the parser generated for the overload without it, rather than generating a second one. The cursor keeps the
-  furthest offset it was moved back from (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only), and span
-  code calls `Cursor.RecordFailure` at its failure label since it doesn't move the cursor. Other parsers that read past the
-  cursor without moving it report the failure at their start; keep any new `RecordFailure` on failure paths only.
+- The embedded runtime files and the code emitters write must compile with C# 10: no collection expressions
+  (`default` for an empty span, `Array.Empty<T>()`, `new[] { ... }`), raw strings, `required`, `file` types or other
+  later syntax. The generic math helpers of `Numbers.cs` need C# 11: they are compiled out under
+  `PARLOT_NO_GENERIC_MATH`, and emitters check `SourceGenerationContext.SupportsStaticAbstractMembers` before
+  calling them. `Parlot.Standalone.Tests` and `Parlot.Standalone.NetStandard` build with `LangVersion` 10 to catch this.
+- `TextReader` entry points set `SourceGenerationContext.IsCompacting` (token loops, `CreateSpan`, pins). Emitters gate
+  that code on `IsCompacting` so `string` output is unchanged.
+- Subgraphs of parsers which only read the text are generated as *span code* (`SourceGeneration/SpanSource.cs`): one
+  method reads a span local through a position local and moves the cursor once, when it matches. Composite emitters
+  call `SpanSource.TryGenerate` first. Span code leaves the position anywhere when it jumps to a failure label, whose
+  owner moves it back; it marks `HitEnd` when a check looks at the end of the span and before a callback invoked there.
+  A new literal whose code only reads the text implements the internal `ISpanSourceable`.
+- The furthest failure (`out int` / `out (int Offset, int Line, int Column)` overloads) is kept by the cursor
+  (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only); span code calls `Cursor.RecordFailure` at its
+  failure label. Keep any new `RecordFailure` on failure paths only.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
-- The analyzer-only `Parlot.SourceGenerator` package bundles its build-time Parlot dependency.
-  `StandaloneRuntimeSources` embeds shared runtime files and maps them to internal `Parlot.Generated`
-  types. It lowers the shared downlevel polyfills' static extension syntax to C# 10 helpers; consumers
-  do not need PolySharp. Library packages targeting older frameworks must reference System.Memory
-  explicitly (not privately) to propagate that dependency. Do not fork algorithms into separately
-  maintained copies. The embedded files are compiled with `#define PARLOT_STANDALONE`: generated parsers
-  only parse strings, so `Cursor` uses a constant `0` window base there and drops the compacting
-  window replacement. Application models and runtime callback helpers belong in normal `.cs` files,
-  not solely in `.parlot.cs` files.
-- `Numbers.Reflection.cs` stays in the runtime library, not the embedded support. Generated numeric
-  parsing uses static dispatch from `Numbers.cs`; do not reintroduce reflection-only helpers into
-  generated consumers. The package tests enforce `IsAotCompatible` with warnings as errors and publish
-  and execute a net10.0 Native AOT consumer, requiring the platform's native compiler toolchain.
-
-Full reference: `docs/source-generation.md`.
+- `StandaloneRuntimeSources` embeds the shared runtime files into generated consumers as internal `Parlot.Generated`
+  types, compiled with `#define PARLOT_STANDALONE`. Do not fork algorithms into separately maintained copies.
+- `Numbers.Reflection.cs` stays in the runtime library, not the embedded support; do not reintroduce reflection-only
+  helpers into generated consumers. The package tests publish and execute a net10.0 Native AOT consumer, which needs
+  the platform's native compiler toolchain.
 
 ## Performance rules
 
@@ -256,18 +155,15 @@ Full reference: `docs/source-generation.md`.
 - No allocations in `Parse`. No LINQ, no closures, no `params` arrays on hot paths; mark lambdas `static`.
 - Prefer `ReadOnlySpan<char>` / `TextSpan` over `string`; `[MethodImpl(MethodImplOptions.AggressiveInlining)]`
   on tiny hot helpers, as in `Character`, `Scanner` and `ParseContext`.
-- Accumulate list results with the internal `ListBuilder<T>` (`src/Parlot/Fluent/ListBuilder.cs`, embedded in
-  generated parsers too), not `List<T>` or `HybridList<T>`: it keeps four items inline, longer lists go on a per-thread
-  scratch stack shared by nested lists, and the result is one array of the exact size. Declare it as a local, never copy it, and call `Release()`
-  in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters) so that an exception can't leave items on
-  the stack. Read its items through the builder after a callback, which can parse and grow the stack.
-- Strings of the input that are kept and repeat come from the internal `StringPool` (`src/Parlot/StringPool.cs`, embedded in
-  generated parsers too): one pool per parser, built with it, shared by its parses, bounded, lock-free to read. Emitters
-  get its static field with `SourceGenerationContext.GetStringPoolField`, which keys it by the pool, so parsers sharing
-  a pool share the field. `ToPooledString()` uses it. The cases a case-insensitive text returns are few: they go in the
-  four slots of the internal `CaseCache` instead (`GetCaseCacheField`), which costs a parser 48 bytes, not a pool.
+- Accumulate list results with the internal `ListBuilder<T>`, not `List<T>` or `HybridList<T>`. Declare it as a
+  local, never copy it, and call `Release()` in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters)
+  so that an exception can't leave items on its per-thread stack. Read its items through the builder after a
+  callback, which can parse and grow the stack.
+- Strings of the input that are kept and repeat come from the internal `StringPool`, one per parser
+  (`ToPooledString()`; emitters get its field with `SourceGenerationContext.GetStringPoolField`). The few cases a
+  case-insensitive text returns go in the internal `CaseCache` instead (`GetCaseCacheField`).
 - Modern APIs (`SearchValues`, vectorization) go behind `#if NET8_0_OR_GREATER` with a downlevel path;
-  PolySharp and `src/Parlot/Polyfill.cs` cover the rest.
+  PolySharp and `src/Parlot/Polyfills` cover the rest.
 - Measure. Add or extend a benchmark in `test/Parlot.Benchmarks` for any hot-path change and put the
   before/after table in the PR; the tables in `README.md` are the current baseline.
 
@@ -276,34 +172,25 @@ Full reference: `docs/source-generation.md`.
 - `Terms.*` skips whitespace and comments; `Literals.*` does not. Never wrap a `Terms` parser in
   `SkipWhiteSpace()`.
 - `And()` builds **flat** tuples: `a.And(b).And(c)` yields `(char, char, char)`, not nested pairs.
-  `+` is `And`, `|` is `Or`.
-- Drop keywords from the AST with `SkipAnd` / `AndSkip`:
-  `ifKeyword.SkipAnd(expression).AndSkip(thenKeyword).And(expression)` → `(Expression, Expression)`.
-- `Optional()` always yields `Option<T>`; use `HasValue` / `TryGetValue(out …)` / `OrSome(default)`.
 - `Text("hello", caseInsensitive: true)` returns the canonical text to avoid an allocation; pass
   `returnMatchedText: true` if you need the input's casing.
-- `LeftAssociative` / `Unary` express operator precedence; `Named()` improves error messages.
 - Samples worth reading before writing a grammar: `src/Samples/Calc`, `src/Samples/Json`, `src/Samples/Sql`.
 
 ## Conventions
 
-- Multi-target: `net472;netstandard2.0;net8.0;net10.0`. Runtime and standalone tests execute on
-  net8.0/net10.0 and net472 on Windows (source generator tests on net10.0). On other hosts, downlevel
-  targets are compile-verified only — be deliberate about `#if` branches.
-- `Nullable` is enabled and `AllowUnsafeBlocks` is on for `src/Parlot`; the assembly is strong-named
-  (`Parlot.snk`), test projects are not signed.
+- Tests execute on net8.0/net10.0, and net472 on Windows only. On other hosts, downlevel targets are
+  compile-verified only — be deliberate about `#if` branches.
 - Generated files, never hand-edited: `Character.Generated.cs` (see above) and `ParserOperatorExtensions.cs`
   (T4 output of `ParserOperatorExtensions.tt` — edit the template).
-- Style is enforced by `.editorconfig`: 4-space C#, `var` everywhere, file-scoped namespaces, `_camelCase`
-  private fields, no primary constructors.
+- Follow `.editorconfig`: `var` everywhere, file-scoped namespaces, `_camelCase` private fields, no primary
+  constructors (not all of it fails the build).
 - The public API ships on NuGet: mark members `[Obsolete]` rather than removing them, and add XML docs to
-  new public API (`GenerateDocumentationFile` is on).
-- Tests mirror the source layout and use xunit v3 `[Fact]`/`[Theory]`; cover the failure path, not just the
-  match. `test/Parlot.Tests/BenchmarksTests.cs` re-runs the benchmark grammars as correctness tests
-  (net10.0 only), so benchmark code must stay valid.
+  new public API.
+- Tests cover the failure path, not just the match. `test/Parlot.Tests/BenchmarksTests.cs` re-runs the benchmark
+  grammars as correctness tests (net10.0 only), so benchmark code must stay valid.
 
 ## Pull requests
 
 Branch as `feature/…`, `fix/…` or `perf/…`, keep logical changes in separate commits, and before opening:
-a full `dotnet build` (all TFMs) plus both test projects must be green, benchmarks included for
+a full `dotnet build` (all TFMs) plus the test projects above must be green, benchmarks included for
 performance-sensitive work, and `docs/` updated when behaviour or the public API changes.
