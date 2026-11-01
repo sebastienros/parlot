@@ -657,7 +657,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         result.Body.Add($"{result.SuccessVariable} = {climb}({_levels.Length - 1}, out {result.ValueVariable}, ref {nextName}, ref {nextPositionName});");
 
         // The local functions are each a single statement, so that their returns are not taken for the parser's own
-        result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, factories, levelsField, ctx, cursor, compacting));
+        result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth > 0));
         result.Body.Add(GenerateLookup(lookupName, levelHelpers, choiceHelper, ctx, cursor));
 
         foreach (var level in _prefixLevels)
@@ -668,7 +668,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return result;
     }
 
-    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string[] levelHelpers, string[] factories, string levelsField, string ctx, string cursor, bool compacting)
+    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string[] levelHelpers, string[] factories, string levelsField, string ctx, string cursor, bool compacting, bool limitRecursion)
     {
         var id = climb.Substring("climb".Length);
         var sb = new StringBuilder();
@@ -748,7 +748,22 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             Line("    if (prefixOperator >= 0)");
             Line("    {");
-            Line($"        if (!{climb}(prefixLevel, out var operand, ref next, ref nextPosition))");
+
+            // Deep input fails instead of overflowing the stack, and each prefix operator counts as one level of recursion
+            Line($"        {ctx}.EnsureSufficientStack();");
+
+            if (limitRecursion)
+            {
+                Line($"        {ctx}.EnterRecursion();");
+                Line($"        var climbedOperand = {climb}(prefixLevel, out var operand, ref next, ref nextPosition);");
+                Line($"        {ctx}.ExitRecursion();");
+                Line("        if (!climbedOperand)");
+            }
+            else
+            {
+                Line($"        if (!{climb}(prefixLevel, out var operand, ref next, ref nextPosition))");
+            }
+
             Line("        {");
             Line($"            {cursor}.ResetPosition(start);");
             Line("            climbed = default!;");

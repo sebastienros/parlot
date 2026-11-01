@@ -56,6 +56,15 @@ public sealed partial class ParserSourceGenerator
         public bool Diagnostics => !CollectsDiagnostics && Factory.Method.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
             attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
+
+        // The recursion limit of the factory's attribute, 0 for none
+        public int MaxRecursionDepth => Factory.Method.GetAttributes()
+            .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
+            .SelectMany(static attribute => attribute.NamedArguments)
+            .Where(static argument => argument.Key == "MaxRecursionDepth" && argument.Value.Value is int)
+            .Select(static argument => (int)argument.Value.Value!)
+            .FirstOrDefault();
+
         public MethodToGenerate Factory { get; }
         public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - (CollectsDiagnostics ? 2 : 1)];
         public IParameterSymbol? DiagnosticsParameter => CollectsDiagnostics ? Method.Parameters[Method.Parameters.Length - 1] : null;
@@ -529,7 +538,7 @@ public sealed partial class ParserSourceGenerator
             || type is IArrayTypeSymbol array && UsesParlotType(array.ElementType)
             || type is INamedTypeSymbol named && named.TypeArguments.Any(UsesParlotType);
 
-    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core, bool wrapperIsContext)
+    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core, bool wrapperIsContext, int maxRecursionDepth)
     {
         var entry = standalone.Method;
         var factory = standalone.Factory.Method;
@@ -571,7 +580,7 @@ public sealed partial class ParserSourceGenerator
             ? $"new {wrapper}({scanner}{cancellationArgument}, {arguments})"
             : wrapperIsContext
                 ? $"new {wrapper}({scanner}{cancellationArgument})"
-                : $"new global::Parlot.Fluent.ParseContext({scanner}{cancellationArgument})";
+                : $"new global::Parlot.Fluent.ParseContext({ParseContextArguments(scanner, token, maxRecursionDepth)})";
         source.AppendLine($"            var {context} = {contextCreation};");
         var diagnostics = standalone.DiagnosticsParameter is { } diagnosticsParameter ? EscapeIdentifier(diagnosticsParameter.Name) : null;
         var diagnosticType = standalone.DiagnosticsParameter is { Type: INamedTypeSymbol { TypeArguments: [var element] } }
@@ -603,8 +612,19 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine("                    return true;");
         source.AppendLine("                }");
         source.AppendLine("            }");
-        source.AppendLine("            catch (global::Parlot.ParseException)");
-        source.AppendLine("            {");
+        if (diagnostics is not null)
+        {
+            // Errors are recorded rather than thrown, an exception fails the whole parse: a callback's, or the recursion limit
+            var exception = prefix + "_exception";
+            source.AppendLine($"            catch (global::Parlot.ParseException {exception})");
+            source.AppendLine("            {");
+            source.AppendLine($"                {context}.AddDiagnostic({exception}.Message, {exception}.Position, global::Parlot.ParseDiagnosticSeverity.Error);");
+        }
+        else
+        {
+            source.AppendLine("            catch (global::Parlot.ParseException)");
+            source.AppendLine("            {");
+        }
         source.AppendLine($"                {value} = default!;");
         source.AppendLine("                return false;");
         source.AppendLine("            }");

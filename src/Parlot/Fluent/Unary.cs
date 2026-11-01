@@ -163,6 +163,15 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
         // Register this unary parser as a deferred method for recursive calls
         var helperMethodName = context.Deferred.GetOrCreateMethodName(this, "Unary");
 
+        // Each invocation counts as one level of recursion, like at runtime. The recursive invocations go through the helper,
+        // which checks the stack.
+        var limitRecursion = context.MaxRecursionDepth > 0;
+
+        if (limitRecursion)
+        {
+            result.Body.Add($"{ctx}.EnterRecursion();");
+        }
+
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
         var opValueTypeName = SourceGenerationContext.GetTypeName(typeof(TInput));
@@ -257,6 +266,11 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");
         result.Body.Add("}");
+
+        if (limitRecursion)
+        {
+            result.Body.Add($"{ctx}.ExitRecursion();");
+        }
 
         return result;
     }
@@ -408,6 +422,15 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
         var operatorMatchedName = $"unaryOpMatched{context.NextNumber()}";
         var helperMethodName = context.Deferred.GetOrCreateMethodName(this, "UnaryCtx");
 
+        // Each invocation counts as one level of recursion, like at runtime. The recursive invocations go through the helper,
+        // which checks the stack.
+        var limitRecursion = context.MaxRecursionDepth > 0;
+
+        if (limitRecursion)
+        {
+            result.Body.Add($"{ctx}.EnterRecursion();");
+        }
+
         result.Body.Add($"bool {operatorMatchedName} = false;");
 
         var opValueTypeName = SourceGenerationContext.GetTypeName(typeof(TInput));
@@ -500,6 +523,11 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");
         result.Body.Add("}");
+
+        if (limitRecursion)
+        {
+            result.Body.Add($"{ctx}.ExitRecursion();");
+        }
 
         return result;
     }
