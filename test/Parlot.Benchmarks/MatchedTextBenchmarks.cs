@@ -7,20 +7,28 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Benchmarks;
 
-// Before the pool:
-// | Method   | Mean     | Error    | StdDev   | Gen0   | Gen1   | Allocated |
-// |--------- |---------:|---------:|---------:|-------:|-------:|----------:|
-// | Texts    | 46.55 us | 3.009 us | 2.815 us | 2.0142 | 0.1221 |  34.08 KB |
-// | Keywords | 48.53 us | 5.080 us | 4.752 us | 2.0142 | 0.1221 |  34.08 KB |
+// Before the cases were kept, each match of another case allocated a string:
+// | Method   | Mean     | Allocated |
+// |--------- |---------:|----------:|
+// | Texts    | 46.55 us |  34.08 KB |
+// | Keywords | 48.53 us |  34.08 KB |
 //
-// With the pool:
-// | Method   | Mean     | Error    | StdDev   | Gen0   | Allocated |
-// |--------- |---------:|---------:|---------:|-------:|----------:|
-// | Texts    | 44.81 us | 4.030 us | 3.770 us | 0.4272 |   8.02 KB |
-// | Keywords | 44.32 us | 3.469 us | 2.896 us | 0.4272 |   8.02 KB |
+// With a StringPool per parser:
+// | Method        | Mean      | Allocated |
+// |-------------- |----------:|----------:|
+// | Texts         | 42.90 us  |   8.02 KB |
+// | Keywords      | 46.26 us  |   8.02 KB |
+// | BuildAndMatch | 598.5 ns  |   3.58 KB |
+//
+// With the four cases of CaseCache:
+// | Method        | Mean      | Allocated |
+// |-------------- |----------:|----------:|
+// | Texts         | 40.76 us  |   8.02 KB |
+// | Keywords      | 43.09 us  |   8.02 KB |
+// | BuildAndMatch | 186.6 ns  |     512 B |
 
 // Measures case-insensitive texts and keywords returning the matched text, on 1000 matches in mixed cases. The cases that
-// differ from the text are taken from a pool. The 8 KB left are the result list.
+// differ from the text are kept by the parser. The 8 KB left are the result list.
 
 [MemoryDiagnoser, ShortRunJob]
 public class MatchedTextBenchmarks
@@ -47,4 +55,8 @@ public class MatchedTextBenchmarks
 
     [Benchmark]
     public IReadOnlyList<string> Keywords() => _keywords.Parse(_input)!;
+
+    // What a parser costs: it is built and matches a case that differs from its text once
+    [Benchmark]
+    public string BuildAndMatch() => Terms.Keyword("select", caseInsensitive: true, returnMatchedText: true).Parse(" SELECT")!;
 }
