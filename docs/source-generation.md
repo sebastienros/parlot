@@ -501,9 +501,15 @@ Adds namespace imports needed by emitted callback or helper source:
 private static Parser<Expression> Build() => ...;
 ```
 
-Usings in the `.parlot.cs` file compile the build-time factory. `[IncludeUsings]` applies to the generated
-output, so add it when copied callback expressions require extension methods or unqualified application
-types that are not otherwise emitted with fully qualified names.
+Callbacks bind their names as they do in the `.parlot.cs` file. The generator copies them with the types,
+namespaces and static members they name fully qualified (`global::App.Models.SqlParameter.Create(...)`), so
+usings placed inside a `namespace` block, aliases and `using static` keep their meaning, and a type of the same
+name in an enclosing namespace of the generated class can't take over. Extension methods, and the methods of
+query and collection expressions, still bind by name: the generated file imports the namespaces of the
+factory's usings, file-level and from its enclosing `namespace` blocks, that exist in the application.
+
+`[IncludeUsings]` adds more namespaces to the generated output, for instance for the extension methods of a
+custom emitter's source.
 
 ### `[IncludeFiles]`
 
@@ -630,7 +636,25 @@ Enable compiler-generated file output to inspect the direct parser and shared su
 ```
 
 Generated callbacks include `#line` mappings to their `.parlot.cs` source, so breakpoints and stack traces
-map back to the original lambda or method-group location.
+map back to the original lambda or method-group location. The `ParlotLineDirectives` MSBuild property
+chooses the paths of these directives:
+
+| Value | `#line` directives |
+|---|---|
+| `absolute` (default) | The full path of the `.parlot.cs` file, as the compiler has it. Breakpoints work. |
+| `relative` | The path relative to the project directory, with `/` separators, so the output is the same in every checkout. |
+| `none` | Not emitted. Callbacks are debugged in the generated code. |
+
+```xml
+<PropertyGroup>
+  <ParlotLineDirectives>relative</ParlotLineDirectives>
+</PropertyGroup>
+```
+
+Use `relative` or `none` to check generated files in or compare them between machines. The compiler resolves a
+relative `#line` path from the directory of the generated file, which isn't the project directory, so the
+debugger may not find the `.parlot.cs` file from it; keep the default for debugging. Another value is reported
+as the warning `PARLOT027`, and the default is used.
 
 ## Diagnostics
 
@@ -642,6 +666,7 @@ Standalone-specific diagnostics are:
 | `PARLOT024` | Generated code requires unsupported runtime code |
 | `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
 | `PARLOT026` | The project targets an unsupported framework or C# language version |
+| `PARLOT027` | `ParlotLineDirectives` is not `absolute`, `relative` or `none` (warning) |
 
 Other factory diagnostics still apply. Common cases include:
 

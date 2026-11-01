@@ -141,7 +141,9 @@ Application models and runtime callback helpers belong in normal `.cs` files. Co
 
 ## Helper attributes
 
-`[IncludeUsings]` adds imports required by emitted callback source:
+Callbacks are copied with the names of types, namespaces and static members fully qualified, and the generated
+file imports the namespaces of the factory's usings (file-level and in `namespace` blocks) for extension
+methods. `[IncludeUsings]` adds more imports to the emitted source:
 
 ```csharp
 [GenerateParser(nameof(TryParse))]
@@ -199,6 +201,10 @@ To inspect generated files:
   </CompilerGeneratedFilesOutputPath>
 </PropertyGroup>
 ```
+
+Callbacks carry `#line` directives with the absolute path of their `.parlot.cs` file, for breakpoints. Set
+`<ParlotLineDirectives>relative</ParlotLineDirectives>` (paths relative to the project directory) or `none` to
+get the same output in every checkout.
 
 For the complete contract, capture restrictions, diagnostics, and `IncludeFiles` containment limits, see
 the [Source Generation Guide](../../docs/source-generation.md).

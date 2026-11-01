@@ -37,6 +37,11 @@ public sealed partial class ParserSourceGenerator
         "Standalone generation requires .NET Framework 4.7.2+, .NET Standard 2.0+, or .NET 8+, and C# 12 or later",
         "Parlot.SourceGenerator", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor LineDirectivesDescriptor = new(
+        "PARLOT027", "Invalid ParlotLineDirectives value",
+        "ParlotLineDirectives must be 'absolute', 'relative' or 'none', not '{0}'; absolute paths are used",
+        "Parlot.SourceGenerator", DiagnosticSeverity.Warning, isEnabledByDefault: true);
+
     private sealed class StandaloneEntryPoint
     {
         public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory, bool isReader, bool collectsDiagnostics)
@@ -68,6 +73,9 @@ public sealed partial class ParserSourceGenerator
                 : null;
         public string? Source { get; set; }
 
+        // How the generated callbacks map to the grammar file
+        public LineDirectives LineDirectives { get; set; } = LineDirectives.Absolute;
+
         // What the grammar analysis found, which a factory that opts into diagnostics hands to Parlot Explorer
         public List<GrammarFinding> GrammarFindings { get; set; } = [];
 
@@ -90,8 +98,9 @@ public sealed partial class ParserSourceGenerator
             options.GlobalOptions.TryGetValue("build_property.DesignTimeBuild", out var designTime);
             options.GlobalOptions.TryGetValue("build_property.BuildingProject", out var building);
             options.GlobalOptions.TryGetValue("build_property.BuildingInsideVisualStudio", out var visualStudio);
+            options.GlobalOptions.TryGetValue("build_property.ParlotLineDirectives", out var lineDirectives);
             return (Identifier: identifier, Version: version, Directory: directory,
-                DesignTime: IsDesignTimeOrIdeContext(designTime, building, visualStudio));
+                DesignTime: IsDesignTimeOrIdeContext(designTime, building, visualStudio), LineDirectives: lineDirectives);
         });
 
         var compiledFactories = context.SyntaxProvider.CreateSyntaxProvider(
@@ -117,7 +126,7 @@ public sealed partial class ParserSourceGenerator
 
             GenerateStandalone(output, (CSharpCompilation)compilation, (CSharpParseOptions)parseOptions,
                 files, TargetFrameworkInfo.FromMsBuildProperties(configuration.Identifier ?? "", configuration.Version ?? ""),
-                configuration.Directory ?? "", configuration.DesignTime);
+                configuration.Directory ?? "", configuration.DesignTime, configuration.LineDirectives);
         });
     }
 
@@ -128,7 +137,8 @@ public sealed partial class ParserSourceGenerator
         ImmutableArray<(string Path, SourceText? Text)> files,
         TargetFrameworkInfo target,
         string projectDirectory,
-        bool designTime)
+        bool designTime,
+        string? lineDirectivesValue)
     {
         var supportedTarget = target.Identifier switch
         {
@@ -141,6 +151,16 @@ public sealed partial class ParserSourceGenerator
         {
             output.ReportDiagnostic(Diagnostic.Create(StandaloneTargetDescriptor, Location.None));
             return;
+        }
+
+        var lineDirectives = LineDirectives.Parse(lineDirectivesValue, projectDirectory);
+        if (lineDirectives is null)
+        {
+            if (!designTime)
+            {
+                output.ReportDiagnostic(Diagnostic.Create(LineDirectivesDescriptor, Location.None, lineDirectivesValue));
+            }
+            lineDirectives = LineDirectives.Absolute;
         }
 
         var trees = new List<SyntaxTree>();
@@ -260,6 +280,7 @@ public sealed partial class ParserSourceGenerator
                 continue;
             }
 
+            entry.LineDirectives = lineDirectives;
             pending.Add(entry);
         }
 
