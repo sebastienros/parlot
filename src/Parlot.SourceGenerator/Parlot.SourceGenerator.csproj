@@ -74,6 +74,7 @@
     <EmbeddedResource Include="../Parlot/Fluent/ParseContext.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ParseContext.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/HybridList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.HybridList.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/ListBuilder.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ListBuilder.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/OperatorList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.OperatorList.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/NumberOptions.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.NumberOptions.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/DelegateParser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.DelegateParser.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/TextReaderRefillSource.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.TextReaderRefillSource.cs" />

@@ -176,8 +176,10 @@ parser entries, and the `OnEnterParser` / `OnExitParser` hooks. `Deferred`, thro
 internal `EnsureSufficientStack()` on each entry, which throws a `ParseException` rather than letting deep input overflow
 the stack, and counts a level with `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the
 same, the counting only when `SourceGenerationContext.MaxRecursionDepth` is set. Parsers that would repeat themselves, like
-`Unary` and the prefix operators of `PrecedenceParser`, read in a loop with a `ListBuilder` instead, and only count the
-levels: a new parser type does the same, or checks the stack if it must recurse. White space is the context's `WhiteSpaceSet`, a bit
+`Unary` and the prefix operators of `PrecedenceParser`, read in a loop instead and only count the levels, keeping the
+operators in the internal `OperatorList` (a `stackalloc` span that moves to the pool). A new parser type does the same, or
+checks the stack if it must recurse. A loop in a `finally` block keeps the JIT from tiering its method up with PGO: leave the
+levels with `ExitRecursion(count)` there. White space is the context's `WhiteSpaceSet`, a bit
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
 one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
 (`char.IsWhiteSpace`, asserted by `CharMaskGeneratorTest`); another set is a new `WhiteSpaceSet` bit pair, not an edit of the

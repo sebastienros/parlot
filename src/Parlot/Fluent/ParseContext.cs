@@ -985,6 +985,23 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Records exit from <paramref name="levels"/> recursive parsers, like as many calls to <see cref="ExitRecursion()"/>.
+    /// </summary>
+    /// <remarks>
+    /// The chains of operators call it in a <see langword="finally"/> block instead of looping there: the JIT compiles a method
+    /// with a loop in a handler fully optimized at once, without the profile of its calls.
+    /// </remarks>
+    internal void ExitRecursion(int levels)
+    {
+        var depth = _recursionDepth;
+
+        if (depth > 0 && levels > 0)
+        {
+            _recursionDepth = depth > levels ? depth - levels : 0;
+        }
+    }
+
+    /// <summary>
     /// Checks if a parser is already active at the current position.
     /// </summary>
     /// <param name="parser">The parser to check.</param>

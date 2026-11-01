@@ -137,7 +137,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
     {
         // Each operator counts as one level of recursion, as when the operand of each one was parsed by this parser
         var limitRecursion = context.MaxRecursionDepth > 0;
-        var operators = new ListBuilder<int>();
+        var operators = new OperatorList(stackalloc int[OperatorList.InlineCapacity]);
 
         try
         {
@@ -175,10 +175,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
         {
             if (limitRecursion)
             {
-                for (var i = 0; i < operators.Count; i++)
-                {
-                    context.ExitRecursion();
-                }
+                context.ExitRecursion(operators.Count);
             }
 
             operators.Release();
@@ -346,7 +343,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
     {
         // Each operator counts as one level of recursion, as when the operand of each one was parsed by this parser
         var limitRecursion = context.MaxRecursionDepth > 0;
-        var operators = new ListBuilder<int>();
+        var operators = new OperatorList(stackalloc int[OperatorList.InlineCapacity]);
 
         try
         {
@@ -384,10 +381,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
         {
             if (limitRecursion)
             {
-                for (var i = 0; i < operators.Count; i++)
-                {
-                    context.ExitRecursion();
-                }
+                context.ExitRecursion(operators.Count);
             }
 
             operators.Release();
@@ -508,7 +502,7 @@ internal static class UnarySource
             $"bool {chain}(global::Parlot.Fluent.ParseContext {ctx}, int op, int start, out {valueTypeName} operand)",
             "{",
             $"    var {cursor} = {ctx}.Scanner.Cursor;",
-            $"    {ListBuilderSource.Declare("operators", "int")}",
+            $"    var operators = new global::Parlot.Fluent.OperatorList(stackalloc int[{OperatorList.InlineCapacity.ToString(CultureInfo.InvariantCulture)}]);",
             "    try",
             "    {",
             "        do",
@@ -553,7 +547,7 @@ internal static class UnarySource
 
         if (limitRecursion)
         {
-            lines.Add($"        for (var i = 0; i < operators.Count; i++) {ctx}.ExitRecursion();");
+            lines.Add($"        {ctx}.ExitRecursion(operators.Count);");
         }
 
         lines.Add("        operators.Release();");
