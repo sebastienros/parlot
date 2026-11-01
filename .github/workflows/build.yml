@@ -57,15 +57,15 @@ jobs:
         global-json-file: test/Parlot.SourceGenerator.Tests/MinimumSdk/global.json
         check-latest: false
     - name: Restore
-      run: dotnet restore -p:Configuration=Release -p:VersionSuffix=preview-${{ github.run_number }} -p:ContinuousIntegrationBuild=True
+      run: dotnet restore -p:Configuration=Release -p:VersionSuffix=preview.${{ github.run_number }} -p:ContinuousIntegrationBuild=True
     - name: Build
-      run: dotnet build --configuration Release --no-restore -p:VersionSuffix=preview-${{ github.run_number }} -p:ContinuousIntegrationBuild=True
+      run: dotnet build --configuration Release --no-restore -p:VersionSuffix=preview.${{ github.run_number }} -p:ContinuousIntegrationBuild=True
     - name: Test
       run: dotnet test --configuration Release --no-build
 
     - name: Pack preview packages
       if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
-      run: dotnet pack --output artifacts --configuration Release --no-build -p:VersionSuffix=preview-${{ github.run_number }} -p:ContinuousIntegrationBuild=True
+      run: dotnet pack --output artifacts --configuration Release --no-build -p:VersionSuffix=preview.${{ github.run_number }} -p:ContinuousIntegrationBuild=True
 
     - name: Push preview packages to Feedz
       if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
@@ -76,4 +76,12 @@ jobs:
         set -euo pipefail
         for package in artifacts/*.nupkg; do
           dotnet nuget push "$package" --api-key "$FEEDZ_IO_API_KEY" --source https://f.feedz.io/sebastienros/parlot/nuget/index.json --skip-duplicate
+        done
+        # Previews used to be versioned <prefix>-preview-<run number>, which NuGet orders as text (preview-999 is
+        # newer than preview-1000) and above every <prefix>-preview.<run number>. Delete them so they don't shadow newer builds.
+        for package in artifacts/*.nupkg; do
+          id=$(basename "$package" | sed -E 's/\.[0-9]+\.[0-9]+\.[0-9]+-.*$//' | tr '[:upper:]' '[:lower:]')
+          for version in $(curl -fsS "https://f.feedz.io/sebastienros/parlot/nuget/v3/packages/$id/index.json" | jq -r '.versions[] | select(test("-preview-[0-9]+$"))'); do
+            dotnet nuget delete "$id" "$version" --api-key "$FEEDZ_IO_API_KEY" --source https://f.feedz.io/sebastienros/parlot/nuget/index.json --non-interactive
+          done
         done
