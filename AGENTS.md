@@ -141,6 +141,9 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
+- Keep `try`/`finally` (a `ListBuilder`'s release) out of generated code that runs for every operand, like the
+  `Operators()` climb: on .NET 10 it gave the recursive climb a larger frame to zero on each call and stack homes for its
+  loop state, 5-14% of NCalc's parse time. Emit it in a local function reached only when the list has an item.
 - `StandaloneRuntimeSources` embeds the shared runtime files into generated consumers as internal `Parlot.Generated`
   types, compiled with `#define PARLOT_STANDALONE`. Do not fork algorithms into separately maintained copies.
 - `Numbers.Reflection.cs` stays in the runtime library, not the embedded support; do not reintroduce reflection-only
