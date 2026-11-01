@@ -146,6 +146,19 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("Simple", 1)]
+    [InlineData("Calls", 1)]
+    [InlineData("Conditional", 2)]
+    public void TernaryLevelGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the runtime Sequence one
+        var benchmark = new TernaryLevelBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.SequenceRuntime());
+        Assert.Equal(expected, benchmark.LevelGenerated());
+    }
+
+    [Theory]
     [InlineData("Repeated")]
     [InlineData("Distinct")]
     public void PooledStringGrammars(string scenario)
