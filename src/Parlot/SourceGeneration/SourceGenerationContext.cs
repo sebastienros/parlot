@@ -371,7 +371,8 @@ public sealed class SourceGenerationContext
         return fieldName;
     }
 
-    private Dictionary<StringPool, string>? _stringPoolFields;
+    // The static fields of the pools and caches, by the object they are generated for
+    private Dictionary<object, string>? _sharedFields;
 
     /// <summary>
     /// Returns the name of the static field holding the generated counterpart of a parser's string pool, registering it
@@ -379,18 +380,36 @@ public sealed class SourceGenerationContext
     /// share the field, whatever the number of times their code is generated.
     /// </summary>
     internal string GetStringPoolField(StringPool pool)
-    {
-        _stringPoolFields ??= new Dictionary<StringPool, string>();
+        => GetSharedField(pool, "private static readonly global::Parlot.StringPool",
+            $"new global::Parlot.StringPool({pool.ConfiguredMaximumLength.ToString(System.Globalization.CultureInfo.InvariantCulture)})");
 
-        if (!_stringPoolFields.TryGetValue(pool, out var fieldName))
+    /// <summary>
+    /// Returns the name of the static field holding the generated counterpart of a text's cache of matched cases,
+    /// registering it the first time.
+    /// </summary>
+    internal string GetCaseCacheField(CaseCache cache)
+        => GetSharedField(cache, "private static readonly global::Parlot.CaseCache", "new global::Parlot.CaseCache()");
+
+    private string GetSharedField(object owner, string declaration, string initializer)
+    {
+        _sharedFields ??= new Dictionary<object, string>(ReferenceComparer.Instance);
+
+        if (!_sharedFields.TryGetValue(owner, out var fieldName))
         {
-            fieldName = RegisterStaticField(
-                "private static readonly global::Parlot.StringPool",
-                $"new global::Parlot.StringPool({pool.ConfiguredMaximumLength.ToString(System.Globalization.CultureInfo.InvariantCulture)})");
-            _stringPoolFields[pool] = fieldName;
+            fieldName = RegisterStaticField(declaration, initializer);
+            _sharedFields[owner] = fieldName;
         }
 
         return fieldName;
+    }
+
+    private sealed class ReferenceComparer : IEqualityComparer<object>
+    {
+        public static readonly ReferenceComparer Instance = new();
+
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(object obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
     }
 
     /// <summary>

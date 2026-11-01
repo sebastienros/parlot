@@ -11,13 +11,13 @@ Parlot provides a fluent API based on parser combinators that provide a more rea
 | Branch | Purpose | Package feed |
 | --- | --- | --- |
 | [`release/1.x`](https://github.com/sebastienros/parlot/tree/release/1.x) | Maintenance of stable Parlot 1.x releases. | [![NuGet.org stable version](https://img.shields.io/nuget/v/Parlot.svg?label=nuget.org)](https://www.nuget.org/packages/Parlot) |
-| [`main`](https://github.com/sebastienros/parlot/tree/main) | Development of Parlot 2.0, including source-generated parsers. | [![Feedz preview version](https://img.shields.io/endpoint?url=https%3A%2F%2Ff.feedz.io%2Fsebastienros%2Fparlot%2Fshield%2FParlot%2Flatest)](https://f.feedz.io/sebastienros/parlot/nuget/index.json) |
+| [`main`](https://github.com/sebastienros/parlot/tree/main) | Development of Parlot 2.0, including source-generated parsers. | [![Feedz preview version](https://img.shields.io/endpoint?url=https%3A%2F%2Ff.feedz.io%2Fsebastienros%2Fparlot%2Fshield%2FParlot%2Flatest)](https://feedz.io/org/sebastienros/repository/parlot/packages/Parlot) |
 
 ### Preview packages
 
 Succefful build on `main`, publishes preview packages to the
 [Parlot feed on feedz.io](https://f.feedz.io/sebastienros/parlot/nuget/index.json).
-Versions follow `2.0.0-preview-<run number>`, using the GitHub Actions build run number.
+Versions follow `2.0.0-preview.<run number>`, using the GitHub Actions build run number.
 These packages contain the latest development changes and are intended for testing before release.
 
 Add the preview feed alongside NuGet.org, then install the latest prerelease version:

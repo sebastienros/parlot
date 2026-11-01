@@ -14,8 +14,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     private readonly string[]? _expectedPrefixes;
 
     // The strings of the matched texts that differ from the text, for a literal returning them: they are cases of the
-    // text, which are few, so each one is allocated once
-    private readonly StringPool? _pool;
+    // text, which are few, so the first ones are kept
+    private readonly CaseCache? _cases;
 
     // The invariant upper case of each char of the BMP, at the index of the char. It is only built for a
     // case-insensitive text which doesn't start with an ASCII char.
@@ -34,7 +34,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 
         if (!_returnText)
         {
-            _pool = new StringPool(Text.Length);
+            _cases = new CaseCache();
         }
 
         // A culture comparison ignores some chars, like the soft hyphen, and the current culture is the one of the
@@ -141,8 +141,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
     // Whether the canonical text is returned rather than the matched one
     internal bool ReturnsText => _returnText;
 
-    // The pool of the matched texts, when they are returned
-    internal StringPool? Pool => _pool;
+    // The cases of the matched texts, when they are returned
+    internal CaseCache? Cases => _cases;
 
     public bool CanSeek { get; }
 
@@ -190,7 +190,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
                     ? Text
                     : start == cursor.BufferStart && end - start == buffer.Length
                         ? buffer
-                        : _pool!.Get(parsedText));
+                        : _cases!.Get(parsedText));
             }
 
             context.ExitParser(this);
@@ -252,7 +252,7 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
             result.Body.Add($"    var {parsedTextName} = {cursorName}.GetSpan({startName}, {lengthLiteral});");
             result.Body.Add($"    {result.ValueVariable} = {parsedTextName}.SequenceEqual({textLiteral}.AsSpan())");
             result.Body.Add($"        ? {textLiteral}");
-            result.Body.Add($"        : {lengthLiteral} == {bufferName}.Length ? {bufferName} : {context.GetStringPoolField(_pool!)}.Get({parsedTextName});");
+            result.Body.Add($"        : {lengthLiteral} == {bufferName}.Length ? {bufferName} : {context.GetCaseCacheField(_cases!)}.Get({parsedTextName});");
         }
         else
         {

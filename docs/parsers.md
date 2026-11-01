@@ -348,8 +348,9 @@ The case-insensitive comparison is ordinal. It doesn't depend on the current cul
 If you need to preserve the original casing from the input, set `returnMatchedText: true`.
 An exact-case match returns the requested text without allocating; if the matched text
 has different casing but covers the entire input, the input string itself is returned.
-A differently cased substring is taken from a pool the parser keeps, so each casing the
-input uses is allocated once, also across parses. `Keyword` does the same.
+A differently cased substring is taken from the cases the parser keeps: the first four
+casings it matches, usually the ones the input uses most, are allocated once and shared by
+all its parses, and other casings are allocated each time. `Keyword` does the same.
 
 Usage:
 
@@ -1477,7 +1478,7 @@ On `Terms.String()` or `Literals.String()`, the string literal also decodes its 
 an escaped value isn't allocated either when the pool has it. The literal it is called on is unchanged.
 
 `ToPooledString()` takes a `Parser<TextSpan>`: the string of a `Parser<string>` is already created, a pool would only
-share it. Case-insensitive `Text` and `Keyword` parsers returning the matched text pool the cases they return by
+share it. Case-insensitive `Text` and `Keyword` parsers returning the matched text keep the cases they return by
 themselves.
 
 ### Else

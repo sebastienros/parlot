@@ -760,9 +760,9 @@ retain their own inlining hints.
 
 Measure representative grammars. Result models and callbacks can still allocate, and conversions such as
 `TextSpan.ToString()` intentionally create application-owned strings when the public result requires them.
-`ToPooledString()` and case-insensitive `Text`/`Keyword` parsers returning the matched text keep their pool in a
-static field of the generated class, shared by all the calls of the entry point, like the runtime parser shares its
-pool between parses. A pooled string literal decodes its escape sequences into the same field.
+`ToPooledString()` keeps its pool, and case-insensitive `Text`/`Keyword` parsers returning the matched text keep their
+cases, in a static field of the generated class, shared by all the calls of the entry point, like the runtime parser
+shares them between parses. A pooled string literal decodes its escape sequences into the same field.
 
 Custom string delimiters use the scanner's single-character overload without allocating a delimiter array
 per token. When `Capture` discards a string parser's decoded value, the generated parser still validates
