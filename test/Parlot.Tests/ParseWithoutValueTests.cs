@@ -114,6 +114,8 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Bs.Discard<int>(1));
 #pragma warning restore CS0618
         AssertSameAsParse(Bs.Then(1));
+        AssertSameAsParse(Terms.Identifier().ToPooledString());
+        AssertSameAsParse(Capture(Bs).ToPooledString());
         AssertSameAsParse(Bs.Then(static x => x.Count));
         AssertSameAsParse(A.WhenFollowedBy(Bs));
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));

@@ -109,6 +109,33 @@ public class UtilityTypesTests
     }
 
     [Fact]
+    public void TextSpanShouldShareSingleAsciiChars()
+    {
+        var buffer = "a=b, a\u00e9";
+
+        Assert.Same(new TextSpan(buffer, 0, 1).ToString(), new TextSpan(buffer, 5, 1).ToString());
+        Assert.Same(new TextSpan(buffer, 1, 1).ToString(), new TextSpan("=", 0, 1).ToString());
+        Assert.Equal("a", new TextSpan(buffer, 0, 1).ToString());
+        Assert.Equal("\0", new TextSpan("\0", 0, 1).ToString());
+
+        // Other chars are new strings
+        Assert.Equal("\u00e9", new TextSpan(buffer, 6, 1).ToString());
+        Assert.NotSame(new TextSpan(buffer, 6, 1).ToString(), new TextSpan(buffer, 6, 1).ToString());
+
+        // An invalid span still throws
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => new TextSpan(buffer, 7, 1).ToString());
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => new TextSpan(buffer, -1, 1).ToString());
+    }
+
+    [Fact]
+    public void DecodedSingleAsciiCharsAreShared()
+    {
+        Assert.Same(Character.DecodeString("\\n"), Character.DecodeString("\\n"));
+        Assert.Equal("\n", Character.DecodeString("\\n"));
+        Assert.Equal("\u00e9", Character.DecodeString("\\u00e9"));
+    }
+
+    [Fact]
     public void TextSpanShouldCreateFromSubstring()
     {
         var span = new TextSpan("hello world", 6, 5);

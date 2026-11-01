@@ -145,6 +145,27 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmark.TableGenerated());
     }
 
+    [Theory]
+    [InlineData("Repeated")]
+    [InlineData("Distinct")]
+    public void PooledStringGrammars(string scenario)
+    {
+        // The setup checks the pooled strings against ToString()
+        var benchmark = new PooledStringBenchmarks { Scenario = scenario };
+        benchmark.Setup();
+        Assert.Equal(1000, benchmark.PooledIdentifiers().Count);
+        Assert.Equal(1000, benchmark.PooledStrings().Count);
+    }
+
+    [Fact]
+    public void MatchedTextGrammars()
+    {
+        var benchmark = new MatchedTextBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("Select", benchmark.Texts()[2]);
+        Assert.Equal("SELECT", benchmark.Keywords()[0]);
+    }
+
     [Fact]
     public void OperatorChoiceGrammar()
     {

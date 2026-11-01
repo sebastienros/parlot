@@ -261,6 +261,10 @@ Full reference: `docs/source-generation.md`.
   scratch stack shared by nested lists, and the result is one array of the exact size. Declare it as a local, never copy it, and call `Release()`
   in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters) so that an exception can't leave items on
   the stack. Read its items through the builder after a callback, which can parse and grow the stack.
+- Strings of the input that are kept and repeat come from the internal `StringPool` (`src/Parlot/StringPool.cs`, embedded in
+  generated parsers too): one pool per parser, built with it, shared by its parses, bounded, lock-free to read. Emitters
+  get its static field with `SourceGenerationContext.GetStringPoolField`, which keys it by the pool, so parsers sharing
+  a pool share the field. `ToPooledString()` and matched case-insensitive texts use it.
 - Modern APIs (`SearchValues`, vectorization) go behind `#if NET8_0_OR_GREATER` with a downlevel path;
   PolySharp and `src/Parlot/Polyfill.cs` cover the rest.
 - Measure. Add or extend a benchmark in `test/Parlot.Benchmarks` for any hot-path change and put the

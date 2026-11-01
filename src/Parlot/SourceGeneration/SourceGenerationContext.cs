@@ -371,6 +371,28 @@ public sealed class SourceGenerationContext
         return fieldName;
     }
 
+    private Dictionary<StringPool, string>? _stringPoolFields;
+
+    /// <summary>
+    /// Returns the name of the static field holding the generated counterpart of a parser's string pool, registering it
+    /// the first time. The parsers sharing a pool, like a pooled string and the string literal it decodes into the pool,
+    /// share the field, whatever the number of times their code is generated.
+    /// </summary>
+    internal string GetStringPoolField(StringPool pool)
+    {
+        _stringPoolFields ??= new Dictionary<StringPool, string>();
+
+        if (!_stringPoolFields.TryGetValue(pool, out var fieldName))
+        {
+            fieldName = RegisterStaticField(
+                "private static readonly global::Parlot.StringPool",
+                $"new global::Parlot.StringPool({pool.ConfiguredMaximumLength.ToString(System.Globalization.CultureInfo.InvariantCulture)})");
+            _stringPoolFields[pool] = fieldName;
+        }
+
+        return fieldName;
+    }
+
     /// <summary>
     /// Creates a new <see cref="SourceResult"/> with conventional success and value names.
     /// </summary>

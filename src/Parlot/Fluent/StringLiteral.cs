@@ -22,6 +22,9 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
 
     private readonly StringLiteralQuotes _quotes;
 
+    // The pool the decoded strings come from, for a literal read by a pooled string
+    private readonly StringPool? _pool;
+
     public StringLiteral(StringLiteralQuotes quotes)
     {
         _quotes = quotes;
@@ -51,6 +54,17 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         ExpectedChars = [quote];
 
         Name = "StringLiteral";
+    }
+
+    /// <summary>
+    /// A copy of <paramref name="source"/> which takes the strings it decodes from <paramref name="pool"/>.
+    /// </summary>
+    internal StringLiteral(StringLiteral source, StringPool pool)
+    {
+        _quotes = source._quotes;
+        _pool = pool;
+        ExpectedChars = source.ExpectedChars;
+        Name = source.Name;
     }
 
     public bool CanSeek { get; } = true;
@@ -92,7 +106,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         // The scanner knows whether the string has escape sequences, so a string without any isn't read again
         if (hasEscape)
         {
-            result.Set(start, end, new TextSpan(Character.DecodeStringInternal(text.Slice(1, text.Length - 2))));
+            result.Set(start, end, new TextSpan(Character.DecodeStringInternal(text.Slice(1, text.Length - 2), _pool)));
         }
         else
         {
@@ -149,7 +163,8 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
             // The scanner knows whether the string has escape sequences, so a string without any isn't read again
             result.Body.Add($"    if ({hasEscapeName})");
             result.Body.Add("    {");
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2)));");
+            var pool = _pool != null ? ", " + context.GetStringPoolField(_pool) : "";
+            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2){pool}));");
             result.Body.Add("    }");
             result.Body.Add("    else");
             result.Body.Add("    {");
