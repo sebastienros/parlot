@@ -32,13 +32,14 @@ and each prefix operator applied by an [operator table](#operator-tables). Excee
 which fails the whole parse: a choice doesn't try its next alternative, `TryParse` returns `false` with the error and
 `Parse` throws.
 
-Without a limit, the same parsers check the stack of the thread on each entry, with
+Without a limit, the `Deferred` and `Recursive` parsers check the stack of the thread on each entry, with
 `RuntimeHelpers.TryEnsureSufficientExecutionStack()` (`EnsureSufficientExecutionStack()` below .NET Standard 2.1), and fail
 the whole parse the same way, with the error "The input is nested too deeply to be parsed on the remaining stack.", rather
 than overflowing the stack, which would end the process. How deep a grammar can go then depends on the stack of the thread
 and on the stack each level of the grammar takes; a limit makes it independent of both. Each entry increments a counter
 and the stack is checked on every 16th one, so a grammar recurses at most 16 levels past a check, which the runtime's
-margin (64 KB or more) leaves room for.
+margin (64 KB or more) leaves room for. `Unary` and the prefix operators of an operator table read their operators in a
+loop, so a chain of operators doesn't use the stack, whatever its length; the levels they count are only for the limit.
 
 A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
@@ -178,8 +179,8 @@ of an operand doesn't depend on the number of levels.
   a postfix operator only the operators of its level and of the looser ones are tried: `a! ** b`, with `**` tighter than
   `!`, is `a!`.
 - An operator and an operand that both read nothing stop the level, as in the chain.
-- With a `maxRecursionDepth`, each prefix operator applied counts as one level of recursion. Chains of binary operators
-  don't recurse, whatever their length.
+- Chains of operators don't recurse, whatever their length: the prefix operators are read in a loop, like the binary ones.
+  With a `maxRecursionDepth`, each prefix operator applied still counts as one level of recursion.
 - The parser is seekable from its operand and its prefix operators, so it can be an alternative of a lookup table.
 - Each call of `Unary`, `Postfix`, `LeftAssociative`, `RightAssociative` or `Ternary` returns a new parser, the table is not modified.
   `Named()` returns a `Parser<T>`, call it last.

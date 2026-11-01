@@ -141,6 +141,13 @@ to every `Deferred`.
 The proof assumes that a parser doesn't move the cursor before the position where it was invoked, and that the callbacks
 of a grammar (conversions, predicates, selectors) don't invoke parsers.
 
+## Deep nesting
+
+A `Deferred` checks the stack and fails the parse with a `ParseException` when it runs low, so an input nested deeper than
+the stack allows fails rather than ending the process (see [Limiting parser recursion](parsers.md#limiting-parser-recursion)).
+A custom parser that invokes itself directly doesn't get that check: read the repetition in a loop with an explicit list, as
+`Unary` does for its chain of operators, or recurse through a `Deferred`.
+
 A custom parser can be invoked before anything is read and can then invoke any parser, so a `Deferred` which can invoke one
 before reading anything keeps the check. A custom parser whose fields only hold plain data (numbers, enums, strings, and
 arrays or structs of these), and whose enclosing types too, is assumed not to invoke other parsers, like a parser that reads

@@ -2499,6 +2499,31 @@ public class FluentTests
     }
 
     [Fact]
+    public void UnaryShouldParseChainsLongerThanTheStack()
+    {
+        var parser = Terms.Integer().Unary(
+            (Literals.Char('-'), static value => -value),
+            (Literals.Char('!'), static value => value + 1));
+        var contextual = Terms.Integer().Unary(
+            (Literals.Char('-'), static (ParseContext _, long value) => -value),
+            (Literals.Char('!'), static (ParseContext _, long value) => value + 1));
+        var chain = new string('-', 1_000_000) + "5";
+
+        Assert.Equal(5L, parser.Parse(chain));
+        Assert.Equal(5L, contextual.Parse(chain));
+
+        // The operators apply from the last one
+        Assert.Equal(-5L, parser.Parse("!-!5"));
+        Assert.Equal(-5L, contextual.Parse("!-!5"));
+
+        // An operator not followed by an operand fails the parser, which leaves the cursor where it started
+        var context = new ParseContext(new Scanner("--x"));
+        var result = new ParseResult<long>();
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
     public void RecursionLimitShouldWorkWhenLoopDetectionIsDisabled()
     {
         var loop = Deferred<string>();

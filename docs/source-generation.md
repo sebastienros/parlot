@@ -227,9 +227,10 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   at that position instead of overflowing the stack, as the runtime `Deferred` does. The check costs one
   comparison per entry and allocates nothing.
 - Recursion that consumes input is bounded like at runtime (see
-  [Limiting parser recursion](parsers.md#limiting-parser-recursion)). `Deferred`, `Recursive` and `Unary` parsers and
-  the prefix operators of `Operators()` check the stack of the thread on each entry, and input nested too deeply for it
-  makes the entry point return `false` instead of overflowing the stack and ending the process. The diagnostics overload
+  [Limiting parser recursion](parsers.md#limiting-parser-recursion)). `Deferred` and `Recursive` parsers check the stack
+  of the thread on each entry, and input nested too deeply for it makes the entry point return `false` instead of
+  overflowing the stack and ending the process. `Unary` and the prefix operators of `Operators()` read their operators in
+  a loop, so their chains don't use the stack. The diagnostics overload
   returns the error "The input is nested too deeply to be parsed on the remaining stack." at the position where it was
   reached. `[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` sets a limit that doesn't depend on the stack,
   counted like `ParseContext.MaxRecursionDepth`: the entry point returns `false` when a parse exceeds it, and the
@@ -614,8 +615,14 @@ build-time grammar code depends on another generator's output:
 private static Parser<Expression> Build() => ...;
 ```
 
-Assembly names must match analyzer references available to the consuming project. Multiple names may be
-specified, and class-level and method-level values are combined.
+Each name is an analyzer assembly name (`PolySharp.SourceGenerators`) or the id of the package that brings it
+(`PolySharp`). Multiple names may be specified, and class-level and method-level values are combined.
+
+The generator is taken from the analyzer references MSBuild passes to the compiler, so the version the project
+references is loaded wherever NuGet restored it (`NUGET_PACKAGES`, `--packages`, `RestorePackagesPath`). When the
+build doesn't pass them, or the name isn't among them, the newest version under the project's `NuGetPackageRoot`,
+then `NUGET_PACKAGES`, then `~/.nuget/packages` is used. A name that can't be found reports the warning
+`PARLOT012` and the factory compiles without that generator.
 
 ## Build-time security
 

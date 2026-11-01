@@ -131,8 +131,11 @@ public sealed partial class ParserSourceGenerator
             options.GlobalOptions.TryGetValue("build_property.BuildingProject", out var building);
             options.GlobalOptions.TryGetValue("build_property.BuildingInsideVisualStudio", out var visualStudio);
             options.GlobalOptions.TryGetValue("build_property.ParlotLineDirectives", out var lineDirectives);
+            options.GlobalOptions.TryGetValue(IncludeGeneratorsResolver.AnalyzersProperty, out var analyzers);
+            options.GlobalOptions.TryGetValue(IncludeGeneratorsResolver.PackageRootProperty, out var packageRoot);
             return (Identifier: identifier, Version: version, Directory: directory,
-                DesignTime: IsDesignTimeOrIdeContext(designTime, building, visualStudio), LineDirectives: lineDirectives);
+                DesignTime: IsDesignTimeOrIdeContext(designTime, building, visualStudio), LineDirectives: lineDirectives,
+                Generators: new IncludedGeneratorSearch(analyzers, packageRoot));
         });
 
         var compiledFactories = context.SyntaxProvider.CreateSyntaxProvider(
@@ -158,7 +161,7 @@ public sealed partial class ParserSourceGenerator
 
             GenerateStandalone(output, (CSharpCompilation)compilation, (CSharpParseOptions)parseOptions,
                 files, TargetFrameworkInfo.FromMsBuildProperties(configuration.Identifier ?? "", configuration.Version ?? ""),
-                configuration.Directory ?? "", configuration.DesignTime, configuration.LineDirectives);
+                configuration.Directory ?? "", configuration.DesignTime, configuration.LineDirectives, configuration.Generators);
         });
     }
 
@@ -170,7 +173,8 @@ public sealed partial class ParserSourceGenerator
         TargetFrameworkInfo target,
         string projectDirectory,
         bool designTime,
-        string? lineDirectivesValue)
+        string? lineDirectivesValue,
+        IncludedGeneratorSearch generatorSearch)
     {
         var supportedTarget = target.Identifier switch
         {
@@ -318,7 +322,7 @@ public sealed partial class ParserSourceGenerator
             pending.Add(entry);
         }
 
-        GenerateStandaloneEntryPoints(output, compilation, target, pending, projectDirectory, entryPointKeys);
+        GenerateStandaloneEntryPoints(output, compilation, target, pending, projectDirectory, generatorSearch, entryPointKeys);
         ReportGrammarDiagnostics(output, pending);
 
         var generated = new List<(string HintName, SyntaxTree Tree)>();
@@ -443,6 +447,7 @@ public sealed partial class ParserSourceGenerator
         TargetFrameworkInfo target,
         List<StandaloneEntryPoint> entries,
         string projectDirectory,
+        IncludedGeneratorSearch generatorSearch,
         ISet<string> entryPointKeys)
     {
         var shared = new List<PreparedFactory>();
@@ -454,7 +459,7 @@ public sealed partial class ParserSourceGenerator
             // Included files and generators change the compilation, so these factories keep a build of their own
             if (entry.Factory.AdditionalFiles.Length > 0 || entry.Factory.AdditionalGenerators.Length > 0)
             {
-                GenerateStandaloneEntryPoint(output, compilation, target, entry, projectDirectory, entryPointKeys);
+                GenerateStandaloneEntryPoint(output, compilation, target, entry, projectDirectory, generatorSearch, entryPointKeys);
                 continue;
             }
 
@@ -507,7 +512,7 @@ public sealed partial class ParserSourceGenerator
             // Rewriting one file can break the build of all of them, so each factory retries alone and reports its own errors
             foreach (var prepared in shared)
             {
-                GenerateStandaloneEntryPoint(output, compilation, target, prepared.Standalone, projectDirectory, entryPointKeys);
+                GenerateStandaloneEntryPoint(output, compilation, target, prepared.Standalone, projectDirectory, generatorSearch, entryPointKeys);
             }
             return;
         }
@@ -521,12 +526,13 @@ public sealed partial class ParserSourceGenerator
         TargetFrameworkInfo target,
         StandaloneEntryPoint entry,
         string projectDirectory,
+        IncludedGeneratorSearch generatorSearch,
         ISet<string> entryPointKeys)
     {
         try
         {
             GenerateForMethod(output, compilation, target, entry.Factory,
-                projectDirectory, isDesignTimeBuild: false, entry, entryPointKeys);
+                projectDirectory, isDesignTimeBuild: false, generatorSearch, entry, entryPointKeys);
         }
         catch (Exception exception) when (IsStandaloneOutputException(exception))
         {

@@ -221,6 +221,58 @@ public class PrecedenceParserTests
         Assert.Equal("(-(-a))", value);
     }
 
+    private static Parser<long> TwoPrefixLevels() => Terms.Integer().Operators()
+        .Unary((Literals.Char('-'), static value => -value))
+        .LeftAssociative((Literals.Char('*'), static (a, b) => a * b))
+        .Unary((Literals.Char('!'), static value => value + 1));
+
+    [Fact]
+    public void ShouldParsePrefixChainsLongerThanTheStack()
+    {
+        var parser = TwoPrefixLevels();
+
+        Assert.Equal(5L, parser.Parse(new string('-', 1_000_000) + "5"));
+
+        // The operators of the levels up to the one of a prefix operator apply to its operand first
+        Assert.Equal(-5L, parser.Parse("!-2*3"));
+        Assert.Equal(999_994L, parser.Parse(new string('!', 1_000_000) + "-2*3"));
+
+        // The operand of a prefix operator can start with an operator of its level or of a tighter one, not a looser one
+        var context = new ParseContext(new Scanner("-!2"));
+        var result = new ParseResult<long>();
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("!-2*3")]
+    [InlineData("-2*!3")]
+    [InlineData("!!-2*-3*4")]
+    [InlineData("!2*!3")]
+    [InlineData("--2*3")]
+    [InlineData("-!2")]
+    [InlineData("!-!-2*3")]
+    [InlineData("2*-")]
+    [InlineData("!")]
+    [InlineData("-")]
+    public void PrefixChainsShouldParseLikeTheChainOfLevels(string input)
+    {
+        var chain = Terms.Integer()
+            .Unary((Literals.Char('-'), static value => -value))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => a * b))
+            .Unary((Literals.Char('!'), static value => value + 1));
+
+        var chainContext = new ParseContext(new Scanner(input));
+        var chainResult = new ParseResult<long>();
+        var tableContext = new ParseContext(new Scanner(input));
+        var tableResult = new ParseResult<long>();
+
+        Assert.Equal(chain.Parse(chainContext, ref chainResult), TwoPrefixLevels().Parse(tableContext, ref tableResult));
+        Assert.Equal(chainResult.Value, tableResult.Value);
+        Assert.Equal(chainResult.Start, tableResult.Start);
+        Assert.Equal(chainContext.Scanner.Cursor.Offset, tableContext.Scanner.Cursor.Offset);
+    }
+
 #if NET8_0_OR_GREATER
     [Theory]
     [InlineData("5", 5)]
