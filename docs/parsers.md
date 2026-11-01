@@ -15,7 +15,8 @@
 
 Recursive grammars can limit the nesting depth accepted from untrusted input by setting
 `maxRecursionDepth` on the `ParseContext`. The default value is `0`, which applies no limit.
-The limit applies to both runtime and source-generated parsers.
+A source-generated parser takes the limit from its attribute instead,
+`[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` (see [Source generation](source-generation.md)).
 
 ```c#
 var context = new ParseContext(new Scanner(input), maxRecursionDepth: 128);
@@ -25,6 +26,18 @@ if (!parser.TryParse(context, out var result, out var error))
     // error reports when the configured recursion limit was exceeded
 }
 ```
+
+Each entry into a `Deferred` or `Recursive` parser counts as one level, and so does each invocation of a `Unary` parser
+and each prefix operator applied by an [operator table](#operator-tables). Exceeding the limit throws a `ParseException`,
+which fails the whole parse: a choice doesn't try its next alternative, `TryParse` returns `false` with the error and
+`Parse` throws.
+
+Without a limit, the same parsers check the stack of the thread on each entry, with
+`RuntimeHelpers.TryEnsureSufficientExecutionStack()` (`EnsureSufficientExecutionStack()` below .NET Standard 2.1), and fail
+the whole parse the same way, with the error "The input is nested too deeply to be parsed on the remaining stack.", rather
+than overflowing the stack, which would end the process. How deep a grammar can go then depends on the stack of the thread
+and on the stack each level of the grammar takes; a limit makes it independent of both. The check costs about a nanosecond
+per entry, and the limit, when set, a few more.
 
 A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see

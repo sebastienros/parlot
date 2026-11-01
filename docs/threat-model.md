@@ -112,7 +112,7 @@ build-time trust guidance, hardened GitHub Actions, release validation, and pack
 Consumers should:
 
 - reject input over an application-specific limit before creating a `Scanner`;
-- use cancellation deadlines and `ParseContext.MaxRecursionDepth`;
+- use cancellation deadlines and `ParseContext.MaxRecursionDepth` (`[GenerateParser(MaxRecursionDepth = n)]` for generated parsers);
 - bound repeated elements, AST depth, decoded strings, and collection growth;
 - treat semantic actions, custom parsers, and `ParseContext` hooks as arbitrary trusted code;
 - redact input, source excerpts, tokens, and paths from user-visible errors;

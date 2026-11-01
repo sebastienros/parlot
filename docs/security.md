@@ -50,7 +50,9 @@ Parlot does not impose an application-wide input or result limit. Consumers shou
 following before accepting hostile input:
 
 - reject inputs over an application-specific byte or character limit before creating a `Scanner`;
-- pass a `CancellationToken` with a deadline and set `ParseContext.MaxRecursionDepth` for recursive grammars;
+- pass a `CancellationToken` with a deadline and set `ParseContext.MaxRecursionDepth` (or
+  `[GenerateParser(MaxRecursionDepth = n)]`) for recursive grammars. Without it, recursive parsers fail input nested too
+  deeply for the remaining stack rather than overflowing it, but how deep that is depends on the thread's stack;
 - bound repeated elements, AST depth, decoded string lengths, and other result growth in the grammar or
   semantic actions;
 - avoid returning raw input, file paths, tokens, or source excerpts in user-visible errors and logs; map
