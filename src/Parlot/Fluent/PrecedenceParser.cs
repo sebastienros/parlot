@@ -1005,6 +1005,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         result.Body.Add($"{result.SuccessVariable} = {climb}({_levels.Length - 1}, out {result.ValueVariable}, ref {nextName}, ref {nextPositionName});");
 
         // The local functions are each a single statement, so that their returns are not taken for the parser's own
+        var chains = new List<string>();
+
         for (var level = 0; level < _levels.Length; level++)
         {
             switch (_levels[level].Valued)
@@ -1013,12 +1015,23 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                     valuedCases[level] = GenerateValuedPostfix(level, postfix, Helper, context);
                     break;
                 case { } binary:
-                    valuedCases[level] = GenerateValuedBinary(level, binary, Helper, climb, valueType, context);
+                    valuedCases[level] = GenerateValuedBinary(level, binary, Helper, climb, valueType, context, out var chain);
+
+                    if (chain is not null)
+                    {
+                        chains.Add(chain);
+                    }
+
                     break;
             }
         }
 
         result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth > 0));
+
+        foreach (var chain in chains)
+        {
+            result.Body.Add(chain);
+        }
 
         if (_hasFollowingOperators)
         {
@@ -1451,8 +1464,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return sb.ToString();
     }
 
-    // The case of the climb's switch for a level of valued binary operators, which are parsed and applied there
-    private static string GenerateValuedBinary(int level, ValuedOperators<T> valued, Func<object, Type, string> helper, string climb, string valueType, SourceGenerationContext context)
+    // The case of the climb's switch for a level of valued binary operators, which are parsed and applied there. The
+    // operations which follow the right operand of a right-associative level are read by chain, a local function of their
+    // own: the builder they are kept in is released in a finally block, and exception handling in the climb would slow
+    // down every operand of the table, whether the level's operators are used or not.
+    private static string GenerateValuedBinary(int level, ValuedOperators<T> valued, Func<object, Type, string> helper, string climb, string valueType, SourceGenerationContext context, out string? chain)
     {
         var binary = (IValuedBinary)valued;
         var cursor = context.CursorName;
@@ -1460,6 +1476,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         var levelText = level.ToString(CultureInfo.InvariantCulture);
         var tighterText = (level - 1).ToString(CultureInfo.InvariantCulture);
         var nextLevelText = (level + 1).ToString(CultureInfo.InvariantCulture);
+        var valuedText = Lookahead.Valued(level).ToString(CultureInfo.InvariantCulture);
         var operatorHelper = helper(valued.Choices[0], binary.OperatorType);
         var factory = context.RegisterLambda(binary.Factory);
         var sb = new StringBuilder();
@@ -1484,58 +1501,87 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("                    continue;");
         Line("                }");
 
+        chain = null;
+
         if (binary.RightAssociative)
         {
-            var elementType = $"({SourceGenerationContext.GetTypeName(binary.OperatorType)}, {valueType})";
+            var chainName = $"chain{climb.Substring("climb".Length)}_{levelText}";
+            var pinArgument = context.IsCompacting ? ", pin" : "";
 
-            Line($"                {ListBuilderSource.Declare("operations", elementType)}");
-            Line("                try");
+            // The chain returns true when it stopped at an operator which isn't followed by an operand
+            Line($"                if (next == {valuedText} && {chainName}(ref right, ref next, ref nextPosition{pinArgument}))");
             Line("                {");
-            Line($"                    while (next == {Lookahead.Valued(level).ToString(CultureInfo.InvariantCulture)})");
-            Line("                    {");
-            Line("                        var operationPosition = nextPosition;");
-
-            if (context.IsCompacting)
-            {
-                Line($"                        {ctx}.MovePin(pin, operationPosition);");
-            }
-
-            Line($"                        if (!{operatorHelper}({ctx}, out var operation))");
-            Line("                        {");
-            Line($"                            lowest = {nextLevelText};");
-            Line("                            lookup = true;");
-            Line("                            break;");
-            Line("                        }");
-            Line($"                        if (!{climb}({tighterText}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
-            Line("                        {");
-            Line($"                            {cursor}.ResetPosition(operationPosition);");
-            Line($"                            lowest = {nextLevelText};");
-            Line("                            lookup = true;");
-            Line("                            break;");
-            Line("                        }");
-            Line("                        operations.Add((operation, operand));");
-            Line("                    }");
-
-            // The pairs are read from the builder: the factories can parse, and grow the scratch stack
-            Line("                    var count = operations.Count;");
-            Line("                    if (count > 0)");
-            Line("                    {");
-            Line("                        var accumulated = operations[count - 1].Item2;");
-            Line("                        for (var i = count - 1; i > 0; i--)");
-            Line("                        {");
-            Line($"                            accumulated = {Apply("operations[i - 1].Item2", "accumulated", "operations[i].Item1")};");
-            Line("                        }");
-            Line($"                        right = {Apply("right", "accumulated", "operations[0].Item1")};");
-            Line("                    }");
+            Line($"                    lowest = {nextLevelText};");
+            Line("                    lookup = true;");
             Line("                }");
-            Line("                finally");
-            Line("                {");
-            Line("                    operations.Release();");
-            Line("                }");
+
+            chain = GenerateValuedChain(chainName, valuedText, operatorHelper, binary, climb, tighterText, valueType, Apply, context);
         }
 
         Line($"                climbed = {Apply("climbed", "right", "op")};");
         Line("                continue;");
+
+        return sb.ToString();
+    }
+
+    // The local function reading the operations which follow the right operand of a right-associative level of valued
+    // binary operators, and folding them into it
+    private static string GenerateValuedChain(string name, string valuedText, string operatorHelper, IValuedBinary binary, string climb, string tighterText, string valueType, Func<string, string, string, string> apply, SourceGenerationContext context)
+    {
+        var cursor = context.CursorName;
+        var ctx = context.ParseContextName;
+        var elementType = $"({SourceGenerationContext.GetTypeName(binary.OperatorType)}, {valueType})";
+        var sb = new StringBuilder();
+
+        void Line(string text) => sb.Append(text).Append('\n');
+
+        Line($"bool {name}(ref {valueType} right, ref int next, ref int nextPosition{(context.IsCompacting ? ", int pin" : "")})");
+        Line("{");
+        Line("    var stopped = false;");
+        Line($"    {ListBuilderSource.Declare("operations", elementType)}");
+        Line("    try");
+        Line("    {");
+        Line($"        while (next == {valuedText})");
+        Line("        {");
+        Line("            var operationPosition = nextPosition;");
+
+        if (context.IsCompacting)
+        {
+            Line($"            {ctx}.MovePin(pin, operationPosition);");
+        }
+
+        Line($"            if (!{operatorHelper}({ctx}, out var operation))");
+        Line("            {");
+        Line("                stopped = true;");
+        Line("                break;");
+        Line("            }");
+        Line($"            if (!{climb}({tighterText}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
+        Line("            {");
+        Line($"                {cursor}.ResetPosition(operationPosition);");
+        Line("                stopped = true;");
+        Line("                break;");
+        Line("            }");
+        Line("            operations.Add((operation, operand));");
+        Line("        }");
+
+        // The pairs are read from the builder: the factories can parse, and grow the scratch stack
+        Line("        var count = operations.Count;");
+        Line("        if (count > 0)");
+        Line("        {");
+        Line("            var accumulated = operations[count - 1].Item2;");
+        Line("            for (var i = count - 1; i > 0; i--)");
+        Line("            {");
+        Line($"                accumulated = {apply("operations[i - 1].Item2", "accumulated", "operations[i].Item1")};");
+        Line("            }");
+        Line($"            right = {apply("right", "accumulated", "operations[0].Item1")};");
+        Line("        }");
+        Line("    }");
+        Line("    finally");
+        Line("    {");
+        Line("        operations.Release();");
+        Line("    }");
+        Line("    return stopped;");
+        sb.Append('}');
 
         return sb.ToString();
     }
