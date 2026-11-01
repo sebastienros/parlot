@@ -208,7 +208,7 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - A null input is rejected.
 - End-of-input matching is explicit. Add `.Eof()` when trailing input must fail.
 - `Terms` parsers skip configured whitespace and comments; `Literals` parsers do not. The execution context can't be
-  configured, so select ASCII whitespace with `WithWhiteSpaceSet(WhiteSpaceSet.Ascii)` in the grammar.
+  configured, so select another white space set, such as `WithWhiteSpaceSet(WhiteSpaceSet.Ascii)` or `WhiteSpaceSet.Json`, in the grammar.
 - A `Deferred` parser that is entered again at the position where it is already active (left recursion) fails
   at that position instead of overflowing the stack, as the runtime `Deferred` does. The check costs one
   comparison per entry and allocates nothing. Recursion that consumes input is bounded only by the stack
