@@ -57,7 +57,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         // An alternative that can't tell what it starts with may be a Deferred whose parser is set later, or
         // a choice holding one, so the table is built again from the hints they declare once parsing starts
-        _resolved = _originalParsers.Length <= 1 || !_originalParsers.Any(static x => x is ISeekable seekable && !IsResolved(seekable));
+        _resolved = _originalParsers.Length == 0 || !_originalParsers.Any(static x => x is ISeekable seekable && !IsResolved(seekable));
 
         static bool IsResolved(ISeekable seekable) => seekable.CanSeek && Array.IndexOf(seekable.ExpectedChars, OtherSeekableChar) < 0;
     }
@@ -175,11 +175,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             }
         }
 
-        // We can't build a lookup table if there is only one parser
-        if (parsers.Length <= 1)
+        if (parsers.Length == 0)
         {
             return;
         }
+
+        // A single alternative gets a lookup table too, so the choice declares its hints to the choices that hold it
 
         // Technically we shouldn't be able to build a lookup table if not all parsers are seekable.
         // For instance, "or" | identifier is not seekable since 'identifier' is not seekable.

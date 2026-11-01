@@ -121,7 +121,7 @@ internal sealed class PostfixGroup<T, TOperator> : PostfixGroup<T>
             _factories[i] = factory ?? throw new ArgumentException("Operators must not contain null factories.", parameterName);
         }
 
-        // A choice of a single parser doesn't declare its hints
+        // A single operator is invoked directly
         _choice = parsers.Length == 1 ? parsers[0] : new OneOf<(int, TOperator)>(parsers);
     }
 
@@ -193,7 +193,7 @@ internal sealed class ValuedBinary<T, TOperator> : ValuedOperators<T>, IValuedBi
             }
         }
 
-        // A choice of a single parser doesn't declare its hints
+        // A single operator is invoked directly
         Choice = operators.Length == 1 ? operators[0] : new OneOf<TOperator>(operators);
         Choices = [Choice];
         _factory = factory;
