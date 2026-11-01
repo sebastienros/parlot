@@ -923,7 +923,7 @@ public class ParseContext
     /// <summary>
     /// Throws a <see cref="ParseException"/> when the stack of the thread is too deep to enter a recursive parser safely,
     /// such that deeply nested input fails the parse instead of overflowing the stack. Called on each entry into a
-    /// <see cref="Deferred{T}"/> or prefix operator parser, whether <see cref="MaxRecursionDepth"/> is set or not.
+    /// <c>Deferred</c>, <c>Unary</c> or prefix operator parser, whether <see cref="MaxRecursionDepth"/> is set or not.
     /// </summary>
     /// <remarks>
     /// The stack is checked on every 16th entry: any 16 consecutive entries contain a check, so the parsers never recurse
