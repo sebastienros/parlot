@@ -370,6 +370,25 @@ public static partial class Grammars
         return OneOf(recursive, Literals.Text("c"));
     }
 
+    [GenerateParser(nameof(TryParseUnaryChain))]
+    private static Parser<long> BuildUnaryChain() =>
+        Terms.Integer().Unary(
+            (Literals.Char('-'), static value => -value),
+            (Literals.Char('!'), static value => value + 1));
+
+    [GenerateParser(nameof(TryParseUnaryContextChain))]
+    private static Parser<long> BuildUnaryContextChain() =>
+        Terms.Integer().Unary(
+            (Literals.Char('-'), static (ParseContext _, long value) => -value),
+            (Literals.Char('!'), static (ParseContext _, long value) => value + 1));
+
+    [GenerateParser(nameof(TryParsePrefixChain))]
+    private static Parser<long> BuildPrefixChain() =>
+        Terms.Integer().Operators()
+            .Unary((Literals.Char('-'), static value => -value))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => a * b))
+            .Unary((Literals.Char('!'), static value => value + 1));
+
     [GenerateParser(nameof(TryParseAnyOfDigits))]
     private static Parser<string> BuildAnyOfDigits() => Literals.AnyOf("0123456789").Then(static value => value.ToString());
 
