@@ -17,9 +17,15 @@ runtime package or assembly.
 
 ## Downlevel package dependencies
 
-The analyzer package automatically restores `System.Memory` 4.6.3 for downlevel applications. Shared
-polyfills are emitted as C# 12-compatible internal helpers, so consuming projects do not need PolySharp.
-Modern targets do not acquire these compatibility dependencies.
+The analyzer package depends on `System.Memory` 4.5.5 or later for downlevel applications, so a project
+without a reference restores 4.5.5, and one that references a later version, such as 4.6.3, keeps it.
+Generated parsers build against either. A project that pins the 4.5.x compatibility packages (`System.Memory`
+4.5.5, `System.Buffers` 4.5.1, `System.Numerics.Vectors` 4.5.0) or `System.Runtime.CompilerServices.Unsafe`
+6.0.0 gets no NU1605 downgrade. The grammar factory is compiled against the analyzer's Parlot assembly,
+which is built against `System.Memory` 4.6.3: the generator lowers that assembly's references to the versions
+the project references, so a project on 4.5.5 does not fail with CS1705. Shared polyfills are emitted as
+C# 12-compatible internal helpers, so consuming projects do not need PolySharp. Modern targets do not acquire
+these compatibility dependencies.
 
 When publishing a library that contains generated parsers for downlevel targets, explicitly reference
 `System.Memory` so it is included in your library's package dependencies:
@@ -29,6 +35,8 @@ When publishing a library that contains generated parsers for downlevel targets,
   <PackageReference Include="System.Memory" Version="4.6.3" />
 </ItemGroup>
 ```
+
+Any version from 4.5.5 works; reference the one your library already ships with.
 
 Do not mark that reference `PrivateAssets="all"`. The analyzer itself should remain private, but its
 private transitive dependencies are not propagated to consumers of your library. Packing reports an

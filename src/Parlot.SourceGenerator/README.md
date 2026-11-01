@@ -33,6 +33,7 @@ propagates that runtime dependency to downstream consumers:
 </ItemGroup>
 ```
 
+Any version from 4.5.5 works, so a library that ships with System.Memory 4.5.5 keeps it.
 Packing reports an error if this reference is missing. Modern targets need no compatibility packages,
 and the generated support code does not require PolySharp.
 
