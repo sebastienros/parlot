@@ -106,6 +106,12 @@ internal sealed class StringPool
     }
 
     /// <summary>
+    /// Gets the string of a single ASCII char, which all the strings of a single char share.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static string Ascii(char c) => s_ascii[c];
+
+    /// <summary>
     /// The length beyond which values are not pooled, as the pool was created.
     /// </summary>
     internal int ConfiguredMaximumLength { get; }

@@ -138,7 +138,13 @@ public static partial class Character
                 buffer[dataIndex++] = c;
             }
 
-            return pool != null ? pool.Get(buffer.Slice(0, dataIndex)) : buffer.Slice(0, dataIndex).ToString();
+            if (pool != null)
+            {
+                return pool.Get(buffer.Slice(0, dataIndex));
+            }
+
+            // Escape sequences often decode to a single char, like "\n"
+            return dataIndex == 1 && buffer[0] < 128 ? StringPool.Ascii(buffer[0]) : buffer.Slice(0, dataIndex).ToString();
         }
         finally
         {
