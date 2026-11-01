@@ -132,6 +132,20 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData(1, -42)]
+    [InlineData(2, 43)]
+    [InlineData(5, 1)]
+    [InlineData(32, 1)]
+    public void PrefixChainGrammar(int count, long expected)
+    {
+        // The setup checks every parser against the runtime Unary one
+        var benchmark = new PrefixChainBenchmarks { Count = count };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.UnaryRuntime());
+        Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
+    [Theory]
     [InlineData("Atom", 1)]
     [InlineData("Members", 1254301)]
     [InlineData("Conditional", 993)]
