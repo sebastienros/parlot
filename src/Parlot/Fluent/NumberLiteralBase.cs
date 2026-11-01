@@ -200,15 +200,16 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         }
 
         // The helper is available in Parlot's net8.0+ assets. A net7.0 consumer selects
-        // the netstandard2.0 asset, which cannot expose generic-math APIs.
+        // the netstandard2.0 asset, which cannot expose generic-math APIs, and C# 10 can't compile them.
         var supportsFastNumberParsing =
             context.TargetFramework.Identifier == TargetFrameworkIdentifier.NetCoreApp &&
-            context.TargetFramework.Version >= new Version(8, 0);
+            context.TargetFramework.Version >= new Version(8, 0) &&
+            context.SupportsStaticAbstractMembers;
         var tryParseMethod = supportsFastNumberParsing
             ? $"global::Parlot.Numbers.TryParseNumber<{valueTypeName}>"
             : Numbers.HasTryParseOverload(typeof(T))
                 ? "global::Parlot.Numbers.TryParse"
-                : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later.");
+                : throw new NotSupportedException($"Source generation for numbers of type '{typeof(T)}' requires .NET 8 or later and C# 11 or later.");
 
         _parseExpressions = (context, tryParseMethod, numberStylesFieldName, cultureExpr);
 

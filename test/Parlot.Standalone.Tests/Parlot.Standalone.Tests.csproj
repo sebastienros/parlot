@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows')) or '$(ParlotTestNetFramework)' == 'true'">net472;$(TargetFrameworks)</TargetFrameworks>
-    <LangVersion>12</LangVersion>
+    <LangVersion>10</LangVersion>
     <IsPackable>false</IsPackable>
     <AnalysisLevel>latest-Default</AnalysisLevel>
     <SignAssembly>false</SignAssembly>
