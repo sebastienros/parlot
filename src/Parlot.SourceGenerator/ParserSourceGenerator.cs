@@ -2195,6 +2195,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         var generators = new List<ISourceGenerator>();
         var loadedAssemblyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // The factory is declared in a .parlot.cs file, which the host compilation doesn't contain
+        var location = GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault());
+
         // Build a map of analyzer assembly paths from the compilation's references
         var analyzerPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -2302,7 +2305,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                         "Parlot.SourceGenerator",
                         DiagnosticSeverity.Warning,
                         isEnabledByDefault: true),
-                    methodSymbol.Locations.FirstOrDefault(),
+                    location,
                     generatorName));
                 continue;
             }
@@ -2358,7 +2361,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                         "Parlot.SourceGenerator",
                         DiagnosticSeverity.Warning,
                         isEnabledByDefault: true),
-                    methodSymbol.Locations.FirstOrDefault(),
+                    location,
                     generatorName,
                     ex.Message));
             }
@@ -2378,7 +2381,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             // Report any errors from the generators (but not warnings/info to avoid noise)
             foreach (var diag in generatorDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
             {
-                context.ReportDiagnostic(diag);
+                context.ReportDiagnostic(WithExternalLocation(diag));
             }
 
             return (CSharpCompilation)updatedCompilation;
@@ -2393,11 +2396,36 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Warning,
                     isEnabledByDefault: true),
-                methodSymbol.Locations.FirstOrDefault(),
+                location,
                 ex.Message));
 
             return csharpCompilation;
         }
+    }
+
+    // Diagnostics must be reported on the trees of the compilation being analyzed. The included generators run on
+    // the factory compilation, which contains the .parlot.cs files and their own outputs, so their locations are
+    // reported as external files.
+    private static Diagnostic WithExternalLocation(Diagnostic diagnostic)
+    {
+        if (diagnostic.Location.SourceTree is null)
+        {
+            return diagnostic;
+        }
+
+        var descriptor = diagnostic.Descriptor;
+        return Diagnostic.Create(
+            descriptor.Id,
+            descriptor.Category,
+            diagnostic.GetMessage(CultureInfo.InvariantCulture),
+            diagnostic.Severity,
+            descriptor.DefaultSeverity,
+            descriptor.IsEnabledByDefault,
+            diagnostic.WarningLevel,
+            descriptor.Title,
+            descriptor.Description,
+            descriptor.HelpLinkUri,
+            ExternalLocation(diagnostic.Location));
     }
 
     private static RoslynCompilation BypassPartialMethodsAndRetryEmit(

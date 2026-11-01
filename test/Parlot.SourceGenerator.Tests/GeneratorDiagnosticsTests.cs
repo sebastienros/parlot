@@ -515,6 +515,30 @@ public class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void IncludeGenerators_Reports_A_Missing_Generator_As_A_Warning()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                [IncludeGenerators("Parlot.Missing.Generator")]
+                private static Parser<string> Build() => Parsers.Terms.Text("hello");
+            }
+            """;
+        var options = DefaultOptions();
+
+        // The factory is in a .parlot.cs file, outside the compilation the diagnostic is reported on
+        var (result, compilation) = RunStandalone(Declaration, grammar, options);
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT012");
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Equal("Grammar.parlot.cs", diagnostic.Location.GetLineSpan().Path);
+        AssertNoErrors(result, compilation);
+    }
+
+    [Fact]
     public void IncludeFiles_Rejects_Oversized_Source()
     {
         using var project = new TemporaryDirectory();
@@ -1041,7 +1065,14 @@ public class GeneratorDiagnosticsTests
 
         public void Dispose()
         {
-            Directory.Delete(Path, recursive: true);
+            try
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Windows keeps the generator assemblies a test loaded
+            }
         }
     }
 }
