@@ -197,7 +197,8 @@ Configuration is stored in the existing per-call execution context, without a se
 allocation. The scanner, cursor, and context use the shared runtime implementations.
 
 - A successful parse assigns `value` and returns `true`.
-- An ordinary mismatch returns `false` and assigns `default` to `value`.
+- An ordinary mismatch returns `false` and assigns `default` to `value`. An overload can also return where the
+  parse failed, see [Failure position](#failure-position).
 - `Error` and `ElseError` throw `ParseException` internally; the direct entry point converts that exception
   to `false` and a default result.
 - An explicitly declared diagnostics overload instead collects grammar errors and warnings and returns
@@ -252,6 +253,42 @@ parser of its own, like the `TextReader` ones: only the overloads returning diag
 code collecting them, so the code generated for the other overloads is unchanged, and declaring both
 generates the grammar twice. The [Parser Explorer](explorer.md) traces the overloads that don't
 return diagnostics.
+
+### Failure position
+
+Declare an overload with an extra final `out (int Offset, int Line, int Column)` parameter, or `out int` for the offset
+only, to learn where a failed parse went wrong. It needs no `Error` or `ElseError` in the grammar:
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value);
+public static partial bool TryParse(string input, out MyValue value, out (int Offset, int Line, int Column) failure);
+
+if (!Sql.TryParse(query, out var value, out var failure))
+{
+    throw new FormatException($"Syntax error at line {failure.Line}, column {failure.Column}.");
+}
+```
+
+When the parse fails, `failure` is the *furthest failure*: the position where the attempt which matched the most text
+stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white space the expected `FROM` skipped. When the
+grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
+`TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
+like `TextPosition`. The names of the tuple elements are free.
+
+The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
+and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
+normal forwarding method otherwise). When only this overload is declared, the parser is generated for it. A string and
+a `TextReader` overload each have their own parser, as above, and can both return the failure. The overloads which
+return diagnostics can't also return the failure, the diagnostics having positions already.
+
+The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved
+back from: four instructions, without a branch, on that path only. Span code covering several parsers, which doesn't
+move the cursor until it matches, records the position of its failing check on its failure path. The overloads which
+don't return the failure run the same code, and the line and column of the failure are only computed when they are
+returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse, successful or not,
+nor its allocations. The furthest failure also counts
+the text lookaheads such as `WhenFollowedBy` read. A `TextReader` overload returns the same failure as the `string`
+one: the buffer only drops text before positions the parse read later.
 
 ### Cancellation
 

@@ -1659,6 +1659,11 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
 
         AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0);
+        foreach (var overload in standalone.FailureOverloads)
+        {
+            sb.AppendLine();
+            AppendStandaloneEntryPoint(sb, overload, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0);
+        }
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
         // Note: Currently no helper methods are needed since we use HashSet<char> and SearchValues<char>

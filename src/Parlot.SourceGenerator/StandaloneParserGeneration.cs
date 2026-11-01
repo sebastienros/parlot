@@ -36,12 +36,13 @@ public sealed partial class ParserSourceGenerator
 
     private sealed class StandaloneEntryPoint
     {
-        public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory, bool isReader, bool collectsDiagnostics)
+        public StandaloneEntryPoint(IMethodSymbol method, MethodToGenerate factory, bool isReader, bool collectsDiagnostics, FailureOutput failure)
         {
             Method = method;
             Factory = factory;
             IsReader = isReader;
             CollectsDiagnostics = collectsDiagnostics;
+            Failure = failure;
         }
 
         public IMethodSymbol Method { get; }
@@ -52,15 +53,25 @@ public sealed partial class ParserSourceGenerator
         // Whether the entry point returns the grammar errors and warnings, in an out parameter after the result
         public bool CollectsDiagnostics { get; }
 
+        // What the entry point returns of the furthest failure, in an out parameter after the result
+        public FailureOutput Failure { get; }
+
+        // The overloads returning the furthest failure, which call the parser generated for this entry point
+        public List<StandaloneEntryPoint> FailureOverloads { get; } = [];
+
+        // The number of out parameters after the result
+        private int TrailingOutputs => CollectsDiagnostics || Failure != FailureOutput.None ? 1 : 0;
+
         // The Parser Explorer traces the entry points whose result is the last parameter
-        public bool Diagnostics => !CollectsDiagnostics && Factory.Method.GetAttributes().Any(static attribute =>
+        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && Factory.Method.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
             attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
         public MethodToGenerate Factory { get; }
-        public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - (CollectsDiagnostics ? 2 : 1)];
+        public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - 1 - TrailingOutputs];
         public IParameterSymbol? DiagnosticsParameter => CollectsDiagnostics ? Method.Parameters[Method.Parameters.Length - 1] : null;
+        public IParameterSymbol? FailureParameter => Failure != FailureOutput.None ? Method.Parameters[Method.Parameters.Length - 1] : null;
         public IParameterSymbol? CancellationTokenParameter
-            => Method.Parameters.Length == Factory.Method.Parameters.Length + (CollectsDiagnostics ? 4 : 3)
+            => Method.Parameters.Length == Factory.Method.Parameters.Length + 3 + TrailingOutputs
                 ? Method.Parameters[ResultParameter.Ordinal - 1]
                 : null;
         public string? Source { get; set; }
@@ -70,6 +81,18 @@ public sealed partial class ParserSourceGenerator
 
         // The diagnostics of these findings, reported once all the factories of the build ran
         public List<Diagnostic> GrammarDiagnostics { get; } = [];
+    }
+
+    // What an entry point returns of the furthest failure
+    private enum FailureOutput
+    {
+        None,
+
+        // out int: the offset
+        Offset,
+
+        // out (int Offset, int Line, int Column)
+        Position,
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
@@ -235,7 +258,9 @@ public sealed partial class ParserSourceGenerator
             return;
         }
 
-        var entryPointKeys = new HashSet<string>(entries.Select(static entry => GetMethodKey(entry.Method)), StringComparer.Ordinal);
+        var entryPointKeys = new HashSet<string>(entries
+            .SelectMany(static entry => entry.FailureOverloads.Prepend(entry))
+            .Select(static entry => GetMethodKey(entry.Method)), StringComparer.Ordinal);
         var pending = new List<StandaloneEntryPoint>();
         foreach (var entry in entries)
         {
@@ -252,7 +277,7 @@ public sealed partial class ParserSourceGenerator
 
             if (designTime)
             {
-                entry.Source = GenerateStandaloneDesignTimeStub(entry.Method);
+                entry.Source = GenerateStandaloneDesignTimeStub(entry.FailureOverloads.Prepend(entry).Select(static overload => overload.Method).ToArray());
                 continue;
             }
 
@@ -447,7 +472,8 @@ public sealed partial class ParserSourceGenerator
         error = "Use [GenerateParser(nameof(TryParse))] with a matching static partial bool method "
             + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result. "
             + "Other overloads with the same name may take a TextReader instead of the string, or add a last "
-            + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics.";
+            + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics, "
+            + "or a last out int or out (int Offset, int Line, int Column) receiving the furthest failure.";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -464,12 +490,17 @@ public sealed partial class ParserSourceGenerator
         }
 
         var candidates = type.GetMembers(name!).OfType<IMethodSymbol>()
-            .Select(method => (Method: method, Collects: HasDiagnosticsOutput(method, factory.Method, resultType)))
+            .Select(method =>
+            {
+                var collects = HasDiagnosticsOutput(method, factory.Method, resultType);
+                return (Method: method, Collects: collects,
+                    Failure: collects ? FailureOutput.None : GetFailureOutput(method, factory.Method, resultType));
+            })
             .Where(candidate =>
             {
                 var method = candidate.Method;
-                var resultIndex = method.Parameters.Length - (candidate.Collects ? 2 : 1);
-                var extra = candidate.Collects ? 1 : 0;
+                var extra = candidate.Collects || candidate.Failure != FailureOutput.None ? 1 : 0;
+                var resultIndex = method.Parameters.Length - 1 - extra;
                 return method.IsStatic && method.IsPartialDefinition && method.PartialImplementationPart is null
                     && !method.IsGenericMethod && !method.ReturnsByRef && method.ReturnType.SpecialType == SpecialType.System_Boolean
                     && (method.Parameters.Length == factory.Method.Parameters.Length + 2 + extra
@@ -488,17 +519,72 @@ public sealed partial class ParserSourceGenerator
             })
             .ToArray();
 
-        // At most one entry point of each kind: string or TextReader input, returning the diagnostics or not
+        // At most one entry point of each kind: string or TextReader input, returning the diagnostics, the furthest failure, or neither
         if (candidates.Length == 0 || candidates
-            .GroupBy(static candidate => (candidate.Method.Parameters[0].Type.SpecialType == SpecialType.System_String, candidate.Collects))
+            .GroupBy(static candidate => (candidate.Method.Parameters[0].Type.SpecialType == SpecialType.System_String, candidate.Collects, candidate.Failure))
             .Any(static group => group.Count() > 1))
         {
             return null;
         }
 
-        return candidates.Select(candidate => new StandaloneEntryPoint(candidate.Method, factory,
-            isReader: candidate.Method.Parameters[0].Type.SpecialType != SpecialType.System_String,
-            collectsDiagnostics: candidate.Collects)).ToArray();
+        var entries = new List<StandaloneEntryPoint>();
+        foreach (var candidate in candidates.OrderBy(static candidate => candidate.Failure))
+        {
+            var entry = new StandaloneEntryPoint(candidate.Method, factory,
+                isReader: candidate.Method.Parameters[0].Type.SpecialType != SpecialType.System_String,
+                collectsDiagnostics: candidate.Collects, candidate.Failure);
+
+            // An overload returning the furthest failure calls the parser of the overload with the same input which doesn't,
+            // or of another one returning the failure, rather than generating it again
+            var parser = entry.Failure == FailureOutput.None ? null : entries.FirstOrDefault(other =>
+                other.IsReader == entry.IsReader && !other.CollectsDiagnostics);
+            if (parser is null)
+            {
+                entries.Add(entry);
+                continue;
+            }
+
+            if ((parser.CancellationTokenParameter is null) != (entry.CancellationTokenParameter is null))
+            {
+                error = $"The overload '{entry.Method.ToDisplayString()}' returns the furthest failure of the parser generated "
+                    + $"for '{parser.Method.ToDisplayString()}', so both must take a CancellationToken or neither. "
+                    + "Declare the other one as a normal forwarding method.";
+                return null;
+            }
+
+            parser.FailureOverloads.Add(entry);
+        }
+
+        return entries.ToArray();
+    }
+
+    // Whether the entry point ends with the out result followed by an out int, or an out (int Offset, int Line, int Column),
+    // receiving the furthest failure
+    private static FailureOutput GetFailureOutput(IMethodSymbol method, IMethodSymbol factory, ITypeSymbol resultType)
+    {
+        if (method.Parameters.Length < factory.Parameters.Length + 3)
+        {
+            return FailureOutput.None;
+        }
+
+        var result = method.Parameters[method.Parameters.Length - 2];
+        var failure = method.Parameters[method.Parameters.Length - 1];
+        if (result.RefKind != RefKind.Out || !SymbolEqualityComparer.Default.Equals(result.Type, resultType)
+            || failure.RefKind != RefKind.Out)
+        {
+            return FailureOutput.None;
+        }
+
+        if (failure.Type.SpecialType == SpecialType.System_Int32)
+        {
+            return FailureOutput.Offset;
+        }
+
+        return failure.Type is INamedTypeSymbol { IsTupleType: true } tuple
+            && tuple.TupleElements.Length == 3
+            && tuple.TupleElements.All(static element => element.Type.SpecialType == SpecialType.System_Int32)
+                ? FailureOutput.Position
+                : FailureOutput.None;
     }
 
     // Whether the entry point ends with the out result followed by an
@@ -583,6 +669,7 @@ public sealed partial class ParserSourceGenerator
             source.AppendLine($"            {context}.CollectDiagnostics = true;");
             source.AppendLine($"            {diagnostics} = global::System.Array.Empty<{diagnosticType}>();");
         }
+        var failure = standalone.FailureParameter is { } failureParameter ? EscapeIdentifier(failureParameter.Name) : null;
         source.AppendLine($"            var {result} = new global::Parlot.ParseResult<{valueType}>();");
         source.AppendLine("            try");
         source.AppendLine("            {");
@@ -600,14 +687,48 @@ public sealed partial class ParserSourceGenerator
         }
         source.AppendLine("                {");
         source.AppendLine($"                    {value} = {result}.Value;");
+        if (failure is not null)
+        {
+            source.AppendLine($"                    {failure} = default;");
+        }
         source.AppendLine("                    return true;");
         source.AppendLine("                }");
+        if (failure is not null)
+        {
+            // Read while the buffer of a TextReader is still held. The parsers moved the cursor back from where they failed.
+            var furthest = prefix + "_furthest";
+            if (standalone.Failure == FailureOutput.Offset)
+            {
+                source.AppendLine($"                {failure} = {context}.Scanner.Cursor.FurthestOffset;");
+            }
+            else
+            {
+                source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
+                source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column);");
+            }
+        }
         source.AppendLine("            }");
-        source.AppendLine("            catch (global::Parlot.ParseException)");
-        source.AppendLine("            {");
-        source.AppendLine($"                {value} = default!;");
-        source.AppendLine("                return false;");
-        source.AppendLine("            }");
+        if (failure is not null)
+        {
+            // An Error or ElseError parser reports where it failed
+            var exception = prefix + "_exception";
+            source.AppendLine($"            catch (global::Parlot.ParseException {exception})");
+            source.AppendLine("            {");
+            source.AppendLine($"                {value} = default!;");
+            source.AppendLine(standalone.Failure == FailureOutput.Offset
+                ? $"                {failure} = {exception}.Position.Offset;"
+                : $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column);");
+            source.AppendLine("                return false;");
+            source.AppendLine("            }");
+        }
+        else
+        {
+            source.AppendLine("            catch (global::Parlot.ParseException)");
+            source.AppendLine("            {");
+            source.AppendLine($"                {value} = default!;");
+            source.AppendLine("                return false;");
+            source.AppendLine("            }");
+        }
         if (standalone.IsReader || diagnostics is not null)
         {
             source.AppendLine("            finally");
@@ -651,17 +772,22 @@ public sealed partial class ParserSourceGenerator
         return $"{modifiers} bool {EscapeIdentifier(entry.Name)}({parameters})";
     }
 
-    private static string GenerateStandaloneDesignTimeStub(IMethodSymbol entry)
+    // The overloads are those of the same partial class
+    private static string GenerateStandaloneDesignTimeStub(IMethodSymbol[] overloads)
     {
+        var entry = overloads[0];
         var ns = entry.ContainingNamespace.IsGlobalNamespace ? "" : $"namespace {entry.ContainingNamespace.ToDisplayString()};";
+        var methods = string.Join("\n", overloads.Select(static overload => $$"""
+                {{StandaloneSignature(overload)}} =>
+                    throw new global::System.NotSupportedException("Standalone parsers are generated during build.");
+            """));
         return $$"""
             // <auto-generated />
             #nullable enable
             {{ns}}
             partial class {{EscapeIdentifier(entry.ContainingType.Name)}}
             {
-                {{StandaloneSignature(entry)}} =>
-                    throw new global::System.NotSupportedException("Standalone parsers are generated during build.");
+            {{methods}}
             }
             """;
     }
