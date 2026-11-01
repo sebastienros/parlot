@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable, IDiscardableParser
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
@@ -73,6 +73,37 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         {
             results.Release();
         }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    // The loop of Parse, without the list
+    bool IDiscardableParser.ParseWithoutValue(ParseContext context)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+        var count = 0;
+
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
+        while (_max == 0 || count < _max)
+        {
+            var previousOffset = context.Scanner.Cursor.Offset;
+            if (!_parser.Parse(context, ref parsed)
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
+            context.MovePin(pin);
+
+            count++;
+        }
+
+        context.Unpin(pin);
 
         context.ExitParser(this);
         return true;
