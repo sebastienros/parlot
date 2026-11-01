@@ -23,22 +23,29 @@ internal static class SeekableHints
     /// </summary>
     public static (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Union(IReadOnlyList<object> parsers)
     {
-        if (parsers.Count == 0 || parsers[0] is not ISeekable first || !first.CanSeek)
+        if (parsers.Count == 0)
         {
             return (false, [], false);
         }
 
-        var skipWhitespace = first.SkipWhitespace;
+        var skipWhitespace = false;
         var expectedChars = new List<char>();
 
-        foreach (var parser in parsers)
+        for (var i = 0; i < parsers.Count; i++)
         {
-            if (parser is not ISeekable seekable || !seekable.CanSeek || seekable.SkipWhitespace != skipWhitespace)
+            var hints = Of(parsers[i]);
+
+            if (i == 0)
+            {
+                skipWhitespace = hints.SkipWhitespace;
+            }
+
+            if (!hints.CanSeek || hints.SkipWhitespace != skipWhitespace)
             {
                 return (false, [], false);
             }
 
-            foreach (var c in seekable.ExpectedChars)
+            foreach (var c in hints.ExpectedChars)
             {
                 if (!expectedChars.Contains(c))
                 {
@@ -48,6 +55,28 @@ internal static class SeekableHints
         }
 
         return (true, expectedChars.ToArray(), skipWhitespace);
+    }
+
+    /// <summary>
+    /// Gets the hints of a parser, or none when it doesn't tell them.
+    /// </summary>
+    /// <remarks>
+    /// While the hints of a grammar are resolved, a choice whose lookup table isn't complete yet builds it first, such that
+    /// the parsers that start with the choice forward the hints of the complete table, see <see cref="IResolvableSeekable"/>.
+    /// </remarks>
+    public static (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Of(object parser)
+    {
+        if (parser is not ISeekable seekable)
+        {
+            return (false, [], false);
+        }
+
+        if (parser is IResolvableSeekable resolvable && SeekableResolution.IsResolving)
+        {
+            resolvable.EnsureResolved();
+        }
+
+        return (seekable.CanSeek, seekable.ExpectedChars, seekable.SkipWhitespace);
     }
 
     /// <summary>

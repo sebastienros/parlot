@@ -1,9 +1,10 @@
 using System;
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISourceable, ILoopAnalyzable
+internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly OneOf<TOperator> _operators;
@@ -38,6 +39,20 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISource
 
         return new OneOf<TOperator>(operators);
     }
+
+    // The hints of the first operand, which is parsed first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {

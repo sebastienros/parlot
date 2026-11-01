@@ -1,3 +1,4 @@
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
@@ -11,7 +12,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
+public sealed class RightAssociative<T, TInput> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T, T> Factory)[] _operators;
@@ -26,6 +27,20 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable, ILoopA
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
     }
+
+    // The hints of the first operand, which is parsed first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
@@ -152,7 +167,7 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISourceable, ILoopA
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
+public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T, T> Factory)[] _operators;
@@ -167,6 +182,20 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISourcea
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
     }
+
+    // The hints of the first operand, which is parsed first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {

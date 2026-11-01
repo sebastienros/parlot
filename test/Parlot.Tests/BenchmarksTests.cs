@@ -74,6 +74,16 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
     }
 
+    [Fact]
+    public void WrapperChoiceGrammar()
+    {
+        // The setup checks both choices
+        var benchmark = new WrapperChoiceBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("h", benchmark.Operators());
+        Assert.Equal("h", benchmark.Sequences());
+    }
+
     [Theory]
     [InlineData("Atom", 1)]
     [InlineData("Arithmetic", 7)]

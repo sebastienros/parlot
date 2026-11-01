@@ -129,9 +129,8 @@ var keyword = SkipWhiteSpace(Literals.Text("a").Or(Literals.Text("b")).Or(Litera
 An alternative that can't tell which chars it starts with, like `ZeroOrOne(sign).SkipAnd(number)`, can declare them,
 and that it skips white space, with `Lookup(skipWhiteSpace: true, ...)`.
 
-Most parsers copy the hints of the parser they start with when they are built. A parser that starts with a `Deferred`
-before its `Parser` is set keeps the hints of a `Deferred` that has none, and the message says so. Build it after
-setting the parser when the grammar allows it, or wrap it in `Lookup`.
+A parser that starts with another one, like a sequence, reads its hints when the choice builds its table. A sequence
+built before the `Deferred` it starts with is set is not reported.
 
 | Benchmark | Mean |
 |---|---:|

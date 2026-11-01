@@ -4,6 +4,8 @@ using System;
 
 namespace Parlot.Fluent;
 
+// Not an ISeekable: a choice would skip it for the chars its parser doesn't start with, where it reports an error instead of
+// failing
 public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
@@ -126,14 +128,18 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     private readonly Parser<T> _parser;
     private readonly string _message;
 
-    /// <inheritdoc />
-    public bool CanSeek { get; }
+    // The error is only raised when the parser matches, so it can't be raised for a char it doesn't start with. The hints
+    // are read when they are asked for since the parser can be a Deferred set later.
+    private ForwardedHints? _hints;
 
     /// <inheritdoc />
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
 
     /// <inheritdoc />
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
@@ -141,14 +147,6 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
-
-        // The error is only raised when the parser matches, so it can't be raised for a char it doesn't start with
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -231,11 +229,14 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
     private readonly Parser<T> _parser;
     private readonly string _message;
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
 
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
@@ -243,13 +244,6 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _message = message ?? throw new ArgumentNullException(nameof(message));
-
-        if (_parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)

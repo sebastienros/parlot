@@ -19,23 +19,22 @@ public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable, IL
         // Validates the set
         Character.GetWhiteSpaceMask(whiteSpaceSet);
         _whiteSpaceSet = whiteSpaceSet;
-
-        // A parser skipping white spaces does it with this set, which a OneOf doesn't know about:
-        // it would skip them with its own before looking up the first char.
-        if (parser is ISeekable seekable && !seekable.SkipWhitespace)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-        }
     }
 
     public WhiteSpaceSet WhiteSpaceSet => _whiteSpaceSet;
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later. A parser
+    // skipping white spaces does it with this set, which a OneOf doesn't know about: it would skip them with its own
+    // before looking up the first char.
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => Hints.CanSeek;
+
+    public char[] ExpectedChars => Hints.ExpectedChars;
 
     public bool SkipWhitespace { get; }
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _parser, static parser => SeekableHints.Of(parser) is { SkipWhitespace: false } hints ? hints : (false, [], false));
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
 

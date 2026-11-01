@@ -1,3 +1,4 @@
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Runtime.CompilerServices;
@@ -10,7 +11,7 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <typeparam name="T">The type of the value being parsed.</typeparam>
 /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
-public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
+public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<T, T> Factory)[] _operators;
@@ -25,6 +26,33 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
     }
+
+    // The hints of the operators and of the operand, any of which can read first. They are read when they are asked for since
+    // the operand can be a Deferred set later.
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => Hints.CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => Hints.ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, this, static self =>
+    {
+        var first = new object[self._operators.Length + 1];
+
+        for (var i = 0; i < self._operators.Length; i++)
+        {
+            first[i] = self._operators[i].Op;
+        }
+
+        first[first.Length - 1] = self._parser;
+
+        return SeekableHints.Union(first);
+    });
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
@@ -233,7 +261,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
     public override string ToString() => Name ?? $"Unary({_parser})";
 }
 
-public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable, ILoopAnalyzable
+public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
 {
     private readonly Parser<T> _parser;
     private readonly (Parser<TInput> Op, Func<ParseContext, T, T> Factory)[] _operators;
@@ -248,6 +276,33 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISourceable, ILoopA
             throw new ArgumentException("At least one operator must be provided.", nameof(operators));
         }
     }
+
+    // The hints of the operators and of the operand, any of which can read first. They are read when they are asked for since
+    // the operand can be a Deferred set later.
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => Hints.CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => Hints.ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, this, static self =>
+    {
+        var first = new object[self._operators.Length + 1];
+
+        for (var i = 0; i < self._operators.Length; i++)
+        {
+            first[i] = self._operators[i].Op;
+        }
+
+        first[first.Length - 1] = self._parser;
+
+        return SeekableHints.Union(first);
+    });
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {

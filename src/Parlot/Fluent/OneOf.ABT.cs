@@ -1,11 +1,12 @@
 using Parlot.Analysis;
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable, IChoiceParser
+public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IChoiceParser
     where A : T
     where B : T
 {
@@ -17,6 +18,20 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISourceable, ILoopAnalyzable, IC
         _parserA = parserA ?? throw new ArgumentNullException(nameof(parserA));
         _parserB = parserB ?? throw new ArgumentNullException(nameof(parserB));
     }
+
+    // The hints of both parsers, read when they are asked for since they can be Deferred parsers set later
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => Hints.CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => Hints.ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, this, static self => SeekableHints.Union(new object[] { self._parserA, self._parserB }));
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parserA) | analysis.Invoke(_parserB);
 

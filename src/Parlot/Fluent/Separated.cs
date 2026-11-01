@@ -58,20 +58,19 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         _removeEmptyEntries = removeEmptyEntries;
         _allowLeadingSeparator = allowLeadingSeparator;
         _allowTrailingSeparator = allowTrailingSeparator;
-
-        if (min > 0 && !allowLeadingSeparator && _parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
-    public bool CanSeek { get; }
+    // The hints of the first element, read when they are asked for since it can be a Deferred set later. There are none when
+    // the list can be empty or start with a separator.
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => Hints.CanSeek;
 
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => Hints.ExpectedChars;
+
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, this, static self => self._min > 0 && !self._allowLeadingSeparator ? SeekableHints.Of(self._parser) : (false, [], false));
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 

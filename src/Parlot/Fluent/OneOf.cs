@@ -15,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -102,6 +102,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
                 Build();
 
                 Volatile.Write(ref _resolved, true);
+
+                // The parsers that start with this one read its hints again
+                SeekableResolution.Invalidate();
             }
             finally
             {
@@ -109,6 +112,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
             }
         }
     }
+
+    void IResolvableSeekable.EnsureResolved() => EnsureResolved();
 
     private void Build()
     {

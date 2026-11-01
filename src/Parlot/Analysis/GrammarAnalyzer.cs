@@ -350,8 +350,8 @@ internal sealed class GrammarAnalysis
             return;
         }
 
-        // The lookup tables of OneOf<T>
-        if (choice is ISeekable && !ReportMixedWhiteSpace(choice, alternatives, candidates))
+        // The lookup tables of OneOf<T>. A choice of two types tells its chars without building a table.
+        if (choice is IResolvableSeekable && !ReportMixedWhiteSpace(choice, alternatives, candidates))
         {
             ReportUnseekableAlternatives(choice, alternatives, candidates);
         }
@@ -365,7 +365,6 @@ internal sealed class GrammarAnalysis
         var skipping = new List<string>();
         var others = new List<string>();
         var otherIndexes = new List<int>();
-        var stale = new List<string>();
 
         // An alternative that can start with white space would never match once white space is skipped before it
         var fixable = true;
@@ -383,11 +382,6 @@ internal sealed class GrammarAnalysis
                 others.Add(Describe(alternative));
                 otherIndexes.Add(index);
                 fixable &= !(FixedText(alternative) is { } text && char.IsWhiteSpace(text.Text[0])) && ParlotTypeName(alternative) != "WhiteSpaceLiteral";
-
-                if (FindStaleDeferred(alternative) is { } deferred)
-                {
-                    stale.Add($" {Capitalize(Describe(alternative))} was built before the parser of {Describe(deferred)} was set, and kept the hints it had then.");
-                }
             }
         }
 
@@ -397,30 +391,10 @@ internal sealed class GrammarAnalysis
         }
 
         Report(GrammarRule.MixedWhiteSpaceChoice, choice,
-            $"{Capitalize(DescribeChoice(choice, alternatives))} has no lookup table, so it tries each alternative in order whatever the next char is: {Join(skipping)} {Plural(skipping.Count, "skips", "skip")} white space and {Join(others)} {Plural(others.Count, "doesn't", "don't")}, or can't tell.{string.Concat(stale)} Make every alternative skip white space, with Terms parsers, SkipWhiteSpace or Lookup(skipWhiteSpace: true, ...), or none of them.",
+            $"{Capitalize(DescribeChoice(choice, alternatives))} has no lookup table, so it tries each alternative in order whatever the next char is: {Join(skipping)} {Plural(skipping.Count, "skips", "skip")} white space and {Join(others)} {Plural(others.Count, "doesn't", "don't")}, or can't tell. Make every alternative skip white space, with Terms parsers, SkipWhiteSpace or Lookup(skipWhiteSpace: true, ...), or none of them.",
             null, fixable ? new GrammarFix(GrammarFixKind.SkipWhiteSpace, otherIndexes, $"Skip white space in {Join(others)}") : null);
 
         return true;
-    }
-
-    // The deferred parser an alternative starts with when the alternative kept the hints the deferred parser had before
-    // its parser was set: most parsers copy the hints of the parser they start with when they are built
-    private object? FindStaleDeferred(object alternative)
-    {
-        if (alternative is not ISeekable copied)
-        {
-            return null;
-        }
-
-        foreach (var parser in Chain(alternative))
-        {
-            if (parser is IDeferredParser)
-            {
-                return parser is ISeekable current && (current.CanSeek != copied.CanSeek || current.SkipWhitespace != copied.SkipWhitespace) ? parser : null;
-            }
-        }
-
-        return null;
     }
 
     private bool StartsWithLeftRecursion(object alternative)
@@ -505,9 +479,7 @@ internal sealed class GrammarAnalysis
 
             if (first is ISeekable { CanSeek: true })
             {
-                return FindStaleDeferred(parser) is { } deferred
-                    ? $"{Describe(parser)} was built before the parser of {Describe(deferred)} was set, and kept the hints it had then"
-                    : $"{Describe(parser)} doesn't tell which chars {Describe(first)} starts with";
+                return $"{Describe(parser)} doesn't tell which chars {Describe(first)} starts with";
             }
 
             parser = first;

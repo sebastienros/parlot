@@ -138,6 +138,12 @@ A parser that matches a fixed ordinal text implements it, and a parser that copi
 first forwards its prefixes with `SeekableHints.Prefixes`. Choices use them, at runtime and in generated code, to skip
 the alternatives that only share a first char with the input (`docs/keyword-lookups.md`).
 
+A parser that takes its hints from the parsers it starts with reads them when they are asked for, through the internal
+`ForwardedHints`, never in its constructor: these parsers can be `Deferred` parsers set later, or choices whose table is only
+complete once the grammar is. The hints are those of the parsers one of which must match at the start for this one to match.
+A parser has none when it can succeed without reading, or when skipping it changes the outcome, like `ElseError`, which
+reports an error instead of failing.
+
 `ILoopAnalyzable` (internal, `Parlot.Fluent`) tells `LoopAnalysis` which parsers a parser invokes before it reads
 anything and whether it can succeed without reading; every built-in parser implements it. From that, the first parse of a
 grammar proves which `Deferred` parsers can't be invoked again at the position where they are active (no left recursion),

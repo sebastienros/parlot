@@ -22,20 +22,16 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
         _before = before ?? throw new ArgumentNullException(nameof(before));
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _after = after ?? throw new ArgumentNullException(nameof(after));
-
-        if (_before is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _before).CanSeek;
 
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _before).ExpectedChars;
+
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _before).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_before);
 

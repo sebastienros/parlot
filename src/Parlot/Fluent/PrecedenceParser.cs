@@ -45,6 +45,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     private readonly int _lowestLookupLevel;
     private OneOf<int>? _choice;
 
+    // The parsers that can read first, a prefix operator or an operand, whose hints are read when they are asked for since
+    // they can be Deferred parsers set later
+    private readonly object[] _first;
+    private ForwardedHints? _hints;
+
     /// <summary>
     /// Creates a parser with no operators, which parses the values of <paramref name="operand"/>. Levels are added with
     /// <see cref="Unary{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>,
@@ -104,17 +109,19 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         _prefixLevels = prefixLevels.ToArray();
-        (CanSeek, ExpectedChars, SkipWhitespace) = SeekableHints.Union(first);
+        _first = first.ToArray();
     }
 
     /// <inheritdoc />
-    public bool CanSeek { get; }
+    public bool CanSeek => Hints.CanSeek;
 
     /// <inheritdoc />
-    public char[] ExpectedChars { get; }
+    public char[] ExpectedChars => Hints.ExpectedChars;
 
     /// <inheritdoc />
-    public bool SkipWhitespace { get; }
+    public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _first, static first => SeekableHints.Union(first));
 
     /// <summary>
     /// Returns a parser with an additional level of prefix operators, which binds less tightly than the existing levels.

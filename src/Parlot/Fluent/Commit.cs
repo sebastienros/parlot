@@ -18,20 +18,16 @@ public sealed class Commit<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoop
     public Commit(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-
-        if (parser is ISeekable seekable)
-        {
-            CanSeek = seekable.CanSeek;
-            ExpectedChars = seekable.ExpectedChars;
-            SkipWhitespace = seekable.SkipWhitespace;
-        }
     }
 
-    public bool CanSeek { get; }
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
 
-    public char[] ExpectedChars { get; } = [];
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
 
-    public bool SkipWhitespace { get; }
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
