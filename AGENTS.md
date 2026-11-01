@@ -99,9 +99,10 @@ type implements each of these that applies:
   `ParseWithoutValueTests`.
 - A wrapper, a parser that never fails, or one that starts with a fixed text goes in the sets at the top of
   `GrammarAnalysis`.
-- A parser that recurses (`Deferred`, `Unary`, prefix operators) calls the internal `EnsureSufficientStack()` on each
-  entry and counts a level with `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the
-  same, counting only when `SourceGenerationContext.MaxRecursionDepth` is set.
+- A parser that recurses (`Deferred`) calls the internal `EnsureSufficientStack()` on each entry and counts a level with
+  `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the same, counting only when
+  `SourceGenerationContext.MaxRecursionDepth` is set. A parser that would repeat itself reads in a loop instead and only
+  counts the levels, like `Unary` and the prefix operators, which keep their operators in the internal `OperatorList`.
 
 White space is the context's `WhiteSpaceSet`, a bit of `Character`'s char table: test it with
 `context.MaySkipWhiteSpace(ch)` or the context's masks, never the one-argument `Character.IsWhiteSpace*`, which only
@@ -159,6 +160,8 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   local, never copy it, and call `Release()` in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters)
   so that an exception can't leave items on its per-thread stack. Read its items through the builder after a
   callback, which can parse and grow the stack.
+- No loop in a `finally` block: the JIT then compiles the method fully optimized at once, without tiering it up with
+  PGO (`ExitRecursion(count)` leaves several levels at once).
 - Strings of the input that are kept and repeat come from the internal `StringPool`, one per parser
   (`ToPooledString()`; emitters get its field with `SourceGenerationContext.GetStringPoolField`). The few cases a
   case-insensitive text returns go in the internal `CaseCache` instead (`GetCaseCacheField`).

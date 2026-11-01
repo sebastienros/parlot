@@ -261,7 +261,8 @@ public class OperatorLevelsEquivalenceTests
 
         Assert.True(additive.Parse(context, ref result));
         Assert.Equal("(((-a)*b)+c)", result.Value);
-        Assert.Equal(new[] { "additive", "multiplicative", "unary", "unary", "unary", "multiplicative", "unary" }, entered);
+        // Unary reads its operators in a loop, it is entered once for "-a"
+        Assert.Equal(new[] { "additive", "multiplicative", "unary", "unary", "multiplicative", "unary" }, entered);
     }
 
     [Fact]

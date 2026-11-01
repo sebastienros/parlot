@@ -213,6 +213,31 @@ public class GrammarsTests
     }
 
     [Fact]
+    public void Prefix_Operator_Chains_Longer_Than_The_Stack_Are_Parsed()
+    {
+        var chain = new string('-', 1_000_000) + "5";
+
+        Assert.True(Grammars.TryParseUnaryChain(chain, out var value));
+        Assert.Equal(5, value);
+        Assert.True(Grammars.TryParseUnaryContextChain(chain, out value));
+        Assert.Equal(5, value);
+        Assert.True(Grammars.TryParsePrefixChain(chain, out value));
+        Assert.Equal(5, value);
+
+        // The operators apply from the last one, after the operators of the levels up to their own that follow the operand
+        Assert.True(Grammars.TryParseUnaryChain("!-!5", out value));
+        Assert.Equal(-5, value);
+        Assert.True(Grammars.TryParsePrefixChain("!-2*3", out value));
+        Assert.Equal(-5, value);
+        Assert.True(Grammars.TryParsePrefixChain(new string('!', 1_000_000) + "-2*3", out value));
+        Assert.Equal(999_994, value);
+
+        // An operator not followed by an operand fails the parser
+        Assert.False(Grammars.TryParseUnaryChain("--", out _));
+        Assert.False(Grammars.TryParsePrefixChain("-!2", out _));
+    }
+
+    [Fact]
     public void Unary_Rolls_Back_An_Operator_With_No_Operand()
     {
         Assert.True(Grammars.TryParseUnaryFallback("-", out var value));

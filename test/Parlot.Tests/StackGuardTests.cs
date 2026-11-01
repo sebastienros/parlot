@@ -59,34 +59,36 @@ public class StackGuardTests
     }
 
     [Fact]
-    public void UnaryShouldFailOnDeepInputInsteadOfOverflowingTheStack()
+    public void UnaryShouldParseDeepInputWithoutTheStack()
     {
         var negation = Literals.Char('a').Then(0).Unary((Literals.Char('-'), static count => count + 1));
         var contextual = Literals.Char('a').Then(0).Unary((Literals.Char('-'), static (_, count) => count + 1));
 
+        // The operators are read in a loop, the chain doesn't recurse
         OnSmallStack(() =>
         {
-            Assert.False(negation.TryParse(DeepNegation, out _, out var error));
-            Assert.Equal(Message, error.Message);
-            Assert.False(contextual.TryParse(DeepNegation, out _, out error));
-            Assert.Equal(Message, error.Message);
+            Assert.True(negation.TryParse(DeepNegation, out var count));
+            Assert.Equal(Depth, count);
+            Assert.True(contextual.TryParse(DeepNegation, out count));
+            Assert.Equal(Depth, count);
 
-            Assert.True(negation.TryParse("---a", out var count));
+            Assert.True(negation.TryParse("---a", out count));
             Assert.Equal(3, count);
         });
     }
 
     [Fact]
-    public void PrefixOperatorsShouldFailOnDeepInputInsteadOfOverflowingTheStack()
+    public void PrefixOperatorsShouldParseDeepInputWithoutTheStack()
     {
         var table = Literals.Char('a').Then(0).Operators().Unary((Literals.Char('-'), static count => count + 1));
 
+        // The operators are read in a loop, the chain doesn't recurse
         OnSmallStack(() =>
         {
-            Assert.False(table.TryParse(DeepNegation, out _, out var error));
-            Assert.Equal(Message, error.Message);
+            Assert.True(table.TryParse(DeepNegation, out var count));
+            Assert.Equal(Depth, count);
 
-            Assert.True(table.TryParse("---a", out var count));
+            Assert.True(table.TryParse("---a", out count));
             Assert.Equal(3, count);
         });
     }

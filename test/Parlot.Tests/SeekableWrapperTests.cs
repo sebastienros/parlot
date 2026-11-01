@@ -248,14 +248,14 @@ public class SeekableWrapperTests
         Assert.Equal(['!', '-', 'a', 'b'], Seekable(choice).ExpectedChars.OrderBy(static c => c));
         Assert.True(Seekable(choice).SkipWhitespace);
 
-        // Each operator invokes the parser again for its operand
-        Assert.Equal((true, "-!ab", 3, 7), ParseCounting(choice, parser, " - ! ab"));
+        // The operators are read in a loop, the parser is invoked once for the whole chain
+        Assert.Equal((true, "-!ab", 1, 7), ParseCounting(choice, parser, " - ! ab"));
         Assert.Equal((true, "ab", 1, 3), ParseCounting(choice, parser, " ab"));
         Assert.Equal((true, "b", 0, 2), ParseCounting(choice, parser, " b"));
         Assert.Equal((false, null, 0, 0), ParseCounting(choice, parser, " c"));
 
         // An operator without an operand fails, and so does the choice
-        Assert.Equal((false, null, 2, 0), ParseCounting(choice, parser, " -c"));
+        Assert.Equal((false, null, 1, 0), ParseCounting(choice, parser, " -c"));
         Assert.Equal((false, null, 1, 0), ParseCounting(choice, parser, " ac"));
     }
 

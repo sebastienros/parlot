@@ -18,8 +18,6 @@ public class RecursionTests
         OnSmallStack(static () =>
         {
             Assert.False(RecursionGrammars.List(DeepList, out _));
-            Assert.False(RecursionGrammars.Negation(DeepNegation, out _));
-            Assert.False(RecursionGrammars.Prefix(DeepNegation, out _));
 
             using var reader = new StringReader(DeepList);
             Assert.False(RecursionGrammars.List(reader, out _));
@@ -27,6 +25,19 @@ public class RecursionTests
             // A parse that fits the stack is unaffected
             Assert.True(RecursionGrammars.List("[[[item]]]", out var depth));
             Assert.Equal(3, depth);
+        });
+    }
+
+    [Fact]
+    public void Deep_Prefix_Operator_Chains_Are_Read_In_A_Loop()
+    {
+        // The operators of Unary and of an operator table don't recurse, a chain longer than the stack allows is parsed
+        OnSmallStack(static () =>
+        {
+            Assert.True(RecursionGrammars.Negation(DeepNegation, out var count));
+            Assert.Equal(Depth, count);
+            Assert.True(RecursionGrammars.Prefix(DeepNegation, out count));
+            Assert.Equal(Depth, count);
         });
     }
 
@@ -56,7 +67,7 @@ public class RecursionTests
         Assert.Equal("The maximum parser recursion depth of 3 was exceeded.", diagnostic.Message);
         Assert.Equal(3, diagnostic.Offset);
 
-        // Each invocation of Unary is a level
+        // Each invocation of Unary is a level, and so is each of its operators
         Assert.True(RecursionGrammars.LimitedNegation("--a", out var count));
         Assert.Equal(2, count);
         Assert.False(RecursionGrammars.LimitedNegation("---a", out _));

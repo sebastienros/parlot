@@ -928,7 +928,8 @@ public class ParseContext
     /// <summary>
     /// Throws a <see cref="ParseException"/> when the stack of the thread is too deep to enter a recursive parser safely,
     /// such that deeply nested input fails the parse instead of overflowing the stack. Called on each entry into a
-    /// <c>Deferred</c>, <c>Unary</c> or prefix operator parser, whether <see cref="MaxRecursionDepth"/> is set or not.
+    /// <c>Deferred</c> parser, through which grammars recurse, whether <see cref="MaxRecursionDepth"/> is set or not.
+    /// <c>Unary</c> and prefix operators read their chains in a loop, so they don't recurse.
     /// </summary>
     /// <remarks>
     /// The stack is checked on every 16th entry: any 16 consecutive entries contain a check, so the parsers never recurse
@@ -980,6 +981,23 @@ public class ParseContext
         if (_recursionDepth > 0)
         {
             _recursionDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Records exit from <paramref name="levels"/> recursive parsers, like as many calls to <see cref="ExitRecursion()"/>.
+    /// </summary>
+    /// <remarks>
+    /// The chains of operators call it in a <see langword="finally"/> block instead of looping there: the JIT compiles a method
+    /// with a loop in a handler fully optimized at once, without the profile of its calls.
+    /// </remarks>
+    internal void ExitRecursion(int levels)
+    {
+        var depth = _recursionDepth;
+
+        if (depth > 0 && levels > 0)
+        {
+            _recursionDepth = depth > levels ? depth - levels : 0;
         }
     }
 
