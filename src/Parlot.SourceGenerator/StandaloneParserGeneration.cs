@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -181,7 +184,8 @@ public sealed partial class ParserSourceGenerator
                 ?? throw new InvalidOperationException("The analyzer is missing its grammar compilation assembly.");
             using var image = new MemoryStream();
             stream.CopyTo(image);
-            compilation = compilation.AddReferences(MetadataReference.CreateFromImage(image.ToArray()));
+            compilation = compilation.AddReferences(MetadataReference.CreateFromImage(
+                LowerReferencedVersions(image.ToArray(), compilation)));
         }
 
         var entries = new List<StandaloneEntryPoint>();
@@ -327,6 +331,47 @@ public sealed partial class ParserSourceGenerator
     /// Runs the factories of all the entry points from one private build of the host compilation, rather than
     /// emitting and loading the whole project once per factory.
     /// </summary>
+    /// <summary>
+    /// The grammar assembly is built against the latest compatibility packages, such as System.Memory 4.6.3.
+    /// A project pinned to an older compatible version, like System.Memory 4.5.5, would fail with CS1705, which
+    /// can't be suppressed. The image is only compiled against, the compiler host's assemblies execute the factory,
+    /// so its references are lowered to the versions the project references.
+    /// </summary>
+    private static byte[] LowerReferencedVersions(byte[] image, Compilation compilation)
+    {
+        var referenced = new Dictionary<string, Version>(StringComparer.OrdinalIgnoreCase);
+        foreach (var identity in compilation.ReferencedAssemblyNames)
+        {
+            referenced[identity.Name] = identity.Version;
+        }
+
+        using var pe = new PEReader(ImmutableArray.Create(image));
+        var metadata = pe.GetMetadataReader();
+        var table = pe.PEHeaders.MetadataStartOffset + metadata.GetTableMetadataOffset(TableIndex.AssemblyRef);
+        var rowSize = metadata.GetTableRowSize(TableIndex.AssemblyRef);
+        foreach (var handle in metadata.AssemblyReferences)
+        {
+            var reference = metadata.GetAssemblyReference(handle);
+            if (referenced.TryGetValue(metadata.GetString(reference.Name), out var version) && version < reference.Version)
+            {
+                // An AssemblyRef row starts with its major, minor, build and revision numbers, as little-endian ushorts.
+                var row = table + (MetadataTokens.GetRowNumber(handle) - 1) * rowSize;
+                WriteUInt16(image, row, version.Major);
+                WriteUInt16(image, row + 2, version.Minor);
+                WriteUInt16(image, row + 4, version.Build);
+                WriteUInt16(image, row + 6, version.Revision);
+            }
+        }
+
+        return image;
+
+        static void WriteUInt16(byte[] buffer, int offset, int value)
+        {
+            buffer[offset] = (byte)value;
+            buffer[offset + 1] = (byte)(value >> 8);
+        }
+    }
+
     private static void GenerateStandaloneEntryPoints(
         SourceProductionContext output,
         Compilation compilation,
