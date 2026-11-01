@@ -164,7 +164,10 @@ for a rewrite that preserves what a grammar parses: do the rewrite instead.
 (`_cacheOffset`), the loop-detection stack (`PushParserAtPosition` / `PopParserAtPosition`, a plain stack
 scanned with a vectorized `IndexOf` rather than a hash set, only used by the `Deferred` parsers `LoopAnalysis` can't
 prove, or when the white space parser can invoke a `Deferred`), cancellation checks throttled to every 64
-parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is the context's `WhiteSpaceSet`, a bit
+parser entries, and the `OnEnterParser` / `OnExitParser` hooks. A parser that recurses (`Deferred`, `Unary`, prefix
+operators) calls the internal `EnsureSufficientStack()` on each entry, which throws a `ParseException` rather than letting
+deep input overflow the stack, and counts a level with `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set;
+its emitter does the same, the counting only when `SourceGenerationContext.MaxRecursionDepth` is set. White space is the context's `WhiteSpaceSet`, a bit
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
 one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
 (`char.IsWhiteSpace`, asserted by `CharMaskGeneratorTest`); another set is a new `WhiteSpaceSet` bit pair, not an edit of the

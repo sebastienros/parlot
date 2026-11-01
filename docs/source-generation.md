@@ -223,8 +223,16 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   configured, so select another white space set, such as `WithWhiteSpaceSet(WhiteSpaceSet.Ascii)` or `WhiteSpaceSet.SpaceTabCrLf`, in the grammar.
 - A `Deferred` parser that is entered again at the position where it is already active (left recursion) fails
   at that position instead of overflowing the stack, as the runtime `Deferred` does. The check costs one
-  comparison per entry and allocates nothing. Recursion that consumes input is bounded only by the stack
-  since no recursion depth limit can be set on a generated entry point.
+  comparison per entry and allocates nothing.
+- Recursion that consumes input is bounded like at runtime (see
+  [Limiting parser recursion](parsers.md#limiting-parser-recursion)). `Deferred`, `Recursive` and `Unary` parsers and
+  the prefix operators of `Operators()` check the stack of the thread on each entry, and input nested too deeply for it
+  makes the entry point return `false` instead of overflowing the stack and ending the process. The diagnostics overload
+  returns the error "The input is nested too deeply to be parsed on the remaining stack." at the position where it was
+  reached. `[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` sets a limit that doesn't depend on the stack,
+  counted like `ParseContext.MaxRecursionDepth`: the entry point returns `false` when a parse exceeds it, and the
+  diagnostics overload returns "The maximum parser recursion depth of 128 was exceeded.". Both fail the whole parse, a
+  choice doesn't try another alternative. The code counting the levels is only generated with a limit.
 - `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
   target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
   the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
@@ -341,8 +349,9 @@ the parsed value. They do not expose the internal execution context:
 
 - No consumed offset is returned. Without `.Eof()`, a parser may successfully match a prefix, but the
   caller cannot retrieve the position where parsing stopped. Use `.Eof()` for whole-input parsing.
-- No custom `ParseContext`, recursion-depth setting, or other execution-context option can be supplied.
-  Factory parameters configure generated callbacks and branches; they do not configure the parsing engine.
+- No custom `ParseContext` or other execution-context option can be supplied. Factory parameters configure
+  generated callbacks and branches; they do not configure the parsing engine. The recursion limit is set on the
+  attribute, `MaxRecursionDepth`, for every call.
 - The input is a `string` or a `TextReader`; `ReadOnlySpan<char>` and `Stream` entry points are not supported.
   Wrap a `Stream` in a `StreamReader`.
 
@@ -737,7 +746,8 @@ per call without allocating a bound parser object.
 Besides what the grammar's callbacks and results allocate, a `string` entry point allocates two objects: the
 internal context, which also holds the configuration and the state of the grammar's deferred parsers, and a
 scanner that is its own cursor. The context's loop detection and recursion limit members, which generated
-parsers don't use, only allocate their state when a callback calls them.
+parsers don't use, only allocate their state when a callback calls them, or, for the recursion limit, when the attribute
+sets `MaxRecursionDepth`.
 
 Generated parser helpers and callbacks use normal JIT inlining heuristics. Forcing inlining based only
 on a helper's local statement count can duplicate large parser chains, increasing native code size and

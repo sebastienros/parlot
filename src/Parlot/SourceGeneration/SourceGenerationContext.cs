@@ -168,6 +168,17 @@ public sealed class SourceGenerationContext
     public bool CollectDiagnostics { get; set; }
 
     /// <summary>
+    /// Gets or sets the maximum number of nested recursive parser invocations of the generated parser, or <c>0</c> for no
+    /// limit, like <c>ParseContext.MaxRecursionDepth</c>.
+    /// </summary>
+    /// <remarks>
+    /// Parsers that recurse without a <c>Deferred</c> parser, like prefix operators, generate the code counting their
+    /// recursion when it is set, such that a parse which exceeds it throws a <c>ParseException</c>. Recursive parsers check
+    /// the stack of the thread whether it is set or not.
+    /// </remarks>
+    public int MaxRecursionDepth { get; set; }
+
+    /// <summary>
     /// Generates the code of a token, a parser that reads the cursor directly, when <see cref="IsCompacting"/> is set.
     /// </summary>
     /// <remarks>
