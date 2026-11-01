@@ -513,6 +513,14 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             return false;
         }
 
+        if (!_hasFollowingOperators)
+        {
+            // There is nothing to look up after the operand
+            next.Operator = Lookahead.None;
+            next.Offset = context.Scanner.Cursor.Offset;
+            return true;
+        }
+
         var cursor = context.Scanner.Cursor;
         var pin = -1;
 
