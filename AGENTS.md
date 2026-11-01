@@ -168,7 +168,7 @@ parser entries, and the `OnEnterParser` / `OnExitParser` hooks. White space is t
 of `Character`'s char table: parsers test it with `context.MaySkipWhiteSpace(ch)` or the context's masks, not with the
 one-argument `Character.IsWhiteSpace*`, which only know the default set. The default set is exactly Unicode `White_Space`
 (`char.IsWhiteSpace`, asserted by `CharMaskGeneratorTest`); another set is a new `WhiteSpaceSet` bit pair, not an edit of the
-default one, and the char table has room for one more. Runtime grammars that need external state
+default one, and the byte char table is full (`Default`, `Ascii`, `SpaceTabCrLf` and the identifier bits): one more set needs a wider table. Runtime grammars that need external state
 can subclass it; generated entry points instead accept application-owned configuration parameters.
 
 ### Source generation

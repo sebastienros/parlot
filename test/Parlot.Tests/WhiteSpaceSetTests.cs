@@ -39,11 +39,16 @@ public class WhiteSpaceSetTests
             Assert.Equal(c is ' ' or '\t' or '\f', Character.IsWhiteSpace(c, WhiteSpaceSet.Ascii));
             Assert.Equal(c is ' ' or '\t' or '\f' or '\n' or '\r' or '\v', Character.IsWhiteSpaceOrNewLine(c, WhiteSpaceSet.Ascii));
 
+            Assert.Equal(c is ' ' or '\t', Character.IsWhiteSpace(c, WhiteSpaceSet.SpaceTabCrLf));
+            Assert.Equal(c is ' ' or '\t' or '\n' or '\r', Character.IsWhiteSpaceOrNewLine(c, WhiteSpaceSet.SpaceTabCrLf));
+
             // Every set is part of the default one, which is what the white space literals declare to OneOf
             Assert.True(!Character.IsWhiteSpaceOrNewLine(c, WhiteSpaceSet.Ascii) || Character.IsWhiteSpaceOrNewLine(c));
+            Assert.True(!Character.IsWhiteSpaceOrNewLine(c, WhiteSpaceSet.SpaceTabCrLf) || Character.IsWhiteSpaceOrNewLine(c));
         }
 
         Assert.Equal(Character.AsciiWhiteSpaceOrNewLines.Length, Character.AsciiWhiteSpaces.Length + Character.AsciiNewLines.Length);
+        Assert.Equal(Character.SpaceTabCrLfWhiteSpaceOrNewLines.Length, Character.SpaceTabCrLfWhiteSpaces.Length + Character.SpaceTabCrLfNewLines.Length);
     }
 
     [Fact]
@@ -51,9 +56,9 @@ public class WhiteSpaceSetTests
     {
         var context = new ParseContext(new Scanner("a"));
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => context.WhiteSpaceSet = (WhiteSpaceSet)2);
-        Assert.Throws<ArgumentOutOfRangeException>(() => Terms.Text("a").WithWhiteSpaceSet((WhiteSpaceSet)2));
-        Assert.Throws<ArgumentOutOfRangeException>(() => Character.IsWhiteSpace(' ', (WhiteSpaceSet)2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => context.WhiteSpaceSet = (WhiteSpaceSet)3);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Terms.Text("a").WithWhiteSpaceSet((WhiteSpaceSet)3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Character.IsWhiteSpace(' ', (WhiteSpaceSet)3));
         Assert.Equal(WhiteSpaceSet.Default, context.WhiteSpaceSet);
     }
 
@@ -298,6 +303,186 @@ public class WhiteSpaceSetTests
         Assert.Equal([1L, 2L], parser.Parse(new System.IO.StringReader("1 ,\n 2"), options));
         Assert.Equal([1L], parser.Parse(new System.IO.StringReader("1 ,\u00A02"), options));
         Assert.Equal([1L, 2L], parser.Parse(new System.IO.StringReader("1 ,\u00A02")));
+    }
+
+    private static ParseContext SpaceTabCrLfContext(string text, bool useNewLines = false)
+        => new(new Scanner(text), useNewLines) { WhiteSpaceSet = WhiteSpaceSet.SpaceTabCrLf };
+
+    [Fact]
+    public void ContextShouldTellTheSelectedSet()
+    {
+        foreach (var useNewLines in new[] { false, true })
+        {
+            var context = new ParseContext(new Scanner("a"), useNewLines);
+            Assert.Equal(WhiteSpaceSet.Default, context.WhiteSpaceSet);
+
+            foreach (var set in new[] { WhiteSpaceSet.SpaceTabCrLf, WhiteSpaceSet.Ascii, WhiteSpaceSet.Default, WhiteSpaceSet.SpaceTabCrLf })
+            {
+                context.WhiteSpaceSet = set;
+                Assert.Equal(set, context.WhiteSpaceSet);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData("\n")]
+    [InlineData("\r")]
+    [InlineData(" \t\r\n")]
+    public void TermsShouldSkipSpaceTabCrLfWithSpaceTabCrLfSet(string spaces)
+    {
+        var parser = Terms.Identifier().And(Terms.Integer()).And(Terms.Char(';')).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf);
+
+        Assert.True(parser.TryParse($"{spaces}a{spaces}1{spaces};", out var result));
+        Assert.Equal("a", result.Item1.ToString());
+        Assert.Equal(1, result.Item2);
+    }
+
+    [Theory]
+    [InlineData('\f')]
+    [InlineData('\v')]
+    [InlineData('\u0085')]
+    [InlineData('\u00A0')]
+    [InlineData('\u2028')]
+    [InlineData('\u3000')]
+    public void TermsShouldNotSkipOtherWhiteSpaceWithSpaceTabCrLfSet(char space)
+    {
+        var text = $" {space}a";
+
+        Assert.True(Terms.Text("a").TryParse(text, out _));
+        Assert.False(Terms.Text("a").WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).TryParse(text, out _));
+
+        // The text is not consumed
+        var context = SpaceTabCrLfContext(text);
+        Assert.False(Terms.Identifier().TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        // The space is a char like any other
+        Assert.True(Terms.Text($"{space}a").WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf).TryParse($" \r\n\t{space}a", out _));
+    }
+
+    [Fact]
+    public void UseNewLinesShouldNotSkipNewLinesWithSpaceTabCrLfSet()
+    {
+        var parser = Terms.Text("a");
+
+        foreach (var newLine in Character.SpaceTabCrLfNewLines)
+        {
+            var context = SpaceTabCrLfContext($" {newLine}a", useNewLines: true);
+            Assert.False(parser.TryParse(context, out _, out _));
+            Assert.Equal(0, context.Scanner.Cursor.Offset);
+            Assert.True(parser.TryParse(SpaceTabCrLfContext($" {newLine}a", useNewLines: false), out _, out _));
+        }
+
+        Assert.True(parser.TryParse(SpaceTabCrLfContext(" \ta", useNewLines: true), out _, out _));
+        Assert.False(parser.TryParse(SpaceTabCrLfContext(" \fa", useNewLines: true), out _, out _));
+
+        // The new lines are read by Literals.WhiteSpace when it includes them
+        Assert.True(Literals.WhiteSpace().TryParse(SpaceTabCrLfContext(" \t\n", useNewLines: true), out var span, out _));
+        Assert.Equal(" \t", span.ToString());
+        Assert.True(Literals.WhiteSpace(includeNewLines: true).TryParse(SpaceTabCrLfContext(" \r\n\t\v", useNewLines: true), out span, out _));
+        Assert.Equal(" \r\n\t", span.ToString());
+    }
+
+    [Fact]
+    public void SkipWhiteSpaceShouldUseTheSpaceTabCrLfSet()
+    {
+        var context = SpaceTabCrLfContext(" \t\r\n\f a");
+
+        context.SkipWhiteSpace();
+        Assert.Equal(4, context.Scanner.Cursor.Offset);
+        Assert.Equal(2, context.Scanner.Cursor.Position.Line);
+
+        // Changing the set doesn't reuse the white space skipped from the same offset with the previous one
+        context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+        context.WhiteSpaceSet = WhiteSpaceSet.Ascii;
+        context.SkipWhiteSpace();
+        Assert.Equal(6, context.Scanner.Cursor.Offset);
+
+        context.Scanner.Cursor.ResetPosition(TextPosition.Start);
+        context.WhiteSpaceSet = WhiteSpaceSet.SpaceTabCrLf;
+        context.SkipWhiteSpace();
+        Assert.Equal(4, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void LiteralsShouldUseTheSpaceTabCrLfSet()
+    {
+        Assert.True(Literals.WhiteSpace(includeNewLines: true).TryParse(SpaceTabCrLfContext(" \r\n\t\f"), out var span, out _));
+        Assert.Equal(" \r\n\t", span.ToString());
+
+        Assert.True(Literals.WhiteSpace().TryParse(SpaceTabCrLfContext("\t \n"), out span, out _));
+        Assert.Equal("\t ", span.ToString());
+
+        var context = SpaceTabCrLfContext("\v ");
+        Assert.False(Literals.WhiteSpace(includeNewLines: true).TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        Assert.True(Literals.NonWhiteSpace().TryParse(SpaceTabCrLfContext("a\fb\vc\u00A0d\re"), out span, out _));
+        Assert.Equal("a\fb\vc\u00A0d", span.ToString());
+
+        Assert.True(Literals.NonWhiteSpace(includeNewLines: false).TryParse(SpaceTabCrLfContext("a\nb\vc\td"), out span, out _));
+        Assert.Equal("a\nb\vc", span.ToString());
+
+        // A long run is searched rather than read char by char
+        var longText = new string('a', 100) + "\f\v\u00A0" + new string('b', 100) + "\rc";
+        Assert.True(Literals.NonWhiteSpace().TryParse(SpaceTabCrLfContext(longText), out span, out _));
+        Assert.Equal(203, span.Length);
+    }
+
+    [Fact]
+    public void OneOfShouldSkipWhiteSpaceWithTheSpaceTabCrLfSet()
+    {
+        var parser = ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf);
+
+        Assert.True(parser.TryParse(" for\fif\r\n\f", out var values));
+        Assert.Equal(["for", "\f", "if", "\f"], values);
+
+        Assert.True(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).TryParse(" for\fif\r\n\f", out values));
+        Assert.Equal(["for", "if"], values);
+    }
+
+    [Fact]
+    public void CommentsShouldUseTheSpaceTabCrLfSet()
+    {
+        var parser = ZeroOrMany(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("#"))
+            .WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)
+            .Eof();
+
+        Assert.True(parser.TryParse(" a # comment\r\n\tb", out var values));
+        Assert.Equal(2, values.Count);
+
+        Assert.False(parser.TryParse("a\f# comment", out _));
+        Assert.False(parser.TryParse("a \vb", out _));
+    }
+
+    [Fact]
+    public void ScannerShouldSkipTheWhiteSpaceOfTheSpaceTabCrLfSet()
+    {
+        var scanner = new Scanner(" \t\f\na");
+        Assert.True(scanner.SkipWhiteSpace(WhiteSpaceSet.SpaceTabCrLf));
+        Assert.Equal(2, scanner.Cursor.Offset);
+        Assert.False(scanner.SkipWhiteSpaceOrNewLine(WhiteSpaceSet.SpaceTabCrLf));
+        Assert.True(scanner.SkipWhiteSpaceOrNewLine(WhiteSpaceSet.Ascii));
+        Assert.Equal(4, scanner.Cursor.Offset);
+
+        scanner = new Scanner("\n\r \v");
+        Assert.False(scanner.SkipWhiteSpace(WhiteSpaceSet.SpaceTabCrLf));
+        Assert.True(scanner.SkipWhiteSpaceOrNewLine(WhiteSpaceSet.SpaceTabCrLf));
+        Assert.Equal(3, scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ContextFactoryShouldSelectTheSpaceTabCrLfSetForStreams()
+    {
+        var parser = Separated(Terms.Char(','), Terms.Integer());
+        var options = new StreamParseOptions { BufferSize = 1, ContextFactory = static (scanner, _) => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.SpaceTabCrLf } };
+
+        Assert.Equal([1L, 2L], parser.Parse(new System.IO.StringReader("1 ,\r\n\t2"), options));
+        Assert.Equal([1L], parser.Parse(new System.IO.StringReader("1 ,\f2"), options));
+        Assert.Equal([1L, 2L], parser.Parse(new System.IO.StringReader("1 ,\f2")));
     }
 
     // The default set is the Unicode White_Space property (PropList.txt)

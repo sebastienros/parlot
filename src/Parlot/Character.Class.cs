@@ -48,6 +48,21 @@ public static partial class Character
     /// </summary>
     public const string AsciiWhiteSpaceOrNewLines = AsciiWhiteSpaces + AsciiNewLines;
 
+    /// <summary>
+    /// The chars <see cref="IsWhiteSpace(char, WhiteSpaceSet)"/> accepts for <see cref="WhiteSpaceSet.SpaceTabCrLf"/>: tab and space.
+    /// </summary>
+    public const string SpaceTabCrLfWhiteSpaces = "\t ";
+
+    /// <summary>
+    /// The new lines of <see cref="WhiteSpaceSet.SpaceTabCrLf"/>: <c>\n</c> and <c>\r</c>.
+    /// </summary>
+    public const string SpaceTabCrLfNewLines = "\n\r";
+
+    /// <summary>
+    /// The chars of <see cref="WhiteSpaceSet.SpaceTabCrLf"/>: <see cref="SpaceTabCrLfWhiteSpaces"/> and <see cref="SpaceTabCrLfNewLines"/>.
+    /// </summary>
+    public const string SpaceTabCrLfWhiteSpaceOrNewLines = SpaceTabCrLfWhiteSpaces + SpaceTabCrLfNewLines;
+
     // The chars which can start a default identifier, for the parsers to declare as their expected chars
     internal static readonly char[] _identifierStartChars = DefaultIdentifierStart.ToCharArray();
 }
