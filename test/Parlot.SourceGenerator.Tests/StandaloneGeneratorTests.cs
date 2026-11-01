@@ -514,6 +514,37 @@ public class StandaloneGeneratorTests
     }
 
     [Fact]
+    public void Generation_Errors_Are_Reported_On_Their_Factory()
+    {
+        const string declaration = """
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, out int value);
+                public static partial bool TryParseHelper(string text, out int value);
+            }
+            """;
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                private static int Helper(int value) => value;
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<int> Build() => Terms.Number<int>(NumberOptions.Integer);
+                [GenerateParser(nameof(TryParseHelper))]
+                private static Parser<int> BuildHelper() => Terms.Number<int>(NumberOptions.Integer).Then(value => Helper(value));
+            }
+            """;
+        var (result, _) = Generate(declaration, grammar);
+        var errors = result.Diagnostics.Where(static diagnostic => diagnostic.Id == "PARLOT024").ToArray();
+
+        Assert.NotEmpty(errors);
+        Assert.All(errors, static error => Assert.StartsWith("Standalone factory 'BuildHelper'",
+            error.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Runtime_Only_Parser_Under_SkipWhiteSpace_Is_A_Generation_Error()
     {
         const string grammar = """
