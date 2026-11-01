@@ -86,6 +86,12 @@ public sealed class SourceGenerationContext
     public bool SupportsCSharp9SwitchPatterns => CSharpLanguageMajorVersion >= 9;
 
     /// <summary>
+    /// Whether the consuming project can use static abstract interface members (C# 11), which the generic math
+    /// helpers like <c>Numbers.TryParseNumber&lt;T&gt;</c> require. An unknown version is assumed to support them.
+    /// </summary>
+    public bool SupportsStaticAbstractMembers => CSharpLanguageMajorVersion is 0 or >= 11;
+
+    /// <summary>
     /// Global locals (as code lines) for the generated root method.
     /// </summary>
     public IList<string> GlobalLocals { get; } = new List<string>();
