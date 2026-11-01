@@ -11,7 +11,9 @@ internal enum CharacterMask : byte
     WhiteSpace = 4,
     WhiteSpaceOrNewLine = 8,
     AsciiWhiteSpace = 16,
-    AsciiWhiteSpaceOrNewLine = 32
+    AsciiWhiteSpaceOrNewLine = 32,
+    JsonWhiteSpace = 64,
+    JsonWhiteSpaceOrNewLine = 128
 }
 
 #if !NET8_0_OR_GREATER

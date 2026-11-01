@@ -6,7 +6,7 @@ namespace Parlot;
 /// <remarks>
 /// Each set is a bit in the char table Parlot already reads, so selecting one keeps the white space checks to a single
 /// lookup per char. A set's line breaks are its new lines, which <see cref="Fluent.ParseContext.UseNewLines"/> keeps from being
-/// skipped. Use <see cref="Fluent.ParseContext.WhiteSpaceParser"/> for any other set, or to skip comments.
+/// skipped. The table has no room for more sets: use <see cref="Fluent.ParseContext.WhiteSpaceParser"/> for any other set, or to skip comments.
 /// </remarks>
 public enum WhiteSpaceSet : byte
 {
@@ -22,4 +22,11 @@ public enum WhiteSpaceSet : byte
     /// These are the chars of C's <c>isspace</c> and Ruby's <c>\s</c>.
     /// </summary>
     Ascii = 1,
+
+    /// <summary>
+    /// Space, <c>\t</c> and the new lines <c>\n</c> and <c>\r</c> (<see cref="Character.JsonNewLines"/>),
+    /// <see cref="Character.JsonWhiteSpaceOrNewLines"/>. These are the white space chars of JSON (RFC 8259), of XML, of Go, and of
+    /// many SQL dialects, which unlike <see cref="Ascii"/> don't accept <c>\f</c> and <c>\v</c>.
+    /// </summary>
+    Json = 2,
 }

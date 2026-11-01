@@ -406,7 +406,12 @@ public class ParseContext
     /// </remarks>
     public WhiteSpaceSet WhiteSpaceSet
     {
-        get => WhiteSpaceMask == (byte)CharacterMask.WhiteSpace ? WhiteSpaceSet.Default : WhiteSpaceSet.Ascii;
+        get => WhiteSpaceMask switch
+        {
+            (byte)CharacterMask.WhiteSpace => WhiteSpaceSet.Default,
+            (byte)CharacterMask.AsciiWhiteSpace => WhiteSpaceSet.Ascii,
+            _ => WhiteSpaceSet.Json,
+        };
         set
         {
             var mask = Character.GetWhiteSpaceMask(value);

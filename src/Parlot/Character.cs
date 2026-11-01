@@ -218,6 +218,7 @@ public static partial class Character
     {
         WhiteSpaceSet.Default => (byte)CharacterMask.WhiteSpace,
         WhiteSpaceSet.Ascii => (byte)CharacterMask.AsciiWhiteSpace,
+        WhiteSpaceSet.Json => (byte)CharacterMask.JsonWhiteSpace,
         _ => ThrowInvalidWhiteSpaceSet(set),
     };
 
