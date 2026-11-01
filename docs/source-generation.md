@@ -615,8 +615,14 @@ build-time grammar code depends on another generator's output:
 private static Parser<Expression> Build() => ...;
 ```
 
-Assembly names must match analyzer references available to the consuming project. Multiple names may be
-specified, and class-level and method-level values are combined.
+Each name is an analyzer assembly name (`PolySharp.SourceGenerators`) or the id of the package that brings it
+(`PolySharp`). Multiple names may be specified, and class-level and method-level values are combined.
+
+The generator is taken from the analyzer references MSBuild passes to the compiler, so the version the project
+references is loaded wherever NuGet restored it (`NUGET_PACKAGES`, `--packages`, `RestorePackagesPath`). When the
+build doesn't pass them, or the name isn't among them, the newest version under the project's `NuGetPackageRoot`,
+then `NUGET_PACKAGES`, then `~/.nuget/packages` is used. A name that can't be found reports the warning
+`PARLOT012` and the factory compiles without that generator.
 
 ## Build-time security
 

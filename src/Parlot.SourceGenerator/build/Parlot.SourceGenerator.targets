@@ -30,6 +30,15 @@
                Condition="$([System.String]::Copy('%(AdditionalFiles.Identity)').EndsWith('.parlot.cs', System.StringComparison.OrdinalIgnoreCase))" />
     </ItemGroup>
   </Target>
+  <Target Name="CollectParlotAnalyzers"
+          BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun">
+    <!-- [IncludeGenerators] loads the generators the compiler is given, wherever NuGet restored them. A generator
+         can't see analyzer references, and an editorconfig value ends at ';' or '#', hence the '|' separator. A path
+         with a '#' is cut there, and the generator falls back to the NuGet package folders. -->
+    <PropertyGroup>
+      <_ParlotAnalyzers>@(Analyzer->'%(FullPath)', '|')</_ParlotAnalyzers>
+    </PropertyGroup>
+  </Target>
   <Target Name="IsolateParlotDesignTimeEditorConfig"
           BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun"
           Condition="'$(DesignTimeBuild)' == 'true' or ('$(BuildingInsideVisualStudio)' == 'true' and '$(BuildingProject)' == 'false')">

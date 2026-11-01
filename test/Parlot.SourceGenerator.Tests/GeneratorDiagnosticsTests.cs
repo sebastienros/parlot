@@ -514,6 +514,115 @@ public class GeneratorDiagnosticsTests
         AssertNoErrors(result, compilation);
     }
 
+    private const string IncludedGeneratorGrammar = """
+        using Parlot.Fluent;
+        using Parlot.SourceGenerator;
+        public static partial class Grammar
+        {
+            [GenerateParser(nameof(TryParse))]
+            [IncludeGenerators("{0}")]
+            private static Parser<string> Build() => Parsers.Terms.Text(Included.Text).Eof();
+        }
+        """;
+
+    [Fact]
+    public void IncludeGenerators_Reports_A_Missing_Generator_As_A_Warning()
+    {
+        using var packages = new TemporaryDirectory();
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                [IncludeGenerators("Parlot.Missing.Generator")]
+                private static Parser<string> Build() => Parsers.Terms.Text("hello");
+            }
+            """;
+        var options = DefaultOptions();
+        options["build_property.NuGetPackageRoot"] = packages.Path;
+        options["build_property._ParlotAnalyzers"] = Path.Combine(packages.Path, "Other.dll");
+
+        // The factory is in a .parlot.cs file, outside the compilation the diagnostic is reported on
+        var (result, compilation) = RunStandalone(Declaration, grammar, options);
+
+        var diagnostic = Assert.Single(result.Diagnostics, static item => item.Id == "PARLOT012");
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Equal("Grammar.parlot.cs", diagnostic.Location.GetLineSpan().Path);
+        AssertNoErrors(result, compilation);
+    }
+
+    [Fact]
+    public void IncludeGenerators_Finds_A_Package_In_The_Project_Package_Root()
+    {
+        using var packages = new TemporaryDirectory();
+        var id = "Parlot.Included" + Guid.NewGuid().ToString("N");
+        // NuGet folders are lowercase, and the newest version wins: 1.10.0 is newer than 1.9.0
+        var newest = Path.Combine(packages.Path, id.ToLowerInvariant(), "1.10.0", "analyzers", "dotnet", "cs");
+        var older = Path.Combine(packages.Path, id.ToLowerInvariant(), "1.9.0", "analyzers", "dotnet", "cs");
+        WriteIncludedGenerator(newest, id + ".SourceGenerators");
+        Directory.CreateDirectory(older);
+        File.WriteAllText(Path.Combine(older, id + ".SourceGenerators.dll"), "not an assembly");
+        var options = DefaultOptions();
+        options["build_property.NuGetPackageRoot"] = packages.Path + Path.DirectorySeparatorChar;
+
+        var (result, compilation) = RunStandalone(Declaration, IncludedGeneratorGrammar.Replace("{0}", id, StringComparison.Ordinal), options);
+
+        AssertNoErrors(result, compilation);
+        Assert.DoesNotContain(result.Diagnostics, static item => item.Id is "PARLOT012" or "PARLOT013");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IncludeGenerators_Finds_An_Analyzer_Reference_Of_The_Project(bool byPackageId)
+    {
+        using var packages = new TemporaryDirectory();
+        var id = "Parlot.Included" + Guid.NewGuid().ToString("N");
+        // Restored anywhere, like NUGET_PACKAGES=C:\Nuget: only MSBuild knows where
+        var directory = Path.Combine(packages.Path, id, "2.0.0", "analyzers", "dotnet", "roslyn4.8", "cs");
+        var assembly = WriteIncludedGenerator(directory, id + ".SourceGenerators");
+        var options = DefaultOptions();
+        options["build_property.NuGetPackageRoot"] = Path.Combine(packages.Path, "empty");
+        options["build_property._ParlotAnalyzers"] = Path.Combine(packages.Path, "Other.dll") + "|" + assembly;
+
+        var name = byPackageId ? id : id + ".SourceGenerators";
+        var (result, compilation) = RunStandalone(Declaration, IncludedGeneratorGrammar.Replace("{0}", name, StringComparison.Ordinal), options);
+
+        AssertNoErrors(result, compilation);
+        Assert.DoesNotContain(result.Diagnostics, static item => item.Id is "PARLOT012" or "PARLOT013");
+    }
+
+    // A generator adding the Included class the grammar reads
+    private static string WriteIncludedGenerator(string directory, string assemblyName)
+    {
+        const string source = """
+            using Microsoft.CodeAnalysis;
+            [Generator]
+            public sealed class IncludedGenerator : IIncrementalGenerator
+            {
+                public void Initialize(IncrementalGeneratorInitializationContext context)
+                    => context.RegisterPostInitializationOutput(static output => output.AddSource("Included.g.cs",
+                        "internal static class Included { public const string Text = \"included\"; }"));
+            }
+            """;
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(IIncrementalGenerator).Assembly.Location)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(static path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [CSharpSyntaxTree.ParseText(source)],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, assemblyName + ".dll");
+        var emit = compilation.Emit(path);
+        Assert.True(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
+        return path;
+    }
+
     [Fact]
     public void IncludeFiles_Rejects_Oversized_Source()
     {
@@ -1041,7 +1150,14 @@ public class GeneratorDiagnosticsTests
 
         public void Dispose()
         {
-            Directory.Delete(Path, recursive: true);
+            try
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Windows keeps the generator assemblies a test loaded
+            }
         }
     }
 }

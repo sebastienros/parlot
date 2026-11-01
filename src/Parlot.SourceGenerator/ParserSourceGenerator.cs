@@ -592,6 +592,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         MethodToGenerate methodInfo,
         string projectDirectory,
         bool isDesignTimeBuild,
+        IncludedGeneratorSearch generatorSearch,
         StandaloneEntryPoint standalone,
         ISet<string> entryPointKeys)
     {
@@ -637,7 +638,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // Run additional source generators if specified via [IncludeGenerators] attribute
         if (methodInfo.AdditionalGenerators.Length > 0)
         {
-            tempCompilation = RunAdditionalGenerators(context, tempCompilation, methodInfo.AdditionalGenerators, parseOptions, methodSymbol, isDesignTimeBuild);
+            tempCompilation = RunAdditionalGenerators(context, tempCompilation, methodInfo.AdditionalGenerators, parseOptions, methodSymbol, isDesignTimeBuild, generatorSearch);
         }
 
         using var peStream = new MemoryStream();
@@ -2172,7 +2173,8 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         string[] generatorAssemblyNames,
         CSharpParseOptions parseOptions,
         IMethodSymbol methodSymbol,
-        bool isDesignTimeBuild)
+        bool isDesignTimeBuild,
+        IncludedGeneratorSearch generatorSearch)
     {
         // Skip running additional generators in design-time builds to avoid assembly loading conflicts.
         // During design-time builds (IDE IntelliSense, code analysis), MSBuild sets DesignTimeBuild=true.
@@ -2193,106 +2195,15 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         }
 
         var generators = new List<ISourceGenerator>();
-        var loadedAssemblyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var loadedAssemblyPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Build a map of analyzer assembly paths from the compilation's references
-        var analyzerPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var reference in csharpCompilation.References)
-        {
-            if (reference is PortableExecutableReference peRef && peRef.FilePath is not null)
-            {
-                var assemblyName = Path.GetFileNameWithoutExtension(peRef.FilePath);
-
-                // Check if this might be an analyzer/generator assembly
-                // Analyzers are typically referenced from packages/analyzers folders
-                var filePath = peRef.FilePath;
-                if (filePath.Contains("analyzers") || filePath.Contains("Analyzers"))
-                {
-                    if (!analyzerPaths.ContainsKey(assemblyName))
-                    {
-                        analyzerPaths[assemblyName] = filePath;
-                    }
-                }
-            }
-        }
-
-        // Also look for analyzer paths in common NuGet package locations
-        // Try to find analyzer assemblies from the project's NuGet packages
-        var searchPaths = new List<string>();
-
-        // Add common NuGet package cache locations
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (!string.IsNullOrEmpty(userProfile))
-        {
-            searchPaths.Add(Path.Combine(userProfile, ".nuget", "packages"));
-        }
+        // The factory is declared in a .parlot.cs file, which the host compilation doesn't contain
+        var location = GrammarDiagnosticLocation(methodSymbol.Locations.FirstOrDefault());
 
         foreach (var generatorName in generatorAssemblyNames)
         {
-            if (loadedAssemblyNames.Contains(generatorName))
-            {
-                continue;
-            }
-
-            string? assemblyPath = null;
-
-            // First check if we already found it in the compilation references
-            if (analyzerPaths.TryGetValue(generatorName, out var knownPath))
-            {
-                assemblyPath = knownPath;
-            }
-            else
-            {
-                // Search in NuGet package folders
-                foreach (var searchPath in searchPaths)
-                {
-                    if (!Directory.Exists(searchPath))
-                    {
-                        continue;
-                    }
-
-                    // Look for package folder matching the generator name (case-insensitive)
-                    var packageDir = Path.Combine(searchPath, generatorName.ToLowerInvariant());
-                    if (Directory.Exists(packageDir))
-                    {
-                        // Find the latest version folder
-                        var versionDirs = Directory.GetDirectories(packageDir)
-                            .OrderByDescending(d => d)
-                            .ToArray();
-
-                        foreach (var versionDir in versionDirs)
-                        {
-                            // Look for analyzer assemblies
-                            var analyzerDir = Path.Combine(versionDir, "analyzers", "dotnet", "cs");
-                            if (Directory.Exists(analyzerDir))
-                            {
-                                var dllPath = Path.Combine(analyzerDir, generatorName + ".dll");
-                                if (File.Exists(dllPath))
-                                {
-                                    assemblyPath = dllPath;
-                                    break;
-                                }
-
-                                // Try to find any .dll in the analyzer folder
-                                var dlls = Directory.GetFiles(analyzerDir, "*.dll");
-                                if (dlls.Length > 0)
-                                {
-                                    assemblyPath = dlls[0];
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (assemblyPath is not null)
-                    {
-                        break;
-                    }
-                }
-            }
-
-            if (assemblyPath is null || !File.Exists(assemblyPath))
+            var assemblyPaths = IncludeGeneratorsResolver.Find(generatorName, generatorSearch.Analyzers, generatorSearch.PackageRoot);
+            if (assemblyPaths.Count == 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     new DiagnosticDescriptor(
@@ -2302,68 +2213,21 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                         "Parlot.SourceGenerator",
                         DiagnosticSeverity.Warning,
                         isEnabledByDefault: true),
-                    methodSymbol.Locations.FirstOrDefault(),
+                    location,
                     generatorName));
                 continue;
             }
 
-            try
+            foreach (var assemblyPath in assemblyPaths)
             {
-                var assembly = Assembly.LoadFrom(assemblyPath);
-                loadedAssemblyNames.Add(generatorName);
-
-                // Find all source generator types in the assembly
-                foreach (var type in assembly.GetTypes())
+                if (!loadedAssemblyPaths.Add(assemblyPath))
                 {
-                    if (type.IsAbstract || type.IsInterface)
-                    {
-                        continue;
-                    }
-
-                    // Check for IIncrementalGenerator
-                    if (typeof(IIncrementalGenerator).IsAssignableFrom(type))
-                    {
-                        try
-                        {
-                            var instance = (IIncrementalGenerator)Activator.CreateInstance(type)!;
-                            generators.Add(instance.AsSourceGenerator());
-                        }
-                        catch
-                        {
-                            // Skip types that can't be instantiated
-                        }
-                    }
-                    // Check for ISourceGenerator (legacy generators)
-                    else if (typeof(ISourceGenerator).IsAssignableFrom(type))
-                    {
-                        try
-                        {
-                            var instance = (ISourceGenerator)Activator.CreateInstance(type)!;
-                            generators.Add(instance);
-                        }
-                        catch
-                        {
-                            // Skip types that can't be instantiated
-                        }
-                    }
+                    continue;
                 }
-            }
-            catch (Exception ex)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    new DiagnosticDescriptor(
-                        "PARLOT013",
-                        "Failed to load generator assembly",
-                        "Failed to load generator assembly '{0}': {1}",
-                        "Parlot.SourceGenerator",
-                        DiagnosticSeverity.Warning,
-                        isEnabledByDefault: true),
-                    methodSymbol.Locations.FirstOrDefault(),
-                    generatorName,
-                    ex.Message));
+
+                LoadGenerators(context, generators, assemblyPath, generatorName, location);
             }
         }
-
         if (generators.Count == 0)
         {
             return csharpCompilation;
@@ -2378,7 +2242,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             // Report any errors from the generators (but not warnings/info to avoid noise)
             foreach (var diag in generatorDiagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
             {
-                context.ReportDiagnostic(diag);
+                context.ReportDiagnostic(WithExternalLocation(diag));
             }
 
             return (CSharpCompilation)updatedCompilation;
@@ -2393,11 +2257,100 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     "Parlot.SourceGenerator",
                     DiagnosticSeverity.Warning,
                     isEnabledByDefault: true),
-                methodSymbol.Locations.FirstOrDefault(),
+                location,
                 ex.Message));
 
             return csharpCompilation;
         }
+    }
+
+    [SuppressMessage("Build", "RS1035", Justification = "Loading generator assemblies is necessary to run them.")]
+    private static void LoadGenerators(
+        SourceProductionContext context,
+        List<ISourceGenerator> generators,
+        string assemblyPath,
+        string generatorName,
+        Location? location)
+    {
+        try
+        {
+            var assembly = Assembly.LoadFrom(assemblyPath);
+
+            // Find all source generator types in the assembly
+            foreach (var type in assembly.GetTypes())
+            {
+                if (type.IsAbstract || type.IsInterface)
+                {
+                    continue;
+                }
+
+                // Check for IIncrementalGenerator
+                if (typeof(IIncrementalGenerator).IsAssignableFrom(type))
+                {
+                    try
+                    {
+                        var instance = (IIncrementalGenerator)Activator.CreateInstance(type)!;
+                        generators.Add(instance.AsSourceGenerator());
+                    }
+                    catch
+                    {
+                        // Skip types that can't be instantiated
+                    }
+                }
+                // Check for ISourceGenerator (legacy generators)
+                else if (typeof(ISourceGenerator).IsAssignableFrom(type))
+                {
+                    try
+                    {
+                        var instance = (ISourceGenerator)Activator.CreateInstance(type)!;
+                        generators.Add(instance);
+                    }
+                    catch
+                    {
+                        // Skip types that can't be instantiated
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(
+                    "PARLOT013",
+                    "Failed to load generator assembly",
+                    "Failed to load generator assembly '{0}': {1}",
+                    "Parlot.SourceGenerator",
+                    DiagnosticSeverity.Warning,
+                    isEnabledByDefault: true),
+                location,
+                generatorName,
+                ex.Message));
+        }
+    }
+
+    // Diagnostics must be reported on the trees of the compilation being analyzed. The included generators run on
+    // the factory compilation, which contains the .parlot.cs files and their own outputs, so their locations are
+    // reported as external files.
+    private static Diagnostic WithExternalLocation(Diagnostic diagnostic)
+    {
+        if (diagnostic.Location.SourceTree is null)
+        {
+            return diagnostic;
+        }
+
+        var descriptor = diagnostic.Descriptor;
+        return Diagnostic.Create(
+            descriptor.Id,
+            descriptor.Category,
+            diagnostic.GetMessage(CultureInfo.InvariantCulture),
+            diagnostic.Severity,
+            descriptor.DefaultSeverity,
+            descriptor.IsEnabledByDefault,
+            diagnostic.WarningLevel,
+            descriptor.Title,
+            descriptor.Description,
+            descriptor.HelpLinkUri,
+            ExternalLocation(diagnostic.Location));
     }
 
     private static RoslynCompilation BypassPartialMethodsAndRetryEmit(
