@@ -363,6 +363,10 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             }
         }
 
+        // Callbacks name types and namespaces fully qualified, but their extension methods (and query or collection
+        // expression methods) bind through the usings of the factory, file-level and in its namespaces
+        AddUsingsInScope(methodDecl, semanticModel, additionalUsings);
+
         // Check for [IncludeGenerators] attribute on method and containing class
         var includeGeneratorsAttrSymbol = compilation.GetTypeByMetadataName("Parlot.SourceGenerator.IncludeGeneratorsAttribute");
         var additionalGenerators = new List<string>();
@@ -405,6 +409,56 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             additionalGenerators.ToArray(),
             validationErrors.Count > 0 ? validationErrors.ToArray() : null,
             validationErrors.Count > 0 ? validationArgs.ToArray() : null);
+    }
+
+    private static void AddUsingsInScope(MethodDeclarationSyntax methodDecl, SemanticModel semanticModel, List<string> usings)
+    {
+        foreach (var node in methodDecl.Ancestors())
+        {
+            var directives = node switch
+            {
+                BaseNamespaceDeclarationSyntax declaration => declaration.Usings,
+                CompilationUnitSyntax unit => unit.Usings,
+                _ => default,
+            };
+            foreach (var directive in directives)
+            {
+                // Aliases and static usings only bring names, which callbacks qualify; global usings apply already
+                if (directive.Alias is null && directive.StaticKeyword.IsKind(SyntaxKind.None)
+                    && directive.GlobalKeyword.IsKind(SyntaxKind.None) && directive.Name is { } name
+                    && semanticModel.GetSymbolInfo(name).Symbol is INamespaceSymbol { IsGlobalNamespace: false } ns
+                    && ExistsOutsideGrammar(ns))
+                {
+                    usings.Add(ns.ToDisplayString());
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a namespace exists in the application, rather than only in Parlot or in the build-only grammar files,
+    /// whose usings would not compile in the generated code.
+    /// </summary>
+    private static bool ExistsOutsideGrammar(INamespaceSymbol ns)
+    {
+        foreach (var member in ns.GetMembers())
+        {
+            if (member is INamespaceSymbol child)
+            {
+                if (ExistsOutsideGrammar(child))
+                {
+                    return true;
+                }
+            }
+            else if (member.ContainingAssembly?.Identity.Name is not ("Parlot" or "Parlot.SourceGenerator")
+                && (member.DeclaringSyntaxReferences.Length == 0 || member.DeclaringSyntaxReferences.Any(static reference =>
+                    !reference.SyntaxTree.FilePath.EndsWith(".parlot.cs", StringComparison.OrdinalIgnoreCase))))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private readonly record struct MethodToGenerate(
@@ -1423,7 +1477,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                     invokeMethod,
                     originalSource,
                     isMethodGroup,
-                    lambdaInfo?.FilePath,
+                    standalone.LineDirectives.GetPath(lambdaInfo?.FilePath),
                     lambdaInfo?.StartLine ?? 0,
                     isStatic: !hasParameters);
                 sb.AppendLine(methodSource);
@@ -1680,6 +1734,11 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine();
 
         AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0, sgContext.MaxRecursionDepth);
+        foreach (var overload in standalone.FailureOverloads)
+        {
+            sb.AppendLine();
+            AppendStandaloneEntryPoint(sb, overload, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0, sgContext.MaxRecursionDepth);
+        }
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
         // Note: Currently no helper methods are needed since we use HashSet<char> and SearchValues<char>

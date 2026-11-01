@@ -17,9 +17,15 @@ runtime package or assembly.
 
 ## Downlevel package dependencies
 
-The analyzer package automatically restores `System.Memory` 4.6.3 for downlevel applications. Shared
-polyfills are emitted as C# 12-compatible internal helpers, so consuming projects do not need PolySharp.
-Modern targets do not acquire these compatibility dependencies.
+The analyzer package depends on `System.Memory` 4.5.5 or later for downlevel applications, so a project
+without a reference restores 4.5.5, and one that references a later version, such as 4.6.3, keeps it.
+Generated parsers build against either. A project that pins the 4.5.x compatibility packages (`System.Memory`
+4.5.5, `System.Buffers` 4.5.1, `System.Numerics.Vectors` 4.5.0) or `System.Runtime.CompilerServices.Unsafe`
+6.0.0 gets no NU1605 downgrade. The grammar factory is compiled against the analyzer's Parlot assembly,
+which is built against `System.Memory` 4.6.3: the generator lowers that assembly's references to the versions
+the project references, so a project on 4.5.5 does not fail with CS1705. Shared polyfills are emitted as
+C# 12-compatible internal helpers, so consuming projects do not need PolySharp. Modern targets do not acquire
+these compatibility dependencies.
 
 When publishing a library that contains generated parsers for downlevel targets, explicitly reference
 `System.Memory` so it is included in your library's package dependencies:
@@ -29,6 +35,8 @@ When publishing a library that contains generated parsers for downlevel targets,
   <PackageReference Include="System.Memory" Version="4.6.3" />
 </ItemGroup>
 ```
+
+Any version from 4.5.5 works; reference the one your library already ships with.
 
 Do not mark that reference `PrivateAssets="all"`. The analyzer itself should remain private, but its
 private transitive dependencies are not propagated to consumers of your library. Packing reports an
@@ -197,7 +205,8 @@ Configuration is stored in the existing per-call execution context, without a se
 allocation. The scanner, cursor, and context use the shared runtime implementations.
 
 - A successful parse assigns `value` and returns `true`.
-- An ordinary mismatch returns `false` and assigns `default` to `value`.
+- An ordinary mismatch returns `false` and assigns `default` to `value`. An overload can also return where the
+  parse failed, see [Failure position](#failure-position).
 - `Error` and `ElseError` throw `ParseException` internally; the direct entry point converts that exception
   to `false` and a default result.
 - An explicitly declared diagnostics overload instead collects grammar errors and warnings and returns
@@ -260,6 +269,42 @@ parser of its own, like the `TextReader` ones: only the overloads returning diag
 code collecting them, so the code generated for the other overloads is unchanged, and declaring both
 generates the grammar twice. The [Parser Explorer](explorer.md) traces the overloads that don't
 return diagnostics.
+
+### Failure position
+
+Declare an overload with an extra final `out (int Offset, int Line, int Column)` parameter, or `out int` for the offset
+only, to learn where a failed parse went wrong. It needs no `Error` or `ElseError` in the grammar:
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value);
+public static partial bool TryParse(string input, out MyValue value, out (int Offset, int Line, int Column) failure);
+
+if (!Sql.TryParse(query, out var value, out var failure))
+{
+    throw new FormatException($"Syntax error at line {failure.Line}, column {failure.Column}.");
+}
+```
+
+When the parse fails, `failure` is the *furthest failure*: the position where the attempt which matched the most text
+stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white space the expected `FROM` skipped. When the
+grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
+`TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
+like `TextPosition`. The names of the tuple elements are free.
+
+The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
+and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
+normal forwarding method otherwise). When only this overload is declared, the parser is generated for it. A string and
+a `TextReader` overload each have their own parser, as above, and can both return the failure. The overloads which
+return diagnostics can't also return the failure, the diagnostics having positions already.
+
+The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved
+back from: four instructions, without a branch, on that path only. Span code covering several parsers, which doesn't
+move the cursor until it matches, records the position of its failing check on its failure path. The overloads which
+don't return the failure run the same code, and the line and column of the failure are only computed when they are
+returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse, successful or not,
+nor its allocations. The furthest failure also counts
+the text lookaheads such as `WhenFollowedBy` read. A `TextReader` overload returns the same failure as the `string`
+one: the buffer only drops text before positions the parse read later.
 
 ### Cancellation
 
@@ -502,9 +547,15 @@ Adds namespace imports needed by emitted callback or helper source:
 private static Parser<Expression> Build() => ...;
 ```
 
-Usings in the `.parlot.cs` file compile the build-time factory. `[IncludeUsings]` applies to the generated
-output, so add it when copied callback expressions require extension methods or unqualified application
-types that are not otherwise emitted with fully qualified names.
+Callbacks bind their names as they do in the `.parlot.cs` file. The generator copies them with the types,
+namespaces and static members they name fully qualified (`global::App.Models.SqlParameter.Create(...)`), so
+usings placed inside a `namespace` block, aliases and `using static` keep their meaning, and a type of the same
+name in an enclosing namespace of the generated class can't take over. Extension methods, and the methods of
+query and collection expressions, still bind by name: the generated file imports the namespaces of the
+factory's usings, file-level and from its enclosing `namespace` blocks, that exist in the application.
+
+`[IncludeUsings]` adds more namespaces to the generated output, for instance for the extension methods of a
+custom emitter's source.
 
 ### `[IncludeFiles]`
 
@@ -631,7 +682,25 @@ Enable compiler-generated file output to inspect the direct parser and shared su
 ```
 
 Generated callbacks include `#line` mappings to their `.parlot.cs` source, so breakpoints and stack traces
-map back to the original lambda or method-group location.
+map back to the original lambda or method-group location. The `ParlotLineDirectives` MSBuild property
+chooses the paths of these directives:
+
+| Value | `#line` directives |
+|---|---|
+| `absolute` (default) | The full path of the `.parlot.cs` file, as the compiler has it. Breakpoints work. |
+| `relative` | The path relative to the project directory, with `/` separators, so the output is the same in every checkout. |
+| `none` | Not emitted. Callbacks are debugged in the generated code. |
+
+```xml
+<PropertyGroup>
+  <ParlotLineDirectives>relative</ParlotLineDirectives>
+</PropertyGroup>
+```
+
+Use `relative` or `none` to check generated files in or compare them between machines. The compiler resolves a
+relative `#line` path from the directory of the generated file, which isn't the project directory, so the
+debugger may not find the `.parlot.cs` file from it; keep the default for debugging. Another value is reported
+as the warning `PARLOT027`, and the default is used.
 
 ## Diagnostics
 
@@ -643,6 +712,7 @@ Standalone-specific diagnostics are:
 | `PARLOT024` | Generated code requires unsupported runtime code |
 | `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
 | `PARLOT026` | The project targets an unsupported framework or C# language version |
+| `PARLOT027` | `ParlotLineDirectives` is not `absolute`, `relative` or `none` (warning) |
 
 Other factory diagnostics still apply. Common cases include:
 

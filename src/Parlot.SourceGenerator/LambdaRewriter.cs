@@ -455,23 +455,35 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         }
 
         public override SyntaxNode? VisitGenericName(GenericNameSyntax node)
-            => QualifyMember(node) ?? base.VisitGenericName(node);
+        {
+            // The type arguments are names too, which bind where the factory is
+            var visited = (GenericNameSyntax)base.VisitGenericName(node)!;
+            return QualifyMember(node, visited) ?? visited;
+        }
 
-        private ExpressionSyntax? QualifyMember(SimpleNameSyntax node)
+        public override SyntaxNode? VisitQualifiedName(QualifiedNameSyntax node)
+            => QualifyName(node) ?? base.VisitQualifiedName(node);
+
+        /// <summary>
+        /// Qualifies the names of types, namespaces and static members, so that the callback binds them as it does
+        /// in the factory, whatever the usings and the namespace of the generated code.
+        /// </summary>
+        private ExpressionSyntax? QualifyMember(SimpleNameSyntax node, SimpleNameSyntax? visited = null)
         {
             if (node.Parent is MemberAccessExpressionSyntax member && member.Name == node
-                || node.Parent is MemberBindingExpressionSyntax or QualifiedNameSyntax or AliasQualifiedNameSyntax
+                || node.Parent is MemberBindingExpressionSyntax or AliasQualifiedNameSyntax
+                || node.Parent is QualifiedNameSyntax qualified && qualified.Right == node
                 || node.Parent is NameColonSyntax or NameEqualsSyntax)
             {
                 return null;
             }
 
-            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
-            if (symbol is INamedTypeSymbol { ContainingAssembly.Identity.Name: "Parlot" } type)
+            if (QualifyName(node) is { } name)
             {
-                return SyntaxFactory.ParseName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .WithTriviaFrom(node);
+                return name;
             }
+
+            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
             if (symbol is IMethodSymbol { IsStatic: true, MethodKind: MethodKind.Ordinary }
                 or IFieldSymbol { IsStatic: true }
                 or IPropertySymbol { IsStatic: true }
@@ -480,10 +492,30 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 return SyntaxFactory.MemberAccessExpression(
                     SyntaxKind.SimpleMemberAccessExpression,
                     SyntaxFactory.ParseName(symbol.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                    node.WithoutTrivia()).WithTriviaFrom(node);
+                    (visited ?? node).WithoutTrivia()).WithTriviaFrom(node);
             }
 
             return null;
+        }
+
+        private NameSyntax? QualifyName(NameSyntax node)
+        {
+            if (node.Parent is QualifiedNameSyntax qualified && qualified.Right == node
+                || node.Parent is AliasQualifiedNameSyntax
+                || node.IsVar
+                || node is GenericNameSyntax { IsUnboundGenericName: true }
+                || node is QualifiedNameSyntax { Right: GenericNameSyntax { IsUnboundGenericName: true } })
+            {
+                return null;
+            }
+
+            var symbol = _semanticModel.GetSymbolInfo(node).Symbol;
+            // Nullable<T> and native integers display with their keyword syntax, which isn't a name
+            return symbol is INamedTypeSymbol { IsAnonymousType: false, IsNativeIntegerType: false, TypeKind: not TypeKind.Error }
+                    and not { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
+                or INamespaceSymbol { IsGlobalNamespace: false }
+                ? SyntaxFactory.ParseName(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).WithTriviaFrom(node)
+                : null;
         }
 
         public override SyntaxNode? VisitAnonymousObjectMemberDeclarator(AnonymousObjectMemberDeclaratorSyntax node)
