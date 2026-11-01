@@ -9,7 +9,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
     private readonly Parser<T> _parser;
 
     // The value of the parser isn't used, so the parsers whose value allocates don't build it
-    private readonly IDiscardableParser? _discardable;
+    private readonly bool _withoutValue;
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
@@ -27,7 +27,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
     public Capture(Parser<T> parser)
     {
         _parser = parser;
-        _discardable = parser as IDiscardableParser;
+        _withoutValue = parser is not null && parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
@@ -42,7 +42,7 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
 
         // The captured text must still be buffered once the parser is done
         var pin = context.Pin();
-        var success = _discardable is not null ? _discardable.ParseWithoutValue(context) : _parser.Parse(context, ref _);
+        var success = _withoutValue ? _parser.ParseWithoutValue(context, ref _) : _parser.Parse(context, ref _);
         context.Unpin(pin);
 
         if (success)

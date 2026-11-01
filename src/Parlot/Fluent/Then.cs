@@ -18,6 +18,9 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
     private readonly U? _value;
     private readonly Parser<T> _parser;
 
+    // Whether the parser is invoked without its value, which a constant doesn't use
+    private readonly bool _withoutValue;
+
     private Then(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -41,6 +44,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
     public Then(Parser<T> parser, U value) : this(parser)
     {
         _value = value;
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -62,7 +66,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
 
         var parsed = new ParseResult<T>();
 
-        if (_parser.Parse(context, ref parsed))
+        if (_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
         {
             if (_action1 != null)
             {

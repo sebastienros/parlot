@@ -12,6 +12,10 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
     private readonly object _lockObject = new();
     private Parser<T>? _parser;
 
+    // Whether the parser is invoked without its value when this one's isn't used. A pair read while the parser is replaced
+    // is still correct, any parser can be invoked without its value.
+    private bool _withoutValue;
+
     // Whether the hints are being read from the parser, see Resolve()
     private bool _resolving;
 
@@ -33,6 +37,7 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
             lock (LoopAnalysis.SyncRoot)
             {
                 _parser = value;
+                _withoutValue = value!.CanParseWithoutValue;
                 LoopAnalysis.Invalidate(this);
             }
 
@@ -177,6 +182,31 @@ public sealed class Deferred<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILo
         }
 
         return ParseTracked(context, ref result, parser);
+    }
+
+    // The parser is set later, and can be replaced
+    internal override bool CanParseWithoutValue => true;
+
+    // Parse, with the parser invoked without its value when it isn't tracked. The other path keeps a single implementation.
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        var parser = _parser;
+
+        if (parser is null || !_withoutValue || _loopDetection != LoopAnalysis.Elided || context.TracksDeferredParsers)
+        {
+            return Parse(context, ref result);
+        }
+
+        // Deep input fails instead of overflowing the stack
+        context.EnsureSufficientStack();
+
+        context.EnterParser(this);
+
+        var success = parser.ParseWithoutValue(context, ref result);
+
+        context.ExitParser(this);
+
+        return success;
     }
 
     private bool ParseTracked(ParseContext context, ref ParseResult<T> result, Parser<T> parser)

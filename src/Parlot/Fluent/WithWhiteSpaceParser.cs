@@ -12,6 +12,9 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
     private readonly Parser<T> _parser;
     private readonly Parser<TextSpan> _whiteSpaceParser;
 
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     // Whether the white space parser can invoke a deferred parser, see ParseContext.HasReentrantWhiteSpaceParser.
     // Unknown until the first parse, which needs the grammar to be complete.
     private int _reentrantWhiteSpaceParser = Unknown;
@@ -23,6 +26,7 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _whiteSpaceParser = whiteSpaceParser ?? throw new ArgumentNullException(nameof(whiteSpaceParser));
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later. A parser
@@ -53,6 +57,35 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
 
             // Parse with the custom whitespace parser
             var success = _parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+            return success;
+        }
+        finally
+        {
+            // Restore the previous whitespace parser
+            context.SetWhiteSpaceParser(previousWhiteSpaceParser, previousReentrant);
+        }
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, with the parser invoked without its value
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        // Save the current whitespace parser
+        var previousWhiteSpaceParser = context.WhiteSpaceParser;
+        var previousReentrant = context.HasReentrantWhiteSpaceParser;
+
+        try
+        {
+            // Set the custom whitespace parser
+            context.SetWhiteSpaceParser(_whiteSpaceParser, IsWhiteSpaceParserReentrant());
+
+            // Parse with the custom whitespace parser
+            var success = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
 
             context.ExitParser(this);
             return success;

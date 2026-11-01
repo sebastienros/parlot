@@ -48,10 +48,18 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     //private readonly CharMap<Func<ParseContext, ValueTuple<bool, T>>> _lambdaMap = new();
     //private Func<ParseContext, ValueTuple<bool, T>>? _lambdaOtherParsers;
 
+    // Whether an alternative can be invoked without its value, such that this one is when its value isn't used
+    private readonly bool _withoutValue;
+
     public OneOf(Parser<T>[] parsers)
     {
         _originalParsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
         OriginalParsers = Parsers = parsers;
+
+        foreach (var parser in parsers)
+        {
+            _withoutValue |= parser is not null && parser.CanParseWithoutValue;
+        }
 
         Build();
 
@@ -479,6 +487,90 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             for (var i = 0; i < parsers.Length; i++)
             {
                 if (parsers[i].Parse(context, ref result))
+                {
+                    context.ExitParser(this);
+                    return true;
+                }
+            }
+        }
+
+        // We only need to reset the position if we are skipping whitespaces
+        // as the parsers would have reverted their own state
+
+        if (SkipWhitespace)
+        {
+            cursor.ResetPosition(start);
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, with the alternatives invoked without their value
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        if (!Volatile.Read(ref _resolved))
+        {
+            EnsureResolved();
+        }
+
+        // The alternatives are invoked with their value when the input is a reader or the diagnostics are collected
+        if (context.IsCompactingOrCollectingDiagnostics)
+        {
+            return ParseCompacting(context, ref result);
+        }
+
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+
+        // The position is only needed to revert the whitespaces this parser skipped, the sub-parsers
+        // revert their own state.
+        var start = 0;
+
+        // If all sub-parsers skip whitespaces, do it once here
+        if (SkipWhitespace)
+        {
+            start = cursor.Offset;
+            context.SkipWhiteSpace();
+        }
+
+        var map = _parseMap;
+
+        if (map != null)
+        {
+            // Each lookup entry also contains the non-seekable parsers
+            var seekableParsers = map[cursor.Current] ?? _otherParsers;
+
+            if (seekableParsers != null)
+            {
+                if (seekableParsers.Length == 0)
+                {
+                    seekableParsers = SelectByPrefix(cursor);
+                }
+
+                // The length is read after the selection, so that the loop doesn't check the bounds of the array
+                var length = seekableParsers.Length;
+
+                for (var i = 0; i < length; i++)
+                {
+                    if (seekableParsers[i].ParseWithoutValue(context, ref result))
+                    {
+                        context.ExitParser(this);
+                        return true;
+                    }
+                }
+            }
+        }
+        else
+        {
+            var parsers = _parsers;
+
+            for (var i = 0; i < parsers.Length; i++)
+            {
+                if (parsers[i].ParseWithoutValue(context, ref result))
                 {
                     context.ExitParser(this);
                     return true;

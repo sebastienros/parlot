@@ -15,6 +15,10 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     private readonly bool _allowLeadingSeparator;
     private readonly bool _allowTrailingSeparator;
 
+    // Whether the parsers are invoked without their value when it isn't used, the separator's never is
+    private readonly bool _separatorWithoutValue;
+    private readonly bool _withoutValue;
+
     public Separated(Parser<U> separator, Parser<T> parser) : this(separator, parser, 1, 0)
     {
     }
@@ -58,6 +62,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         _removeEmptyEntries = removeEmptyEntries;
         _allowLeadingSeparator = allowLeadingSeparator;
         _allowTrailingSeparator = allowTrailingSeparator;
+        _separatorWithoutValue = separator.CanParseWithoutValue;
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     // The hints of the first element, read when they are asked for since it can be a Deferred set later. There are none when
@@ -119,7 +125,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
                 if (!first)
                 {
-                    if (!_separator.Parse(context, ref separatorResult))
+                    if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                     {
                         break;
                     }
@@ -189,6 +195,103 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         return true;
     }
 
+    internal override bool CanParseWithoutValue => !(_removeEmptyEntries || _allowLeadingSeparator || _allowTrailingSeparator);
+
+    // The loop of Parse, without the list. The options keep a single implementation.
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    {
+        if (_removeEmptyEntries || _allowLeadingSeparator || _allowTrailingSeparator)
+        {
+            return Parse(context, ref result);
+        }
+
+        context.EnterParser(this);
+
+        var end = context.Scanner.Cursor.Offset;
+        var initialPosition = end;
+
+        // An empty result is at the current position
+        var start = end;
+
+        var parsed = new ParseResult<T>();
+        var separatorResult = new ParseResult<U>();
+        var count = 0;
+
+        // The end of the last element is read again when a separator isn't followed by an element
+        var pin = context.Pin();
+
+        while (_max == 0 || count < _max)
+        {
+            var first = count == 0;
+            var previousOffset = context.Scanner.Cursor.Offset;
+
+            if (!first)
+            {
+                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                {
+                    break;
+                }
+            }
+
+            if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)))
+            {
+                if (!first)
+                {
+                    // A separator was found, but not followed by another value: the cursor is reset to before the separator
+                    context.Scanner.Cursor.ResetPosition(end);
+                    break;
+                }
+
+                if (_min > 0)
+                {
+                    context.Unpin(pin);
+                    context.ExitParser(this);
+                    return false;
+                }
+                break;
+            }
+            else
+            {
+                end = context.Scanner.Cursor.Offset;
+                context.MovePin(pin);
+            }
+
+            if (context.Scanner.Cursor.Offset == previousOffset)
+            {
+                if (first && _min > 0)
+                {
+                    context.Unpin(pin);
+                    context.ExitParser(this);
+                    return false;
+                }
+
+                break;
+            }
+
+            if (first)
+            {
+                start = parsed.Start;
+            }
+
+            count++;
+        }
+
+        context.Unpin(pin);
+
+        if (_min > 1 && count < _min)
+        {
+            context.Scanner.Cursor.ResetPosition(initialPosition);
+            context.ExitParser(this);
+            return false;
+        }
+
+        result.Start = start;
+        result.End = end;
+
+        context.ExitParser(this);
+        return true;
+    }
+
     private bool ParseWithOptions(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
     {
         var cursor = context.Scanner.Cursor;
@@ -205,7 +308,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             while (true)
             {
                 var beforeSeparator = cursor.Offset;
-                if (!_separator.Parse(context, ref separatorResult) || cursor.Offset == beforeSeparator)
+                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                 {
                     break;
                 }
@@ -247,7 +350,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         {
             while (_max == 0 || results.Count < _max)
             {
-                if (!_separator.Parse(context, ref separatorResult))
+                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                 {
                     break;
                 }
@@ -268,7 +371,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                     }
 
                     var beforeSeparator = cursor.Offset;
-                    if (!_separator.Parse(context, ref separatorResult) || cursor.Offset == beforeSeparator)
+                    if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                     {
                         break;
                     }

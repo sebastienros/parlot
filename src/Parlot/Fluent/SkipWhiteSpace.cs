@@ -8,9 +8,13 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
 {
     public Parser<T> Parser { get; }
 
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     public SkipWhiteSpace(Parser<T> parser)
     {
         Parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -45,6 +49,39 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         context.SkipWhiteSpace();
 
         if (Parser.Parse(context, ref result))
+        {
+            context.ExitParser(this);
+            return true;
+        }
+
+        cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, with the parser invoked without its value
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+
+        // Shortcut for common scenario
+        if (!context.MaySkipWhiteSpace(cursor.Current))
+        {
+            context.ExitParser(this);
+            return _withoutValue ? Parser.ParseWithoutValue(context, ref result) : Parser.Parse(context, ref result);
+        }
+
+        var start = cursor.Offset;
+
+        // Use the scanner's logic to ignore whitespaces since it knows about multi-line grammars
+        context.SkipWhiteSpace();
+
+        if (_withoutValue ? Parser.ParseWithoutValue(context, ref result) : Parser.Parse(context, ref result))
         {
             context.ExitParser(this);
             return true;

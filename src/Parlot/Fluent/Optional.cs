@@ -12,9 +12,14 @@ namespace Parlot.Fluent;
 public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
 {
     private readonly Parser<T> _parser;
+
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     public Optional(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -47,6 +52,37 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzabl
         }
 
         // Optional always succeeds
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, without the option
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<Option<T>> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
+
+        if (success)
+        {
+            result.Start = parsed.Start;
+            result.End = parsed.End;
+        }
+        else
+        {
+            // Nothing was read: the result is empty at the current position
+            var offset = context.Scanner.Cursor.Offset;
+            result.Start = offset;
+            result.End = offset;
+        }
+
         context.ExitParser(this);
         return true;
     }

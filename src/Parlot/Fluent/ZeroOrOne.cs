@@ -11,9 +11,13 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopA
 {
     private readonly Parser<T> _parser;
 
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     public ZeroOrOne(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -46,6 +50,37 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopA
         }
 
         // ZeroOrOne always succeeds
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => true;
+
+    // Parse, without the list
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed);
+        context.Unpin(pin);
+
+        if (success)
+        {
+            result.Start = parsed.Start;
+            result.End = parsed.End;
+        }
+        else
+        {
+            // Nothing was read: the result is empty at the current position
+            var offset = context.Scanner.Cursor.Offset;
+            result.Start = offset;
+            result.End = offset;
+        }
+
         context.ExitParser(this);
         return true;
     }
