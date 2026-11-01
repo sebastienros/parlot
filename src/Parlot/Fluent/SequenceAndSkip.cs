@@ -9,10 +9,16 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _withoutValue1;
+    private readonly bool _withoutValue2;
+
     public SequenceAndSkip(Parser<T1> parser1, Parser<T2> parser2)
     {
         _parser1 = parser1 ?? throw new ArgumentNullException(nameof(parser1));
         _parser2 = parser2 ?? throw new ArgumentNullException(nameof(parser2));
+        _withoutValue1 = _parser1.CanParseWithoutValue;
+        _withoutValue2 = _parser2.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -40,9 +46,40 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
         {
             var parseResult2 = new ParseResult<T2>();
 
-            if (_parser2.Parse(context, ref parseResult2))
+            if (_withoutValue2 ? _parser2.ParseWithoutValue(context, ref parseResult2) : _parser2.Parse(context, ref parseResult2))
             {
                 result.Set(parseResult1.Start, parseResult2.End, parseResult1.Value);
+
+                context.ExitParser(this);
+                return true;
+            }
+
+            context.Scanner.Cursor.ResetPosition(start);
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue1 || _withoutValue2;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T1> result)
+    {
+        context.EnterParser(this);
+
+        var parseResult1 = new ParseResult<T1>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_withoutValue1 ? _parser1.ParseWithoutValue(context, ref parseResult1) : _parser1.Parse(context, ref parseResult1))
+        {
+            var parseResult2 = new ParseResult<T2>();
+
+            if (_withoutValue2 ? _parser2.ParseWithoutValue(context, ref parseResult2) : _parser2.Parse(context, ref parseResult2))
+            {
+                result.Start = parseResult1.Start;
+                result.End = parseResult2.End;
 
                 context.ExitParser(this);
                 return true;
@@ -122,6 +159,10 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _parserWithoutValue;
+    private readonly bool _lastParserWithoutValue;
+
     public SequenceAndSkip(Parser<ValueTuple<T1, T2>>
         parser,
         Parser<T3> lastParser
@@ -129,6 +170,8 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
     {
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -156,7 +199,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
         {
             var lastResult = new ParseResult<T3>();
 
-            if (_lastParser.Parse(context, ref lastResult))
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
                 var tuple = (
                     tupleResult.Value.Item1,
@@ -164,6 +207,37 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
                 );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
+                return true;
+            }
+        }
+
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _parserWithoutValue || _lastParserWithoutValue;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<ValueTuple<T1, T2>> result)
+    {
+        context.EnterParser(this);
+
+        var tupleResult = new ParseResult<ValueTuple<T1, T2>>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_parserWithoutValue ? _parser.ParseWithoutValue(context, ref tupleResult) : _parser.Parse(context, ref tupleResult))
+        {
+            var lastResult = new ParseResult<T3>();
+
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
+            {
+                result.Start = tupleResult.Start;
+                result.End = lastResult.End;
 
                 context.ExitParser(this);
                 return true;
@@ -245,10 +319,16 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _parserWithoutValue;
+    private readonly bool _lastParserWithoutValue;
+
     public SequenceAndSkip(Parser<ValueTuple<T1, T2, T3>> parser, Parser<T4> lastParser)
     {
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -276,7 +356,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
         {
             var lastResult = new ParseResult<T4>();
 
-            if (_lastParser.Parse(context, ref lastResult))
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
                 var tuple = (
                     tupleResult.Value.Item1,
@@ -285,6 +365,37 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
                 );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
+                return true;
+            }
+        }
+
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _parserWithoutValue || _lastParserWithoutValue;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3>> result)
+    {
+        context.EnterParser(this);
+
+        var tupleResult = new ParseResult<ValueTuple<T1, T2, T3>>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_parserWithoutValue ? _parser.ParseWithoutValue(context, ref tupleResult) : _parser.Parse(context, ref tupleResult))
+        {
+            var lastResult = new ParseResult<T4>();
+
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
+            {
+                result.Start = tupleResult.Start;
+                result.End = lastResult.End;
 
                 context.ExitParser(this);
                 return true;
@@ -365,10 +476,16 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _parserWithoutValue;
+    private readonly bool _lastParserWithoutValue;
+
     public SequenceAndSkip(Parser<ValueTuple<T1, T2, T3, T4>> parser, Parser<T5> lastParser)
     {
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -396,7 +513,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
         {
             var lastResult = new ParseResult<T5>();
 
-            if (_lastParser.Parse(context, ref lastResult))
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
                 var tuple = (
                     tupleResult.Value.Item1,
@@ -406,6 +523,37 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
                 );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
+                return true;
+            }
+        }
+
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _parserWithoutValue || _lastParserWithoutValue;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4>> result)
+    {
+        context.EnterParser(this);
+
+        var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4>>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_parserWithoutValue ? _parser.ParseWithoutValue(context, ref tupleResult) : _parser.Parse(context, ref tupleResult))
+        {
+            var lastResult = new ParseResult<T5>();
+
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
+            {
+                result.Start = tupleResult.Start;
+                result.End = lastResult.End;
 
                 context.ExitParser(this);
                 return true;
@@ -487,10 +635,16 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _parserWithoutValue;
+    private readonly bool _lastParserWithoutValue;
+
     public SequenceAndSkip(Parser<ValueTuple<T1, T2, T3, T4, T5>> parser, Parser<T6> lastParser)
     {
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -518,7 +672,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
         {
             var lastResult = new ParseResult<T6>();
 
-            if (_lastParser.Parse(context, ref lastResult))
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
                 var tuple = (
                     tupleResult.Value.Item1,
@@ -529,6 +683,37 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
                 );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
+                return true;
+            }
+        }
+
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _parserWithoutValue || _lastParserWithoutValue;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5>> result)
+    {
+        context.EnterParser(this);
+
+        var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5>>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_parserWithoutValue ? _parser.ParseWithoutValue(context, ref tupleResult) : _parser.Parse(context, ref tupleResult))
+        {
+            var lastResult = new ParseResult<T6>();
+
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
+            {
+                result.Start = tupleResult.Start;
+                result.End = lastResult.End;
 
                 context.ExitParser(this);
                 return true;
@@ -609,10 +794,16 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _parserWithoutValue;
+    private readonly bool _lastParserWithoutValue;
+
     public SequenceAndSkip(Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> parser, Parser<T7> lastParser)
     {
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -640,7 +831,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
         {
             var lastResult = new ParseResult<T7>();
 
-            if (_lastParser.Parse(context, ref lastResult))
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
                 var tuple = (
                     tupleResult.Value.Item1,
@@ -652,6 +843,37 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
                 );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
+                return true;
+            }
+        }
+
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _parserWithoutValue || _lastParserWithoutValue;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>> result)
+    {
+        context.EnterParser(this);
+
+        var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6>>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_parserWithoutValue ? _parser.ParseWithoutValue(context, ref tupleResult) : _parser.Parse(context, ref tupleResult))
+        {
+            var lastResult = new ParseResult<T7>();
+
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
+            {
+                result.Start = tupleResult.Start;
+                result.End = lastResult.End;
 
                 context.ExitParser(this);
                 return true;
@@ -733,10 +955,16 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> _parser;
     private readonly Parser<T8> _lastParser;
 
+    // Whether the parsers are invoked without their value when it isn't used
+    private readonly bool _parserWithoutValue;
+    private readonly bool _lastParserWithoutValue;
+
     public SequenceAndSkip(Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> parser, Parser<T8> lastParser)
     {
         _parser = parser;
         _lastParser = lastParser ?? throw new ArgumentNullException(nameof(lastParser));
+        _parserWithoutValue = parser is not null && parser.CanParseWithoutValue;
+        _lastParserWithoutValue = _lastParser.CanParseWithoutValue;
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -764,7 +992,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
         {
             var lastResult = new ParseResult<T8>();
 
-            if (_lastParser.Parse(context, ref lastResult))
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
                 var tuple = (
                     tupleResult.Value.Item1,
@@ -777,6 +1005,37 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
                 );
 
                 result.Set(tupleResult.Start, lastResult.End, tuple);
+
+                context.ExitParser(this);
+                return true;
+            }
+        }
+
+        context.Scanner.Cursor.ResetPosition(start);
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    internal override bool CanParseWithoutValue => _parserWithoutValue || _lastParserWithoutValue;
+
+    // Parse, without the tuple
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> result)
+    {
+        context.EnterParser(this);
+
+        var tupleResult = new ParseResult<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>();
+
+        var start = context.Scanner.Cursor.Offset;
+
+        if (_parserWithoutValue ? _parser.ParseWithoutValue(context, ref tupleResult) : _parser.Parse(context, ref tupleResult))
+        {
+            var lastResult = new ParseResult<T8>();
+
+            if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
+            {
+                result.Start = tupleResult.Start;
+                result.End = lastResult.End;
 
                 context.ExitParser(this);
                 return true;

@@ -72,6 +72,7 @@ public class DiscardResultTests
                 foreach (var helper in helpers)
                 {
                     Assert.DoesNotContain(helper.Result.Body, static line => line.Contains(".ToString()", StringComparison.Ordinal));
+                    Assert.DoesNotContain(helper.Result.Body, static line => line.Contains(".Get(parsedText", StringComparison.Ordinal));
                 }
                 Assert.Equal(discard, context.DiscardResult);
                 Assert.Equal(compacting, context.IsCompacting);
@@ -92,8 +93,9 @@ public class DiscardResultTests
 
         Assert.Equal(2, helpers.Length);
         Assert.NotEqual(helpers[0].MethodName, helpers[1].MethodName);
-        Assert.Equal(!skipFirst, helpers[0].Result.Body.Any(static line => line.Contains(".ToString()", StringComparison.Ordinal)));
-        Assert.Equal(skipFirst, helpers[1].Result.Body.Any(static line => line.Contains(".ToString()", StringComparison.Ordinal)));
+        // The matched text is taken from the text's pool when its value is used
+        Assert.Equal(!skipFirst, helpers[0].Result.Body.Any(static line => line.Contains(".Get(parsedText", StringComparison.Ordinal)));
+        Assert.Equal(skipFirst, helpers[1].Result.Body.Any(static line => line.Contains(".Get(parsedText", StringComparison.Ordinal)));
         Assert.False(context.DiscardResult);
     }
 
@@ -135,7 +137,7 @@ public class DiscardResultTests
             var context = new SourceGenerationContext();
             parser.GenerateSource(context);
             Assert.Contains(context.Helpers.Enumerate(), static helper =>
-                helper.Result.Body.Any(static line => line.Contains(".ToString()", StringComparison.Ordinal)));
+                helper.Result.Body.Any(static line => line.Contains(".Get(parsedText", StringComparison.Ordinal)));
         }
     }
 

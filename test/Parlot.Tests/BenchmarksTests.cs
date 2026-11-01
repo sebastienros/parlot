@@ -46,6 +46,27 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void CommentsGrammar()
+    {
+        var benchmark = new CommentsBenchmarks();
+        benchmark.Setup();
+        Assert.Equal(-64.5m, benchmark.Expression_Spaces().Evaluate());
+        Assert.Equal(-64.5m, benchmark.Expression_Comments().Evaluate());
+    }
+
+    [Fact]
+    public void ParseWithoutValueGrammars()
+    {
+        var benchmark = new ParseWithoutValueBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.CapturedSequence().ToString());
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.CapturedSeparated().ToString());
+        Assert.Equal(["a", "b", "c", "d", "e", "f", "g"], benchmark.SkippedList().Select(static x => x.ToString()));
+        Assert.True(benchmark.TryParseSequence());
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.TryMatchSequence().ToString());
+    }
+
+    [Fact]
     public void DiscardedTextGrammar()
     {
         var benchmark = new DiscardResultBenchmarks();
@@ -96,6 +117,53 @@ public class BenchmarksTests
         benchmark.Setup();
         Assert.Equal(expected, benchmark.NestedRuntime());
         Assert.Equal(expected, benchmark.ChainGenerated());
+    }
+
+    [Theory]
+    [InlineData("Operand", 42)]
+    [InlineData("Prefixes", 1)]
+    public void PrefixTableGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the runtime Unary one
+        var benchmark = new PrefixTableBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.UnaryRuntime());
+        Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Members", 1254301)]
+    [InlineData("Conditional", 993)]
+    [InlineData("Mixed", 1185)]
+    public void ValuedOperatorsGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the folded runtime one
+        var benchmark = new ValuedOperatorsBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.FoldRuntime());
+        Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
+    [Theory]
+    [InlineData("Repeated")]
+    [InlineData("Distinct")]
+    public void PooledStringGrammars(string scenario)
+    {
+        // The setup checks the pooled strings against ToString()
+        var benchmark = new PooledStringBenchmarks { Scenario = scenario };
+        benchmark.Setup();
+        Assert.Equal(1000, benchmark.PooledIdentifiers().Count);
+        Assert.Equal(1000, benchmark.PooledStrings().Count);
+    }
+
+    [Fact]
+    public void MatchedTextGrammars()
+    {
+        var benchmark = new MatchedTextBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("Select", benchmark.Texts()[2]);
+        Assert.Equal("SELECT", benchmark.Keywords()[0]);
     }
 
     [Fact]

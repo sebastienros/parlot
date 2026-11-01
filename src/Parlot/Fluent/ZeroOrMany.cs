@@ -9,6 +9,9 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
     private readonly Parser<T> _parser;
     private readonly int _max;
 
+    // Whether the elements are parsed without their value when the list isn't built
+    private readonly bool _withoutValue;
+
     public ZeroOrMany(Parser<T> parser) : this(parser, 0)
     {
     }
@@ -19,6 +22,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         ThrowHelper.ThrowIfNegative(max, nameof(max));
         _max = max;
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -73,6 +77,53 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         {
             results.Release();
         }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => true;
+
+    // The loop of Parse, without the list
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
+    {
+        context.EnterParser(this);
+
+        // An empty result is at the current position
+        var start = context.Scanner.Cursor.Offset;
+        var end = start;
+
+        var parsed = new ParseResult<T>();
+        var count = 0;
+
+        // The start of the current element is read again when it fails
+        var pin = context.Pin();
+
+        while (_max == 0 || count < _max)
+        {
+            var previousOffset = context.Scanner.Cursor.Offset;
+            if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
+                || context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
+            }
+
+            context.MovePin(pin);
+
+            if (count == 0)
+            {
+                start = parsed.Start;
+            }
+
+            end = parsed.End;
+
+            count++;
+        }
+
+        context.Unpin(pin);
+
+        result.Start = start;
+        result.End = end;
 
         context.ExitParser(this);
         return true;

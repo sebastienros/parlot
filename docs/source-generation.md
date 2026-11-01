@@ -202,6 +202,8 @@ invoked, in their order, and each one still matches its own text. Choices read f
 An `Operators()` table (see [Operator tables](parsers.md#operator-tables)) is emitted as a single precedence climbing
 loop: recursive local functions which look for the operator following an operand once, through the
 generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
+The lookup stops at a level whose operators have a value (valued `Postfix`, `LeftAssociative`, `RightAssociative` and
+`Ternary`), and the case of the loop for that level parses them and passes their values to the factories.
 
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
@@ -758,6 +760,9 @@ retain their own inlining hints.
 
 Measure representative grammars. Result models and callbacks can still allocate, and conversions such as
 `TextSpan.ToString()` intentionally create application-owned strings when the public result requires them.
+`ToPooledString()` and case-insensitive `Text`/`Keyword` parsers returning the matched text keep their pool in a
+static field of the generated class, shared by all the calls of the entry point, like the runtime parser shares its
+pool between parses. A pooled string literal decodes its escape sequences into the same field.
 
 Custom string delimiters use the scanner's single-character overload without allocating a delimiter array
 per token. When `Capture` discards a string parser's decoded value, the generated parser still validates

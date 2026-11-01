@@ -100,6 +100,28 @@ var success = parser.TryParse(reader, out var value, out var fatalError, options
 // context.Diagnostics
 ```
 
+## Matching without a value
+
+`IsMatch` returns whether a parser matches the start of a text, and `TryMatch` also returns the text it matched, as a
+`TextSpan`. Neither builds the value: the lists, tuples and options of the parsers are skipped, which `TryParse` would
+allocate and discard.
+
+```c#
+var assignment = Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer());
+
+assignment.IsMatch("age = 12; next"); // true
+assignment.TryMatch("age = 12; next", out var match); // match is "age = 12"
+```
+
+- Like `TryParse`, the parser doesn't have to reach the end of the text. Add `.Eof()` to match the whole text.
+- The text is the one [`Capture`](#capture) returns, from the cursor to where the parser ended: it includes the white space
+  that a `Terms` parser skips before its first token.
+- Callbacks that read a value, like those of `Then` or `When`, still receive it, so the parsers below them build their
+  values.
+- A parse error, like the ones of `ElseError`, or a cancellation fails the match. `TryMatch(..., out error)` returns it.
+- The `ParseContext` overloads match at the cursor of the context and move it after the match, so a context can be reused
+  without allocating.
+
 ## Associative operators
 
 `LeftAssociative` groups from the left (`10 - 4 - 2` is `(10 - 4) - 2`); `RightAssociative` groups from the right (`10 - 4 - 2` is `10 - (4 - 2)`). Both accept an ordered array of operator parsers returning a common value and a shared factory that receives `(left, right, operation)`:
@@ -160,11 +182,58 @@ of an operand doesn't depend on the number of levels.
 - Chains of operators don't recurse, whatever their length: the prefix operators are read in a loop, like the binary ones.
   With a `maxRecursionDepth`, each prefix operator applied still counts as one level of recursion.
 - The parser is seekable from its operand and its prefix operators, so it can be an alternative of a lookup table.
-- Each call of `Unary`, `Postfix`, `LeftAssociative` or `RightAssociative` returns a new parser, the table is not modified.
+- Each call of `Unary`, `Postfix`, `LeftAssociative`, `RightAssociative` or `Ternary` returns a new parser, the table is not modified.
   `Named()` returns a `Parser<T>`, call it last.
 
 A chain of `Unary`, `LeftAssociative` and `RightAssociative` parsers still parses level by level: build it with
 `Operators()` to parse it with a single precedence parser.
+
+### Operators with a value
+
+The factories of a level can also receive the value of the operator, so that member accesses, indexers, calls and
+conditionals are levels of the table rather than parsers around it:
+
+```csharp
+var expression = Deferred<Expression>();
+var primary = identifier.Or(number).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+expression.Parser = primary.Operators()
+    .Postfix(
+        (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => new Member(x, name.ToString())),
+        (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => new Index(x, index)))
+    .Unary((Terms.Char('-'), static x => new Negate(x)))
+    .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => new Binary(op, a, b))
+    .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)))
+    .LeftAssociative((Terms.Text("=="), static (a, b) => new Equal(a, b)))
+    .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => new Conditional(c, a, b), rightAssociative: false)
+    .LeftAssociative((Terms.Text("??"), static (a, b) => new Coalesce(a, b)));
+
+expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) ? d : e) ?? f
+```
+
+- `Postfix((op, (x, value) => ...))` passes the value of the operator to its factory. Each call takes operators of one
+  type; `Postfix(first, second)` takes two operators of different types in the same level, like a member access and an
+  indexer, which apply in any order: `a.b[c].d`.
+- `LeftAssociative(operators, (a, b, op) => ...)` and `RightAssociative(operators, (a, b, op) => ...)` are the levels of
+  the `LeftAssociative(Parser<TOperator>[], Func<T, T, TOperator, T>)` combinators, whose single factory receives the
+  value of the operator.
+- `Ternary(question, middle, colon, (condition, whenTrue, whenFalse) => ...)` is a level of conditionals. The condition
+  is a value of the tighter levels, and `middle`, usually the whole expression, is parsed between `question` and `colon`.
+  With `rightAssociative: true`, the default, the last operand can be another conditional: `a ? b : c ? d : e` is
+  `a ? b : (c ? d : e)`, as in C. With `rightAssociative: false` it is a value of the tighter levels only:
+  `a ? b : c ? d : e` is `(a ? b : c) ? d : e`. The looser levels apply to the whole conditional, so with `??` looser,
+  `a ? b : c ?? d` is `(a ? b : c) ?? d` and the last operand can't contain a `??`, while `a ?? b ? c : d` is
+  `a ?? (b ? c : d)`. A last operand that is a whole expression, as in C# where it can be an assignment, can't be a level.
+- These levels parse what the equivalent chain parses: a level whose operator is `question.SkipAnd(middle).AndSkip(colon)`
+  for a conditional, or `primary.And(ZeroOrMany(postfix))` folded for the postfix operators of the tightest level, with
+  the same results, spans and cursor positions. When `question`, `middle`, `colon` or the last operand doesn't match,
+  nothing is read and the looser levels are tried at the position of `question`: a `?` doesn't need to exclude the `??`
+  of a looser level.
+- The table looks up the operator following an operand through a single choice of the operators up to the next level
+  of valued operators, which starts with a check of the first chars of these: when the next char can start one of them,
+  the level that applies them parses them and passes their values to the factories right away, otherwise the looser
+  levels are tried in the same choice. An operator is parsed only once at a position, even when it parses an expression,
+  like an index or the middle of a conditional, and the values are never kept for a looser level.
 
 ## Terms and Literals
 
@@ -279,7 +348,8 @@ The case-insensitive comparison is ordinal. It doesn't depend on the current cul
 If you need to preserve the original casing from the input, set `returnMatchedText: true`.
 An exact-case match returns the requested text without allocating; if the matched text
 has different casing but covers the entire input, the input string itself is returned.
-Only a differently cased substring needs a new string.
+A differently cased substring is taken from a pool the parser keeps, so each casing the
+input uses is allocated once, also across parses. `Keyword` does the same.
 
 Usage:
 
@@ -487,6 +557,9 @@ Result:
 ```
 'hello\\nworld'
 ```
+
+The value is a `TextSpan` of the input when the string has no escape sequence, and of a new string otherwise. To get
+strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool.
 
 ### Identifier
 
@@ -1302,6 +1375,9 @@ var capture = Capture(parser);
 capture.Parse("age = 12");
 ```
 
+The parser doesn't build its value, for instance its lists, unless a callback reads it. `parser.TryMatch(text, out var match)`
+returns the same text without a `Capture` parser, see [Matching without a value](#matching-without-a-value).
+
 Result:
 
 ```
@@ -1370,6 +1446,39 @@ Result:
 ```
 
 > **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects.
+
+### ToPooledString
+
+Returns the text of a `Parser<TextSpan>` as a string taken from a pool, such that a value the parser matches many times
+is allocated once, instead of once per `ToString()`.
+
+```c#
+Parser<string> ToPooledString(this Parser<TextSpan> parser)
+```
+
+Usage:
+
+```c#
+var identifiers = ZeroOrMany(Terms.Identifier().ToPooledString());
+var names = identifiers.Parse("foo bar foo");
+// ReferenceEquals(names[0], names[2]) == true
+```
+
+The pool belongs to the parser `ToPooledString()` returns and lives as long as it does: all its parses share it, also
+concurrent ones, finding a value takes no lock and adding one does. It is bounded. It holds up to 4096 values of up to 64
+chars, and longer values are created as usual. A full pool keeps its values. A pool whose values rarely repeat
+(ids, numbers, timestamps) switches itself off: when nearly all its first 512 values were new, or when most lookups miss
+once it is full.
+
+A lookup costs about as much as creating a short string, so pooling pays off when the strings are kept, like the
+identifiers or member names of a syntax tree held in memory, rather than when each one is used and dropped.
+
+On `Terms.String()` or `Literals.String()`, the string literal also decodes its escape sequences into the pool, so that
+an escaped value isn't allocated either when the pool has it. The literal it is called on is unchanged.
+
+`ToPooledString()` takes a `Parser<TextSpan>`: the string of a `Parser<string>` is already created, a pool would only
+share it. Case-insensitive `Text` and `Keyword` parsers returning the matched text pool the cases they return by
+themselves.
 
 ### Else
 

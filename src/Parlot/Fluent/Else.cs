@@ -12,9 +12,13 @@ public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
     private readonly T? _value;
     private readonly Func<ParseContext, T>? _func;
 
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     public Else(Parser<T> parser, T value)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _withoutValue = parser.CanParseWithoutValue;
         _value = value;
     }
 
@@ -22,6 +26,7 @@ public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _func = func ?? throw new ArgumentNullException(nameof(func));
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -38,6 +43,38 @@ public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
         // The text is read again when the parser fails
         var pin = context.Pin();
         var success = _parser.Parse(context, ref result);
+        context.Unpin(pin);
+
+        if (!success)
+        {
+            // The parser reset the cursor, and may have left the positions of a partial match in the result
+            var offset = context.Scanner.Cursor.Offset;
+
+            if (_func != null)
+            {
+                result.Set(offset, offset, _func(context));
+            }
+            else
+            {
+                // _value can't be null if _func is null
+                result.Set(offset, offset, _value!);
+            }
+        }
+
+        context.ExitParser(this);
+        return true;
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, with the parser invoked without its value. The function is still invoked, as in generated code.
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        // The text is read again when the parser fails
+        var pin = context.Pin();
+        var success = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
         context.Unpin(pin);
 
         if (!success)

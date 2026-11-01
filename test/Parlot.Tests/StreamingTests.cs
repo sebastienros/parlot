@@ -39,6 +39,9 @@ public class StreamingTests
         ["operators-eof"] = new Grammar<string>(CreateOperators().Eof()),
         // A chain of operator levels is parsed by a single precedence parser
         ["operator-levels"] = new Grammar<string>(CreateOperatorLevels()),
+        // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
+        ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
+        ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
@@ -65,6 +68,9 @@ public class StreamingTests
         ["scan-signature"] = new Grammar<TextSpan>(Literals.Scan(LiquidScanners.VariableSignature, LiquidScanners.StartChars)),
         ["scan-tag"] = new Grammar<IReadOnlyList<TextSpan>>(Terms.Text("{%").SkipAnd(ZeroOrMany(Terms.Scan(LiquidScanners.Identifier, LiquidScanners.StartChars))).AndSkip(Terms.Text("-%}").Or(Terms.Text("%}")))),
         ["string"] = new Grammar<TextSpan>(Terms.String()),
+        // Pooled strings copy the text out of the window, and string literals decode into the pool
+        ["pooled-strings"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Identifier().ToPooledString(), Terms.String().ToPooledString())).Eof()),
+        ["text-ci-matched"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("hello", caseInsensitive: true, returnMatchedText: true), Terms.Keyword("for", caseInsensitive: true, returnMatchedText: true)))),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["nul-string"] = new Grammar<TextSpan>(new StringLiteral('\0')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
@@ -181,6 +187,15 @@ public class StreamingTests
         Add("operators-eof", operators);
         Add("operator-levels", operators);
 
+        string[] valuedOperators =
+        [
+            "", "a", "a.b", "a.b.c", "a[b]", "a[b][c].d", "a.", "a[", "a[b", "-a.b", "a ? b : c", "a ? b : c ? d : e", "a ?? b",
+            "a ? b ?? c : d", "a ? b : c ?? d", "a ? b", "a ? b :", "a ?? ", "a = b = c", "a = b ? c : d", "a = b = ", "a * b / c",
+            "a[b ? c : d].e", " a . b [ c ] ? d : e ", "a\n?\nb\n:\nc",
+        ];
+        Add("valued-operators", valuedOperators);
+        Add("valued-operators-eof", valuedOperators);
+
         Add("sql",
             "SELECT * FROM users",
             "SELECT id, name FROM users WHERE id = 1",
@@ -236,6 +251,8 @@ public class StreamingTests
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
+        Add("pooled-strings", "", "a", "abc abc", "'abc' abc \"a\\nb\" 'a\\nb'", "abcdefghijklmnopqr abcdefghijklmnopqr x", "'unterminated");
+        Add("text-ci-matched", "", "HELLO hello Hello HELLO", "FOR for hello", "HeLLo FoR fore");
         Add("nested-lists", "", "1", "[", "[]", "()", "{}", "[1]", "(1)", "{1}", "[1,2,3,4,5,6]", "(1 2 3 4 5 6)", "[1,[2,[3,4],5],(6 7 (8 9 10 11 12) 13),{14 15}]",
             "(1 2 [3,4 (5 6)] 7", "[1,2,", "[1,(2 3", "{1 2", "((((((((1 2 3))))))))", "[" + string.Join(",", Enumerable.Range(0, 40)) + ",(" + string.Join(" ", Enumerable.Range(0, 30)) + ")]",
             "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");
@@ -783,6 +800,24 @@ public class StreamingTests
             .LeftAssociative((Terms.Text("<"), Binary("<")), (Terms.Text("<="), Binary("<=")))
             .Unary((Terms.Text("not"), static x => $"(not {x})"))
             .LeftAssociative((Terms.Text("&&"), Binary("&&")), (Terms.Text("=="), Binary("==")));
+
+        return expression;
+    }
+
+    private static Parser<string> CreateValuedOperators()
+    {
+        var expression = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix(
+                (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => $"{x}.{name}"),
+                (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => $"{x}[{index}]"))
+            .Unary((Terms.Char('-'), static x => $"(-{x})"))
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => $"({a}{op}{b})")
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => $"({c}?{a}:{b})", rightAssociative: false)
+            .LeftAssociative((Terms.Text("??"), static (a, b) => $"({a}??{b})"))
+            .RightAssociative([Terms.Text("=")], static (a, b, op) => $"({a}{op}{b})");
 
         return expression;
     }

@@ -13,10 +13,14 @@ public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
     private readonly Parser<T> _parser;
     private readonly U _value;
 
+    // Whether the parser is invoked without its value, which is replaced
+    private readonly bool _withoutValue;
+
     public Discard(Parser<T> parser, U value)
     {
         _parser = parser;
         _value = value;
+        _withoutValue = parser is not null && parser.CanParseWithoutValue;
     }
 
     // The hints of the parser, the only one this one invokes, read when they are asked for since it can be a Deferred set later
@@ -41,7 +45,7 @@ public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
         var parsed = new ParseResult<T>();
 
-        if (_parser.Parse(context, ref parsed))
+        if (_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
         {
             result.Set(parsed.Start, parsed.End, _value);
 

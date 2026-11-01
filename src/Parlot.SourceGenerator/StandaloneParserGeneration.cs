@@ -322,14 +322,22 @@ public sealed partial class ParserSourceGenerator
         ReportGrammarDiagnostics(output, pending);
 
         var generated = new List<(string HintName, SyntaxTree Tree)>();
+
+        // The entry point of each generated tree, whose factory an error in it is reported on
+        var owners = new Dictionary<SyntaxTree, StandaloneEntryPoint>();
         foreach (var entry in entries)
         {
             if (entry.Source is not null)
             {
                 var hintName = $"StandaloneParser{generated.Count}.g.cs";
-                generated.Add((hintName, CSharpSyntaxTree.ParseText(entry.Source, options, hintName, Encoding.UTF8)));
+                var tree = CSharpSyntaxTree.ParseText(entry.Source, options, hintName, Encoding.UTF8);
+                generated.Add((hintName, tree));
+                owners.Add(tree, entry);
             }
         }
+
+        // An error in the embedded runtime is reported on the first factory
+        StandaloneEntryPoint Owner(SyntaxTree? tree) => tree is not null && owners.TryGetValue(tree, out var owner) ? owner : entries[0];
 
         if (generated.Count == 0)
         {
@@ -351,8 +359,9 @@ public sealed partial class ParserSourceGenerator
             {
                 foreach (var error in errors.Take(5))
                 {
+                    var owner = Owner(error.Location.SourceTree);
                     output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
-                        ExternalLocation(entries[0].Factory.AttributeLocation), entries[0].Factory.Method.Name,
+                        ExternalLocation(owner.Factory.AttributeLocation), owner.Factory.Method.Name,
                         error.GetMessage(System.Globalization.CultureInfo.InvariantCulture)));
                 }
                 return;
@@ -367,8 +376,9 @@ public sealed partial class ParserSourceGenerator
                     var symbol = model.GetSymbolInfo(name, output.CancellationToken).Symbol;
                     if (symbol?.ContainingAssembly?.Identity.Name is "Parlot" or "Parlot.SourceGenerator")
                     {
+                        var owner = Owner(source.Tree);
                         output.ReportDiagnostic(Diagnostic.Create(StandaloneOutputDescriptor,
-                            ExternalLocation(entries[0].Factory.AttributeLocation), entries[0].Factory.Method.Name,
+                            ExternalLocation(owner.Factory.AttributeLocation), owner.Factory.Method.Name,
                             symbol.ToDisplayString()));
                         return;
                     }

@@ -12,6 +12,9 @@ public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable, IL
     private readonly Parser<T> _parser;
     private readonly WhiteSpaceSet _whiteSpaceSet;
 
+    // Whether the parser is invoked without its value when this one's isn't used
+    private readonly bool _withoutValue;
+
     public WithWhiteSpaceSet(Parser<T> parser, WhiteSpaceSet whiteSpaceSet)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -19,6 +22,7 @@ public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable, IL
         // Validates the set
         Character.GetWhiteSpaceMask(whiteSpaceSet);
         _whiteSpaceSet = whiteSpaceSet;
+        _withoutValue = parser.CanParseWithoutValue;
     }
 
     public WhiteSpaceSet WhiteSpaceSet => _whiteSpaceSet;
@@ -49,6 +53,30 @@ public sealed class WithWhiteSpaceSet<T> : Parser<T>, ISeekable, ISourceable, IL
             context.WhiteSpaceSet = _whiteSpaceSet;
 
             var success = _parser.Parse(context, ref result);
+
+            context.ExitParser(this);
+            return success;
+        }
+        finally
+        {
+            context.WhiteSpaceSet = previousWhiteSpaceSet;
+        }
+    }
+
+    internal override bool CanParseWithoutValue => _withoutValue;
+
+    // Parse, with the parser invoked without its value
+    internal override bool ParseWithoutValue(ParseContext context, ref ParseResult<T> result)
+    {
+        context.EnterParser(this);
+
+        var previousWhiteSpaceSet = context.WhiteSpaceSet;
+
+        try
+        {
+            context.WhiteSpaceSet = _whiteSpaceSet;
+
+            var success = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
 
             context.ExitParser(this);
             return success;

@@ -16,7 +16,16 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseTable(string text, out string value);
     public static partial bool TryParseTable(TextReader reader, out string value);
     public static partial bool TryParseZeroWidthPrefix(string text, out string value);
+    public static partial bool TryParsePrefixOnly(string text, out string value);
+    public static partial bool TryParsePrefixOnly(TextReader reader, out string value);
+    public static partial bool TryParseNoLevels(string text, out string value);
+    public static partial bool TryParseNoLevels(TextReader reader, out string value);
     public static partial bool TryParseEmptyOperators(string text, out string value);
+    public static partial bool TryParseValued(string text, out string value);
+    public static partial bool TryParseValued(TextReader reader, out string value);
+    public static partial bool TryParseValuedRight(string text, out string value);
+    public static partial bool TryParseValuedRight(TextReader reader, out string value);
+    public static partial bool TryParseValuedEmpty(string text, out string value);
 }
 
 internal static class PrecedenceAst
@@ -28,6 +37,12 @@ internal static class PrecedenceAst
     public static string Suffix(string op, string operand) => $"({operand}{op})";
 
     public static string Binary(string op, string left, string right) => $"({left}{op}{right})";
+
+    public static string Member(string operand, string name) => $"{operand}.{name}";
+
+    public static string Index(string operand, string index) => $"{operand}[{index}]";
+
+    public static string Conditional(string condition, string whenTrue, string whenFalse) => $"({condition}?{whenTrue}:{whenFalse})";
 }
 
 /// <summary>
@@ -85,6 +100,48 @@ public class PrecedenceTests
     }
 
     [Theory]
+    [InlineData("a")]
+    [InlineData("-a")]
+    [InlineData("- ~ -a + b")]
+    [InlineData("not -a")]
+    [InlineData("-not a")]
+    [InlineData("not not (- a)")]
+    [InlineData("-(not a)")]
+    [InlineData("nota")]
+    [InlineData("a -b")]
+    [InlineData("-")]
+    [InlineData("not")]
+    [InlineData("-(a")]
+    [InlineData("")]
+    public void Generated_Prefix_Only_Table_Parses_Like_The_Runtime(string input)
+    {
+        var expected = Run(RuntimePrefixOnly(), input);
+
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParsePrefixOnly, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParsePrefixOnly, input, chunk));
+        }
+    }
+
+    [Theory]
+    [InlineData("a", "a | ")]
+    [InlineData(" a b", "a |  b")]
+    [InlineData("-a", "<failed>")]
+    [InlineData("", "<failed>")]
+    public void Generated_Table_Without_Levels_Parses_Its_Operand(string input, string expected)
+    {
+        Assert.Equal(expected, Run(WithRest(Terms.Identifier().Then(static x => x.ToString()).Operators()), input));
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseNoLevels, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseNoLevels, input, chunk));
+        }
+    }
+
+    [Theory]
     [InlineData("+5", "(+5) | ")]
     [InlineData("-5", "(-5) | ")]
     [InlineData("--5*+2", "((-5)*(+2)) | ")]
@@ -105,6 +162,77 @@ public class PrecedenceTests
     public void Generated_Operators_Stop_When_Operator_And_Operand_Are_Empty(string input, string expected)
     {
         Assert.True(PrecedenceGrammars.TryParseEmptyOperators(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("a.b")]
+    [InlineData("a.b[c].d")]
+    [InlineData("a[b + c[d]]")]
+    [InlineData("-a.b!")]
+    [InlineData("a!#!")]
+    [InlineData("a.")]
+    [InlineData("a[")]
+    [InlineData("a[b")]
+    [InlineData("a ** b ** c")]
+    [InlineData("a ** b ** ")]
+    [InlineData("a * b / c")]
+    [InlineData("a <= b < c")]
+    [InlineData("a ? b : c")]
+    [InlineData("a ? b : c ? d : e")]
+    [InlineData("a ? b ? c : d : e")]
+    [InlineData("a ?? b")]
+    [InlineData("a ? b ?? c : d")]
+    [InlineData("a ? b : c ?? d")]
+    [InlineData("a ?? b ? c : d")]
+    [InlineData("a ? b")]
+    [InlineData("a ? b :")]
+    [InlineData("a = b += c")]
+    [InlineData("a = b ? c : d")]
+    [InlineData("a = b = ")]
+    [InlineData("(a.b ? c[d] : -e) ** f")]
+    [InlineData(".a")]
+    [InlineData("")]
+    public void Generated_Valued_Operators_Parse_Like_The_Runtime(string input)
+    {
+        foreach (var right in new[] { false, true })
+        {
+            var expected = Run(RuntimeValued(right), input);
+            StringParser generated = right ? PrecedenceGrammars.TryParseValuedRight : PrecedenceGrammars.TryParseValued;
+            ReaderParser reader = right ? PrecedenceGrammars.TryParseValuedRight : PrecedenceGrammars.TryParseValued;
+
+            Assert.Equal(expected, Run(generated, input));
+
+            foreach (var chunk in new[] { 1, 2, int.MaxValue })
+            {
+                Assert.Equal(expected, Run(reader, input, chunk));
+            }
+        }
+    }
+
+    [Fact]
+    public void Generated_Valued_Operators_Parse_Random_Expressions_Like_The_Runtime()
+    {
+        foreach (var right in new[] { false, true })
+        {
+            var runtime = RuntimeValued(right);
+            StringParser generated = right ? PrecedenceGrammars.TryParseValuedRight : PrecedenceGrammars.TryParseValued;
+
+            foreach (var input in RandomValuedExpressions(right ? 23 : 29, 2000))
+            {
+                Assert.Equal(Run(runtime, input), Run(generated, input));
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("x!+x!", "((x!)+(x!)) | ")]
+    [InlineData("x^x^x", "(x^(x^x)) | ")]
+    [InlineData("", " | ")]
+    [InlineData("x?", "x | ?")]
+    public void Generated_Valued_Operators_Stop_When_Operator_And_Operand_Are_Empty(string input, string expected)
+    {
+        Assert.True(PrecedenceGrammars.TryParseValuedEmpty(input, out var value));
         Assert.Equal(expected, value);
     }
 
@@ -153,6 +281,65 @@ public class PrecedenceTests
             .RightAssociative(Ops("<==", "="));
 
         return WithRest(expression);
+    }
+
+    private static Parser<string> RuntimePrefixOnly()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)), (Terms.Char('~'), static x => PrecedenceAst.Prefix("~", x)))
+            .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)));
+
+        return WithRest(expression);
+    }
+
+    private static Parser<string> RuntimeValued(bool rightAssociative)
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix(
+                (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => PrecedenceAst.Member(x, name.ToString())),
+                (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => PrecedenceAst.Index(x, index)))
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)), (Terms.Char('~'), static x => PrecedenceAst.Prefix("~", x)))
+            .Postfix((Terms.Char('!'), static (x, op) => PrecedenceAst.Suffix(op.ToString(), x)), (Terms.Char('#'), static (x, op) => PrecedenceAst.Suffix(op + "" + op, x)))
+            .RightAssociative(new[] { Terms.Text("**") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)), (Terms.Char('-'), static (a, b) => PrecedenceAst.Binary("-", a, b)))
+            .LeftAssociative(new[] { Terms.Text("<="), Terms.Text("<") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => PrecedenceAst.Conditional(c, a, b), rightAssociative)
+            .LeftAssociative((Terms.Text("??"), static (a, b) => PrecedenceAst.Binary("??", a, b)))
+            .RightAssociative(new[] { Terms.Text("="), Terms.Text("+=") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b));
+
+        return WithRest(expression);
+    }
+
+    private static IEnumerable<string> RandomValuedExpressions(int seed, int count)
+    {
+        var random = new Random(seed);
+        string[] tokens = ["a", "b", "1", "(", ")", "[", "]", ".", ".b", "-", "~", "!", "#", "**", "*", "/", "+", "<", "<=", "=", "+=", "?", ":", "??"];
+
+        string Space() => random.Next(3) == 0 ? " " : "";
+
+        for (var i = 0; i < count; i++)
+        {
+            var sb = new StringBuilder();
+            var length = random.Next(0, 14);
+
+            for (var j = 0; j < length; j++)
+            {
+                // Mostly operands and operators in turn, so that most inputs apply some operators
+                var token = random.Next(3) == 0 ? tokens[random.Next(tokens.Length)] : j % 2 == 0 ? tokens[random.Next(3)] : tokens[random.Next(7, tokens.Length)];
+                sb.Append(token).Append(Space());
+            }
+
+            yield return sb.ToString();
+        }
     }
 
     private static readonly string[] Tokens =

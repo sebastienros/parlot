@@ -143,6 +143,14 @@ complete once the grammar is. The hints are those of the parsers one of which mu
 A parser has none when it can succeed without reading, or when skipping it changes the outcome, like `ElseError`, which
 reports an error instead of failing.
 
+The internal `Parser<T>.ParseWithoutValue` matches what `Parse` matches, with the same positions and the same parsers
+entered, without building the value. A parser whose value allocates (the lists), or which returns or combines the values of
+such parsers (sequences, choices, wrappers), overrides it and `CanParseWithoutValue`. A parser that doesn't use the value of a
+parser it invokes (`Capture`, the skipped parser of `AndSkip`, the delimiters of `Between`, a constant `Then`) reads
+`CanParseWithoutValue` once, in its constructor, and invokes `ParseWithoutValue` only when it is set, so the other parsers
+don't pay for the extra call. `ParseWithoutValueTests` compares both methods: add a new override there. It is the runtime
+counterpart of `SourceGenerationContext.DiscardResult`; callbacks still receive their values.
+
 `ILoopAnalyzable` (internal, `Parlot.Fluent`) tells `LoopAnalysis` which parsers a parser invokes before it reads
 anything and whether it can succeed without reading; every built-in parser implements it. From that, the first parse of a
 grammar proves which `Deferred` parsers can't be invoked again at the position where they are active (no left recursion),
@@ -255,6 +263,10 @@ Full reference: `docs/source-generation.md`.
   scratch stack shared by nested lists, and the result is one array of the exact size. Declare it as a local, never copy it, and call `Release()`
   in a `finally` block (`ListBuilderSource.ReleaseInFinally` in emitters) so that an exception can't leave items on
   the stack. Read its items through the builder after a callback, which can parse and grow the stack.
+- Strings of the input that are kept and repeat come from the internal `StringPool` (`src/Parlot/StringPool.cs`, embedded in
+  generated parsers too): one pool per parser, built with it, shared by its parses, bounded, lock-free to read. Emitters
+  get its static field with `SourceGenerationContext.GetStringPoolField`, which keys it by the pool, so parsers sharing
+  a pool share the field. `ToPooledString()` and matched case-insensitive texts use it.
 - Modern APIs (`SearchValues`, vectorization) go behind `#if NET8_0_OR_GREATER` with a downlevel path;
   PolySharp and `src/Parlot/Polyfill.cs` cover the rest.
 - Measure. Add or extend a benchmark in `test/Parlot.Benchmarks` for any hot-path change and put the
