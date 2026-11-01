@@ -66,7 +66,7 @@ public class StandalonePackageTests
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup>
                     <TargetFrameworks>{{targetFramework}}</TargetFrameworks>
-                    <LangVersion>12</LangVersion>
+                    <LangVersion>10</LangVersion>
                     <PackageId>Standalone.Author</PackageId>
                     <Version>{{version}}</Version>
                     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -94,6 +94,7 @@ public class StandalonePackageTests
                 public static partial class Grammar
                 {
                     public static partial bool TryParse(string text, out int value);
+                    public static partial bool TryParse(System.IO.TextReader reader, out int value);
                     public static partial bool TryParseLong(string text, System.Threading.CancellationToken cancellationToken, out long value);
                     public static partial bool TryParseDecimal(string text, out decimal value);
                     public static partial bool TryParseDouble(string text, out double value);
@@ -201,7 +202,7 @@ public class StandalonePackageTests
                   <PropertyGroup>
                     <TargetFramework>{{consumerFramework}}</TargetFramework>
                     <OutputType>Exe</OutputType>
-                    <LangVersion>12</LangVersion>
+                    <LangVersion>10</LangVersion>
                     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
                   </PropertyGroup>
                   <ItemGroup><PackageReference Include="Standalone.Author" Version="{{version}}" /></ItemGroup>
@@ -212,6 +213,9 @@ public class StandalonePackageTests
                     throw new System.InvalidOperationException("Generated parser failed.");
                 if (Standalone.Author.Grammar.TryParse("42x", out _))
                     throw new System.InvalidOperationException("Generated EOF check failed.");
+                if (!Standalone.Author.Grammar.TryParse(new System.IO.StringReader(" 42"), out var read) || read != 42
+                    || Standalone.Author.Grammar.TryParse(new System.IO.StringReader("42x"), out _))
+                    throw new System.InvalidOperationException("Generated reader parser failed.");
                 if (Standalone.Author.Grammar.TryParse("2147483648", out _))
                     throw new System.InvalidOperationException("Generated overflow check failed.");
                 if (!Standalone.Author.Grammar.TryParseLong("-9223372036854775808", default, out var integer) || integer != long.MinValue)

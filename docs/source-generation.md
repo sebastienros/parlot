@@ -11,14 +11,16 @@ explicitly on both platforms. The test treats CS9057 as an error and compiles an
 When raising the minimum compiler requirement deliberately, update that manifest and this requirement
 together rather than only upgrading the Roslyn package.
 Generated consumers support the same target frameworks as Parlot: .NET Framework 4.7.2,
-.NET Standard 2.0, .NET 8, and .NET 10. C# 12 or later is required even when targeting an older runtime.
+.NET Standard 2.0, .NET 8, and .NET 10. C# 10 or later is required even when targeting an older runtime, so a
+project still on the language version of the .NET 6 SDK can use them; the compiler host itself must still be
+Roslyn 5.0 or later. With C# 10, a .NET 8+ target parses numbers like a downlevel one, see below.
 Downlevel targets use compatibility packages such as `System.Memory`, but never require the Parlot
 runtime package or assembly.
 
 ## Downlevel package dependencies
 
 The analyzer package automatically restores `System.Memory` 4.6.3 for downlevel applications. Shared
-polyfills are emitted as C# 12-compatible internal helpers, so consuming projects do not need PolySharp.
+polyfills are emitted as C# 10-compatible internal helpers, so consuming projects do not need PolySharp.
 Modern targets do not acquire these compatibility dependencies.
 
 When publishing a library that contains generated parsers for downlevel targets, explicitly reference
@@ -47,7 +49,8 @@ Add the analyzer package to the project that owns the grammar:
 ```xml
 <PropertyGroup>
   <TargetFramework>net8.0</TargetFramework>
-  <LangVersion>12</LangVersion>
+  <!-- 10 or later -->
+  <LangVersion>10</LangVersion>
 </PropertyGroup>
 
 <ItemGroup>
@@ -216,7 +219,11 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
   target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
   the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
-  primitive types, `decimal` and `BigInteger`; other types are reported as a build error.
+  primitive types, `decimal` and `BigInteger`; other types are reported as a build error. So is a .NET 8+
+  consumer compiled with C# 10, which can't compile the generic math helpers (static abstract interface members
+  are C# 11): its numbers are parsed with the fixed overloads, and its embedded runtime defines
+  `PARLOT_NO_GENERIC_MATH`. These overloads call the type's `TryParse`, without the generic helper's fast path
+  for short runs of decimal digits.
 - A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A `Terms`
   parser reports the start of its content, after the skipped white space, as at runtime. A composite parser
   that skips white space internally (a sequence or a choice of `Terms` parsers) reports the offset where the

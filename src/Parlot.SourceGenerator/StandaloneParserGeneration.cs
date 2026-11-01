@@ -31,7 +31,7 @@ public sealed partial class ParserSourceGenerator
 
     private static readonly DiagnosticDescriptor StandaloneTargetDescriptor = new(
         "PARLOT026", "Unsupported standalone target",
-        "Standalone generation requires .NET Framework 4.7.2+, .NET Standard 2.0+, or .NET 8+, and C# 12 or later",
+        "Standalone generation requires .NET Framework 4.7.2+, .NET Standard 2.0+, or .NET 8+, and C# 10 or later",
         "Parlot.SourceGenerator", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
     private sealed class StandaloneEntryPoint
@@ -134,7 +134,7 @@ public sealed partial class ParserSourceGenerator
             TargetFrameworkIdentifier.NetCoreApp => target.Version >= new Version(8, 0),
             _ => false,
         };
-        if (!designTime && (!supportedTarget || options.LanguageVersion < LanguageVersion.CSharp12))
+        if (!designTime && (!supportedTarget || options.LanguageVersion < LanguageVersion.CSharp10))
         {
             output.ReportDiagnostic(Diagnostic.Create(StandaloneTargetDescriptor, Location.None));
             return;
