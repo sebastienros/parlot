@@ -385,6 +385,34 @@ public class ValuedOperatorsTests
     }
 
     [Fact]
+    public void ShouldParseTheDocumentationExample()
+    {
+        var expression = Deferred<string>();
+        var primary = Atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix(
+                (Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => $"({x}.{name})"),
+                (Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => $"({x}[{index}])"))
+            .Unary((Terms.Char('-'), Prefix("-")))
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], Valued)
+            .LeftAssociative((Terms.Char('+'), Binary("+")))
+            .LeftAssociative((Terms.Text("=="), Binary("==")))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), Conditional, rightAssociative: false)
+            .LeftAssociative((Terms.Text("??"), Binary("??")));
+
+        Assert.Equal("(((((-((a.b)[i]))*2)==c)?d:e)??f)", expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GrammarShouldHaveNoFindings(bool rightAssociativeConditional)
+    {
+        Assert.Empty(Analysis.GrammarAnalyzer.Analyze(Grammar(table: true, rightAssociativeConditional)));
+    }
+
+    [Fact]
     public void ShouldValidateItsArguments()
     {
         Assert.Throws<ArgumentNullException>(() => Atom.Operators().Postfix((ValueTuple<Parser<char>, Func<string, char, string>>[])null!));
