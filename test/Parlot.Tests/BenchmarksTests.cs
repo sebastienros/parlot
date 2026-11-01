@@ -46,6 +46,15 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void CommentsGrammar()
+    {
+        var benchmark = new CommentsBenchmarks();
+        benchmark.Setup();
+        Assert.Equal(-64.5m, benchmark.Expression_Spaces().Evaluate());
+        Assert.Equal(-64.5m, benchmark.Expression_Comments().Evaluate());
+    }
+
+    [Fact]
     public void DiscardedTextGrammar()
     {
         var benchmark = new DiscardResultBenchmarks();
