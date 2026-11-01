@@ -6,7 +6,8 @@ using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Benchmarks;
 
-// Parsers whose value isn't used, so their lists aren't built: captured sequences and lists, and skipped lists.
+// Parsers whose value isn't used, so their lists aren't built: captured sequences and lists, skipped lists, and TryMatch
+// compared to TryParse.
 
 [MemoryDiagnoser, ShortRunJob]
 public class ParseWithoutValueBenchmarks
@@ -16,8 +17,10 @@ public class ParseWithoutValueBenchmarks
     private const string Statements = "a;; b; c;;; d; e;; f; g;;; h";
 
     // A dotted name, as a sequence with a list
-    private static readonly Parser<TextSpan> _capturedSequence =
-        Capture(Literals.Identifier().And(ZeroOrMany(Literals.Char('.').SkipAnd(Literals.Identifier()))));
+    private static readonly Parser<(TextSpan, IReadOnlyList<TextSpan>)> _sequence =
+        Literals.Identifier().And(ZeroOrMany(Literals.Char('.').SkipAnd(Literals.Identifier())));
+
+    private static readonly Parser<TextSpan> _capturedSequence = Capture(_sequence);
 
     // The same dotted name, as a separated list
     private static readonly Parser<TextSpan> _capturedSeparated = Capture(Separated(Literals.Char('.'), Literals.Identifier()));
@@ -29,7 +32,8 @@ public class ParseWithoutValueBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        if (CapturedSequence().ToString() != Dotted || CapturedSeparated().ToString() != Dotted || SkippedList().Count != 7)
+        if (CapturedSequence().ToString() != Dotted || CapturedSeparated().ToString() != Dotted || SkippedList().Count != 7
+            || !TryParseSequence() || TryMatchSequence().ToString() != Dotted)
         {
             throw new InvalidOperationException("Incorrect parsing.");
         }
@@ -40,6 +44,13 @@ public class ParseWithoutValueBenchmarks
 
     [Benchmark]
     public TextSpan CapturedSeparated() => _capturedSeparated.Parse(new ParseContext(new Scanner(Dotted)));
+
+    // The value is built, and discarded
+    [Benchmark]
+    public bool TryParseSequence() => _sequence.TryParse(Dotted, out _);
+
+    [Benchmark]
+    public TextSpan TryMatchSequence() => _sequence.TryMatch(Dotted, out var match) ? match : default;
 
     [Benchmark]
     public IReadOnlyList<TextSpan> SkippedList() => _skippedList.Parse(new ParseContext(new Scanner(Statements)))!;

@@ -62,6 +62,8 @@ public class BenchmarksTests
         Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.CapturedSequence().ToString());
         Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.CapturedSeparated().ToString());
         Assert.Equal(["a", "b", "c", "d", "e", "f", "g"], benchmark.SkippedList().Select(static x => x.ToString()));
+        Assert.True(benchmark.TryParseSequence());
+        Assert.Equal("alpha.beta.gamma.delta.epsilon.zeta", benchmark.TryMatchSequence().ToString());
     }
 
     [Fact]
