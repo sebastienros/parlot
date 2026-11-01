@@ -81,6 +81,16 @@ public static partial class GeneratedParsers
     [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
     private static Parser<IJson> BuildJsonAscii() => BuildJson().WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
 
+    // The JSON grammar with the JSON white space set, for WhiteSpaceSetBenchmarks
+    [GenerateParser(nameof(TryParseJsonJsonSet))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonJsonSet() => BuildJson().WithWhiteSpaceSet(WhiteSpaceSet.Json);
+
+    // The JSON grammar skipping the same chars with a white space parser, for WhiteSpaceSetBenchmarks
+    [GenerateParser(nameof(TryParseJsonWhiteSpaceParser))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonWhiteSpaceParser() => BuildJson().WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"));
+
     [GenerateParser(nameof(TryParseLog))]
     [IncludeUsings("System.Collections.Generic")]
     private static Parser<int> BuildLog()
