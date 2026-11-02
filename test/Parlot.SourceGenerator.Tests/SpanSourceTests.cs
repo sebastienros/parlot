@@ -235,6 +235,30 @@ public class SpanSourceTests
     }
 
     [Theory]
+    [InlineData("1_000;2_000.000_5 1e1_0")]
+    [InlineData("1__2;3,000_000.5_5e-1_0")]
+    [InlineData("-1_2 ; 3")]
+    [InlineData("1_;2")]
+    [InlineData("1;2_ 3")]
+    [InlineData("1;2._5")]
+    [InlineData("1;2e_5")]
+    [InlineData("1;2_e5")]
+    [InlineData("1;2__")]
+    [InlineData("_1;2")]
+    [InlineData("9_223_372_036_854_775_808;1")]
+    [InlineData("1;1_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000_000")]
+    public void Underscored_Numbers_Match_The_Runtime(string text)
+    {
+        var parser = Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowUnderscore)
+            .AndSkip(Terms.Char(';'))
+            .And(Terms.Number<decimal>(NumberOptions.Any | NumberOptions.AllowUnderscore))
+            .And(Terms.Number<double>(NumberOptions.Float | NumberOptions.AllowUnderscore).ZeroOrOne())
+            .Then(static t => $"{t.Item1}|{t.Item2}|{string.Join(",", t.Item3)}");
+
+        Check(parser, SpanSourceGrammars.TryParseUnderscoredNumbers, SpanSourceGrammars.TryParseUnderscoredNumbers, text);
+    }
+
+    [Theory]
     [InlineData("[ abc ]")]
     [InlineData("[ # comment\n abc # more\n ]")]
     [InlineData("[#\n_a1#\n]")]
@@ -443,6 +467,8 @@ public static partial class SpanSourceGrammars
     public static partial bool TryParseDelimited(TextReader reader, out string value);
     public static partial bool TryParseNumbers(string text, out string value);
     public static partial bool TryParseNumbers(TextReader reader, out string value);
+    public static partial bool TryParseUnderscoredNumbers(string text, out string value);
+    public static partial bool TryParseUnderscoredNumbers(TextReader reader, out string value);
     public static partial bool TryParseCommented(string text, out string value);
     public static partial bool TryParseCommented(TextReader reader, out string value);
 }

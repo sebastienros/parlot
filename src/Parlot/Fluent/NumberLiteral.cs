@@ -24,6 +24,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
+    private readonly bool _allowUnderscore;
 
     public bool CanSeek { get; } = true;
 
@@ -49,6 +50,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
+        _allowUnderscore = (numberOptions & NumberOptions.AllowUnderscore) != 0;
 
         ExpectedChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -62,7 +64,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
             ExpectedChars = [.. ExpectedChars, decimalSeparator];
         }
 
-        // A group separator or an exponent can't be a starting char
+        // A group separator, an exponent or an underscore can't be a starting char
 
         Name = "NumberLiteral";
     }
@@ -81,9 +83,14 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         var reset = context.Scanner.Cursor.Offset;
         var start = reset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
+        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
+
+            if (_allowUnderscore)
+            {
+                number = Numbers.RemoveUnderscores(number);
+            }
 
             if (Numbers.TryParseNumber<T>(number, _numberStyles, _culture, out var value))
             {
@@ -152,8 +159,13 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
 
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        var allowUnderscore = _allowUnderscore ? "true, " : "";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
+        if (_allowUnderscore)
+        {
+            result.Body.Add($"    {numberSpanName} = global::Parlot.Numbers.RemoveUnderscores({numberSpanName});");
+        }
         var outTarget = context.DiscardResult ? "_" : parsedValueName;
         // The generic helper needs the consumer's net8.0+ runtime and C# 11; other consumers only have the fixed
         // overloads. An unknown target keeps the generic path this build was compiled for.

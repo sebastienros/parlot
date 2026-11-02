@@ -519,6 +519,15 @@ Result:
 -12345.6
 ```
 
+`NumberOptions.AllowUnderscore` accepts underscores between digits to make long numbers easier to read, like C#, Java or
+Python do. Underscores can be repeated but must be between two digits, so `1_`, `1_.5` or `1e_5` only read `1`. They
+are ignored when the value is computed. The option isn't part of `NumberOptions.Any`.
+
+```c#
+var parser = Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowUnderscore);
+parser.Parse("1_000_000"); // 1000000
+```
+
 ### Hexadecimal, Octal and Binary
 
 Match integer digits in a specific radix and return any integer .NET type. These parsers don't consume

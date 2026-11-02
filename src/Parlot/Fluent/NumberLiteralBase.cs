@@ -24,6 +24,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
     private readonly bool _allowDecimalSeparator;
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
+    private readonly bool _allowUnderscore;
 
     public bool CanSeek => true;
 
@@ -51,6 +52,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         _allowDecimalSeparator = (numberOptions & NumberOptions.AllowDecimalSeparator) != 0;
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
+        _allowUnderscore = (numberOptions & NumberOptions.AllowUnderscore) != 0;
 
         var expectedChars = "0123456789";
 
@@ -64,7 +66,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
             expectedChars += _decimalSeparator;
         }
 
-        // A group separator or an exponent can't be a starting char
+        // A group separator, an exponent or an underscore can't be a starting char
 
         ExpectedChars = expectedChars.ToCharArray();
 
@@ -86,9 +88,14 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         var reset = context.Scanner.Cursor.Offset;
         var start = reset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, out var number, _decimalSeparator, _groupSeparator))
+        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
+
+            if (_allowUnderscore)
+            {
+                number = Numbers.RemoveUnderscores(number);
+            }
 
             if (TryParseNumber(number, _numberStyles, _culture, out T value))
             {
@@ -150,8 +157,13 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         var allowExponent = _allowExponent ? "true" : "false";
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        var allowUnderscore = _allowUnderscore ? "true, " : "";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
+        if (_allowUnderscore)
+        {
+            result.Body.Add($"    {numberSpanName} = global::Parlot.Numbers.RemoveUnderscores({numberSpanName});");
+        }
         var outTarget = context.DiscardResult ? $"{valueTypeName} _" : parsedValueName;
         result.Body.Add($"    if ({tryParseMethod}({numberSpanName}, {numberStylesFieldName}, {cultureExpr}, out {outTarget}))");
         result.Body.Add("    {");
@@ -226,7 +238,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         var (tryParseMethod, numberStyles, culture) = GetParseExpressions(writer.Context);
 
         NumberSource.GenerateSpanSource(writer, valueVariable, fail, typeof(T), tryParseMethod, numberStyles, culture,
-            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _decimalSeparator, _groupSeparator);
+            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _decimalSeparator, _groupSeparator);
     }
 }
 

@@ -377,4 +377,47 @@ public static partial class Numbers
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsValidRadix(int radix) => (uint)(radix - 2) <= 14;
+
+    // The digits of the last number read with underscores on this thread
+    [ThreadStatic]
+    private static char[]? t_digits;
+
+    /// <summary>
+    /// Returns <paramref name="number"/> without the underscores separating its digits, which the parsing methods of
+    /// .NET don't accept. The digits are copied to a buffer of the thread when there are underscores, which the next
+    /// call overwrites, so the result must be parsed before another number is read.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ReadOnlySpan<char> RemoveUnderscores(ReadOnlySpan<char> number)
+    {
+        var index = number.IndexOf('_');
+
+        return index < 0 ? number : RemoveUnderscores(number, index);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ReadOnlySpan<char> RemoveUnderscores(ReadOnlySpan<char> number, int index)
+    {
+        var digits = t_digits;
+
+        if (digits == null || digits.Length < number.Length)
+        {
+            t_digits = digits = new char[Math.Max(number.Length, 64)];
+        }
+
+        number.Slice(0, index).CopyTo(digits);
+        var length = index;
+
+        for (var i = index + 1; i < number.Length; i++)
+        {
+            var c = number[i];
+
+            if (c != '_')
+            {
+                digits[length++] = c;
+            }
+        }
+
+        return new ReadOnlySpan<char>(digits, 0, length);
+    }
 }
