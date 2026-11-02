@@ -24,6 +24,10 @@ public static partial class RecursionGrammars
     [GenerateParser(nameof(LimitedPrefix), MaxRecursionDepth = 2)]
     public static Parser<int> BuildLimitedPrefix() => PrefixGrammar();
 
+    // The limit, as callbacks read it from the context
+    [GenerateParser(nameof(LimitOfContext), MaxRecursionDepth = 7)]
+    public static Parser<int> BuildLimitOfContext() => Literals.Char('x').Then(static (context, _) => context.MaxRecursionDepth);
+
     // The nesting depth of brackets around "item"
     private static Parser<int> ListGrammar() =>
         Recursive<int>(static list => Between(Literals.Char('['), list, Literals.Char(']')).Then(static depth => depth + 1)

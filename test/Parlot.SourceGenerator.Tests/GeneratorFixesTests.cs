@@ -306,10 +306,14 @@ public class GeneratorFixesTests
         // loop of the following ones) count. The first prefix operator leaves its level on both returns of its path without a
         // list, the following ones at once in the finally block of the list.
         var limited = Source("nameof(TryParse), MaxRecursionDepth = 64");
-        Assert.Equal(5, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.EnterRecursion\(\);").Count);
+        Assert.Equal(5, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.EnterRecursion\(64\);").Count);
         Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.ExitRecursion\(\);").Count);
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(limited, @"context\.ExitRecursion\(operators\.Count\);").Count);
-        Assert.Contains(": base(__parlotScanner, 64)", limited, StringComparison.Ordinal);
+
+        // The code passes the limit, which the context returns without storing it: its cold state would be allocated
+        Assert.Contains("public override int MaxRecursionDepth => 64;", limited, StringComparison.Ordinal);
+        Assert.Contains(": base(__parlotScanner)", limited, StringComparison.Ordinal);
+        Assert.DoesNotContain("context.EnterRecursion();", limited, StringComparison.Ordinal);
     }
 
     [Fact]
