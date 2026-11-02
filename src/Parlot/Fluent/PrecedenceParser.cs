@@ -1226,8 +1226,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         var follows = _hasFollowingOperators;
 
-        // A negative maxLevel, ~level, resumes the climb of the levels up to level on the operand in resumed, with the operator
-        // which follows it in next, see GeneratePrefixed(). Without operators that can follow an operand, it is never negative.
+        // A maxLevel of ~level - 1 resumes the climb of the levels up to level on the operand in resumed, with the operator
+        // which follows it in next, see GeneratePrefixed(). -1 isn't one of them: it climbs no level, for the right operand
+        // of a binary operator of the tightest level. Without operators that can follow an operand, it is never negative.
         // It isn't a pair of flags: on Windows x64 they are two more arguments on the stack, and .NET 10 then gave the climb a
         // frame pointer and a prolog zeroing 1.1 KB instead of 0.5 KB on each call (13% of NCalc's parse time).
         Line($"bool {climb}(int maxLevel, out {valueType} climbed, ref int next, ref int nextPosition)");
@@ -1265,7 +1266,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (_prefixLevels.Length > 0)
         {
-            Line("    if (maxLevel >= 0)");
+            Line("    if (maxLevel >= -1)");
             Line("    {");
 
             // The first operator is matched here rather than in prefixed(): most operands have none, and their code then has
@@ -1288,7 +1289,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line("    else");
             Line("    {");
             Line($"        climbed = {resumed};");
-            Line("        maxLevel = ~maxLevel;");
+            Line("        maxLevel = ~maxLevel - 1;");
             Line("        lookup = false;");
             Line("    }");
         }
@@ -1634,7 +1635,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             // The operator following the operand is looked for once, before the climb of the first level resumes
             Line($"        {lookup}(0, ref next, ref nextPosition);");
             Line($"        {resumed} = climbed;");
-            Line($"        {climb}(~{LevelOf("op")}, out climbed, ref next, ref nextPosition);");
+            Line($"        {climb}(~{LevelOf("op")} - 1, out climbed, ref next, ref nextPosition);");
         }
 
         Apply("        ", "op");
@@ -1681,7 +1682,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (follows)
         {
             Line($"            {resumed} = climbed;");
-            Line($"            {climb}(~{LevelOf("prefixOperator")}, out climbed, ref next, ref nextPosition);");
+            Line($"            {climb}(~{LevelOf("prefixOperator")} - 1, out climbed, ref next, ref nextPosition);");
         }
 
         Apply("            ", "prefixOperator");

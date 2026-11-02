@@ -139,10 +139,9 @@ public partial class SqlParser
         // Unary expressions
         var unaryMinus = Terms.Char('-').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Minus, x.Item2));
         var unaryPlus = Terms.Char('+').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Plus, x.Item2));
-        var unaryNot = NOT.And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.Not, x.Item2));
         var unaryBitwiseNot = Terms.Char('~').And(term).Then<Expression>(x => new UnaryExpression(UnaryOperator.BitwiseNot, x.Item2));
 
-        var unaryExpr = unaryMinus.Or(unaryPlus).Or(unaryNot).Or(unaryBitwiseNot);
+        var unaryExpr = unaryMinus.Or(unaryPlus).Or(unaryBitwiseNot);
         var primary = unaryExpr.Or(term);
 
         // Binary operators
@@ -150,7 +149,7 @@ public partial class SqlParser
         var likeOp = notLike.Or(LIKE);
 
         // Build expression with proper precedence
-        var multiplicative = primary.LeftAssociative(
+        var multiplicative = primary.Operators().LeftAssociative(
             (Terms.Char('*'), (a, b) => new BinaryExpression(a, BinaryOperator.Multiply, b)),
             (Terms.Char('/'), (a, b) => new BinaryExpression(a, BinaryOperator.Divide, b)),
             (Terms.Char('%'), (a, b) => new BinaryExpression(a, BinaryOperator.Modulo, b))
@@ -187,30 +186,26 @@ public partial class SqlParser
             (Terms.Char('|'), (a, b) => new BinaryExpression(a, BinaryOperator.BitwiseOr, b))
         );
 
-        var andExpr = bitwise.LeftAssociative(
+        // BETWEEN and IN apply to the value before them. The bounds of a BETWEEN stop before the AND which separates them.
+        var betweenKeyword = BETWEEN.Then(static _ => false).Or(NOT.AndSkip(BETWEEN).Then(static _ => true));
+        var inKeyword = IN.Then(static _ => false).Or(NOT.AndSkip(IN).Then(static _ => true));
+
+        var predicate = bitwise.Postfix(
+            (betweenKeyword.And(bitwise).AndSkip(AND).And(bitwise),
+                static (value, range) => new BetweenExpression(value, range.Item2, range.Item3, range.Item1)),
+            (inKeyword.AndSkip(LPAREN).And(functionArgs).AndSkip(RPAREN),
+                static (value, list) => new InExpression(value, list.Item2, list.Item1)));
+
+        // NOT applies to a whole predicate: NOT a = 1 is NOT (a = 1)
+        var notExpr = predicate.Unary((NOT, a => new UnaryExpression(UnaryOperator.Not, a)));
+
+        var andExpr = notExpr.LeftAssociative(
             (AND, (a, b) => new BinaryExpression(a, BinaryOperator.And, b))
         );
 
-        var orExpr = andExpr.LeftAssociative(
+        expression.Parser = andExpr.LeftAssociative(
             (OR, (a, b) => new BinaryExpression(a, BinaryOperator.Or, b))
         );
-
-        // BETWEEN and IN expressions
-        var betweenExpr = andExpr.And(NOT.Optional()).AndSkip(BETWEEN).And(bitwise).AndSkip(AND).And(bitwise)
-            .Then<Expression>(result =>
-            {
-                var (expr, notKeyword, lower, upper) = result;
-                return new BetweenExpression(expr, lower, upper, notKeyword.HasValue);
-            });
-
-        var inExpr = andExpr.And(NOT.Optional()).AndSkip(IN).AndSkip(LPAREN).And(functionArgs).AndSkip(RPAREN)
-            .Then<Expression>(result =>
-            {
-                var (expr, notKeyword, values) = result;
-                return new InExpression(expr, values, notKeyword.HasValue);
-            });
-
-        expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
 
         // Column source
         var columnSourceId = identifier.Then<ColumnSource>(id => new ColumnSourceIdentifier(id)).Named("ColumnSourceIdentifier");
@@ -283,7 +278,7 @@ public partial class SqlParser
             .Or(LEFT.Then(JoinKind.Left))
             .Or(RIGHT.Then(JoinKind.Right));
 
-        var joinCondition = ON.SkipAnd(andExpr);
+        var joinCondition = ON.SkipAnd(expression);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
         var joinStatement = joinKind.Else(JoinKind.None).AndSkip(JOIN).And(tableSourceItemList).And(joinCondition)

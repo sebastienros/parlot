@@ -276,7 +276,7 @@ The benchmarks below (`StreamingBenchmarks`) count the failed records of an acce
 measure the parsers rather than a model. The log is read from a `TextReader` which isn't a `StringReader`, to avoid the
 fast path. `Document` parses the log of `Count` records as a single value, `Lines` parses one record per line.
 
-Refreshed on 2026-10-30 on Apple M4 Pro (Arm64), .NET 10.0.11, SDK 11.0.100-rc.2.26504.105,
+Refreshed on 2026-11-01 on Apple M4 Pro (Arm64), .NET 10.0.11, SDK 11.0.100-rc.3.26522.148,
 BenchmarkDotNet 0.15.8 `ShortRun`, without command-line iteration or warmup overrides. Ratios are
 relative to `ReadToEnd` + `Parse`. Runtime and generated results below come from the same reader-enabled run.
 `ReadToEnd` reads the text into a `string` like `StreamReader` does, through a `StringBuilder`. To run them:
@@ -288,24 +288,24 @@ GeneratedReader=true dotnet run --project test/Parlot.Benchmarks/Parlot.Benchmar
 
 | Method | Count | Mean | Ratio | Allocated | Alloc ratio |
 |---|---:|---:|---:|---:|---:|
-| Document, `ReadToEnd` + `Parse` | 1000 | 234.3 us | 1.00 | 422.46 KB | 1.00 |
-| Document, `Parse(TextReader)` | 1000 | 280.3 us | 1.20 | 212.55 KB | 0.50 |
-| Document, `TryParseAsync(TextReader)` | 1000 | 288.2 us | 1.23 | 213.38 KB | 0.51 |
-| Document, `ReadToEnd` + `Parse` | 10000 | 2.40 ms | 1.00 | 4.09 MB | 1.00 |
-| Document, `Parse(TextReader)` | 10000 | 2.78 ms | 1.16 | 2.15 MB | 0.53 |
-| Document, `TryParseAsync(TextReader)` | 10000 | 2.67 ms | 1.11 | 2.15 MB | 0.53 |
-| Document, `ReadToEnd` + `Parse` | 100000 | 25.4 ms | 1.00 | 41.04 MB | 1.00 |
-| Document, `Parse(TextReader)` | 100000 | 27.8 ms | 1.09 | 21.49 MB | 0.52 |
-| Document, `TryParseAsync(TextReader)` | 100000 | 27.6 ms | 1.08 | 21.49 MB | 0.52 |
-| Lines, `ReadLine` + `Parse` | 1000 | 255.6 us | 1.00 | 395.49 KB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 1000 | 233.8 us | 0.91 | 207.02 KB | 0.52 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 270.6 us | 1.06 | 395.99 KB | 1.00 |
-| Lines, `ReadLine` + `Parse` | 10000 | 2.52 ms | 1.00 | 3.89 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 10000 | 2.33 ms | 0.92 | 2.03 MB | 0.52 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 10000 | 2.71 ms | 1.07 | 3.89 MB | 1.00 |
-| Lines, `ReadLine` + `Parse` | 100000 | 26.0 ms | 1.00 | 39.20 MB | 1.00 |
-| Lines, `ParseManyAsync(TextReader)` | 100000 | 23.4 ms | 0.90 | 20.61 MB | 0.53 |
-| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 26.9 ms | 1.03 | 39.20 MB | 1.00 |
+| Document, `ReadToEnd` + `Parse` | 1000 | 198.8 us | 1.00 | 418.17 KB | 1.00 |
+| Document, `Parse(TextReader)` | 1000 | 254.8 us | 1.28 | 208.27 KB | 0.50 |
+| Document, `TryParseAsync(TextReader)` | 1000 | 266.8 us | 1.34 | 209.11 KB | 0.50 |
+| Document, `ReadToEnd` + `Parse` | 10000 | 2.10 ms | 1.00 | 4.00 MB | 1.00 |
+| Document, `Parse(TextReader)` | 10000 | 2.55 ms | 1.21 | 2.06 MB | 0.52 |
+| Document, `TryParseAsync(TextReader)` | 10000 | 2.50 ms | 1.19 | 2.06 MB | 0.52 |
+| Document, `ReadToEnd` + `Parse` | 100000 | 22.3 ms | 1.00 | 40.42 MB | 1.00 |
+| Document, `Parse(TextReader)` | 100000 | 25.2 ms | 1.13 | 20.87 MB | 0.52 |
+| Document, `TryParseAsync(TextReader)` | 100000 | 25.3 ms | 1.13 | 20.87 MB | 0.52 |
+| Lines, `ReadLine` + `Parse` | 1000 | 219.1 us | 1.00 | 411.12 KB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 1000 | 206.1 us | 0.94 | 207.24 KB | 0.50 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 1000 | 240.3 us | 1.10 | 411.63 KB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 10000 | 2.14 ms | 1.00 | 4.04 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 10000 | 2.07 ms | 0.96 | 2.03 MB | 0.50 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 10000 | 2.42 ms | 1.13 | 4.04 MB | 1.00 |
+| Lines, `ReadLine` + `Parse` | 100000 | 21.5 ms | 1.00 | 40.72 MB | 1.00 |
+| Lines, `ParseManyAsync(TextReader)` | 100000 | 20.8 ms | 0.96 | 20.63 MB | 0.51 |
+| Lines, `ParseManyAsync(TextReader, '\n')` | 100000 | 24.2 ms | 1.12 | 40.72 MB | 1.00 |
 
 The cost of a single value is a constant ratio of reading the text first, whatever its size, and the buffer stays flat.
 Peak buffered characters for the same logs, whose longest record has 122 characters:
