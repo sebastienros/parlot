@@ -21,13 +21,24 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
     static readonly char[] SingleOrDoubleQuotes = ['\'', '\"'];
 
     private readonly StringLiteralQuotes _quotes;
+    private readonly bool _returnDecoded = true;
 
     // The pool the decoded strings come from, for a literal read by a pooled string
     private readonly StringPool? _pool;
 
     public StringLiteral(StringLiteralQuotes quotes)
+        : this(quotes, returnDecoded: true)
+    {
+    }
+
+    /// <param name="quotes">The quotes that delimit the string.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences of the string are decoded. When <c>false</c> the text between the quotes is returned as it is.
+    /// </param>
+    public StringLiteral(StringLiteralQuotes quotes, bool returnDecoded)
     {
         _quotes = quotes;
+        _returnDecoded = returnDecoded;
 
         ExpectedChars = _quotes switch
         {
@@ -62,6 +73,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
     internal StringLiteral(StringLiteral source, StringPool pool)
     {
         _quotes = source._quotes;
+        _returnDecoded = source._returnDecoded;
         _pool = pool;
         ExpectedChars = source.ExpectedChars;
         Name = source.Name;
@@ -104,7 +116,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         var end = cursor.Offset;
 
         // The scanner knows whether the string has escape sequences, so a string without any isn't read again
-        if (hasEscape)
+        if (hasEscape && _returnDecoded)
         {
             result.Set(start, end, new TextSpan(Character.DecodeStringInternal(text.Slice(1, text.Length - 2), _pool)));
         }
@@ -146,7 +158,8 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
             ? $"({cursorName}.Current == (char)34 ? (char)34 : (char)39)"
             : $"(char){(int)ExpectedChars[0]}";
 
-        if (context.DiscardResult)
+        // The text of a string that isn't decoded is the span between the quotes, it doesn't need the text of the scanner
+        if (context.DiscardResult || !_returnDecoded)
         {
             result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, out _, out _))");
         }
@@ -160,18 +173,28 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         if (!context.DiscardResult)
         {
             result.Body.Add($"    var {endName} = {cursorName}.Offset;");
-            // The scanner knows whether the string has escape sequences, so a string without any isn't read again
-            result.Body.Add($"    if ({hasEscapeName})");
-            result.Body.Add("    {");
-            var pool = _pool != null ? ", " + context.GetStringPoolField(_pool) : "";
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2){pool}));");
-            result.Body.Add("    }");
-            result.Body.Add("    else");
-            result.Body.Add("    {");
+
             // Buffer windows are immutable strings, so the span can reference the current one. BufferStart is a
             // constant 0 in assemblies without TextReader entry points.
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan({scannerName}.Buffer, {startName} + 1 - {cursorName}.BufferStart, {endName} - {startName} - 2);");
-            result.Body.Add("    }");
+            var rawValue = $"new global::Parlot.TextSpan({scannerName}.Buffer, {startName} + 1 - {cursorName}.BufferStart, {endName} - {startName} - 2)";
+
+            if (_returnDecoded)
+            {
+                // The scanner knows whether the string has escape sequences, so a string without any isn't read again
+                result.Body.Add($"    if ({hasEscapeName})");
+                result.Body.Add("    {");
+                var pool = _pool != null ? ", " + context.GetStringPoolField(_pool) : "";
+                result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2){pool}));");
+                result.Body.Add("    }");
+                result.Body.Add("    else");
+                result.Body.Add("    {");
+                result.Body.Add($"        {result.ValueVariable} = {rawValue};");
+                result.Body.Add("    }");
+            }
+            else
+            {
+                result.Body.Add($"    {result.ValueVariable} = {rawValue};");
+            }
         }
         result.Body.Add("}");
 

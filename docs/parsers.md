@@ -553,6 +553,7 @@ Matches a quoted string literal with escape sequences. Use this parser to parse 
 
 ```c#
 Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble)
+Parser<TextSpan> String(StringLiteralQuotes quotes, bool returnDecoded)
 ```
 
 Usage:
@@ -570,6 +571,15 @@ Result:
 
 The value is a `TextSpan` of the input when the string has no escape sequence, and of a new string otherwise. To get
 strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool.
+
+Pass `returnDecoded: false` to get the text between the quotes as it is, without decoding the escape sequences. The value is then always
+a `TextSpan` of the input, which is useful when the text is decoded later, or by another component. The escape sequences are still
+read to find the closing quote, so `'it\'s'` is one string, and its value is `it\'s`.
+
+```c#
+var parser = Terms.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false);
+parser.Parse("'a\\nb'"); // a\nb, the backslash and the `n` are kept
+```
 
 ### Identifier
 
