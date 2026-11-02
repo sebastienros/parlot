@@ -1118,10 +1118,18 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         var lookupName = $"lookup{id}";
         var nextName = $"next{id}";
         var nextPositionName = $"nextPosition{id}";
+        var resumedName = $"resumed{id}";
 
         result.Body.Add($"var {nextName} = -1;");
         result.Body.Add($"var {nextPositionName} = 0;");
-        result.Body.Add($"{result.SuccessVariable} = {climb}({_levels.Length - 1}, ref {result.ValueVariable}, ref {nextName}, ref {nextPositionName}, false, true);");
+
+        if (_hasFollowingOperators && _prefixLevels.Length > 0)
+        {
+            // The operand on which prefixed() resumes the climb of an operator's level, see GenerateClimb()
+            result.Body.Add($"{valueType} {resumedName} = default!;");
+        }
+
+        result.Body.Add($"{result.SuccessVariable} = {climb}({_levels.Length - 1}, out {result.ValueVariable}, ref {nextName}, ref {nextPositionName});");
 
         // The local functions are each a single statement, so that their returns are not taken for the parser's own
         var chains = new List<string>();
@@ -1145,7 +1153,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
-        result.Body.Add(GenerateClimb(climb, lookupName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting));
+        result.Body.Add(GenerateClimb(climb, lookupName, resumedName, valueType, operandHelper, levelHelpers, valuedCases, factories, levelsField, ctx, cursor, compacting));
 
         foreach (var chain in chains)
         {
@@ -1160,7 +1168,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (_prefixLevels.Length > 0)
         {
             var idText = id.ToString(CultureInfo.InvariantCulture);
-            result.Body.Add(GeneratePrefixed(climb, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth));
+            result.Body.Add(GeneratePrefixed(climb, lookupName, resumedName, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth));
 
             foreach (var level in _prefixLevels)
             {
@@ -1173,7 +1181,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
     // The climb of the levels up to maxLevel. Without operators that can follow an operand, it parses the prefix operators
     // and the operand only, and the lookup isn't generated.
-    private string GenerateClimb(string climb, string lookup, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting)
+    private string GenerateClimb(string climb, string lookup, string resumed, string valueType, string operandHelper, string?[] levelHelpers, string?[] valuedCases, string[] factories, string? levelsField, string ctx, string cursor, bool compacting)
     {
         var id = climb.Substring("climb".Length);
         var sb = new StringBuilder();
@@ -1218,9 +1226,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         var follows = _hasFollowingOperators;
 
-        // With parsed set, the operand is the value of climbed and lookup tells whether the operator following it is still to be
-        // looked for, see GeneratePrefixed(). Without operators that can follow an operand, parsed is never set.
-        Line($"bool {climb}(int maxLevel, ref {valueType} climbed, ref int next, ref int nextPosition, bool parsed, bool lookup)");
+        // A negative maxLevel, ~level, resumes the climb of the levels up to level on the operand in resumed, with the operator
+        // which follows it in next, see GeneratePrefixed(). Without operators that can follow an operand, it is never negative.
+        // It isn't a pair of flags: on Windows x64 they are two more arguments on the stack, and .NET 10 then gave the climb a
+        // frame pointer and a prolog zeroing 1.1 KB instead of 0.5 KB on each call (13% of NCalc's parse time).
+        Line($"bool {climb}(int maxLevel, out {valueType} climbed, ref int next, ref int nextPosition)");
         Line("{");
 
         if (!follows)
@@ -1236,7 +1246,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                     Line(line);
                 }
 
-                Line($"    if (prefixOperator >= 0) return prefixed{id}(prefixOperator, start, ref climbed, ref next, ref nextPosition);");
+                Line($"    if (prefixOperator >= 0) return prefixed{id}(prefixOperator, start, out climbed, ref next, ref nextPosition);");
             }
 
             Line($"    return {operandHelper}({ctx}, out climbed);");
@@ -1251,13 +1261,14 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         Line("    var lowest = 0;");
-        Line("    if (!parsed)");
-        Line("    {");
-        Line("        lookup = true;");
+        Line("    var lookup = true;");
 
         if (_prefixLevels.Length > 0)
         {
-            // The first operator is matched here rather than in prefixes(): most operands have none, and their code then has
+            Line("    if (maxLevel >= 0)");
+            Line("    {");
+
+            // The first operator is matched here rather than in prefixed(): most operands have none, and their code then has
             // no call to set up
             Line($"        var start = {cursor}.Offset;");
             Line("        var prefixOperator = -1;");
@@ -1269,17 +1280,23 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             Line("        if (prefixOperator >= 0)");
             Line("        {");
-            Line($"            if (!prefixed{id}(prefixOperator, start, ref climbed, ref next, ref nextPosition)) return false;");
+            Line($"            if (!prefixed{id}(prefixOperator, start, out climbed, ref next, ref nextPosition)) return false;");
             Line("            lookup = false;");
             Line("        }");
             Line($"        else if (!{operandHelper}({ctx}, out climbed)) return false;");
+            Line("    }");
+            Line("    else");
+            Line("    {");
+            Line($"        climbed = {resumed};");
+            Line("        maxLevel = ~maxLevel;");
+            Line("        lookup = false;");
+            Line("    }");
         }
         else
         {
-            Line($"        if (!{operandHelper}({ctx}, out climbed)) return false;");
+            Line($"    if (!{operandHelper}({ctx}, out climbed)) return false;");
         }
 
-        Line("    }");
         Line("    while (true)");
         Line("    {");
         Line("        if (lookup)");
@@ -1349,8 +1366,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
 
             Line("                var op = next;");
-            Line($"                {valueType} right = default!;");
-            Line($"                if (!{climb}({(level - 1).ToString(CultureInfo.InvariantCulture)}, ref right, ref next, ref nextPosition, false, true) || nextPosition == position)");
+            Line($"                if (!{climb}({(level - 1).ToString(CultureInfo.InvariantCulture)}, out var right, ref next, ref nextPosition) || nextPosition == position)");
             Line("                {");
             Line($"                    {cursor}.ResetPosition(position);");
             Line($"                    lowest = {nextLevelText};");
@@ -1373,8 +1389,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                     Line($"                    {ctx}.MovePin(pin, operationPosition);");
                 }
 
-                Line($"                    {valueType} operand = default!;");
-                Line($"                    if (!{climb}({(level - 1).ToString(CultureInfo.InvariantCulture)}, ref operand, ref next, ref nextPosition, false, true) || nextPosition == operationPosition)");
+                Line($"                    if (!{climb}({(level - 1).ToString(CultureInfo.InvariantCulture)}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
                 Line("                    {");
                 Line($"                        {cursor}.ResetPosition(operationPosition);");
                 Line($"                        lowest = {nextLevelText};");
@@ -1529,7 +1544,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     // The prefix operators following the first one, then their operand, applied from the last operator like at runtime
-    private string GeneratePrefixed(string climb, string id, string valueType, string operandHelper, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, int maxRecursionDepth)
+    private string GeneratePrefixed(string climb, string lookup, string resumed, string id, string valueType, string operandHelper, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, int maxRecursionDepth)
     {
         var sb = new StringBuilder();
         var limitRecursion = maxRecursionDepth > 0;
@@ -1585,7 +1600,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line($"{indent}}}");
         }
 
-        Line($"bool prefixed{id}(int op, int start, ref {valueType} climbed, ref int next, ref int nextPosition)");
+        Line($"bool prefixed{id}(int op, int start, out {valueType} climbed, ref int next, ref int nextPosition)");
         Line("{");
 
         // Like at runtime, each operator counts as one level of recursion. An exception fails the whole parse, and the context
@@ -1616,7 +1631,10 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (follows)
         {
-            Line($"        {climb}({LevelOf("op")}, ref climbed, ref next, ref nextPosition, true, true);");
+            // The operator following the operand is looked for once, before the climb of the first level resumes
+            Line($"        {lookup}(0, ref next, ref nextPosition);");
+            Line($"        {resumed} = climbed;");
+            Line($"        {climb}(~{LevelOf("op")}, out climbed, ref next, ref nextPosition);");
         }
 
         Apply("        ", "op");
@@ -1653,7 +1671,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (follows)
         {
-            Line("        var lookup = true;");
+            Line($"        {lookup}(0, ref next, ref nextPosition);");
         }
 
         Line("        for (var i = operators.Count - 1; i >= 0; i--)");
@@ -1662,16 +1680,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (follows)
         {
-            Line($"            {climb}({LevelOf("prefixOperator")}, ref climbed, ref next, ref nextPosition, true, lookup);");
+            Line($"            {resumed} = climbed;");
+            Line($"            {climb}(~{LevelOf("prefixOperator")}, out climbed, ref next, ref nextPosition);");
         }
 
         Apply("            ", "prefixOperator");
-
-        if (follows)
-        {
-            Line("            lookup = false;");
-        }
-
         Line("        }");
         Line("        return true;");
         Line("    }");
@@ -1777,8 +1790,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("                    lookup = true;");
         Line("                    continue;");
         Line("                }");
-        Line($"                {valueType} right = default!;");
-        Line($"                if (!{climb}({tighterText}, ref right, ref next, ref nextPosition, false, true) || nextPosition == position)");
+        Line($"                if (!{climb}({tighterText}, out var right, ref next, ref nextPosition) || nextPosition == position)");
         Line("                {");
         Line($"                    {cursor}.ResetPosition(position);");
         Line($"                    lowest = {nextLevelText};");
@@ -1840,8 +1852,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("                stopped = true;");
         Line("                break;");
         Line("            }");
-        Line($"            {valueType} operand = default!;");
-        Line($"            if (!{climb}({tighterText}, ref operand, ref next, ref nextPosition, false, true) || nextPosition == operationPosition)");
+        Line($"            if (!{climb}({tighterText}, out var operand, ref next, ref nextPosition) || nextPosition == operationPosition)");
         Line("            {");
         Line($"                {cursor}.ResetPosition(operationPosition);");
         Line("                stopped = true;");
