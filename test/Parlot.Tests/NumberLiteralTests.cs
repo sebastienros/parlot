@@ -654,4 +654,113 @@ public class NumberLiteralTests
         Assert.True(Literals.Number<decimal>(NumberOptions.Float).TryParse(source, out var result));
         Assert.Equal(expected, result);
     }
+
+    [Fact]
+    public void ExpectedCharsShouldContainTheSecondDecimalSeparator()
+    {
+        var parsers = new System.Collections.Generic.List<ISeekable>
+        {
+            (ISeekable)Literals.Number<decimal>(NumberOptions.Number, '.', '_', ','),
+            (ISeekable)Literals.Number<long>(NumberOptions.Number, '.', '_', ','),
+#if NET8_0_OR_GREATER
+            (ISeekable)new NumberLiteral<int>(NumberOptions.Number, '.', '_', ','),
+#endif
+        };
+
+        foreach (var parser in parsers)
+        {
+            Assert.Contains(',', parser.ExpectedChars!);
+            Assert.Contains('.', parser.ExpectedChars!);
+        }
+    }
+
+    [Fact]
+    public void ExpectedCharsShouldNotContainTheSecondDecimalSeparatorWithoutDecimals()
+    {
+        var parser = (ISeekable)Literals.Number<long>(NumberOptions.Integer, '.', '_', ',');
+
+        Assert.DoesNotContain(',', parser.ExpectedChars!);
+    }
+
+    [Theory]
+    [InlineData("1.5", 1.5)]
+    [InlineData("1,5", 1.5)]
+    [InlineData(",5", 0.5)]
+    [InlineData("-1,25", -1.25)]
+    [InlineData("10,5", 10.5)]
+    public void NumberLiteralShouldAcceptTheSecondDecimalSeparator(string source, double expected)
+    {
+        var options = NumberOptions.Number | NumberOptions.AllowGroupSeparators;
+
+        Assert.Equal((decimal)expected, Literals.Number<decimal>(options, '.', '_', ',').Parse(source));
+        Assert.Equal(expected, Literals.Number<double>(options, '.', '_', ',').Parse(source));
+        Assert.Equal((decimal)expected, Terms.Number<decimal>(options, '.', '_', ',').Parse(" " + source));
+        Assert.Equal((decimal)expected, NumberLiterals.CreateNumberLiteralParser<decimal>(options, '.', '_', ',').Parse(source));
+    }
+
+    [Theory]
+    [InlineData("1,5", 1.5)]
+    [InlineData("1.5", 1.5)]
+    [InlineData("12", 12)]
+    public void SecondDecimalSeparatorShouldBeAbleToBeTheGroupSeparator(string source, double expected)
+    {
+        var parser = Literals.Number<decimal>(NumberOptions.Number | NumberOptions.AllowGroupSeparators, '.', ',', ',');
+
+        Assert.Equal((decimal)expected, parser.Parse(source));
+    }
+
+    [Fact]
+    public void SecondDecimalSeparatorThatIsTheGroupSeparatorShouldNotGroupDigits()
+    {
+        var parser = Literals.Number<decimal>(NumberOptions.Number | NumberOptions.AllowGroupSeparators, '.', ',', ',');
+        var context = new ParseContext(new Scanner("1,5,5"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1.5m, result.Value);
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void NumberLiteralShouldOnlyAcceptTheConfiguredDecimalSeparators()
+    {
+        var parser = Literals.Number<decimal>(NumberOptions.Number, ',', '_', ';');
+
+        // The dot is neither of the separators, so the number ends before it
+        Assert.Equal(1m, parser.Parse("1.5"));
+        Assert.Equal(1.5m, parser.Parse("1;5"));
+        Assert.Equal(1.5m, parser.Parse("1,5"));
+    }
+
+    [Fact]
+    public void NumberLiteralShouldResetTheCursorWhenNeitherDecimalSeparatorMatches()
+    {
+        var parser = Literals.Number<decimal>(NumberOptions.Number, ',', '_', ';');
+        var context = new ParseContext(new Scanner(".5"));
+        var result = new ParseResult<decimal>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void IntegerNumberLiteralShouldNotParseAFractionWithTheSecondDecimalSeparator()
+    {
+        var parser = Literals.Number<int>(NumberOptions.Number, '.', '_', ',');
+        var context = new ParseContext(new Scanner("1,5"));
+        var result = new ParseResult<int>();
+
+        // 1,5 is not an integer with either separator
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void NumberLiteralShouldNotAcceptASecondDecimalSeparatorByDefault()
+    {
+        Assert.Equal(1m, Literals.Number<decimal>(NumberOptions.Float).Parse("1,5"));
+
+        // The comma is the group separator by default
+        Assert.Equal(15m, Literals.Number<decimal>().Parse("1,5"));
+    }
 }

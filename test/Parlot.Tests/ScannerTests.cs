@@ -705,4 +705,40 @@ public class ScannerTests
         Assert.True(decimal.TryParse(expected, NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }
+
+    [Theory]
+    [InlineData("1.5", "1.5")]
+    [InlineData("1,5", "1,5")]
+    [InlineData(",5", ",5")]
+    [InlineData("-,5", "-,5")]
+    [InlineData("1,5,5", "1,5")]
+    [InlineData("1,5e2", "1,5e2")]
+    [InlineData("1.5,5", "1.5")]
+    public void ShouldReadDecimalWithSecondDecimalSeparator(string text, string expected)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.True(scanner.ReadDecimal(NumberOptions.Float, out var result, decimalSeparator: '.', groupSeparator: '_', secondDecimalSeparator: ','));
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("1.5", "1")]
+    [InlineData("1;5", "1;5")]
+    public void ShouldNotReadADecimalSeparatorWhichIsNotConfigured(string text, string expected)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.True(scanner.ReadDecimal(NumberOptions.Float, out var result, decimalSeparator: ',', groupSeparator: '_', secondDecimalSeparator: ';'));
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ShouldNotReadTheSecondDecimalSeparatorByDefault()
+    {
+        var scanner = new Scanner("1,5");
+
+        Assert.True(scanner.ReadDecimal(NumberOptions.Float, out var result));
+        Assert.Equal("1", result);
+    }
 }
