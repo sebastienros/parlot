@@ -128,17 +128,15 @@ public partial class SqlParser
             .Then<Expression>(value => new UnaryExpression(UnaryOperator.Minus, value.Item2));
         var unaryPlus = Terms.Char('+').And(term)
             .Then<Expression>(value => new UnaryExpression(UnaryOperator.Plus, value.Item2));
-        var unaryNot = NOT.And(term)
-            .Then<Expression>(value => new UnaryExpression(UnaryOperator.Not, value.Item2));
         var unaryBitwiseNot = Terms.Char('~').And(term)
             .Then<Expression>(value => new UnaryExpression(UnaryOperator.BitwiseNot, value.Item2));
 
-        var unaryExpr = unaryMinus.Or(unaryPlus).Or(unaryNot).Or(unaryBitwiseNot);
+        var unaryExpr = unaryMinus.Or(unaryPlus).Or(unaryBitwiseNot);
         var primary = unaryExpr.Or(term);
 
         var notLike = NOT.AndSkip(LIKE);
 
-        var multiplicative = primary.LeftAssociative(
+        var multiplicative = primary.Operators().LeftAssociative(
             (Terms.Char('*'), (left, right) => new BinaryExpression(left, BinaryOperator.Multiply, right)),
             (Terms.Char('/'), (left, right) => new BinaryExpression(left, BinaryOperator.Divide, right)),
             (Terms.Char('%'), (left, right) => new BinaryExpression(left, BinaryOperator.Modulo, right))
@@ -175,29 +173,26 @@ public partial class SqlParser
             (Terms.Char('|'), (left, right) => new BinaryExpression(left, BinaryOperator.BitwiseOr, right))
         );
 
-        var andExpr = bitwise.LeftAssociative(
+        // BETWEEN and IN apply to the value before them. The bounds of a BETWEEN stop before the AND which separates them.
+        var betweenKeyword = BETWEEN.Then(static _ => false).Or(NOT.AndSkip(BETWEEN).Then(static _ => true));
+        var inKeyword = IN.Then(static _ => false).Or(NOT.AndSkip(IN).Then(static _ => true));
+
+        var predicate = bitwise.Postfix(
+            (betweenKeyword.And(bitwise).AndSkip(AND).And(bitwise),
+                static (value, range) => new BetweenExpression(value, range.Item2, range.Item3, range.Item1)),
+            (inKeyword.AndSkip(LPAREN).And(functionArgs).AndSkip(RPAREN),
+                static (value, list) => new InExpression(value, list.Item2, list.Item1)));
+
+        // NOT applies to a whole predicate: NOT a = 1 is NOT (a = 1)
+        var notExpr = predicate.Unary((NOT, value => new UnaryExpression(UnaryOperator.Not, value)));
+
+        var andExpr = notExpr.LeftAssociative(
             (AND, (left, right) => new BinaryExpression(left, BinaryOperator.And, right))
         );
 
-        var orExpr = andExpr.LeftAssociative(
+        expression.Parser = andExpr.LeftAssociative(
             (OR, (left, right) => new BinaryExpression(left, BinaryOperator.Or, right))
         );
-
-        var betweenExpr = andExpr.And(NOT.Optional()).AndSkip(BETWEEN).And(bitwise).AndSkip(AND).And(bitwise)
-            .Then<Expression>(result =>
-            {
-                var (value, notKeyword, lower, upper) = result;
-                return new BetweenExpression(value, lower, upper, notKeyword.HasValue);
-            });
-
-        var inExpr = andExpr.And(NOT.Optional()).AndSkip(IN).AndSkip(LPAREN).And(functionArgs).AndSkip(RPAREN)
-            .Then<Expression>(result =>
-            {
-                var (value, notKeyword, values) = result;
-                return new InExpression(value, values, notKeyword.HasValue);
-            });
-
-        expression.Parser = betweenExpr.Or(inExpr).Or(orExpr);
 
         var columnSourceId = identifier
             .Then<ColumnSource>(id => new ColumnSourceIdentifier(id))
@@ -277,7 +272,7 @@ public partial class SqlParser
             .Or(LEFT.Then(JoinKind.Left))
             .Or(RIGHT.Then(JoinKind.Right));
 
-        var joinCondition = ON.SkipAnd(andExpr);
+        var joinCondition = ON.SkipAnd(expression);
         var tableSourceItemList = Separated(COMMA, tableSourceItem);
 
         var joinStatement = joinKind.Else(JoinKind.None)

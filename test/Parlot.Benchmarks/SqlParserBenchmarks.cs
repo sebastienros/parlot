@@ -27,8 +27,9 @@ public class SqlParserBenchmarks
     // }
 
     [Params(
-        "select a where a not like '%foo%'"
-        // "select a where b = (select Avg(c) from d)"
+        "select a where a not like '%foo%'",
+        "select a where b = (select Avg(c) from d)",
+        "select id, name from users u where u.age > 18 and u.status in (1, 2, 3) order by name"
     )]
     public string Sql { get; set; } = string.Empty;
 

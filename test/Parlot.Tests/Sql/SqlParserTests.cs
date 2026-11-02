@@ -997,4 +997,236 @@ public class SqlParserTests
         Assert.Equal("by c", rightStr.Value);
     }
 
+    [Theory]
+    [InlineData("SELECT * FROM t WHERE a BETWEEN 1")]
+    [InlineData("SELECT * FROM t WHERE a BETWEEN 1 AND")]
+    [InlineData("SELECT * FROM t WHERE a BETWEEN 1 OR 2")]
+    [InlineData("SELECT * FROM t WHERE a NOT BETWEEN")]
+    [InlineData("SELECT * FROM t WHERE a NOT")]
+    [InlineData("SELECT * FROM t WHERE a NOT IN")]
+    [InlineData("SELECT * FROM t WHERE a IN 1")]
+    [InlineData("SELECT * FROM t WHERE a IN (1")]
+    [InlineData("SELECT * FROM t WHERE a OR")]
+    public void ShouldNotParseIncompleteExpressions(string sql)
+    {
+        Assert.Null(SqlParser.Parse(sql));
+#if NET8_0_OR_GREATER
+        Assert.False(SqlParser.TryParse(sql, out _));
+#endif
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM t WHERE a ORDER BY b")]
+    [InlineData("SELECT * FROM t WHERE a OR b ORDER BY c")]
+    [InlineData("SELECT * FROM t WHERE a BETWEEN 1 AND 2 ORDER BY c")]
+    [InlineData("SELECT * FROM t WHERE a IN (1) ORDER BY c")]
+    [InlineData("SELECT * FROM t WHERE a LIMIT 1")]
+    [InlineData("SELECT f(a OR b, c BETWEEN 1 AND 2, d IN (1)) FROM t")]
+    public void ShouldStopExpressionsBeforeWhatFollowsThem(string sql)
+    {
+        Assert.NotNull(SqlParser.Parse(sql));
+#if NET8_0_OR_GREATER
+        Assert.True(SqlParser.TryParse(sql, out _));
+#endif
+    }
+
+    [Theory]
+    [InlineData("a BETWEEN 1 AND 2", false)]
+    [InlineData("a NOT BETWEEN 1 AND 2", true)]
+    public void ShouldParseBetween(string expression, bool isNot)
+    {
+        foreach (var where in WhereExpressions(expression))
+        {
+            var between = Assert.IsType<BetweenExpression>(where);
+            Assert.Equal(isNot, between.IsNot);
+            Assert.IsType<IdentifierExpression>(between.Expression);
+        }
+    }
+
+    [Theory]
+    [InlineData("a IN (1, 2)", false)]
+    [InlineData("a NOT IN (1, 2)", true)]
+    public void ShouldParseIn(string expression, bool isNot)
+    {
+        foreach (var where in WhereExpressions(expression))
+        {
+            var inExpression = Assert.IsType<InExpression>(where);
+            Assert.Equal(isNot, inExpression.IsNot);
+            Assert.IsType<IdentifierExpression>(inExpression.Expression);
+        }
+    }
+
+    [Theory]
+    [InlineData("a = 1 AND b IN (1)", "((a = 1) AND (b IN))")]
+    [InlineData("a AND b BETWEEN 1 AND 2", "(a AND (b BETWEEN 1 2))")]
+    [InlineData("a BETWEEN 1 AND 2 AND b", "((a BETWEEN 1 2) AND b)")]
+    [InlineData("a BETWEEN 1 AND 2 AND b BETWEEN 3 AND 4", "((a BETWEEN 1 2) AND (b BETWEEN 3 4))")]
+    [InlineData("a BETWEEN 1 AND 2 OR b", "((a BETWEEN 1 2) OR b)")]
+    [InlineData("a IN (1) OR b", "((a IN) OR b)")]
+    [InlineData("a OR b BETWEEN 1 AND 2", "(a OR (b BETWEEN 1 2))")]
+    [InlineData("a OR b IN (1)", "(a OR (b IN))")]
+    [InlineData("a NOT IN (1) AND b NOT BETWEEN 1 AND 2", "((a NOT IN) AND (b NOT BETWEEN 1 2))")]
+    [InlineData("a NOT LIKE b AND c NOT IN (1)", "((a NOT_LIKE b) AND (c NOT IN))")]
+    [InlineData("a + 1 BETWEEN b - 1 AND c * 2", "((a + 1) BETWEEN (b - 1) (c * 2))")]
+    [InlineData("a & b IN (1)", "((a & b) IN)")]
+    [InlineData("a = b IN (1)", "((a = b) IN)")]
+    [InlineData("a BETWEEN 1 AND 2 BETWEEN 3 AND 4", "((a BETWEEN 1 2) BETWEEN 3 4)")]
+    [InlineData("a IN (1) IN (2)", "((a IN) IN)")]
+    public void ShouldBindBetweenAndInTighterThanAndOr(string expression, string expected)
+    {
+        foreach (var where in WhereExpressions(expression))
+        {
+            Assert.Equal(expected, Format(where));
+        }
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM t JOIN u ON a IN (1) WHERE b")]
+    [InlineData("SELECT * FROM t JOIN u ON a = 1 AND b BETWEEN 1 AND 2")]
+    public void ShouldParseBetweenAndInInJoinConditions(string sql)
+    {
+        Assert.NotNull(SqlParser.Parse(sql));
+#if NET8_0_OR_GREATER
+        Assert.True(SqlParser.TryParse(sql, out _));
+#endif
+    }
+
+    [Theory]
+    [InlineData("NOT a = 1", "(NOT (a = 1))")]
+    [InlineData("NOT a LIKE b", "(NOT (a LIKE b))")]
+    [InlineData("NOT a NOT LIKE b", "(NOT (a NOT_LIKE b))")]
+    [InlineData("NOT a & b", "(NOT (a & b))")]
+    [InlineData("NOT a IN (1)", "(NOT (a IN))")]
+    [InlineData("NOT a NOT IN (1)", "(NOT (a NOT IN))")]
+    [InlineData("NOT a BETWEEN 1 AND 2", "(NOT (a BETWEEN 1 2))")]
+    [InlineData("NOT a AND b", "((NOT a) AND b)")]
+    [InlineData("a AND NOT b", "(a AND (NOT b))")]
+    [InlineData("NOT a OR NOT b AND c", "((NOT a) OR ((NOT b) AND c))")]
+    [InlineData("NOT NOT a = 1", "(NOT (NOT (a = 1)))")]
+    [InlineData("-a = 1", "((- a) = 1)")]
+    [InlineData("~a & b", "((~ a) & b)")]
+    public void ShouldBindNotLooserThanPredicates(string expression, string expected)
+    {
+        foreach (var where in WhereExpressions(expression))
+        {
+            Assert.Equal(expected, Format(where));
+        }
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM t WHERE NOT")]
+    [InlineData("SELECT * FROM t WHERE NOT AND a")]
+    [InlineData("SELECT * FROM t WHERE a = NOT b")]
+    [InlineData("SELECT * FROM t WHERE 1 + NOT 2")]
+    [InlineData("SELECT * FROM t WHERE -NOT a")]
+    [InlineData("SELECT * FROM t WHERE a BETWEEN NOT b AND c")]
+    public void ShouldNotParseNotInsideAPredicate(string sql)
+    {
+        Assert.Null(SqlParser.Parse(sql));
+#if NET8_0_OR_GREATER
+        Assert.False(SqlParser.TryParse(sql, out _));
+#endif
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM t WHERE a IN (NOT b)")]
+    [InlineData("SELECT * FROM t WHERE (NOT a) = b")]
+    [InlineData("SELECT f(NOT a) FROM t")]
+    public void ShouldParseNotInsideDelimitedExpressions(string sql)
+    {
+        Assert.NotNull(SqlParser.Parse(sql));
+#if NET8_0_OR_GREATER
+        Assert.True(SqlParser.TryParse(sql, out _));
+#endif
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM t JOIN u ON a OR b", "(a OR b)")]
+    [InlineData("SELECT * FROM t JOIN u ON a OR b WHERE c", "(a OR b)")]
+    [InlineData("SELECT * FROM t JOIN u ON a OR b ORDER BY c", "(a OR b)")]
+    [InlineData("SELECT * FROM t JOIN u ON a ORDER BY c", "a")]
+    [InlineData("SELECT * FROM t LEFT JOIN u ON a = 1 OR b AND NOT c", "((a = 1) OR (b AND (NOT c)))")]
+    public void ShouldParseOrInJoinConditions(string sql, string expected)
+    {
+        var runtime = SqlParser.Parse(sql);
+        Assert.NotNull(runtime);
+        Assert.Equal(expected, Format(Assert.Single(GetSelectStatement(runtime).FromClause!.Joins!).Conditions));
+#if NET8_0_OR_GREATER
+        Assert.True(SqlParser.TryParse(sql, out var generated));
+        Assert.Equal(expected, Format(Assert.Single(GetSelectStatement(generated).FromClause!.Joins!).Conditions));
+#endif
+    }
+
+    [Fact]
+    public void ShouldParseConsecutiveJoinsWithOrInTheirConditions()
+    {
+        var result = SqlParser.Parse("SELECT * FROM t JOIN u ON a OR b LEFT JOIN v ON c OR d");
+        Assert.NotNull(result);
+
+        var joins = GetSelectStatement(result).FromClause!.Joins!;
+        Assert.Equal(2, joins.Count);
+        Assert.Equal("(a OR b)", Format(joins[0].Conditions));
+        Assert.Equal("(c OR d)", Format(joins[1].Conditions));
+    }
+
+    private static string Format(Expression expression) => expression switch
+    {
+        UnaryExpression unary => $"({UnaryText(unary.Operator)} {Format(unary.Expression)})",
+        BetweenExpression between => $"({Format(between.Expression)} {(between.IsNot ? "NOT " : "")}BETWEEN {Format(between.Lower)} {Format(between.Upper)})",
+        InExpression list => $"({Format(list.Expression)} {(list.IsNot ? "NOT " : "")}IN)",
+        BinaryExpression binary => $"({Format(binary.Left)} {OperatorText(binary.Operator)} {Format(binary.Right)})",
+        IdentifierExpression identifier => identifier.Identifier.ToString(),
+        LiteralExpression<decimal> number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        _ => expression.GetType().Name,
+    };
+
+    private static string UnaryText(UnaryOperator op) => op switch
+    {
+        UnaryOperator.Not => "NOT",
+        UnaryOperator.Minus => "-",
+        UnaryOperator.BitwiseNot => "~",
+        _ => op.ToString(),
+    };
+
+    private static string OperatorText(BinaryOperator op) => op switch
+    {
+        BinaryOperator.And => "AND",
+        BinaryOperator.Or => "OR",
+        BinaryOperator.Equal => "=",
+        BinaryOperator.NotLike => "NOT_LIKE",
+        BinaryOperator.Like => "LIKE",
+        BinaryOperator.Add => "+",
+        BinaryOperator.Subtract => "-",
+        BinaryOperator.Multiply => "*",
+        BinaryOperator.BitwiseAnd => "&",
+        _ => op.ToString(),
+    };
+
+    [Fact]
+    public void ShouldParseOrOperandsFromTheLeft()
+    {
+        foreach (var where in WhereExpressions("a OR b AND c OR d"))
+        {
+            var outer = Assert.IsType<BinaryExpression>(where);
+            Assert.Equal(BinaryOperator.Or, outer.Operator);
+            Assert.IsType<IdentifierExpression>(outer.Right);
+
+            var inner = Assert.IsType<BinaryExpression>(outer.Left);
+            Assert.Equal(BinaryOperator.Or, inner.Operator);
+            Assert.IsType<IdentifierExpression>(inner.Left);
+            Assert.Equal(BinaryOperator.And, Assert.IsType<BinaryExpression>(inner.Right).Operator);
+        }
+    }
+
+    private static System.Collections.Generic.IEnumerable<Expression> WhereExpressions(string expression)
+    {
+        var sql = "SELECT * FROM t WHERE " + expression;
+        var runtime = SqlParser.Parse(sql);
+        Assert.NotNull(runtime);
+        yield return GetSelectStatement(runtime).WhereClause!.Expression;
+#if NET8_0_OR_GREATER
+        Assert.True(SqlParser.TryParse(sql, out var generated));
+        yield return GetSelectStatement(generated).WhereClause!.Expression;
+#endif
+    }
 }
