@@ -1160,7 +1160,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (_prefixLevels.Length > 0)
         {
             var idText = id.ToString(CultureInfo.InvariantCulture);
-            result.Body.Add(GeneratePrefixed(climb, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth > 0));
+            result.Body.Add(GeneratePrefixed(climb, idText, valueType, operandHelper, factories, levelsField, ctx, cursor, compacting, context.MaxRecursionDepth));
 
             foreach (var level in _prefixLevels)
             {
@@ -1529,9 +1529,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     // The prefix operators following the first one, then their operand, applied from the last operator like at runtime
-    private string GeneratePrefixed(string climb, string id, string valueType, string operandHelper, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, bool limitRecursion)
+    private string GeneratePrefixed(string climb, string id, string valueType, string operandHelper, string[] factories, string? levelsField, string ctx, string cursor, bool compacting, int maxRecursionDepth)
     {
         var sb = new StringBuilder();
+        var limitRecursion = maxRecursionDepth > 0;
+        var enterRecursion = $"{ctx}.EnterRecursion({maxRecursionDepth.ToString(CultureInfo.InvariantCulture)});";
 
         void Line(string text) => sb.Append(text).Append('\n');
 
@@ -1590,7 +1592,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // isn't used again, so the levels are only left on a return.
         if (limitRecursion)
         {
-            Line($"    {ctx}.EnterRecursion();");
+            Line("    " + enterRecursion);
         }
 
         // The next operator is of the level of this one or of a tighter one
@@ -1636,7 +1638,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (limitRecursion)
         {
-            Line($"            {ctx}.EnterRecursion();");
+            Line("            " + enterRecursion);
         }
 
         Line("            operators.Add(op);");

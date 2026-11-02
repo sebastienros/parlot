@@ -160,6 +160,17 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("Flat", 3)]
+    [InlineData("Nested", 50)]
+    public void RecursionLimitGrammar(string input, long expected)
+    {
+        // The setup checks the limited parser against the other one
+        var benchmark = new RecursionLimitBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.Generated());
+    }
+
+    [Theory]
     [InlineData("Simple", 1)]
     [InlineData("Calls", 1)]
     [InlineData("Conditional", 2)]

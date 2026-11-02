@@ -706,7 +706,7 @@ public sealed partial class ParserSourceGenerator
             || type is IArrayTypeSymbol array && UsesParlotType(array.ElementType)
             || type is INamedTypeSymbol named && named.TypeArguments.Any(UsesParlotType);
 
-    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core, bool wrapperIsContext, int maxRecursionDepth)
+    private static void AppendStandaloneEntryPoint(StringBuilder source, StandaloneEntryPoint standalone, string wrapper, string core, bool wrapperIsContext)
     {
         var entry = standalone.Method;
         var factory = standalone.Factory.Method;
@@ -748,7 +748,7 @@ public sealed partial class ParserSourceGenerator
             ? $"new {wrapper}({scanner}{cancellationArgument}, {arguments})"
             : wrapperIsContext
                 ? $"new {wrapper}({scanner}{cancellationArgument})"
-                : $"new global::Parlot.Fluent.ParseContext({ParseContextArguments(scanner, token, maxRecursionDepth)})";
+                : $"new global::Parlot.Fluent.ParseContext({ParseContextArguments(scanner, token)})";
         source.AppendLine($"            var {context} = {contextCreation};");
         var diagnostics = standalone.DiagnosticsParameter is { } diagnosticsParameter ? EscapeIdentifier(diagnosticsParameter.Name) : null;
         var diagnosticType = standalone.DiagnosticsParameter is { Type: INamedTypeSymbol { TypeArguments: [var element] } }
