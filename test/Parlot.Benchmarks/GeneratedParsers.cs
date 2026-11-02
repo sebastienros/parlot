@@ -21,6 +21,7 @@ public static partial class GeneratedParsers
     public static partial bool TryParseText(string input, out string value);
     public static partial bool TryParseMatchedText(string input, out string value);
     public static partial bool TryParseDecimal(string input, out decimal value);
+    public static partial bool TryParseUnderscoredDecimal(string input, out decimal value);
     public static partial bool TryParseInteger(string input, out long value);
     public static partial bool TryParseOneOf(string input, out string value);
     public static partial bool TryParseLiteralOneOf(string input, out string value);

@@ -101,6 +101,39 @@ public class SimpleParsersBenchmarks
         return result;
     }
 
+    // The digits are copied without their underscores before the value is parsed
+    private static readonly Parser<decimal> _underscoredDecimalFluent = Terms.Number<decimal>(NumberOptions.Float | NumberOptions.AllowUnderscore);
+
+    private const string UnderscoredDecimalInput = "123_456.789_012";
+
+    [Benchmark, BenchmarkCategory("Decimal")]
+    public decimal Decimal_NoUnderscores_Fluent()
+    {
+        _underscoredDecimalFluent.TryParse(DecimalInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Decimal")]
+    public decimal Decimal_NoUnderscores_Generated()
+    {
+        GeneratedParsers.TryParseUnderscoredDecimal(DecimalInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Decimal")]
+    public decimal Decimal_Underscores_Fluent()
+    {
+        _underscoredDecimalFluent.TryParse(UnderscoredDecimalInput, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Decimal")]
+    public decimal Decimal_Underscores_Generated()
+    {
+        GeneratedParsers.TryParseUnderscoredDecimal(UnderscoredDecimalInput, out var result);
+        return result;
+    }
+
     // ==================== Integer ====================
 
     private static readonly Parser<long> _integerFluent = Terms.Integer();
