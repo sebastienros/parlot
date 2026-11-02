@@ -28,21 +28,14 @@ public static partial class GeneratedParsers
         var groupExpression = Between(openParen, expression, closeParen);
         var primary = number.Or(groupExpression);
 
-        var unary = primary.Unary(
-            (minus, static value => new NegateExpression(value))
-        );
-
-        var multiplicative = unary.LeftAssociative(
-            (divided, static (left, right) => new Division(left, right)),
-            (times, static (left, right) => new Multiplication(left, right))
-        );
-
-        var additive = multiplicative.LeftAssociative(
-            (plus, static (left, right) => new Addition(left, right)),
-            (minus, static (left, right) => new Subtraction(left, right))
-        );
-
-        expression.Parser = additive;
+        expression.Parser = primary.Operators()
+            .Unary((minus, static value => new NegateExpression(value)))
+            .LeftAssociative(
+                (divided, static (left, right) => new Division(left, right)),
+                (times, static (left, right) => new Multiplication(left, right)))
+            .LeftAssociative(
+                (plus, static (left, right) => new Addition(left, right)),
+                (minus, static (left, right) => new Subtraction(left, right)));
 
         return expression;
     }

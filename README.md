@@ -88,32 +88,26 @@ static FluentParser()
     // primary => NUMBER | "(" expression ")";
     var primary = number.Or(groupExpression);
 
-    // ( "-" ) unary | primary;
-    var unary = primary.Unary(
-        (minus, x => new NegateExpression(x))
-        );
-
-    // multiplicative => unary ( ( "/" | "*" ) unary )* ;
-    var multiplicative = unary.LeftAssociative(
-        (divided, static (a, b) => new Division(a, b)),
-        (times, static (a, b) => new Multiplication(a, b))
-        );
-
-    // additive => multiplicative(("-" | "+") multiplicative) * ;
-    var additive = multiplicative.LeftAssociative(
-        (plus, static (a, b) => new Addition(a, b)),
-        (minus, static (a, b) => new Subtraction(a, b))
-        );
-
-    expression.Parser = additive;
+    // The levels of operators, from the one which binds the tightest
+    expression.Parser = primary.Operators()
+        // unary => ( "-" ) unary | primary ;
+        .Unary((minus, static x => new NegateExpression(x)))
+        // multiplicative => unary ( ( "/" | "*" ) unary )* ;
+        .LeftAssociative(
+            (divided, static (a, b) => new Division(a, b)),
+            (times, static (a, b) => new Multiplication(a, b)))
+        // additive => multiplicative ( ( "-" | "+" ) multiplicative )* ;
+        .LeftAssociative(
+            (plus, static (a, b) => new Addition(a, b)),
+            (minus, static (a, b) => new Subtraction(a, b)));
 
     Expression = expression;
 }
 ```
 
-The same table can be declared at once with `primary.Operators()`, which parses it with a single precedence climbing
-loop that looks for the operator following an operand once whatever the number of levels, and also supports postfix
-operators, see [Operator tables](docs/parsers.md#operator-tables).
+`primary.Operators()` parses the table with a single precedence climbing loop that looks for the operator following an
+operand once whatever the number of levels, and also supports postfix operators, see
+[Operator tables](docs/parsers.md#operator-tables).
 
 ## Documentation
 
