@@ -758,6 +758,10 @@ public class BenchmarksTests
 
         Assert.Equal("hello", benchmarks.Text_Generated());
         Assert.Equal(123.456m, benchmarks.Decimal_Generated());
+        Assert.Equal(123.456m, benchmarks.Decimal_NoUnderscores_Fluent());
+        Assert.Equal(123.456m, benchmarks.Decimal_NoUnderscores_Generated());
+        Assert.Equal(123456.789012m, benchmarks.Decimal_Underscores_Fluent());
+        Assert.Equal(123456.789012m, benchmarks.Decimal_Underscores_Generated());
         Assert.Equal(123L, benchmarks.Integer_Generated());
         Assert.Equal("cherry", benchmarks.OneOf_Generated());
         Assert.Equal("cherry", benchmarks.LiteralOneOf_Generated());

@@ -56,8 +56,15 @@ public enum NumberOptions
     Float = AllowLeadingSign | AllowDecimalSeparator | AllowExponent,
 
     /// <summary>
-    /// Indicates that all options are used.
+    /// Indicates that all options are used, except <see cref="AllowUnderscore"/>.
     /// This is a composite number style.
     /// </summary>
     Any = AllowLeadingSign | AllowDecimalSeparator | AllowGroupSeparators | AllowExponent,
+
+    /// <summary>
+    /// Indicates that underscores (_) can separate the digits of the numeric string to make it easier to read, like
+    /// in <c>1_000_000</c>. Underscores are only allowed between two digits, and can be repeated. They are ignored
+    /// when the value is computed. It isn't part of <see cref="Any"/>, which reads <c>1_000</c> as <c>1</c>.
+    /// </summary>
+    AllowUnderscore = 16,
 }

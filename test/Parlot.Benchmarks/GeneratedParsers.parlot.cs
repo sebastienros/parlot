@@ -141,6 +141,9 @@ public static partial class GeneratedParsers
     [GenerateParser(nameof(TryParseDecimal))]
     private static Parser<decimal> BuildDecimal() => Terms.Decimal();
 
+    [GenerateParser(nameof(TryParseUnderscoredDecimal))]
+    private static Parser<decimal> BuildUnderscoredDecimal() => Terms.Number<decimal>(NumberOptions.Float | NumberOptions.AllowUnderscore);
+
     [GenerateParser(nameof(TryParseInteger))]
     private static Parser<long> BuildInteger() => Terms.Integer();
 

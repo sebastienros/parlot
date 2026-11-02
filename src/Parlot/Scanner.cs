@@ -232,6 +232,13 @@ public class Scanner
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadDecimal(out ReadOnlySpan<char> number) => ReadDecimal(true, true, false, true, out number);
 
+    /// <summary>
+    /// Reads a decimal number with the given options.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="number"/> is the text that was read. With <see cref="NumberOptions.AllowUnderscore"/> it
+    /// includes the underscores, which the parsing methods of .NET don't accept.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
     {
@@ -240,18 +247,23 @@ public class Scanner
             (numberOptions & NumberOptions.AllowDecimalSeparator) != 0,
             (numberOptions & NumberOptions.AllowGroupSeparators) != 0,
             (numberOptions & NumberOptions.AllowExponent) != 0,
+            (numberOptions & NumberOptions.AllowUnderscore) != 0,
             out number,
             decimalSeparator,
             groupSeparator);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
+        => ReadDecimal(allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, allowUnderscore: false, out number, decimalSeparator, groupSeparator);
+
+    internal bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, out ReadOnlySpan<char> number, char decimalSeparator, char groupSeparator)
     {
         // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
         // The chars are counted on the span first such that the cursor only moves once, and not at all when there is no number.
 
         var span = Cursor.Span;
-        var length = ScanDecimal(span, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, decimalSeparator, groupSeparator, out var reachedEnd);
+        var length = ScanDecimal(span, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, allowUnderscore, decimalSeparator, groupSeparator, out var reachedEnd);
 
         if (reachedEnd)
         {
@@ -278,6 +290,7 @@ public class Scanner
     /// <param name="allowDecimalSeparator">Whether the number can have a decimal part.</param>
     /// <param name="allowGroupSeparator">Whether the integral part can have group separators.</param>
     /// <param name="allowExponent">Whether the number can have an exponent.</param>
+    /// <param name="allowUnderscore">Whether underscores can separate digits, e.g. <c>1_000</c>.</param>
     /// <param name="decimalSeparator">The decimal separator.</param>
     /// <param name="groupSeparator">The group separator.</param>
     /// <param name="reachedEnd">
@@ -285,10 +298,10 @@ public class Scanner
     /// it, including when the number doesn't use the chars it read last, like the <c>e</c> of <c>1e</c>.
     /// </param>
     /// <remarks>
-    /// The number is read like <see cref="ReadDecimal(bool, bool, bool, bool, out ReadOnlySpan{char}, char, char)"/> reads it,
+    /// The number is read like <see cref="ReadDecimal(bool, bool, bool, bool, bool, out ReadOnlySpan{char}, char, char)"/> reads it,
     /// which moves the cursor over it. Generated parsers read it on the span they match without the cursor.
     /// </remarks>
-    internal static int ScanDecimal(ReadOnlySpan<char> text, bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, char decimalSeparator, char groupSeparator, out bool reachedEnd)
+    internal static int ScanDecimal(ReadOnlySpan<char> text, bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, char decimalSeparator, char groupSeparator, out bool reachedEnd)
     {
         var i = 0;
 
@@ -298,10 +311,12 @@ public class Scanner
         }
 
         var integralStart = i;
-        i = ScanDigits(text, i);
 
-        // The furthest char read, which a group separator or an exponent the number doesn't use can be after
+        // The furthest char read, which a group separator, an exponent or underscores the number doesn't use can be after
         var furthest = i;
+
+        i = ScanDigits(text, i, allowUnderscore, ref furthest);
+        furthest = Math.Max(furthest, i);
         var hasIntegralPart = i != integralStart;
 
         // A number without integral part must have a decimal part, e.g. `.5`
@@ -325,12 +340,12 @@ public class Scanner
                 }
                 else
                 {
-                    var digits = ScanDigits(text, i);
+                    var digits = ScanDigits(text, i, allowUnderscore, ref furthest);
 
                     if (digits == i)
                     {
                         // it was not a group separator so go back where the symbol was and stop
-                        furthest = i;
+                        furthest = Math.Max(furthest, i);
                         i = beforeGroup;
                         break;
                     }
@@ -344,7 +359,7 @@ public class Scanner
         {
             var afterSeparator = i + 1;
 
-            i = ScanDigits(text, afterSeparator);
+            i = ScanDigits(text, afterSeparator, allowUnderscore, ref furthest);
             furthest = Math.Max(furthest, i);
 
             // A decimal separator must be followed by a number if there is no integral part, e.g. `[NaN].[NaN]`.
@@ -365,7 +380,7 @@ public class Scanner
                 exponent++;
             }
 
-            var digits = ScanDigits(text, exponent);
+            var digits = ScanDigits(text, exponent, allowUnderscore, ref furthest);
             furthest = Math.Max(furthest, digits);
 
             // The exponent must be followed by a number, without a group separator, otherwise it isn't part of the number
@@ -389,6 +404,46 @@ public class Scanner
         }
 
         return start;
+    }
+
+    // Returns the index of the first char from start which isn't a decimal digit, or underscores between digits when they are
+    // allowed. furthest is moved after underscores which aren't followed by a digit, which the next chars could still be.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ScanDigits(ReadOnlySpan<char> text, int start, bool allowUnderscore, ref int furthest)
+    {
+        var i = ScanDigits(text, start);
+
+        if (allowUnderscore && i != start)
+        {
+            i = ScanUnderscoredDigits(text, i, ref furthest);
+        }
+
+        return i;
+    }
+
+    // Reads the groups of digits which follow underscores, from the end of a group of digits
+    private static int ScanUnderscoredDigits(ReadOnlySpan<char> text, int i, ref int furthest)
+    {
+        while (i < text.Length && text[i] == '_')
+        {
+            var next = i + 1;
+
+            while (next < text.Length && text[next] == '_')
+            {
+                next++;
+            }
+
+            if (next >= text.Length || !Character.IsDecimalDigit(text[next]))
+            {
+                // Trailing underscores aren't part of the number, e.g. `1_`
+                furthest = Math.Max(furthest, next);
+                break;
+            }
+
+            i = ScanDigits(text, next + 1);
+        }
+
+        return i;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
