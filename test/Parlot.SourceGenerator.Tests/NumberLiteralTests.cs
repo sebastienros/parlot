@@ -62,6 +62,32 @@ public class NumberLiteralTests
         Assert.Equal(expected, value);
     }
 
+    [Fact]
+    public void Trailing_Decimal_Separator_Is_Left_For_The_Next_Parser_When_The_Fractional_Part_Is_Required()
+    {
+        Assert.True(Grammars.TryParseFractionalPartRequired("1.", out var value));
+        Assert.Equal(1m, value);
+        Assert.False(Grammars.TryParseFractionalPartRequired("1", out _));
+        Assert.False(Grammars.TryParseFractionalPartRequired("1.5", out _));
+    }
+
+    [Fact]
+    public void Trailing_Decimal_Separator_Is_Consumed_By_Default()
+    {
+        Assert.True(Grammars.TryParseFractionalPartOptional("1.", out var value));
+        Assert.Equal(1m, value);
+        Assert.True(Grammars.TryParseFractionalPartOptional("1.5", out value));
+        Assert.Equal(1.5m, value);
+    }
+
+    [Fact]
+    public void Trailing_Decimal_Separator_Is_Left_For_The_Next_Parser_In_Generated_Number_Parsers()
+    {
+        Assert.True(Grammars.TryParseFractionalPartRequiredCallback("1.", out var value));
+        Assert.Equal(2m, value);
+        Assert.False(Grammars.TryParseFractionalPartRequiredCallback("1", out _));
+    }
+
     [Theory]
     [InlineData("123", true, 123L)]
     [InlineData("-789", false, 0L)]
