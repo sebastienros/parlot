@@ -175,6 +175,15 @@ public class HitEndTests
     [InlineData("12", NumberOptions.Integer, "12", true)]
     [InlineData("12.", NumberOptions.Integer, "12", false)]
     [InlineData("", NumberOptions.Integer, null, true)]
+    [InlineData("1_", NumberOptions.Integer | NumberOptions.AllowUnderscore, "1", true)]
+    [InlineData("1__", NumberOptions.Integer | NumberOptions.AllowUnderscore, "1", true)]
+    [InlineData("1_2", NumberOptions.Integer | NumberOptions.AllowUnderscore, "1_2", true)]
+    [InlineData("1_a", NumberOptions.Integer | NumberOptions.AllowUnderscore, "1", false)]
+    [InlineData("1_2 ", NumberOptions.Integer | NumberOptions.AllowUnderscore, "1_2", false)]
+    [InlineData("1.5_", NumberOptions.Float | NumberOptions.AllowUnderscore, "1.5", true)]
+    [InlineData("1e5_", NumberOptions.Float | NumberOptions.AllowUnderscore, "1e5", true)]
+    [InlineData("1,5_", NumberOptions.Number | NumberOptions.AllowUnderscore, "1,5", true)]
+    [InlineData("1_,", NumberOptions.Number | NumberOptions.AllowUnderscore, "1", false)]
     public void ReadDecimalHitsEndWhenItReadsTheEnd(string text, NumberOptions options, string expected, bool hitEnd)
     {
         var s = new Scanner(text, isFinal: false);

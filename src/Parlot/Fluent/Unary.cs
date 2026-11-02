@@ -466,10 +466,11 @@ internal static class UnarySource
 
         // Like at runtime, the parser counts as one level of recursion, and each operator as one more
         var limitRecursion = context.MaxRecursionDepth > 0;
+        var enterRecursion = $"{ctx}.EnterRecursion({context.MaxRecursionDepth.ToString(CultureInfo.InvariantCulture)});";
 
         if (limitRecursion)
         {
-            result.Body.Add($"{ctx}.EnterRecursion();");
+            result.Body.Add(enterRecursion);
         }
 
         // The first operator is matched inline: most operands have none, and their code then has no call to set up
@@ -511,7 +512,7 @@ internal static class UnarySource
 
         if (limitRecursion)
         {
-            lines.Add($"            {ctx}.EnterRecursion();");
+            lines.Add("            " + enterRecursion);
         }
 
         lines.Add("            operators.Add(op);");

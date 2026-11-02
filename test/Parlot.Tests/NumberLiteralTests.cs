@@ -2,6 +2,7 @@ using System;
 using Parlot.Fluent;
 using Parlot.Rewriting;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using Xunit;
 
@@ -60,6 +61,144 @@ public class NumberLiteralTests
         Assert.Equal(expected, parser.Parse(input));
         Assert.Equal("e", parser.Parse("e2"));
         Assert.Equal(",", parser.Parse(",5"));
+    }
+
+    [Theory]
+    [InlineData(NumberOptions.AllowUnderscore, '.', ',', "0123456789")]
+    [InlineData(NumberOptions.Any | NumberOptions.AllowUnderscore, '.', ',', "0123456789+-.")]
+    public void UnderscoresShouldNotStartANumber(NumberOptions options, char decimalSeparator, char groupSeparator, string expected)
+    {
+        ExpectedCharsShouldBeTheCharsStartingANumber(options, decimalSeparator, groupSeparator, expected);
+    }
+
+    [Theory]
+    [InlineData("1_000", 1000)]
+    [InlineData("1__000", 1000)]
+    [InlineData("-1_234.567_8", -1234.5678)]
+    [InlineData("1,000_000.5", 1000000.5)]
+    [InlineData("1_2.3_4e1_0", 123400000000)]
+    [InlineData("1_2e-1", 1.2)]
+    public void ShouldParseNumbersWithUnderscores(string text, decimal expected)
+    {
+        var options = NumberOptions.Any | NumberOptions.AllowUnderscore;
+        var parsers = new Parser<decimal>[]
+        {
+            Literals.Number<decimal>(options),
+            Terms.Number<decimal>(options),
+            new TestNumberLiteral(options, '.', ','),
+        };
+
+        foreach (var parser in parsers)
+        {
+            var context = new ParseContext(new Scanner(text));
+            var result = new ParseResult<decimal>();
+
+            Assert.True(parser.Parse(context, ref result));
+            Assert.Equal(expected, result.Value);
+            Assert.Equal(text.Length, context.Scanner.Cursor.Offset);
+            Assert.Equal(text.Length, result.End);
+        }
+    }
+
+    [Fact]
+    public void ShouldParseNumbersWithUnderscoresOfAnyType()
+    {
+        Assert.Equal((byte)255, Literals.Number<byte>(NumberOptions.AllowUnderscore).Parse("2_5_5"));
+        Assert.Equal(-1_000, Literals.Number<int>(NumberOptions.Integer | NumberOptions.AllowUnderscore).Parse("-1_000"));
+        Assert.Equal(long.MaxValue, Literals.Number<long>(NumberOptions.AllowUnderscore).Parse("9_223_372_036_854_775_807"));
+        Assert.Equal(ulong.MaxValue, Literals.Number<ulong>(NumberOptions.AllowUnderscore).Parse("18_446_744_073_709_551_615"));
+        Assert.Equal(1.5e10, Literals.Number<double>(NumberOptions.Float | NumberOptions.AllowUnderscore).Parse("1.5e1_0"));
+        Assert.Equal(1_000.25f, Literals.Number<float>(NumberOptions.Float | NumberOptions.AllowUnderscore).Parse("1_000.2_5"));
+
+        // Longer than the buffer the digits are first copied to
+        var digits = string.Join("_", Enumerable.Repeat("1234567890", 20));
+        Assert.Equal(BigInteger.Parse(digits.Replace("_", "")), Literals.Number<BigInteger>(NumberOptions.AllowUnderscore).Parse(digits));
+    }
+
+    [Theory]
+    [InlineData("1_000", 1)]
+    [InlineData("1.5_5", 1.5)]
+    public void ShouldNotReadUnderscoresWithoutTheOption(string text, decimal expected)
+    {
+        Assert.Equal(expected, Literals.Number<decimal>(NumberOptions.Any).Parse(text));
+        Assert.Equal(expected, new TestNumberLiteral(NumberOptions.Any, '.', ',').Parse(text));
+    }
+
+    [Theory]
+    [InlineData("1_", 1, 1)]
+    [InlineData("1__x", 1, 1)]
+    [InlineData("1_.5", 1, 1)]
+    [InlineData("1._5", 1, 2)]
+    [InlineData("1e_5", 1, 1)]
+    [InlineData("1_e5", 1, 1)]
+    public void ShouldStopBeforeUnderscoresNotFollowedByADigit(string text, decimal expected, int end)
+    {
+        var context = new ParseContext(new Scanner(text));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(Literals.Number<decimal>(NumberOptions.Any | NumberOptions.AllowUnderscore).Parse(context, ref result));
+        Assert.Equal(expected, result.Value);
+        Assert.Equal(end, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("_1")]
+    [InlineData("-_1")]
+    [InlineData("2_5_6")]
+    public void ShouldRestoreTheCursorWhenANumberWithUnderscoresFails(string text)
+    {
+        var parsers = new Parser<byte>[]
+        {
+            Literals.Number<byte>(NumberOptions.Integer | NumberOptions.AllowUnderscore),
+            new TestByteNumberLiteral(NumberOptions.Integer | NumberOptions.AllowUnderscore),
+        };
+
+        foreach (var parser in parsers)
+        {
+            var context = new ParseContext(new Scanner(text));
+            var result = new ParseResult<byte>();
+
+            Assert.False(parser.Parse(context, ref result));
+            Assert.Equal(0, context.Scanner.Cursor.Offset);
+        }
+    }
+
+    [Fact]
+    public void CustomNumberParsersShouldReceiveTheDigitsWithoutUnderscores()
+    {
+        var parser = new RecordingNumberLiteral(NumberOptions.Float | NumberOptions.AllowUnderscore);
+
+        Assert.Equal(1234.5m, parser.Parse("1_234.5"));
+        Assert.Equal("1234.5", parser.LastText);
+
+        // The text is passed as is when there are no underscores
+        Assert.Equal(12m, parser.Parse("12"));
+        Assert.Equal("12", parser.LastText);
+    }
+
+    private sealed class RecordingNumberLiteral : NumberLiteralBase<decimal>
+    {
+        public RecordingNumberLiteral(NumberOptions options) : base(options)
+        {
+        }
+
+        public string LastText { get; private set; } = "";
+
+        public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out decimal value)
+        {
+            LastText = s.ToString();
+            return decimal.TryParse(LastText, style, provider, out value);
+        }
+    }
+
+    private sealed class TestByteNumberLiteral : NumberLiteralBase<byte>
+    {
+        public TestByteNumberLiteral(NumberOptions options) : base(options)
+        {
+        }
+
+        public override bool TryParseNumber(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out byte value)
+            => byte.TryParse(s.ToString(), style, provider, out value);
     }
 
     private sealed class TestNumberLiteral : NumberLiteralBase<decimal>

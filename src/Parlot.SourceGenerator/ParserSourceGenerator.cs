@@ -1227,6 +1227,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         var valueTypeName = TypeNameHelper.GetTypeName(valueType);
         var coreName = methodName + "_Core";
         var wrapperName = "GeneratedParser_" + methodName;
+        var limitRecursion = sgContext.MaxRecursionDepth > 0;
         var hasParameters = methodSymbol.Parameters.Length > 0;
         var staticModifier = hasParameters ? "" : "static ";
         var parameterList = GetFactoryParameterList(methodSymbol);
@@ -1405,7 +1406,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             var cancellationDeclaration = standalone.CancellationTokenParameter is not null
                 ? $", global::System.Threading.CancellationToken {cancellationParameter}"
                 : "";
-            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner {scannerParameter}{cancellationDeclaration}, {parameterList}) : base({ParseContextArguments(scannerParameter, standalone.CancellationTokenParameter is not null ? cancellationParameter : null, sgContext.MaxRecursionDepth)})");
+            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner {scannerParameter}{cancellationDeclaration}, {parameterList}) : base({ParseContextArguments(scannerParameter, standalone.CancellationTokenParameter is not null ? cancellationParameter : null)})");
             sb.AppendLine("            {");
             foreach (var parameter in methodSymbol.Parameters)
             {
@@ -1414,16 +1415,16 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             sb.AppendLine("            }");
             sb.AppendLine();
         }
-        else if (deferredMethods.Count > 0)
+        else if (deferredMethods.Count > 0 || limitRecursion)
         {
-            // The context carries the per-parse state of the deferred parsers (see the deferred helpers below),
-            // so the entry point creates this subclass. The parser methods remain static.
+            // The context carries the per-parse state of the deferred parsers (see the deferred helpers below) and returns
+            // the recursion limit, so the entry point creates this subclass. The parser methods remain static.
             var cancellationDeclaration = standalone.CancellationTokenParameter is not null
                 ? ", global::System.Threading.CancellationToken __parlotCancellationToken"
                 : "";
             sb.AppendLine($"        private sealed class {wrapperName} : global::Parlot.Fluent.ParseContext");
             sb.AppendLine("        {");
-            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner __parlotScanner{cancellationDeclaration}) : base({ParseContextArguments("__parlotScanner", standalone.CancellationTokenParameter is not null ? "__parlotCancellationToken" : null, sgContext.MaxRecursionDepth)})");
+            sb.AppendLine($"            public {wrapperName}(global::Parlot.Scanner __parlotScanner{cancellationDeclaration}) : base({ParseContextArguments("__parlotScanner", standalone.CancellationTokenParameter is not null ? "__parlotCancellationToken" : null)})");
             sb.AppendLine("            {");
             sb.AppendLine("            }");
             sb.AppendLine();
@@ -1614,8 +1615,14 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             }
         }
 
+        if (limitRecursion)
+        {
+            sb.AppendLine();
+            // The code counting the levels passes the limit, which the context returns for the callbacks without storing it
+            sb.AppendLine($"        public override int MaxRecursionDepth => {sgContext.MaxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+        }
+
         var deferredIndex = 0;
-        var limitRecursion = sgContext.MaxRecursionDepth > 0;
         foreach (var (deferredMethodName, deferredValueTypeName, deferredResult, deferredParserName, countsRecursion) in deferredMethods)
         {
             var stateField = $"__parlotDeferred{deferredIndex++}";
@@ -1642,7 +1649,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             var countRecursion = limitRecursion && countsRecursion;
             if (countRecursion)
             {
-                sb.AppendLine("            context.EnterRecursion();");
+                sb.AppendLine($"            context.EnterRecursion({sgContext.MaxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)});");
             }
             sb.AppendLine($"            var previous = state.{stateField};");
             sb.AppendLine($"            state.{stateField} = offset;");
@@ -1734,11 +1741,11 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0, sgContext.MaxRecursionDepth);
+        AppendStandaloneEntryPoint(sb, standalone, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0 || limitRecursion);
         foreach (var overload in standalone.FailureOverloads)
         {
             sb.AppendLine();
-            AppendStandaloneEntryPoint(sb, overload, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0, sgContext.MaxRecursionDepth);
+            AppendStandaloneEntryPoint(sb, overload, wrapperName, coreName, wrapperIsContext: deferredMethods.Count > 0 || limitRecursion);
         }
 
         // Generate helper methods if needed (e.g., CreateCharMap for ListOfChars on netstandard)
@@ -1755,17 +1762,9 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         return (sb.ToString(), failedLambdas, capturedVariables);
     }
 
-    // The arguments of a ParseContext constructor, which sets the recursion limit of the attribute
-    private static string ParseContextArguments(string scanner, string? cancellationToken, int maxRecursionDepth)
-    {
-        if (maxRecursionDepth > 0)
-        {
-            var depth = maxRecursionDepth.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            return cancellationToken is null ? $"{scanner}, {depth}" : $"{scanner}, {depth}, cancellationToken: {cancellationToken}";
-        }
-
-        return cancellationToken is null ? scanner : $"{scanner}, {cancellationToken}";
-    }
+    // The arguments of a ParseContext constructor. The recursion limit of the attribute is returned by the generated context.
+    private static string ParseContextArguments(string scanner, string? cancellationToken)
+        => cancellationToken is null ? scanner : $"{scanner}, {cancellationToken}";
 
     // The string and TextReader entry points of a factory are generated separately
     private static string GetEntryIdentifier(IMethodSymbol method, StandaloneEntryPoint standalone)

@@ -754,9 +754,9 @@ per call without allocating a bound parser object.
 
 Besides what the grammar's callbacks and results allocate, a `string` entry point allocates two objects: the
 internal context, which also holds the configuration and the state of the grammar's deferred parsers, and a
-scanner that is its own cursor. The context's loop detection and recursion limit members, which generated
-parsers don't use, only allocate their state when a callback calls them, or, for the recursion limit, when the attribute
-sets `MaxRecursionDepth`.
+scanner that is its own cursor. A recursion limit set with `MaxRecursionDepth` allocates nothing more: the context
+counts the levels in a field and the generated code passes the limit. The context's loop detection members, which
+generated parsers don't use, only allocate their state when a callback calls them.
 
 Generated parser helpers and callbacks use normal JIT inlining heuristics. Forcing inlining based only
 on a helper's local statement count can duplicate large parser chains, increasing native code size and

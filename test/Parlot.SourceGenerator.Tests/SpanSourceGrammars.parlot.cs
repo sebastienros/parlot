@@ -115,6 +115,15 @@ public static partial class SpanSourceGrammars
             .And(Terms.Number<double>(NumberOptions.Any).ZeroOrOne())
             .Then(static t => $"{t.Item1}|{t.Item2}|{string.Join(",", t.Item3)}");
 
+    // Numbers whose digits can be separated by underscores
+    [GenerateParser(nameof(TryParseUnderscoredNumbers))]
+    private static Parser<string> BuildUnderscoredNumbers() =>
+        Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowUnderscore)
+            .AndSkip(Terms.Char(';'))
+            .And(Terms.Number<decimal>(NumberOptions.Any | NumberOptions.AllowUnderscore))
+            .And(Terms.Number<double>(NumberOptions.Float | NumberOptions.AllowUnderscore).ZeroOrOne())
+            .Then(static t => $"{t.Item1}|{t.Item2}|{string.Join(",", t.Item3)}");
+
     // A custom white space parser skips comments
     [GenerateParser(nameof(TryParseCommented))]
     private static Parser<string> BuildCommented() =>

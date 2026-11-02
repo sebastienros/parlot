@@ -492,6 +492,57 @@ public class ScannerTests
     }
 
     [Theory]
+    [InlineData("1_000", "1_000")]
+    [InlineData("1__000", "1__000")]
+    [InlineData("12_3.0_1", "12_3.0_1")]
+    [InlineData("-1_2.3_4e1_0", "-1_2.3_4e1_0")]
+    [InlineData("1,000_000.5", "1,000_000.5")]
+    [InlineData("1_", "1")]
+    [InlineData("1__", "1")]
+    [InlineData("1_a", "1")]
+    [InlineData("1_.5", "1")]
+    [InlineData("1._5", "1.")]
+    [InlineData("1_e5", "1")]
+    [InlineData("1e_5", "1")]
+    [InlineData("1e5_", "1e5")]
+    [InlineData("1,_5", "1")]
+    public void ShouldReadDecimalWithUnderscores(string text, string expected)
+    {
+        // Underscores are only part of the number between two digits, and they are kept in the text that is read
+        var scanner = new Scanner(text);
+
+        Assert.True(scanner.ReadDecimal(NumberOptions.Any | NumberOptions.AllowUnderscore, out var result));
+        Assert.Equal(expected, result.ToString());
+        Assert.Equal(expected.Length, scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("1_000", "1")]
+    [InlineData("1.0_5", "1.0")]
+    [InlineData("1e1_0", "1e1")]
+    public void ShouldNotReadUnderscoresByDefault(string text, string expected)
+    {
+        Assert.True(new Scanner(text).ReadDecimal(NumberOptions.Any, out var result));
+        Assert.Equal(expected, result.ToString());
+
+        Assert.True(new Scanner(text).ReadDecimal(out result));
+        Assert.Equal(expected, result.ToString());
+    }
+
+    [Theory]
+    [InlineData("_1")]
+    [InlineData("-_1")]
+    [InlineData("._1")]
+    [InlineData("_")]
+    public void ShouldNotReadDecimalStartingWithUnderscore(string text)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.False(scanner.ReadDecimal(NumberOptions.Any | NumberOptions.AllowUnderscore, out _));
+        Assert.Equal(TextPosition.Start, scanner.Cursor.Position);
+    }
+
+    [Theory]
     [InlineData(" 1")]
     [InlineData("abc")]
     [InlineData(".")]

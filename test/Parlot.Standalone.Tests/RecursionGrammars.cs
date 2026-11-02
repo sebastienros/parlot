@@ -14,4 +14,5 @@ public static partial class RecursionGrammars
     public static partial bool LimitedNegation(string text, out int value);
     public static partial bool Prefix(string text, out int value);
     public static partial bool LimitedPrefix(string text, out int value);
+    public static partial bool LimitOfContext(string text, out int value);
 }

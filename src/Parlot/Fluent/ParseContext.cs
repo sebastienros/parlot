@@ -15,23 +15,20 @@ public class ParseContext
     /// When <c>true</c>, loop detection is disabled. This may be needed when the ParseContext itself is mutated
     /// during loops and can change the end result of parsing at the same location.
     /// </remarks>
+#if PARLOT_STANDALONE
+    // Generated parsers detect their cycles with fields of their own context, only callbacks read it
+    public bool DisableLoopDetection => _coldState?.DisableLoopDetection ?? false;
+#else
     public bool DisableLoopDetection { get; }
+#endif
 
     /// <summary>
     /// The maximum number of nested recursive parser invocations, or <c>0</c> for no limit.
     /// </summary>
 #if PARLOT_STANDALONE
-    public int MaxRecursionDepth
-    {
-        get => _coldState?.MaxRecursionDepth ?? 0;
-        private set
-        {
-            if (value != 0)
-            {
-                GetColdState().MaxRecursionDepth = value;
-            }
-        }
-    }
+    // A generated parser with a limit passes it to EnterRecursion(int), and returns it from the context it creates. The
+    // limit of a context created with one is in ColdState.
+    public virtual int MaxRecursionDepth => _coldState?.MaxRecursionDepth ?? 0;
 #else
     public int MaxRecursionDepth { get; }
 #endif
@@ -43,7 +40,15 @@ public class ParseContext
     /// When <c>false</c>, new lines will be skipped like any other white space.
     /// Otherwise new lines need to be read explicitly by a rule.
     /// </remarks>
-    public bool UseNewLines { get; }
+    public bool UseNewLines
+    {
+        // The bit of the white space skipped is the set's white space bit when it's set, see _skipMask
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => (_skipMask & WhiteSpaceBits) != 0;
+    }
+
+    // The white space bits of the sets in Character._characterData, each followed by the bit of the set with new lines
+    private const byte WhiteSpaceBits = (byte)(CharacterMask.WhiteSpace | CharacterMask.AsciiWhiteSpace | CharacterMask.SpaceTabCrLfWhiteSpace);
 
     /// <summary>
     /// The scanner used for the parsing session.
@@ -171,9 +176,9 @@ public class ParseContext
     /// scan over the recorded positions since two entries rarely share the same one.
     /// </remarks>
 #if PARLOT_STANDALONE
-    // Generated parsers detect the cycles of their deferred parsers with fields of their own context, and can't limit
-    // their recursion. The state of loop detection and of the recursion limit, kept for the callbacks, is then stored
-    // in ColdState rather than in the context that each generated parse allocates. The algorithms are the same.
+    // Generated parsers detect the cycles of their deferred parsers with fields of their own context, and pass their recursion
+    // limit to EnterRecursion(int). The state of loop detection and the limit, kept for the callbacks, are then stored in
+    // ColdState rather than in the context that each generated parse allocates. The algorithms are the same.
     private int[]? _activePositions { get => _coldState?.ActivePositions; set => GetColdState().ActivePositions = value; }
     private object[]? _activeParsers { get => _coldState?.ActiveParsers; set => GetColdState().ActiveParsers = value; }
     private int _activeCount { get => _coldState?.ActiveCount ?? 0; set => GetColdState().ActiveCount = value; }
@@ -195,11 +200,9 @@ public class ParseContext
     // first entry checks it.
     private byte _stackCheckCount;
 
-#if PARLOT_STANDALONE
-    private int _recursionDepth { get => _coldState?.RecursionDepth ?? 0; set => GetColdState().RecursionDepth = value; }
-#else
+    // The levels of recursion entered. A field even in the context of the generated parsers, which keeps the state
+    // they don't use in ColdState: a parse with a limit would otherwise allocate it.
     private int _recursionDepth;
-#endif
 
     // TODO: For backward compatibility only, remove in future versions
     public ParseContext(Scanner scanner, bool useNewLines)
@@ -228,12 +231,23 @@ public class ParseContext
         ThrowHelper.ThrowIfNegative(maxRecursionDepth, nameof(maxRecursionDepth));
 
         Scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
-        UseNewLines = useNewLines;
         _skipMask = useNewLines ? (byte)CharacterMask.WhiteSpace : (byte)CharacterMask.WhiteSpaceOrNewLine;
         CancellationToken = cancellationToken;
         _flags = cancellationToken.CanBeCanceled ? CancellableFlag : (byte)0;
+#if PARLOT_STANDALONE
+        if (disableLoopDetection)
+        {
+            GetColdState().DisableLoopDetection = true;
+        }
+
+        if (maxRecursionDepth > 0)
+        {
+            GetColdState().MaxRecursionDepth = maxRecursionDepth;
+        }
+#else
         DisableLoopDetection = disableLoopDetection;
         MaxRecursionDepth = maxRecursionDepth;
+#endif
 
         if (maxRecursionDepth > 0)
         {
@@ -289,12 +303,12 @@ public class ParseContext
         public int CommitOffset;
 
 #if PARLOT_STANDALONE
-        // Loop detection and recursion limit, see _activePositions
+        // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
         public object[]? ActiveParsers;
         public int ActiveCount;
+        public bool DisableLoopDetection;
         public int MaxRecursionDepth;
-        public int RecursionDepth;
 #endif
     }
 
@@ -431,7 +445,8 @@ public class ParseContext
     }
 
     // The bit of the white space set in Character._characterData that SkipWhiteSpace skips: the set's white space when
-    // UseNewLines is set, its white space or new lines otherwise. The set isn't stored otherwise, the context would grow.
+    // UseNewLines is set, its white space or new lines otherwise. Neither the set nor UseNewLines is stored otherwise, the
+    // context would grow.
     internal byte _skipMask = (byte)CharacterMask.WhiteSpaceOrNewLine;
 
     // The bit of the white space set without new lines
@@ -915,14 +930,28 @@ public class ParseContext
             return;
         }
 
+        EnterRecursion(maxRecursionDepth);
+    }
+
+    /// <summary>
+    /// Records entry into a recursive parser and throws when <paramref name="maxRecursionDepth"/>, which isn't <c>0</c>, is
+    /// exceeded. The generated parsers pass the limit of their attribute, which the context doesn't store.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EnterRecursion(int maxRecursionDepth)
+    {
         if (_recursionDepth >= maxRecursionDepth)
         {
-            throw new ParseException(
-                $"The maximum parser recursion depth of {maxRecursionDepth} was exceeded.",
-                Scanner.Cursor.Position);
+            ThrowRecursionDepthExceeded(maxRecursionDepth);
         }
 
         _recursionDepth++;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowRecursionDepthExceeded(int maxRecursionDepth)
+    {
+        throw new ParseException($"The maximum parser recursion depth of {maxRecursionDepth} was exceeded.", Scanner.Cursor.Position);
     }
 
     /// <summary>

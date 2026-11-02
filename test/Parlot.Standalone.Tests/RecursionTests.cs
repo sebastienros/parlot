@@ -94,6 +94,32 @@ public class RecursionTests
         Assert.False(RecursionGrammars.LimitedList(new string('[', Depth), out _));
     }
 
+    [Fact]
+    public void Max_Recursion_Depth_Is_Read_By_The_Callbacks()
+    {
+        Assert.True(RecursionGrammars.LimitOfContext("x", out var limit));
+        Assert.Equal(7, limit);
+    }
+
+#if NET
+    [Fact]
+    public void Max_Recursion_Depth_Allocates_Nothing_More()
+    {
+        // The levels are counted in a field of the context, the limit doesn't allocate the cold state of the context
+        Assert.Equal(Allocated(static () => RecursionGrammars.List("[[item]]", out _)), Allocated(static () => RecursionGrammars.LimitedList("[[item]]", out _)));
+        Assert.Equal(Allocated(static () => RecursionGrammars.Negation("--a", out _)), Allocated(static () => RecursionGrammars.LimitedNegation("--a", out _)));
+        Assert.Equal(Allocated(static () => RecursionGrammars.Prefix("--a", out _)), Allocated(static () => RecursionGrammars.LimitedPrefix("--a", out _)));
+
+        static long Allocated(Func<bool> parse)
+        {
+            Assert.True(parse());
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            Assert.True(parse());
+            return GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+    }
+#endif
+
     internal static void OnSmallStack(Action action)
     {
         Exception failure = null;

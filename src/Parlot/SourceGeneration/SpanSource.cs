@@ -490,6 +490,7 @@ internal static class NumberSource
         bool allowDecimalSeparator,
         bool allowGroupSeparator,
         bool allowExponent,
+        bool allowUnderscore,
         char decimalSeparator,
         char groupSeparator)
     {
@@ -501,13 +502,16 @@ internal static class NumberSource
         static string Bool(bool value) => value ? "true" : "false";
 
         writer.Add($"{text} = {writer.Span}.Slice({writer.Pos});");
-        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, {Bool(allowLeadingSign)}, {Bool(allowDecimalSeparator)}, {Bool(allowGroupSeparator)}, {Bool(allowExponent)}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
+        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, {Bool(allowLeadingSign)}, {Bool(allowDecimalSeparator)}, {Bool(allowGroupSeparator)}, {Bool(allowExponent)}, {Bool(allowUnderscore)}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
 
         // More digits could follow the end of the span
         writer.Add($"if ({reachedEnd}) {writer.MarkHitEnd}");
 
         // The value is parsed even when it's not used, since a number its type can't represent doesn't match
-        writer.Add($"if ({length} == 0 || !{tryParseMethod}({text}.Slice(0, {length}), {numberStyles}, {culture}, out {number})) {fail.Goto()}");
+        var digits = allowUnderscore
+            ? $"global::Parlot.Numbers.RemoveUnderscores({text}.Slice(0, {length}))"
+            : $"{text}.Slice(0, {length})";
+        writer.Add($"if ({length} == 0 || !{tryParseMethod}({digits}, {numberStyles}, {culture}, out {number})) {fail.Goto()}");
         writer.Add($"{writer.Pos} += {length};");
 
         if (valueVariable != null)
