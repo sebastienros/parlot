@@ -57,6 +57,52 @@ public static partial class PrecedenceGrammars
         return WithRest(expression);
     }
 
+    // A binary level as the tightest one and a looser prefix level, the same tables as PrecedenceTests.RuntimeTightest
+    [GenerateParser(nameof(TryParseTightestLeft))]
+    private static Parser<string> BuildTightestLeft()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .LeftAssociative((Terms.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)), (Terms.Char('/'), static (a, b) => PrecedenceAst.Binary("/", a, b)))
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)));
+
+        return WithRest(expression);
+    }
+
+    [GenerateParser(nameof(TryParseTightestRight))]
+    private static Parser<string> BuildTightestRight()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .RightAssociative((Terms.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b)), (Terms.Char('/'), static (a, b) => PrecedenceAst.Binary("/", a, b)))
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)));
+
+        return WithRest(expression);
+    }
+
+    [GenerateParser(nameof(TryParseTightestValued))]
+    private static Parser<string> BuildTightestValued()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)));
+
+        return WithRest(expression);
+    }
+
     // A table without levels parses its operand
     [GenerateParser(nameof(TryParseNoLevels))]
     private static Parser<string> BuildNoLevels() =>

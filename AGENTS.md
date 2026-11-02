@@ -147,7 +147,7 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   loop state, 5-14% of NCalc's parse time. Emit it in a local function reached only when the list has an item.
 - Don't add parameters to the climb: with the closure and `this`, its four already put two arguments on the stack on
   Windows x64, and two more flags made .NET 10 give it a frame pointer and zero 1.1 KB of its frame on each call (13% of
-  NCalc's parse time). Encode states in the existing ones, as the `~level` of a resumed climb.
+  NCalc's parse time). Encode states in the existing ones, as the `~level - 1` of a resumed climb.
 - `StandaloneRuntimeSources` embeds the shared runtime files into generated consumers as internal `Parlot.Generated`
   types, compiled with `#define PARLOT_STANDALONE`. Do not fork algorithms into separately maintained copies.
 - `Numbers.Reflection.cs` stays in the runtime library, not the embedded support; do not reintroduce reflection-only

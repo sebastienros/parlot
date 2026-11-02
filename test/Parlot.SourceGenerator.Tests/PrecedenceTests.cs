@@ -18,6 +18,10 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseZeroWidthPrefix(string text, out string value);
     public static partial bool TryParsePrefixOnly(string text, out string value);
     public static partial bool TryParsePrefixOnly(TextReader reader, out string value);
+    public static partial bool TryParseTightestLeft(string text, out string value);
+    public static partial bool TryParseTightestLeft(TextReader reader, out string value);
+    public static partial bool TryParseTightestRight(string text, out string value);
+    public static partial bool TryParseTightestValued(string text, out string value);
     public static partial bool TryParseNoLevels(string text, out string value);
     public static partial bool TryParseNoLevels(TextReader reader, out string value);
     public static partial bool TryParseEmptyOperators(string text, out string value);
@@ -85,6 +89,54 @@ public class PrecedenceTests
         foreach (var chunk in new[] { 1, 2, int.MaxValue })
         {
             Assert.Equal(expected, Run(PrecedenceGrammars.TryParseTable, input, chunk));
+        }
+    }
+
+    // The right operand of the tightest level climbs no level, which isn't resuming the climb of a level after a prefix
+    [Theory]
+    [InlineData("a")]
+    [InlineData("a * b")]
+    [InlineData("a * b / c")]
+    [InlineData("a * b * c + d")]
+    [InlineData("-a")]
+    [InlineData("-a * b")]
+    [InlineData("-a * b + c")]
+    [InlineData("- - a * b")]
+    [InlineData("a * -b")]
+    [InlineData("a + -b * c")]
+    [InlineData("a + -b + c")]
+    [InlineData("(a * b) * -(c + d)")]
+    [InlineData("a *")]
+    [InlineData("a * + b")]
+    [InlineData("-a *")]
+    [InlineData("-")]
+    [InlineData("")]
+    public void Generated_Table_With_A_Binary_Tightest_Level_Parses_Like_The_Runtime(string input)
+    {
+        var left = Run(RuntimeTightest("left"), input);
+
+        Assert.Equal(left, Run(PrecedenceGrammars.TryParseTightestLeft, input));
+        Assert.Equal(Run(RuntimeTightest("right"), input), Run(PrecedenceGrammars.TryParseTightestRight, input));
+        Assert.Equal(Run(RuntimeTightest("valued"), input), Run(PrecedenceGrammars.TryParseTightestValued, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(left, Run(PrecedenceGrammars.TryParseTightestLeft, input, chunk));
+        }
+    }
+
+    [Fact]
+    public void Generated_Table_With_A_Binary_Tightest_Level_Parses_Random_Expressions_Like_The_Runtime()
+    {
+        var left = RuntimeTightest("left");
+        var right = RuntimeTightest("right");
+        var valued = RuntimeTightest("valued");
+
+        foreach (var input in RandomExpressions(23, 2000))
+        {
+            Assert.Equal(Run(left, input), Run(PrecedenceGrammars.TryParseTightestLeft, input));
+            Assert.Equal(Run(right, input), Run(PrecedenceGrammars.TryParseTightestRight, input));
+            Assert.Equal(Run(valued, input), Run(PrecedenceGrammars.TryParseTightestValued, input));
         }
     }
 
@@ -279,6 +331,27 @@ public class PrecedenceTests
             .LeftAssociative(Ops("<", "<="))
             .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)))
             .RightAssociative(Ops("<==", "="));
+
+        return WithRest(expression);
+    }
+
+    private static Parser<string> RuntimeTightest(string kind)
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+        var table = primary.Operators();
+
+        table = kind switch
+        {
+            "left" => table.LeftAssociative(Ops("*", "/")),
+            "right" => table.RightAssociative(Ops("*", "/")),
+            _ => table.LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b)),
+        };
+
+        expression.Parser = table
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative(Ops("+"));
 
         return WithRest(expression);
     }
