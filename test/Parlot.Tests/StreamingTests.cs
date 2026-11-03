@@ -62,6 +62,8 @@ public class StreamingTests
         ["prefix-texts"] = new Grammar<string>(OneOf(Terms.Text("<<="), Terms.Text("<="), Terms.Text("<<"), Terms.Text("<>"), Terms.Text("<"))),
         ["keyword-part"] = new Grammar<string>(Terms.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789_-\u00e9")),
         ["keywords-part"] = new Grammar<string>(OneOf(Literals.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789_-"), Literals.Keyword("inc", "-"), Literals.Text("i"))),
+        ["keyword-ranges"] = new Grammar<string>(Terms.Keyword("in", [('a', 'z'), ('0', '9'), ('\u0080', '\ufffe')], caseInsensitive: true)),
+        ["keywords-ranges"] = new Grammar<string>(OneOf(Literals.Keyword("in", [('a', 'z'), ('\u0080', '\ufffe')]), Literals.Keyword("inc", [('a', 'z'), ('\u0080', '\ufffe')]), Literals.Text("i"))),
         ["anyof"] = new Grammar<TextSpan>(Literals.AnyOf("abc", minSize: 3)),
         ["anyof-max"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Literals.AnyOf("abc", minSize: 1, maxSize: 2))),
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),

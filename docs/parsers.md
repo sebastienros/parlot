@@ -410,6 +410,7 @@ Matches a keyword string, ensuring the following character is not a letter. This
 Parser<string> Keyword(string text, bool caseInsensitive = false, bool returnMatchedText = false)
 Parser<string> Keyword(string text, ReadOnlySpan<char> identifierPart, bool caseInsensitive = false, bool returnMatchedText = false)
 Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false)
+Parser<string> Keyword(string text, ReadOnlySpan<(char First, char Last)> identifierPartRanges, bool caseInsensitive = false, bool returnMatchedText = false)
 ```
 
 Like `Text`, when `caseInsensitive` is `true` the default behavior is to return the canonical keyword text you requested (e.g. passing "if" returns "if" even if the input is "IF"). Set `returnMatchedText: true` to preserve the matched input casing; exact-case matches reuse the keyword, and whole-input matches can reuse the input string.
@@ -452,7 +453,18 @@ parser.Parse("in_x");      // null - failure
 parser.Parse("in-x");      // null - failure
 ```
 
-The set is checked with a bitset for ASCII chars, and any other char is looked up in the set, so it has the cost of the default check. The `string` overload lets factories compiled for .NET Framework or .NET Standard 2.0 pass a string literal. A large source-generated choice of keywords only uses the [keyword lookup](keyword-lookups.md) when none of them has custom identifier chars.
+A set too large for a list goes in `identifierPartRanges`, whose ends are included. For instance, for words that also take every char above ASCII:
+
+```c#
+(char First, char Last)[] wordPart = [('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\ufffe')];
+var from = Terms.Keyword("from", wordPart, caseInsensitive: true);
+
+from.Parse("from x"); // "from"
+from.Parse("from1");  // null - failure
+from.Parse("fromé");  // null - failure
+```
+
+The set is checked with a bitset for ASCII chars, and the ranges of the other chars one after the other, so it has the cost of the default check on ASCII input. The `string` overload lets factories compiled for .NET Framework or .NET Standard 2.0 pass a string literal. A large source-generated choice of keywords uses the [keyword lookup](keyword-lookups.md) when they share their identifier chars, their case sensitivity, and contain only ASCII letters which are identifier chars themselves; a case-insensitive one must return the canonical text.
 
 ### Integer
 

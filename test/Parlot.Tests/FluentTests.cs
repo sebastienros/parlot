@@ -2951,4 +2951,55 @@ public class FluentTests
             Assert.Equal(['a', 'b', 'c'], seekable.ExpectedChars);
         }
     }
+
+    [Theory]
+    [InlineData("from", true)]
+    [InlineData("FROM x", true)]
+    [InlineData("from(", true)]
+    [InlineData("from\uffff", true)]
+    [InlineData("from\u007f", true)]
+    [InlineData("from1", false)]
+    [InlineData("from_", false)]
+    [InlineData("fromage", false)]
+    [InlineData("from\u00e9", false)]
+    [InlineData("from\u0080", false)]
+    [InlineData("from\ufffe", false)]
+    [InlineData("fro", false)]
+    public void KeywordWithRangesChecksItsBoundary(string input, bool expected)
+    {
+        var parser = Literals.Keyword("from", [('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\ufffe')], caseInsensitive: true);
+
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.Equal(expected, parser.Parse(context, ref result));
+        Assert.Equal(expected ? 4 : 0, context.Scanner.Cursor.Offset);
+        if (expected)
+        {
+            Assert.Equal("from", result.Value);
+        }
+    }
+
+    [Fact]
+    public void KeywordRangesCanOverlapAndCrossAscii()
+    {
+        var parser = Literals.Keyword("if", [('\u0100', '\u0200'), ('\u0150', '\u0300'), ('\u0301', '\u0301'), ('z', '\u0090')]);
+
+        Assert.False(parser.TryParse("ifz", out _));
+        Assert.False(parser.TryParse("if\u007f", out _));
+        Assert.False(parser.TryParse("if\u0080", out _));
+        Assert.False(parser.TryParse("if\u0090", out _));
+        Assert.True(parser.TryParse("if\u0091", out _));
+        Assert.False(parser.TryParse("if\u0250", out _));
+        Assert.False(parser.TryParse("if\u0301", out _));
+        Assert.True(parser.TryParse("if\u0302", out _));
+        Assert.True(parser.TryParse("ify", out _));
+    }
+
+    [Fact]
+    public void KeywordRangesMustNotBeEmpty()
+    {
+        Assert.Throws<ArgumentException>(() => new KeywordLiteral("if", [('z', 'a')]));
+    }
 }
+

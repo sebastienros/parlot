@@ -26,4 +26,25 @@ public static partial class KeywordIdentifierPartGrammars
         OneOf(
             Terms.Keyword("if"), Terms.Keyword("else"), Terms.Keyword("elsif"), Terms.Keyword("for"),
             Terms.Keyword("in", LiquidIdentifierPart), Terms.Keyword("and"), Terms.Keyword("or"), Terms.Keyword("with"));
+
+    // HQL's words: letters, digits, '_', '$' and every char above ASCII
+    private static readonly (char First, char Last)[] WordPart =
+        [('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('$', '$'), ('\u0080', '\ufffe')];
+
+    [GenerateParser(nameof(TryParseRanges))]
+    private static Parser<string> BuildRanges() =>
+        Terms.Keyword("from", WordPart, caseInsensitive: true);
+
+    [GenerateParser(nameof(TryParseRangesMatched))]
+    private static Parser<string> BuildRangesMatched() =>
+        Literals.Keyword("from", WordPart, caseInsensitive: true, returnMatchedText: true);
+
+    // The same ranges on all, so this is a keyword lookup of the identifier chars
+    [GenerateParser(nameof(TryParseRangesChoice))]
+    private static Parser<string> BuildRangesChoice() =>
+        OneOf(
+            Terms.Keyword("from", WordPart, caseInsensitive: true), Terms.Keyword("select", WordPart, caseInsensitive: true),
+            Terms.Keyword("where", WordPart, caseInsensitive: true), Terms.Keyword("in", WordPart, caseInsensitive: true),
+            Terms.Keyword("inner", WordPart, caseInsensitive: true), Terms.Keyword("join", WordPart, caseInsensitive: true),
+            Terms.Keyword("or", WordPart, caseInsensitive: true), Terms.Keyword("order", WordPart, caseInsensitive: true));
 }

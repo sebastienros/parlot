@@ -275,6 +275,15 @@ public class LiteralBuilder
     public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
 
     /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not in <paramref name="identifierPartRanges"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPartRanges">The ranges of chars that continue an identifier, both ends included, e.g. <c>[('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\uffff')]</c>. They replace the default ASCII letters.</param>
+    /// <param name="caseInsensitive">Whether the text is matched ignoring case.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    public Parser<string> Keyword(string text, ReadOnlySpan<(char First, char Last)> identifierPartRanges, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, identifierPartRanges, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
+
+    /// <summary>
     /// Builds a parser that matches the specified char.
     /// </summary>
     public Parser<char> Char(char c) => new CharLiteral(c);
@@ -547,6 +556,15 @@ public class TermBuilder
     /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
     /// </remarks>
     public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
+
+    /// <summary>
+    /// Builds a parser that matches a keyword by ensuring the following character is not in <paramref name="identifierPartRanges"/>.
+    /// </summary>
+    /// <param name="text">The keyword.</param>
+    /// <param name="identifierPartRanges">The ranges of chars that continue an identifier, both ends included, e.g. <c>[('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\uffff')]</c>. They replace the default ASCII letters.</param>
+    /// <param name="caseInsensitive">Whether the text is matched ignoring case.</param>
+    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
+    public Parser<string> Keyword(string text, ReadOnlySpan<(char First, char Last)> identifierPartRanges, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, identifierPartRanges, caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
 
     /// <summary>
     /// Builds a parser that matches the specified char.
