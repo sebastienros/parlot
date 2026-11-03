@@ -129,15 +129,21 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         result.Body.Add("else");
         result.Body.Add("{");
         result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Offset;");
+        var recordedName = $"recorded{context.NextNumber()}";
+        result.Body.Add($"    var {recordedName} = {cursorName}.RecordedFailure;");
         var lookahead = context.PinnedCall(result, $"{lookaheadHelperName}({context.ParseContextName}, out _)", "    ");
         result.Body.Add($"    if ({lookahead})");
         result.Body.Add("    {");
+        // The failure is at the start of what must not follow, wherever it was read up to
+        result.Body.Add($"        {context.ParseContextName}.RecordRejected({beforeLookaheadName}, {recordedName}, {(_lookahead is ISeekable { SkipWhitespace: true } ? "true" : "false")});");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add($"        {result.SuccessVariable} = false;");
         result.Body.Add("    }");
         result.Body.Add("    else");
         result.Body.Add("    {");
         result.Body.Add($"        {cursorName}.ResetPosition({beforeLookaheadName});");
+        // What the lookahead read, to find that it doesn't match, says nothing about what follows at this position
+        result.Body.Add($"        {cursorName}.RestoreRecordedFailure({recordedName});");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");
         result.Body.Add("}");

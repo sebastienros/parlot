@@ -464,6 +464,27 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Records the failure of what a parser read and then rejected, as generated code does: only the start of what it read
+    /// tells about the input, at <paramref name="start"/> or after the white space there. <paramref name="recorded"/> is
+    /// the failure recorded before the rejected text was read.
+    /// </summary>
+    /// <remarks>Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal void RecordRejected(int start, int recorded, bool skipWhiteSpace)
+    {
+        var cursor = Scanner.Cursor;
+        cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
+
+        if (skipWhiteSpace)
+        {
+            SkipWhiteSpace();
+        }
+
+        cursor.RecordFailure(cursor.Offset);
+    }
+
+    /// <summary>
     /// Whether <see cref="SkipWhiteSpace"/> can skip something at a char, the shortcut of the parsers skipping white space.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

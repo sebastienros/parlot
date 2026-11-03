@@ -301,6 +301,16 @@ grammar fails through an `Error` or `ElseError` parser, it is the position of th
 `TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
 like `TextPosition`. The names of the tuple elements are free.
 
+What a parser read and then rejected is not what moved the attempt forward, so the failure is at its start, where the
+first bad token is:
+
+- A `When` whose condition rejects the value fails at the start of the value, after the white space the parser skips:
+  `Terms.Identifier().When(...)` on `  from` reports 2, not 6.
+- `WhenNotFollowedBy` and `Not` fail at the start of what must not match, after the white space it skips.
+- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` matches, nor when the parser of
+  `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
+  which was expected there.
+
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
 normal forwarding method otherwise). When only this overload is declared, the parser is generated for it. A string and
@@ -312,9 +322,9 @@ back from: four instructions, without a branch, on that path only. Span code cov
 move the cursor until it matches, records the position of its failing check on its failure path. The overloads which
 don't return the failure run the same code, and the line and column of the failure are only computed when they are
 returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse, successful or not,
-nor its allocations. The furthest failure also counts
-the text lookaheads such as `WhenFollowedBy` read. A `TextReader` overload returns the same failure as the `string`
-one: the buffer only drops text before positions the parse read later.
+nor its allocations. A rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and
+restores it, one load and one store around the lookahead. A `TextReader` overload returns the same failure as the
+`string` one: the buffer only drops text before positions the parse read later.
 
 ### Cancellation
 
