@@ -67,4 +67,11 @@ public enum NumberOptions
     /// when the value is computed. It isn't part of <see cref="Any"/>, which reads <c>1_000</c> as <c>1</c>.
     /// </summary>
     AllowUnderscore = 16,
+
+    /// <summary>
+    /// When set, a decimal separator that is not followed by digits is left out of the number, e.g. <c>1.</c> reads as <c>1</c>
+    /// and the separator is kept for the next parser. When not set (default), the trailing separator is consumed, so <c>1.</c>
+    /// is read as <c>1.</c>. It isn't part of <see cref="Any"/>.
+    /// </summary>
+    RequireFractionalPartForDecimals = 32,
 }

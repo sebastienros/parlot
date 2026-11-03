@@ -705,4 +705,47 @@ public class ScannerTests
         Assert.True(decimal.TryParse(expected, NumberStyles.AllowExponent, CultureInfo.InvariantCulture, out _));
         Assert.Equal(expected, result);
     }
+
+    [Theory]
+    [InlineData("1.", "1.", "")]
+    [InlineData("1.a", "1.", "a")]
+    [InlineData("1.e5", "1.e5", "")]
+    public void ShouldReadTrailingDecimalSeparatorByDefault(string text, string expected, string remainder)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.True(scanner.ReadDecimal(NumberOptions.Float, out var result));
+        Assert.Equal(expected, result);
+        Assert.Equal(remainder, text.Substring(scanner.Cursor.Offset));
+    }
+
+    [Theory]
+    [InlineData("1.", "1", ".")]
+    [InlineData("1.a", "1", ".a")]
+    [InlineData("1.e5", "1", ".e5")]
+    [InlineData("-1.", "-1", ".")]
+    [InlineData("1.5", "1.5", "")]
+    [InlineData("1.5e2", "1.5e2", "")]
+    [InlineData("1_0.", "1_0", ".")]
+    public void ShouldLeaveTrailingDecimalSeparatorWhenTheFractionalPartIsRequired(string text, string expected, string remainder)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.True(scanner.ReadDecimal(NumberOptions.Float | NumberOptions.AllowUnderscore | NumberOptions.RequireFractionalPartForDecimals, out var result));
+        Assert.Equal(expected, result);
+        Assert.Equal(remainder, text.Substring(scanner.Cursor.Offset));
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("-.")]
+    [InlineData(".e5")]
+    [InlineData("a")]
+    public void ShouldNotReadNumberWithoutDigitsWhenTheFractionalPartIsRequired(string text)
+    {
+        var scanner = new Scanner(text);
+
+        Assert.False(scanner.ReadDecimal(NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals, out _));
+        Assert.Equal(0, scanner.Cursor.Offset);
+    }
 }

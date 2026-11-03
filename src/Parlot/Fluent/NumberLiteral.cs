@@ -25,6 +25,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
     private readonly bool _allowUnderscore;
+    private readonly bool _requireFractionalPartForDecimals;
 
     public bool CanSeek { get; } = true;
 
@@ -51,6 +52,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
         _allowUnderscore = (numberOptions & NumberOptions.AllowUnderscore) != 0;
+        _requireFractionalPartForDecimals = (numberOptions & NumberOptions.RequireFractionalPartForDecimals) != 0;
 
         ExpectedChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
@@ -83,7 +85,7 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
         var reset = context.Scanner.Cursor.Offset;
         var start = reset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, out var number, _decimalSeparator, _groupSeparator))
+        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _requireFractionalPartForDecimals, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
 
@@ -159,7 +161,10 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
 
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        var allowUnderscore = _allowUnderscore ? "true, " : "";
+        // The overload which reads underscores and the fractional part has all the flags
+        var allowUnderscore = _allowUnderscore || _requireFractionalPartForDecimals
+            ? $"{(_allowUnderscore ? "true" : "false")}, {(_requireFractionalPartForDecimals ? "true" : "false")}, "
+            : "";
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         if (_allowUnderscore)

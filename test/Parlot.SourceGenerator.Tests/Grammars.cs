@@ -102,6 +102,9 @@ public static partial class Grammars
     public static partial bool TryParseDoubleExponent(string text, out double value);
     public static partial bool TryParseCommaDecimal(string text, out decimal value);
     public static partial bool TryParseUnderscoreInteger(string text, out long value);
+    public static partial bool TryParseFractionalPartRequired(string text, out decimal value);
+    public static partial bool TryParseFractionalPartOptional(string text, out decimal value);
+    public static partial bool TryParseFractionalPartRequiredCallback(string text, out decimal value);
     public static partial bool TryParseUnsignedInteger(string text, out long value);
     public static partial bool TryParseIntegralDecimal(string text, out decimal value);
     public static partial bool TryParseFloat(string text, out float value);

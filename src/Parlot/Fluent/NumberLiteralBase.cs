@@ -25,6 +25,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
     private readonly bool _allowGroupSeparator;
     private readonly bool _allowExponent;
     private readonly bool _allowUnderscore;
+    private readonly bool _requireFractionalPartForDecimals;
 
     public bool CanSeek => true;
 
@@ -53,6 +54,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         _allowGroupSeparator = (numberOptions & NumberOptions.AllowGroupSeparators) != 0;
         _allowExponent = (numberOptions & NumberOptions.AllowExponent) != 0;
         _allowUnderscore = (numberOptions & NumberOptions.AllowUnderscore) != 0;
+        _requireFractionalPartForDecimals = (numberOptions & NumberOptions.RequireFractionalPartForDecimals) != 0;
 
         var expectedChars = "0123456789";
 
@@ -88,7 +90,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         var reset = context.Scanner.Cursor.Offset;
         var start = reset;
 
-        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, out var number, _decimalSeparator, _groupSeparator))
+        if (context.Scanner.ReadDecimal(_allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _requireFractionalPartForDecimals, out var number, _decimalSeparator, _groupSeparator))
         {
             var end = context.Scanner.Cursor.Offset;
 
@@ -157,7 +159,10 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         var allowExponent = _allowExponent ? "true" : "false";
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        var allowUnderscore = _allowUnderscore ? "true, " : "";
+        // The overload which reads underscores and the fractional part has all the flags
+        var allowUnderscore = _allowUnderscore || _requireFractionalPartForDecimals
+            ? $"{(_allowUnderscore ? "true" : "false")}, {(_requireFractionalPartForDecimals ? "true" : "false")}, "
+            : "";
         result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         if (_allowUnderscore)
@@ -238,7 +243,7 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         var (tryParseMethod, numberStyles, culture) = GetParseExpressions(writer.Context);
 
         NumberSource.GenerateSpanSource(writer, valueVariable, fail, typeof(T), tryParseMethod, numberStyles, culture,
-            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _decimalSeparator, _groupSeparator);
+            _allowLeadingSign, _allowDecimalSeparator, _allowGroupSeparator, _allowExponent, _allowUnderscore, _requireFractionalPartForDecimals, _decimalSeparator, _groupSeparator);
     }
 }
 
