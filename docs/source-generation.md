@@ -204,6 +204,7 @@ loop: recursive local functions which look for the operator following an operand
 generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
 The lookup stops at a level whose operators have a value (valued `Postfix`, `LeftAssociative`, `RightAssociative` and
 `Ternary`), and the case of the loop for that level parses them and passes their values to the factories.
+Valued `Unary` levels stay in the prefix loop, whose chains keep the values of their operators in a `ListBuilder`.
 
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure

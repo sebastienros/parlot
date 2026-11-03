@@ -173,4 +173,42 @@ public static partial class PrecedenceGrammars
 
     private static Parser<string> WithRest(Parser<string> parser) =>
         parser.And(Literals.Pattern(static _ => true, minSize: 0)).Then(static x => x.Item1 + " | " + x.Item2.ToString());
+
+    // Prefix levels with values of two types and a plain one, the same table as PrecedenceTests.RuntimeValuedPrefix
+    [GenerateParser(nameof(TryParseValuedPrefix))]
+    private static Parser<string> BuildValuedPrefix()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-'), static (x, op) => PrecedenceAst.Prefix(op.ToString(), x)), (Terms.Char('~'), static (x, op) => PrecedenceAst.Prefix(op.ToString(), x)))
+            .RightAssociative((Terms.Text("**"), static (a, b) => PrecedenceAst.Binary("**", a, b)))
+            .Unary((Terms.Char('@'), static x => PrecedenceAst.Prefix("@", x)))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)))
+            .Unary((Terms.Text("not"), static (x, op) => PrecedenceAst.Prefix(op + " ", x)));
+
+        return WithRest(expression);
+    }
+
+    // An operator that reads nothing isn't one, and the next one is tried
+    [GenerateParser(nameof(TryParseValuedPrefixEmpty))]
+    private static Parser<string> BuildValuedPrefixEmpty() =>
+        WithRest(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)).Operators()
+            .Unary(
+                (ZeroOrMany(Literals.Char('-')).Then(static x => x.Count), static (x, op) => PrecedenceAst.Prefix(new string('-', op), x)),
+                (Literals.Char('+').Then(static _ => 1), static (x, op) => PrecedenceAst.Prefix(new string('+', op), x)))
+            .LeftAssociative((Literals.Char('*').Then(static _ => 0), static (a, b) => PrecedenceAst.Binary("*", a, b))));
+
+    // The position of the operator, which is what these operators are for
+    [GenerateParser(nameof(TryParseValuedPrefixPosition))]
+    private static Parser<string> BuildValuedPrefixPosition() =>
+        WithRest(Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Terms.Char('-').Then(static (context, start, end, _) => end - 1), static (x, position) => $"({position}:{x})")));
+
+    [GenerateParser(nameof(TryParseValuedPrefixLimit), MaxRecursionDepth = 3)]
+    private static Parser<string> BuildValuedPrefixLimit() =>
+        Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Terms.Char('-'), static (x, op) => PrecedenceAst.Prefix(op.ToString(), x)));
 }

@@ -214,6 +214,10 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
 - `Postfix((op, (x, value) => ...))` passes the value of the operator to its factory. Each call takes operators of one
   type; `Postfix(first, second)` takes two operators of different types in the same level, like a member access and an
   indexer, which apply in any order: `a.b[c].d`.
+- `Unary((op, (x, value) => ...))` passes the value of a prefix operator to its factory, for instance the position of
+  its token: `Unary((Capture(Terms.Char('-')), static (x, token) => new Negate(x, token.Offset)))`. Each call takes
+  operators of one type. A chain is still read in a loop: the values wait on a stack until the operand is parsed, so it
+  doesn't allocate, but an operator of such a table takes the code path of chains even when it is alone.
 - `LeftAssociative(operators, (a, b, op) => ...)` and `RightAssociative(operators, (a, b, op) => ...)` are the levels of
   the `LeftAssociative(Parser<TOperator>[], Func<T, T, TOperator, T>)` combinators, whose single factory receives the
   value of the operator.

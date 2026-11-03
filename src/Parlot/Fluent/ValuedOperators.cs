@@ -151,6 +151,146 @@ internal sealed class PostfixGroup<T, TOperator> : PostfixGroup<T>
 }
 
 /// <summary>
+/// The values of a level of prefix operators whose factories receive them.
+/// </summary>
+/// <remarks>
+/// The operators of a chain return their index, like the other prefix operators, so that a chain is read in a loop whatever
+/// the types of the values of its levels. The values wait on the scratch stack of their type until their operand is parsed,
+/// and are taken in the reverse order: each chain owns the values it pushed, above the ones of the chains around it.
+/// </remarks>
+internal abstract class ValuedPrefix<T>
+{
+    /// <summary>
+    /// The type of the values of the operators.
+    /// </summary>
+    public abstract Type OperatorType { get; }
+
+    /// <summary>
+    /// The operators, which return their index in the level and their value, for the source generator.
+    /// </summary>
+    public abstract object[] IndexedOperators { get; }
+
+    /// <summary>
+    /// The choice of <see cref="IndexedOperators"/>, for the source generator.
+    /// </summary>
+    public abstract object IndexedChoice { get; }
+
+    /// <summary>
+    /// Applies the operator at <paramref name="index"/> in the level, with the value on the top of the stack.
+    /// </summary>
+    public abstract T Apply(T operand, int index);
+
+    /// <summary>
+    /// Removes the value on the top of the stack, of an operator that won't apply.
+    /// </summary>
+    public abstract void Drop();
+}
+
+internal sealed class ValuedPrefix<T, TOperator> : ValuedPrefix<T>
+{
+    private readonly Func<T, TOperator, T>[] _factories;
+
+    public ValuedPrefix(int first, (Parser<TOperator> Op, Func<T, TOperator, T> Factory)[] operators, string parameterName)
+    {
+        if (operators is null)
+        {
+            throw new ArgumentNullException(parameterName);
+        }
+
+        if (operators.Length == 0)
+        {
+            throw new ArgumentException("At least one operator must be provided.", parameterName);
+        }
+
+        Operators = new Parser<int>[operators.Length];
+        var indexed = new Parser<(int, TOperator)>[operators.Length];
+        _factories = new Func<T, TOperator, T>[operators.Length];
+
+        for (var i = 0; i < operators.Length; i++)
+        {
+            var (op, factory) = operators[i];
+            var parser = op ?? throw new ArgumentException("Operators must not contain null parsers.", parameterName);
+            Operators[i] = new ValuedPrefixOperator<TOperator>(parser, first + i);
+            indexed[i] = new IndexedOperator<TOperator>(parser, first + i);
+            _factories[i] = factory ?? throw new ArgumentException("Operators must not contain null factories.", parameterName);
+        }
+
+        IndexedOperators = indexed;
+
+        // A single operator is invoked directly
+        IndexedChoice = indexed.Length == 1 ? indexed[0] : new OneOf<(int, TOperator)>(indexed);
+    }
+
+    public Parser<int>[] Operators { get; }
+
+    public Delegate[] Factories => _factories;
+
+    public override Type OperatorType => typeof(TOperator);
+
+    public override object[] IndexedOperators { get; }
+
+    public override object IndexedChoice { get; }
+
+    public override T Apply(T operand, int index)
+    {
+        // The factory can parse, and grow the stack, so the value leaves it first
+        return _factories[index](operand, ListScratch<TOperator>.Current.Pop());
+    }
+
+    public override void Drop() => ListScratch<TOperator>.Current.Pop();
+}
+
+/// <summary>
+/// Matches a prefix operator, returns its index in the table, and leaves its value on the scratch stack of its type for
+/// the <see cref="ValuedPrefix{T}"/> which applies it.
+/// </summary>
+internal sealed class ValuedPrefixOperator<T> : Parser<int>, Rewriting.ISeekablePrefixes, ILoopAnalyzable
+{
+    private readonly Parser<T> _parser;
+    private readonly int _index;
+
+    // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
+    private ForwardedHints? _hints;
+
+    public ValuedPrefixOperator(Parser<T> parser, int index)
+    {
+        _parser = parser;
+        _index = index;
+    }
+
+    public bool CanSeek => ForwardedHints.Get(ref _hints, _parser).CanSeek;
+
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, _parser).ExpectedChars;
+
+    public bool SkipWhitespace => ForwardedHints.Get(ref _hints, _parser).SkipWhitespace;
+
+    string[]? Rewriting.ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    public override bool Parse(ParseContext context, ref ParseResult<int> result)
+    {
+        context.EnterParser(this);
+
+        var parsed = new ParseResult<T>();
+
+        if (_parser.Parse(context, ref parsed))
+        {
+            ListScratch<T>.Current.Push(parsed.Value);
+            result.Set(parsed.Start, parsed.End, _index);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    public override string ToString() => _parser.ToString() ?? "";
+}
+
+/// <summary>
 /// The description of a <see cref="ValuedBinary{T, TOperator}"/> for the source generator.
 /// </summary>
 internal interface IValuedBinary
