@@ -441,6 +441,44 @@ public sealed partial class ParserSourceGenerator
         }
     }
 
+    /// <summary>
+    /// Reports the C# errors of the grammar files, and returns the entry points of the files without any. The factories
+    /// run from a tree without the bodies of their lambdas, so these errors can't all come from emitting it, and the
+    /// analysis of the callbacks would report what doesn't bind as something else.
+    /// </summary>
+    private static List<StandaloneEntryPoint> ReportGrammarCompilerErrors(
+        SourceProductionContext output,
+        Compilation compilation,
+        List<StandaloneEntryPoint> entries)
+    {
+        var failedTrees = new HashSet<SyntaxTree>();
+        foreach (var group in entries.GroupBy(static entry => entry.Factory.Method.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree))
+        {
+            // What they include can declare what the grammar file refers to. Emitting them reports the errors that stay.
+            if (group.Key is not { } tree
+                || group.Any(static entry => entry.Factory.AdditionalFiles.Length > 0 || entry.Factory.AdditionalGenerators.Length > 0))
+            {
+                continue;
+            }
+
+            foreach (var diagnostic in compilation.GetSemanticModel(tree).GetDiagnostics(cancellationToken: output.CancellationToken))
+            {
+                // The implementation of a partial method can come from a generator that didn't run yet
+                if (diagnostic.Severity == DiagnosticSeverity.Error && diagnostic.Id is not ("CS8795" or "CS0759"))
+                {
+                    failedTrees.Add(tree);
+                    output.ReportDiagnostic(Diagnostic.Create(GrammarCompilerErrorDescriptor,
+                        GrammarDiagnosticLocation(diagnostic.Location), diagnostic.Id,
+                        diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture)));
+                }
+            }
+        }
+
+        return failedTrees.Count == 0
+            ? entries
+            : entries.Where(entry => !failedTrees.Contains(entry.Factory.Method.DeclaringSyntaxReferences.First().SyntaxTree)).ToList();
+    }
+
     private static void GenerateStandaloneEntryPoints(
         SourceProductionContext output,
         Compilation compilation,
@@ -450,6 +488,8 @@ public sealed partial class ParserSourceGenerator
         IncludedGeneratorSearch generatorSearch,
         ISet<string> entryPointKeys)
     {
+        entries = ReportGrammarCompilerErrors(output, compilation, entries);
+
         var shared = new List<PreparedFactory>();
         var rewrittenTrees = new Dictionary<SyntaxTree, (int FirstPointer, SyntaxTree Rewritten)>();
         var semanticModels = new Dictionary<SyntaxTree, SemanticModel>();

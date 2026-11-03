@@ -729,6 +729,7 @@ Standalone-specific diagnostics are:
 | `PARLOT025` | An annotated factory was compiled into the application instead of supplied build-only |
 | `PARLOT026` | The project targets an unsupported framework or C# language version |
 | `PARLOT027` | `ParlotLineDirectives` is not `absolute`, `relative` or `none` (warning) |
+| `PARLOT028` | A C# error of a grammar file, with the compiler's id and message: the project doesn't compile these files, so the generator reports them |
 
 Other factory diagnostics still apply. Common cases include:
 

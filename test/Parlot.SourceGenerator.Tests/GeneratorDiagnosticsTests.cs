@@ -66,6 +66,77 @@ public class GeneratorDiagnosticsTests
         Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT021");
     }
 
+    [Fact]
+    public void Compiler_Errors_Of_A_Grammar_Are_Reported_Instead_Of_A_Hidden_Binding_Failure()
+    {
+        var declaration = Declaration.Replace(
+            "string text, out",
+            "string text, bool state, out",
+            StringComparison.Ordinal);
+        // No using for TextSpan: the Then below doesn't bind, so state isn't seen as read in a parse-time callback
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            using static Parlot.Fluent.Parsers;
+            public static partial class Grammar
+            {
+                private static string Text(TextSpan span) => span.ToString();
+
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build(bool state) =>
+                    Terms.Identifier().Then(static (TextSpan span) => Text(span)).When((_, _) => state);
+            }
+            """;
+
+        var (result, _) = RunStandalone(declaration, grammar);
+
+        var errors = result.Diagnostics.Where(static diagnostic => diagnostic.Id == "PARLOT028").ToArray();
+        Assert.NotEmpty(errors);
+        Assert.All(errors, static error => Assert.Contains("CS0246", error.GetMessage(), StringComparison.Ordinal));
+        Assert.All(errors, static error => Assert.Contains("TextSpan", error.GetMessage(), StringComparison.Ordinal));
+        Assert.All(errors, static error => Assert.True(error.Location.GetLineSpan().IsValid));
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT021");
+    }
+
+    [Fact]
+    public void Compiler_Errors_In_A_Lambda_Body_Are_Reported()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Parsers.Terms.Text("yes").Then(static x => x.Missing);
+            }
+            """;
+
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT028"
+            && diagnostic.GetMessage().Contains("Missing", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Grammar_Without_Compiler_Errors_Reports_None()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                private static Parser<string> Build() => Parsers.Terms.Text("yes");
+            }
+            """;
+
+        var (result, _) = RunStandalone(Declaration, grammar);
+
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT028");
+        Assert.Contains(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("return enabled ? Terms.Text(\"yes\") : Terms.Text(\"no\");")]
     [InlineData("var selected = enabled; return If(() => selected, Terms.Text(\"yes\"));")]
@@ -512,6 +583,43 @@ public class GeneratorDiagnosticsTests
             grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
 
         AssertNoErrors(result, compilation);
+    }
+
+    [Fact]
+    public void IncludeFiles_Type_In_A_Callback_Is_Not_A_Hidden_Binding_Failure()
+    {
+        using var project = new TemporaryDirectory();
+        File.WriteAllText(
+            Path.Combine(project.Path, "Included.cs"),
+            """
+            internal sealed class Included
+            {
+                public static string Text(string value) => value;
+            }
+            """);
+        var declaration = Declaration.Replace(
+            "string text, out",
+            "string text, bool state, out",
+            StringComparison.Ordinal);
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse))]
+                [IncludeFiles("Included.cs")]
+                private static Parser<string> Build(bool state) =>
+                    Parsers.Terms.Text("safe").When((_, value) => state && Included.Text(value) == value);
+            }
+            """;
+
+        var (result, _) = RunStandalone(
+            declaration,
+            grammar,
+            DefaultOptions(project.Path),
+            grammarPath: Path.Combine(project.Path, "Grammar.parlot.cs"));
+
+        Assert.DoesNotContain(result.Diagnostics, static diagnostic => diagnostic.Id is "PARLOT021" or "PARLOT028");
     }
 
     private const string IncludedGeneratorGrammar = """
