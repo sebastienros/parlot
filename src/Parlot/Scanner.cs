@@ -241,6 +241,18 @@ public class Scanner
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
+        => ReadDecimal(numberOptions, out number, decimalSeparator, groupSeparator, '\0');
+
+    /// <summary>
+    /// Reads a decimal number with the given options, which can also use a second decimal separator.
+    /// </summary>
+    /// <param name="numberOptions">The options of the number.</param>
+    /// <param name="number">The text that was read.</param>
+    /// <param name="decimalSeparator">The decimal separator.</param>
+    /// <param name="groupSeparator">The group separator.</param>
+    /// <param name="secondDecimalSeparator">An alternative decimal separator, or <c>'\0'</c> if there is none.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadDecimal(NumberOptions numberOptions, out ReadOnlySpan<char> number, char decimalSeparator, char groupSeparator, char secondDecimalSeparator)
     {
         return ReadDecimal(
             (numberOptions & NumberOptions.AllowLeadingSign) != 0,
@@ -250,20 +262,22 @@ public class Scanner
             (numberOptions & NumberOptions.AllowUnderscore) != 0,
             out number,
             decimalSeparator,
-            groupSeparator);
+            groupSeparator,
+            secondDecimalSeparator);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, out ReadOnlySpan<char> number, char decimalSeparator = '.', char groupSeparator = ',')
         => ReadDecimal(allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, allowUnderscore: false, out number, decimalSeparator, groupSeparator);
 
-    internal bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, out ReadOnlySpan<char> number, char decimalSeparator, char groupSeparator)
+    // secondDecimalSeparator: an optional alternative decimal separator, '\0' if there is none.
+    internal bool ReadDecimal(bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, out ReadOnlySpan<char> number, char decimalSeparator, char groupSeparator, char secondDecimalSeparator = '\0')
     {
         // The buffer is read while the value is a valid decimal number. For instance `123,a` will return `123`.
         // The chars are counted on the span first such that the cursor only moves once, and not at all when there is no number.
 
         var span = Cursor.Span;
-        var length = ScanDecimal(span, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, allowUnderscore, decimalSeparator, groupSeparator, out var reachedEnd);
+        var length = ScanDecimal(span, allowLeadingSign, allowDecimalSeparator, allowGroupSeparator, allowExponent, allowUnderscore, decimalSeparator, groupSeparator, secondDecimalSeparator, out var reachedEnd);
 
         if (reachedEnd)
         {
@@ -293,15 +307,16 @@ public class Scanner
     /// <param name="allowUnderscore">Whether underscores can separate digits, e.g. <c>1_000</c>.</param>
     /// <param name="decimalSeparator">The decimal separator.</param>
     /// <param name="groupSeparator">The group separator.</param>
+    /// <param name="secondDecimalSeparator">An alternative decimal separator, or <c>'\0'</c> if there is none.</param>
     /// <param name="reachedEnd">
     /// Whether the number was read up to the end of <paramref name="text"/>, so that the text which follows it could change
     /// it, including when the number doesn't use the chars it read last, like the <c>e</c> of <c>1e</c>.
     /// </param>
     /// <remarks>
-    /// The number is read like <see cref="ReadDecimal(bool, bool, bool, bool, bool, out ReadOnlySpan{char}, char, char)"/> reads it,
+    /// The number is read like <see cref="ReadDecimal(bool, bool, bool, bool, bool, out ReadOnlySpan{char}, char, char, char)"/> reads it,
     /// which moves the cursor over it. Generated parsers read it on the span they match without the cursor.
     /// </remarks>
-    internal static int ScanDecimal(ReadOnlySpan<char> text, bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, char decimalSeparator, char groupSeparator, out bool reachedEnd)
+    internal static int ScanDecimal(ReadOnlySpan<char> text, bool allowLeadingSign, bool allowDecimalSeparator, bool allowGroupSeparator, bool allowExponent, bool allowUnderscore, char decimalSeparator, char groupSeparator, char secondDecimalSeparator, out bool reachedEnd)
     {
         var i = 0;
 
@@ -320,7 +335,7 @@ public class Scanner
         var hasIntegralPart = i != integralStart;
 
         // A number without integral part must have a decimal part, e.g. `.5`
-        if (!hasIntegralPart && (!allowDecimalSeparator || i >= text.Length || text[i] != decimalSeparator))
+        if (!hasIntegralPart && (!allowDecimalSeparator || i >= text.Length || (text[i] != decimalSeparator && (secondDecimalSeparator == '\0' || text[i] != secondDecimalSeparator))))
         {
             reachedEnd = furthest >= text.Length;
             return 0;
@@ -355,7 +370,7 @@ public class Scanner
             }
         }
 
-        if (allowDecimalSeparator && i < text.Length && text[i] == decimalSeparator)
+        if (allowDecimalSeparator && i < text.Length && (text[i] == decimalSeparator || (secondDecimalSeparator != '\0' && text[i] == secondDecimalSeparator)))
         {
             var afterSeparator = i + 1;
 

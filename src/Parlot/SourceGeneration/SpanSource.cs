@@ -486,13 +486,15 @@ internal static class NumberSource
         string tryParseMethod,
         string numberStyles,
         string culture,
+        string? culture2,
         bool allowLeadingSign,
         bool allowDecimalSeparator,
         bool allowGroupSeparator,
         bool allowExponent,
         bool allowUnderscore,
         char decimalSeparator,
-        char groupSeparator)
+        char groupSeparator,
+        char secondDecimalSeparator)
     {
         var text = writer.DeclareLocal("global::System.ReadOnlySpan<char>", "numberText");
         var length = writer.DeclareLocal("int", "numberLength", "0");
@@ -502,7 +504,7 @@ internal static class NumberSource
         static string Bool(bool value) => value ? "true" : "false";
 
         writer.Add($"{text} = {writer.Span}.Slice({writer.Pos});");
-        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, {Bool(allowLeadingSign)}, {Bool(allowDecimalSeparator)}, {Bool(allowGroupSeparator)}, {Bool(allowExponent)}, {Bool(allowUnderscore)}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, out {reachedEnd});");
+        writer.Add($"{length} = global::Parlot.Scanner.ScanDecimal({text}, {Bool(allowLeadingSign)}, {Bool(allowDecimalSeparator)}, {Bool(allowGroupSeparator)}, {Bool(allowExponent)}, {Bool(allowUnderscore)}, (char){(int)decimalSeparator}, (char){(int)groupSeparator}, (char){(int)secondDecimalSeparator}, out {reachedEnd});");
 
         // More digits could follow the end of the span
         writer.Add($"if ({reachedEnd}) {writer.MarkHitEnd}");
@@ -511,7 +513,15 @@ internal static class NumberSource
         var digits = allowUnderscore
             ? $"global::Parlot.Numbers.RemoveUnderscores({text}.Slice(0, {length}))"
             : $"{text}.Slice(0, {length})";
-        writer.Add($"if ({length} == 0 || !{tryParseMethod}({digits}, {numberStyles}, {culture}, out {number})) {fail.Goto()}");
+        var parsed = $"{tryParseMethod}({digits}, {numberStyles}, {culture}, out {number})";
+
+        if (culture2 != null)
+        {
+            // The number is parsed using the second decimal separator if it can't be parsed using the first one
+            parsed = $"({parsed} || {tryParseMethod}({digits}, {numberStyles}, {culture2}, out {number}))";
+        }
+
+        writer.Add($"if ({length} == 0 || !{parsed}) {fail.Goto()}");
         writer.Add($"{writer.Pos} += {length};");
 
         if (valueVariable != null)

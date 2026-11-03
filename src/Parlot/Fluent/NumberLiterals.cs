@@ -9,73 +9,98 @@ public static class NumberLiterals
     public const char DefaultDecimalSeparator = '.';
     public const char DefaultGroupSeparator = ',';
 
+    /// <summary>
+    /// The value of the second decimal separator that stands for no second decimal separator.
+    /// </summary>
+    public const char NoSecondDecimalSeparator = '\0';
+
+    /// <summary>
+    /// Returns the group separator that is used when a second decimal separator is configured. A char that is the
+    /// second decimal separator can't also be the group separator, so there is no group separator in this case.
+    /// </summary>
+    internal static char GetEffectiveGroupSeparator(char groupSeparator, char secondDecimalSeparator)
+        => secondDecimalSeparator != NoSecondDecimalSeparator && secondDecimalSeparator == groupSeparator ? NoSecondDecimalSeparator : groupSeparator;
+
     public static Parser<T> CreateNumberLiteralParser<T>(NumberOptions numberOptions = NumberOptions.Number, char decimalSeparator = DefaultDecimalSeparator, char groupSeparator = DefaultGroupSeparator)
 #if NET8_0_OR_GREATER
     where T : INumber<T>
+#endif
+        => CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator, NoSecondDecimalSeparator);
+
+    /// <summary>
+    /// Creates a parser that matches a number and returns any numeric type, using a second decimal separator when the first one doesn't match.
+    /// </summary>
+    /// <param name="numberOptions">The options of the number.</param>
+    /// <param name="decimalSeparator">The decimal separator.</param>
+    /// <param name="groupSeparator">The group separator. It is not used if it is the same char as <paramref name="secondDecimalSeparator"/>.</param>
+    /// <param name="secondDecimalSeparator">An alternative decimal separator, or <see cref="NoSecondDecimalSeparator"/> if there is none.</param>
+    public static Parser<T> CreateNumberLiteralParser<T>(NumberOptions numberOptions, char decimalSeparator, char groupSeparator, char secondDecimalSeparator)
+#if NET8_0_OR_GREATER
+    where T : INumber<T>
     {
-        return new NumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator);
+        return new NumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
 #else
     {
         if (typeof(T) == typeof(byte))
         {
-            var literal = new ByteNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new ByteNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(sbyte))
         {
-            var literal = new SByteNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new SByteNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(int))
         {
-            var literal = new IntNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new IntNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(uint))
         {
-            var literal = new UIntNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new UIntNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(long))
         {
-            var literal = new LongNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new LongNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(ulong))
         {
-            var literal = new ULongNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new ULongNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(short))
         {
-            var literal = new ShortNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new ShortNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(ushort))
         {
-            var literal = new UShortNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new UShortNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(decimal))
         {
-            var literal = new DecimalNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new DecimalNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(double))
         {
-            var literal = new DoubleNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new DoubleNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (typeof(T) == typeof(float))
         {
-            var literal = new FloatNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new FloatNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         // No Half branch: this is the !NET8_0_OR_GREATER leg, and System.Half does not exist on
         // net472 or netstandard2.0. On net8.0+ the INumber<T> lane above handles Half instead.
         else if (typeof(T) == typeof(BigInteger))
         {
-            var literal = new BigIntegerNumberLiteral(numberOptions, decimalSeparator, groupSeparator);
+            var literal = new BigIntegerNumberLiteral(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
             return (literal as NumberLiteralBase<T>)!;
         }
         else if (SpanNumberLiteral<T>.TryParseMethod is not null)
@@ -83,7 +108,7 @@ public static class NumberLiterals
             // Types this build can't name, such as Half, Int128, UInt128, nint or nuint, when the runtime
             // provides their span TryParse. This is how the netstandard2.0 build runs inside the source
             // generator host, which executes on a modern runtime and emits the consumer's generic path.
-            return new SpanNumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator);
+            return new SpanNumberLiteral<T>(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
         }
         else
         {
@@ -100,8 +125,8 @@ public static class NumberLiterals
         // T.TryParse(ReadOnlySpan<char>, NumberStyles, IFormatProvider, out T), resolved once per type
         public static readonly TryParseSpan? TryParseMethod = CreateTryParse();
 
-        public SpanNumberLiteral(NumberOptions numberOptions, char decimalSeparator, char groupSeparator)
-            : base(numberOptions, decimalSeparator, groupSeparator)
+        public SpanNumberLiteral(NumberOptions numberOptions, char decimalSeparator, char groupSeparator, char secondDecimalSeparator)
+            : base(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator)
         {
         }
 

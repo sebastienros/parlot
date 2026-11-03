@@ -289,6 +289,19 @@ public class LiteralBuilder
     => NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator);
 
     /// <summary>
+    /// Builds a parser that matches a number and returns any numeric type, using a second decimal separator when the first one doesn't match.
+    /// </summary>
+    /// <param name="numberOptions">The options of the number.</param>
+    /// <param name="decimalSeparator">The decimal separator.</param>
+    /// <param name="groupSeparator">The group separator. It is not used if it is the same char as <paramref name="secondDecimalSeparator"/>.</param>
+    /// <param name="secondDecimalSeparator">An alternative decimal separator, or <c>'\0'</c> if there is none.</param>
+    public Parser<T> Number<T>(NumberOptions numberOptions, char decimalSeparator, char groupSeparator, char secondDecimalSeparator)
+#if NET8_0_OR_GREATER
+    where T : INumber<T>
+#endif
+    => NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator);
+
+    /// <summary>
     /// Builds a parser that matches hexadecimal digits without a prefix and returns any integer type.
     /// </summary>
     public Parser<T> Hexadecimal<T>()
@@ -561,6 +574,19 @@ public class TermBuilder
         where T : INumber<T>
 #endif
         => SkipWhiteSpace(NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator));
+
+    /// <summary>
+    /// Builds a parser that matches a number and returns any numeric type, using a second decimal separator when the first one doesn't match.
+    /// </summary>
+    /// <param name="numberOptions">The options of the number.</param>
+    /// <param name="decimalSeparator">The decimal separator.</param>
+    /// <param name="groupSeparator">The group separator. It is not used if it is the same char as <paramref name="secondDecimalSeparator"/>.</param>
+    /// <param name="secondDecimalSeparator">An alternative decimal separator, or <c>'\0'</c> if there is none.</param>
+    public Parser<T> Number<T>(NumberOptions numberOptions, char decimalSeparator, char groupSeparator, char secondDecimalSeparator)
+#if NET8_0_OR_GREATER
+        where T : INumber<T>
+#endif
+        => SkipWhiteSpace(NumberLiterals.CreateNumberLiteralParser<T>(numberOptions, decimalSeparator, groupSeparator, secondDecimalSeparator));
 
     /// <summary>
     /// Builds a parser that matches hexadecimal digits without a prefix and returns any integer type.

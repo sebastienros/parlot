@@ -63,6 +63,54 @@ public class NumberLiteralTests
     }
 
     [Theory]
+    [InlineData("1.5", true, 1.5)]
+    [InlineData("1,5", true, 1.5)]
+    [InlineData("-1,5", true, -1.5)]
+    [InlineData(",5", true, 0.5)]
+    [InlineData("12", true, 12)]
+    [InlineData("1,5,5", false, 0)]
+    public void Second_Decimal_Separator_That_Is_The_Group_Separator(string input, bool expectedSuccess, decimal expected)
+    {
+        Assert.Equal(expectedSuccess, Grammars.TryParseSecondSeparatorGroupDecimal(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("1,5", true, 1.5)]
+    [InlineData("1.5", true, 1.5)]
+    [InlineData("-.5", true, -0.5)]
+    [InlineData("+,25", true, 0.25)]
+    [InlineData("abc", false, 0)]
+    public void Second_Decimal_Separator_Is_Used_When_The_First_One_Does_Not_Match(string input, bool expectedSuccess, decimal expected)
+    {
+        Assert.Equal(expectedSuccess, Grammars.TryParseSecondSeparatorDecimal(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("1;5", true, 1.5)]
+    [InlineData("1.5", true, 1.5)]
+    [InlineData("1_0;5e2", true, 1050.0)]
+    [InlineData("2.5E1", true, 25.0)]
+    [InlineData("1,5", true, 15.0)]
+    public void Second_Decimal_Separator_With_Underscores_And_Exponent(string input, bool expectedSuccess, double expected)
+    {
+        Assert.Equal(expectedSuccess, Grammars.TryParseSecondSeparatorDouble(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("1.5", true, 3.0)]
+    [InlineData("1,5", true, 3.0)]
+    [InlineData("1,5e1", true, 30.0)]
+    [InlineData("a", false, 0.0)]
+    public void Second_Decimal_Separator_Is_Supported_In_Generated_Number_Parsers(string input, bool expectedSuccess, decimal expected)
+    {
+        Assert.Equal(expectedSuccess, Grammars.TryParseSecondSeparatorCallback(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("123", true, 123L)]
     [InlineData("-789", false, 0L)]
     [InlineData("+42", false, 0L)]

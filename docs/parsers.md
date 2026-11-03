@@ -528,6 +528,17 @@ var parser = Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowUnder
 parser.Parse("1_000_000"); // 1000000
 ```
 
+The optional `secondDecimalSeparator` argument is an alternative decimal separator, which is useful for human input where the same key
+can enter `.` or `,` depending on the keyboard layout. The number is parsed with the decimal separator, and if that fails with the second one.
+If the second separator is the same char as the group separator, then this char is a decimal separator only, and the number has no group
+separators. `'\0'`, the default, means there is no second decimal separator.
+
+```c#
+var parser = Terms.Number<decimal>(NumberOptions.Number, decimalSeparator: '.', groupSeparator: '_', secondDecimalSeparator: ',');
+parser.Parse("1.5"); // 1.5
+parser.Parse("1,5"); // 1.5
+```
+
 ### Hexadecimal, Octal and Binary
 
 Match integer digits in a specific radix and return any integer .NET type. These parsers don't consume

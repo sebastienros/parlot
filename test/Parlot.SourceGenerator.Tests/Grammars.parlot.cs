@@ -530,6 +530,41 @@ public static partial class Grammars
             NumberOptions.Integer | NumberOptions.AllowGroupSeparators,
             groupSeparator: '_').Eof();
 
+    // The second decimal separator is also the group separator: it is only a decimal separator here
+    [GenerateParser(nameof(TryParseSecondSeparatorGroupDecimal))]
+    private static Parser<decimal> BuildSecondSeparatorGroupDecimal() =>
+        Terms.Number<decimal>(
+            NumberOptions.Number | NumberOptions.AllowGroupSeparators,
+            decimalSeparator: '.',
+            groupSeparator: ',',
+            secondDecimalSeparator: ',').Eof();
+
+    [GenerateParser(nameof(TryParseSecondSeparatorDecimal))]
+    private static Parser<decimal> BuildSecondSeparatorDecimal() =>
+        Terms.Number<decimal>(
+            NumberOptions.AllowLeadingSign | NumberOptions.AllowDecimalSeparator,
+            decimalSeparator: ',',
+            groupSeparator: '_',
+            secondDecimalSeparator: '.').Eof();
+
+    [GenerateParser(nameof(TryParseSecondSeparatorDouble))]
+    private static Parser<double> BuildSecondSeparatorDouble() =>
+        Terms.Number<double>(
+            NumberOptions.Number | NumberOptions.AllowExponent | NumberOptions.AllowUnderscore,
+            decimalSeparator: '.',
+            groupSeparator: ',',
+            secondDecimalSeparator: ';').Eof();
+
+    // A callback after the number generates the number as a parser of its own, not as span code
+    [GenerateParser(nameof(TryParseSecondSeparatorCallback))]
+    private static Parser<decimal> BuildSecondSeparatorCallback() =>
+        Terms.Number<decimal>(
+            NumberOptions.Float,
+            decimalSeparator: '.',
+            groupSeparator: ',',
+            secondDecimalSeparator: ',')
+            .Then(static value => value * 2).Eof();
+
     [GenerateParser(nameof(TryParseUnsignedInteger))]
     private static Parser<long> BuildUnsignedInteger() => Terms.Number<long>(NumberOptions.None).Eof();
 
