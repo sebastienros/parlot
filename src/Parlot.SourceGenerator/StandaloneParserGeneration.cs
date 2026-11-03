@@ -113,6 +113,12 @@ public sealed partial class ParserSourceGenerator
 
         // out (int Offset, int Line, int Column)
         Position,
+
+        // out (int Offset, bool NestedTooDeeply)
+        OffsetAndNesting,
+
+        // out (int Offset, int Line, int Column, bool NestedTooDeeply)
+        PositionAndNesting,
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
@@ -671,11 +677,28 @@ public sealed partial class ParserSourceGenerator
             return FailureOutput.Offset;
         }
 
-        return failure.Type is INamedTypeSymbol { IsTupleType: true } tuple
-            && tuple.TupleElements.Length == 3
-            && tuple.TupleElements.All(static element => element.Type.SpecialType == SpecialType.System_Int32)
-                ? FailureOutput.Position
-                : FailureOutput.None;
+        if (failure.Type is not INamedTypeSymbol { IsTupleType: true } tuple)
+        {
+            return FailureOutput.None;
+        }
+
+        // A last bool tells that the input is nested too deeply
+        var elements = tuple.TupleElements;
+        var nesting = elements[elements.Length - 1].Type.SpecialType == SpecialType.System_Boolean;
+        var positions = nesting ? elements.Length - 1 : elements.Length;
+
+        if (elements.Take(positions).Any(static element => element.Type.SpecialType != SpecialType.System_Int32))
+        {
+            return FailureOutput.None;
+        }
+
+        return (positions, nesting) switch
+        {
+            (1, true) => FailureOutput.OffsetAndNesting,
+            (3, false) => FailureOutput.Position,
+            (3, true) => FailureOutput.PositionAndNesting,
+            _ => FailureOutput.None,
+        };
     }
 
     // Whether the entry point ends with the out result followed by an
@@ -788,14 +811,22 @@ public sealed partial class ParserSourceGenerator
         {
             // Read while the buffer of a TextReader is still held. The parsers moved the cursor back from where they failed.
             var furthest = prefix + "_furthest";
-            if (standalone.Failure == FailureOutput.Offset)
+            switch (standalone.Failure)
             {
-                source.AppendLine($"                {failure} = {context}.Scanner.Cursor.FurthestOffset;");
-            }
-            else
-            {
-                source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
-                source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column);");
+                case FailureOutput.Offset:
+                    source.AppendLine($"                {failure} = {context}.Scanner.Cursor.FurthestOffset;");
+                    break;
+                case FailureOutput.OffsetAndNesting:
+                    source.AppendLine($"                {failure} = ({context}.Scanner.Cursor.FurthestOffset, false);");
+                    break;
+                case FailureOutput.Position:
+                    source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
+                    source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column);");
+                    break;
+                default:
+                    source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
+                    source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column, false);");
+                    break;
             }
         }
         source.AppendLine("            }");
@@ -813,9 +844,13 @@ public sealed partial class ParserSourceGenerator
             if (failure is not null)
             {
                 // An Error or ElseError parser reports where it failed
-                source.AppendLine(standalone.Failure == FailureOutput.Offset
-                    ? $"                {failure} = {exception}.Position.Offset;"
-                    : $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column);");
+                source.AppendLine(standalone.Failure switch
+                {
+                    FailureOutput.Offset => $"                {failure} = {exception}.Position.Offset;",
+                    FailureOutput.OffsetAndNesting => $"                {failure} = ({exception}.Position.Offset, {exception}.IsNestedTooDeeply);",
+                    FailureOutput.Position => $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column);",
+                    _ => $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column, {exception}.IsNestedTooDeeply);",
+                });
             }
             source.AppendLine("                return false;");
             source.AppendLine("            }");

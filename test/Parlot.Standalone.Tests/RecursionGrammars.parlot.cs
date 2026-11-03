@@ -12,6 +12,12 @@ public static partial class RecursionGrammars
     [GenerateParser(nameof(LimitedList), MaxRecursionDepth = 3)]
     public static Parser<int> BuildLimitedList() => ListGrammar();
 
+    [GenerateParser(nameof(Nested))]
+    public static Parser<int> BuildNested() => ListGrammar();
+
+    [GenerateParser(nameof(LimitedNested), MaxRecursionDepth = 3)]
+    public static Parser<int> BuildLimitedNested() => ListGrammar();
+
     [GenerateParser(nameof(Negation))]
     public static Parser<int> BuildNegation() => NegationGrammar();
 
