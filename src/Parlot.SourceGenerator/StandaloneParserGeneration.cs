@@ -910,19 +910,23 @@ public sealed partial class ParserSourceGenerator
                 continue;
             }
 
-            var replaced = root.ReplaceNodes(declarations, static (_, method) => method
-                .WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(static token => !token.IsKind(SyntaxKind.PartialKeyword))))
-                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.ThrowExpression(
-                    SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("global::System.InvalidOperationException"))
-                        .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression,
-                                SyntaxFactory.Literal("A generated entry point cannot be called while constructing a grammar.")))))))))
-                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            var replaced = root.ReplaceNodes(declarations, static (_, method) => WithThrowingBody(method,
+                "A generated entry point cannot be called while constructing a grammar."));
             compilation = compilation.ReplaceSyntaxTree(tree,
                 CSharpSyntaxTree.Create((CSharpSyntaxNode)replaced, (CSharpParseOptions)tree.Options, tree.FilePath));
         }
         return compilation;
     }
+
+    private static MethodDeclarationSyntax WithThrowingBody(MethodDeclarationSyntax method, string message)
+        => method
+            .WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(static token => !token.IsKind(SyntaxKind.PartialKeyword))))
+            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.ThrowExpression(
+                SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("global::System.InvalidOperationException"))
+                    .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression,
+                            SyntaxFactory.Literal(message)))))))))
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
     private static Location? ExternalLocation(Location? location)
     {
