@@ -435,4 +435,15 @@ public class GrammarsTests
         Assert.True(ClassLevelAttributeGrammars.TryParseText("hello", out var text));
         Assert.Equal("hello", text);
     }
+
+    [Fact]
+    public void Always_Default_Of_A_Type_Without_Literals_Is_Generated()
+    {
+        Assert.True(Grammars.TryParseAlwaysDefaultTuple("", out var tuple));
+        Assert.Equal(default, tuple);
+
+        Assert.True(Grammars.TryParseAlwaysDefaultStruct(" x", out var date));
+        Assert.Equal(default, date);
+        Assert.False(Grammars.TryParseAlwaysDefaultStruct(" y", out _));
+    }
 }
