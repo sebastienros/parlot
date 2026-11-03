@@ -131,7 +131,8 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
         {
             // The callback receives the offsets of the inner match. The runtime reports the start of the
             // content, after any white space a Terms parser skipped, so a SkipWhiteSpace wrapper is
-            // unfolded here: the white space is skipped first and the start is read after it.
+            // unfolded here: the white space is skipped first and the start is read after it. A parser
+            // which starts by skipping white space, like a choice of Terms parsers, then finds none.
             startName = $"start{context.NextNumber()}";
 
             if (_parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable })
@@ -139,6 +140,10 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
                 helperName = context.Helpers
                     .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
                     .MethodName;
+            }
+
+            if (_parser is ISeekable { SkipWhitespace: true })
+            {
                 resetName = $"reset{context.NextNumber()}";
                 result.Body.Add($"var {resetName} = {cursorName}.Offset;");
                 result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");

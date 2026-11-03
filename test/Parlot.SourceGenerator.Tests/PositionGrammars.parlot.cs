@@ -100,4 +100,30 @@ public static partial class PositionGrammars
                 var position = context.Scanner.Cursor.Position;
                 return (position.Offset, position.Line, position.Column);
             }));
+
+    // The offsets a callback receives on composites, compared with the runtime in ThenOffsetsTests
+    [GenerateParser(nameof(TryParseOffsetsChoice))]
+    private static Parser<(int Start, int End)> BuildOffsetsChoice() =>
+        Terms.Text("ab").Or(Terms.Text("cd")).Then(static (context, start, end, _) => (start, end));
+
+    [GenerateParser(nameof(TryParseOffsetsLargeChoice))]
+    private static Parser<(int Start, int End)> BuildOffsetsLargeChoice() =>
+        OneOf(
+            Terms.Keyword("if"), Terms.Keyword("else"), Terms.Keyword("for"), Terms.Keyword("while"),
+            Terms.Keyword("do"), Terms.Keyword("return"), Terms.Keyword("break"), Terms.Keyword("continue"))
+        .Then(static (context, start, end, _) => (start, end));
+
+    [GenerateParser(nameof(TryParseOffsetsSequence))]
+    private static Parser<(int Start, int End)> BuildOffsetsSequence() =>
+        Terms.Text("ab").And(Terms.Text("cd")).Then(static (context, start, end, _) => (start, end));
+
+    [GenerateParser(nameof(TryParseOffsetsMixedChoice))]
+    private static Parser<(int Start, int End)> BuildOffsetsMixedChoice() =>
+        Terms.Text("ab").Or(Literals.Text("cd")).Then(static (context, start, end, _) => (start, end));
+
+    // A failed alternative gives the white space back to the next parser
+    [GenerateParser(nameof(TryParseOffsetsBacktrack))]
+    private static Parser<(int Start, int End)> BuildOffsetsBacktrack() =>
+        ZeroOrOne(Terms.Text("ab").Or(Terms.Text("cd")).Then(static (context, start, end, _) => (start, end)))
+            .SkipAnd(Literals.Text("  x").Then(static (context, start, end, _) => (start, end)));
 }
