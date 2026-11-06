@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Returns a list containing zero or one result from the inner parser.
 /// </summary>
-public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable, IReadsWith
 {
     private readonly Parser<T> _parser;
 
@@ -19,6 +19,9 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopA
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _withoutValue = parser.CanParseWithoutValue;
     }
+
+    // It reads only where the parser does, see CustomWhiteSpace
+    object IReadsWith.Parser => _parser;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
