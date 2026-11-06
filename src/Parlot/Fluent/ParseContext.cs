@@ -754,6 +754,13 @@ public class ParseContext
             }
         }
 
+        // The char before the floor stays buffered, so a parser can tell whether its text is at the start of the input or of a line
+        // (see TextScanner). The char before each position the parser can be at is buffered since all refills keep it.
+        if (floor > Scanner.Cursor.BufferStart)
+        {
+            floor--;
+        }
+
         state.RefillSource!.Refill(Scanner.Cursor, floor, CancellationToken);
 
         // The skipped white spaces might continue in the new text
