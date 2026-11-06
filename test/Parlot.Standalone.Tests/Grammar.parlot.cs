@@ -106,6 +106,11 @@ public static partial class Grammar
         Terms.Text("hello").AndSkip(Terms.Text("world")).Eof()
             .WithWhiteSpaceParser(Capture(OneOrMany(Literals.Char('_'))));
 
+    [GenerateParser(nameof(TryParseComments))]
+    private static Parser<string> Comments() =>
+        Terms.Text("hello").AndSkip(Terms.Text("world")).Eof()
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n").WithMultiLine("/*", "*/"));
+
     [GenerateParser(nameof(TryParseConfigured))]
     private static Parser<string> Configured(GrammarOptions options) =>
         If(() => { options.Evaluations++; return options.Formal; }, Terms.Text("Hello"), Terms.Text("Hi"))

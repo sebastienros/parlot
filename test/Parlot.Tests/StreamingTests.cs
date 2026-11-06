@@ -95,6 +95,8 @@ public class StreamingTests
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
+        ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
         ["ascii-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
         ["ascii-context"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.Ascii }),
         ["ascii-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\u00A0"))).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
@@ -268,6 +270,9 @@ public class StreamingTests
             "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+        Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
+        Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
+        Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");
         string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];
         Add("ascii-separated", separated);
         Add("ascii-context", separated);
