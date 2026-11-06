@@ -2951,4 +2951,42 @@ public class FluentTests
             Assert.Equal(['a', 'b', 'c'], seekable.ExpectedChars);
         }
     }
+
+    [Theory]
+    [InlineData("\"a\\nb\"", "a\\nb", "a\nb")]
+    [InlineData("'it\\'s'", "it\\'s", "it's")]
+    [InlineData("\"plain\"", "plain", "plain")]
+    [InlineData("\"\"", "", "")]
+    public void StringLiteralShouldOnlyDecodeWhenRequested(string text, string raw, string decoded)
+    {
+        Assert.Equal(raw, new StringLiteral(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).Parse(text).ToString());
+        Assert.Equal(decoded, new StringLiteral(StringLiteralQuotes.SingleOrDouble, returnDecoded: true).Parse(text).ToString());
+        Assert.Equal(decoded, new StringLiteral(StringLiteralQuotes.SingleOrDouble).Parse(text).ToString());
+        Assert.Equal(raw, Literals.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).Parse(text).ToString());
+        Assert.Equal(raw, Terms.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).Parse(" " + text).ToString());
+        Assert.Equal(decoded, Terms.String().Parse(" " + text).ToString());
+    }
+
+    [Fact]
+    public void StringLiteralShouldNotDecodeWhenPooled()
+    {
+        var parser = ZeroOrMany(Terms.String(StringLiteralQuotes.Single, returnDecoded: false).ToPooledString());
+
+        var result = parser.Parse("'a\\nb' 'a\\nb'");
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("a\\nb", result[0]);
+        Assert.Same(result[0], result[1]);
+    }
+
+    [Fact]
+    public void StringLiteralShouldResetTheCursorWhenNotDecoded()
+    {
+        var parser = Literals.String(StringLiteralQuotes.Single, returnDecoded: false);
+        var context = new ParseContext(new Scanner("'a\\'b"));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
 }
