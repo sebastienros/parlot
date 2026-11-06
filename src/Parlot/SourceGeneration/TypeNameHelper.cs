@@ -9,6 +9,12 @@ public static class TypeNameHelper
     {
         ThrowHelper.ThrowIfNull(type, nameof(type));
 
+        // The return type of an Action callback
+        if (type == typeof(void))
+        {
+            return "void";
+        }
+
         var sb = new StringBuilder();
         AppendTypeName(sb, type);
         return sb.ToString();
