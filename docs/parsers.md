@@ -1470,6 +1470,46 @@ Result:
 
 > **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects.
 
+### ThenTry
+
+Converts the result of a parser with a conversion which can reject it, like a `When` and a `Then` in a single parser and a
+single callback. When the conversion returns `false`, the parser fails and the cursor is moved back to where it was, such
+that a choice tries its next alternative.
+
+```c#
+Parser<U> ThenTry<U>(TryConvert<T, U> conversion)
+Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion)
+
+delegate bool TryConvert<in T, U>(ParseContext context, int start, int end, T value, out U result);
+```
+
+The `TryConvert` overload receives the `ParseContext` and the start and end offsets of the value, like the
+`Then((context, start, end, value) => ...)` overload. Its parameters are typed, since a lambda with an `out` parameter
+can't infer them before C# 14:
+
+```c#
+// An identifier which isn't a reserved word, replacing identifierName.When(...).Then(...)
+var identifier = Terms.Identifier()
+    .ThenTry(static (ParseContext context, int start, int end, TextSpan name, out Identifier result) =>
+    {
+        if (IsReserved(name, ((MyContext)context).Flags))
+        {
+            result = null!;
+            return false;
+        }
+
+        result = new Identifier(name.ToString(), start, end);
+        return true;
+    });
+
+// A number which must fit a byte
+var octet = Terms.Integer().ThenTry(static value => (value is >= 0 and <= 255, (byte)value));
+```
+
+The conversion is invoked on each match, even when the value of the parser isn't used, since it decides whether the parser
+succeeds. A `When(...).Then(...)` pair invokes two parsers and two callbacks on each match: when the condition and the
+conversion read the same value, as a reserved word check before an AST node is built, `ThenTry` does both in one.
+
 ### ToPooledString
 
 Returns the text of a `Parser<TextSpan>` as a string taken from a pool, such that a value the parser matches many times
@@ -1652,7 +1692,8 @@ Adds some additional logic for a parser to succeed. The condition is executed wh
 Parser<T> When(Func<ParseContext, T, bool> predicate)
 ```
 
-To evaluate a condition before a parser is executed use the `If` parser instead.
+To evaluate a condition before a parser is executed use the `If` parser instead. To convert the value once it meets the
+condition, use [`ThenTry`](#thentry), which does both with a single callback.
 
 ### WhenFollowedBy
 

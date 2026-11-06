@@ -160,6 +160,34 @@ public class FailureTests
         Assert.Equal(offset, failure.Offset);
     }
 
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    [InlineData("  ,", 2)]
+    public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.ConversionRejected(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionRejected(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.ConversionRejected("  word ;", out var value, out failureOffset));
+        Assert.Equal("word", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("fromage,", 7)]
+    public void Value_Rejected_By_A_Tuple_Conversion_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.ConversionRejectedLiteral(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+    }
+
     [Fact]
     public void Rejected_Value_Doesnt_Stop_A_Longer_Attempt_Being_Reported()
     {
