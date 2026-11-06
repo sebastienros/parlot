@@ -96,6 +96,17 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void ThenTryGrammars()
+    {
+        // 28 tokens per line, 50 lines
+        var benchmark = new ThenTryBenchmarks();
+        Assert.Equal(1400, benchmark.WhenThen());
+        Assert.Equal(1400, benchmark.ThenTry());
+        Assert.Equal(1400, benchmark.WhenThenGenerated());
+        Assert.Equal(1400, benchmark.ThenTryGenerated());
+    }
+
+    [Fact]
     public void WrapperChoiceGrammar()
     {
         // The setup checks both choices
