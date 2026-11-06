@@ -93,6 +93,8 @@ public class StreamingTests
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         // Nested lists of the same element type share the scratch stack of the list parsers
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
+        // A state set for the parser in braces, which an alternative leaves when it fails after reading
+        ["state"] = new Grammar<IReadOnlyList<string>>(CreateStateGrammar(), static scanner => new DepthContext(scanner)),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["ascii-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
@@ -121,6 +123,29 @@ public class StreamingTests
             Terms.Identifier().And(Terms.Char('=').Then(static (c, _) => Position(c))).And(Terms.Char('(')).Then(static (c, x) => x.Item2),
             Terms.Identifier().Then(static (c, _) => Position(c)))),
     };
+
+    private static Parser<IReadOnlyList<string>> CreateStateGrammar()
+    {
+        var item = Deferred<string>();
+        var nested = OneOf(
+            Terms.Char('{').And(Terms.Char('!')).Then(static _ => "!"),
+            Between(Terms.Char('{'), ZeroOrMany(item), Terms.Char('}')).Then(static items => "{" + string.Join(",", items) + "}"))
+            .WithState<DepthContext, int>(static c => c.Depth, static (c, depth) => c.Depth = depth, static depth => depth + 1);
+        item.Parser = OneOf(
+            nested,
+            Terms.Identifier().Then(static (c, x) => x.ToString() + ((DepthContext)c).Depth.ToString(CultureInfo.InvariantCulture)));
+
+        return ZeroOrMany(item).Eof();
+    }
+
+    private sealed class DepthContext : ParseContext
+    {
+        public DepthContext(Scanner scanner) : base(scanner)
+        {
+        }
+
+        public int Depth { get; set; }
+    }
 
     private static Parser<object> CreateNestedLists()
     {
@@ -266,6 +291,7 @@ public class StreamingTests
         Add("nested-lists", "", "1", "[", "[]", "()", "{}", "[1]", "(1)", "{1}", "[1,2,3,4,5,6]", "(1 2 3 4 5 6)", "[1,[2,[3,4],5],(6 7 (8 9 10 11 12) 13),{14 15}]",
             "(1 2 [3,4 (5 6)] 7", "[1,2,", "[1,(2 3", "{1 2", "((((((((1 2 3))))))))", "[" + string.Join(",", Enumerable.Range(0, 40)) + ",(" + string.Join(" ", Enumerable.Range(0, 30)) + ")]",
             "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");
+        Add("state", "", "a", "a {b} c", "{!} a", "{ a { b { c } } d }", "{ a {! } b", "{a", "{ {! a", "a { b } } c", "{" + string.Join(" ", Enumerable.Range(0, 40).Select(static i => "x" + i)) + " {!} {y}}");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
         string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];
