@@ -207,6 +207,47 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<T> Commit() => new Commit<T>(this);
 
     /// <summary>
+    /// Builds a parser that updates a state of a custom parse context while the previous parser runs, then restores it.
+    /// </summary>
+    /// <typeparam name="C">The concrete <see cref="ParseContext" /> type holding the state.</typeparam>
+    /// <typeparam name="S">The type of the state.</typeparam>
+    /// <param name="get">Reads the state from the context.</param>
+    /// <param name="set">Writes the state to the context.</param>
+    /// <param name="update">Returns the state the parser runs with, from the current one.</param>
+    /// <remarks>
+    /// <para>
+    /// The state is restored when the parser succeeds, fails or throws. Parsers invoked by the parser, like <c>If</c>,
+    /// <c>Select</c> or <c>When</c>, read the updated state. For instance, with flags of a custom context:
+    /// <code>
+    /// var functionBody = body.WithState&lt;JsContext, Flags&gt;(static c => c.Flags, static (c, f) => c.Flags = f, static f => (f | Flags.Return) &amp; ~Flags.NoIn);
+    /// </code>
+    /// </para>
+    /// <para>
+    /// A source-generated parser runs with Parlot's own context: use <see cref="WithState{S}(Func{S}, Action{S}, Func{S, S})"/>
+    /// with a state held by a configuration parameter instead.
+    /// </para>
+    /// </remarks>
+    public Parser<T> WithState<C, S>(Func<C, S> get, Action<C, S> set, Func<S, S> update) where C : ParseContext
+        => new WithState<C, S, T>(this, get, set, update);
+
+    /// <summary>
+    /// Builds a parser that updates a state while the previous parser runs, then restores it.
+    /// </summary>
+    /// <typeparam name="S">The type of the state.</typeparam>
+    /// <param name="get">Reads the state.</param>
+    /// <param name="set">Writes the state.</param>
+    /// <param name="update">Returns the state the parser runs with, from the current one.</param>
+    /// <remarks>
+    /// The state is restored when the parser succeeds, fails or throws. Parsers invoked by the parser, like <c>If</c>,
+    /// <c>Select</c> or <c>When</c>, read the updated state. In a source-generated parser the state can be held by a
+    /// configuration parameter: <c>body.WithState(() => options.Flags, f => options.Flags = f, static f => f | Flags.Return)</c>.
+    /// A state shared by concurrent parses must be held by the parse context instead, see
+    /// <see cref="WithState{C, S}(Func{C, S}, Action{C, S}, Func{S, S})"/>.
+    /// </remarks>
+    public Parser<T> WithState<S>(Func<S> get, Action<S> set, Func<S, S> update)
+        => new WithState<ParseContext, S, T>(this, get, set, update);
+
+    /// <summary>
     /// Builds a parser that discards the previous result and replaces it by the specified type or value.
     /// </summary>
     [Obsolete("Use Then<U>() instead.")]

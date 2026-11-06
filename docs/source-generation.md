@@ -437,6 +437,7 @@ Parameters may be read by inline parse-time callbacks passed to:
 - `When`
 - `Switch`
 - `Else`
+- `WithState`
 
 For example:
 
@@ -521,6 +522,20 @@ interchangeable with the runtime library type.
 Pass application-owned state through configuration parameters instead. Context-aware callbacks may use the
 built-in context for parser internals, but public entry points and application state must not depend on
 Parlot context types.
+
+A state that a grammar sets for the duration of a parser, like the flags of a custom context read by `If`, is held by
+a configuration parameter and set with the `WithState` overload without a context:
+
+```csharp
+[GenerateParser(nameof(TryParseProgram))]
+private static Parser<Program> BuildProgram(ParserState state) =>
+    ...
+    functionBody.WithState(() => state.Flags, flags => state.Flags = flags, static flags => flags | Flags.Return)
+    ...
+```
+
+The state is restored when the parser succeeds, fails or throws, so it is back to the value it had when the entry
+point was called. Don't share such a state between concurrent calls.
 
 ## Application models and runtime helpers
 

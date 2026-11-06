@@ -1728,6 +1728,53 @@ To validate a parsed value instead, use `When`.
 The obsolete overloads taking a separate state argument and the `If<C, S, T>` type have been removed
 in this major version. Capture state in the condition or read it from a custom `ParseContext`.
 
+### WithState
+
+Sets a state while a parser runs, then restores the previous one, the way `WithWhiteSpaceSet` does for white space.
+Many grammars depend on the enclosing construct: in JavaScript `yield` is an operator in a generator and an identifier
+elsewhere, and `in` isn't an operator in the head of a `for`. `If`, `Select` and `When` read such a state, `WithState`
+sets it for the parsers it invokes.
+
+```c#
+Parser<T> WithState<C, S>(Func<C, S> get, Action<C, S> set, Func<S, S> update) where C : ParseContext
+Parser<T> WithState<S>(Func<S> get, Action<S> set, Func<S, S> update)
+```
+
+It reads the state with `get`, writes `update` of it with `set`, runs the parser and writes the state it read back,
+whether the parser succeeds, fails or throws. Like any parser it leaves the cursor where it started when it fails.
+
+The state is usually held by a custom `ParseContext`, so that concurrent parses don't share it:
+
+```c#
+[Flags]
+enum Flags { None = 0, Yield = 1, NoIn = 2 }
+
+sealed class JsContext : ParseContext
+{
+    public JsContext(string text) : base(new Scanner(text)) { }
+
+    public Flags Flags { get; set; }
+}
+
+// "yield" is a keyword in a generator, and an identifier elsewhere
+var yieldOrIdentifier = If<JsContext, string>(
+    static c => (c.Flags & Flags.Yield) != 0,
+    Terms.Text("yield"),
+    Terms.Identifier().Then(static x => x.ToString()));
+
+var generatorBody = Between(Terms.Char('{'), yieldOrIdentifier, Terms.Char('}'))
+    .WithState<JsContext, Flags>(static c => c.Flags, static (c, f) => c.Flags = f, static f => (f | Flags.Yield) & ~Flags.NoIn);
+
+generatorBody.Parse(new JsContext("{ yield }"));  // "yield", the keyword
+```
+
+Nested `WithState` parsers each restore the state they read, so the state an inner one sets is only seen by its parser.
+The parser forwards the chars its parser can start with, so a `OneOf` still selects it from the next char.
+
+A [source-generated](source-generation.md) parser runs with Parlot's own context: hold the state in a configuration
+parameter and use the overload without a context, as in
+`body.WithState(() => options.Flags, f => options.Flags = f, static f => f | Flags.Yield)`.
+
 ### Switch
 
 Returns a parser using custom logic based on previous results.
