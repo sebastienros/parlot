@@ -48,7 +48,7 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
 
             if (_parser2.Parse(context, ref parseResult2))
             {
-                result.Set(parseResult1.Start, parseResult2.End, (parseResult1.Value, parseResult2.Value));
+                result.Set(SequenceStart.Of(in parseResult1, in parseResult2), parseResult2.End, (parseResult1.Value, parseResult2.Value));
 
                 context.ExitParser(this);
                 return true;
@@ -78,7 +78,7 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
 
             if (_withoutValue2 ? _parser2.ParseWithoutValue(context, ref parseResult2) : _parser2.Parse(context, ref parseResult2))
             {
-                result.Start = parseResult1.Start;
+                result.Start = SequenceStart.Of(in parseResult1, in parseResult2);
                 result.End = parseResult2.End;
 
                 context.ExitParser(this);
@@ -229,7 +229,7 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
                     lastResult.Value
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -259,7 +259,7 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -401,7 +401,7 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
                     lastResult.Value
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -431,7 +431,7 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -572,7 +572,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
                     lastResult.Value
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -602,7 +602,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -744,7 +744,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
                     lastResult.Value
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -774,7 +774,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -917,7 +917,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
                     lastResult.Value
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -947,7 +947,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
