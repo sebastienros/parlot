@@ -79,7 +79,7 @@ internal sealed class SeekGuard
         // A parser which reads the cursor itself, like a literal, tests the char as fast as the guard would, and a choice
         // already selects its alternatives from it: the guard would only skip the white space a second time when it matches.
         // The analysis takes its own lock, so it isn't run under the lock of the hints.
-        if (!LoopAnalysis.InvokesParsersAtStart(parser) || parser.GetType() is { IsGenericType: true } type && type.GetGenericTypeDefinition() == typeof(OneOf<>))
+        if (!LoopAnalysis.InvokesParsersAtStart(SkippedParser(parser)) || IsGeneric(parser, typeof(OneOf<>)))
         {
             return null;
         }
@@ -89,6 +89,13 @@ internal sealed class SeekGuard
             return SeekableHintsOf(parser);
         }
     }
+
+    // The parser a white space skip invokes, like the literal of a Terms parser, which then also tests the char as fast
+    private static object SkippedParser(object parser) => IsGeneric(parser, typeof(SkipWhiteSpace<>))
+        ? parser.GetType().GetProperty(nameof(SkipWhiteSpace<object>.Parser))!.GetValue(parser)!
+        : parser;
+
+    private static bool IsGeneric(object parser, Type definition) => parser.GetType() is { IsGenericType: true } type && type.GetGenericTypeDefinition() == definition;
 
     private static (char[] ExpectedChars, bool SkipWhitespace)? SeekableHintsOf(object parser)
     {
