@@ -694,7 +694,10 @@ public class ParseContext
             return false;
         }
 
+        // Not a failure: the token is read again, and records its own failures
+        var recorded = cursor.RecordedFailure;
         cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
         Refill(start);
         cursor.ResetHitEnd();
 

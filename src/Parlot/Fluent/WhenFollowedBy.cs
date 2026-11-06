@@ -58,7 +58,9 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         }
 
         // Save position before lookahead check
-        var beforeLookahead = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var beforeLookahead = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
 
         // Now check if the lookahead parser matches at the current position
         var lookaheadResult = new ParseResult<object>();
@@ -66,16 +68,18 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         var lookaheadSuccess = _lookahead.Parse(context, ref lookaheadResult);
         context.Unpin(pin);
 
-        // Reset position to before the lookahead (it shouldn't consume input)
-        context.Scanner.Cursor.ResetPosition(beforeLookahead);
-
-        // If lookahead failed, fail this parser and reset to start
+        // If lookahead failed, fail this parser and reset to start: the lookahead was expected, its failure counts
         if (!lookaheadSuccess)
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            cursor.ResetPosition(start);
             context.ExitParser(this);
             return false;
         }
+
+        // Reset position to before the lookahead (it shouldn't consume input). What the lookahead matched says nothing
+        // about what follows at this position.
+        cursor.ResetPosition(beforeLookahead);
+        cursor.RestoreRecordedFailure(recorded);
 
         context.ExitParser(this);
         return true;

@@ -43,17 +43,53 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
 
-        var valid = _parser.Parse(context, ref result) && _action(context, result.Value);
+        // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to, as in generated
+        // code. The start is known after the white space the parser skips, which only the failure path looks for. A
+        // compacting buffer can't be read again from the start, so it is skipped first.
+        var valueStart = -1;
 
-        if (!valid)
+        if (context.IsCompacting && _parser is ISeekable { SkipWhitespace: true })
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            if (context.MaySkipWhiteSpace(cursor.Current))
+            {
+                context.SkipWhiteSpace();
+            }
+
+            valueStart = cursor.Offset;
+        }
+
+        if (!_parser.Parse(context, ref result))
+        {
+            cursor.ResetPosition(start);
+            context.ExitParser(this);
+            return false;
+        }
+
+        if (!_action(context, result.Value))
+        {
+            var recorded = cursor.RecordedFailure;
+
+            if (valueStart >= 0)
+            {
+                cursor.ResetPosition(start);
+                cursor.RestoreRecordedFailure(recorded);
+                cursor.RecordFailure(valueStart);
+            }
+            else
+            {
+                context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true });
+                cursor.ResetPosition(start);
+            }
+
+            context.ExitParser(this);
+            return false;
         }
 
         context.ExitParser(this);
-        return valid;
+        return true;
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
