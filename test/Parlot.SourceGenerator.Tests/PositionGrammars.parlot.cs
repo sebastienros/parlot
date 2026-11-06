@@ -121,6 +121,19 @@ public static partial class PositionGrammars
     private static Parser<(int Start, int End)> BuildOffsetsMixedChoice() =>
         Terms.Text("ab").Or(Literals.Text("cd")).Then(static (context, start, end, _) => (start, end));
 
+    // Between reports offsets which span its delimiters, like SkipAnd/AndSkip
+    [GenerateParser(nameof(TryParseOffsetsBetween))]
+    private static Parser<(int Start, int End)> BuildOffsetsBetween() =>
+        Between(Terms.Char('['), Terms.Identifier(), Terms.Char(']')).Then(static (context, start, end, _) => (start, end));
+
+    [GenerateParser(nameof(TryParseOffsetsBetweenLiterals))]
+    private static Parser<(int Start, int End)> BuildOffsetsBetweenLiterals() =>
+        Between(Literals.Char('['), Literals.Identifier(), Literals.Char(']')).Then(static (context, start, end, _) => (start, end));
+
+    [GenerateParser(nameof(TryParseOffsetsSkipAndAndSkip))]
+    private static Parser<(int Start, int End)> BuildOffsetsSkipAndAndSkip() =>
+        Terms.Char('[').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(']')).Then(static (context, start, end, _) => (start, end));
+
     // A failed alternative gives the white space back to the next parser
     [GenerateParser(nameof(TryParseOffsetsBacktrack))]
     private static Parser<(int Start, int End)> BuildOffsetsBacktrack() =>

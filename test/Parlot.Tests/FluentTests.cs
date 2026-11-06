@@ -1244,6 +1244,41 @@ public class FluentTests
         Assert.Equal(" [abc", result1);
     }
 
+    [Theory]
+    [InlineData("[x]", "x", 0, 3)]
+    [InlineData(" [ xy ] ", "xy", 1, 7)]
+    [InlineData("[ xy ]]", "xy", 0, 6)]
+    public void BetweenShouldSpanDelimiters(string input, string value, int start, int end)
+    {
+        var key = Terms.Identifier();
+        var between = Between(Terms.Char('['), key, Terms.Char(']'));
+        var sequence = Terms.Char('[').SkipAnd(key).AndSkip(Terms.Char(']'));
+
+        var result = new ParseResult<TextSpan>();
+        Assert.True(between.Parse(new ParseContext(new Scanner(input)), ref result));
+        Assert.Equal((start, end), (result.Start, result.End));
+        Assert.Equal(value, result.Value.ToString());
+
+        // Same span as the equivalent sequence, through the offsets a callback receives
+        Assert.Equal(
+            sequence.Then(static (_, s, e, _) => (s, e)).Parse(input),
+            between.Then(static (_, s, e, _) => (s, e)).Parse(input));
+    }
+
+    [Theory]
+    [InlineData(" xy ]")]   // before fails
+    [InlineData(" [ 1 ]")]  // parser fails
+    [InlineData(" [ xy )")] // after fails
+    [InlineData(" [ xy ")]  // after fails at the end
+    public void BetweenShouldRestorePositionWhenFailingToSpanDelimiters(string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(Between(Terms.Char('['), Terms.Identifier(), Terms.Char(']')).Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
     [Fact]
     public void SeparatedShouldSplit()
     {
