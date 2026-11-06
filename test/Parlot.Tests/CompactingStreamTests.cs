@@ -56,6 +56,24 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void GuardedRepetitionsKeepTheBufferBounded()
+    {
+        // The loop skips the white space to test whether a statement can start after it, then moves back before it: the
+        // white space stays pinned until the statement or the end is read, and is released after
+        var statement = Terms.Text("let").SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(';'));
+        var parser = ZeroOrMany(statement).AndSkip(Terms.Char('}')).Eof();
+        var padding = new string(' ', 40);
+        var text = string.Join(padding, Enumerable.Range(0, 10_000).Select(static i => "let id" + i + ";")) + padding + "}";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+        Assert.Equal(10_000, result.Count);
+        Assert.Equal("id9999", result[9_999].ToString());
+        Assert.InRange(peak(), 1, 128);
+    }
+
+    [Fact]
     public void AlternativesKeepTheTextTheyCanReadAgain()
     {
         // Both alternatives start with 'a', the first one is read again from the start by the second one
