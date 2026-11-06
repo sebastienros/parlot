@@ -1,10 +1,11 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -168,15 +169,17 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser1, _parser2);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser1, typeof(T1), true), (_parser2, typeof(T2), true)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>))}({values[0]}, {values[1]})";
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser1, typeof(T1), true), (_parser2, typeof(T2), true)],
-            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2>))}({values[0]}, {values[1]})");
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser1} & {_parser2}";
 }
 
-public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
@@ -275,10 +278,12 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2>), true), (_lastParser, typeof(T3), true)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3>))}({values[0]}.Item1, {values[0]}.Item2, {values[1]})";
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2>), true), (_lastParser, typeof(T3), true)],
-            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3>))}({values[0]}.Item1, {values[0]}.Item2, {values[1]})");
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & {_lastParser} ";
 
@@ -350,7 +355,7 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
     }
 }
 
-public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
@@ -512,15 +517,17 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3>), true), (_lastParser, typeof(T4), true)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[1]})";
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3>), true), (_lastParser, typeof(T4), true)],
-            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[1]})");
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
@@ -683,15 +690,17 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4>), true), (_lastParser, typeof(T5), true)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[1]})";
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4>), true), (_lastParser, typeof(T5), true)],
-            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[1]})");
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
@@ -855,15 +864,17 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5>), true), (_lastParser, typeof(T6), true)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[0]}.Item5, {values[1]})";
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5>), true), (_lastParser, typeof(T6), true)],
-            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[0]}.Item5, {values[1]})");
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
 
-public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
@@ -1028,10 +1039,12 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), true), (_lastParser, typeof(T7), true)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[0]}.Item5, {values[0]}.Item6, {values[1]})";
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), true), (_lastParser, typeof(T7), true)],
-            static values => $"new {SourceGenerationContext.GetTypeName(typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>))}({values[0]}.Item1, {values[0]}.Item2, {values[0]}.Item3, {values[0]}.Item4, {values[0]}.Item5, {values[0]}.Item6, {values[1]})");
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & {_lastParser} ";
 }
