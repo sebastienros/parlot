@@ -89,6 +89,12 @@ public class StreamingTests
         ["not"] = new Grammar<TextSpan>(Not(Literals.Text("ab")).SkipAnd(Literals.NonWhiteSpace())),
         ["followed"] = new Grammar<TextSpan>(Terms.Identifier().WhenFollowedBy(Terms.Char('('))),
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
+        // A rejected value gives the cursor back to the next alternative, here the keyword the identifier rejects
+        ["thentry"] = new Grammar<string>(ZeroOrMany(Terms.Identifier().ThenTry(static (ParseContext _, int start, int end, TextSpan name, out string result) =>
+        {
+            result = $"{name}@{start}-{end}";
+            return !name.Span.SequenceEqual("for");
+        }).Or(Terms.Keyword("for"))).Then(static values => string.Join(",", values))),
         ["separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer())),
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         // Nested lists of the same element type share the scratch stack of the list parsers
@@ -259,6 +265,7 @@ public class StreamingTests
         Add("not", "", "a", "ab", "abc", "ac", "xab");
         Add("followed", "", "f", "f(", "f (", "f x", "f");
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
+        Add("thentry", "", "a", "for", "  for  forx", "a for b", " forever for\n for1 1", "fo");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
         Add("pooled-strings", "", "a", "abc abc", "'abc' abc \"a\\nb\" 'a\\nb'", "abcdefghijklmnopqr abcdefghijklmnopqr x", "'unterminated");

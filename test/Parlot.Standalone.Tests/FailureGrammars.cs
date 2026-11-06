@@ -28,6 +28,11 @@ public static partial class FailureGrammars
 
     public static partial bool RejectedLiteral(string text, out string value, out int failureOffset);
 
+    public static partial bool ConversionRejected(string text, out string value, out int failureOffset);
+    public static partial bool ConversionRejected(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool ConversionRejectedLiteral(string text, out string value, out int failureOffset);
+
     public static partial bool Second(string text, out string value, out int failureOffset);
 
     public static partial bool NotFollowed(string text, out string value, out int failureOffset);
