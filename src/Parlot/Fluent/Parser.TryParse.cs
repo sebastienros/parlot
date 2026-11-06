@@ -26,6 +26,8 @@ public abstract partial class Parser<T>
 
     public T? Parse(ParseContext context)
     {
+        context.Scanner.Cursor.ResetFurthestOffset();
+
         var localResult = new ParseResult<T>();
 
         var success = Parse(context, ref localResult);
@@ -61,6 +63,8 @@ public abstract partial class Parser<T>
     public bool TryParse(ParseContext context, out T value, out ParseError? error)
     {
         error = null;
+
+        context.Scanner.Cursor.ResetFurthestOffset();
 
         try
         {
