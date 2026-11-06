@@ -404,12 +404,176 @@ public class ValuedOperatorsTests
         Assert.Equal("(((((-((a.b)[i]))*2)==c)?d:e)??f)", expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"));
     }
 
+    /// <summary>
+    /// A conditional whose last operand is parsed by its own parser, between a tighter <c>||</c> and a looser <c>=</c>, and
+    /// the same grammar written with a fold of the conditionals over the chain of the tighter level. The last operand is
+    /// the whole expression, as in JavaScript, or a primary, which is tighter than the conditional.
+    /// </summary>
+    private static Parser<string> ConditionalWithLast(bool table, bool wholeExpressionLast)
+    {
+        var expression = Deferred<string>();
+        var primary = Atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+        var last = wholeExpressionLast ? expression : primary;
+        var question = Terms.Char('?');
+        var colon = Terms.Char(':');
+
+        if (table)
+        {
+            expression.Parser = primary.Operators()
+                .LeftAssociative((Terms.Text("||"), Binary("||")))
+                .Ternary(question, expression, colon, last, Conditional)
+                .RightAssociative((Terms.Char('='), Binary("=")));
+
+            return expression;
+        }
+
+        var or = primary.LeftAssociative((Terms.Text("||"), Binary("||")));
+
+        // Without conditionals the span is the operand's, and not the empty one of OneOrMany after it
+        var folded = or.And(OneOrMany(question.SkipAnd(expression).AndSkip(colon).And(last))).Then(static x =>
+        {
+            var value = x.Item1;
+
+            foreach (var (whenTrue, whenFalse) in x.Item2)
+            {
+                value = Conditional(value, whenTrue, whenFalse);
+            }
+
+            return value;
+        });
+
+        expression.Parser = folded.Or(or).RightAssociative((Terms.Char('='), Binary("=")));
+
+        return expression;
+    }
+
+    [Theory]
+    [InlineData("a ? b : c = d", "(a?b:(c=d))")]
+    [InlineData("a ? b : c ? d : e", "(a?b:(c?d:e))")]
+    [InlineData("a ? b ? c : d : e", "(a?(b?c:d):e)")]
+    [InlineData("a || b ? c : d", "((a||b)?c:d)")]
+    [InlineData("a ? b : c || d", "(a?b:(c||d))")]
+    [InlineData("a = b ? c : d = e", "(a=(b?c:(d=e)))")]
+    [InlineData("a ? b = c : d", "(a?(b=c):d)")]
+    [InlineData("(a ? b : c) = d", "((a?b:c)=d)")]
+    public void ShouldParseTheLastOperandOfAConditionalWithItsParser(string input, string expected)
+    {
+        Assert.Equal(expected, ConditionalWithLast(table: true, wholeExpressionLast: true).Parse(input));
+    }
+
+    [Theory]
+    [InlineData("a ? b : c = d", "((a?b:c)=d)")]
+    [InlineData("a ? b : c ? d : e", "((a?b:c)?d:e)")]
+    [InlineData("a ? b : c || d", "(a?b:c)")]
+    public void ShouldApplyConditionalsInTurnWhenTheLastOperandIsTighter(string input, string expected)
+    {
+        Assert.Equal(expected, ConditionalWithLast(table: true, wholeExpressionLast: false).Parse(input));
+    }
+
+    [Theory]
+    [InlineData("a ? b : c", 0, 9)]
+    [InlineData("  a ? b : c = d  ", 2, 15)]
+    [InlineData("x = a ? b : c", 0, 13)]
+    [InlineData("a ? b : c ? d : e", 0, 17)]
+    public void ShouldSpanTheConditionalFromItsConditionToItsLastOperand(string input, int start, int end)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.True(ConditionalWithLast(table: true, wholeExpressionLast: true).Parse(context, ref result));
+        Assert.Equal(start, result.Start);
+        Assert.Equal(end, result.End);
+        Assert.Equal(end, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("a ?", "a", 1)]
+    [InlineData("a ? b", "a", 1)]
+    [InlineData("a ? b :", "a", 1)]
+    [InlineData("a ? : c", "a", 1)]
+    [InlineData("a ? b : )", "a", 1)]
+    [InlineData("a || b ? c :", "(a||b)", 6)]
+    [InlineData("a = b ? c", "(a=b)", 5)]
+    [InlineData("a ? b : c = ", "(a?b:c)", 9)]
+    [InlineData("a ? b : c ? d", "(a?b:c)", 9)]
+    public void ShouldNotReadAConditionalWithoutItsLastOperand(string input, string expected, int offset)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.True(ConditionalWithLast(table: true, wholeExpressionLast: true).Parse(context, ref result));
+        Assert.Equal(expected, result.Value);
+        Assert.Equal(offset, result.End);
+        Assert.Equal(offset, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("?")]
+    [InlineData("? a : b")]
+    [InlineData("(a ? b : c")]
+    public void ShouldRestoreTheCursorWhenTheConditionalTableFails(string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.False(ConditionalWithLast(table: true, wholeExpressionLast: true).Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConditionalWithLastShouldParseLikeTheFold(bool wholeExpressionLast)
+    {
+        var chain = ConditionalWithLast(table: false, wholeExpressionLast);
+        var table = ConditionalWithLast(table: true, wholeExpressionLast);
+
+        string[] tokens = ["a", "b", "?", ":", "=", "||", "(", ")"];
+        var inputs = new List<string> { "" };
+        var previous = new List<string> { "" };
+
+        // All the sequences of up to 6 tokens
+        for (var length = 1; length <= 6; length++)
+        {
+            var next = new List<string>();
+
+            foreach (var prefix in previous)
+            {
+                foreach (var token in tokens)
+                {
+                    next.Add(prefix.Length == 0 ? token : prefix + " " + token);
+                }
+            }
+
+            inputs.AddRange(next);
+            previous = next;
+        }
+
+        var conditionals = 0;
+
+        foreach (var input in inputs)
+        {
+            var expected = Run(chain, input);
+
+            if (expected.Contains('?'))
+            {
+                conditionals++;
+            }
+
+            Assert.True(expected == Run(table, input), $"'{input}': chain {expected}, table {Run(table, input)}");
+        }
+
+        Assert.True(conditionals > 50, $"{conditionals} conditionals");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void GrammarShouldHaveNoFindings(bool rightAssociativeConditional)
     {
         Assert.Empty(Analysis.GrammarAnalyzer.Analyze(Grammar(table: true, rightAssociativeConditional)));
+        Assert.Empty(Analysis.GrammarAnalyzer.Analyze(ConditionalWithLast(table: true, wholeExpressionLast: rightAssociativeConditional)));
     }
 
     [Fact]
@@ -423,6 +587,8 @@ public class ValuedOperatorsTests
         Assert.Throws<ArgumentException>(() => Atom.Operators().RightAssociative([(Parser<char>)null!], static (a, b, _) => a));
         Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), (Parser<string>)null!, Terms.Char(':'), Conditional));
         Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), (Func<string, string, string, string>)null!));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), (Parser<string>)null!, Conditional));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), Atom, (Func<string, string, string, string>)null!));
     }
 
     [Fact]
@@ -431,7 +597,8 @@ public class ValuedOperatorsTests
         var seekable = (Rewriting.ISeekable)Atom.Operators()
             .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => Member(x, name)))
             .Unary((Terms.Char('~'), Prefix("~")))
-            .Ternary(Terms.Char('?'), Atom, Terms.Char(':'), Conditional);
+            .Ternary(Terms.Char('?'), Atom, Terms.Char(':'), Conditional)
+            .Ternary(Terms.Char('?'), Atom, Terms.Char(':'), Atom, Conditional);
 
         Assert.True(seekable.CanSeek);
         Assert.Contains('~', seekable.ExpectedChars);
