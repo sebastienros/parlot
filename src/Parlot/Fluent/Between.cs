@@ -8,6 +8,12 @@ namespace Parlot.Fluent;
 /// This parser parses a value between two other parsers. It returns the value parsed by the middle parser
 /// making it easier to skip delimiters than writing <code>a.SkipAnd(b).AndSkip(c)</code>.
 /// </summary>
+/// <remarks>
+/// Like <code>a.SkipAnd(b).AndSkip(c)</code>, the result's <see cref="ParseResult{T}.Start"/> and
+/// <see cref="ParseResult{T}.End"/> span the delimiters: they are the start of <code>before</code> and the end of
+/// <code>after</code>. Use <see cref="Parsers.Capture{T}(Parser{T})"/> or the offsets of a callback on the middle
+/// parser for the span of the value alone.
+/// </remarks>
 /// <typeparam name="A">The type of the parser before the main parser.</typeparam>
 /// <typeparam name="T">The type of the value parsed by the main parser.</typeparam>
 /// <typeparam name="B">The type of the parser after the main parser.</typeparam>
@@ -81,6 +87,10 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
             return false;
         }
 
+        // The result spans the delimiters, like before.SkipAnd(parser).AndSkip(after) and the generated parsers
+        result.Start = parsedA.Start;
+        result.End = parsedB.End;
+
         context.ExitParser(this);
         return true;
     }
@@ -123,6 +133,10 @@ public sealed class Between<A, T, B> : Parser<T>, ISeekablePrefixes, ISourceable
             context.ExitParser(this);
             return false;
         }
+
+        // The result spans the delimiters, like before.SkipAnd(parser).AndSkip(after) and the generated parsers
+        result.Start = parsedA.Start;
+        result.End = parsedB.End;
 
         context.ExitParser(this);
         return true;
