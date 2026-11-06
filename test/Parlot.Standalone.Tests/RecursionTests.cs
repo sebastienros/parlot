@@ -42,6 +42,40 @@ public class RecursionTests
     }
 
     [Fact]
+    public void Failure_Tells_Deep_Input_From_Other_Failures()
+    {
+        OnSmallStack(static () =>
+        {
+            Assert.False(RecursionGrammars.Nested(DeepList, out _, out (int Offset, int Line, int Column, bool NestedTooDeeply) failure));
+            Assert.True(failure.NestedTooDeeply);
+            Assert.True(failure.Offset > 0);
+
+            using var reader = new StringReader(DeepList);
+            Assert.False(RecursionGrammars.Nested(reader, out _, out (int Offset, bool NestedTooDeeply) readerFailure));
+            Assert.True(readerFailure.NestedTooDeeply);
+
+            // An ordinary failure, also deeper than the limit of the other grammar
+            Assert.False(RecursionGrammars.Nested("[[[[[oops", out _, out failure));
+            Assert.Equal((5, 1, 6, false), failure);
+
+            Assert.True(RecursionGrammars.Nested("[[item]]", out var depth, out failure));
+            Assert.Equal(2, depth);
+            Assert.Equal(default, failure);
+        });
+    }
+
+    [Theory]
+    [InlineData("[[item]]", true, false)] // The limit counts each entry, "item" included
+    [InlineData("[[[item]]]", false, true)]
+    [InlineData("[[oops", false, false)]
+    [InlineData("oops", false, false)]
+    public void Failure_Tells_The_Recursion_Limit_From_Other_Failures(string text, bool success, bool nestedTooDeeply)
+    {
+        Assert.Equal(success, RecursionGrammars.LimitedNested(text, out _, out (int Offset, bool NestedTooDeeply) failure));
+        Assert.Equal(nestedTooDeeply, failure.NestedTooDeeply);
+    }
+
+    [Fact]
     public void Deep_Input_Is_Reported_By_The_Diagnostics_Overload()
     {
         OnSmallStack(static () =>

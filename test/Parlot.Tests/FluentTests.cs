@@ -2951,4 +2951,28 @@ public class FluentTests
             Assert.Equal(['a', 'b', 'c'], seekable.ExpectedChars);
         }
     }
+
+    [Fact]
+    public void ParseExceptionOfTheRecursionLimitIsNestedTooDeeply()
+    {
+        var list = Recursive<int>(static list => Between(Literals.Char('['), list, Literals.Char(']')).Or(Literals.Text("item").Then(0)));
+
+        var error = Assert.Throws<ParseException>(() =>
+        {
+            var context = new ParseContext(new Scanner("[[[[item]]]]"), maxRecursionDepth: 3);
+            var result = new ParseResult<int>();
+            list.Parse(context, ref result);
+        });
+
+        Assert.True(error.IsNestedTooDeeply);
+    }
+
+    [Fact]
+    public void ParseExceptionOfAnErrorIsNotNestedTooDeeply()
+    {
+        var error = Assert.Throws<ParseException>(() => Literals.Char('a').ElseError("Expected a").Parse("b"));
+
+        Assert.False(error.IsNestedTooDeeply);
+    }
 }
+

@@ -229,7 +229,7 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
 - Recursion that consumes input is bounded like at runtime (see
   [Limiting parser recursion](parsers.md#limiting-parser-recursion)). `Deferred` and `Recursive` parsers check the stack
   of the thread on each entry, and input nested too deeply for it makes the entry point return `false` instead of
-  overflowing the stack and ending the process. `Unary` and the prefix operators of `Operators()` read their operators in
+  overflowing the stack and ending the process. A [failure overload](#failure-position) can tell it from other failures. `Unary` and the prefix operators of `Operators()` read their operators in
   a loop, so their chains don't use the stack. The diagnostics overload
   returns the error "The input is nested too deeply to be parsed on the remaining stack." at the position where it was
   reached. `[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` sets a limit that doesn't depend on the stack,
@@ -300,6 +300,11 @@ stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white spac
 grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
 `TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
 like `TextPosition`. The names of the tuple elements are free.
+
+To also tell input nested too deeply from other failures, add a last `bool` to the tuple, as in
+`out (int Offset, bool NestedTooDeeply)` or `out (int Offset, int Line, int Column, bool NestedTooDeeply)`. It is `true`
+when the parse exceeded `MaxRecursionDepth` or the stack of the thread, where `Offset` is the position that was reached.
+It costs nothing until such a failure: the entry point reads it in the handler of the exception which ended the parse.
 
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
