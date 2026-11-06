@@ -242,6 +242,214 @@ public class ValuedOperatorsTests
         Assert.True(operations > inputs.Count / 2, $"{operations} of {inputs.Count}");
     }
 
+    /// <summary>
+    /// A table of consecutive valued binary levels whose operators share their first chars, between a valued postfix level
+    /// (an indexer), a prefix level, a conditional and a looser prefix level, and the same grammar written with a fold of
+    /// the indexers and a chain of levels.
+    /// </summary>
+    private static Parser<string> ValuedLevelsGrammar(bool table, bool rightAssociativeConditional)
+    {
+        var expression = Deferred<string>();
+        var primary = Atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+        var index = Between(Terms.Char('['), expression, Terms.Char(']'));
+        var question = Terms.Char('?');
+        var colon = Terms.Char(':');
+
+        PrecedenceParser<string> Levels(PrecedenceParser<string> levels) => levels
+            .RightAssociative(Texts("**"), Valued)
+            .LeftAssociative(Texts("*", "/", "%"), Valued)
+            .LeftAssociative(Texts("+", "-"), Valued)
+            .LeftAssociative(Texts(">>>", "<<", ">>"), Valued)
+            .LeftAssociative(Texts("<=", ">=", "<", ">"), Valued)
+            .LeftAssociative(Texts("===", "==", "!="), Valued)
+            .Unary((Terms.Char('-'), Prefix("-")))
+            .LeftAssociative(Texts("&"), Valued)
+            .LeftAssociative(Texts("&&"), Valued)
+            .LeftAssociative(Texts("||"), Valued);
+
+        if (table)
+        {
+            expression.Parser = Levels(primary.Operators().Postfix((index, static (x, i) => Index(x, i))))
+                .Ternary(question, expression, colon, Conditional, rightAssociativeConditional)
+                .LeftAssociative(Texts("??"), Valued)
+                .Unary((Terms.Char('!'), Prefix("!")));
+
+            return expression;
+        }
+
+        // Without indexers the span is the primary's, and not the empty one of ZeroOrMany after it
+        var folded = primary.And(OneOrMany(index)).Then(static x =>
+        {
+            var value = x.Item1;
+
+            foreach (var i in x.Item2)
+            {
+                value = Index(value, i);
+            }
+
+            return value;
+        });
+
+        Parser<string> chain = Levels(folded.Or(primary).Operators());
+        Parser<string>[] conditional = [question.SkipAnd(expression).AndSkip(colon)];
+
+        chain = rightAssociativeConditional
+            ? chain.RightAssociative(conditional, static (c, whenFalse, whenTrue) => Conditional(c, whenTrue, whenFalse))
+            : chain.LeftAssociative(conditional, static (c, whenFalse, whenTrue) => Conditional(c, whenTrue, whenFalse));
+
+        expression.Parser = chain.LeftAssociative(Texts("??"), Valued).Unary((Terms.Char('!'), Prefix("!")));
+        return expression;
+    }
+
+    private static IEnumerable<string> RandomValuedLevelsExpressions(int seed, int count)
+    {
+        var random = new Random(seed);
+        string[] tokens = ["a", "b", "1", "(", ")", "[", "]", "-", "!", "**", "*", "/", "%", "+", "<<", ">>", ">>>", "<", "<=", ">", ">=", "==", "===", "!=", "&", "&&", "||", "??", "?", ":"];
+        string[] binaries = ["**", "*", "/", "%", "+", "-", "<<", ">>", ">>>", "<", "<=", ">", ">=", "==", "===", "!=", "&", "&&", "||", "??"];
+
+        string Space() => random.Next(4) switch { 0 => " ", 1 => "  ", _ => "" };
+
+        string Expression(int depth)
+        {
+            var sb = new StringBuilder();
+            var terms = random.Next(1, 7);
+
+            for (var i = 0; i < terms; i++)
+            {
+                if (i > 0)
+                {
+                    if (depth < 3 && random.Next(7) == 0)
+                    {
+                        sb.Append(Space()).Append('?').Append(Space()).Append(Expression(depth + 1)).Append(Space()).Append(':').Append(Space());
+                    }
+                    else
+                    {
+                        sb.Append(Space()).Append(binaries[random.Next(binaries.Length)]).Append(Space());
+                    }
+                }
+
+                while (random.Next(5) == 0)
+                {
+                    sb.Append(random.Next(2) == 0 ? '-' : '!').Append(Space());
+                }
+
+                sb.Append(depth < 3 && random.Next(5) == 0 ? "(" + Expression(depth + 1) + ")" : random.Next(2) == 0 ? "a" : "1");
+
+                while (depth < 3 && random.Next(4) == 0)
+                {
+                    sb.Append(Space()).Append('[').Append(Expression(depth + 1)).Append(']');
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            switch (random.Next(4))
+            {
+                case 0:
+                    var sb = new StringBuilder();
+                    var length = random.Next(0, 10);
+
+                    for (var j = 0; j < length; j++)
+                    {
+                        sb.Append(tokens[random.Next(tokens.Length)]).Append(Space());
+                    }
+
+                    yield return sb.ToString();
+                    break;
+
+                case 1:
+                    // An expression with a token inserted or a char removed
+                    var expression = Expression(0);
+                    var position = random.Next(expression.Length + 1);
+
+                    yield return random.Next(2) == 0 || expression.Length == 0
+                        ? expression.Insert(position, tokens[random.Next(tokens.Length)])
+                        : expression.Remove(Math.Min(position, expression.Length - 1), 1);
+                    break;
+
+                default:
+                    yield return Expression(0) + Space();
+                    break;
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConsecutiveValuedLevelsShouldParseLikeTheChain(bool rightAssociativeConditional)
+    {
+        var chain = ValuedLevelsGrammar(table: false, rightAssociativeConditional);
+        var table = ValuedLevelsGrammar(table: true, rightAssociativeConditional);
+
+        var inputs = new List<string>
+        {
+            "", "a", "a * b", "a ** b", "a ** b ** c", "a * * b", "a ** ", "a *", "a >>> b >> c << d", "a >> > b", "a < b <= c > d >= e",
+            "a === b == c != d", "a == = b", "a & b && c || d ?? e", "a & & b", "a && & b", "a || b | c", "- a & - b", "a & -", "!a ?? !b",
+            "a ?? !b", "a[b * c] ** d[e]", "a[b ? c : d] + e", "a ? b : c", "a ? b ** c : d ?? e", "a < b ? c : d ? e : f", "a ?",
+            "a ? b", "a ? b :", "a ?? ", "a + ", "a +", "a -- b", "a - - b", "a - -", "(a * b) % c", "[a]", "-", "!", "a[", "a[]",
+        };
+        inputs.AddRange(RandomValuedLevelsExpressions(rightAssociativeConditional ? 17 : 7, 4000));
+
+        var operations = 0;
+
+        foreach (var input in inputs)
+        {
+            var expected = Run(chain, input);
+
+            if (expected.Length > 0 && expected[0] == '(')
+            {
+                operations++;
+            }
+
+            Assert.True(expected == Run(table, input), $"'{input}': chain {expected}, table {Run(table, input)}");
+        }
+
+        Assert.True(operations > inputs.Count / 4, $"{operations} of {inputs.Count}");
+    }
+
+    [Theory]
+    [InlineData("a", 1)]
+    [InlineData("a )", 1)]
+    [InlineData("a || b", 2)]
+    [InlineData("a[b] || c", 4)]
+    [InlineData("a ? b : c", 3)]
+    // The ** level is probed, then the * is looked up from the next level, and the conditional is probed before the ??
+    [InlineData("a * b", 3)]
+    [InlineData("a ?? b", 3)]
+    public void ConsecutiveValuedLevelsShouldBeLookedUpThroughASingleChoice(string input, int lookups)
+    {
+        var expression = Deferred<string>();
+
+        // The choices of the lookups are the only OneOf<int> of the grammar
+        expression.Parser = Atom.Operators()
+            .Postfix((Between(Terms.Char('['), expression, Terms.Char(']')), static (x, i) => Index(x, i)))
+            .RightAssociative(Texts("**"), Valued)
+            .LeftAssociative(Texts("*", "/", "%"), Valued)
+            .LeftAssociative(Texts("+", "-"), Valued)
+            .LeftAssociative(Texts(">>>", "<<", ">>"), Valued)
+            .LeftAssociative(Texts("<=", ">=", "<", ">"), Valued)
+            .LeftAssociative(Texts("===", "==", "!="), Valued)
+            .LeftAssociative(Texts("&"), Valued)
+            .LeftAssociative(Texts("&&"), Valued)
+            .LeftAssociative(Texts("||"), Valued)
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), Conditional)
+            .LeftAssociative(Texts("??"), Valued);
+
+        var count = 0;
+        var context = new ParseContext(new Scanner(input))
+        {
+            OnEnterParser = (parser, _) => count += parser is OneOf<int> ? 1 : 0,
+        };
+        var result = new ParseResult<string>();
+
+        Assert.True(expression.Parse(context, ref result));
+        Assert.Equal(lookups, count);
+    }
+
     [Theory]
     [InlineData("a.b", "a.b")]
     [InlineData("a.b.c", "a.b.c")]
