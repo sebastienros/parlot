@@ -78,6 +78,72 @@ public class KeywordIdentifierPartTests
         Assert.DoesNotContain("IsInRange", Generate(Literals.Keyword("in", LiquidIdentifierPart)), StringComparison.Ordinal);
     }
 
+    private static readonly string WordPart =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$"
+        + new string(Enumerable.Range(0x80, 0xFFFE - 0x80 + 1).Select(static i => (char)i).ToArray());
+
+    private static readonly string[] RangeInputs =
+    [
+        "", "f", "from", " from", "FROM", "From x", "from(", "from.x", "from1", "from_", "from$", "fromé", "from\u0080", "from\ufffe",
+        "from\uffff", "from\u007f", "fromage", "inner", "in", "in ", "inn", "or", "order", "orders", "SELECT", "select1", "where\u00e9", "join",
+    ];
+
+    private static Parser<string> RangesChoice() => OneOf(
+        new[] { "from", "select", "where", "in", "inner", "join", "or", "order" }
+            .Select(static word => Terms.Keyword(word, WordPart, caseInsensitive: true)).ToArray());
+
+    [Fact]
+    public void Generated_Keywords_With_A_Large_Set_Match_The_Runtime_Parser()
+    {
+        foreach (var input in RangeInputs)
+        {
+            Check(Terms.Keyword("from", WordPart, caseInsensitive: true), KeywordIdentifierPartGrammars.TryParseRanges, KeywordIdentifierPartGrammars.TryParseRanges, input);
+            Check(Literals.Keyword("from", WordPart, caseInsensitive: true, returnMatchedText: true), KeywordIdentifierPartGrammars.TryParseRangesMatched, KeywordIdentifierPartGrammars.TryParseRangesMatched, input);
+            Check(RangesChoice(), KeywordIdentifierPartGrammars.TryParseRangesChoice, KeywordIdentifierPartGrammars.TryParseRangesChoice, input);
+        }
+
+        Assert.False(KeywordIdentifierPartGrammars.TryParseRanges("from\u00e9", out _));
+        Assert.True(KeywordIdentifierPartGrammars.TryParseRanges("from\uffff", out var value));
+        Assert.Equal("from", value);
+        Assert.True(KeywordIdentifierPartGrammars.TryParseRangesChoice(" ORDER", out value));
+        Assert.Equal("order", value);
+        Assert.False(KeywordIdentifierPartGrammars.TryParseRangesChoice("orders", out _));
+    }
+
+    [Fact]
+    public void Generated_Keyword_Choices_With_A_Large_Set_Check_The_Boundary_After_A_Buffer_End()
+    {
+        foreach (var input in new[] { "inner", "inner ", "inner1", "inneré", "in", "in$" })
+        {
+            for (var split = 0; split <= input.Length + 1; split++)
+            {
+                var text = new string(' ', BufferSize - split) + input;
+                Check(RangesChoice(), KeywordIdentifierPartGrammars.TryParseRangesChoice, KeywordIdentifierPartGrammars.TryParseRangesChoice, text);
+            }
+        }
+    }
+
+    [Fact]
+    public void Keyword_Lookup_Takes_Keywords_With_The_Same_Identifier_Chars()
+    {
+        // The set above ASCII is one range in the generated code, not a list of chars
+        var source = Generate(Literals.Keyword("from", WordPart));
+        Assert.Contains(">= '\\u0080' && next", source, StringComparison.Ordinal);
+        Assert.True(source.Length < 2000, source.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var words = new[] { "if", "else", "elsif", "for", "in", "and", "or", "with" };
+
+        Assert.Contains("MatchKeyword", Generate(RangesChoice()), StringComparison.Ordinal);
+        Assert.Contains("MatchKeyword", Generate(OneOf(words.Select(static word => Terms.Keyword(word, LiquidIdentifierPart)).ToArray())), StringComparison.Ordinal);
+        Assert.Contains("MatchKeyword", Generate(OneOf(words.Select(static word => Terms.Keyword(word, caseInsensitive: true)).ToArray())), StringComparison.Ordinal);
+
+        // Another boundary, comparison or returned text, or a keyword whose chars don't continue an identifier
+        Assert.DoesNotContain("MatchKeyword", Generate(OneOf([Terms.Keyword("if", "abcdefghijklmnopqrstuvwxyz"), .. words[1..].Select(static word => Terms.Keyword(word, LiquidIdentifierPart))])), StringComparison.Ordinal);
+        Assert.DoesNotContain("MatchKeyword", Generate(OneOf([Terms.Keyword("if", LiquidIdentifierPart, caseInsensitive: true), .. words[1..].Select(static word => Terms.Keyword(word, LiquidIdentifierPart))])), StringComparison.Ordinal);
+        Assert.DoesNotContain("MatchKeyword", Generate(OneOf(words.Select(static word => Terms.Keyword(word, caseInsensitive: true, returnMatchedText: true)).ToArray())), StringComparison.Ordinal);
+        Assert.DoesNotContain("MatchKeyword", Generate(OneOf(words.Select(static word => Terms.Keyword(word, "0123456789")).ToArray())), StringComparison.Ordinal);
+    }
+
     private static Parser<string> Choice() =>
         OneOf(
             Terms.Keyword("if"), Terms.Keyword("else"), Terms.Keyword("elsif"), Terms.Keyword("for"),
@@ -109,4 +175,10 @@ public static partial class KeywordIdentifierPartGrammars
     public static partial bool TryParseNonAscii(TextReader reader, out string value);
     public static partial bool TryParseChoice(string text, out string value);
     public static partial bool TryParseChoice(TextReader reader, out string value);
+    public static partial bool TryParseRanges(string text, out string value);
+    public static partial bool TryParseRanges(TextReader reader, out string value);
+    public static partial bool TryParseRangesMatched(string text, out string value);
+    public static partial bool TryParseRangesMatched(TextReader reader, out string value);
+    public static partial bool TryParseRangesChoice(string text, out string value);
+    public static partial bool TryParseRangesChoice(TextReader reader, out string value);
 }

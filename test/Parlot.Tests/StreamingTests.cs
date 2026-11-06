@@ -25,6 +25,9 @@ namespace Parlot.Tests;
 /// </summary>
 public class StreamingTests
 {
+    // Declared before the grammars, which read it
+    private static readonly string AboveAscii = new string(Enumerable.Range(0x80, 0xFFFE - 0x80 + 1).Select(static i => (char)i).ToArray());
+
     private static readonly Dictionary<string, IGrammar> Grammars = new()
     {
         ["calc"] = new Grammar<CalcExpression>(FluentParser.Expression),
@@ -62,6 +65,8 @@ public class StreamingTests
         ["prefix-texts"] = new Grammar<string>(OneOf(Terms.Text("<<="), Terms.Text("<="), Terms.Text("<<"), Terms.Text("<>"), Terms.Text("<"))),
         ["keyword-part"] = new Grammar<string>(Terms.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789_-\u00e9")),
         ["keywords-part"] = new Grammar<string>(OneOf(Literals.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789_-"), Literals.Keyword("inc", "-"), Literals.Text("i"))),
+        ["keyword-large-set"] = new Grammar<string>(Terms.Keyword("in", "abcdefghijklmnopqrstuvwxyz0123456789" + AboveAscii, caseInsensitive: true)),
+        ["keywords-large-set"] = new Grammar<string>(OneOf(Literals.Keyword("in", "abcdefghijklmnopqrstuvwxyz" + AboveAscii), Literals.Keyword("inc", "abcdefghijklmnopqrstuvwxyz" + AboveAscii), Literals.Text("i"))),
         ["anyof"] = new Grammar<TextSpan>(Literals.AnyOf("abc", minSize: 3)),
         ["anyof-max"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Literals.AnyOf("abc", minSize: 1, maxSize: 2))),
         ["noneof"] = new Grammar<TextSpan>(Literals.NoneOf(",;", minSize: 2)),

@@ -272,7 +272,7 @@ public class LiteralBuilder
     /// This overload exists so a factory compiled for .NET Framework or .NET Standard 2.0, where a <see cref="string"/>
     /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
     /// </remarks>
-    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
+    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, identifierPart ?? throw new ArgumentNullException(nameof(identifierPart)), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText);
 
     /// <summary>
     /// Builds a parser that matches the specified char.
@@ -546,7 +546,7 @@ public class TermBuilder
     /// This overload exists so a factory compiled for .NET Framework or .NET Standard 2.0, where a <see cref="string"/>
     /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
     /// </remarks>
-    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
+    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, identifierPart ?? throw new ArgumentNullException(nameof(identifierPart)), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText));
 
     /// <summary>
     /// Builds a parser that matches the specified char.

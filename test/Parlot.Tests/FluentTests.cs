@@ -3,6 +3,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using Xunit;
 
@@ -2951,4 +2952,54 @@ public class FluentTests
             Assert.Equal(['a', 'b', 'c'], seekable.ExpectedChars);
         }
     }
+
+    [Theory]
+    [InlineData("from", true)]
+    [InlineData("FROM x", true)]
+    [InlineData("from(", true)]
+    [InlineData("from\uffff", true)]
+    [InlineData("from\u007f", true)]
+    [InlineData("from1", false)]
+    [InlineData("from_", false)]
+    [InlineData("fromage", false)]
+    [InlineData("from\u00e9", false)]
+    [InlineData("from\u0080", false)]
+    [InlineData("from\ufffe", false)]
+    [InlineData("fro", false)]
+    public void KeywordWithALargeSetChecksItsBoundary(string input, bool expected)
+    {
+        var parser = Literals.Keyword("from", Chars(('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\ufffe')), caseInsensitive: true);
+
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.Equal(expected, parser.Parse(context, ref result));
+        Assert.Equal(expected ? 4 : 0, context.Scanner.Cursor.Offset);
+        if (expected)
+        {
+            Assert.Equal("from", result.Value);
+        }
+    }
+
+    [Fact]
+    public void KeywordSetIsMergedIntoRanges()
+    {
+        // Overlapping, adjacent and repeated chars, in any order, across ASCII
+        var parser = Literals.Keyword("if", Chars(('\u0100', '\u0200'), ('\u0150', '\u0300'), ('\u0301', '\u0301'), ('z', '\u0090'), ('\u0150', '\u0150')));
+
+        Assert.False(parser.TryParse("ifz", out _));
+        Assert.False(parser.TryParse("if\u007f", out _));
+        Assert.False(parser.TryParse("if\u0080", out _));
+        Assert.False(parser.TryParse("if\u0090", out _));
+        Assert.True(parser.TryParse("if\u0091", out _));
+        Assert.False(parser.TryParse("if\u0250", out _));
+        Assert.False(parser.TryParse("if\u0301", out _));
+        Assert.True(parser.TryParse("if\u0302", out _));
+        Assert.True(parser.TryParse("ify", out _));
+    }
+
+    // The chars of the ranges, both ends included
+    private static string Chars(params (char First, char Last)[] ranges) =>
+        string.Concat(ranges.Select(static range => new string(Enumerable.Range(range.First, range.Last - range.First + 1).Select(static c => (char)c).ToArray())));
 }
+

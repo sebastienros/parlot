@@ -452,7 +452,20 @@ parser.Parse("in_x");      // null - failure
 parser.Parse("in-x");      // null - failure
 ```
 
-The set is checked with a bitset for ASCII chars, and any other char is looked up in the set, so it has the cost of the default check. The `string` overload lets factories compiled for .NET Framework or .NET Standard 2.0 pass a string literal. A large source-generated choice of keywords only uses the [keyword lookup](keyword-lookups.md) when none of them has custom identifier chars.
+A large set is a list too, built once with the grammar. For instance, for words that also take every char above ASCII:
+
+```c#
+static readonly string WordPart = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+    + new string(Enumerable.Range(0x80, 0xFFFE - 0x80 + 1).Select(static i => (char)i).ToArray());
+
+var from = Terms.Keyword("from", WordPart, caseInsensitive: true);
+
+from.Parse("from x"); // "from"
+from.Parse("from1");  // null - failure
+from.Parse("fromé");  // null - failure
+```
+
+The set is checked with a bitset for ASCII chars, and the other chars are kept as ranges of consecutive chars, compared one after the other: the chars above ASCII of this example are a single range. It has the cost of the default check on ASCII input. Keywords given the same `string` share it. The `string` overload lets factories compiled for .NET Framework or .NET Standard 2.0 pass a string literal. A large source-generated choice of keywords uses the [keyword lookup](keyword-lookups.md) when they share their identifier chars, their case sensitivity, and contain only ASCII letters which are identifier chars themselves; a case-insensitive one must return the canonical text.
 
 ### Integer
 
