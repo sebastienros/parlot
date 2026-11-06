@@ -376,6 +376,23 @@ public class LiteralBuilder
 #endif
 
     /// <summary>
+    /// Builds a parser that matches an identifier whose chars are code points accepted by predicates, which can be written
+    /// as escape sequences or surrogate pairs depending on <paramref name="options"/>.
+    /// </summary>
+    /// <param name="isStart">Whether a code point can start the identifier.</param>
+    /// <param name="isPart">Whether a code point can follow the start.</param>
+    /// <param name="options">The escape sequences and surrogate pairs which are code points,
+    /// <see cref="IdentifierOptions.JavaScript"/> for JavaScript identifiers.</param>
+    /// <returns>A parser returning the text of the identifier, escape sequences included, which
+    /// <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.</returns>
+    /// <remarks>
+    /// The predicates are invoked for each ASCII char when the parser is built, and must give the same answer for a code
+    /// point each time. They can't accept a new line. An escape sequence is accepted when the predicate accepts its code
+    /// point, a surrogate pair is passed to the predicate as the code point it encodes.
+    /// </remarks>
+    public Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options) => new CodePointIdentifier(isStart, isPart, options);
+
+    /// <summary>
     /// Builds a parser that matches a char against a predicate.
     /// </summary>
     /// <param name="predicate">The predicate to match against each char.</param>
@@ -648,6 +665,23 @@ public class TermBuilder
     public Parser<TextSpan> Identifier(ReadOnlySpan<char> identifierStart, ReadOnlySpan<char> identifierPart) => SkipWhiteSpace(new IdentifierLiteral(SearchValues.Create(identifierStart), SearchValues.Create(identifierPart), identifierStart.ToArray()));
 
 #endif
+
+    /// <summary>
+    /// Builds a parser that matches an identifier whose chars are code points accepted by predicates, which can be written
+    /// as escape sequences or surrogate pairs depending on <paramref name="options"/>.
+    /// </summary>
+    /// <param name="isStart">Whether a code point can start the identifier.</param>
+    /// <param name="isPart">Whether a code point can follow the start.</param>
+    /// <param name="options">The escape sequences and surrogate pairs which are code points,
+    /// <see cref="IdentifierOptions.JavaScript"/> for JavaScript identifiers.</param>
+    /// <returns>A parser returning the text of the identifier, escape sequences included, which
+    /// <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.</returns>
+    /// <remarks>
+    /// The predicates are invoked for each ASCII char when the parser is built, and must give the same answer for a code
+    /// point each time. They can't accept a new line. An escape sequence is accepted when the predicate accepts its code
+    /// point, a surrogate pair is passed to the predicate as the code point it encodes.
+    /// </remarks>
+    public Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options) => SkipWhiteSpace(new CodePointIdentifier(isStart, isPart, options));
 
     /// <summary>
     /// Builds a parser that matches a char against a predicate.
