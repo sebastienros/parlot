@@ -229,11 +229,15 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
   the same results, spans and cursor positions. When `question`, `middle`, `colon` or the last operand doesn't match,
   nothing is read and the looser levels are tried at the position of `question`: a `?` doesn't need to exclude the `??`
   of a looser level.
-- The table looks up the operator following an operand through a single choice of the operators up to the next level
-  of valued operators, which starts with a check of the first chars of these: when the next char can start one of them,
-  the level that applies them parses them and passes their values to the factories right away, otherwise the looser
-  levels are tried in the same choice. An operator is parsed only once at a position, even when it parses an expression,
-  like an index or the middle of a conditional, and the values are never kept for a looser level.
+- The table looks up the operator following an operand through a single choice of all its operators, in which each level
+  of valued operators is a check of the first chars of these: when the next char can start one of them, the level that
+  applies them parses them and passes their values to the factories right away, otherwise the looser levels are tried in
+  the same choice. An operator is parsed only once at a position, even when it parses an expression, like an index or the
+  middle of a conditional, and the values are never kept for a looser level. A table of valued levels, like a level per
+  precedence of binary operators with a single factory receiving the operator, costs a single choice after an operand,
+  like the same table with a factory per operator. When the next char can start an operator of a valued level that
+  doesn't match, another choice follows, from the next level: with a valued `**` level tighter than a `*` level,
+  `a * b` probes the `**` level, which doesn't match, then looks up the `*` from the next level.
 
 ## Terms and Literals
 

@@ -160,6 +160,19 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Arguments", 14)]
+    [InlineData("Mixed", 1652203732534)]
+    public void ValuedLevelsGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the runtime one with a factory per operator
+        var benchmark = new ValuedLevelsBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.PerOperatorRuntime());
+        Assert.Equal(expected, benchmark.ValuedGenerated());
+    }
+
+    [Theory]
     [InlineData("Flat", 3)]
     [InlineData("Nested", 50)]
     public void RecursionLimitGrammar(string input, long expected)
