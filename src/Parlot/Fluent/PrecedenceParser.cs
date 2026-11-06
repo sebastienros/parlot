@@ -303,7 +303,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// <paramref name="colon"/> is a value of the tighter levels when the level is left-associative,
     /// <c>a ? b : c ? d : e</c> being <c>(a ? b : c) ? d : e</c>, and can be another conditional when it is
     /// right-associative, <c>a ? b : c ? d : e</c> being <c>a ? b : (c ? d : e)</c>. The operators of the looser levels
-    /// apply to the conditional: <c>a ? b : c ?? d</c> is <c>(a ? b : c) ?? d</c> when <c>??</c> is looser.
+    /// apply to the conditional: <c>a ? b : c ?? d</c> is <c>(a ? b : c) ?? d</c> when <c>??</c> is looser. For a last
+    /// operand that is looser than the conditional, like an assignment, use
+    /// <see cref="Ternary{TQuestion, TMiddle, TColon}(Parser{TQuestion}, Parser{TMiddle}, Parser{TColon}, Parser{T}, Func{T, TMiddle, T, T})"/>.
     /// </para>
     /// <para>
     /// It is the level of binary operators whose operator is <paramref name="question"/>, <paramref name="middle"/> and
@@ -340,6 +342,60 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Parser<TMiddle>[] operators = [question.SkipAnd(middle).AndSkip(colon)];
 
         return Add(OperatorLevel<T>.CreateValued(kind, OperatorCount, new ValuedBinary<T, TMiddle>(operators, null, factory, rightAssociative, nameof(middle))));
+    }
+
+    /// <summary>
+    /// Returns a parser with an additional level of a conditional operator <c>condition ? whenTrue : whenFalse</c> whose
+    /// last operand is parsed by <paramref name="last"/>, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The condition is a value of the tighter levels. <paramref name="middle"/> is parsed between
+    /// <paramref name="question"/> and <paramref name="colon"/>, and <paramref name="last"/> after <paramref name="colon"/>.
+    /// Unlike <see cref="Ternary{TQuestion, TMiddle, TColon}(Parser{TQuestion}, Parser{TMiddle}, Parser{TColon}, Func{T, TMiddle, T, T}, bool)"/>,
+    /// the last operand can be looser than the conditional, as in C# and JavaScript where it is an assignment:
+    /// with <paramref name="last"/> the whole expression, <c>a ? b : c = d</c> is <c>a ? b : (c = d)</c> and
+    /// <c>a ? b : c ? d : e</c> is <c>a ? b : (c ? d : e)</c>. The operators of the looser levels apply to what follows the
+    /// last operand: with <c>,</c> looser and <paramref name="last"/> an assignment, <c>a ? b : c, d</c> is
+    /// <c>(a ? b : c), d</c>.
+    /// </para>
+    /// <para>
+    /// It is the level of valued postfix operators whose operator is
+    /// <c>question.SkipAnd(middle).AndSkip(colon).And(last)</c>: when one of them doesn't match, nothing is read, and the
+    /// looser levels are tried at the position of <paramref name="question"/>. A conditional can follow another one when
+    /// <paramref name="last"/> doesn't read it, <c>a ? b : c ? d : e</c> being <c>(a ? b : c) ? d : e</c> when
+    /// <paramref name="last"/> is tighter than the conditional.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TQuestion">The type of the parser before the middle operand.</typeparam>
+    /// <typeparam name="TMiddle">The type of the middle operand.</typeparam>
+    /// <typeparam name="TColon">The type of the parser after the middle operand.</typeparam>
+    /// <param name="question">The parser before the middle operand.</param>
+    /// <param name="middle">The parser of the middle operand.</param>
+    /// <param name="colon">The parser after the middle operand.</param>
+    /// <param name="last">The parser of the last operand, usually the whole expression or an assignment.</param>
+    /// <param name="factory">The function creating the result from the condition, the middle operand and the last operand.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    /// <example>
+    /// <code>
+    /// var expression = Deferred&lt;Expression&gt;();
+    /// expression.Parser = primary.Operators()
+    ///     .LeftAssociative((Terms.Text("||"), static (a, b) => new Or(a, b)))
+    ///     .Ternary(Terms.Char('?'), expression, Terms.Char(':'), expression, static (condition, whenTrue, whenFalse) => new Conditional(condition, whenTrue, whenFalse))
+    ///     .RightAssociative((Terms.Char('='), static (a, b) => new Assign(a, b)));
+    /// </code>
+    /// </example>
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<T, TMiddle, T, T> factory)
+    {
+        ThrowHelper.ThrowIfNull(question, nameof(question));
+        ThrowHelper.ThrowIfNull(middle, nameof(middle));
+        ThrowHelper.ThrowIfNull(colon, nameof(colon));
+        ThrowHelper.ThrowIfNull(last, nameof(last));
+        ThrowHelper.ThrowIfNull(factory, nameof(factory));
+
+        Parser<(TMiddle, T)> op = question.SkipAnd(middle).AndSkip(colon).And(last);
+
+        return Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new ConditionalGroup<T, TMiddle>(op, factory)])));
     }
 
     private int OperatorCount => _operatorLevels.Length;
@@ -1732,7 +1788,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line("                        continue;");
             Line("                    }");
 
-            if (group.Factories.Length == 1)
+            if (group.IsConditional)
+            {
+                // The value is the index of the operator and the pair of the middle and last operands
+                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}(climbed, {name}.Item2.Item1, {name}.Item2.Item2);");
+            }
+            else if (group.Factories.Length == 1)
             {
                 Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}(climbed, {name}.Item2);");
             }

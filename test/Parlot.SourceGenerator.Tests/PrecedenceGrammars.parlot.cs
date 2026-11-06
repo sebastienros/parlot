@@ -164,6 +164,27 @@ public static partial class PrecedenceGrammars
         return WithRest(expression);
     }
 
+    // A conditional whose last operand is an assignment, looser than the conditional, as in JavaScript
+    [GenerateParser(nameof(TryParseConditionalLast))]
+    private static Parser<string> BuildConditionalLast()
+    {
+        var expression = Deferred<string>();
+        var assignment = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        assignment.Parser = primary.Operators()
+            .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => PrecedenceAst.Member(x, name.ToString())))
+            .LeftAssociative((Terms.Text("||"), static (a, b) => PrecedenceAst.Binary("||", a, b)))
+            .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment, static (c, a, b) => PrecedenceAst.Conditional(c, a, b))
+            .LeftAssociative((Terms.Text("??"), static (a, b) => PrecedenceAst.Binary("??", a, b)))
+            .RightAssociative(new[] { Terms.Text("="), Terms.Text("+=") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b));
+
+        expression.Parser = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => PrecedenceAst.Binary(",", a, b)));
+
+        return WithRest(expression);
+    }
+
     [GenerateParser(nameof(TryParseValuedEmpty))]
     private static Parser<string> BuildValuedEmpty() =>
         WithRest(Literals.Text("x").Optional().Then(static x => x.HasValue ? "x" : "").Operators()

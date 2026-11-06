@@ -45,6 +45,9 @@ public class StreamingTests
         // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
         ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
         ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
+        // A conditional whose last operand is the whole expression, read after the colon by the level
+        ["conditional-last"] = new Grammar<string>(CreateConditionalWithLast()),
+        ["conditional-last-eof"] = new Grammar<string>(CreateConditionalWithLast().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
@@ -203,6 +206,14 @@ public class StreamingTests
         ];
         Add("valued-operators", valuedOperators);
         Add("valued-operators-eof", valuedOperators);
+
+        string[] conditionalLast =
+        [
+            "", "a", "a ? b : c", "a ? b : c = d", "a ? b : c ? d : e", "a || b ? c : d", "a = b ? c : d = e", "a ? b", "a ? b :",
+            "a ? b : c =", "a ?", "a ? b : c, d", "a, b ? c : d, e", " a ? ( b , c ) : d ", "a\n?\nb\n:\nc\n=\nd", "a ? b : c || d",
+        ];
+        Add("conditional-last", conditionalLast);
+        Add("conditional-last-eof", conditionalLast);
 
         Add("sql",
             "SELECT * FROM users",
@@ -828,6 +839,22 @@ public class StreamingTests
             .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => $"({c}?{a}:{b})", rightAssociative: false)
             .LeftAssociative((Terms.Text("??"), static (a, b) => $"({a}??{b})"))
             .RightAssociative([Terms.Text("=")], static (a, b, op) => $"({a}{op}{b})");
+
+        return expression;
+    }
+
+    private static Parser<string> CreateConditionalWithLast()
+    {
+        var expression = Deferred<string>();
+        var assignment = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        assignment.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), static (a, b) => $"({a}||{b})"))
+            .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment, static (c, a, b) => $"({c}?{a}:{b})")
+            .RightAssociative((Terms.Char('='), static (a, b) => $"({a}={b})"));
+
+        expression.Parser = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => $"({a},{b})"));
 
         return expression;
     }
