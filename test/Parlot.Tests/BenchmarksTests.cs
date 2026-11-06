@@ -76,6 +76,16 @@ public class BenchmarksTests
         Assert.Equal("KeYwOrD", benchmark.RetainedText());
     }
 
+    [Fact]
+    public void BetweenGrammar()
+    {
+        var benchmark = new BetweenBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("key", benchmark.BetweenValue());
+        Assert.Equal(7, benchmark.BetweenSpan());
+        Assert.Equal(" [ 1, 2, 3, 4, 5, 6, 7, 8 ]", benchmark.BetweenWithoutValue());
+    }
+
     [Theory]
     [InlineData("Small", "Mixed")]
     [InlineData("Medium", "Mixed")]
