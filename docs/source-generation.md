@@ -244,11 +244,11 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   are C# 11): its numbers are parsed with the fixed overloads, and its embedded runtime defines
   `PARLOT_NO_GENERIC_MATH`. These overloads call the type's `TryParse`, without the generic helper's fast path
   for short runs of decimal digits.
-- A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A `Terms`
-  parser reports the start of its content, after the skipped white space, as at runtime. A composite parser
-  that skips white space internally (a sequence or a choice of `Terms` parsers) reports the offset where the
-  generated parser was entered, before that white space, where the runtime reports the start of its first
-  element.
+- A `Then((context, start, end, value) => ...)` callback receives the offsets of the inner match. A parser which
+  starts by skipping white space, like a `Terms` parser, a choice whose alternatives are all `Terms` parsers, or a
+  sequence starting with one, reports the start of its content, after the skipped white space, as at runtime. A choice
+  whose alternatives don't all skip white space reports the offset where it was entered, before the white space of the
+  alternative that matched, where the runtime reports the start of that alternative's content.
 
 ### Non-breaking diagnostics
 
