@@ -307,7 +307,7 @@ first bad token is:
 - A `When` whose condition rejects the value fails at the start of the value, after the white space the parser skips:
   `Terms.Identifier().When(...)` on `  from` reports 2, not 6.
 - `WhenNotFollowedBy` and `Not` fail at the start of what must not match, after the white space it skips.
-- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` matches, nor when the parser of
+- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
 
