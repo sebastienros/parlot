@@ -914,7 +914,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             {
                 var operatorResult = new ParseResult<int>();
 
-                if (_levels[prefixLevels[i]].ValuedPrefix is { } valued)
+                if (_hasValuedPrefixes && _levels[prefixLevels[i]].ValuedPrefix is { } valued)
                 {
                     // Its value has the type of the level, which parses what follows
                     var outcome = valued.ParsePrefixed(this, context, start, i, pin, ref result, ref next);
@@ -1075,7 +1075,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 }
 
                 // The result spans the first operator and the operand
-                result.Set(resultStart, result.End, ApplyPrefix(context, op, result.Value));
+                result.Set(resultStart, result.End, _hasValuedPrefixes ? ApplyPrefix(context, op, result.Value) : _unary[op]!(result.Value));
                 lookup = false;
                 pending = i;
             }

@@ -11,7 +11,8 @@ namespace Parlot.Benchmarks;
 /// Prefix operators whose nodes need the position of the operator, like the ones of a JavaScript parser, at runtime and
 /// generated. Before valued prefix levels, they were parsed outside the table, by a recursive choice of the operators and
 /// of the table of the tighter levels (Outside). They are now a level of the table whose factory receives the position
-/// (Table).
+/// (Table). Plain is the table with a prefix level whose factories don't receive the positions, which parses the same
+/// text, the cost of the prefix levels of a table without values.
 /// </summary>
 [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public partial class ValuedPrefixBenchmarks
@@ -88,6 +89,15 @@ public partial class ValuedPrefixBenchmarks
     [Benchmark, BenchmarkCategory("Generated")]
     public long TableGenerated() => TryParseTable(_input, out var value) ? value : -1;
 
+    private Parser<long> _plain = ValuedPrefixGrammar.CreatePlain();
+
+    [Benchmark, BenchmarkCategory("Runtime")]
+    public long PlainRuntime() => _plain.Parse(_input);
+
+    [Benchmark, BenchmarkCategory("Generated")]
+    public long PlainGenerated() => TryParsePlain(_input, out var value) ? value : -1;
+
+    public static partial bool TryParsePlain(string input, out long value);
     public static partial bool TryParseOutside(string input, out long value);
     public static partial bool TryParseTable(string input, out long value);
 }
@@ -99,6 +109,18 @@ public partial class ValuedPrefixBenchmarks
 public static class ValuedPrefixGrammar
 {
     public static long Prefix(long operand, int position, long op) => (operand * 31) + (position * 7) + op;
+
+    // The positions are not passed, the values differ from the ones of Create()
+    public static Parser<long> CreatePlain() => Terms.Integer().Operators()
+            .Postfix((Terms.Text("++"), static x => x + 1))
+            .Unary(
+                (Terms.Text("-"), static x => Prefix(x, 0, 1)),
+                (Terms.Text("!"), static x => Prefix(x, 0, 2)),
+                (Terms.Text("~"), static x => Prefix(x, 0, 3)),
+                (Terms.Text("typeof"), static x => Prefix(x, 0, 4)),
+                (Terms.Text("void"), static x => Prefix(x, 0, 5)))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => (a * 3) + b))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => (a * 5) + b), (Terms.Char('-'), static (a, b) => (a * 5) - b));
 
     public static Parser<long> Create(bool table)
     {

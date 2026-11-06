@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -480,20 +481,13 @@ internal sealed class ValuedBinary<T, TOperator> : ValuedOperators<T>, IValuedBi
 
     public Delegate Factory { get; }
 
-    private T Apply(ParseContext context, T left, T right, TOperator op)
-    {
-        if (_factory is not null)
-        {
-            return _factory(left, right, op);
-        }
+    // The factories without the context keep the shape they had before the context was passed, which the JIT inlines
+    private T Apply(ParseContext context, T left, T right, TOperator op) =>
+        _factory is not null ? _factory(left, right, op) : _conditional is not null ? _conditional(left, op, right) : ApplyWithContext(context, left, right, op);
 
-        if (_conditional is not null)
-        {
-            return _conditional(left, op, right);
-        }
-
-        return _contextFactory is not null ? _contextFactory(context, left, right, op) : _contextConditional!(context, left, op, right);
-    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private T ApplyWithContext(ParseContext context, T left, T right, TOperator op) =>
+        _contextFactory is not null ? _contextFactory(context, left, right, op) : _contextConditional!(context, left, op, right);
 
     public override int Apply(PrecedenceParser<T> parser, ParseContext context, int level, int pin, ref ParseResult<T> result, ref PrecedenceParser<T>.Lookahead next)
     {

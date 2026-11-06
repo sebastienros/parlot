@@ -32,6 +32,18 @@ public partial class ValuedPrefixBenchmarks
             .LeftAssociative((Terms.Char('+'), static (a, b) => (a * 5) + b), (Terms.Char('-'), static (a, b) => (a * 5) - b));
     }
 
+    [GenerateParser(nameof(TryParsePlain))]
+    private static Parser<long> BuildPlain() => Terms.Integer().Operators()
+            .Postfix((Terms.Text("++"), static x => x + 1))
+            .Unary(
+                (Terms.Text("-"), static x => ValuedPrefixGrammar.Prefix(x, 0, 1)),
+                (Terms.Text("!"), static x => ValuedPrefixGrammar.Prefix(x, 0, 2)),
+                (Terms.Text("~"), static x => ValuedPrefixGrammar.Prefix(x, 0, 3)),
+                (Terms.Text("typeof"), static x => ValuedPrefixGrammar.Prefix(x, 0, 4)),
+                (Terms.Text("void"), static x => ValuedPrefixGrammar.Prefix(x, 0, 5)))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => (a * 3) + b))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => (a * 5) + b), (Terms.Char('-'), static (a, b) => (a * 5) - b));
+
     [GenerateParser(nameof(TryParseTable))]
     private static Parser<long> BuildTable()
     {
