@@ -343,6 +343,12 @@ public class LiteralBuilder
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
 
     /// <summary>
+    /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
+    /// <see cref="StringEscapes.JavaScript"/>.
+    /// </summary>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes) => new StringLiteral(quotes, escapes);
+
+    /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
     public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null)
@@ -615,6 +621,12 @@ public class TermBuilder
     /// Builds a parser that matches an quoted string that can be escaped.
     /// </summary>
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => SkipWhiteSpace(new StringLiteral(quotes));
+
+    /// <summary>
+    /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
+    /// <see cref="StringEscapes.JavaScript"/>, after white space.
+    /// </summary>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes) => SkipWhiteSpace(new StringLiteral(quotes, escapes));
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.

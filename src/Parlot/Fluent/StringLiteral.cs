@@ -22,12 +22,23 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
 
     private readonly StringLiteralQuotes _quotes;
 
+    // The escape sequences the literal accepts, and how it decodes them
+    private readonly StringEscapes _escapes;
+
     // The pool the decoded strings come from, for a literal read by a pooled string
     private readonly StringPool? _pool;
 
-    public StringLiteral(StringLiteralQuotes quotes)
+    public StringLiteral(StringLiteralQuotes quotes) : this(quotes, StringEscapes.Default)
+    {
+    }
+
+    /// <summary>
+    /// A string literal enclosed in <paramref name="quotes"/>, with the escape sequences of <paramref name="escapes"/>.
+    /// </summary>
+    public StringLiteral(StringLiteralQuotes quotes, StringEscapes escapes)
     {
         _quotes = quotes;
+        _escapes = escapes;
 
         ExpectedChars = _quotes switch
         {
@@ -41,8 +52,16 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         Name = "StringLiteral";
     }
 
-    public StringLiteral(char quote)
+    public StringLiteral(char quote) : this(quote, StringEscapes.Default)
     {
+    }
+
+    /// <summary>
+    /// A string literal enclosed in <paramref name="quote"/>, with the escape sequences of <paramref name="escapes"/>.
+    /// </summary>
+    public StringLiteral(char quote, StringEscapes escapes)
+    {
+        _escapes = escapes;
         _quotes = quote switch
         {
             '\'' => StringLiteralQuotes.Single,
@@ -62,6 +81,7 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
     internal StringLiteral(StringLiteral source, StringPool pool)
     {
         _quotes = source._quotes;
+        _escapes = source._escapes;
         _pool = pool;
         ExpectedChars = source.ExpectedChars;
         Name = source.Name;
@@ -72,6 +92,11 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
     public char[] ExpectedChars { get; }
 
     public bool SkipWhitespace { get; }
+
+    /// <summary>
+    /// The escape sequences the literal accepts, and how it decodes them.
+    /// </summary>
+    public StringEscapes Escapes => _escapes;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 
@@ -95,7 +120,14 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
             quote = '"';
         }
 
-        if (!context.Scanner.ReadQuotedString(quote, out var text, out var hasEscape))
+        // The default escapes keep their own scanner and decoder
+        ReadOnlySpan<char> text;
+        bool hasEscape;
+        var read = _escapes == StringEscapes.Default
+            ? context.Scanner.ReadQuotedString(quote, out text, out hasEscape)
+            : context.Scanner.ReadQuotedString(quote, _escapes, out text, out hasEscape);
+
+        if (!read)
         {
             context.ExitParser(this);
             return false;
@@ -106,7 +138,12 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
         // The scanner knows whether the string has escape sequences, so a string without any isn't read again
         if (hasEscape)
         {
-            result.Set(start, end, new TextSpan(Character.DecodeStringInternal(text.Slice(1, text.Length - 2), _pool)));
+            var content = text.Slice(1, text.Length - 2);
+            var decoded = _escapes == StringEscapes.Default
+                ? Character.DecodeStringInternal(content, _pool)
+                : Character.DecodeStringInternal(content, _escapes, quote, _pool);
+
+            result.Set(start, end, new TextSpan(decoded));
         }
         else
         {
@@ -146,13 +183,17 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
             ? $"({cursorName}.Current == (char)34 ? (char)34 : (char)39)"
             : $"(char){(int)ExpectedChars[0]}";
 
+        // The default escapes keep the overload without them
+        var escapesArgument = $"(global::Parlot.Fluent.StringEscapes){(int)_escapes}";
+        var escapes = _escapes == StringEscapes.Default ? "" : escapesArgument + ", ";
+
         if (context.DiscardResult)
         {
-            result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, out _, out _))");
+            result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, {escapes}out _, out _))");
         }
         else
         {
-            result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, out var {textName}, out var {hasEscapeName}))");
+            result.Body.Add($"if ({scannerName}.ReadQuotedString({quote}, {escapes}out var {textName}, out var {hasEscapeName}))");
         }
 
         result.Body.Add("{");
@@ -163,8 +204,10 @@ public sealed class StringLiteral : Parser<TextSpan>, ISeekable, ISourceable, IL
             // The scanner knows whether the string has escape sequences, so a string without any isn't read again
             result.Body.Add($"    if ({hasEscapeName})");
             result.Body.Add("    {");
+            // The other escapes also need the quote, the first char of the text, and take the pool even when there is none
             var pool = _pool != null ? ", " + context.GetStringPoolField(_pool) : "";
-            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2){pool}));");
+            var decodeArguments = _escapes == StringEscapes.Default ? pool : $", {escapesArgument}, {textName}[0]" + (_pool != null ? pool : ", null");
+            result.Body.Add($"        {result.ValueVariable} = new global::Parlot.TextSpan(global::Parlot.Character.DecodeStringInternal({textName}.Slice(1, {textName}.Length - 2){decodeArguments}));");
             result.Body.Add("    }");
             result.Body.Add("    else");
             result.Body.Add("    {");

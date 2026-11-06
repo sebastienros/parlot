@@ -784,7 +784,9 @@ shares them between parses. A pooled string literal decodes its escape sequences
 Custom string delimiters use the scanner's single-character overload without allocating a delimiter array
 per token. When `Capture` discards a string parser's decoded value, the generated parser still validates
 escape sequences but skips decoding and its string allocation. Callbacks and predicates that consume the
-value still receive decoded text and execute normally, even when their result is captured or discarded.
+value still receive decoded text and execute normally, even when their result is captured or discarded. String
+literals with `StringEscapes` other than `Default` generate the same scanner and decoder as the runtime parser, with
+the escapes as a constant.
 Helpers are specialized by result mode so the same parser can be used both for capture and for its value.
 
 Generated parsers also use recognition-only helpers for fully skipped `AndSkip`/`SkipAnd` operands,
