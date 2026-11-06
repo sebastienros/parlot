@@ -145,6 +145,77 @@ public class FailureTests
         Assert.Equal((2, 1, 3), failure);
     }
 
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    [InlineData("  ,", 2)]
+    public void Rejected_Value_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.Rejected(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.Rejected(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Fact]
+    public void Rejected_Value_Doesnt_Stop_A_Longer_Attempt_Being_Reported()
+    {
+        Assert.False(FailureGrammars.Second("  a  from", out _, out var failureOffset));
+        Assert.Equal(5, failureOffset);
+
+        // Without white space to skip, the start is where the parser was entered
+        Assert.False(FailureGrammars.RejectedLiteral("from;", out _, out failureOffset));
+        Assert.Equal(0, failureOffset);
+
+        Assert.True(FailureGrammars.Rejected("  word ;", out var value, out failureOffset));
+        Assert.Equal("word", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("abc((", 3)]
+    [InlineData("abc  ((;", 5)]
+    [InlineData("abc  (;", 5)] // Doesn't match, so the expected ';' fails after the white space
+    [InlineData("abc ,", 4)]
+    public void Not_Followed_By_Fails_At_What_Follows(string text, int offset)
+    {
+        Assert.False(FailureGrammars.NotFollowed(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.NotFollowed(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("abc((", 3)] // A lookahead that matched doesn't count: the 'x' expected next fails at 3, not after the "(("
+    [InlineData("abc  ((y", 5)] // The 'x' expected next fails after its white space, at the lookahead's text
+    [InlineData("abc  (", 5)] // The lookahead was expected, it fails after its white space
+    [InlineData("abc", 3)]
+    public void Followed_By_That_Matched_Doesnt_Count(string text, int offset)
+    {
+        Assert.False(FailureGrammars.Followed(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.Followed(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("abc", 0)]
+    [InlineData("  abc", 2)]
+    [InlineData("  abd,", 5)]
+    public void Not_Fails_At_What_Matched(string text, int offset)
+    {
+        Assert.False(FailureGrammars.Negative(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.Negative(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible
     private sealed class OneCharReader : TextReader
     {

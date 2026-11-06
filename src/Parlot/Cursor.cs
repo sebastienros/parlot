@@ -509,8 +509,7 @@ public class Cursor
     /// </summary>
     /// <remarks>
     /// Parsers move the cursor back when they fail after reading, so when a parse fails this is the classic "furthest
-    /// failure" position: where the longest attempt to match the input stopped. Lookaheads which read past the match and
-    /// move back count too.
+    /// failure" position: where the longest attempt to match the input stopped.
     /// </remarks>
     internal int FurthestOffset
     {
@@ -519,6 +518,23 @@ public class Cursor
             var offset = _offset + _base;
             return offset > _furthestOffset ? offset : _furthestOffset;
         }
+    }
+
+    /// <summary>
+    /// The furthest offset recorded so far, for <see cref="RestoreRecordedFailure(int)"/>.
+    /// </summary>
+    internal int RecordedFailure => _furthestOffset;
+
+    /// <summary>
+    /// Forgets the failures recorded since <paramref name="recordedFailure"/> was read from <see cref="RecordedFailure"/>.
+    /// </summary>
+    /// <remarks>
+    /// For what reading past a position doesn't tell about the input at that position: a lookahead that matched, or which
+    /// isn't there to match, and a value which a condition rejected once it was read.
+    /// </remarks>
+    internal void RestoreRecordedFailure(int recordedFailure)
+    {
+        _furthestOffset = recordedFailure;
     }
 
     /// <summary>

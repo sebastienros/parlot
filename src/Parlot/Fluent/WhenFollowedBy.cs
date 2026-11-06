@@ -129,6 +129,8 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         result.Body.Add("else");
         result.Body.Add("{");
         result.Body.Add($"    var {beforeLookaheadName} = {cursorName}.Offset;");
+        var recordedName = $"recorded{context.NextNumber()}";
+        result.Body.Add($"    var {recordedName} = {cursorName}.RecordedFailure;");
         var lookahead = context.PinnedCall(result, $"{lookaheadHelperName}({context.ParseContextName}, out _)", "    ");
         result.Body.Add($"    if (!{lookahead})");
         result.Body.Add("    {");
@@ -138,6 +140,8 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         result.Body.Add("    else");
         result.Body.Add("    {");
         result.Body.Add($"        {cursorName}.ResetPosition({beforeLookaheadName});");
+        // What the lookahead matched says nothing about what follows at this position
+        result.Body.Add($"        {cursorName}.RestoreRecordedFailure({recordedName});");
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("    }");
         result.Body.Add("}");
