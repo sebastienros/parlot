@@ -733,7 +733,10 @@ public class FluentTests
         Assert.True(custom.CanSeek);
         Assert.Equal(new[] { 'a', 'b', '-' }, custom.ExpectedChars);
 
-        Assert.False(((ISeekable)Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("b"))).CanSeek);
+        // The start chars of search values are found by testing every char
+        var searchValues = (ISeekable)Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("b"));
+        Assert.True(searchValues.CanSeek);
+        Assert.Equal(new[] { 'a' }, searchValues.ExpectedChars);
 #endif
     }
 
