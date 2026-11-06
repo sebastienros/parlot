@@ -63,6 +63,15 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         isEnabledByDefault: true,
         description: "Use If or Select to describe every branch at compile time. Configuration arguments are supplied at parse time, not used to build the parser graph.");
 
+    private static readonly DiagnosticDescriptor GrammarCompilerErrorDescriptor = new(
+        "PARLOT028",
+        "Grammar file doesn't compile",
+        "{0}: {1}",
+        "Parlot.SourceGenerator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A grammar file is compiled by the generator, not by the project, so the generator reports its C# errors.");
+
     private static readonly DiagnosticDescriptor EagerCallbackDescriptor = new(
         "PARLOT022",
         "Captured callback executed during generation",
@@ -556,7 +565,13 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         // The rewriter replaces each lambda/method group with a stub that contains a unique pointer
         // When the rewritten code executes, LambdaRegistry can extract the pointer and map it
         // back to the original source code
-        var invalidParameterUses = FactoryParameterUsage.FindInvalidUses(methodSymbol, methodSyntax, semanticModel).ToList();
+        // A factory that doesn't bind yet, until its included files and generators are there, can't tell what its
+        // callbacks are. It reports its errors when it is emitted, instead of mistaking them for eager reads.
+        var bound = (methodInfo.AdditionalFiles.Length == 0 && methodInfo.AdditionalGenerators.Length == 0)
+            || !semanticModel.GetDiagnostics(methodSyntax.Span).Any(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        var invalidParameterUses = bound
+            ? FactoryParameterUsage.FindInvalidUses(methodSymbol, methodSyntax, semanticModel).ToList()
+            : [];
         if (invalidParameterUses.Count > 0)
         {
             foreach (var use in invalidParameterUses)
