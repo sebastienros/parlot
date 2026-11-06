@@ -46,6 +46,9 @@ public class StreamingTests
         ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
         ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
+        // Escape sequences and surrogate pairs cut by the end of the window
+        ["codepoint-identifiers"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).Then(static x => Character.DecodeIdentifier(x).ToString())).Eof()),
+        ["codepoint-identifier-calls"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).AndSkip(Terms.Char('(')).Then(static x => Character.DecodeIdentifier(x).ToString())).Eof()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
         ["integer-standalone-eof"] = new Grammar<long>(Terms.Integer().AndSkip(Eof())),
@@ -222,6 +225,10 @@ public class StreamingTests
             "SELEC * FROM users");
 
         Add("identifier", "", "a", "abc", " abc def", "1a", "a1_b ");
+        string[] codePointIdentifiers = ["", "a", "\\u0061bc d\\u{62}", "\\u{1D4D0}x", "\U0001D49C a\U0001D49Cb", "\\u00", "a\\u00", "a\\u{1D4", "a\\", "a\ud835",
+            "a\ud835b", "\udc9c", "a\\u0020", "\u00e9t\u00e9 caf\u00e9", "a\\u{110000}", "a( b\\u c\\u0062(", "a\\u{62}\\u"];
+        Add("codepoint-identifiers", codePointIdentifiers);
+        Add("codepoint-identifier-calls", codePointIdentifiers);
         Add("integer", "", "1", "123", " 42x", "-5", "+", "123456789012");
         Add("standalone-eof", "", " ", "a");
         Add("integer-standalone-eof", "", "42", "42a", "42 ", " 42");
