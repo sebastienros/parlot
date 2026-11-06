@@ -373,6 +373,9 @@ public class ParseContext
         if (!ReferenceEquals(_whiteSpaceParser, parser))
         {
             _whiteSpaceParser = parser;
+#if !PARLOT_STANDALONE
+            _whiteSpaceStart = WhiteSpaceStart.Of(parser);
+#endif
 
             // The white spaces skipped by the previous parser are not the ones this one skips
             _cacheOffset = -1;
@@ -397,6 +400,9 @@ public class ParseContext
             if (!ReferenceEquals(_whiteSpaceParser, value))
             {
                 _whiteSpaceParser = value;
+#if !PARLOT_STANDALONE
+                _whiteSpaceStart = WhiteSpaceStart.Of(value);
+#endif
 
                 // The white spaces skipped by the previous parser are not the ones this one skips
                 _cacheOffset = -1;
@@ -410,6 +416,12 @@ public class ParseContext
     }
 
     private Parser<TextSpan>? _whiteSpaceParser;
+
+#if !PARLOT_STANDALONE
+    // The chars WhiteSpaceParser can start with, from its seek hints, or null when it doesn't tell them: it isn't invoked
+    // at another char.
+    private WhiteSpaceStart? _whiteSpaceStart;
+#endif
 
     /// <summary>
     /// The chars that are white space. Default is <see cref="WhiteSpaceSet.Default"/>.
@@ -488,7 +500,11 @@ public class ParseContext
     /// Whether <see cref="SkipWhiteSpace"/> can skip something at a char, the shortcut of the parsers skipping white space.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if PARLOT_STANDALONE
     internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is not null || Character.HasMask(ch, _skipMask);
+#else
+    internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is null ? Character.HasMask(ch, _skipMask) : _whiteSpaceStart is null || _whiteSpaceStart.Contains(ch);
+#endif
 
     // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
@@ -518,6 +534,15 @@ public class ParseContext
         }
         else
         {
+#if !PARLOT_STANDALONE
+            // The parser isn't invoked at a char it can't start with, the shortcut of the white space sets. At the end of
+            // the text the parser is invoked, which tells whether a stream has more text.
+            if (_whiteSpaceStart is not null && !Scanner.Cursor.Eof && !_whiteSpaceStart.Contains(Scanner.Cursor.Current))
+            {
+                return;
+            }
+#endif
+
             ParseResult<TextSpan> _ = default;
             WhiteSpaceParser.Parse(this, ref _);
         }
