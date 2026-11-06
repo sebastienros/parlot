@@ -390,6 +390,16 @@ public class LiteralBuilder
     /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
     public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
 
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the text at the current position, which also gets the text before it.
+    /// </summary>
+    /// <param name="scanner">
+    /// The function that returns the length of the token at a position of the text, <c>0</c> when there is none. It can read the text
+    /// before the token, for instance to match only at the start of the input or of a line. See <see cref="TextScanner"/>.
+    /// </param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
+
 #if NET8_0_OR_GREATER
     /// <summary>
     /// Builds a parser that matches a list of chars.
@@ -663,6 +673,16 @@ public class TermBuilder
     /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
     /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
     public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
+
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the text at the current position, which also gets the text before it.
+    /// </summary>
+    /// <param name="scanner">
+    /// The function that returns the length of the token at a position of the text, <c>0</c> when there is none. It can read the text
+    /// before the token, for instance to match only at the start of the input or of a line. See <see cref="TextScanner"/>.
+    /// </param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default) => SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
 
 #if NET8_0_OR_GREATER
     /// <summary>
