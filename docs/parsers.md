@@ -214,6 +214,14 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
 - `Postfix((op, (x, value) => ...))` passes the value of the operator to its factory. Each call takes operators of one
   type; `Postfix(first, second)` takes two operators of different types in the same level, like a member access and an
   indexer, which apply in any order: `a.b[c].d`.
+- `Unary((op, (x, value) => ...))` is a level of prefix operators whose factory receives the value of the operator,
+  operand first like `Postfix`. A single factory can create the nodes of all the operators of a level, and an operator
+  can return its position, which its node starts at: `Terms.Text("typeof").Then(static (context, start, end, _) => start)`.
+  The level parses like the one of `Unary((op, x => ...))`, mixed with plain prefix levels and postfix levels: its
+  operators are read in the same loop as the ones of the other prefix levels, and apply from the last one once their
+  operand is parsed, so `- - !x` with valued `-` and plain `!` is `-(-(!x))` and the two `-` receive their own values. A
+  chain of valued operators doesn't recurse either, and each one counts as a level of recursion with a
+  `maxRecursionDepth`.
 - `LeftAssociative(operators, (a, b, op) => ...)` and `RightAssociative(operators, (a, b, op) => ...)` are the levels of
   the `LeftAssociative(Parser<TOperator>[], Func<T, T, TOperator, T>)` combinators, whose single factory receives the
   value of the operator.
@@ -234,6 +242,31 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
   the level that applies them parses them and passes their values to the factories right away, otherwise the looser
   levels are tried in the same choice. An operator is parsed only once at a position, even when it parses an expression,
   like an index or the middle of a conditional, and the values are never kept for a looser level.
+
+### Factories with the context
+
+Like the combinators, the levels take factories which receive the `ParseContext` first, for nodes which need the state of
+a context, like a map of the lines to compute a line and a column:
+
+```csharp
+expression.Parser = primary.Operators()
+    .Postfix((Terms.Text("++"), static (ParseContext context, Expression x, string op) => new PostIncrement(x, Location(context))))
+    .Unary((Terms.Char('-').Then(static (_, start, _, _) => start), static (ParseContext context, Expression x, int start) => new Negate(x, Location(context, start))))
+    .LeftAssociative((Terms.Char('*'), static (ParseContext context, Expression a, Expression b) => new Multiply(a, b, Location(context))))
+    .LeftAssociative([Terms.Text("+"), Terms.Text("-")], static (ParseContext context, Expression a, Expression b, string op) => new Binary(op, a, b, Location(context)))
+    .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (ParseContext context, Expression c, Expression a, Expression b) => new Conditional(c, a, b, Location(context)));
+```
+
+- `LeftAssociative((op, (context, a, b) => ...))` and `RightAssociative((op, (context, a, b) => ...))` for the plain
+  binary levels, `LeftAssociative(operators, (context, a, b, op) => ...)` and `RightAssociative(operators, (context, a, b, op) => ...)`
+  for the valued ones, and `Ternary(question, middle, colon, (context, condition, whenTrue, whenFalse) => ...)`.
+- `Unary((op, (context, x, value) => ...))` and `Postfix((op, (context, x, value) => ...))` for the unary levels: a factory
+  which needs the context and not the value of its operator ignores the value. There is no `(context, x)` overload of
+  the table's `Unary` and `Postfix`, unlike the combinators: its lambdas would take two parameters, like the ones of the
+  valued levels, and C# couldn't tell which level a call adds.
+- When the types of the parameters of a lambda are not given, C# picks the overload from their number. With
+  `(context, a, b) => ...`, a level of binary operators whose values aren't passed, the types are optional; giving them,
+  as above, documents which overload is used.
 
 ## Terms and Literals
 
