@@ -203,7 +203,10 @@ An `Operators()` table (see [Operator tables](parsers.md#operator-tables)) is em
 loop: recursive local functions which look for the operator following an operand once, through the
 generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
 The lookup stops at a level whose operators have a value (valued `Postfix`, `LeftAssociative`, `RightAssociative` and
-`Ternary`), and the case of the loop for that level parses them and passes their values to the factories.
+`Ternary`), and the case of the loop for that level parses them and passes their values to the factories. The operators
+of a valued `Unary` level are matched with the ones of the other prefix levels: the first one keeps its value in a
+local, and the values of the following ones of a chain are kept in a `ListBuilder` of their type until they apply. The
+factories which receive the `ParseContext` are called with the context of the parse.
 
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure

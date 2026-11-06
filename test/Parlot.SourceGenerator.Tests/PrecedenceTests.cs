@@ -30,6 +30,12 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseValuedRight(string text, out string value);
     public static partial bool TryParseValuedRight(TextReader reader, out string value);
     public static partial bool TryParseValuedEmpty(string text, out string value);
+    public static partial bool TryParseValuedPrefix(string text, out string value);
+    public static partial bool TryParseValuedPrefix(TextReader reader, out string value);
+    public static partial bool TryParseValuedPrefixOnly(string text, out string value);
+    public static partial bool TryParseValuedPrefixOnly(TextReader reader, out string value);
+    public static partial bool TryParseValuedPrefixLimited(string text, out string value);
+    public static partial bool TryParseValuedZeroWidthPrefix(string text, out string value);
 }
 
 internal static class PrecedenceAst
@@ -288,6 +294,124 @@ public class PrecedenceTests
         Assert.Equal(expected, value);
     }
 
+    [Theory]
+    [InlineData("a")]
+    [InlineData("-a")]
+    [InlineData("- ~ -a")]
+    [InlineData("- ~ !a ** b")]
+    [InlineData("!-a")]
+    [InlineData("typeof -a ** b * c")]
+    [InlineData("-typeof a")]
+    [InlineData("void typeof - ~a++ * b + c")]
+    [InlineData("a * typeof b ** -c++")]
+    [InlineData("await a ? typeof b : - c")]
+    [InlineData("await await -a + b")]
+    [InlineData("a ? b : c ? d : e")]
+    [InlineData("(-a) ** void (b)")]
+    [InlineData("-")]
+    [InlineData("- -")]
+    [InlineData("typeof")]
+    [InlineData("a * -")]
+    [InlineData("a * void ~")]
+    [InlineData("- !")]
+    [InlineData("-(- a")]
+    [InlineData("await")]
+    [InlineData("")]
+    public void Generated_Valued_Prefix_Operators_Parse_Like_The_Runtime(string input)
+    {
+        var expected = Run(RuntimeValuedPrefix(), input);
+
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedPrefix, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedPrefix, input, chunk));
+        }
+    }
+
+    [Theory]
+    [InlineData("- - !a", "(-(-(!a))) | ")]
+    [InlineData("typeof -a ** b", "typeof@0(((-a)**b)) | ")]
+    [InlineData("a * void typeof b", "(a*void@4(typeof@9(b))) | ")]
+    [InlineData("await a ? b : c", "await@0((a?b:c)) | ")]
+    [InlineData("- !", "<failed>")]
+    public void Generated_Valued_Prefix_Operators_Receive_Their_Values(string input, string expected)
+    {
+        Assert.Equal(expected, Run(RuntimeValuedPrefix(), input));
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedPrefix, input));
+    }
+
+    [Fact]
+    public void Generated_Valued_Prefix_Operators_Parse_Random_Expressions_Like_The_Runtime()
+    {
+        var runtime = RuntimeValuedPrefix();
+        var random = new Random(516);
+        string[] tokens = ["a", "b", "1", "(", ")", "-", "~", "!", "typeof ", "void ", "await ", "**", "*", "/", "+", "++", "?", ":"];
+
+        for (var i = 0; i < 2000; i++)
+        {
+            var sb = new StringBuilder();
+            var length = random.Next(0, 14);
+
+            for (var j = 0; j < length; j++)
+            {
+                sb.Append(tokens[random.Next(tokens.Length)]).Append(random.Next(3) == 0 ? " " : "");
+            }
+
+            var input = sb.ToString();
+            Assert.Equal(Run(runtime, input), Run(PrecedenceGrammars.TryParseValuedPrefix, input));
+        }
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("-a")]
+    [InlineData("- -a")]
+    [InlineData("not -a")]
+    [InlineData("not not - - (not a)")]
+    [InlineData("-not a")]
+    [InlineData("-")]
+    [InlineData("not -")]
+    [InlineData("")]
+    public void Generated_Valued_Prefix_Only_Table_Parses_Like_The_Runtime(string input)
+    {
+        var expected = Run(RuntimeValuedPrefixOnly(), input);
+
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedPrefixOnly, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedPrefixOnly, input, chunk));
+        }
+    }
+
+    [Theory]
+    [InlineData("a", "a | ")]
+    [InlineData("--a*-a", "(-@0(-@1(a))*-@4(a)) | ")]
+    [InlineData("---a", "-@0(-@1(-@2(a))) | ")]
+    [InlineData("----a", "<failed>")]
+    [InlineData("-a*--a", "(-@0(a)*-@3(-@4(a))) | ")]
+    public void Generated_Valued_Prefix_Operators_Count_Levels_Of_Recursion(string input, string expected)
+    {
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedPrefixLimited, input));
+
+        var runtime = RuntimeValuedPrefixLimited();
+        var context = new ParseContext(new Scanner(input), maxRecursionDepth: 3);
+        Assert.Equal(expected, runtime.TryParse(context, out var value, out _) ? value : "<failed>");
+    }
+
+    [Theory]
+    [InlineData("+5", "+@0(5) | ")]
+    [InlineData("--5", "-2(5) | ")]
+    [InlineData("-+5", "-1(+@1(5)) | ")]
+    [InlineData("5", "5 | ")]
+    [InlineData("+", "<failed>")]
+    public void Generated_Valued_Prefix_Operators_Skip_Operators_That_Read_Nothing(string input, string expected)
+    {
+        Assert.Equal(expected, Run(RuntimeValuedZeroWidthPrefix(), input));
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseValuedZeroWidthPrefix, input));
+    }
+
     internal static string Run(Parser<string> parser, string input) =>
         parser.TryParse(input, out var value) ? value! : "<failed>";
 
@@ -391,6 +515,56 @@ public class PrecedenceTests
 
         return WithRest(expression);
     }
+
+    // The tables of PrecedenceGrammars.BuildValuedPrefix() and the following ones
+    internal static Parser<string> RuntimeValuedPrefix()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Terms.Text("++"), static (ParseContext context, string x, string op) => PrecedenceAst.Suffix(op, x)))
+            .Unary((Terms.Char('!'), static x => PrecedenceAst.Prefix("!", x)))
+            .Unary((Terms.Char('-'), static (string x, char op) => PrecedenceAst.Prefix(op.ToString(), x)), (Terms.Char('~'), static (string x, char op) => PrecedenceAst.Prefix(op.ToString(), x)))
+            .RightAssociative((Terms.Text("**"), static (ParseContext context, string a, string b) => PrecedenceAst.Binary("**", a, b)))
+            .Unary(
+                (Terms.Text("typeof").Then(static (_, start, _, _) => start), static (ParseContext context, string x, int start) => $"typeof@{start}({x})"),
+                (Terms.Text("void").Then(static (_, start, _, _) => start), static (ParseContext context, string x, int start) => $"void@{start}({x})"))
+            .LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/") }, static (ParseContext context, string a, string b, string op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)), (Terms.Char('-'), static (a, b) => PrecedenceAst.Binary("-", a, b)))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (ParseContext context, string c, string a, string b) => PrecedenceAst.Conditional(c, a, b))
+            .Unary((Terms.Text("await").Then(static (_, start, _, _) => start), static (string x, int start) => $"await@{start}({x})"));
+
+        return WithRest(expression);
+    }
+
+    // Only prefix levels, after which no operator is looked up, one of them with values
+    internal static Parser<string> RuntimeValuedPrefixOnly()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString());
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"))
+            .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)));
+
+        return WithRest(expression);
+    }
+
+    // A single valued prefix level whose operators are counted as levels of recursion
+    internal static Parser<string> RuntimeValuedPrefixLimited() =>
+        WithRest(Literals.Char('a').Then(static _ => "a").Operators()
+            .Unary((Literals.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b))));
+
+    // A valued prefix level whose first operator can match without reading anything
+    internal static Parser<string> RuntimeValuedZeroWidthPrefix() =>
+        WithRest(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)).Operators()
+            .Unary(
+                (ZeroOrMany(Literals.Char('-')).Then(static x => x.Count), static (string x, int count) => $"-{count}({x})"),
+                (Literals.Char('+').Then(static (_, start, _, _) => start), static (string x, int start) => $"+@{start}({x})")));
 
     private static IEnumerable<string> RandomValuedExpressions(int seed, int count)
     {

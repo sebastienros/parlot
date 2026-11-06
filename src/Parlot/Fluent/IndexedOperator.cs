@@ -20,6 +20,46 @@ internal sealed class IndexedOperator<T> : Parser<(int Index, T Value)>, ISeekab
         _index = index;
     }
 
+    /// <summary>
+    /// Creates the choice of a level of operators whose factories receive their values, which returns the index of the
+    /// operator that matched and its value, with the parser and the factory of each operator.
+    /// </summary>
+    internal static Parser<(int Index, T Value)> CreateChoice<TFactory>((Parser<T> Op, TFactory Factory)[] operators, string parameterName, out TFactory[] factories, out IndexedOperator<T>[] parsers)
+        where TFactory : Delegate
+    {
+        if (operators is null)
+        {
+            throw new ArgumentNullException(parameterName);
+        }
+
+        if (operators.Length == 0)
+        {
+            throw new ArgumentException("At least one operator must be provided.", parameterName);
+        }
+
+        parsers = new IndexedOperator<T>[operators.Length];
+        factories = new TFactory[operators.Length];
+
+        for (var i = 0; i < operators.Length; i++)
+        {
+            var (op, factory) = operators[i];
+            parsers[i] = new IndexedOperator<T>(op ?? throw new ArgumentException("Operators must not contain null parsers.", parameterName), i);
+            factories[i] = factory ?? throw new ArgumentException("Operators must not contain null factories.", parameterName);
+        }
+
+        if (parsers.Length == 1)
+        {
+            // A single operator is invoked directly
+            return parsers[0];
+        }
+
+        // The choice gets an array of its own type, which it can write
+        var choices = new Parser<(int, T)>[parsers.Length];
+        Array.Copy(parsers, choices, parsers.Length);
+
+        return new OneOf<(int, T)>(choices);
+    }
+
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
 

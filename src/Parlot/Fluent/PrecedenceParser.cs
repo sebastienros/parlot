@@ -33,10 +33,16 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     private readonly Parser<T> _operand;
     private readonly OperatorLevel<T>[] _levels;
 
-    // The level of each operator, and its factory as a unary or a binary function
+    // The level of each operator, and its factory as a unary or a binary function, or a binary function receiving the
+    // context, or the level of valued prefix operators which applies it
     private readonly int[] _operatorLevels;
     private readonly Func<T, T>?[] _unary;
     private readonly Func<T, T, T>?[] _binary;
+    private readonly Func<ParseContext, T, T, T>?[] _contextBinary;
+    private readonly ValuedPrefix<T>?[] _valuedPrefixes;
+
+    // Whether some prefix operators have values, which a chain discards when it fails
+    private readonly bool _hasValuedPrefixes;
 
     // The prefix levels, from the tightest one, which are tried before an operand
     private readonly int[] _prefixLevels;
@@ -72,10 +78,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         _operand = operand;
         _levels = levels;
 
-        var count = levels.Length == 0 ? 0 : levels[levels.Length - 1].First + levels[levels.Length - 1].Operators.Length;
+        var count = levels.Length == 0 ? 0 : levels[levels.Length - 1].First + levels[levels.Length - 1].Count;
         _operatorLevels = new int[count];
         _unary = new Func<T, T>?[count];
         _binary = new Func<T, T, T>?[count];
+        _contextBinary = new Func<ParseContext, T, T, T>?[count];
+        _valuedPrefixes = new ValuedPrefix<T>?[count];
 
         var prefixLevels = new List<int>();
         _segments = new Segment[levels.Length];
@@ -104,6 +112,20 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             segment ??= new Segment { End = levels.Length };
             _segments[level] = segment;
 
+            if (operatorLevel.ValuedPrefix is { } valuedPrefix)
+            {
+                for (var i = 0; i < valuedPrefix.Count; i++)
+                {
+                    _operatorLevels[operatorLevel.First + i] = level;
+                    _valuedPrefixes[operatorLevel.First + i] = valuedPrefix;
+                }
+
+                _hasValuedPrefixes = true;
+                prefixLevels.Add(level);
+                first.Add(valuedPrefix.Choice);
+                continue;
+            }
+
             for (var i = 0; i < operatorLevel.Operators.Length; i++)
             {
                 var index = operatorLevel.First + i;
@@ -113,9 +135,13 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 {
                     _unary[index] = (Func<T, T>)operatorLevel.Factories[i];
                 }
+                else if (operatorLevel.Factories[i] is Func<T, T, T> binary)
+                {
+                    _binary[index] = binary;
+                }
                 else
                 {
-                    _binary[index] = (Func<T, T, T>)operatorLevel.Factories[i];
+                    _contextBinary[index] = (Func<ParseContext, T, T, T>)operatorLevel.Factories[i];
                 }
             }
 
@@ -273,7 +299,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// <returns>A new parser with the additional level.</returns>
     public PrecedenceParser<T> LeftAssociative<TOperator>(Parser<TOperator>[] operators, Func<T, T, TOperator, T> factory) =>
         Add(OperatorLevel<T>.CreateValued(OperatorKind.LeftAssociative, OperatorCount, new ValuedBinary<T, TOperator>(
-            operators, factory ?? throw new ArgumentNullException(nameof(factory)), null, rightAssociative: false, nameof(operators))));
+            operators, factory ?? throw new ArgumentNullException(nameof(factory)), conditional: false, rightAssociative: false, nameof(operators))));
 
     /// <summary>
     /// Returns a parser with an additional level of right-associative binary operators whose factory receives the value of
@@ -290,7 +316,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// <returns>A new parser with the additional level.</returns>
     public PrecedenceParser<T> RightAssociative<TOperator>(Parser<TOperator>[] operators, Func<T, T, TOperator, T> factory) =>
         Add(OperatorLevel<T>.CreateValued(OperatorKind.RightAssociative, OperatorCount, new ValuedBinary<T, TOperator>(
-            operators, factory ?? throw new ArgumentNullException(nameof(factory)), null, rightAssociative: true, nameof(operators))));
+            operators, factory ?? throw new ArgumentNullException(nameof(factory)), conditional: false, rightAssociative: true, nameof(operators))));
 
     /// <summary>
     /// Returns a parser with an additional level of a conditional operator <c>condition ? whenTrue : whenFalse</c>, which
@@ -329,7 +355,30 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     ///     .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (condition, whenTrue, whenFalse) => new Conditional(condition, whenTrue, whenFalse));
     /// </code>
     /// </example>
-    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Func<T, TMiddle, T, T> factory, bool rightAssociative = true)
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Func<T, TMiddle, T, T> factory, bool rightAssociative = true) =>
+        AddTernary(question, middle, colon, factory, rightAssociative);
+
+    /// <summary>
+    /// Returns a parser with an additional level of a conditional operator <c>condition ? whenTrue : whenFalse</c> whose
+    /// factory receives the <see cref="ParseContext"/>, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of
+    /// <see cref="Ternary{TQuestion, TMiddle, TColon}(Parser{TQuestion}, Parser{TMiddle}, Parser{TColon}, Func{T, TMiddle, T, T}, bool)"/>.
+    /// </remarks>
+    /// <typeparam name="TQuestion">The type of the parser before the middle operand.</typeparam>
+    /// <typeparam name="TMiddle">The type of the middle operand.</typeparam>
+    /// <typeparam name="TColon">The type of the parser after the middle operand.</typeparam>
+    /// <param name="question">The parser before the middle operand.</param>
+    /// <param name="middle">The parser of the middle operand.</param>
+    /// <param name="colon">The parser after the middle operand.</param>
+    /// <param name="factory">The function creating the result from the context, the condition, the middle operand and the last operand.</param>
+    /// <param name="rightAssociative">Whether the last operand can be another conditional of the level.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Func<ParseContext, T, TMiddle, T, T> factory, bool rightAssociative = true) =>
+        AddTernary(question, middle, colon, factory, rightAssociative);
+
+    private PrecedenceParser<T> AddTernary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Delegate factory, bool rightAssociative)
     {
         ThrowHelper.ThrowIfNull(question, nameof(question));
         ThrowHelper.ThrowIfNull(middle, nameof(middle));
@@ -339,8 +388,123 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         var kind = rightAssociative ? OperatorKind.RightAssociative : OperatorKind.LeftAssociative;
         Parser<TMiddle>[] operators = [question.SkipAnd(middle).AndSkip(colon)];
 
-        return Add(OperatorLevel<T>.CreateValued(kind, OperatorCount, new ValuedBinary<T, TMiddle>(operators, null, factory, rightAssociative, nameof(middle))));
+        return Add(OperatorLevel<T>.CreateValued(kind, OperatorCount, new ValuedBinary<T, TMiddle>(operators, factory, conditional: true, rightAssociative, nameof(middle))));
     }
+
+    /// <summary>
+    /// Returns a parser with an additional level of prefix operators whose factories receive the value of the operator,
+    /// which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The level parses like the one of <see cref="Unary{TInput}(ValueTuple{Parser{TInput}, Func{T, T}}[])"/>: its
+    /// operators are read with the ones of the other prefix levels, in a loop, and apply from the last one once their
+    /// operand is parsed. The value of an operator can be its position, with
+    /// <c>Then(static (context, start, end, value) =&gt; start)</c>, or a value shared by the operators, such that a single
+    /// factory creates the nodes of all of them.
+    /// </para>
+    /// <para>
+    /// Like the other valued levels, the factory receives the operand, then the value of the operator.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="list">The operators of the level and the functions creating their result from the operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    /// <example>
+    /// <code>
+    /// var expression = primary.Operators()
+    ///     .Unary(
+    ///         (Terms.Char('-').Then(static (context, start, end, _) =&gt; start), static (x, start) =&gt; new Negate(x, start)),
+    ///         (Terms.Text("typeof").Then(static (context, start, end, _) =&gt; start), static (x, start) =&gt; new TypeOf(x, start)))
+    ///     .LeftAssociative((Terms.Char('*'), static (a, b) =&gt; new Multiply(a, b)));
+    /// </code>
+    /// </example>
+    public PrecedenceParser<T> Unary<TOperator>(params (Parser<TOperator> op, Func<T, TOperator, T> factory)[] list) =>
+        Add(OperatorLevel<T>.CreateValuedPrefix(new ValuedPrefix<T, TOperator>(OperatorCount, list, nameof(list))));
+
+    /// <summary>
+    /// Returns a parser with an additional level of prefix operators whose factories receive the
+    /// <see cref="ParseContext"/> and the value of the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="Unary{TOperator}(ValueTuple{Parser{TOperator}, Func{T, TOperator, T}}[])"/>. A
+    /// factory which needs the context and not the value of its operator ignores the value.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="list">The operators of the level and the functions creating their result from the context, the operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> Unary<TOperator>(params (Parser<TOperator> op, Func<ParseContext, T, TOperator, T> factory)[] list) =>
+        Add(OperatorLevel<T>.CreateValuedPrefix(new ValuedPrefix<T, TOperator>(OperatorCount, list, nameof(list))));
+
+    /// <summary>
+    /// Returns a parser with an additional level of postfix operators whose factories receive the
+    /// <see cref="ParseContext"/> and the value of the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="Postfix{TOperator}(ValueTuple{Parser{TOperator}, Func{T, TOperator, T}}[])"/>. A
+    /// factory which needs the context and not the value of its operator ignores the value.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="list">The operators of the level and the functions creating their result from the context, the operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> Postfix<TOperator>(params (Parser<TOperator> op, Func<ParseContext, T, TOperator, T> factory)[] list) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new PostfixGroup<T, TOperator>(list, nameof(list))])));
+
+    /// <summary>
+    /// Returns a parser with an additional level of left-associative binary operators whose factories receive the
+    /// <see cref="ParseContext"/>, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="LeftAssociative{TInput}(ValueTuple{Parser{TInput}, Func{T, T, T}}[])"/>.
+    /// </remarks>
+    /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
+    /// <param name="list">The operators of the level and the functions creating their result from the context and the operands.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> LeftAssociative<TInput>(params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list) =>
+        Add(OperatorLevel<T>.Create(OperatorKind.LeftAssociative, OperatorCount, list, nameof(list)));
+
+    /// <summary>
+    /// Returns a parser with an additional level of right-associative binary operators whose factories receive the
+    /// <see cref="ParseContext"/>, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="RightAssociative{TInput}(ValueTuple{Parser{TInput}, Func{T, T, T}}[])"/>.
+    /// </remarks>
+    /// <typeparam name="TInput">The type of the operator parsers.</typeparam>
+    /// <param name="list">The operators of the level and the functions creating their result from the context and the operands.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> RightAssociative<TInput>(params (Parser<TInput> op, Func<ParseContext, T, T, T> factory)[] list) =>
+        Add(OperatorLevel<T>.Create(OperatorKind.RightAssociative, OperatorCount, list, nameof(list)));
+
+    /// <summary>
+    /// Returns a parser with an additional level of left-associative binary operators whose factory receives the
+    /// <see cref="ParseContext"/> and the value of the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="LeftAssociative{TOperator}(Parser{TOperator}[], Func{T, T, TOperator, T})"/>.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="operators">The operators of the level.</param>
+    /// <param name="factory">The function creating the result from the context, the left operand, the right operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> LeftAssociative<TOperator>(Parser<TOperator>[] operators, Func<ParseContext, T, T, TOperator, T> factory) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.LeftAssociative, OperatorCount, new ValuedBinary<T, TOperator>(
+            operators, factory ?? throw new ArgumentNullException(nameof(factory)), conditional: false, rightAssociative: false, nameof(operators))));
+
+    /// <summary>
+    /// Returns a parser with an additional level of right-associative binary operators whose factory receives the
+    /// <see cref="ParseContext"/> and the value of the operator, which binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of <see cref="RightAssociative{TOperator}(Parser{TOperator}[], Func{T, T, TOperator, T})"/>.
+    /// </remarks>
+    /// <typeparam name="TOperator">The type of the operator parsers.</typeparam>
+    /// <param name="operators">The operators of the level.</param>
+    /// <param name="factory">The function creating the result from the context, the left operand, the right operand and the value of the operator.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> RightAssociative<TOperator>(Parser<TOperator>[] operators, Func<ParseContext, T, T, TOperator, T> factory) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.RightAssociative, OperatorCount, new ValuedBinary<T, TOperator>(
+            operators, factory ?? throw new ArgumentNullException(nameof(factory)), conditional: false, rightAssociative: true, nameof(operators))));
 
     private int OperatorCount => _operatorLevels.Length;
 
@@ -439,7 +603,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             if (level.Kind == OperatorKind.Prefix)
             {
-                analysis.Invoke(level.Choice!);
+                analysis.Invoke(level.ValuedPrefix?.Choice ?? level.Choice!);
             }
         }
 
@@ -621,7 +785,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             if (kind == OperatorKind.LeftAssociative)
             {
                 // The operator following the operand is of this level or a looser one
-                result.Set(result.Start, right.End, _binary[op]!(result.Value, right.Value));
+                result.Set(result.Start, right.End, ApplyBinary(context, op, result.Value, right.Value));
                 continue;
             }
 
@@ -658,18 +822,37 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
                 for (var i = operations.Count - 1; i > 0; i--)
                 {
-                    accumulated = _binary[operations[i].Operator]!(operations[i - 1].Operand, accumulated);
+                    accumulated = ApplyBinary(context, operations[i].Operator, operations[i - 1].Operand, accumulated);
                 }
 
-                value = _binary[operations[0].Operator]!(value, accumulated);
+                value = ApplyBinary(context, operations[0].Operator, value, accumulated);
             }
 
-            result.Set(result.Start, end, _binary[op]!(result.Value, value));
+            result.Set(result.Start, end, ApplyBinary(context, op, result.Value, value));
         }
 
         context.Unpin(pin);
         return true;
     }
+
+    // The parts of the parser that the first operator of a valued prefix level reads, see ValuedPrefix.ParsePrefixed()
+    internal Parser<T> Operand => _operand;
+
+    internal bool HasFollowingOperators => _hasFollowingOperators;
+
+    internal int LevelOf(int op) => _operatorLevels[op];
+
+    internal ValuedPrefix<T>? ValuedPrefixOf(int op) => _valuedPrefixes[op];
+
+    // The factory of a binary operator, which receives the context or not
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private T ApplyBinary(ParseContext context, int op, T left, T right) =>
+        _binary[op] is { } factory ? factory(left, right) : _contextBinary[op]!(context, left, right);
+
+    // The factory of a prefix operator, which receives the value of the operator or not
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private T ApplyPrefix(ParseContext context, int op, T operand) =>
+        _unary[op] is { } factory ? factory(operand) : _valuedPrefixes[op]!.Apply(context, op, operand);
 
     /// <summary>
     /// Applies the operators of the valued level of <paramref name="next"/>, which are parsed by the level that applies
@@ -731,6 +914,20 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             {
                 var operatorResult = new ParseResult<int>();
 
+                if (_hasValuedPrefixes && _levels[prefixLevels[i]].ValuedPrefix is { } valued)
+                {
+                    // Its value has the type of the level, which parses what follows
+                    var outcome = valued.ParsePrefixed(this, context, start, i, pin, ref result, ref next);
+
+                    if (outcome >= 0)
+                    {
+                        lookup = false;
+                        return outcome > 0;
+                    }
+
+                    continue;
+                }
+
                 if (MatchPrefix(context, _levels[prefixLevels[i]], start, ref operatorResult))
                 {
                     context.Unpin(pin);
@@ -749,7 +946,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// Matches an operator of the prefix levels from <c>_prefixLevels[top]</c> to the tightest one, and returns the index of
     /// its level in <c>_prefixLevels</c>, or -1.
     /// </summary>
-    private int MatchPrefixes(ParseContext context, int top, ref ParseResult<int> operatorResult)
+    internal int MatchPrefixes(ParseContext context, int top, ref ParseResult<int> operatorResult)
     {
         var offset = context.Scanner.Cursor.Offset;
 
@@ -787,7 +984,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // With a limit, each operator counts as one level of recursion when it is read, see ParseChain()
         if (context.MaxRecursionDepth > 0)
         {
-            return ParseChain(context, start, resultStart, first, top, limitRecursion: true, ref operatorResult, ref result, ref next);
+            return ParseChain(context, start, resultStart, first, top, matched: false, ref operatorResult, ref result, ref next);
         }
 
         // The next operator is of the level of this one or of a tighter one
@@ -795,7 +992,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (top >= 0)
         {
-            return ParseChain(context, start, resultStart, first, top, limitRecursion: false, ref operatorResult, ref result, ref next);
+            return ParseChain(context, start, resultStart, first, top, matched: true, ref operatorResult, ref result, ref next);
         }
 
         // A single operator, the most common case, needs no list
@@ -818,13 +1015,18 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     /// <summary>
-    /// Parses a chain of prefix operators from <paramref name="first"/>. Without <paramref name="limitRecursion"/>, the second
-    /// operator was matched, in <paramref name="operatorResult"/> and the level <c>_prefixLevels[top]</c>. With it, only the
-    /// first one was, and each one counts as one level of recursion, as when the operand of each one was climbed recursively.
+    /// Parses a chain of prefix operators from <paramref name="first"/>. With <paramref name="matched"/>, the second operator
+    /// was matched, in <paramref name="operatorResult"/> and the level <c>_prefixLevels[top]</c>, otherwise only the first
+    /// one was. With a <see cref="ParseContext.MaxRecursionDepth"/>, each operator counts as one level of recursion, as when
+    /// the operand of each one was climbed recursively.
     /// </summary>
-    private bool ParseChain(ParseContext context, int start, int resultStart, int first, int top, bool limitRecursion, ref ParseResult<int> operatorResult, ref ParseResult<T> result, ref Lookahead next)
+    internal bool ParseChain(ParseContext context, int start, int resultStart, int first, int top, bool matched, ref ParseResult<int> operatorResult, ref ParseResult<T> result, ref Lookahead next)
     {
+        var limitRecursion = context.MaxRecursionDepth > 0;
         var operators = new OperatorList(stackalloc int[OperatorList.InlineCapacity]);
+
+        // The operators from the first one which didn't apply, whose values are discarded, -1 for all of them
+        var pending = -1;
 
         try
         {
@@ -835,7 +1037,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             operators.Add(first);
 
-            if (limitRecursion)
+            if (!matched)
             {
                 top = MatchPrefixes(context, top, ref operatorResult);
             }
@@ -873,8 +1075,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 }
 
                 // The result spans the first operator and the operand
-                result.Set(resultStart, result.End, _unary[op]!(result.Value));
+                result.Set(resultStart, result.End, _hasValuedPrefixes ? ApplyPrefix(context, op, result.Value) : _unary[op]!(result.Value));
                 lookup = false;
+                pending = i;
             }
 
             return true;
@@ -886,7 +1089,23 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 context.ExitRecursion(operators.Count);
             }
 
+            if (_hasValuedPrefixes && pending != 0)
+            {
+                DiscardValues(in operators, pending < 0 ? operators.Count : pending);
+            }
+
             operators.Release();
+        }
+    }
+
+    // Removes the values of the operators of a chain which didn't apply, from the last one. A method of its own, since a loop
+    // in a finally block has the JIT compile the method fully optimized at once.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void DiscardValues(in OperatorList operators, int count)
+    {
+        for (var i = count - 1; i >= 0; i--)
+        {
+            _valuedPrefixes[operators[i]]?.Discard();
         }
     }
 
@@ -895,6 +1114,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// </summary>
     private static bool MatchPrefix(ParseContext context, OperatorLevel<T> level, int offset, ref ParseResult<int> result)
     {
+        if (level.ValuedPrefix is { } valued)
+        {
+            // Pushes the value of the operator
+            return valued.Match(context, offset, ref result);
+        }
+
         if (!level.Choice!.Parse(context, ref result))
         {
             return false;
@@ -1099,11 +1324,24 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
+        // The start of the call of the factory of each operator, up to its first operand, which can receive the context
         var factories = new string[_operatorLevels.Length];
 
         for (var i = 0; i < factories.Length; i++)
         {
-            factories[i] = context.RegisterLambda((Delegate?)_unary[i] ?? _binary[i]!);
+            if (_valuedPrefixes[i] is { } valuedPrefix)
+            {
+                var factory = context.RegisterLambda(valuedPrefix.Factories[i - valuedPrefix.First]);
+                factories[i] = valuedPrefix.WithContext ? $"{factory}({ctx}, " : $"{factory}(";
+            }
+            else if (_contextBinary[i] is { } contextBinary)
+            {
+                factories[i] = $"{context.RegisterLambda(contextBinary)}({ctx}, ";
+            }
+            else
+            {
+                factories[i] = $"{context.RegisterLambda((Delegate?)_unary[i] ?? _binary[i]!)}(";
+            }
         }
 
         // The level of each operator, read by the climb when operators can follow an operand, and by chains of operators of
@@ -1127,6 +1365,15 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             // The operand on which prefixed() resumes the climb of an operator's level, see GenerateClimb()
             result.Body.Add($"{valueType} {resumedName} = default!;");
+        }
+
+        foreach (var level in _prefixLevels)
+        {
+            if (_levels[level].ValuedPrefix is { } valuedPrefix)
+            {
+                // The value of the last operator the level matched, see GenerateValuedPrefix()
+                result.Body.Add($"{SourceGenerationContext.GetTypeName(valuedPrefix.OperatorType)} {PrefixValueName(id.ToString(CultureInfo.InvariantCulture), level)} = default!;");
+            }
         }
 
         result.Body.Add($"{result.SuccessVariable} = {climb}({_levels.Length - 1}, out {result.ValueVariable}, ref {nextName}, ref {nextPositionName});");
@@ -1172,7 +1419,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             foreach (var level in _prefixLevels)
             {
-                result.Body.Add(GeneratePrefix(level, $"prefix{id}_{level}", levelHelpers[level]!, prefix, context));
+                result.Body.Add(_levels[level].ValuedPrefix is { } valuedPrefix
+                    ? GenerateValuedPrefix($"prefix{id}_{level}", PrefixValueName(idText, level), valuedPrefix, Helper, context)
+                    : GeneratePrefix(level, $"prefix{id}_{level}", levelHelpers[level]!, prefix, context));
             }
         }
 
@@ -1217,7 +1466,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
             foreach (var i in OperatorsOf(level))
             {
-                arms.Add($"{i} => {factories[i]}({left}, {right})");
+                arms.Add($"{i} => {factories[i]}{left}, {right})");
             }
 
             arms.Add("_ => throw new global::System.InvalidOperationException()");
@@ -1358,7 +1607,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 Line("                    lookup = true;");
                 Line("                    continue;");
                 Line("                }");
-                Line(Switch("                ", "next", OperatorsOf(level), op => $"climbed = {factories[op]}(climbed);"));
+                Line(Switch("                ", "next", OperatorsOf(level), op => $"climbed = {factories[op]}climbed);"));
                 Line($"                lowest = {levelText};");
                 Line("                lookup = true;");
                 Line("                continue;");
@@ -1411,7 +1660,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 Line("                }");
             }
 
-            Line(Switch("                ", "op", OperatorsOf(level), op => $"climbed = {factories[op]}(climbed, right);"));
+            Line(Switch("                ", "op", OperatorsOf(level), op => $"climbed = {factories[op]}climbed, right);"));
             Line("                continue;");
             Line("            }");
         }
@@ -1580,25 +1829,63 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         var follows = _hasFollowingOperators;
         var prefixOperators = new List<int>();
 
+        // The levels of valued operators, whose values are kept in a local of the function for the first operator, and in a
+        // list for the operators of a chain
+        var valuedLevels = new List<int>();
+
         foreach (var level in _prefixLevels)
         {
-            for (var i = 0; i < _levels[level].Operators.Length; i++)
+            for (var i = 0; i < _levels[level].Count; i++)
             {
                 prefixOperators.Add(_levels[level].First + i);
             }
+
+            if (_levels[level].ValuedPrefix is not null)
+            {
+                valuedLevels.Add(level);
+            }
         }
 
-        void Apply(string indent, string op)
+        string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        string FirstValue(int level) => $"firstValue{Text(level)}";
+
+        string Values(int level) => $"values{Text(level)}";
+
+        string ValuesIndex(int level) => $"valuesIndex{Text(level)}";
+
+        // Whether op is an operator of the valued level
+        string IsOf(int level, string op)
+        {
+            var operatorLevel = _levels[level];
+            return $"{op} >= {Text(operatorLevel.First)} && {op} < {Text(operatorLevel.First + operatorLevel.Count)}";
+        }
+
+        // Applies op, whose value is value(level) when it is of a valued level
+        void Apply(string indent, string op, Func<int, string> value)
         {
             Line($"{indent}switch ({op})");
             Line($"{indent}{{");
 
             foreach (var prefixOperator in prefixOperators)
             {
-                Line($"{indent}    case {prefixOperator.ToString(CultureInfo.InvariantCulture)}: climbed = {factories[prefixOperator]}(climbed); break;");
+                var level = _operatorLevels[prefixOperator];
+                var arguments = _levels[level].ValuedPrefix is null ? "climbed" : $"climbed, {value(level)}";
+                Line($"{indent}    case {Text(prefixOperator)}: climbed = {factories[prefixOperator]}{arguments}); break;");
             }
 
             Line($"{indent}}}");
+        }
+
+        // Adds the value of op, when it is of a valued level, to the list of its level
+        void Push(string indent, string op, Func<int, string> value)
+        {
+            foreach (var level in valuedLevels)
+            {
+                // All the operators are of the level when it is the only prefix level
+                var condition = _prefixLevels.Length == 1 ? "" : $"if ({IsOf(level, op)}) ";
+                Line($"{indent}{condition}{Values(level)}.Add({value(level)});");
+            }
         }
 
         Line($"bool prefixed{id}(int op, int start, out {valueType} climbed, ref int next, ref int nextPosition)");
@@ -1609,6 +1896,12 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (limitRecursion)
         {
             Line("    " + enterRecursion);
+        }
+
+        // The value of the first operator, which the matches of the next ones replace
+        foreach (var level in valuedLevels)
+        {
+            Line($"    var {FirstValue(level)} = {PrefixValueName(id, level)};");
         }
 
         // The next operator is of the level of this one or of a tighter one
@@ -1638,7 +1931,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line($"        {climb}(~{LevelOf("op")} - 1, out climbed, ref next, ref nextPosition);");
         }
 
-        Apply("        ", "op");
+        Apply("        ", "op", FirstValue);
 
         if (limitRecursion)
         {
@@ -1648,9 +1941,16 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("        return true;");
         Line("    }");
         Line($"    var operators = new global::Parlot.Fluent.OperatorList(stackalloc int[{OperatorList.InlineCapacity.ToString(CultureInfo.InvariantCulture)}]);");
+
+        foreach (var level in valuedLevels)
+        {
+            Line("    " + ListBuilderSource.Declare(Values(level), SourceGenerationContext.GetTypeName(_levels[level].ValuedPrefix!.OperatorType)));
+        }
+
         Line("    try");
         Line("    {");
         Line("        operators.Add(op);");
+        Push("        ", "op", FirstValue);
         Line("        op = second;");
         Line("        do");
         Line("        {");
@@ -1661,6 +1961,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         Line("            operators.Add(op);");
+
+        // The last match is the one of op
+        Push("            ", "op", level => PrefixValueName(id, level));
         MatchNext("            ", "op", "op", "op");
         Line("        }");
         Line("        while (op >= 0);");
@@ -1675,6 +1978,13 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line($"        {lookup}(0, ref next, ref nextPosition);");
         }
 
+        // The values are read from the lists, from the last one, as the operators apply. The factories can parse, and grow
+        // the scratch stack, so they are read through the lists.
+        foreach (var level in valuedLevels)
+        {
+            Line($"        var {ValuesIndex(level)} = {Values(level)}.Count;");
+        }
+
         Line("        for (var i = operators.Count - 1; i >= 0; i--)");
         Line("        {");
         Line("            var prefixOperator = operators[i];");
@@ -1685,7 +1995,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line($"            {climb}(~{LevelOf("prefixOperator")} - 1, out climbed, ref next, ref nextPosition);");
         }
 
-        Apply("            ", "prefixOperator");
+        Apply("            ", "prefixOperator", level => $"{Values(level)}[--{ValuesIndex(level)}]");
         Line("        }");
         Line("        return true;");
         Line("    }");
@@ -1695,6 +2005,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         if (limitRecursion)
         {
             Line($"        {ctx}.ExitRecursion(operators.Count);");
+        }
+
+        foreach (var level in valuedLevels)
+        {
+            Line($"        {Values(level)}.Release();");
         }
 
         Line("        operators.Release();");
@@ -1732,9 +2047,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             Line("                        continue;");
             Line("                    }");
 
+            var contextArgument = group.WithContext ? $"{ctx}, " : "";
+
             if (group.Factories.Length == 1)
             {
-                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}(climbed, {name}.Item2);");
+                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}({contextArgument}climbed, {name}.Item2);");
             }
             else
             {
@@ -1743,7 +2060,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
                 for (var i = 0; i < group.Factories.Length; i++)
                 {
-                    Line($"                        case {i.ToString(CultureInfo.InvariantCulture)}: climbed = {context.RegisterLambda(group.Factories[i])}(climbed, {name}.Item2); break;");
+                    Line($"                        case {i.ToString(CultureInfo.InvariantCulture)}: climbed = {context.RegisterLambda(group.Factories[i])}({contextArgument}climbed, {name}.Item2); break;");
                 }
 
                 Line("                    }");
@@ -1782,8 +2099,10 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         void Line(string text) => sb.Append(text).Append('\n');
 
         // A conditional's factory takes the middle operand before the last one
+        var contextArgument = binary.WithContext ? $"{ctx}, " : "";
+
         string Apply(string left, string right, string op) =>
-            binary.IsConditional ? $"{factory}({left}, {op}, {right})" : $"{factory}({left}, {right}, {op})";
+            binary.IsConditional ? $"{factory}({contextArgument}{left}, {op}, {right})" : $"{factory}({contextArgument}{left}, {right}, {op})";
 
         Line($"                if (!{operatorHelper}({ctx}, out var op))");
         Line("                {");
@@ -1879,6 +2198,57 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("        operations.Release();");
         Line("    }");
         Line("    return stopped;");
+        sb.Append('}');
+
+        return sb.ToString();
+    }
+
+    // The local of the parser's method which receives the value of the last operator a valued prefix level matched
+    private static string PrefixValueName(string id, int level) => $"prefixValue{id}_{level.ToString(CultureInfo.InvariantCulture)}";
+
+    // Matches an operator of a valued prefix level like GeneratePrefix(), and keeps its value in valueName
+    private static string GenerateValuedPrefix(string name, string valueName, ValuedPrefix<T> valuedPrefix, Func<object, Type, string> helper, SourceGenerationContext context)
+    {
+        var ctx = context.ParseContextName;
+        var cursor = context.CursorName;
+        var choiceType = typeof(ValueTuple<,>).MakeGenericType(typeof(int), valuedPrefix.OperatorType);
+        var choiceHelper = helper(valuedPrefix.Choice, choiceType);
+        var first = valuedPrefix.First.ToString(CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+
+        void Line(string text) => sb.Append(text).Append('\n');
+
+        Line($"bool {name}(out int op)");
+        Line("{");
+        Line($"    var offset = {cursor}.Offset;");
+        Line($"    if (!{choiceHelper}({ctx}, out var matched))");
+        Line("    {");
+        Line("        op = -1;");
+        Line("        return false;");
+        Line("    }");
+        Line($"    if ({cursor}.Offset != offset)");
+        Line("    {");
+        Line($"        {valueName} = matched.Item2;");
+        Line($"        op = {first} + matched.Item1;");
+        Line("        return true;");
+        Line("    }");
+
+        // An operator that didn't read anything is treated as no operator, and the next ones are tried
+        for (var i = 1; i < valuedPrefix.Count; i++)
+        {
+            var operatorHelper = helper(valuedPrefix.Operators[i], choiceType);
+            var index = i.ToString(CultureInfo.InvariantCulture);
+
+            Line($"    if (matched.Item1 < {index} && {operatorHelper}({ctx}, out var operator{index}) && {cursor}.Offset != offset)");
+            Line("    {");
+            Line($"        {valueName} = operator{index}.Item2;");
+            Line($"        op = {(valuedPrefix.First + i).ToString(CultureInfo.InvariantCulture)};");
+            Line("        return true;");
+            Line("    }");
+        }
+
+        Line("    op = -1;");
+        Line("    return false;");
         sb.Append('}');
 
         return sb.ToString();

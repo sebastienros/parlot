@@ -331,8 +331,13 @@ public class PrecedenceParserTests
     public void ShouldValidateItsArguments()
     {
         Assert.Throws<ArgumentNullException>(() => ((Parser<string>)null!).Operators());
-        Assert.Throws<ArgumentException>(() => Atom.Operators().LeftAssociative<char>());
-        Assert.Throws<ArgumentNullException>(() => Atom.Operators().LeftAssociative<char>(null!));
+        Assert.Throws<ArgumentException>(() => Atom.Operators().LeftAssociative(Array.Empty<(Parser<char>, Func<string, string, string>)>()));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().LeftAssociative((ValueTuple<Parser<char>, Func<string, string, string>>[])null!));
+        Assert.Throws<ArgumentException>(() => Atom.Operators().Unary(((Parser<char>)null!, static (string x, char op) => x)));
+        Assert.Throws<ArgumentException>(() => Atom.Operators().Unary((Terms.Char('-'), (Func<string, char, string>)null!)));
+        Assert.Throws<ArgumentException>(() => Atom.Operators().Unary(Array.Empty<(Parser<char>, Func<ParseContext, string, char, string>)>()));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().LeftAssociative([Terms.Char('+')], (Func<ParseContext, string, string, char, string>)null!));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), (Func<ParseContext, string, string, string, string>)null!));
         Assert.Throws<ArgumentException>(() => Atom.Operators().Unary(((Parser<char>)null!, Prefix("-"))));
         Assert.Throws<ArgumentException>(() => Atom.Operators().RightAssociative((Terms.Char('^'), (Func<string, string, string>)null!)));
     }
