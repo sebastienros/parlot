@@ -1084,6 +1084,51 @@ public class GeneratorDiagnosticsTests
             static source => source.SourceText.ToString().Contains("Suggestions", StringComparison.Ordinal));
     }
 
+    [Theory]
+    // The result uses a Parlot type
+    [InlineData("""[GenerateParser(nameof(TryParseBad))] public static Parser<TextSpan> BuildBad() => Parsers.Literals.Pattern(static c => c == 'a');""",
+        "public static partial bool TryParseBad(string text, out Parlot.TextSpan value);")]
+    // The attribute names no entry point
+    [InlineData("""[GenerateParser("")] public static Parser<string> BuildBad() => Parsers.Literals.Text("bad");""",
+        "public static partial bool TryParseBad(string text, out string value);")]
+    // The entry point doesn't match the factory
+    [InlineData("""[GenerateParser(nameof(TryParseBad))] public static Parser<string> BuildBad() => Parsers.Literals.Text("bad");""",
+        "public static partial bool TryParseBad(string text, out int value);")]
+    // The entry point isn't the one the attribute names, and returns nothing
+    [InlineData("""[GenerateParser("Other")] public static Parser<string> BuildBad() => Parsers.Literals.Text("bad");""",
+        "public static partial void TryParseBad(string text, out string value);")]
+    public void Rejected_Factory_Does_Not_Break_The_Others(string badFactory, string badDeclaration)
+    {
+        var grammar = $$"""
+            using Parlot;
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParseGood))]
+                public static Parser<string> BuildGood() => Parsers.Literals.Text("good");
+                {{badFactory}}
+            }
+            """;
+        var declaration = $$"""
+            public static partial class Grammar
+            {
+                public static partial bool TryParseGood(string text, out string value);
+                {{badDeclaration}}
+            }
+            """;
+
+        var (result, compilation) = RunStandalone(declaration, grammar);
+
+        var reported = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Equal("PARLOT023", reported.Id);
+        Assert.Contains("BuildBad", reported.GetMessage(), StringComparison.Ordinal);
+        Assert.Contains(result.Results.SelectMany(static item => item.GeneratedSources),
+            static source => source.SourceText.ToString().Contains("TryParseGood", StringComparison.Ordinal));
+        Assert.DoesNotContain(compilation.GetDiagnostics(), static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+            && diagnostic.GetMessage().Contains("TryParseGood", StringComparison.Ordinal));
+    }
+
     internal static (GeneratorDriverRunResult Result, CSharpCompilation Compilation) RunStandalone(
         string declaration,
         string grammar,

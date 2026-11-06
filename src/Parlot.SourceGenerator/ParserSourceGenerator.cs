@@ -2439,6 +2439,14 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
                 return node.WithModifiers(newModifiers);
             }
 
+            // An out parameter must be assigned, which only a throw avoids. Without this, the entry point of a rejected
+            // factory fails the private build of all the others.
+            if (node.ParameterList.Parameters.Any(static parameter => parameter.Modifiers.Any(SyntaxKind.OutKeyword)))
+            {
+                _bypassedMethods.Add(node.Identifier.Text);
+                return WithThrowingBody(node, "A partial method without an implementation cannot be called while constructing a grammar.");
+            }
+
             // Otherwise, add a stub body.
             if (node.ReturnType is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.VoidKeyword))
             {
