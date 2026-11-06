@@ -248,7 +248,12 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   starts by skipping white space, like a `Terms` parser, a choice whose alternatives are all `Terms` parsers, or a
   sequence starting with one, reports the start of its content, after the skipped white space, as at runtime. A choice
   whose alternatives don't all skip white space reports the offset where it was entered, before the white space of the
-  alternative that matched, where the runtime reports the start of that alternative's content.
+  alternative that matched, where the runtime reports the start of that alternative's content. A sequence whose first
+  parsers can match nothing, like `Optional`, `ZeroOrMany`, `Always` or `Else`, starts where the first of its parsers
+  which matched something does, as at runtime: it is emitted part by part, and the start moves past the white space the
+  next part skips while nothing matched. Such a part which matches something, like an `Optional` of a `Terms` parser,
+  reports the start of its content when all the parsers it can start with skip white space, and the offset where it was
+  entered otherwise.
 
 ### Non-breaking diagnostics
 
