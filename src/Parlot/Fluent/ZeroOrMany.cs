@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable, IReadsWith
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
@@ -24,6 +24,9 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         _max = max;
         _withoutValue = parser.CanParseWithoutValue;
     }
+
+    // It reads only where the parser does, see CustomWhiteSpace
+    object IReadsWith.Parser => _parser;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
