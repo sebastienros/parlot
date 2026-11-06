@@ -28,7 +28,9 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
 
         // The text is read again when the parser fails
         var pin = context.Pin();
@@ -37,11 +39,15 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
         if (!success)
         {
+            // What it read, to find that it doesn't match, says nothing about what follows
+            cursor.RestoreRecordedFailure(recorded);
             context.ExitParser(this);
             return true;
         }
 
-        context.Scanner.Cursor.ResetPosition(start);
+        // The failure is at the start of what matched, wherever it was read up to
+        context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true });
+        cursor.ResetPosition(start);
 
         context.ExitParser(this);
         return false;

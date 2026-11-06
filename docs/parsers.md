@@ -45,6 +45,39 @@ A `Deferred` parser that is invoked again at the position where it is already ac
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
 [Left recursion](writing.md#left-recursion). `disableLoopDetection: true` on the `ParseContext` disables it for every parser.
 
+## Reporting where a parse failed
+
+A parse that fails without an error leaves `TryParse` with a `null` error and the cursor where it started. The most
+useful position is then the *furthest failure*: where the attempt which matched the most text stopped. The cursor keeps
+it in `Cursor.FurthestOffset`, and `Cursor.FurthestPosition` adds its line and column, computed when it is read:
+
+```csharp
+var context = new ParseContext(new Scanner(text));
+
+if (!program.TryParse(context, out var value, out var error))
+{
+    // An Error or ElseError reports its own position, the furthest failure is where the longest attempt stopped
+    var position = context.Scanner.Cursor.FurthestPosition;
+    throw new FormatException($"{error?.Message ?? "Syntax error"} at {position}.");
+}
+```
+
+For a program parsed as `ZeroOrMany(statement).AndSkip(Eof().ElseError("Expected a statement"))`, the error is where the
+statements stopped matching, at the start of the statement that failed, while the furthest failure is where that
+statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
+expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
+return, with the same rules for what a parser reads and then rejects (`When`, `Not`, `WhenFollowedBy`,
+`WhenNotFollowedBy`).
+
+The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
+reused for successive parses reports the failure of the last one. A parse which drives `Parse(context, ref result)`
+itself calls `Cursor.ResetFurthestOffset()` first. After a successful parse, `FurthestOffset` is at least where the parse
+ended. For a `TextReader`, `StreamParseOptions.ContextFactory` gives access to the context, whose cursor reports the same
+furthest failure as the one of the `string`.
+
+The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved back
+from on that path only: it doesn't change the time of a successful parse.
+
 ## Collecting diagnostics without stopping
 
 By default, `Error(...)` and `ElseError(...)` throw `ParseException`; `TryParse(..., out error)`

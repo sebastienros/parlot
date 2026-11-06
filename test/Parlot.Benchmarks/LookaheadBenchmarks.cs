@@ -1,4 +1,6 @@
 using BenchmarkDotNet.Attributes;
+using Parlot.Fluent;
+using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Benchmarks;
 
@@ -25,4 +27,32 @@ public partial class LookaheadBenchmarks
 
     [Benchmark]
     public bool WhenRejected() => TryParseWhen("  from", out _);
+
+    // The same grammars at runtime, see LookaheadBenchmarks.parlot.cs
+    private static readonly Parser<string> FollowedParser =
+        Terms.Identifier().WhenFollowedBy(Terms.Char('(')).Then(static value => "");
+
+    private static readonly Parser<string> NotFollowedParser =
+        Terms.Identifier().WhenNotFollowedBy(Terms.Char('(')).Then(static value => "");
+
+    private static readonly Parser<string> NotParser =
+        Not(Terms.Text("from")).SkipAnd(Terms.Identifier()).Then(static value => "");
+
+    private static readonly Parser<string> WhenParser =
+        Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f').Then(static value => "");
+
+    [Benchmark]
+    public bool RuntimeFollowed() => FollowedParser.TryParse("  word  (", out _);
+
+    [Benchmark]
+    public bool RuntimeNotFollowed() => NotFollowedParser.TryParse("  word  ;", out _);
+
+    [Benchmark]
+    public bool RuntimeNegative() => NotParser.TryParse("  word", out _);
+
+    [Benchmark]
+    public bool RuntimeWhenAccepted() => WhenParser.TryParse("  word", out _);
+
+    [Benchmark]
+    public bool RuntimeWhenRejected() => WhenParser.TryParse("  from", out _);
 }
