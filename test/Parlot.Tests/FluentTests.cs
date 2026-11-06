@@ -3,6 +3,7 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using Xunit;
 
@@ -2965,9 +2966,9 @@ public class FluentTests
     [InlineData("from\u0080", false)]
     [InlineData("from\ufffe", false)]
     [InlineData("fro", false)]
-    public void KeywordWithRangesChecksItsBoundary(string input, bool expected)
+    public void KeywordWithALargeSetChecksItsBoundary(string input, bool expected)
     {
-        var parser = Literals.Keyword("from", [('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\ufffe')], caseInsensitive: true);
+        var parser = Literals.Keyword("from", Chars(('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('\u0080', '\ufffe')), caseInsensitive: true);
 
         var context = new ParseContext(new Scanner(input));
         var result = new ParseResult<string>();
@@ -2981,9 +2982,10 @@ public class FluentTests
     }
 
     [Fact]
-    public void KeywordRangesCanOverlapAndCrossAscii()
+    public void KeywordSetIsMergedIntoRanges()
     {
-        var parser = Literals.Keyword("if", [('\u0100', '\u0200'), ('\u0150', '\u0300'), ('\u0301', '\u0301'), ('z', '\u0090')]);
+        // Overlapping, adjacent and repeated chars, in any order, across ASCII
+        var parser = Literals.Keyword("if", Chars(('\u0100', '\u0200'), ('\u0150', '\u0300'), ('\u0301', '\u0301'), ('z', '\u0090'), ('\u0150', '\u0150')));
 
         Assert.False(parser.TryParse("ifz", out _));
         Assert.False(parser.TryParse("if\u007f", out _));
@@ -2996,10 +2998,8 @@ public class FluentTests
         Assert.True(parser.TryParse("ify", out _));
     }
 
-    [Fact]
-    public void KeywordRangesMustNotBeEmpty()
-    {
-        Assert.Throws<ArgumentException>(() => new KeywordLiteral("if", [('z', 'a')]));
-    }
+    // The chars of the ranges, both ends included
+    private static string Chars(params (char First, char Last)[] ranges) =>
+        string.Concat(ranges.Select(static range => new string(Enumerable.Range(range.First, range.Last - range.First + 1).Select(static c => (char)c).ToArray())));
 }
 

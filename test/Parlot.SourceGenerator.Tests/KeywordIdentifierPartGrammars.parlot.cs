@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Linq;
 using Parlot.Fluent;
 using Parlot.SourceGenerator;
 using static Parlot.Fluent.Parsers;
@@ -28,8 +29,9 @@ public static partial class KeywordIdentifierPartGrammars
             Terms.Keyword("in", LiquidIdentifierPart), Terms.Keyword("and"), Terms.Keyword("or"), Terms.Keyword("with"));
 
     // HQL's words: letters, digits, '_', '$' and every char above ASCII
-    private static readonly (char First, char Last)[] WordPart =
-        [('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('$', '$'), ('\u0080', '\ufffe')];
+    private static readonly string WordPart =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$"
+        + new string(Enumerable.Range(0x80, 0xFFFE - 0x80 + 1).Select(static i => (char)i).ToArray());
 
     [GenerateParser(nameof(TryParseRanges))]
     private static Parser<string> BuildRanges() =>

@@ -1,17 +1,19 @@
 using System;
+using System.Linq;
 using Parlot.Fluent;
 using Parlot.SourceGenerator;
 using static Parlot.Fluent.Parsers;
 
 namespace Parlot.Benchmarks;
 
-public partial class KeywordRangesBenchmarks
+public partial class KeywordLargeSetBenchmarks
 {
-    private static readonly (char First, char Last)[] WordPart =
-        [('a', 'z'), ('A', 'Z'), ('0', '9'), ('_', '_'), ('$', '$'), ('\u0080', '￾')];
+    private static readonly string WordPart =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$"
+        + new string(Enumerable.Range(0x80, 0xFFFE - 0x80 + 1).Select(static i => (char)i).ToArray());
 
-    [GenerateParser(nameof(TryParseRanges))]
-    private static Parser<string> BuildRanges() => OneOf(
+    [GenerateParser(nameof(TryParseKeywords))]
+    private static Parser<string> BuildKeywords() => OneOf(
         Terms.Keyword("from", WordPart, caseInsensitive: true), Terms.Keyword("select", WordPart, caseInsensitive: true),
         Terms.Keyword("where", WordPart, caseInsensitive: true), Terms.Keyword("in", WordPart, caseInsensitive: true),
         Terms.Keyword("inner", WordPart, caseInsensitive: true), Terms.Keyword("join", WordPart, caseInsensitive: true),

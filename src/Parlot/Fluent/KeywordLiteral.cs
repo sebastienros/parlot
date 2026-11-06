@@ -2,14 +2,13 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Parlot.Fluent;
 
 /// <summary>
 /// Parses a keyword: a text that is not followed by a char that continues an identifier. By default these chars
-/// are the ASCII letters; a custom set can be given, as a list of chars or as ranges, e.g. to also reject digits,
-/// <c>_</c> or <c>-</c>, or the non-ASCII chars.
+/// are the ASCII letters; a custom set can be given, e.g. to also reject digits, <c>_</c> or <c>-</c>, or the chars
+/// above ASCII.
 /// This is a specialized parser that can be source-generated without requiring lambda tracking.
 /// </summary>
 public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
@@ -48,97 +47,80 @@ public sealed class KeywordLiteral : Parser<string>, ISeekablePrefixes, ISourcea
     /// <param name="comparison">How the text is compared.</param>
     /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
     public KeywordLiteral(string text, ReadOnlySpan<char> identifierPart, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
-        : this(text, comparison, returnMatchedText)
+        : this(text, identifierPart.ToString(), comparison, returnMatchedText)
     {
-        var ranges = new (char First, char Last)[identifierPart.Length];
-        for (var i = 0; i < identifierPart.Length; i++)
-        {
-            ranges[i] = (identifierPart[i], identifierPart[i]);
-        }
-
-        (_identifierPartLow, _identifierPartHigh, _identifierPartNonAscii) = BuildIdentifierPart(ranges);
-        IdentifierPart = identifierPart.ToString();
     }
 
-    /// <summary>
-    /// Creates a keyword parser that fails when the text is followed by a char of <paramref name="identifierPartRanges"/>.
-    /// </summary>
-    /// <param name="text">The keyword.</param>
-    /// <param name="identifierPartRanges">The ranges of chars that continue an identifier, both ends included. They replace the default ASCII letters.</param>
-    /// <param name="comparison">How the text is compared.</param>
-    /// <param name="returnMatchedText">Whether to return the input's text rather than <paramref name="text"/>.</param>
-    public KeywordLiteral(string text, ReadOnlySpan<(char First, char Last)> identifierPartRanges, StringComparison comparison = StringComparison.Ordinal, bool returnMatchedText = false)
+    // Keeps the instance of the string, which the keywords of a language share
+    internal KeywordLiteral(string text, string identifierPart, StringComparison comparison, bool returnMatchedText)
         : this(text, comparison, returnMatchedText)
     {
-        foreach (var (first, last) in identifierPartRanges)
-        {
-            if (first > last)
-            {
-                throw new ArgumentException($"The range '\\u{(int)first:x4}'-'\\u{(int)last:x4}' is empty.", nameof(identifierPartRanges));
-            }
-        }
-
-        (_identifierPartLow, _identifierPartHigh, _identifierPartNonAscii) = BuildIdentifierPart(identifierPartRanges.ToArray());
-        IdentifierPartRanges = identifierPartRanges.ToArray();
+        (_identifierPartLow, _identifierPartHigh, _identifierPartNonAscii) = BuildIdentifierPart(identifierPart.AsSpan());
+        IdentifierPart = identifierPart;
     }
 
-    private static (ulong Low, ulong High, char[]? NonAscii) BuildIdentifierPart((char First, char Last)[] ranges)
+    // The bitset of the ASCII chars, and the other chars as the first and last chars of sorted ranges, such that a large
+    // set, like all the chars above ASCII, is a few comparisons
+    private static (ulong Low, ulong High, char[]? NonAscii) BuildIdentifierPart(ReadOnlySpan<char> identifierPart)
     {
         var low = 0UL;
         var high = 0UL;
-        var nonAscii = new List<char>();
+        var others = new List<char>();
 
-        foreach (var (first, last) in ranges.OrderBy(static range => range.First))
+        foreach (var c in identifierPart)
         {
-            for (var c = (int)first; c <= last && c < 128; c++)
+            if (c < 64)
             {
-                if (c < 64)
-                {
-                    low |= 1UL << c;
-                }
-                else
-                {
-                    high |= 1UL << (c - 64);
-                }
+                low |= 1UL << c;
             }
-
-            if (last >= 128)
+            else if (c < 128)
             {
-                var start = first < 128 ? (char)128 : first;
-
-                // Adjacent or overlapping with the previous range
-                if (nonAscii.Count > 0 && start - 1 <= nonAscii[nonAscii.Count - 1])
-                {
-                    if (last > nonAscii[nonAscii.Count - 1])
-                    {
-                        nonAscii[nonAscii.Count - 1] = last;
-                    }
-                }
-                else
-                {
-                    nonAscii.Add(start);
-                    nonAscii.Add(last);
-                }
+                high |= 1UL << (c - 64);
+            }
+            else
+            {
+                others.Add(c);
             }
         }
 
-        return (low, high, nonAscii.Count > 0 ? nonAscii.ToArray() : null);
+        if (others.Count == 0)
+        {
+            return (low, high, null);
+        }
+
+        others.Sort();
+
+        var ranges = new List<char> { others[0], others[0] };
+
+        foreach (var c in others)
+        {
+            // A char of the last range, or the one after it
+            if (c - 1 <= ranges[ranges.Count - 1])
+            {
+                if (c > ranges[ranges.Count - 1])
+                {
+                    ranges[ranges.Count - 1] = c;
+                }
+            }
+            else
+            {
+                ranges.Add(c);
+                ranges.Add(c);
+            }
+        }
+
+        return (low, high, ranges.ToArray());
     }
 
     public string Text { get; }
 
     /// <summary>
-    /// The chars that continue an identifier when they are given as a list, otherwise <see langword="null"/>.
+    /// The chars that continue an identifier, or <see langword="null"/> for the default ASCII letters.
     /// </summary>
     public string? IdentifierPart { get; }
 
-    /// <summary>
-    /// The chars that continue an identifier when they are given as ranges, otherwise <see langword="null"/>.
-    /// </summary>
-    public IReadOnlyList<(char First, char Last)>? IdentifierPartRanges { get; }
-
     // Whether a custom set is used, instead of the default ASCII letters
-    internal bool HasCustomIdentifierPart => IdentifierPart != null || IdentifierPartRanges != null;
+    internal bool HasCustomIdentifierPart => IdentifierPart != null;
 
     internal bool IsIdentifierPart(char c) => c < 128
         ? (((c < 64 ? _identifierPartLow : _identifierPartHigh) >> (c & 63)) & 1UL) != 0

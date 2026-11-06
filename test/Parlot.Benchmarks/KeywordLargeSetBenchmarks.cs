@@ -3,15 +3,15 @@ using System;
 
 namespace Parlot.Benchmarks;
 
-// A choice of keywords whose words also take every char above ASCII: the keywords with ranges against the same keywords
-// written as scanners, one after the other, which was the way to get this boundary before.
+// A choice of keywords whose words also take every char above ASCII, a set of identifier chars built with the grammar,
+// against the same keywords written as scanners, one after the other, which was the way to get this boundary before.
 [MemoryDiagnoser, ShortRunJob]
-public partial class KeywordRangesBenchmarks
+public partial class KeywordLargeSetBenchmarks
 {
     private const string Input = "ORDER";
     private const string Rejected = "orderé";
 
-    public static partial bool TryParseRanges(string text, out string value);
+    public static partial bool TryParseKeywords(string text, out string value);
     public static partial bool TryParseScans(string text, out int value);
 
     private static bool IsWordPart(char c) =>
@@ -31,11 +31,11 @@ public partial class KeywordRangesBenchmarks
     public bool Scans() => TryParseScans(Input, out _);
 
     [Benchmark]
-    public bool Ranges() => TryParseRanges(Input, out _);
+    public bool Keywords() => TryParseKeywords(Input, out _);
 
     [Benchmark]
     public bool ScansRejected() => TryParseScans(Rejected, out _);
 
     [Benchmark]
-    public bool RangesRejected() => TryParseRanges(Rejected, out _);
+    public bool KeywordsRejected() => TryParseKeywords(Rejected, out _);
 }
