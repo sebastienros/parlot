@@ -102,6 +102,17 @@ public static partial class Parsers
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
     /// <summary>
+    /// Builds a parser that succeeds with the value of the specified parser when it matches, without consuming any input
+    /// (positive lookahead, the PEG <c>&amp;p</c>).
+    /// </summary>
+    /// <remarks>
+    /// The result starts and ends where the parser is invoked. A choice only tries it for the chars the specified parser
+    /// can start with.
+    /// </remarks>
+    /// <param name="parser">The parser that must match at the current position.</param>
+    public static Parser<T> Peek<T>(Parser<T> parser) => new Peek<T>(parser);
+
+    /// <summary>
     /// Evaluates a condition once and executes <paramref name="parser"/> if it is true.
     /// Otherwise, fails without consuming input or changing the result.
     /// </summary>

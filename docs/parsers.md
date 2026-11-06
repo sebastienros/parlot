@@ -1054,6 +1054,41 @@ hello // failure
 null // success
 ```
 
+### Peek
+
+Succeeds with the value of a parser when it matches, without consuming any input. This is the positive lookahead
+(PEG `&p`), the counterpart of [Not](#not). Unlike [WhenFollowedBy](#whenfollowedby), it doesn't need a parser before it,
+so it can start an alternative.
+
+```c#
+Parser<T> Peek<T>(Parser<T> parser)
+```
+
+Usage:
+
+```c#
+// An automatic semicolon: a ';', or nothing before a '}'
+var semicolon = OneOf(
+    Terms.Char(';').Then(static _ => true),
+    Peek(Terms.Char('}')).Then(static _ => false));
+
+var parser = Peek(Terms.Integer()).And(Terms.Integer());
+parser.Parse("42");
+parser.Parse("x");
+```
+
+Result:
+
+```
+(42, 42)
+failure
+```
+
+The result starts and ends where the parser was invoked. When the parser fails, `Peek` fails and the cursor is where it
+was. `Peek` tells the chars its parser can start with, so a choice only tries it for these chars. In a choice whose
+alternatives all skip white space, like `semicolon` above, the choice skips the white space once before trying them, so
+the cursor is after the white space when `Peek` succeeds there.
+
 ## Coordination parsers
 
 ### Separated
