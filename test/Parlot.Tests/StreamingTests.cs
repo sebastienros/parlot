@@ -45,6 +45,8 @@ public class StreamingTests
         // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
         ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
         ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
+        // Valued prefix operators are matched with the plain ones, their values are kept until they apply
+        ["valued-prefix"] = new Grammar<string>(CreateValuedPrefix()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
@@ -203,6 +205,10 @@ public class StreamingTests
         ];
         Add("valued-operators", valuedOperators);
         Add("valued-operators-eof", valuedOperators);
+
+        Add("valued-prefix",
+            "", "a", "-a", "- -a", "!-a", "- !a", "typeof -a * b", "-typeof a", "a * - typeof !b", "-", "- -", "typeof", "a * -",
+            "-(- a", "- ( - a ) * - b", " - \n typeof  a ", "typeofa", "typeof typeof a");
 
         Add("sql",
             "SELECT * FROM users",
@@ -828,6 +834,21 @@ public class StreamingTests
             .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => $"({c}?{a}:{b})", rightAssociative: false)
             .LeftAssociative((Terms.Text("??"), static (a, b) => $"({a}??{b})"))
             .RightAssociative([Terms.Text("=")], static (a, b, op) => $"({a}{op}{b})");
+
+        return expression;
+    }
+
+    private static Parser<string> CreateValuedPrefix()
+    {
+        var expression = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('!'), static x => $"(!{x})"))
+            .Unary(
+                (Terms.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"),
+                (Terms.Keyword("typeof").Then(static (_, start, _, _) => start), static (string x, int start) => $"typeof@{start}({x})"))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => $"({a}*{b})"));
 
         return expression;
     }
