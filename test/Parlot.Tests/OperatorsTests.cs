@@ -380,4 +380,86 @@ public class OperatorsTests
         Assert.Equal(2, result);
         Assert.False(parser.TryParse("x", out _));
     }
+
+    private static int ScratchCount<T>()
+    {
+        var type = typeof(Parser<>).Assembly.GetType("Parlot.Fluent.ListScratch`1", throwOnError: true)!.MakeGenericType(typeof(T));
+        var scratch = type.GetField("t_current", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+        return scratch == null ? 0 : (int)type.GetField("Count", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(scratch)!;
+    }
+
+    private static Parser<string> ValuedPrefixTable() =>
+        Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary(
+                (ZeroOrOne(Literals.Char('?')).Then(static _ => '?'), static (string x, char op) => $"({op}{x})"),
+                (Terms.Char('-'), static (string x, char op) => x == "boom" ? throw new System.InvalidOperationException() : $"({op}{x})"))
+            .Unary((Terms.Text("not"), static (string x, string op) => $"({op} {x})"));
+
+    [Theory]
+    [InlineData("a", "a")]
+    [InlineData("-a", "(-a)")]
+    [InlineData("- - a", "(-(-a))")]
+    [InlineData("not -a", "(not (-a))")]
+    [InlineData("not not a", "(not (not a))")]
+    [InlineData("?a", "(?a)")]
+    [InlineData("-", null)]
+    [InlineData("not -", null)]
+    [InlineData("- - !", null)]
+    public void ValuedPrefixValuesDontStayOnTheStack(string input, string expected)
+    {
+        var parser = ValuedPrefixTable();
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.Equal(expected is not null, parser.Parse(context, ref result));
+        Assert.Equal(expected, expected is null ? null : result.Value);
+
+        // A failure leaves the cursor where it started, with no value of a chain left behind
+        if (expected is null)
+        {
+            Assert.Equal(0, context.Scanner.Cursor.Offset);
+        }
+
+        Assert.Equal(0, ScratchCount<char>());
+        Assert.Equal(0, ScratchCount<string>());
+    }
+
+    [Theory]
+    [InlineData("-boom")]
+    [InlineData("- - boom")]
+    [InlineData("not -boom")]
+    public void ValuedPrefixValuesDontStayOnTheStackWhenAFactoryThrows(string input)
+    {
+        Assert.Throws<System.InvalidOperationException>(() => ValuedPrefixTable().TryParse(input, out _));
+
+        Assert.Equal(0, ScratchCount<char>());
+        Assert.Equal(0, ScratchCount<string>());
+    }
+
+    [Fact]
+    public void ValuedPrefixValuesDontStayOnTheStackWhenTheLimitIsExceeded()
+    {
+        var parser = ValuedPrefixTable();
+
+        Assert.Throws<ParseException>(() =>
+        {
+            var context = new ParseContext(new Scanner("not not not not a"), maxRecursionDepth: 2);
+            var result = new ParseResult<string>();
+            parser.Parse(context, ref result);
+        });
+
+        Assert.Equal(0, ScratchCount<string>());
+    }
+
+    [Fact]
+    public void ValuedPrefixOperatorsSeekFromTheirFirstChars()
+    {
+        var table = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Unary((Terms.Char('-'), static (string x, char op) => op + x));
+
+        var choice = OneOf(table, Terms.Char('!').Then(static _ => "!"));
+
+        Assert.Equal("-a", choice.Parse("-a"));
+        Assert.Equal("!", choice.Parse("!"));
+    }
 }

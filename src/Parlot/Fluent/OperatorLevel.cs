@@ -50,9 +50,16 @@ internal sealed class OperatorLevel<T>
     public Parser<int>[] Operators { get; }
 
     /// <summary>
-    /// <see cref="Func{T, TResult}"/> of the unary operators, <see cref="Func{T1, T2, TResult}"/> of the binary ones.
+    /// <see cref="Func{T, TResult}"/> of the unary operators, <see cref="Func{T1, T2, TResult}"/> of the binary ones and of
+    /// the prefix operators which receive their values.
     /// </summary>
     public Delegate[] Factories { get; }
+
+    /// <summary>
+    /// The values of a level of prefix operators whose factories receive them, otherwise <see langword="null"/>. Such a level
+    /// has its <see cref="Operators"/> and <see cref="Choice"/>, like a level of other prefix operators.
+    /// </summary>
+    public ValuedPrefix<T>? PrefixValues { get; private init; }
 
     /// <summary>
     /// The choice of <see cref="Operators"/>, <see langword="null"/> for the levels of <see cref="Valued"/> operators.
@@ -90,6 +97,16 @@ internal sealed class OperatorLevel<T>
         }
 
         return new OperatorLevel<T>(kind, first, parsers, factories);
+    }
+
+    /// <summary>
+    /// Creates a level of prefix operators whose factories receive the values of the operators.
+    /// </summary>
+    public static OperatorLevel<T> CreateValuedPrefix<TOperator>(int first, (Parser<TOperator> Op, Func<T, TOperator, T> Factory)[] operators, string parameterName)
+    {
+        var values = new ValuedPrefix<T, TOperator>(first, operators, parameterName);
+
+        return new OperatorLevel<T>(OperatorKind.Prefix, first, values.Operators, values.Factories) { PrefixValues = values };
     }
 
     /// <summary>

@@ -250,6 +250,16 @@ internal sealed class ListScratch<T>
     }
 
     /// <summary>
+    /// Removes the item on the top of the stack.
+    /// </summary>
+    public T Pop()
+    {
+        var item = Items[Count - 1];
+        Release(Count - 1);
+        return item;
+    }
+
+    /// <summary>
     /// Copies the <paramref name="length"/> items from <paramref name="start"/>, the top of the stack, to a new array,
     /// and removes them.
     /// </summary>
