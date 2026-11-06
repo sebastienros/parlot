@@ -47,6 +47,8 @@ public static partial class Grammars
     public static partial bool TryParseZeroOrManyChars(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseZeroOrOneChar(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseZeroOrOneEmpty(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseAlwaysDefaultTuple(string input, out (int, string?) value);
+    public static partial bool TryParseAlwaysDefaultStruct(string input, out DateTime value);
     public static partial bool TryParseEofText(string text, out string value);
     public static partial bool TryParseCaptureChar(string text, out string value);
     public static partial bool TryParseOneOfChar(string text, out char value);

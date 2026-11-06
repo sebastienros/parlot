@@ -214,6 +214,12 @@ public static partial class Grammars
     private static Parser<IReadOnlyList<char>> BuildZeroOrOneEmpty() =>
         ZeroOrOne(new Always<char>('x')).Eof();
 
+    [GenerateParser(nameof(TryParseAlwaysDefaultTuple))]
+    private static Parser<(int, string?)> BuildAlwaysDefaultTuple() => Always<(int, string?)>();
+
+    [GenerateParser(nameof(TryParseAlwaysDefaultStruct))]
+    private static Parser<DateTime> BuildAlwaysDefaultStruct() => Always<DateTime>().AndSkip(Terms.Char('x'));
+
     [GenerateParser(nameof(TryParseEofText))]
     private static Parser<string> BuildEofText() => Terms.Text("end").Eof();
 

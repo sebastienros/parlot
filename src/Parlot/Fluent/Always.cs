@@ -1,5 +1,6 @@
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
@@ -36,6 +37,12 @@ public sealed class Always<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
         // Try to get a string representation of the value for inlining
         var valueExpr = LiteralHelper.ToLiteral(_value);
+
+        // Any type has a default, whether or not its values have a literal
+        if (valueExpr == null && EqualityComparer<T>.Default.Equals(_value, default!))
+        {
+            valueExpr = "default";
+        }
 
         if (valueExpr == null)
         {
