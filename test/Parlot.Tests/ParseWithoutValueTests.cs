@@ -120,6 +120,8 @@ public class ParseWithoutValueTests
         AssertSameAsParse(A.WhenFollowedBy(Bs));
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));
         AssertSameAsParse(SkipWhiteSpace(OneOrMany(Literals.Char('b'))));
+        AssertSameAsParse(NoNewLineBefore(OneOrMany(Literals.Char('b'))));
+        AssertSameAsParse(A.And(Bs.NoNewLineBefore()));
         AssertSameAsParse(Bs.WithWhiteSpaceSet(WhiteSpaceSet.Ascii));
         AssertSameAsParse(A.And(Bs).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char(' ')))));
     }

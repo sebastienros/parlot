@@ -190,6 +190,22 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<T> Eof() => new Eof<T>(this);
 
     /// <summary>
+    /// Builds a parser that skips the white space and comments before this parser, and fails when they contain a new line of
+    /// <see cref="ParseContext.WhiteSpaceSet"/>, such as JavaScript's "[no LineTerminator here]".
+    /// </summary>
+    /// <remarks>
+    /// <c>Terms.Text("return").And(expression.NoNewLineBefore().Optional())</c> doesn't read an expression on the next line.
+    /// </remarks>
+    public Parser<T> NoNewLineBefore() => new NoNewLineBefore<T>(this);
+
+    /// <summary>
+    /// Builds a parser that skips the white space and comments before this parser, and fails when they contain one of
+    /// <paramref name="newLines"/>.
+    /// </summary>
+    /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
+    public Parser<T> NoNewLineBefore(string newLines) => new NoNewLineBefore<T>(this, newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
     /// Builds a parser that prevents any parser from moving back before the end of the previous parser's match once it succeeds,
     /// such that its text is no longer buffered when the input is streamed.
     /// </summary>

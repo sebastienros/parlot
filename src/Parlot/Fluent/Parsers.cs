@@ -72,6 +72,37 @@ public static partial class Parsers
     public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
 
     /// <summary>
+    /// Builds a parser that skips the white space and comments before another one, and fails when they contain a new line of
+    /// <see cref="ParseContext.WhiteSpaceSet"/>, such as JavaScript's "[no LineTerminator here]".
+    /// </summary>
+    public static Parser<T> NoNewLineBefore<T>(Parser<T> parser) => new NoNewLineBefore<T>(parser);
+
+    /// <summary>
+    /// Builds a parser that skips the white space and comments before another one, and fails when they contain one of
+    /// <paramref name="newLines"/>.
+    /// </summary>
+    /// <param name="parser">The parser to invoke after the white space.</param>
+    /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
+    public static Parser<T> NoNewLineBefore<T>(Parser<T> parser, string newLines) => new NoNewLineBefore<T>(parser, newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
+    /// Builds a parser that succeeds when the white space and comments at the cursor contain a new line of
+    /// <see cref="ParseContext.WhiteSpaceSet"/>, returning <see langword="null"/>. It doesn't consume them.
+    /// </summary>
+    /// <remarks>
+    /// JavaScript's automatic semicolon insertion is
+    /// <c>OneOf(Terms.Char(';').Then&lt;object?&gt;(null), Always().WhenFollowedBy(Terms.Char('}')), SkipWhiteSpace(Eof()), NewLineAhead())</c>.
+    /// </remarks>
+    public static Parser<object?> NewLineAhead() => new NewLineAhead();
+
+    /// <summary>
+    /// Builds a parser that succeeds when the white space and comments at the cursor contain one of <paramref name="newLines"/>,
+    /// returning <see langword="null"/>. It doesn't consume them.
+    /// </summary>
+    /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
+    public static Parser<object?> NewLineAhead(string newLines) => new NewLineAhead(newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
     /// Builds a parser that returns an empty list or a list containing one match.
     /// </summary>
     public static Parser<IReadOnlyList<T>> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);

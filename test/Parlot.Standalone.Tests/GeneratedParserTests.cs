@@ -10,6 +10,25 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Theory]
+    [InlineData("a;b", true, "a|b")]
+    [InlineData("a\nb", true, "a|b")]
+    [InlineData("a /* \n */ b", true, "a|b")]
+    [InlineData("return a", true, "return a")]
+    [InlineData("return \v a", true, "return a")]
+    [InlineData("return\na", true, "return|a")]
+    [InlineData("return /* \r\n */ a", true, "return|a")]
+    [InlineData("a b", false, null)]
+    [InlineData("a /* */ b", false, null)]
+    public void New_Lines_Before_A_Token_Are_Found(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseNewLineStatements(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseNewLineStatements(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("abc-->def", true, "abc")]
     [InlineData("a-b->c-->d", true, "a-b->c")]
     [InlineData("a==>b", true, "a")]
