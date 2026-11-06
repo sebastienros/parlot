@@ -101,6 +101,8 @@ public static partial class Grammar
     public static partial bool TryParseTextChoiceCapture(TextReader reader, out string value);
     public static partial bool TryParseTextChoicePosition(TextReader reader, out (int Offset, int Line, int Column) value);
     public static partial bool TryParseScanPosition(TextReader reader, out (string Text, int Offset, int Line, int Column) value);
+    public static partial bool TryParseNewLineStatements(string text, out string value);
+    public static partial bool TryParseNewLineStatements(TextReader reader, out string value);
 }
 
 public sealed class CancellationOptions
