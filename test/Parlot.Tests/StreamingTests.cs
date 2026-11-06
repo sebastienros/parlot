@@ -95,6 +95,9 @@ public class StreamingTests
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // Statements ended by a semicolon or a new line, with "[no LineTerminator here]" before an argument and a postfix operator
+        ["newlines"] = new Grammar<string>(CreateNewLineStatements()),
+        ["newlines-comments"] = new Grammar<string>(CreateNewLineStatements().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["ascii-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
         ["ascii-context"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.Ascii }),
         ["ascii-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\u00A0"))).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
@@ -121,6 +124,14 @@ public class StreamingTests
             Terms.Identifier().And(Terms.Char('=').Then(static (c, _) => Position(c))).And(Terms.Char('(')).Then(static (c, x) => x.Item2),
             Terms.Identifier().Then(static (c, _) => Position(c)))),
     };
+
+    private static Parser<string> CreateNewLineStatements()
+    {
+        var end = OneOf(Terms.Char(';').Then<object?>(static _ => null), NewLineAhead(), SkipWhiteSpace(Eof()));
+        var returnStatement = Terms.Keyword("return").SkipAnd(Terms.Identifier().NoNewLineBefore().Then(static x => "return " + x).Else("return"));
+        var expressionStatement = Terms.Identifier().And(NoNewLineBefore(Terms.Text("++")).Else("")).Then(static x => x.Item1.ToString() + x.Item2);
+        return ZeroOrMany(OneOf(returnStatement, expressionStatement).AndSkip(end)).Eof().Then(static x => string.Join("|", x));
+    }
 
     private static Parser<object> CreateNestedLists()
     {
@@ -268,6 +279,15 @@ public class StreamingTests
             "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+
+        string[] newLines =
+        [
+            "", "a", "a b", "a;b", "a\nb", "a\r\nb", "a  \n  b", "return", "return a", "return\na", "return\r\n a;", "a++", "a ++ b",
+            "a\n++b", "a\n++", "return a\n++b", "a /* x */ b", "a /* \n */ b", "a // c\n b", "return /* x */ a", "return /* \n */ a",
+            "return // c\n a", "a++ /* c */\n b", "a /* b", "a ;  ", "a  ", "a\n",
+        ];
+        Add("newlines", newLines);
+        Add("newlines-comments", newLines);
         string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];
         Add("ascii-separated", separated);
         Add("ascii-context", separated);
