@@ -187,6 +187,63 @@ public class Scanner
         Cursor.AdvanceNoNewLines(i);
     }
 
+    /// <summary>
+    /// Skips a single line comment whose start, of <paramref name="startLength"/> chars, is at the cursor: up to the first of
+    /// <paramref name="lineTerminators"/>, which is not skipped, or to the end of the text.
+    /// </summary>
+    /// <remarks>
+    /// Without terminators the comment ends before <c>"\r\n"</c> or <c>"\n"</c>, as with <c>Literals.Comments(start)</c>.
+    /// Shared by <c>CommentsParser</c> and the code it generates.
+    /// </remarks>
+    internal void SkipSingleLineComment(int startLength, ReadOnlySpan<char> lineTerminators)
+    {
+        var span = Cursor.Span;
+        var text = span.Slice(startLength);
+
+        int index;
+
+        if (lineTerminators.IsEmpty)
+        {
+            index = text.IndexOf('\n');
+
+            if (index > 0 && text[index - 1] == '\r')
+            {
+                index--;
+            }
+        }
+        else
+        {
+            index = text.IndexOfAny(lineTerminators);
+        }
+
+        // Reaching the end of the text records it, the line may continue in a stream
+        Cursor.Advance(index < 0 ? span.Length : startLength + index);
+    }
+
+    /// <summary>
+    /// Skips a multi line comment whose start, of <paramref name="startLength"/> chars, is at the cursor, up to its end
+    /// delimiter included.
+    /// </summary>
+    /// <returns>
+    /// Whether the end delimiter was found. When it's not, the cursor is after the start of the comment, where the error is
+    /// reported, and the end of the text is recorded.
+    /// </returns>
+    /// <remarks>Shared by <c>CommentsParser</c> and the code it generates.</remarks>
+    internal bool SkipMultiLineComment(int startLength, ReadOnlySpan<char> end)
+    {
+        var index = Cursor.Span.Slice(startLength).IndexOf(end);
+
+        if (index < 0)
+        {
+            Cursor.Advance(startLength);
+            Cursor.MarkHitEnd();
+            return false;
+        }
+
+        Cursor.Advance(startLength + index + end.Length);
+        return true;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     [Obsolete("Not optimized")]
     public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
