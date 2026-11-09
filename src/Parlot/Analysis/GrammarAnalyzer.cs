@@ -850,7 +850,7 @@ internal sealed class GrammarAnalysis
                 return false;
             }
 
-            if (ParlotTypeName(parser) is "Then" or "PooledString" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex" && FirstInvoked(parser) is { } inner)
+            if (ParlotTypeName(parser) is "Then" or "PooledString" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex" or "ValuedPrefixOperator" && FirstInvoked(parser) is { } inner)
             {
                 parser = inner;
                 continue;
