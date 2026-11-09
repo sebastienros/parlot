@@ -146,6 +146,26 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void LongestGrammars()
+    {
+        // The ordered choice and the longest match read the same tokens
+        var benchmark = new LongestBenchmarks();
+        var expected = benchmark.OneOf();
+
+        Assert.NotEqual(0, expected);
+        Assert.Equal(expected, benchmark.Longest());
+        Assert.Equal(expected, benchmark.OneOfGenerated());
+        Assert.Equal(expected, benchmark.LongestGenerated());
+
+        expected = benchmark.ExclusiveOneOf();
+
+        Assert.NotEqual(0, expected);
+        Assert.Equal(expected, benchmark.ExclusiveLongest());
+        Assert.Equal(expected, benchmark.ExclusiveOneOfGenerated());
+        Assert.Equal(expected, benchmark.ExclusiveLongestGenerated());
+    }
+
+    [Fact]
     public void SeekGuardGrammars()
     {
         // The setup checks every grammar
