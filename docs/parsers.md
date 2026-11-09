@@ -1282,6 +1282,20 @@ Result:
 0 // failure
 ```
 
+The value is the one of `parser`, but the result's `Start` and `End`, which `Then((context, start, end, value) => ...)`
+receives, span the delimiters, as they do for `before.SkipAnd(parser).AndSkip(after)` and in generated parsers:
+
+```c#
+var key = Terms.Identifier();
+Between(Terms.Char('['), key, Terms.Char(']')).Then(static (c, s, e, v) => (s, e)).Parse(" [x] "); // (1, 4)
+```
+
+For the span of `parser` alone, put the callback on it: `Between(before, parser.Then(...), after)`.
+
+> [!NOTE]
+> Before Parlot 2.0, the result of a runtime `Between` had the `Start` and `End` of `parser`, without the delimiters,
+> while generated parsers already included them.
+
 ### SkipWhiteSpace
 
 Matches a parser after any blank spaces. This parser respects the `Scanner.WhiteSpaceParser` option.

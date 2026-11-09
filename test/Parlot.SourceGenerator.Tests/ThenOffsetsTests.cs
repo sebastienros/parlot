@@ -20,6 +20,9 @@ public class ThenOffsetsTests
             Terms.Keyword("do"), Terms.Keyword("return"), Terms.Keyword("break"), Terms.Keyword("continue"))
             .Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsLargeChoice),
         ["sequence"] = (Terms.Text("ab").And(Terms.Text("cd")).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsSequence),
+        ["between"] = (Between(Terms.Char('['), Terms.Identifier(), Terms.Char(']')).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsBetween),
+        ["between-literals"] = (Between(Literals.Char('['), Literals.Identifier(), Literals.Char(']')).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsBetweenLiterals),
+        ["skipand-andskip"] = (Terms.Char('[').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(']')).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsSkipAndAndSkip),
         ["not-last"] = (Terms.Char('a').AndSkip(Not(Literals.Char('b'))).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsNotLast),
         ["not"] = (Not(Terms.Char('b')).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsNot),
     };
@@ -35,6 +38,15 @@ public class ThenOffsetsTests
     [InlineData("sequence", "ab cd", 0, 5)]
     [InlineData("sequence", "  ab  cd", 2, 8)]
     [InlineData("sequence", "  ab  x", -1, 0)]
+    [InlineData("between", "[x]", 0, 3)]
+    [InlineData("between", " [ xy ] ", 1, 7)]
+    [InlineData("between", " [ xy ", -1, 0)]
+    [InlineData("between", " xy ]", -1, 0)]
+    [InlineData("between-literals", "[xy]", 0, 4)]
+    [InlineData("between-literals", "[xy", -1, 0)]
+    [InlineData("skipand-andskip", "[x]", 0, 3)]
+    [InlineData("skipand-andskip", " [ xy ] ", 1, 7)]
+    [InlineData("skipand-andskip", " [ xy ", -1, 0)]
     [InlineData("not-last", " a c", 1, 2)]
     [InlineData("not-last", " a", 1, 2)]
     [InlineData("not-last", " ab", -1, 0)]
@@ -84,4 +96,7 @@ public static partial class PositionGrammars
     public static partial bool TryParseOffsetsNot(string text, out (int Start, int End) value);
     public static partial bool TryParseOffsetsMixedChoice(string text, out (int Start, int End) value);
     public static partial bool TryParseOffsetsBacktrack(string text, out (int Start, int End) value);
+    public static partial bool TryParseOffsetsBetween(string text, out (int Start, int End) value);
+    public static partial bool TryParseOffsetsBetweenLiterals(string text, out (int Start, int End) value);
+    public static partial bool TryParseOffsetsSkipAndAndSkip(string text, out (int Start, int End) value);
 }
