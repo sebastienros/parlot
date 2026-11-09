@@ -463,3 +463,4 @@ Parlot is already used in these projects:
 - [YesSql](https://github.com/sebastienros/yessql)
 - [NCalc](https://github.com/ncalc/ncalc)
 - [hyperbee.xs] https://github.com/Stillpoint-Software/hyperbee.xs
+- [Spring.NET](https://github.com/spring-projects/spring-net)
