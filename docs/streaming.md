@@ -53,17 +53,21 @@ In compacting mode they run through `ParseContext.ParseToken`:
 
 Only the token is parsed again, never the value. A token is small compared to the input, so this costs about nothing.
 Between tokens the cursor is never at the end of a non-final window: white space is skipped incrementally, refilling as
-needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, runs as a token.
+needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, runs as a token. It isn't invoked before a
+char it can't start with (see [WithWhiteSpaceParser](parsers.md#withwhitespaceparser)), but it always is at the end of the
+buffer, the NUL of `Cursor.Current`, to refill it.
 
 ### Backtrack floor and pins
 
 A refill drops the text below the *backtrack floor*: the lowest position from which an active parser can read again.
+The char before the floor is kept, so a parser always finds the char before its position in the buffer, as a
+`TextScanner` does to tell whether its token starts a line.
 The parsers which move back to read again keep their position with `ParseContext.Pin()`:
 
 | Parser | Pinned text |
 |---|---|
 | `OneOf` (`Or`, `|`) | The start of the choice while alternatives remain to be tried. With a lookup table (see `ISeekable`), the next char selects the alternatives first, so an exclusive choice, like the JSON values, pins nothing. |
-| `Optional`, `ZeroOrOne`, `Else`, `Not`, `WhenFollowedBy`, `WhenNotFollowedBy` | Their start, while their parser runs. |
+| `Optional`, `ZeroOrOne`, `Else`, `Not`, `Peek`, `WhenFollowedBy`, `WhenNotFollowedBy` | Their start, while their parser runs. |
 | `ZeroOrMany`, `OneOrMany`, `Separated` | The start of the current element only: a root array or list streams. |
 | `LeftAssociative`, `RightAssociative` | The start of the current operator, which isn't part of the match when no operand follows it. |
 | `Unary` | Its start, while its operators are tried. |
@@ -198,7 +202,7 @@ and leave the reader open.
 | Method | Description |
 |---|---|
 | `Parse(TextReader)` | Parses one value through the compacting buffer, returns the value or `default`. A `ParseException` is propagated. |
-| `TryParse(TextReader, out T value[, out ParseError? error])` | Same, returns whether the text matched. A `ParseException` or a cancellation returns `false` with the error. |
+| `TryParse(TextReader, out T value[, out ParseError? error])` | Same, returns whether the text matched. A `ParseException` or a cancellation returns `false` with the error. The context of `ContextFactory` reports the [furthest failure](parsers.md#reporting-where-a-parse-failed). |
 | `TryParseAsync(TextReader)` | Parses one value through the compacting buffer, returns `(bool Success, T? Value)`. A `ParseException` returns `false`. |
 | `ParseAsync(TextReader)` | Same, returns the value or `default`. A `ParseException` is propagated. |
 | `ParseManyAsync(TextReader)` | Parses successive values, returns an `IAsyncEnumerable<T>`. |

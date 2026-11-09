@@ -1951,6 +1951,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             for (int i = 0; i < parameters.Length; i++)
             {
                 if (i > 0) sb.Append(", ");
+                sb.Append(GetRefKindModifier(parameters[i]));
                 sb.Append(GetParameterName(i));
             }
             sb.Append(");");
@@ -2058,8 +2059,7 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         for (int i = 0; i < parameters.Length; i++)
         {
             if (i > 0) sb.Append(", ");
-            var paramTypeName = TypeNameHelper.GetTypeName(parameters[i].ParameterType);
-            sb.Append(paramTypeName);
+            sb.Append(GetParameterTypeName(parameters[i]));
             sb.Append(' ');
             // Use original name if available, otherwise fall back to standard name
             sb.Append(i < originalNames.Length ? originalNames[i] : GetParameterName(i));
@@ -2080,14 +2080,27 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
         for (int i = 0; i < parameters.Length; i++)
         {
             if (i > 0) sb.Append(", ");
-            var paramTypeName = TypeNameHelper.GetTypeName(parameters[i].ParameterType);
-            sb.Append(paramTypeName);
+            sb.Append(GetParameterTypeName(parameters[i]));
             sb.Append(' ');
             sb.Append(GetParameterName(i));
         }
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Gets the type of a parameter with its modifier, like "out global::System.String" for the result of a TryConvert callback.
+    /// </summary>
+    private static string GetParameterTypeName(ParameterInfo parameter)
+    {
+        var type = parameter.ParameterType;
+        return type.IsByRef
+            ? GetRefKindModifier(parameter) + TypeNameHelper.GetTypeName(type.GetElementType()!)
+            : TypeNameHelper.GetTypeName(type);
+    }
+
+    private static string GetRefKindModifier(ParameterInfo parameter)
+        => !parameter.ParameterType.IsByRef ? "" : parameter.IsOut ? "out " : parameter.IsIn ? "in " : "ref ";
 
     /// <summary>
     /// Gets a standard parameter name for index i.

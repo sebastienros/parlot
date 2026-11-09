@@ -197,7 +197,8 @@ public class SpanScannerTests
     [Fact]
     public void ScanRequiresAScanner()
     {
-        Assert.Throws<ArgumentNullException>(() => Literals.Scan(null!));
+        Assert.Throws<ArgumentNullException>(() => Literals.Scan((SpanScanner)null!));
+        Assert.Throws<ArgumentNullException>(() => Literals.Scan((TextScanner)null!));
     }
 
     [Theory]
@@ -248,6 +249,151 @@ public class SpanScannerTests
         // Some inputs of ScanReadsOneCharAtATime aren't only tokens, so failures are compared too
         Assert.False(_liquidTokens.TryParse(input + " a-}} b}}", out _));
     }
+
+    [Theory]
+    [InlineData("-->", "-->")]
+    [InlineData("--> a comment\nx", "--> a comment")]
+    [InlineData("-->\r\nx", "-->")]
+    public void TextScanMatchesAtTheStartOfTheInput(string input, string expected)
+    {
+        Assert.Equal(expected, Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Parse(input).ToString());
+    }
+
+    [Theory]
+    [InlineData("x\n--> c", 2, "--> c")]
+    [InlineData("x\r\n-->", 3, "-->")]
+    [InlineData("x\r-->", 2, "-->")]
+    public void TextScanMatchesAtTheStartOfALine(string input, int offset, string expected)
+    {
+        var context = new ParseContext(new Scanner(input));
+        context.Scanner.Cursor.Advance(offset);
+        var result = new ParseResult<TextSpan>();
+
+        Assert.True(Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Parse(context, ref result));
+        Assert.Equal(expected, result.Value.ToString());
+        Assert.Equal(offset, result.Start);
+        Assert.Equal(offset + expected.Length, result.End);
+        Assert.Equal(offset + expected.Length, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("x-->y", 1)]
+    [InlineData("x -->", 2)]
+    [InlineData("x\n-->", 0)]
+    [InlineData("x\n->", 2)]
+    [InlineData("--", 0)]
+    [InlineData("", 0)]
+    public void TextScanFailsWithoutMovingTheCursor(string input, int offset)
+    {
+        var context = new ParseContext(new Scanner(input));
+        context.Scanner.Cursor.Advance(offset);
+        var position = context.Scanner.Cursor.Position;
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Parse(context, ref result));
+        Assert.Equal(position, context.Scanner.Cursor.Position);
+    }
+
+    [Fact]
+    public void TextScanGetsTheWholeTextAndThePosition()
+    {
+        var parser = Literals.Scan(static (text, position) => text.ToString() == "ab cd" && position == 3 ? 2 : 0);
+
+        var context = new ParseContext(new Scanner("ab cd"));
+        var result = new ParseResult<TextSpan>();
+        Assert.False(parser.Parse(context, ref result));
+
+        context.Scanner.Cursor.Advance(3);
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal("cd", result.Value.ToString());
+        Assert.True(context.Scanner.Cursor.Eof);
+    }
+
+    [Fact]
+    public void TermsTextScanSkipsWhiteSpaceBeforeTheToken()
+    {
+        // The white space is part of the text before the token
+        var parser = Terms.Scan(LineStartScanners.HtmlCloseComment, "-");
+
+        Assert.Equal("-->", parser.Parse(" \n-->").ToString());
+        Assert.False(parser.TryParse(" -->", out _));
+
+        Assert.True(((ISeekable)parser).CanSeek);
+        Assert.True(((ISeekable)parser).SkipWhitespace);
+        Assert.Equal(['-'], ((ISeekable)parser).ExpectedChars);
+    }
+
+    [Fact]
+    public void TextScanMarksTheEndOfNonFinalText()
+    {
+        var context = new ParseContext(new Scanner("--", isFinal: false));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Parse(context, ref result));
+        Assert.True(context.Scanner.Cursor.HitEnd);
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void TextScanRejectsTokensLongerThanTheText()
+    {
+        var parser = Literals.Scan(static (text, position) => text.Length - position + 1);
+
+        Assert.Throws<InvalidOperationException>(() => parser.Parse("abc"));
+    }
+
+    public static TheoryData<string> HtmlCommentInputs() =>
+    [
+        "", "-->", "--> c", "-->\n", "x-->y", "x --> y", "x\n-->y", "x\n--> y\nz", "x\r\n--> y", "x\r-->",
+        "--> a\n--> b\nx-->y", "x\n \n-->", "x\n\n-->", "a--\n-->", "a--\n>", "--", "x\n--", "-->-->",
+        "abc def\n-->\nghi-->jkl",
+    ];
+
+    [Theory]
+    [MemberData(nameof(HtmlCommentInputs))]
+    public void TextScanReadsTheTextBeforeTheTokenOneCharAtATime(string input)
+    {
+        // The char before the token is kept in the stream buffer, even when the buffer is refilled one char at a time
+        var expected = _htmlTokens.TryParse(input, out var expectedValue);
+        var options = new StreamParseOptions { BufferSize = 1 };
+
+        Assert.Equal(expected, _htmlTokens.TryParse(new OneCharReader(input), out var value, options));
+        Assert.Equal(expectedValue, value);
+    }
+
+    [Theory]
+    [InlineData("x\n-->y", "x|comment")]
+    [InlineData("x-->y", "x|--|>|y")]
+    [InlineData("-->y\nx", "comment|x")]
+    [InlineData("x --> y", "x|--|>|y")]
+    public void TextScanTellsTheStartOfALine(string input, string expected)
+    {
+        Assert.Equal(expected, _htmlTokens.Parse(input));
+        Assert.Equal(expected, _htmlTokens.Parse(new OneCharReader(input), new StreamParseOptions { BufferSize = 1 }));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task TextScanSeesTheStartOfEachValueOfParseMany()
+    {
+        // Each value is parsed as its own input: the second "-->" follows a ';' in the stream, but starts its value
+        var list = new System.Collections.Generic.List<string>();
+
+        await foreach (var value in Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Then(static x => x.ToString()).ParseManyAsync(new StringReader("-->;-->"), ';', cancellationToken: TestContext.Current.CancellationToken))
+        {
+            list.Add(value);
+        }
+
+        Assert.Equal(["-->", "-->"], list);
+    }
+
+    // The JavaScript tokens around an HTML-like close comment
+    private static readonly Parser<string> _htmlTokens =
+        ZeroOrMany(Terms.Scan(LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment")
+            .Or(Terms.Text("--"))
+            .Or(Terms.Text(">"))
+            .Or(Terms.Identifier().Then(static x => x.ToString())))
+            .Then(static list => string.Join("|", list))
+            .Eof();
 
     // Eof makes the parse fail when the tokens don't cover the text
     private static readonly Parser<string> _liquidTokens =

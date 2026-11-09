@@ -60,6 +60,19 @@ public static partial class FailureGrammars
     public static Parser<string> BuildRejected() =>
         Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
 
+    // The same word, rejected by a conversion
+    [GenerateParser(nameof(ConversionRejected))]
+    public static Parser<string> BuildConversionRejected() =>
+        Terms.Identifier().ThenTry(static (ParseContext _, int _, int _, TextSpan value, out string result) =>
+        {
+            result = value.ToString();
+            return result != "from";
+        }).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(ConversionRejectedLiteral))]
+    public static Parser<string> BuildConversionRejectedLiteral() =>
+        Literals.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())).AndSkip(Terms.Char(';')).Eof();
+
     [GenerateParser(nameof(RejectedLiteral))]
     public static Parser<string> BuildRejectedLiteral() =>
         Literals.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
@@ -75,6 +88,10 @@ public static partial class FailureGrammars
     [GenerateParser(nameof(Followed))]
     public static Parser<string> BuildFollowed() =>
         Terms.Identifier().WhenFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char('x')).Eof();
+
+    [GenerateParser(nameof(Peeked))]
+    public static Parser<string> BuildPeeked() =>
+        Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
 
     [GenerateParser(nameof(Negative))]
     public static Parser<string> BuildNegative() =>

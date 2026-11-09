@@ -110,6 +110,26 @@ public abstract partial class Parser<T> : IParser<T>
     }
 
     /// <summary>
+    /// Builds a parser that converts the previous result with a conversion which can reject it: when
+    /// <paramref name="conversion"/> returns <see langword="false"/> the parser fails and the cursor is moved back to where
+    /// it was, like <see cref="When(Func{ParseContext, T, bool})"/>. It replaces a <c>When(...).Then(...)</c> pair with a
+    /// single parser and a single callback.
+    /// </summary>
+    /// <param name="conversion">
+    /// Receives the <see cref="ParseContext"/>, the start and end offsets of the value and the value, and returns whether it
+    /// is converted, the converted value in its <see langword="out"/> parameter.
+    /// </param>
+    public Parser<U> ThenTry<U>(TryConvert<T, U> conversion) => new ThenTry<T, U>(this, conversion);
+
+    /// <summary>
+    /// Builds a parser that converts the previous result with a conversion which can reject it: when
+    /// <paramref name="conversion"/> returns a tuple whose <c>Success</c> is <see langword="false"/> the parser fails and
+    /// the cursor is moved back to where it was, like <see cref="When(Func{ParseContext, T, bool})"/>.
+    /// </summary>
+    /// <param name="conversion">Returns whether the value is converted, and the converted value.</param>
+    public Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion) => new ThenTry<T, U>(this, conversion);
+
+    /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
     /// </summary>
     public Parser<U> ThenElse<U>(Func<T, U> conversion, U elseValue) => new Then<T, U>(this, conversion).Else(elseValue);

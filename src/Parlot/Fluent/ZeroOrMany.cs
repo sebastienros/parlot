@@ -4,13 +4,16 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable, IReadsWith
 {
     private readonly Parser<T> _parser;
     private readonly int _max;
 
     // Whether the elements are parsed without their value when the list isn't built
     private readonly bool _withoutValue;
+
+    // Whether the parser can start at the current position, so the loop stops without invoking it when it can't
+    private readonly SeekGuard _guard;
 
     public ZeroOrMany(Parser<T> parser) : this(parser, 0)
     {
@@ -23,7 +26,11 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         ThrowHelper.ThrowIfNegative(max, nameof(max));
         _max = max;
         _withoutValue = parser.CanParseWithoutValue;
+        _guard = new SeekGuard(parser);
     }
+
+    // It reads only where the parser does, see CustomWhiteSpace
+    object IReadsWith.Parser => _parser;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
@@ -51,7 +58,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
             while (_max == 0 || results.Count < _max)
             {
                 var previousOffset = context.Scanner.Cursor.Offset;
-                if (!_parser.Parse(context, ref parsed)
+                if (!_guard.CanStart(context)
+                    || !_parser.Parse(context, ref parsed)
                     || context.Scanner.Cursor.Offset == previousOffset)
                 {
                     break;
@@ -102,7 +110,8 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         while (_max == 0 || count < _max)
         {
             var previousOffset = context.Scanner.Cursor.Offset;
-            if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
+            if (!_guard.CanStart(context)
+                || !(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
                 || context.Scanner.Cursor.Offset == previousOffset)
             {
                 break;
@@ -157,6 +166,9 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
         var helperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_ZeroOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
+
+        // The loop stops without invoking the parser when it can't start at the current position
+        helperName = SeekGuard.GetHelper(context, _parser, helperName, typeof(T));
 
         if (!context.DiscardResult && !context.IsCompacting)
         {

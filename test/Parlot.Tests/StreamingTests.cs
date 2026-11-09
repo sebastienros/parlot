@@ -45,7 +45,13 @@ public class StreamingTests
         // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
         ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
         ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
+        // A conditional whose last operand is the whole expression, read after the colon by the level
+        ["conditional-last"] = new Grammar<string>(CreateConditionalWithLast()),
+        ["conditional-last-eof"] = new Grammar<string>(CreateConditionalWithLast().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
+        // Escape sequences and surrogate pairs cut by the end of the window
+        ["codepoint-identifiers"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).Then(static x => Character.DecodeIdentifier(x).ToString())).Eof()),
+        ["codepoint-identifier-calls"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).AndSkip(Terms.Char('(')).Then(static x => Character.DecodeIdentifier(x).ToString())).Eof()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
         ["integer-standalone-eof"] = new Grammar<long>(Terms.Integer().AndSkip(Eof())),
@@ -79,6 +85,13 @@ public class StreamingTests
         // Pooled strings copy the text out of the window, and string literals decode into the pool
         ["pooled-strings"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Identifier().ToPooledString(), Terms.String().ToPooledString())).Eof()),
         ["text-ci-matched"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("hello", caseInsensitive: true, returnMatchedText: true), Terms.Keyword("for", caseInsensitive: true, returnMatchedText: true)))),
+        // Escapes that read optional chars, or a "\r\n" pair, can be split by the end of the window
+        ["js-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript)),
+        // A quote at the end of the window can be the first of a doubled one
+        ["sql-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.Single, StringEscapes.Sql)),
+        ["python-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.Python)),
+        ["json-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.Double, StringEscapes.Json)),
+        ["js-pooled-strings"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript).ToPooledString()).Eof()),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["nul-string"] = new Grammar<TextSpan>(new StringLiteral('\0')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
@@ -87,9 +100,23 @@ public class StreamingTests
         ["textbefore-eof"] = new Grammar<TextSpan>(AnyCharBefore(Literals.Text("--"))),
         ["capture"] = new Grammar<TextSpan>(Capture(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer()))),
         ["not"] = new Grammar<TextSpan>(Not(Literals.Text("ab")).SkipAnd(Literals.NonWhiteSpace())),
+        // A lookahead at the start of an alternative, the text it read is read again
+        ["peek"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("ab"), Peek(Terms.Identifier()).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
+        ["peek-value"] = new Grammar<(long, long)>(Peek(Terms.Integer()).And(Terms.Integer())),
         ["followed"] = new Grammar<TextSpan>(Terms.Identifier().WhenFollowedBy(Terms.Char('('))),
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
+        // A rejected value gives the cursor back to the next alternative, here the keyword the identifier rejects
+        ["thentry"] = new Grammar<string>(ZeroOrMany(Terms.Identifier().ThenTry(static (ParseContext _, int start, int end, TextSpan name, out string result) =>
+        {
+            result = $"{name}@{start}-{end}";
+            return !name.Span.SequenceEqual("for");
+        }).Or(Terms.Keyword("for"))).Then(static values => string.Join(",", values))),
         ["separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer())),
+        // Optional parsers and loops over sequences don't invoke them when the char after the white space can't start them
+        ["guarded-optional"] = new Grammar<string>(Terms.Identifier().And(Terms.Char('?').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(':')).And(Terms.Identifier()).Optional())
+            .Then(static t => t.Item1.ToString() + (t.Item2.HasValue ? $"?{t.Item2.Value.Item1}:{t.Item2.Value.Item2}" : "")).AndSkip(Terms.Char(';'))),
+        ["guarded-loop"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Text("let").SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(';'))).AndSkip(Terms.Char('}'))),
+        ["guarded-separated"] = new Grammar<IReadOnlyList<TextSpan>>(Separated(Terms.Char(',').AndSkip(Literals.Char('|').Optional()), Terms.Identifier()).AndSkip(Terms.Char(';'))),
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         // Nested lists of the same element type share the scratch stack of the list parsers
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
@@ -97,6 +124,11 @@ public class StreamingTests
         ["state"] = new Grammar<IReadOnlyList<string>>(CreateStateGrammar(), static scanner => new DepthContext(scanner)),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
+        ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
+        // White space parsers that tell their first chars aren't invoked before the other ones, except at the end of the buffer
+        ["hinted-comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("./*(", maxSize: 1))).WithWhiteSpaceParser(Capture(OneOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/")))))),
+        ["hinted-context"] = new Grammar<IReadOnlyList<long>>(ZeroOrMany(Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceParser = Capture(ZeroOrMany(Literals.Char('#').Or(Literals.Char(' ')))) }),
         ["ascii-separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
         ["ascii-context"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceSet = WhiteSpaceSet.Ascii }),
         ["ascii-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\u00A0"))).WithWhiteSpaceSet(WhiteSpaceSet.Ascii)),
@@ -108,6 +140,9 @@ public class StreamingTests
         ["spacetabcrlf-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
         ["spacetabcrlf-whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
         ["spacetabcrlf-nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace().WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
+        // A scanner reading the char before its token, which a refill must keep
+        ["scan-line-start"] = new Grammar<string>(ZeroOrMany(Terms.Scan(LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment").Or(Terms.Text("--")).Or(Terms.Text(">")).Or(Terms.Identifier().Then(static x => x.ToString()))).Then(static list => string.Join("|", list)).Eof()),
+        ["scan-line-start-literals"] = new Grammar<string>(ZeroOrMany(Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment").Or(Literals.Text("--")).Or(Literals.Text(">")).Or(Literals.Text("\n")).Or(Literals.Identifier().Then(static x => x.ToString()))).Then(static list => string.Join("|", list)).Eof()),
         // The line and column after the match must not depend on how the text is split
         ["position-text"] = new Grammar<(int, int, int)>(Literals.Text("\r\n").Then(static (c, _) => Position(c))),
         ["position-char"] = new Grammar<(int, int, int)>(Literals.Char('\n').Then(static (c, _) => Position(c))),
@@ -119,6 +154,12 @@ public class StreamingTests
         // compacting buffer has discarded when the assignment spans a refill
         ["position-elseerror"] = new Grammar<(int, int, int)>(Terms.Text("begin").SkipAnd(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer()).ElseError("Expected an assignment")).Then(static (c, _) => Position(c))),
         // A position read after one read further, by an alternative which failed
+        // The identifier starts with any char above ASCII, which the choice dispatches without an entry for each of them
+        ["non-ascii-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(
+            Terms.Text("if"),
+            Terms.Text("é!").Then(static _ => "e!"),
+            Terms.Scan(ScanWord, ("abcdefghijklmnopqrstuvwxyz" + AboveAscii).AsSpan()).Then(static x => x.ToString()),
+            Terms.Char('(').Then(static _ => "("))).Eof()),
         ["position-backtrack"] = new Grammar<(int, int, int)>(OneOf(
             Terms.Identifier().And(Terms.Char('=').Then(static (c, _) => Position(c))).And(Terms.Char('(')).Then(static (c, x) => x.Item2),
             Terms.Identifier().Then(static (c, _) => Position(c)))),
@@ -145,6 +186,24 @@ public class StreamingTests
         }
 
         public int Depth { get; set; }
+    }
+
+    // A word starts with a lowercase ASCII letter or any char above ASCII, and ends before a space or a parenthesis
+    private static int ScanWord(ReadOnlySpan<char> span)
+    {
+        if (span.IsEmpty || span[0] is not ((>= 'a' and <= 'z') or >= '\u0080'))
+        {
+            return 0;
+        }
+
+        var length = 1;
+
+        while (length < span.Length && span[length] is not (' ' or '(' or ')'))
+        {
+            length++;
+        }
+
+        return length;
     }
 
     private static Parser<object> CreateNestedLists()
@@ -229,6 +288,14 @@ public class StreamingTests
         Add("valued-operators", valuedOperators);
         Add("valued-operators-eof", valuedOperators);
 
+        string[] conditionalLast =
+        [
+            "", "a", "a ? b : c", "a ? b : c = d", "a ? b : c ? d : e", "a || b ? c : d", "a = b ? c : d = e", "a ? b", "a ? b :",
+            "a ? b : c =", "a ?", "a ? b : c, d", "a, b ? c : d, e", " a ? ( b , c ) : d ", "a\n?\nb\n:\nc\n=\nd", "a ? b : c || d",
+        ];
+        Add("conditional-last", conditionalLast);
+        Add("conditional-last-eof", conditionalLast);
+
         Add("sql",
             "SELECT * FROM users",
             "SELECT id, name FROM users WHERE id = 1",
@@ -247,6 +314,10 @@ public class StreamingTests
             "SELEC * FROM users");
 
         Add("identifier", "", "a", "abc", " abc def", "1a", "a1_b ");
+        string[] codePointIdentifiers = ["", "a", "\\u0061bc d\\u{62}", "\\u{1D4D0}x", "\U0001D49C a\U0001D49Cb", "\\u00", "a\\u00", "a\\u{1D4", "a\\", "a\ud835",
+            "a\ud835b", "\udc9c", "a\\u0020", "\u00e9t\u00e9 caf\u00e9", "a\\u{110000}", "a( b\\u c\\u0062(", "a\\u{62}\\u"];
+        Add("codepoint-identifiers", codePointIdentifiers);
+        Add("codepoint-identifier-calls", codePointIdentifiers);
         Add("integer", "", "1", "123", " 42x", "-5", "+", "123456789012");
         Add("standalone-eof", "", " ", "a");
         Add("integer-standalone-eof", "", "42", "42a", "42 ", " 42");
@@ -274,6 +345,12 @@ public class StreamingTests
         Add("scan-signature", liquidIdentifiers);
         Add("scan-tag", "", "{%", "{% a %}", "{%a-%}", "{% a b- -%}", "{% a 12 %}", "{% a 12-%}", "{% 1 %}", "{% a-b c--%}", "{% a");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
+        Add("js-string", "", "'\\$'", "'a\\\nb'", "'a\\\r\nb'", "'a\\\rb'", "'a\\\r", "'a\\\r\n", "'a\\\u2028b'", "'\\u{1F600}'", "'\\u{1F6", "'\\u{12g}'",
+            "'\\u{110000}'", "'\\101'", "'\\1'", "'\\12", "'\\1234'", "'\\08'", "'\\x41B'", "'\\x4'", "'\\x4", "'\\a\\8'", "'\\'a\\", "'\\'a\\$'", "\"\\\"\\u{41}\"", "'\\u0041'");
+        Add("sql-string", "", "'", "''", "'''", "''''", "'it''s'", "'it''", "'a\\'", "'a'b", "'a'''b'");
+        Add("python-string", "", "'\\d'", "'\\U0001F600'", "'\\U0001F6'", "'\\U0011FFFF'", "'\\x4'", "'\\101'", "'a\\\r\nb'", "'a\nb'");
+        Add("json-string", "", "\"\\/\"", "\"a\tb\"", "\"\\u004", "\"\\u0041\"", "\"\\'\"", "\"abc");
+        Add("js-pooled-strings", "", "'a\\\r\nb' 'a\\\nb' 'ab'", "'\\101' 'A' '\\x41'", "'\\u{1F600}' '\\u{1F600}'", "'\\$' '\\", "'unterminated");
         Add("nul-string", "", "\0", "\0abc\0", "\0abc", "\0a\\\0b\0", "x");
         Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\", "\\abc\\", "\\\\", "\\abc", "\\a\\\\b\\");
         Add("whitespace", "", " ", "  \n\t x", "x");
@@ -282,9 +359,15 @@ public class StreamingTests
         Add("textbefore-eof", "", "a", "abc", "abc-", "abc--", "--");
         Add("capture", "", "a", "a=", "a = 12", "a = 12 x", "a=x");
         Add("not", "", "a", "ab", "abc", "ac", "xab");
+        Add("peek", "", "ab", "abc", "ab abc a", "  ab  x ab", "a", "1");
+        Add("peek-value", "", "12", "  12", "12 3", "x");
         Add("followed", "", "f", "f(", "f (", "f x", "f");
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
+        Add("thentry", "", "a", "for", "  for  forx", "a for b", " forever for\n for1 1", "fo");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
+        Add("guarded-optional", "", "a", "a;", "a ;", "a ? b : c;", "a\n ?\n b :\n c ;", "a ? b ;", "a ? b : ;", "a ?? b;", "a  \n ", "a ?");
+        Add("guarded-loop", "", "}", " }", "let a; }", "let a;let b;}", "let a; le }", "let a; let }", "let a;\n\n }", "let a; x }", "let");
+        Add("guarded-separated", "", "a;", "a , b ;", "a,|b,c;", "a, ;", "a,| ;", "a ,", "a  ;", "a b");
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
         Add("pooled-strings", "", "a", "abc abc", "'abc' abc \"a\\nb\" 'a\\nb'", "abcdefghijklmnopqr abcdefghijklmnopqr x", "'unterminated");
         Add("text-ci-matched", "", "HELLO hello Hello HELLO", "FOR for hello", "HeLLo FoR fore");
@@ -294,6 +377,11 @@ public class StreamingTests
         Add("state", "", "a", "a {b} c", "{!} a", "{ a { b { c } } d }", "{ a {! } b", "{a", "{ {! a", "a { b } } c", "{" + string.Join(" ", Enumerable.Range(0, 40).Select(static i => "x" + i)) + " {!} {y}}");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+        Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
+        Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
+        Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");
+        Add("hinted-comments", "", "a", "a.b", "a // b\n.c", "a/* b */(c", "a /* b", "a / b", "a/b", "a*/", "// only", "a.\n/", "a/\n/c", "a //");
+        Add("hinted-context", "", "1", "1#2 ##3", "12#", "#", "1 2x", "x", "##12 34#");
         string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];
         Add("ascii-separated", separated);
         Add("ascii-context", separated);
@@ -312,9 +400,13 @@ public class StreamingTests
         Add("position-pattern", "", "ab\rc", "ab\r", "ab\r\n", "ab\n", "a\n\nb c", new string('a', 70) + "\r" + new string('b', 10) + "\n", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
         Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", "\n\n\nab c", new string('a', 70) + "\r\n" + new string('b', 70) + " x",
             new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x");
+        string[] lineStart = ["", "-->", "--> c", "x-->y", "x --> y", "x\n-->y", "x\n--> y\nz", "x\r\n--> y", "x\n\n-->", "a--\n-->", "a--\n>", "--", "x\n--", "abc\n-->\nghi-->jkl"];
+        Add("scan-line-start", lineStart);
+        Add("scan-line-start-literals", lineStart);
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
         Add("position-elseerror", "", "begin", "begin x = 1", "begin x = y", "begin\n", "begin\n x\n =\n 12", "begin\n\n x\n =\n y", "\n\nbegin\r\n  x =\n\n y",
             "begin\r\n" + new string(' ', 70) + "x\n" + new string(' ', 70) + "= z", "\n begin abc\n\n=\n\n\n", "begin 1");
+        Add("non-ascii-choice", "", "if", "if (é) ", "é!", "é!x", "( 中文 ( ℵ )", "€ if", "if #", "ab\u0080 é", "(\uffff");
         Add("position-backtrack", "", "abc", "abc\n =\n (", "abc\n =\n x", "a\r\n=\r\n(", "\n\n abc \n = x", "abc =", "abc\n\n", "1");
         Add("elseerror", "(\n1\n x", "( 12\n )", "\n(\n\n1 \n x", "(1\r\n\r\n");
         Add("integer-eof-error", " 42\n\n x", "\n\n42\n");
@@ -858,6 +950,22 @@ public class StreamingTests
         return expression;
     }
 
+    private static Parser<string> CreateConditionalWithLast()
+    {
+        var expression = Deferred<string>();
+        var assignment = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        assignment.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), static (a, b) => $"({a}||{b})"))
+            .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment, static (c, a, b) => $"({c}?{a}:{b})")
+            .RightAssociative((Terms.Char('='), static (a, b) => $"({a}={b})"));
+
+        expression.Parser = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => $"({a},{b})"));
+
+        return expression;
+    }
+
     private static Parser<StatementList> CreateSqlParser()
     {
         var method = typeof(SqlParser).GetMethod("CreateRuntimeParser", BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -1027,7 +1135,7 @@ public class StreamingTests
     /// <summary>
     /// Returns the text in chunks, optionally completing asynchronously.
     /// </summary>
-    private sealed class ChunkedReader : TextReader
+    internal sealed class ChunkedReader : TextReader
     {
         private readonly string _text;
         private readonly Func<int> _chunk;
