@@ -117,6 +117,16 @@ public static partial class PositionGrammars
     private static Parser<(int Start, int End)> BuildOffsetsSequence() =>
         Terms.Text("ab").And(Terms.Text("cd")).Then(static (context, start, end, _) => (start, end));
 
+    // A sequence ending with Not ends where the previous parser did
+    [GenerateParser(nameof(TryParseOffsetsNotLast))]
+    private static Parser<(int Start, int End)> BuildOffsetsNotLast() =>
+        Terms.Char('a').AndSkip(Not(Literals.Char('b'))).Then(static (context, start, end, _) => (start, end));
+
+    // Not reads nothing: its result is empty, where it was invoked
+    [GenerateParser(nameof(TryParseOffsetsNot))]
+    private static Parser<(int Start, int End)> BuildOffsetsNot() =>
+        Not(Terms.Char('b')).Then(static (context, start, end, _) => (start, end));
+
     [GenerateParser(nameof(TryParseOffsetsMixedChoice))]
     private static Parser<(int Start, int End)> BuildOffsetsMixedChoice() =>
         Terms.Text("ab").Or(Literals.Text("cd")).Then(static (context, start, end, _) => (start, end));

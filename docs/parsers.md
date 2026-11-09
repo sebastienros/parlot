@@ -1046,7 +1046,9 @@ null
 
 ### Not
 
-Succeeds if the parser is not matching.
+Succeeds if the parser is not matching. It never consumes any input: on success its value is `default` and its
+result is empty, starting and ending where `Not` was invoked, before any white space the parser would skip. A sequence
+ending with `Not`, like `keyword.AndSkip(Not(identifierPart))`, then ends where the previous parser did.
 
 ```c#
 Parser<T> Not<T>(Parser<T> parser)
