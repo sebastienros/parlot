@@ -1499,6 +1499,7 @@ added.
 > parsers, which succeeds with an empty span when there is nothing to skip. Like `Literals.WhiteSpace()`, the parser it
 > returns now fails then, without moving the cursor. Skipping white space, which `WithComments` does with it, ignores the
 > result.
+
 With these hints, the context only invokes the parser of the comments before white space and the chars the comments start
 with (see [WithWhiteSpaceParser](#withwhitespaceparser)), not before every token.
 
