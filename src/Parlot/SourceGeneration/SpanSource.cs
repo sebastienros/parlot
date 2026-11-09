@@ -210,7 +210,8 @@ internal sealed class SpanSourceWriter
         // The check of ParseContext.MaySkipWhiteSpace, with the constant mask of the default set first like SkipWhiteSpace.
         // There is no white space at the end of the span.
         BeginBlock($"if ({ctx}.WhiteSpaceParser is not null || ((uint){Pos} < (uint){Span}.Length && global::Parlot.Character.HasMask({Span}[{Pos}], (byte)global::Parlot.CharacterMask.WhiteSpaceOrNewLine) && global::Parlot.Character.HasMask({Span}[{Pos}], {ctx}._skipMask)))");
-        Add($"{Cursor}.ResetPosition({SpanStart} + {Pos});");
+        // Forward, to where the span was read up to: not a failure where the cursor was
+        Add($"{Cursor}.AdvanceTo({SpanStart} + {Pos});");
         Add($"{ctx}.SkipWhiteSpace();");
         Add($"{Pos} = {Cursor}.Offset - {SpanStart};");
         Add($"{Moved} = true;");
@@ -315,8 +316,8 @@ internal static class SpanSource
         }
         else
         {
-            // Skipping white space moved the cursor, which is moved from where it is
-            writer.Add($"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart} + {writer.Pos}); else {cursor}.AdvanceWithinBuffer({writer.Pos});");
+            // Skipping white space moved the cursor, which is moved forward from where it is
+            writer.Add($"if ({writer.Moved}) {cursor}.AdvanceTo({writer.SpanStart} + {writer.Pos}); else {cursor}.AdvanceWithinBuffer({writer.Pos});");
             writer.Add($"{result.SuccessVariable} = true;");
 
             if (fail.IsUsed)

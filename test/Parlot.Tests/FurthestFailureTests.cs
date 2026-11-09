@@ -254,6 +254,23 @@ public class FurthestFailureTests
     public void Not_Fails_At_What_Matched(string text, int offset) => AssertFurthest(Negative, text, offset);
 
     [Theory]
+    [InlineData("a from", 0)]
+    [InlineData("  a from", 2)]
+    [InlineData("  a  from", 2)]
+    [InlineData("\n a\n from", 2)]
+    public void Moving_Forward_In_A_Rejected_Value_Isnt_A_Failure(string text, int offset)
+    {
+        // The lookahead skips the white space after the first word, and the second word then moves the cursor over it,
+        // forward, without reading it again
+        var words = Terms.Identifier().WhenFollowedBy(Terms.Identifier()).And(Terms.Identifier());
+        AssertFurthest(words.When(static (_, _) => false).Eof(), text, offset);
+
+        // The cursor is moved forward to the end of the match that a selector keeps
+        var selected = Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")));
+        AssertFurthest(selected.When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Theory]
     [InlineData("1 + (2 + 3", 10)]
     [InlineData("((1)\n+\n(2 +\nx))", 12)]
     public void TextReader_Context_Reports_The_Furthest_Failure(string text, int offset) => AssertFurthest(Expression, text, offset);

@@ -258,6 +258,51 @@ public class FailureTests
         Assert.Equal(offset, failure.Offset);
     }
 
+    [Theory]
+    [InlineData("a from;", 0)]
+    [InlineData("  a from;", 2)]
+    [InlineData("  a  from;", 2)]
+    [InlineData("\n a\n from;", 2)]
+    [InlineData("  a  b,", 6)]
+    [InlineData("  a  ,", 5)]
+    public void Rejected_Value_Of_Several_Tokens_Fails_At_Its_Start(string text, int offset)
+    {
+        // The cursor moves forward over the white space between the words, which isn't a failure there
+        Assert.False(FailureGrammars.RejectedWords(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedWords(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.False(FailureGrammars.ConversionRejectedWords(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionRejectedWords(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedWords("  a  b ;", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("a from;", 0)]
+    [InlineData("  a from;", 2)]
+    [InlineData("\n a\n from;", 2)]
+    [InlineData("  a  fr,", 7)]
+    public void Rejected_Value_Ending_With_The_Longest_Match_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedLongest(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedLongest(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedLongest("  a  fr ;", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible
     private sealed class OneCharReader : TextReader
     {

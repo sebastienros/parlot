@@ -96,4 +96,22 @@ public static partial class FailureGrammars
     [GenerateParser(nameof(Negative))]
     public static Parser<string> BuildNegative() =>
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // A value of two words, read by moving the cursor forward over the white space between them, that the condition rejects
+    [GenerateParser(nameof(RejectedWords))]
+    public static Parser<string> BuildRejectedWords() =>
+        Terms.Identifier().And(Terms.Identifier()).When(static (_, value) => value.Item2.ToString() != "from")
+            .Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // The same words, rejected by a conversion
+    [GenerateParser(nameof(ConversionRejectedWords))]
+    public static Parser<string> BuildConversionRejectedWords() =>
+        Terms.Identifier().And(Terms.Identifier()).ThenTry(static value => (value.Item2.ToString() != "from", value.Item1.ToString()))
+            .AndSkip(Terms.Char(';')).Eof();
+
+    // A word and the longest of two texts, where the cursor is moved forward to the end of the one a selector keeps
+    [GenerateParser(nameof(RejectedLongest))]
+    public static Parser<string> BuildRejectedLongest() =>
+        Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")))
+            .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
 }

@@ -46,4 +46,13 @@ public static partial class FailureGrammars
 
     public static partial bool Negative(string text, out string value, out int failureOffset);
     public static partial bool Negative(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedWords(string text, out string value, out int failureOffset);
+    public static partial bool RejectedWords(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool ConversionRejectedWords(string text, out string value, out int failureOffset);
+    public static partial bool ConversionRejectedWords(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedLongest(string text, out string value, out int failureOffset);
+    public static partial bool RejectedLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }
