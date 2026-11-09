@@ -314,6 +314,44 @@ public class FurthestFailureTests
     public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start_After_Another_Alternative(string text, int offset) => AssertFurthest(ConversionRejectedAlternative, text, offset);
 
     [Theory]
+    [InlineData("  a  b", 2)]
+    [InlineData("  a b", 2)]
+    [InlineData("a  b", 0)]
+    [InlineData("\n a\n b", 2)]
+    public void Rejected_Value_Of_Several_Tokens_Fails_At_Its_Start(string text, int offset)
+    {
+        // The white space before the value isn't the last one that was skipped: it is read again
+        AssertFurthest(Terms.Identifier().And(Terms.Identifier()).When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Fact]
+    public void Rejected_Value_Fails_After_The_White_Space_Of_Its_Own_Parser()
+    {
+        // The white space where a parser is invoked can have been skipped by another one, here a lookahead which doesn't
+        // match. A parser which doesn't skip any reads its value from where it is invoked.
+        var whiteSpace = Not(Terms.Char('x')).SkipAnd(Literals.WhiteSpace());
+
+        AssertFurthest(whiteSpace.When(static (_, _) => false).Eof(), "  y", 0);
+        AssertFurthest(Terms.Identifier().WhenNotFollowedBy(whiteSpace).Eof(), "a  y", 1);
+        AssertFurthest(Not(whiteSpace).Eof(), "  y", 0);
+
+        // Whereas a parser which skips it reads its value after it, whoever skipped it first
+        AssertFurthest(Not(Terms.Char('x')).SkipAnd(Terms.Identifier().When(static (_, _) => false)).Eof(), "  y", 2);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("/* a */ from;", 8)]
+    [InlineData("  /* a */\n  from;", 12)]
+    [InlineData("/* a */ fromage,", 15)]
+    public void Rejected_Value_Fails_After_The_Comments_Of_A_White_Space_Parser(string text, int offset)
+    {
+        var comments = Capture(ZeroOrMany(Literals.WhiteSpace(includeNewLines: true).Or(Literals.Comments("/*", "*/"))));
+
+        AssertFurthest(Rejected.WithWhiteSpaceParser(comments), text, offset);
+    }
+
+    [Theory]
     [InlineData("abc((", 3)]
     [InlineData("abc  ((;", 5)]
     [InlineData("abc  (;", 5)]

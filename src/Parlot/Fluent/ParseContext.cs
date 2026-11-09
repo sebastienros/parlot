@@ -525,7 +525,10 @@ public class ParseContext
     /// tells about the input, at <paramref name="start"/> or after the white space there. <paramref name="recorded"/> is
     /// the failure recorded before the rejected text was read.
     /// </summary>
-    /// <remarks>Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it.</remarks>
+    /// <remarks>
+    /// Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it: it is left at
+    /// <paramref name="start"/>, or after the white space there when it had to be read again.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal void RecordRejected(int start, int recorded, bool skipWhiteSpace)
     {
@@ -533,12 +536,24 @@ public class ParseContext
         cursor.ResetPosition(start);
         cursor.RestoreRecordedFailure(recorded);
 
+        var valueStart = start;
+
         if (skipWhiteSpace)
         {
-            SkipWhiteSpace();
+            if (start == _cacheOffset)
+            {
+                // The white space at the start is the last one that was skipped, as before a single token: this is where
+                // SkipWhiteSpace() would move the cursor, for the caller to move it back
+                valueStart = _cacheEndOffset;
+            }
+            else
+            {
+                SkipWhiteSpace();
+                valueStart = cursor.Offset;
+            }
         }
 
-        cursor.RecordFailure(cursor.Offset);
+        cursor.RecordFailure(valueStart);
     }
 
     /// <summary>
