@@ -944,6 +944,19 @@ Assert.Equal('=', result.Item2);
 Assert.Equal(12, result.Item3);
 ```
 
+A sequence, including the ones of `AndSkip` and `SkipAnd`, starts where the first of its parsers which matched something
+does. A parser which matches nothing, like an `Optional`, a `ZeroOrMany` without elements or `Always`, is at the cursor,
+before the white space the next `Terms` parser skips, so the sequence starts after that white space. When none of its
+parsers matched something, the sequence starts where the first one does. Only the start changes, not the cursor:
+
+```c#
+var decorators = ZeroOrMany(Terms.Char('@').SkipAnd(Terms.Identifier()));
+var cls = decorators.And(Terms.Text("class")).Then((context, start, end, value) => start);
+
+cls.Parse("   class");    // 3, the start of "class"
+cls.Parse("   @a class"); // 3, the start of "@a"
+```
+
 ### AndSkip
 
 Behaves like [And](#And) but skips the later one's result.

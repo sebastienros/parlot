@@ -126,6 +126,7 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
         var cursorName = context.CursorName;
         string? startName = null;
         string? resetName = null;
+        string? sequenceSuccessName = null;
 
         if (_action3 != null)
         {
@@ -135,17 +136,28 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
             // which starts by skipping white space, like a choice of Terms parsers, then finds none.
             startName = $"start{context.NextNumber()}";
 
+            object content = _parser;
+
             if (_parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable })
             {
+                content = contentSourceable;
                 helperName = context.Helpers
                     .GetOrCreate(contentSourceable, helperKey, parsedTypeName, () => contentSourceable.GenerateSource(context))
                     .MethodName;
             }
 
-            if (_parser is ISeekable { SkipWhitespace: true })
+            // A sequence which can start by matching nothing starts where the content of its next part does, so it is
+            // emitted part by part, and gives back the white space skipped before a part when it fails
+            var sequenceSource = SequenceStartSource.Create(context, content);
+
+            if (sequenceSource != null || _parser is ISeekable { SkipWhitespace: true })
             {
                 resetName = $"reset{context.NextNumber()}";
                 result.Body.Add($"var {resetName} = {cursorName}.Offset;");
+            }
+
+            if (_parser is ISeekable { SkipWhitespace: true })
+            {
                 result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
                 result.Body.Add("{");
                 result.Body.Add($"    {ctx}.SkipWhiteSpace();");
@@ -153,9 +165,15 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
             }
 
             result.Body.Add($"var {startName} = {cursorName}.Offset;");
+
+            if (sequenceSource != null)
+            {
+                sequenceSuccessName = $"matched{context.NextNumber()}";
+                sequenceSource.Generate(result.Body, typeof(T), startName, sequenceSuccessName, $"{parsedName}Value");
+            }
         }
 
-        result.Body.Add($"if ({helperName}({ctx}, out {outTarget}))");
+        result.Body.Add(sequenceSuccessName != null ? $"if ({sequenceSuccessName})" : $"if ({helperName}({ctx}, out {outTarget}))");
         result.Body.Add("{");
 
         if (_action1 != null)

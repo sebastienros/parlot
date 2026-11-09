@@ -22,7 +22,7 @@ public class ParseWithoutValueTests
     private static readonly Parser<IReadOnlyList<char>> As = ZeroOrMany(Terms.Char('a'));
     private static readonly Parser<IReadOnlyList<char>> Bs = OneOrMany(Terms.Char('b'));
 
-    private static readonly string[] Inputs = ["", "a", "b", "c", "ab", "abc", "a b b c", " a a b c d", "bbc", "aabbcc", "cba"];
+    private static readonly string[] Inputs = ["", "a", "b", "c", "ab", "abc", "a b b c", " a a b c d", "bbc", "aabbcc", "cba", "  b c", "  c"];
 
     [Fact]
     public void ShouldInvokeTheOverride()

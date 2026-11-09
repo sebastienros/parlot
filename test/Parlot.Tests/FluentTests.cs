@@ -958,11 +958,12 @@ public class FluentTests
     }
 
     [Fact]
-    public void NotShouldReportItsPositionAsTheStartOfASequence()
+    public void SequenceStartingWithNotShouldStartAtItsFirstToken()
     {
+        // Not reads nothing, so the sequence starts where the next parser read something, after its white space
         var parser = Literals.Char('x').SkipAnd(Not(Terms.Char('b')).SkipAnd(Terms.Char('a')).Then(static (c, s, e, v) => $"[{s},{e}]"));
 
-        Assert.Equal("[1,3]", parser.Parse("x a"));
+        Assert.Equal("[2,3]", parser.Parse("x a"));
     }
 
     [Fact]

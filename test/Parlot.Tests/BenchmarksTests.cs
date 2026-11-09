@@ -45,6 +45,20 @@ public class BenchmarksTests
         }
     }
 
+    [Theory]
+    [InlineData("   class a", 7)]
+    [InlineData("  @a @b class a", 13)]
+    public void SequenceStartGrammars(string input, int length)
+    {
+        // The sequence starts at its first parser which matched something, after the white space
+        var benchmark = new SequenceStartBenchmarks { Input = input };
+        Assert.True(benchmark.Runtime());
+        Assert.True(benchmark.RuntimePlainSequence());
+        Assert.True(benchmark.Generated());
+        Assert.True(SequenceStartBenchmarks.TryParseClass(input, out var generated));
+        Assert.Equal(length, generated);
+    }
+
     [Fact]
     public void CommentsGrammar()
     {
