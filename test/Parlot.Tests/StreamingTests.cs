@@ -119,6 +119,8 @@ public class StreamingTests
             .Then(static t => t.Item1.ToString() + (t.Item2.HasValue ? $"?{t.Item2.Value.Item1}:{t.Item2.Value.Item2}" : "")).AndSkip(Terms.Char(';'))),
         ["guarded-loop"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Text("let").SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(';'))).AndSkip(Terms.Char('}'))),
         ["guarded-separated"] = new Grammar<IReadOnlyList<TextSpan>>(Separated(Terms.Char(',').AndSkip(Literals.Char('|').Optional()), Terms.Identifier()).AndSkip(Terms.Char(';'))),
+        // The first value can match without reading, before a separator (#503)
+        ["separated-empty-first"] = new Grammar<IReadOnlyList<string>>(Separated(Terms.Char('.'), Terms.Identifier().Then(static x => x.ToString()).Or(Always(""))).AndSkip(Terms.Char(';'))),
         ["list-eof"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).Eof()),
         // Nested lists of the same element type share the scratch stack of the list parsers
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
@@ -385,6 +387,7 @@ public class StreamingTests
         Add("guarded-optional", "", "a", "a;", "a ;", "a ? b : c;", "a\n ?\n b :\n c ;", "a ? b ;", "a ? b : ;", "a ?? b;", "a  \n ", "a ?");
         Add("guarded-loop", "", "}", " }", "let a; }", "let a;let b;}", "let a; le }", "let a; let }", "let a;\n\n }", "let a; x }", "let");
         Add("guarded-separated", "", "a;", "a , b ;", "a,|b,c;", "a, ;", "a,| ;", "a ,", "a  ;", "a b");
+        Add("separated-empty-first", "", ";", ".;", ".a.b;", " . . a . b ;", "a..b;", "a.;", "a.b", ".", "..", "a b;", "+");
         Add("list-eof", "", "a", "a b c", "a b 1", "a b ");
         Add("pooled-strings", "", "a", "abc abc", "'abc' abc \"a\\nb\" 'a\\nb'", "abcdefghijklmnopqr abcdefghijklmnopqr x", "'unterminated");
         Add("text-ci-matched", "", "HELLO hello Hello HELLO", "FOR for hello", "HeLLo FoR fore");

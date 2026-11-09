@@ -20,9 +20,12 @@ public class SecurityBoundaryTests
         Assert.Equal(3, OneOrMany(optionalValue).Parse("aaa")!.Count);
         Assert.False(OneOrMany(optionalValue).TryParse("", out _));
 
+        // The first value is read once, the next ones stop when neither the separator nor the value moves the cursor
         var optionalSeparator = ZeroOrOne(Literals.Char(','));
         Assert.Equal(3, Separated(optionalSeparator, optionalValue).Parse("aaa")!.Count);
-        Assert.False(Separated(optionalSeparator, optionalValue).TryParse("", out _));
+        Assert.Single(Separated(optionalSeparator, optionalValue).Parse("")!);
+        Assert.Single(Separated(optionalSeparator, optionalValue, min: 0).Parse("")!);
+        Assert.False(Separated(optionalSeparator, optionalValue, min: 2).TryParse("", out _));
     }
 
     [Fact]

@@ -1401,6 +1401,25 @@ of separators not followed by another value is left untouched for the next parse
 Negative bounds or a positive `max` less than `min` throw `ArgumentOutOfRangeException`
 when the parser is built. Attach `.Eof()` to reject any extra input.
 
+A value that matches without consuming input is a value, the first one too, like an
+empty part of `string.Split`. The list ends when a separator and the value after it
+both match without consuming input, as they would match again:
+
+```c#
+var dot = Terms.Char('.');
+var part = Terms.Identifier().Then(static x => x.ToString()).Or(Always(""));
+var parser = Separated(dot, part);
+
+parser.Parse("a..b");  // ["a", "", "b"]
+parser.Parse(".a.b");  // ["", "a", "b"]
+parser.Parse(".");     // ["", ""]
+parser.Parse("");      // [""]
+```
+
+With `removeEmptyEntries`, `allowLeadingSeparator` or `allowTrailingSeparator`, a value
+that matches without consuming input is an empty entry instead, wherever it is: a leading
+separator is then skipped without recording a value for the omitted part.
+
 ### Between
 
 Matches a parser when between two other ones.
