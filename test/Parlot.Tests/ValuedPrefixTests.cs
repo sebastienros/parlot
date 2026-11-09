@@ -306,7 +306,7 @@ public class ValuedPrefixTests
             .Unary((Terms.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"))
             .LeftAssociative((Terms.Char('*'), Binary("*")));
 
-        Assert.Equal("-@0(-@1((-@3(-@4(a))*-@9(b)))) [0..11] @12", Run(expression, "--(--a * -b)"));
+        Assert.Equal("-@0(-@1((-@3(-@4(a))*-@9(b)))) [0..12] @12", Run(expression, "--(--a * -b)"));
         Assert.Equal(0, ScratchCount<int>());
     }
 
