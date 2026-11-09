@@ -3,7 +3,6 @@ using Parlot.SourceGeneration;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -1756,7 +1755,15 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // With valued operators a single operator takes the same path: its value is read from the builder, after its operand
         void GenerateValuedChain()
         {
-            var valuedLevels = _prefixLevels.Where(level => _levels[level].PrefixValues is not null).ToArray();
+            var valuedLevels = new List<int>();
+
+            foreach (var level in _prefixLevels)
+            {
+                if (_levels[level].PrefixValues is not null)
+                {
+                    valuedLevels.Add(level);
+                }
+            }
 
             Line($"    var operators = new global::Parlot.Fluent.OperatorList(stackalloc int[{OperatorList.InlineCapacity.ToString(CultureInfo.InvariantCulture)}]);");
 
