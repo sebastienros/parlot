@@ -56,6 +56,24 @@ public class GeneratedParserTests
     }
 
     [Theory]
+    [InlineData("abc", true, "abc")]
+    [InlineData("\\u0061b\\u{63} d", true, "abc")]
+    [InlineData("\\u{1D4D0}x", true, "\U0001D4D0x")]
+    [InlineData("a\U0001D49Cb", true, "a\U0001D49Cb")]
+    [InlineData("a\\u00", true, "a")]
+    [InlineData("\\u00", false, null)]
+    [InlineData("\\u0031", false, null)]
+    [InlineData("", false, null)]
+    public void Identifier_Of_Code_Points_Reads_Escapes_And_Surrogate_Pairs(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseCodePointIdentifier(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseCodePointIdentifier(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("12", true, "12")]
     [InlineData("12345", true, "1234")]
     [InlineData("12a", true, "12")]

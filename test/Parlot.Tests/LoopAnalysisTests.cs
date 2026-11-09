@@ -78,6 +78,8 @@ public class LoopAnalysisTests
     [InlineData("if")]
     [InlineData("eof")]
     [InlineData("always")]
+    [InlineData("peek")]
+    [InlineData("peekNullable")]
     [InlineData("skipWhiteSpace")]
     [InlineData("withWhiteSpaceParser")]
     [InlineData("customEmptyLeaf")]
@@ -99,6 +101,8 @@ public class LoopAnalysisTests
             "oneOrMany" => OneOrMany(a.AndSkip(z)).Then(static x => string.Concat(x)),
             "not" => Not(Literals.Char('y')).SkipAnd(a),
             "whenFollowedBy" => Always("w").WhenFollowedBy(a),
+            "peek" => Peek(a).AndSkip(z),
+            "peekNullable" => Peek(Literals.Char('y')).SkipAnd(a),
             "whenNotFollowedBy" => Always("w").WhenNotFollowedBy(a).AndSkip(z),
             "else" => a.AndSkip(z).Else("e").AndSkip(z),
             "nested" => b,

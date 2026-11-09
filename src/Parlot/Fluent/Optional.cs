@@ -9,18 +9,25 @@ namespace Parlot.Fluent;
 /// <remarks>
 /// This parser will always succeed. If the inner parser fails, it will return an option without a value.
 /// </remarks>
-public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzable, ISpanSourceable, IReadsWith
 {
     private readonly Parser<T> _parser;
 
     // Whether the parser is invoked without its value when this one's isn't used
     private readonly bool _withoutValue;
 
+    // Whether the parser can start at the current position, so it isn't invoked when it can't
+    private readonly SeekGuard _guard;
+
     public Optional(Parser<T> parser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         _withoutValue = parser.CanParseWithoutValue;
+        _guard = new SeekGuard(parser);
     }
+
+    // It reads only where the parser does, see CustomWhiteSpace
+    object IReadsWith.Parser => _parser;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
@@ -37,7 +44,7 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzabl
 
         // The text is read again when the parser fails
         var pin = context.Pin();
-        var success = _parser.Parse(context, ref parsed);
+        var success = _guard.CanStart(context) && _parser.Parse(context, ref parsed);
         context.Unpin(pin);
 
         if (success)
@@ -67,7 +74,7 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzabl
 
         // The text is read again when the parser fails
         var pin = context.Pin();
-        var success = _withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed);
+        var success = _guard.CanStart(context) && (_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed));
         context.Unpin(pin);
 
         if (success)
@@ -109,6 +116,9 @@ public sealed class Optional<T> : Parser<Option<T>>, ISourceable, ILoopAnalyzabl
         var helperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_Optional", innerValueTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
+
+        // The parser isn't invoked when it can't start at the current position
+        helperName = SeekGuard.GetHelper(context, _parser, helperName, typeof(T));
 
         // if (Helper(context, out var innerValue))
         // {

@@ -20,6 +20,8 @@ public class ThenOffsetsTests
             Terms.Keyword("do"), Terms.Keyword("return"), Terms.Keyword("break"), Terms.Keyword("continue"))
             .Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsLargeChoice),
         ["sequence"] = (Terms.Text("ab").And(Terms.Text("cd")).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsSequence),
+        ["not-last"] = (Terms.Char('a').AndSkip(Not(Literals.Char('b'))).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsNotLast),
+        ["not"] = (Not(Terms.Char('b')).Then(static (context, start, end, _) => (start, end)), PositionGrammars.TryParseOffsetsNot),
     };
 
     [Theory]
@@ -33,6 +35,12 @@ public class ThenOffsetsTests
     [InlineData("sequence", "ab cd", 0, 5)]
     [InlineData("sequence", "  ab  cd", 2, 8)]
     [InlineData("sequence", "  ab  x", -1, 0)]
+    [InlineData("not-last", " a c", 1, 2)]
+    [InlineData("not-last", " a", 1, 2)]
+    [InlineData("not-last", " ab", -1, 0)]
+    [InlineData("not", " c", 0, 0)]
+    [InlineData("not", "", 0, 0)]
+    [InlineData("not", " b", -1, 0)]
     public void Generated_Callback_Receives_The_Start_Of_The_Content(string grammar, string input, int start, int end)
     {
         var (runtime, generated) = Grammars[grammar];
@@ -72,6 +80,8 @@ public static partial class PositionGrammars
     public static partial bool TryParseOffsetsChoice(string text, out (int Start, int End) value);
     public static partial bool TryParseOffsetsLargeChoice(string text, out (int Start, int End) value);
     public static partial bool TryParseOffsetsSequence(string text, out (int Start, int End) value);
+    public static partial bool TryParseOffsetsNotLast(string text, out (int Start, int End) value);
+    public static partial bool TryParseOffsetsNot(string text, out (int Start, int End) value);
     public static partial bool TryParseOffsetsMixedChoice(string text, out (int Start, int End) value);
     public static partial bool TryParseOffsetsBacktrack(string text, out (int Start, int End) value);
 }

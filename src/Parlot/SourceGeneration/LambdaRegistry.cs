@@ -154,6 +154,11 @@ public sealed class LambdaRegistry
             return TryInvokeForPointer(scanner);
         }
 
+        if (@delegate is Fluent.TextScanner textScanner)
+        {
+            return TryInvokeForPointer(textScanner);
+        }
+
         try
         {
             var method = @delegate.Method;
@@ -199,6 +204,26 @@ public sealed class LambdaRegistry
         try
         {
             scanner(default);
+        }
+        catch
+        {
+            // Ignore exceptions from the original lambda body
+        }
+        finally
+        {
+            LambdaPointer.IsRegistering = wasRegistering;
+        }
+
+        return LambdaPointer.CurrentPointer;
+    }
+
+    private static int TryInvokeForPointer(Fluent.TextScanner scanner)
+    {
+        var wasRegistering = LambdaPointer.IsRegistering;
+        LambdaPointer.IsRegistering = true;
+        try
+        {
+            scanner(default, 0);
         }
         catch
         {

@@ -57,7 +57,7 @@ public class CommentsBenchmarks
 
         var json = JsonParser.Json.Parse(_json)!.ToString();
 
-        if (Json_Spaces().ToString() != json || Json_Comments().ToString() != json
+        if (Json_Default().ToString() != json || Json_Spaces().ToString() != json || Json_Comments().ToString() != json
             || Json_ComposedSpaces().ToString() != json || Json_ComposedComments().ToString() != json
             || Json_GeneratedComments().ToString() != json || Json_GeneratedComposedComments().ToString() != json)
         {
@@ -76,6 +76,10 @@ public class CommentsBenchmarks
 
     [Benchmark, BenchmarkCategory("Expression")]
     public Tests.Calc.Expression Expression_Comments() => _parser.Parse(new ParseContext(new Scanner(Comments)))!;
+
+    // The JSON without comments, with the default white space set and no white space parser
+    [Benchmark, BenchmarkCategory("Json")]
+    public IJson Json_Default() => JsonParser.Json.Parse(new ParseContext(new Scanner(_json)))!;
 
     [Benchmark(Baseline = true), BenchmarkCategory("Json")]
     public IJson Json_ComposedSpaces() => _composedJsonParser.Parse(new ParseContext(new Scanner(_json)))!;

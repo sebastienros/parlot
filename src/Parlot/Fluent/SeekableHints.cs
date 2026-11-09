@@ -80,6 +80,64 @@ internal static class SeekableHints
     }
 
     /// <summary>
+    /// The most non-ASCII chars a parser lists as the chars it can start with. A larger set is listed as
+    /// <see cref="OneOf{T}.NonAsciiSeekableChar"/>, so that each lookup table holding the parser doesn't build an entry for
+    /// each of its chars.
+    /// </summary>
+    public const int MaxNonAsciiChars = 64;
+
+    /// <summary>
+    /// Gets whether <paramref name="expectedChars"/> are all the chars a parser can start with, rather than declaring it can
+    /// start with any char, or with any non-ASCII char.
+    /// </summary>
+    public static bool IsExact(char[] expectedChars) =>
+        Array.IndexOf(expectedChars, OneOf<object>.OtherSeekableChar) < 0 && Array.IndexOf(expectedChars, OneOf<object>.NonAsciiSeekableChar) < 0;
+
+    /// <summary>
+    /// Gets the chars a parser declares it can start with: <paramref name="chars"/> once each, or, when they hold more than
+    /// <see cref="MaxNonAsciiChars"/> non-ASCII chars, their ASCII chars and <see cref="OneOf{T}.NonAsciiSeekableChar"/>.
+    /// </summary>
+    public static char[] ExpectedChars(ReadOnlySpan<char> chars)
+    {
+        var ascii = new List<char>();
+        var nonAscii = new HashSet<char>();
+
+        foreach (var c in chars)
+        {
+            if (c < 0x80)
+            {
+                if (!ascii.Contains(c))
+                {
+                    ascii.Add(c);
+                }
+            }
+            else
+            {
+                nonAscii.Add(c);
+            }
+        }
+
+        if (nonAscii.Count > MaxNonAsciiChars)
+        {
+            ascii.Add(OneOf<object>.NonAsciiSeekableChar);
+            return ascii.ToArray();
+        }
+
+        // The chars keep their order, like before they were compacted
+        var result = new List<char>(ascii.Count + nonAscii.Count);
+
+        foreach (var c in chars)
+        {
+            if (!result.Contains(c))
+            {
+                result.Add(c);
+            }
+        }
+
+        return result.ToArray();
+    }
+
+    /// <summary>
     /// Gets the prefixes a parser forwards from the parser which reads first, see <see cref="ISeekablePrefixes"/>.
     /// </summary>
     public static string[]? Prefixes(object parser) => parser is ISeekablePrefixes seekable ? seekable.ExpectedPrefixes : null;
@@ -97,7 +155,7 @@ internal static class SeekableHints
         var result = new List<string>();
 
         if (parser is ISeekable { CanSeek: true } seekable
-            && Array.IndexOf(seekable.ExpectedChars, OneOf<object>.OtherSeekableChar) < 0
+            && IsExact(seekable.ExpectedChars)
             && Prefixes(parser) is { } prefixes)
         {
             foreach (var prefix in prefixes)
