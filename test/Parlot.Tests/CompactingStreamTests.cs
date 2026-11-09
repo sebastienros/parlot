@@ -196,6 +196,23 @@ public class CompactingStreamTests
         Assert.Equal(text, parser.Parse(new ChunkedReader(text, 1), new StreamParseOptions { BufferSize = 1 }).ToString());
     }
 
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 3)]
+    [InlineData(7, 5)]
+    public void StringEscapesSplitByRefillsAreDecoded(int chunk, int bufferSize)
+    {
+        // Every split of the escape sequences lands at the end of a window with one of the chunk sizes
+        var parser = ZeroOrMany(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript).ToPooledString()).Eof();
+        var text = string.Concat(Enumerable.Repeat(" 'a\\\r\nb\\\rc\\\nd\\101\\7\\u{1F600}\\x41\\$'", 20));
+        var expected = string.Concat(Enumerable.Repeat("abcdA\u0007\U0001F600A$", 20));
+
+        var result = parser.Parse(new ChunkedReader(text, chunk), new StreamParseOptions { BufferSize = bufferSize })!;
+
+        Assert.Equal(20, result.Count);
+        Assert.Equal(expected, string.Concat(result));
+    }
+
     [Fact]
     public void TextSpansRemainValid()
     {

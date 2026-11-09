@@ -82,6 +82,13 @@ public class StreamingTests
         // Pooled strings copy the text out of the window, and string literals decode into the pool
         ["pooled-strings"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Identifier().ToPooledString(), Terms.String().ToPooledString())).Eof()),
         ["text-ci-matched"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("hello", caseInsensitive: true, returnMatchedText: true), Terms.Keyword("for", caseInsensitive: true, returnMatchedText: true)))),
+        // Escapes that read optional chars, or a "\r\n" pair, can be split by the end of the window
+        ["js-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript)),
+        // A quote at the end of the window can be the first of a doubled one
+        ["sql-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.Single, StringEscapes.Sql)),
+        ["python-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.Python)),
+        ["json-string"] = new Grammar<TextSpan>(Terms.String(StringLiteralQuotes.Double, StringEscapes.Json)),
+        ["js-pooled-strings"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript).ToPooledString()).Eof()),
         ["backslash-string"] = new Grammar<TextSpan>(new StringLiteral('\\')),
         ["nul-string"] = new Grammar<TextSpan>(new StringLiteral('\0')),
         ["whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true)),
@@ -294,6 +301,12 @@ public class StreamingTests
         Add("scan-signature", liquidIdentifiers);
         Add("scan-tag", "", "{%", "{% a %}", "{%a-%}", "{% a b- -%}", "{% a 12 %}", "{% a 12-%}", "{% 1 %}", "{% a-b c--%}", "{% a");
         Add("string", "", "'", "'a", "'abc'", "\"a\\\"b\"", "'a\\", "'a\\'", "'\\x'", "x");
+        Add("js-string", "", "'\\$'", "'a\\\nb'", "'a\\\r\nb'", "'a\\\rb'", "'a\\\r", "'a\\\r\n", "'a\\\u2028b'", "'\\u{1F600}'", "'\\u{1F6", "'\\u{12g}'",
+            "'\\u{110000}'", "'\\101'", "'\\1'", "'\\12", "'\\1234'", "'\\08'", "'\\x41B'", "'\\x4'", "'\\x4", "'\\a\\8'", "'\\'a\\", "'\\'a\\$'", "\"\\\"\\u{41}\"", "'\\u0041'");
+        Add("sql-string", "", "'", "''", "'''", "''''", "'it''s'", "'it''", "'a\\'", "'a'b", "'a'''b'");
+        Add("python-string", "", "'\\d'", "'\\U0001F600'", "'\\U0001F6'", "'\\U0011FFFF'", "'\\x4'", "'\\101'", "'a\\\r\nb'", "'a\nb'");
+        Add("json-string", "", "\"\\/\"", "\"a\tb\"", "\"\\u004", "\"\\u0041\"", "\"\\'\"", "\"abc");
+        Add("js-pooled-strings", "", "'a\\\r\nb' 'a\\\nb' 'ab'", "'\\101' 'A' '\\x41'", "'\\u{1F600}' '\\u{1F600}'", "'\\$' '\\", "'unterminated");
         Add("nul-string", "", "\0", "\0abc\0", "\0abc", "\0a\\\0b\0", "x");
         Add("backslash-string", "", "\\", "\\n\\", "\\n\\rest", "\\n", "\\p\\", "\\u12\\", "\\abc\\", "\\\\", "\\abc", "\\a\\\\b\\");
         Add("whitespace", "", " ", "  \n\t x", "x");

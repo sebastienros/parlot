@@ -603,6 +603,7 @@ Matches a quoted string literal with escape sequences. Use this parser to parse 
 
 ```c#
 Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble)
+Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes)
 ```
 
 Usage:
@@ -620,6 +621,64 @@ Result:
 
 The value is a `TextSpan` of the input when the string has no escape sequence, and of a new string otherwise. To get
 strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool.
+
+#### Escape sequences
+
+By default (`StringEscapes.Default`), a string accepts `\0 \\ \a \b \f \n \r \t \v \' \"`, a backslash before its own
+quote, `\u` followed by four hex digits and `\x` followed by one to four hex digits. Any other escape sequence fails the
+string. Raw new lines are allowed.
+
+`StringEscapes` changes this for another language. These presets come with it:
+
+| Preset | Escape sequences |
+| --- | --- |
+| `Default` | Described above. |
+| `CSharp` | `Default`, plus `\e` and `\U` followed by eight hex digits. Raw new lines fail. |
+| `JavaScript` | `\' \" \\ \b \f \n \r \t \v \0`, `\uXXXX`, `\u{...}`, `\xXX`, legacy octal (`\101`), line continuations (a backslash before a new line is removed), and any other char after a backslash stands for itself (`\$` is `$`). Raw `\r` and `\n` fail. |
+| `Json` | `\" \\ \/ \b \f \n \r \t` and `\uXXXX`. Raw control chars (U+0000 to U+001F) fail. |
+| `Python` | `\' \" \\ \a \b \f \n \r \t \v`, octal, `\xXX`, `\uXXXX`, `\UXXXXXXXX` and line continuations. Other escape sequences are kept as is, backslash included (`\d` is `\d`). Raw `\r` and `\n` fail. |
+| `Java` | `\' \" \\ \b \f \n \r \t \s`, octal and `\uXXXX`. Raw `\r` and `\n` fail. |
+| `Sql` | A doubled quote is a quote (`'it''s'`), and a backslash is an ordinary char. |
+
+```c#
+var javaScript = Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript);
+javaScript.Parse(@"'\u{1F600} costs \$5'"); // "😀 costs $5"
+
+var sql = Terms.String(StringLiteralQuotes.Single, StringEscapes.Sql);
+sql.Parse("'it''s'"); // "it's"
+```
+
+For another language, combine the flags of its escape sequences. Whenever one of them adds escape sequences that start
+with a backslash, `\\` is a backslash too; with none of them, as in `StringEscapes.None` or `Sql`, a backslash is an
+ordinary char.
+
+| Flag | Effect |
+| --- | --- |
+| `EscapedQuote` | A backslash before the string's own quote, whichever it is, is that quote. |
+| `Quotes` | `\'` and `\"`, whichever quote delimits the string. |
+| `NewLineAndTab` | `\n`, `\r` and `\t`. |
+| `BackspaceAndFormFeed` | `\b` and `\f`. |
+| `VerticalTab`, `Alert`, `Null`, `Escape` | `\v`, `\a`, `\0` and `\e` (U+001B). |
+| `Slash`, `QuestionMark`, `Space` | `\/`, `\?` and `\s` (a space). |
+| `Unicode`, `LongUnicode` | `\u` followed by four hex digits, `\U` followed by eight. |
+| `BracedUnicode` | `\u{` hex digits `}`, a code point up to U+10FFFF. |
+| `Hex`, `TwoDigitHex` | `\x` followed by one to four hex digits, or by exactly two (`\x41B` is `AB`). |
+| `Octal` | `\0` to `\377`, as in JavaScript and Java. It takes precedence over `Null`. |
+| `AnyChar` | A backslash before any other char is that char. |
+| `KeepUnknown` | A backslash before any other char is kept, with the char. It takes precedence over `AnyChar`. |
+| `LineContinuation` | A backslash before `\n`, `\r\n`, `\r`, U+2028 or U+2029 is removed with it. |
+| `DoubledQuote` | Two quotes that delimit the string are one quote. |
+| `SingleLine` | A raw `\r` or `\n` fails the string. |
+| `NoControlChars` | A raw char from U+0000 to U+001F fails the string. |
+
+Code points above U+FFFF decode to surrogate pairs. A sequence a flag claims but that isn't complete, like `\u12` with
+`Unicode`, fails the string even with `AnyChar` or `KeepUnknown`. For example, Rust strings are
+`StringEscapes.EscapedQuote | StringEscapes.Quotes | StringEscapes.NewLineAndTab | StringEscapes.Null | StringEscapes.TwoDigitHex | StringEscapes.BracedUnicode | StringEscapes.LineContinuation`
+(except that Rust also skips the white space after a line continuation), and a JavaScript template literal, which can span
+lines, is `StringEscapes.JavaScript & ~StringEscapes.SingleLine` with `StringLiteralQuotes.Backtick` (without its `${}`
+substitutions). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
+own parser. To get the raw text of a literal as well, as a JavaScript AST does, read its offsets in a
+`Then(static (context, start, end, value) => ...)` callback, or wrap the string parser in `Capture()` for the raw text only.
 
 ### Identifier
 
