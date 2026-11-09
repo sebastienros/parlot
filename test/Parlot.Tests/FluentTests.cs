@@ -915,6 +915,54 @@ public class FluentTests
     }
 
     [Fact]
+    public void NotShouldSetAnEmptyResultWhereItIsInvoked()
+    {
+        var parser = Not(Terms.Char('b'));
+        var context = new ParseContext(new Scanner("x c"));
+        context.Scanner.Cursor.Advance();
+
+        // What a previous parser left in the result is replaced
+        var result = new ParseResult<char>(5, 7, 'z');
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1, result.Start);
+        Assert.Equal(1, result.End);
+        Assert.Equal(default, result.Value);
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void NotShouldRestoreTheCursorWhenItFails()
+    {
+        var parser = Not(Terms.Text("ab"));
+        var context = new ParseContext(new Scanner("x  ab"));
+        context.Scanner.Cursor.Advance();
+        var result = new ParseResult<string>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData(" a c", "[1,2]")]
+    [InlineData(" a", "[1,2]")]
+    [InlineData(" ab", null)]
+    public void SequenceEndingWithNotShouldEndWithThePreviousParser(string input, string expected)
+    {
+        var parser = Terms.Char('a').AndSkip(Not(Literals.Char('b'))).Then(static (c, s, e, v) => $"[{s},{e}]");
+
+        Assert.Equal(expected, parser.Parse(input));
+    }
+
+    [Fact]
+    public void NotShouldReportItsPositionAsTheStartOfASequence()
+    {
+        var parser = Literals.Char('x').SkipAnd(Not(Terms.Char('b')).SkipAnd(Terms.Char('a')).Then(static (c, s, e, v) => $"[{s},{e}]"));
+
+        Assert.Equal("[1,3]", parser.Parse("x a"));
+    }
+
+    [Fact]
     public void DiscardShouldReplaceValue()
     {
 #pragma warning disable CS0618 // Type or member is obsolete
