@@ -87,6 +87,9 @@ public class StreamingTests
         ["textbefore-eof"] = new Grammar<TextSpan>(AnyCharBefore(Literals.Text("--"))),
         ["capture"] = new Grammar<TextSpan>(Capture(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer()))),
         ["not"] = new Grammar<TextSpan>(Not(Literals.Text("ab")).SkipAnd(Literals.NonWhiteSpace())),
+        // A lookahead at the start of an alternative, the text it read is read again
+        ["peek"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("ab"), Peek(Terms.Identifier()).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
+        ["peek-value"] = new Grammar<(long, long)>(Peek(Terms.Integer()).And(Terms.Integer())),
         ["followed"] = new Grammar<TextSpan>(Terms.Identifier().WhenFollowedBy(Terms.Char('('))),
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
         ["separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer())),
@@ -257,6 +260,8 @@ public class StreamingTests
         Add("textbefore-eof", "", "a", "abc", "abc-", "abc--", "--");
         Add("capture", "", "a", "a=", "a = 12", "a = 12 x", "a=x");
         Add("not", "", "a", "ab", "abc", "ac", "xab");
+        Add("peek", "", "ab", "abc", "ab abc a", "  ab  x ab", "a", "1");
+        Add("peek-value", "", "12", "  12", "12 3", "x");
         Add("followed", "", "f", "f(", "f (", "f x", "f");
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");

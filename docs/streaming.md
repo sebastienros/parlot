@@ -63,7 +63,7 @@ The parsers which move back to read again keep their position with `ParseContext
 | Parser | Pinned text |
 |---|---|
 | `OneOf` (`Or`, `|`) | The start of the choice while alternatives remain to be tried. With a lookup table (see `ISeekable`), the next char selects the alternatives first, so an exclusive choice, like the JSON values, pins nothing. |
-| `Optional`, `ZeroOrOne`, `Else`, `Not`, `WhenFollowedBy`, `WhenNotFollowedBy` | Their start, while their parser runs. |
+| `Optional`, `ZeroOrOne`, `Else`, `Not`, `Peek`, `WhenFollowedBy`, `WhenNotFollowedBy` | Their start, while their parser runs. |
 | `ZeroOrMany`, `OneOrMany`, `Separated` | The start of the current element only: a root array or list streams. |
 | `LeftAssociative`, `RightAssociative` | The start of the current operator, which isn't part of the match when no operand follows it. |
 | `Unary` | Its start, while its operators are tried. |

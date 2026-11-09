@@ -55,6 +55,16 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void PeekGrammars()
+    {
+        var benchmark = new LookaheadBenchmarks();
+        Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Runtime());
+        Assert.Equal(150, benchmark.Peek_Runtime());
+        Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Generated());
+        Assert.Equal(150, benchmark.Peek_Generated());
+    }
+
+    [Fact]
     public void ParseWithoutValueGrammars()
     {
         var benchmark = new ParseWithoutValueBenchmarks();
