@@ -764,7 +764,7 @@ public class ValuedOperatorsTests
         {
             var expected = Run(chain, input);
 
-            if (expected.Contains('?'))
+            if (expected.IndexOf('?') >= 0)
             {
                 conditionals++;
             }
