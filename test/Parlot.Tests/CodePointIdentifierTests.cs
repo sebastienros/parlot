@@ -1,6 +1,7 @@
 using Parlot.Fluent;
 using System;
 using System.Globalization;
+using System.Linq;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -267,5 +268,56 @@ public class CodePointIdentifierTests
         JavaScript.Parse(context, ref result);
 
         Assert.False(context.Scanner.Cursor.HitEnd);
+    }
+
+    [Fact]
+    public void DeclaresTheAsciiStartCharsTheBackslashAndTheNonAsciiHint()
+    {
+        var seekable = Assert.IsAssignableFrom<Parlot.Rewriting.ISeekable>(JavaScript);
+
+        Assert.True(seekable.CanSeek);
+        Assert.False(seekable.SkipWhitespace);
+        Assert.Contains('a', seekable.ExpectedChars);
+        Assert.Contains('$', seekable.ExpectedChars);
+        Assert.Contains('_', seekable.ExpectedChars);
+        Assert.Contains('\\', seekable.ExpectedChars);
+        Assert.Contains(Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar, seekable.ExpectedChars);
+        Assert.DoesNotContain('1', seekable.ExpectedChars);
+        Assert.DoesNotContain(Parlot.Fluent.OneOf<TextSpan>.OtherSeekableChar, seekable.ExpectedChars);
+
+        // Without escape sequences, a backslash doesn't start one
+        var withoutEscapes = (Parlot.Rewriting.ISeekable)Literals.Identifier(IsJavaScriptStart, IsJavaScriptPart, IdentifierOptions.SurrogatePairs);
+        Assert.DoesNotContain('\\', withoutEscapes.ExpectedChars);
+    }
+
+    [Theory]
+    [InlineData("(a)", "(,a,)")]
+    [InlineData("é + 1", "é,+,1")]
+    [InlineData("\\u0061b", "\\u0061b")]
+    [InlineData("𝒜x (y)", "𝒜x,(,y,)")]
+    [InlineData("1a", "1,a")]
+    public void ChoicesSelectTheIdentifierFromItsHints(string text, string expected)
+    {
+        var identifier = Terms.Identifier(IsJavaScriptStart, IsJavaScriptPart, IdentifierOptions.JavaScript);
+        var token = OneOf(Terms.AnyOf("()+", 1, 1), Terms.Pattern(char.IsAsciiDigit).Lookup(true, "0123456789"), identifier);
+
+        // The choice has an exact lookup table, the identifier isn't tried before the other chars
+        Assert.DoesNotContain(Parlot.Fluent.OneOf<TextSpan>.OtherSeekableChar, ((Parlot.Rewriting.ISeekable)token).ExpectedChars);
+
+        var entered = 0;
+        var context = new ParseContext(new Scanner(text))
+        {
+            OnEnterParser = (parser, _) =>
+            {
+                if (parser.GetType().Name == "CodePointIdentifier")
+                {
+                    entered++;
+                }
+            },
+        };
+
+        Assert.True(ZeroOrMany(token).TryParse(context, out var tokens, out _));
+        Assert.Equal(expected, string.Join(",", tokens));
+        Assert.Equal(expected.Split(',').Length - expected.Split(',').Count(static x => x is "(" or ")" or "+" || char.IsAsciiDigit(x[0])), entered);
     }
 }

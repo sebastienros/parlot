@@ -807,8 +807,10 @@ The predicates are invoked for each ASCII char when the parser is built, which i
 give the same answer for a code point each time, and can't accept a new line. They are only invoked when parsing for
 the other chars, escape sequences and surrogate pairs.
 
-Since the chars the start predicate accepts can't be listed, the identifier has no hints for `OneOf`'s lookup table, like
-`Identifier()` with an `extraStart` predicate. `Lookup()` can give it the chars it starts with, when they are known.
+The identifier tells `OneOf`'s lookup table the ASCII chars the start predicate accepts, `\` when it reads escape
+sequences, and `OneOf<T>.NonAsciiSeekableChar`, since the non-ASCII chars the predicate accepts can't be listed: a choice
+holding it doesn't try it before `(` or a digit, and tries it before any char above ASCII. `Lookup()` can give it fewer
+chars, when they are known.
 
 ### Pattern
 

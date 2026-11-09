@@ -1,6 +1,7 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace Parlot.Fluent;
@@ -32,16 +33,40 @@ internal sealed class CodePointIdentifier : Parser<TextSpan>, ISeekable, ISource
         (_startLow, _startHigh) = Character.GetIdentifierAsciiMask(isStart, options);
         (_partLow, _partHigh) = Character.GetIdentifierAsciiMask(isPart, options);
 
+        ExpectedChars = GetExpectedChars(_startLow, _startHigh, options);
+
         Name = "Identifier";
     }
 
-    // The non-ASCII chars the start predicate accepts are unknown, so the parser has no hints, like an Identifier with an
-    // extra start predicate
-    public bool CanSeek => false;
+    // The ASCII chars of the start mask, the backslash of the escape sequences, and any char above ASCII: the non-ASCII
+    // chars the start predicate accepts are unknown, so a choice tries the identifier for each of them
+    public bool CanSeek => true;
 
-    public char[] ExpectedChars => [];
+    public char[] ExpectedChars { get; }
 
     public bool SkipWhitespace => false;
+
+    private static char[] GetExpectedChars(ulong low, ulong high, IdentifierOptions options)
+    {
+        var chars = new List<char>();
+
+        for (var c = 0; c < 128; c++)
+        {
+            if ((((c < 64 ? low : high) >> c) & 1) != 0)
+            {
+                chars.Add((char)c);
+            }
+        }
+
+        if ((options & (IdentifierOptions.UnicodeEscapes | IdentifierOptions.CodePointEscapes)) != 0)
+        {
+            chars.Add('\\');
+        }
+
+        chars.Add(OneOf<object>.NonAsciiSeekableChar);
+
+        return chars.ToArray();
+    }
 
     // An identifier reads at least one char
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
