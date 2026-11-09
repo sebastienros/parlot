@@ -194,6 +194,18 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData("Operands")]
+    [InlineData("Prefixes")]
+    public void ValuedPrefixGrammar(string input)
+    {
+        // The setup checks every parser against the runtime one which parses the prefix operators outside the table
+        var benchmark = new ValuedPrefixBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(benchmark.OutsideRuntime(), benchmark.TableGenerated());
+        Assert.NotEqual(-1, benchmark.TableGenerated());
+    }
+
+    [Theory]
     [InlineData(1, -42)]
     [InlineData(2, 43)]
     [InlineData(5, 1)]

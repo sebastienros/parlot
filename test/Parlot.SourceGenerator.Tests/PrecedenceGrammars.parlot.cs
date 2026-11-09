@@ -221,6 +221,61 @@ public static partial class PrecedenceGrammars
             .LeftAssociative(new[] { Literals.Text("+").Optional() }, static (a, b, _) => PrecedenceAst.Binary("+", a, b))
             .RightAssociative(new[] { Literals.Text("^").Optional() }, static (a, b, _) => PrecedenceAst.Binary("^", a, b)));
 
+    // Valued prefix levels mixed with a plain one and postfix levels, and factories receiving the context. The runtime
+    // parser is the same, see PrecedenceTests.
+    [GenerateParser(nameof(TryParseValuedPrefix))]
+    private static Parser<string> BuildValuedPrefix()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Terms.Text("++"), static (ParseContext context, string x, string op) => PrecedenceAst.Suffix(op, x)))
+            .Unary((Terms.Char('!'), static x => PrecedenceAst.Prefix("!", x)))
+            .Unary((Terms.Char('-'), static (string x, char op) => PrecedenceAst.Prefix(op.ToString(), x)), (Terms.Char('~'), static (string x, char op) => PrecedenceAst.Prefix(op.ToString(), x)))
+            .RightAssociative((Terms.Text("**"), static (ParseContext context, string a, string b) => PrecedenceAst.Binary("**", a, b)))
+            .Unary(
+                (Terms.Text("typeof").Then(static (_, start, _, _) => start), static (ParseContext context, string x, int start) => $"typeof@{start}({x})"),
+                (Terms.Text("void").Then(static (_, start, _, _) => start), static (ParseContext context, string x, int start) => $"void@{start}({x})"))
+            .LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/") }, static (ParseContext context, string a, string b, string op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => PrecedenceAst.Binary("+", a, b)), (Terms.Char('-'), static (a, b) => PrecedenceAst.Binary("-", a, b)))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (ParseContext context, string c, string a, string b) => PrecedenceAst.Conditional(c, a, b))
+            .Unary((Terms.Text("await").Then(static (_, start, _, _) => start), static (string x, int start) => $"await@{start}({x})"));
+
+        return WithRest(expression);
+    }
+
+    // Only prefix levels, after which no operator is looked up, one of them with values
+    [GenerateParser(nameof(TryParseValuedPrefixOnly))]
+    private static Parser<string> BuildValuedPrefixOnly()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString());
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Unary((Terms.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"))
+            .Unary((Terms.Text("not"), static x => PrecedenceAst.Prefix("not ", x)));
+
+        return WithRest(expression);
+    }
+
+    // A single valued prefix level whose operators are counted as levels of recursion
+    [GenerateParser(nameof(TryParseValuedPrefixLimited), MaxRecursionDepth = 3)]
+    private static Parser<string> BuildValuedPrefixLimited() =>
+        WithRest(Literals.Char('a').Then(static _ => "a").Operators()
+            .Unary((Literals.Char('-').Then(static (_, start, _, _) => start), static (string x, int start) => $"-@{start}({x})"))
+            .LeftAssociative((Literals.Char('*'), static (a, b) => PrecedenceAst.Binary("*", a, b))));
+
+    // A valued prefix level whose first operator can match without reading anything
+    [GenerateParser(nameof(TryParseValuedZeroWidthPrefix))]
+    private static Parser<string> BuildValuedZeroWidthPrefix() =>
+        WithRest(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)).Operators()
+            .Unary(
+                (ZeroOrMany(Literals.Char('-')).Then(static x => x.Count), static (string x, int count) => $"-{count}({x})"),
+                (Literals.Char('+').Then(static (_, start, _, _) => start), static (string x, int start) => $"+@{start}({x})")));
+
     private static Parser<string> WithRest(Parser<string> parser) =>
         parser.And(Literals.Pattern(static _ => true, minSize: 0)).Then(static x => x.Item1 + " | " + x.Item2.ToString());
 }

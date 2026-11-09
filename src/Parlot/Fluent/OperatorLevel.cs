@@ -40,6 +40,15 @@ internal sealed class OperatorLevel<T>
         Valued = valued;
     }
 
+    private OperatorLevel(int first, ValuedPrefix<T> valuedPrefix)
+    {
+        Kind = OperatorKind.Prefix;
+        First = first;
+        Operators = [];
+        Factories = [];
+        ValuedPrefix = valuedPrefix;
+    }
+
     public OperatorKind Kind { get; }
 
     /// <summary>
@@ -50,12 +59,19 @@ internal sealed class OperatorLevel<T>
     public Parser<int>[] Operators { get; }
 
     /// <summary>
+    /// The number of operators of the level which have an index in the table: the <see cref="Operators"/>, or the ones of
+    /// <see cref="ValuedPrefix"/>.
+    /// </summary>
+    public int Count => ValuedPrefix?.Count ?? Operators.Length;
+
+    /// <summary>
     /// <see cref="Func{T, TResult}"/> of the unary operators, <see cref="Func{T1, T2, TResult}"/> of the binary ones.
     /// </summary>
     public Delegate[] Factories { get; }
 
     /// <summary>
-    /// The choice of <see cref="Operators"/>, <see langword="null"/> for the levels of <see cref="Valued"/> operators.
+    /// The choice of <see cref="Operators"/>, <see langword="null"/> for the levels of <see cref="Valued"/> operators and
+    /// the <see cref="ValuedPrefix"/> ones.
     /// </summary>
     public OneOf<int>? Choice { get; }
 
@@ -63,6 +79,14 @@ internal sealed class OperatorLevel<T>
     /// The operators whose values are passed to their factories, which have no index in the table.
     /// </summary>
     public ValuedOperators<T>? Valued { get; }
+
+    /// <summary>
+    /// The prefix operators whose values are passed to their factories. Unlike the <see cref="Valued"/> ones, they have
+    /// indices in the table, and are matched with the operators of the other prefix levels.
+    /// </summary>
+    public ValuedPrefix<T>? ValuedPrefix { get; }
+
+    public static OperatorLevel<T> CreateValuedPrefix(ValuedPrefix<T> valuedPrefix) => new(valuedPrefix.First, valuedPrefix);
 
     public static OperatorLevel<T> CreateValued(OperatorKind kind, int first, ValuedOperators<T> valued) => new(kind, first, valued);
 
@@ -96,5 +120,5 @@ internal sealed class OperatorLevel<T>
     /// Gets the index of the first operator of a level added after <paramref name="levels"/>.
     /// </summary>
     public static int NextIndex(List<OperatorLevel<T>> levels) =>
-        levels.Count == 0 ? 0 : levels[levels.Count - 1].First + levels[levels.Count - 1].Operators.Length;
+        levels.Count == 0 ? 0 : levels[levels.Count - 1].First + levels[levels.Count - 1].Count;
 }
