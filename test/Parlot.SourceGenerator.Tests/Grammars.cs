@@ -87,6 +87,9 @@ public static partial class Grammars
     public static partial bool TryParseNotX(string text, out char value);
     public static partial bool TryParseHelloNotBang(string text, out string value);
     public static partial bool TryParseHelloBang(string text, out string value);
+    public static partial bool TryParsePeekValue(string text, out (long, long) value);
+    public static partial bool TryParsePeekSemicolon(string text, out string value);
+    public static partial bool TryParsePeekFails(string text, out string value);
     public static partial bool TryParseCountingOneOf(string text, out char value);
     public static partial bool TryParseLateDeferredOneOf(string text, out char value);
     public static partial bool TryParseSeekableWrappers(string text, out char value);

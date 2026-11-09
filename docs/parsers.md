@@ -246,11 +246,15 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
   the same results, spans and cursor positions. When `question`, `middle`, `colon` or the last operand doesn't match,
   nothing is read and the looser levels are tried at the position of `question`: a `?` doesn't need to exclude the `??`
   of a looser level.
-- The table looks up the operator following an operand through a single choice of the operators up to the next level
-  of valued operators, which starts with a check of the first chars of these: when the next char can start one of them,
-  the level that applies them parses them and passes their values to the factories right away, otherwise the looser
-  levels are tried in the same choice. An operator is parsed only once at a position, even when it parses an expression,
-  like an index or the middle of a conditional, and the values are never kept for a looser level.
+- The table looks up the operator following an operand through a single choice of all its operators, in which each level
+  of valued operators is a check of the first chars of these: when the next char can start one of them, the level that
+  applies them parses them and passes their values to the factories right away, otherwise the looser levels are tried in
+  the same choice. An operator is parsed only once at a position, even when it parses an expression, like an index or the
+  middle of a conditional, and the values are never kept for a looser level. A table of valued levels, like a level per
+  precedence of binary operators with a single factory receiving the operator, costs a single choice after an operand,
+  like the same table with a factory per operator. When the next char can start an operator of a valued level that
+  doesn't match, another choice follows, from the next level: with a valued `**` level tighter than a `*` level,
+  `a * b` probes the `**` level, which doesn't match, then looks up the `*` from the next level.
 
 ## Terms and Literals
 
@@ -623,6 +627,48 @@ Result:
 slice_text
 ```
 
+#### Code points, escape sequences and surrogate pairs
+
+The overload taking code point predicates matches identifiers of any Unicode chars, like those of JavaScript, Java,
+C# or Python. The predicates define the whole sets, and `IdentifierOptions` tells what else is a char:
+
+```c#
+Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options)
+```
+
+| Option | Accepts |
+|---|---|
+| `UnicodeEscapes` | `\uXXXX`, four hexadecimal digits (JavaScript, Java, C#) |
+| `CodePointEscapes` | `\u{X...}`, up to `10FFFF` (JavaScript) |
+| `SurrogatePairs` | chars outside the Basic Multilingual Plane, like `𝒜` (U+1D49C); a lone surrogate is never a char |
+| `JavaScript` | all of the above |
+
+An escape sequence or a surrogate pair is accepted when the predicate accepts the code point it stands for: `1`
+(`1`) can follow the start of an identifier but can't start one. An escape sequence which isn't valid, or whose code
+point isn't accepted, ends the identifier, like any char it doesn't accept. Without `SurrogatePairs`, each surrogate is
+given to the predicates as a code point.
+
+The value is the text of the identifier, escape sequences included. `Character.DecodeIdentifier()` returns the name,
+without allocating when there are no escape sequences:
+
+```c#
+// Mathematical letters stand for the letters outside the BMP here
+static bool IsStart(int c) => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF);
+static bool IsPart(int c) => IsStart(c) || c is 0x200C or 0x200D || (c < 0x10000 && char.IsDigit((char)c));
+
+var identifier = Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript);
+var name = identifier.Then(static x => Character.DecodeIdentifier(x).ToString());
+
+name.Parse(@"ab\u{63}"); // "abc"
+```
+
+The predicates are invoked for each ASCII char when the parser is built, which is then tested with bit masks: they must
+give the same answer for a code point each time, and can't accept a new line. They are only invoked when parsing for
+the other chars, escape sequences and surrogate pairs.
+
+Since the chars the start predicate accepts can't be listed, the identifier has no hints for `OneOf`'s lookup table, like
+`Identifier()` with an `extraStart` predicate. `Lookup()` can give it the chars it starts with, when they are known.
+
 ### Pattern
 
 Matches a consecutive characters with a specific predicate, optionally defining a minimum and maximum size.
@@ -724,6 +770,50 @@ page-title
 Source generated parsers call the scanner directly. It must be a method group or a lambda that captures nothing,
 not even the factory's parameters (`PARLOT015`, `PARLOT021`). At runtime a delegate to a static method goes through a thunk; a `static` lambda calling
 it is slightly faster.
+
+#### Text before the token
+
+A `TextScanner` also gets the text before its token, to match only at the start of the input or of a line, or after
+some char:
+
+```c#
+delegate int TextScanner(ReadOnlySpan<char> text, int position)
+
+Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default)
+```
+
+The token starts at `text[position]`, and the return value is the one of a `SpanScanner` with `span` being
+`text.Slice(position)`. When parsing a `string`, `text` is the whole input and `position` the offset of the cursor. When
+parsing a stream, the text before the token may be partial: `text` starts with the char before `position`, or earlier,
+and `position` is `0` only at the start of the input. `ParseManyAsync` parses each value as its own input, so `position`
+is `0` at the start of each value. With `Terms.Scan`, the white space skipped before the token is part of the text before it.
+
+Usage, the HTML-like close comment of JavaScript (Annex B), a comment only at the start of the input or of a line:
+`x-->y` is `x-- > y`.
+
+```c#
+static int HtmlCloseComment(ReadOnlySpan<char> text, int position)
+{
+    var span = text.Slice(position);
+
+    if (!span.StartsWith("-->"))
+    {
+        // More text could complete a "-->"
+        return span.Length < 3 && "-->".AsSpan().StartsWith(span) ? -1 : 0;
+    }
+
+    if (position > 0 && text[position - 1] is not ('\n' or '\r'))
+    {
+        return 0;
+    }
+
+    // Up to the end of the line
+    var end = span.Slice(3).IndexOfAny('\n', '\r');
+    return end < 0 ? span.Length : 3 + end;
+}
+
+var comment = Literals.Scan(HtmlCloseComment, "-");
+```
 
 ### AnyOf
 
@@ -997,6 +1087,10 @@ parser.Parse(""); // HasValue -> false
 
 Use the `OrSome<T>()` method to provide a default value if the `Option<T>` instance has no value.
 
+When the parser tells the chars it can start with, like a sequence starting with a text, it isn't invoked when the next
+char (after the white space it skips) can't start it. `ZeroOrOne`, `ZeroOrMany`, `OneOrMany` and the separator of
+`Separated` do the same, see [Lookup tables](writing.md#lookup-tables).
+
 ### ZeroOrMany
 
 Executes a parser as long as it's successful. The result is a list of all individual results. The method can also be post-fixed. An optional `max` limits the number of matches; `0` (the default) means unlimited.
@@ -1050,7 +1144,9 @@ null
 
 ### Not
 
-Succeeds if the parser is not matching.
+Succeeds if the parser is not matching. It never consumes any input: on success its value is `default` and its
+result is empty, starting and ending where `Not` was invoked, before any white space the parser would skip. A sequence
+ending with `Not`, like `keyword.AndSkip(Not(identifierPart))`, then ends where the previous parser did.
 
 ```c#
 Parser<T> Not<T>(Parser<T> parser)
@@ -1070,6 +1166,41 @@ Result:
 hello // failure
 null // success
 ```
+
+### Peek
+
+Succeeds with the value of a parser when it matches, without consuming any input. This is the positive lookahead
+(PEG `&p`), the counterpart of [Not](#not). Unlike [WhenFollowedBy](#whenfollowedby), it doesn't need a parser before it,
+so it can start an alternative.
+
+```c#
+Parser<T> Peek<T>(Parser<T> parser)
+```
+
+Usage:
+
+```c#
+// An automatic semicolon: a ';', or nothing before a '}'
+var semicolon = OneOf(
+    Terms.Char(';').Then(static _ => true),
+    Peek(Terms.Char('}')).Then(static _ => false));
+
+var parser = Peek(Terms.Integer()).And(Terms.Integer());
+parser.Parse("42");
+parser.Parse("x");
+```
+
+Result:
+
+```
+(42, 42)
+failure
+```
+
+The result starts and ends where the parser was invoked. When the parser fails, `Peek` fails and the cursor is where it
+was. `Peek` tells the chars its parser can start with, so a choice only tries it for these chars. In a choice whose
+alternatives all skip white space, like `semicolon` above, the choice skips the white space once before trying them, so
+the cursor is after the white space when `Peek` succeeds there.
 
 ## Coordination parsers
 
@@ -1224,6 +1355,18 @@ outer.Parse("a.b-c");  // Inner uses '.', outer uses '-' as whitespace
 
 > Note: The custom whitespace parser must return a `TextSpan`. Use `Capture()` to wrap parsers that don't return `TextSpan`.
 
+The parsers that skip white space invoke the custom parser only before the chars it can start with, which it tells with its
+`ISeekable` hints, and at the end of the text, where a stream tells whether more text follows. Before a `.`, a `(` or an
+identifier, a parser of white space and comments isn't invoked at all. A parser that can succeed without reading anything has no
+hints, but `Capture`, `ZeroOrMany`, `ZeroOrOne` and `Optional` are looked through: `Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(),
+Literals.Comments("//"))))`, the parser `WithComments` builds, is invoked only before white space and `/`. A parser that can start
+with any char (one of the alternatives of its choice doesn't tell its chars, like `Literals.Pattern()`), or skips white space
+itself, is invoked before every token. The same applies to `ParseContext.WhiteSpaceParser`.
+
+Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
+grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still
+invokes it before each token.
+
 ### WithWhiteSpaceSet
 
 Selects the chars that are white space for the inner parser, then restores the previous set. It applies to every `Terms` parser,
@@ -1286,7 +1429,8 @@ New lines follow `UseNewLines` as with the default set: when it is `true` the `T
 `Literals.WhiteSpace(includeNewLines: true)` and `NonWhiteSpace(includeNewLines: true)` include the new lines of the set.
 
 Unlike a `WithWhiteSpaceParser` that would match the same chars, a set keeps the white space fast path: skipping is still one
-table lookup per char, and `OneOf` still skips white space once for all its alternatives. A `WhiteSpaceParser`, when one is set,
+table lookup per char, and `OneOf` still skips white space once for all its alternatives. A white space parser is only invoked
+before the chars it can start with, but each invocation costs more than a table lookup. A `WhiteSpaceParser`, when one is set,
 is used instead of the set to skip white space, but the `Literals.WhiteSpace()` it contains reads the set. To skip ASCII white
 space and comments:
 
@@ -1336,6 +1480,10 @@ parser.Parse("hello -- comment\r\n world");
 parser.Parse("hello # comment\n world");
 parser.Parse("hello /* multiline\n comment\n */ world");
 ```
+
+The parser of the comments is only invoked before white space and the chars the comments start with. On the JSON of
+`CommentsBenchmarks`, indented with spaces and new lines, `WithComments` adds 30% to the parse time of the default white space
+set, down from 54% to 70% when it was invoked before every token.
 
 ### Deferred
 
@@ -1821,6 +1969,12 @@ Parser<T> Lookup(params ISeekable[] parsers)
 ```
 
 The hints taken from other parsers are only used when every one of them can seek and they all skip white space the same way. Otherwise the resulting parser declares that it can start with any char, like the original one.
+
+A parser that can start with any non-ASCII char lists its ASCII chars and `OneOf<T>.NonAsciiSeekableChar`, so that the choices which hold it don't build an entry for each non-ASCII char. More than 64 non-ASCII chars are listed this way:
+
+```c#
+var identifier = Literals.Pattern(char.IsLetter).Lookup(false, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" + OneOf<TextSpan>.NonAsciiSeekableChar);
+```
 
 ## Other parsers
 

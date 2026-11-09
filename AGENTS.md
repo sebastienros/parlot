@@ -82,7 +82,9 @@ type implements each of these that applies:
 - `ISeekable` (`Parlot.Rewriting`): the first chars that can match, so `OneOf` builds a char lookup table, skips
   branches and hoists the whitespace skip. A parser that matches a fixed ordinal text also implements the internal
   `ISeekablePrefixes`; one that copies the hints of the parser it reads first forwards them with
-  `SeekableHints.Prefixes` (`docs/keyword-lookups.md`).
+  `SeekableHints.Prefixes` (`docs/keyword-lookups.md`). A wrapper that reads only where the parser it invokes first does
+  (`Capture`, `ZeroOrMany`, `Optional`) implements the internal `IReadsWith`, which
+  `CustomWhiteSpace` looks through to invoke a white space parser only before its chars.
 - A parser that takes its hints from the parsers it starts with reads them when they are asked for, through the
   internal `ForwardedHints`, never in its constructor: those can be `Deferred` parsers set later, or choices whose table
   is only complete once the grammar is. A parser has no hints when it can succeed without reading, or when skipping it

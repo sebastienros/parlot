@@ -187,9 +187,29 @@ To be able to take advantage of this optimization, a parser type can implement `
 
 The expected chars have to include every char the parser can start with, since a parser is not invoked for any other one. They are computed when the parser is built, so they can't depend on something that is only known when it parses, like the current culture. A parser which can't tell sets `CanSeek` to `false`: a text compared with `StringComparison.CurrentCultureIgnoreCase` does.
 
+A parser that can start with many non-ASCII chars, like an identifier that starts with any Unicode letter, lists its ASCII
+chars and `OneOf<T>.NonAsciiSeekableChar` (U+FFFF) rather than each of the non-ASCII ones. A choice then keeps an exact
+entry for each ASCII char, and invokes the parser for every non-ASCII char, in the order of the alternatives, without
+building an entry for each of them (a table of the ~50,000 letters of the BMP took 23 ms and 27 MB for each choice).
+The choice lists the char too, so the choices that hold it forward the hint. `Identifier`, `Scan`, `AnyOf` and `Lookup`
+list it themselves when their start chars hold more than 64 non-ASCII chars, and an `Identifier` built from
+`SearchValues` finds its start chars from them. `OneOf<T>.OtherSeekableChar` (`'\0'`) is the hint of a parser that can
+start with any char.
+
 A `Deferred` parser reads the hints from its `Parser` whenever they are asked for, so they are known once the grammar is complete. So do the parsers that take their hints from the parsers they start with, like sequences, `Then`, `Between`, `If`, and the operator parsers `Unary`, `LeftAssociative` and `RightAssociative`: a sequence built before the `Deferred` it starts with is set tells its chars once the grammar is complete. A `OneOf` which held an alternative that couldn't tell when it was built, a `Deferred` set later or another `OneOf` holding one, builds its table again from the current hints the first time it parses (once, under a lock shared by every parser), along with the choices its alternatives start with. A `Deferred` that reaches itself while its hints are read reports `CanSeek == false`, so a left-recursive alternative is tried for any char. The source generator runs the factory to completion before emitting, so generated choices use the same table.
 
 `ElseError` doesn't implement `ISeekable`: a choice skipping it for a char its parser doesn't start with would fail where it reports an error.
+
+The parsers which may not invoke their parser use the same hints: `Optional`, `ZeroOrOne`, `ZeroOrMany`, `OneOrMany` (after
+its first element) and the separator of `Separated` don't invoke a parser when the char after the white space it skips
+isn't one of its expected chars. They succeed with no value, stop the loop, or end the list, with the cursor where it was,
+exactly as if the parser had failed on its first char. For an optional sequence, like the conditional tail of an expression
+`'?' expression ':' expression`, this saves entering each level of the sequence before its first literal fails, and makes
+the `OneOf(tail).Optional()` workaround unnecessary. The hints are read the first time the parser is invoked, once the
+grammar is complete, and kept like the lookup table of a choice. A parser without usable hints (`CanSeek == false`, or a
+choice that can start with any char) is always invoked, and so is a parser that reads the cursor itself, like a literal, or a
+`OneOf`: they test the char as fast, and the guard would only skip the white space a second time when they match. Generated parsers test the char the same way before calling the
+parser's method, unless it is generated as span code, which already reads the first char inline.
 
 Parlot's ordinal text and keyword parsers, and the parsers that start with one, also tell choices their whole text, so
 that a choice can skip the alternatives that share a first char with the input but not the rest of their text. A custom

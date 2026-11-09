@@ -22,6 +22,10 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
     private const int NotReentrant = 1;
     private const int Reentrant = 2;
 
+    // The white space parser with the chars it can start with, which need the grammar to be complete: unknown until the first
+    // parse. Two parses can create it, they get the same instance.
+    private CustomWhiteSpace? _customWhiteSpace;
+
     public WithWhiteSpaceParser(Parser<T> parser, Parser<TextSpan> whiteSpaceParser)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
@@ -47,13 +51,13 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
         context.EnterParser(this);
 
         // Save the current whitespace parser
-        var previousWhiteSpaceParser = context.WhiteSpaceParser;
+        var previousWhiteSpace = context.CustomWhiteSpace;
         var previousReentrant = context.HasReentrantWhiteSpaceParser;
 
         try
         {
             // Set the custom whitespace parser
-            context.SetWhiteSpaceParser(_whiteSpaceParser, IsWhiteSpaceParserReentrant());
+            context.SetWhiteSpaceParser(GetCustomWhiteSpace(), IsWhiteSpaceParserReentrant());
 
             // Parse with the custom whitespace parser
             var success = _parser.Parse(context, ref result);
@@ -64,7 +68,7 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
         finally
         {
             // Restore the previous whitespace parser
-            context.SetWhiteSpaceParser(previousWhiteSpaceParser, previousReentrant);
+            context.SetWhiteSpaceParser(previousWhiteSpace, previousReentrant);
         }
     }
 
@@ -76,13 +80,13 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
         context.EnterParser(this);
 
         // Save the current whitespace parser
-        var previousWhiteSpaceParser = context.WhiteSpaceParser;
+        var previousWhiteSpace = context.CustomWhiteSpace;
         var previousReentrant = context.HasReentrantWhiteSpaceParser;
 
         try
         {
             // Set the custom whitespace parser
-            context.SetWhiteSpaceParser(_whiteSpaceParser, IsWhiteSpaceParserReentrant());
+            context.SetWhiteSpaceParser(GetCustomWhiteSpace(), IsWhiteSpaceParserReentrant());
 
             // Parse with the custom whitespace parser
             var success = _withoutValue ? _parser.ParseWithoutValue(context, ref result) : _parser.Parse(context, ref result);
@@ -93,7 +97,7 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
         finally
         {
             // Restore the previous whitespace parser
-            context.SetWhiteSpaceParser(previousWhiteSpaceParser, previousReentrant);
+            context.SetWhiteSpaceParser(previousWhiteSpace, previousReentrant);
         }
     }
 
@@ -110,6 +114,8 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
 
         return reentrant == Reentrant;
     }
+
+    private CustomWhiteSpace GetCustomWhiteSpace() => _customWhiteSpace ??= CustomWhiteSpace.Of(_whiteSpaceParser)!;
 
     // The white space parser is invoked by the parsers that skip white space, see LoopAnalysis.CanReachDeferred()
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);

@@ -44,6 +44,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     // The segment of each level. A level of valued operators starts a segment.
     private readonly Segment[] _segments;
 
+    // The probe of each level of valued operators, which the lookups try in the order of the levels
+    private readonly ValuedProbe?[] _probes;
+
     // The only segment of a table without valued operators, or null
     private readonly Segment? _plainSegment;
 
@@ -79,6 +82,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         var prefixLevels = new List<int>();
         _segments = new Segment[levels.Length];
+        _probes = new ValuedProbe?[levels.Length];
         Segment? segment = null;
 
         // The parser starts with a prefix operator or an operand
@@ -98,6 +102,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
                 segment = new Segment { Valued = level, End = levels.Length };
                 _segments[level] = segment;
+                _probes[level] = new ValuedProbe(Lookahead.Valued(level), operatorLevel.Valued.Choices);
                 continue;
             }
 
@@ -410,9 +415,17 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     /// <summary>
-    /// Consecutive levels whose operators are looked up through a single choice: a level of valued operators, if any, then
-    /// levels without valued operators.
+    /// Consecutive levels which a lookup can start from: a level of valued operators, if any, then levels without valued
+    /// operators.
     /// </summary>
+    /// <remarks>
+    /// A level of valued operators parses its operators, since they can parse an expression of the table, like an index,
+    /// and their values are passed to the factory right away. A lookup can't read them for it: it only tries a
+    /// <see cref="ValuedProbe"/> of their first chars, which returns the operator of the level without reading anything.
+    /// The probes of the valued levels and the operators of the other levels are tried through a single choice, in the
+    /// order of the levels, such that a lookup tries a single choice whatever the number of valued levels. When the
+    /// operators of a probed level don't match, the lookup starts again from the next level, which starts a segment.
+    /// </remarks>
     private sealed class Segment
     {
         // The level of valued operators the segment starts with, -1 when there is none
@@ -425,19 +438,29 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // The next level of valued operators, or the number of levels
         public int End;
 
-        // The choice of a lookup from the start of the segment. When it starts with a level of valued operators, the choice
-        // starts with a probe of their first chars, which returns the operator of the level.
+        // The choice of a lookup from the start of the segment, which tries the operators of all the levels from there. When
+        // the segment starts with a level of valued operators, the choice starts with their probe.
         public OneOf<int>? Choice;
 
-        // The choice of the levels without valued operators, when the segment starts with a level of valued operators
+        // The choice of a lookup from the first level without valued operators, when the segment starts with a level of
+        // valued operators, which tries the operators of all the looser levels from there
         public OneOf<int>? PlainChoice;
     }
 
-    // The choice of the operators of the segment which can follow an operand, from the level of valued operators when
-    // plain is false, built when it is first used since a table is usually built level by level. Null when there are none.
+    // The choice of the operators which can follow an operand, from the start of the segment, or from its first level
+    // without valued operators when plain is true, to the end of the table. The levels of valued operators are probed. It
+    // is built when it is first used since a table is usually built level by level. Null when there are none.
     private OneOf<int>? GetChoice(Segment segment, bool plain)
     {
         plain = plain && segment.Valued >= 0;
+        var probed = !plain && segment.Valued >= 0;
+
+        // Every segment after this one starts with a level of valued operators
+        if (!probed && segment.FirstLookupLevel == int.MaxValue && segment.End == _levels.Length)
+        {
+            return null;
+        }
+
         ref var field = ref plain ? ref segment.PlainChoice : ref segment.Choice;
         var choice = Volatile.Read(ref field);
 
@@ -445,23 +468,19 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             var operators = new List<Parser<int>>();
 
-            if (!plain && segment.Valued >= 0)
+            if (probed)
             {
                 // The operators of the level are tried before the ones of the looser levels
-                operators.Add(new ValuedProbe(Lookahead.Valued(segment.Valued), _levels[segment.Valued].Valued!.Choices));
+                operators.Add(_probes[segment.Valued]!);
             }
 
-            for (var level = segment.FirstLookupLevel; level < segment.End; level++)
-            {
-                if (_levels[level].Kind != OperatorKind.Prefix)
-                {
-                    operators.AddRange(_levels[level].Operators);
-                }
-            }
+            AddPlainOperators(segment, operators);
 
-            if (operators.Count == 0)
+            // The looser segments start with a level of valued operators, which is tried before the levels that follow it
+            for (var next = segment.End; next < _levels.Length; next = _segments[next].End)
             {
-                return null;
+                operators.Add(_probes[next]!);
+                AddPlainOperators(_segments[next], operators);
             }
 
             choice = new OneOf<int>(operators.ToArray());
@@ -469,6 +488,17 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         }
 
         return choice;
+    }
+
+    private void AddPlainOperators(Segment segment, List<Parser<int>> operators)
+    {
+        for (var level = segment.FirstLookupLevel; level < segment.End; level++)
+        {
+            if (_levels[level].Kind != OperatorKind.Prefix)
+            {
+                operators.AddRange(_levels[level].Operators);
+            }
+        }
     }
 
     // The segments of the table, in order, for the source generator
@@ -979,8 +1009,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     /// <summary>
-    /// Looks for an operator following an operand, from the level <paramref name="lowest"/>. The lookup stops at a level
-    /// of valued operators, which the level that applies them parses.
+    /// Looks for an operator following an operand, from the level <paramref name="lowest"/>. The operators of a level of
+    /// valued operators are only probed, and the level that applies them parses them.
     /// </summary>
     private bool Lookup(ParseContext context, int lowest, ref Lookahead next)
     {
@@ -1012,50 +1042,56 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             return true;
         }
 
-        var level = lowest;
-
-        while (level < _levels.Length)
+        if (lowest >= _levels.Length)
         {
-            var segment = _segments[level];
-            OneOf<int>? choice;
+            next.Operator = Lookahead.None;
+            return false;
+        }
 
-            if (level == segment.Valued)
-            {
-                // The probe of the valued operators, then the operators of the looser levels of the segment
-                choice = Volatile.Read(ref segment.Choice) ?? GetChoice(segment, plain: false);
-            }
-            else if (level <= segment.FirstLookupLevel)
-            {
-                // The choice returns the first operator which matches, from the tightest level
-                choice = Volatile.Read(ref segment.Valued >= 0 ? ref segment.PlainChoice : ref segment.Choice) ?? GetChoice(segment, plain: true);
-            }
-            else
-            {
-                if (LookupFrom(context, level, segment.End, ref operatorResult))
-                {
-                    next.Operator = operatorResult.Value;
-                    next.End = operatorResult.End;
-                    return true;
-                }
+        var segment = _segments[lowest];
+        OneOf<int>? choice;
 
-                level = segment.End;
-                continue;
-            }
-
-            if (choice is not null && choice.Parse(context, ref operatorResult))
+        if (lowest == segment.Valued)
+        {
+            // The probe of the valued operators, then the operators of the looser levels
+            choice = Volatile.Read(ref segment.Choice) ?? GetChoice(segment, plain: false);
+        }
+        else if (lowest <= segment.FirstLookupLevel)
+        {
+            // The choice returns the first operator which matches, from the tightest level
+            choice = Volatile.Read(ref segment.Valued >= 0 ? ref segment.PlainChoice : ref segment.Choice) ?? GetChoice(segment, plain: true);
+        }
+        else
+        {
+            if (LookupFrom(context, lowest, segment.End, ref operatorResult))
             {
-                if (operatorResult.Value < 0)
-                {
-                    // The probe of a level of valued operators, whose choice may have skipped white space
-                    context.Scanner.Cursor.ResetPosition(next.Offset);
-                }
-
                 next.Operator = operatorResult.Value;
                 next.End = operatorResult.End;
                 return true;
             }
 
-            level = segment.End;
+            if (segment.End == _levels.Length)
+            {
+                next.Operator = Lookahead.None;
+                return false;
+            }
+
+            // The looser levels, from the next level of valued operators
+            segment = _segments[segment.End];
+            choice = Volatile.Read(ref segment.Choice) ?? GetChoice(segment, plain: false);
+        }
+
+        if (choice is not null && choice.Parse(context, ref operatorResult))
+        {
+            if (operatorResult.Value < 0)
+            {
+                // The probe of a level of valued operators, whose choice may have skipped white space
+                context.Scanner.Cursor.ResetPosition(next.Offset);
+            }
+
+            next.Operator = operatorResult.Value;
+            next.End = operatorResult.End;
+            return true;
         }
 
         next.Operator = Lookahead.None;
@@ -1498,64 +1534,59 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line("{");
         Line($"    nextPosition = {cursor}.Offset;");
 
-        foreach (var segment in Segments())
+        // A choice tries the operators of all the levels from where it starts, and returns the operator of a level of valued
+        // operators when it matched their probe, which may have skipped white space
+        void Choice(string? helper)
         {
-            var (choiceHelper, plainHelper) = segmentHelpers[segment];
-            var condition = "if";
-
-            if (segment.Valued >= 0)
+            if (helper is not null)
             {
-                // The probe of the valued operators, then the operators of the looser levels of the segment. The probe
-                // returns the operator of the level, and its choice may have skipped white space.
-                Line($"    if (lowest <= {Text(segment.Valued)})");
-                Line("    {");
-                Line($"        if ({choiceHelper}({ctx}, out next))");
+                Line($"        if ({helper}({ctx}, out next))");
                 Line("        {");
                 Line($"            if (next < 0) {cursor}.ResetPosition(nextPosition);");
                 Line("            return true;");
                 Line("        }");
+            }
+
+            Line("        next = -1;");
+            Line("        return false;");
+        }
+
+        foreach (var segment in Segments())
+        {
+            var (choiceHelper, plainHelper) = segmentHelpers[segment];
+
+            if (segment.Valued >= 0)
+            {
+                // The previous segments returned, so it is the lookup from the level of valued operators
+                Line($"    if (lowest <= {Text(segment.Valued)})");
+                Line("    {");
+                Choice(choiceHelper);
                 Line("    }");
-                condition = "else if";
             }
             else
             {
                 plainHelper = choiceHelper;
             }
 
-            if (plainHelper is null)
+            // The levels before the first one without valued operators are prefix levels
+            var plainStart = segment.FirstLookupLevel == int.MaxValue ? segment.End - 1 : segment.FirstLookupLevel;
+
+            if (plainStart > segment.Valued)
             {
-                continue;
-            }
-
-            // The choice returns the first operator which matches, from the tightest level
-            Line($"    {condition} (lowest <= {Text(segment.FirstLookupLevel)})");
-            Line("    {");
-            Line($"        if ({plainHelper}({ctx}, out next)) return true;");
-            Line("    }");
-
-            // Only after an operator wasn't followed by an operand, or after a postfix operator
-            var first = true;
-
-            for (var other = segment.FirstLookupLevel + 1; other < segment.End; other++)
-            {
-                if (_levels[other].Kind == OperatorKind.Prefix)
-                {
-                    continue;
-                }
-
-                if (first)
-                {
-                    Line("    else");
-                    Line("    {");
-                    first = false;
-                }
-
-                Line($"        if (lowest <= {Text(other)} && {levelHelpers[other]}({ctx}, out next)) return true;");
-            }
-
-            if (!first)
-            {
+                Line($"    if (lowest <= {Text(plainStart)})");
+                Line("    {");
+                Choice(plainHelper);
                 Line("    }");
+            }
+
+            // Only after an operator wasn't followed by an operand, or after a postfix operator. The lookup continues with
+            // the next segment when they don't match.
+            for (var other = plainStart + 1; other < segment.End; other++)
+            {
+                if (_levels[other].Kind != OperatorKind.Prefix)
+                {
+                    Line($"    if (lowest <= {Text(other)} && {levelHelpers[other]}({ctx}, out next)) return true;");
+                }
             }
         }
 

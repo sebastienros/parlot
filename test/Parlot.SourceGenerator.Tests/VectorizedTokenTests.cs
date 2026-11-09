@@ -319,6 +319,50 @@ public class VectorizedTokenTests
         CheckPadded(Text(Literals.Scan(global::Parlot.Tests.LiquidScanners.Identifier, global::Parlot.Tests.LiquidScanners.StartChars)), VectorizedTokenGrammars.TryParseScanIdentifier, VectorizedTokenGrammars.TryParseScanIdentifier, '1', "", "a", "-}", " ");
     }
 
+    private static readonly Parser<string> LineStartTokens =
+        ZeroOrMany(Terms.Scan(global::Parlot.Tests.LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment")
+            .Or(Terms.Text("--"))
+            .Or(Terms.Text(">"))
+            .Or(Terms.Identifier().Then(static x => x.ToString())))
+            .Then(static list => string.Join("|", list))
+            .Eof();
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("-->")]
+    [InlineData("--> c")]
+    [InlineData("x-->y")]
+    [InlineData("x --> y")]
+    [InlineData("x\n-->y")]
+    [InlineData("x\r\n--> y\nz")]
+    [InlineData("a--\n>")]
+    [InlineData("x\n--")]
+    [InlineData("abc\n-->\nghi-->jkl")]
+    public void Text_Scan_Matches_The_Runtime(string text)
+    {
+        Check(LineStartTokens, VectorizedTokenGrammars.TryParseScanLineStart, VectorizedTokenGrammars.TryParseScanLineStart, text);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("\nabc")]
+    [InlineData("\n")]
+    [InlineData("a\nb")]
+    public void Text_Scan_Lambda_Matches_The_Runtime(string text)
+    {
+        var parser = ZeroOrOne(Literals.Char('\n')).SkipAnd(Literals.Scan(static (text, position) => position == 0 || text[position - 1] == '\n' ? text.Length - position : 0))
+            .Then(static span => span.ToString());
+
+        Check(parser, VectorizedTokenGrammars.TryParseScanTextLambda, VectorizedTokenGrammars.TryParseScanTextLambda, text);
+    }
+
+    [Fact]
+    public void Text_Scan_Results_Do_Not_Depend_On_The_Buffer_Boundaries()
+    {
+        CheckPadded(LineStartTokens, VectorizedTokenGrammars.TryParseScanLineStart, VectorizedTokenGrammars.TryParseScanLineStart, 'a', "-->", "\n-->", "\n--> c", " -->", "\n--", "");
+    }
+
     private static void CheckPadded<T>(Parser<T> parser, StringParser<T> parseString, ReaderParser<T> parseReader, char padding, params string[] inputs)
     {
         foreach (var input in inputs)
@@ -420,6 +464,12 @@ public static partial class VectorizedTokenGrammars
     public static partial bool TryParseScanDiscarded(TextReader reader, out char value);
     public static partial bool TryParseScanPosition(string text, out (string, int, int, int) value);
     public static partial bool TryParseScanPosition(TextReader reader, out (string, int, int, int) value);
+
+    public static partial bool TryParseScanLineStart(string text, out string value);
+    public static partial bool TryParseScanLineStart(TextReader reader, out string value);
+
+    public static partial bool TryParseScanTextLambda(string text, out string value);
+    public static partial bool TryParseScanTextLambda(TextReader reader, out string value);
     public static partial bool TryParseScanOversize(string text, out string value);
     public static partial bool TryParseScanOversize(TextReader reader, out string value);
 }
