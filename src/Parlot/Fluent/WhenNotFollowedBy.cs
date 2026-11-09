@@ -58,7 +58,9 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         }
 
         // Save position before lookahead check
-        var beforeLookahead = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var beforeLookahead = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
 
         // Now check if the lookahead parser matches at the current position
         var lookaheadResult = new ParseResult<object>();
@@ -66,16 +68,20 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         var lookaheadSuccess = _lookahead.Parse(context, ref lookaheadResult);
         context.Unpin(pin);
 
-        // Reset position to before the lookahead (it shouldn't consume input)
-        context.Scanner.Cursor.ResetPosition(beforeLookahead);
-
-        // If lookahead succeeded, fail this parser and reset to start
+        // If lookahead succeeded, fail this parser and reset to start. The failure is at the start of what must not
+        // follow, wherever it was read up to.
         if (lookaheadSuccess)
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            context.RecordRejected(beforeLookahead, recorded, _lookahead is ISeekable { SkipWhitespace: true });
+            cursor.ResetPosition(start);
             context.ExitParser(this);
             return false;
         }
+
+        // Reset position to before the lookahead (it shouldn't consume input). What the lookahead read, to find that it
+        // doesn't match, says nothing about what follows at this position.
+        cursor.ResetPosition(beforeLookahead);
+        cursor.RestoreRecordedFailure(recorded);
 
         context.ExitParser(this);
         return true;

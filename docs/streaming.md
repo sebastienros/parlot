@@ -202,7 +202,7 @@ and leave the reader open.
 | Method | Description |
 |---|---|
 | `Parse(TextReader)` | Parses one value through the compacting buffer, returns the value or `default`. A `ParseException` is propagated. |
-| `TryParse(TextReader, out T value[, out ParseError? error])` | Same, returns whether the text matched. A `ParseException` or a cancellation returns `false` with the error. |
+| `TryParse(TextReader, out T value[, out ParseError? error])` | Same, returns whether the text matched. A `ParseException` or a cancellation returns `false` with the error. The context of `ContextFactory` reports the [furthest failure](parsers.md#reporting-where-a-parse-failed). |
 | `TryParseAsync(TextReader)` | Parses one value through the compacting buffer, returns `(bool Success, T? Value)`. A `ParseException` returns `false`. |
 | `ParseAsync(TextReader)` | Same, returns the value or `default`. A `ParseException` is propagated. |
 | `ParseManyAsync(TextReader)` | Parses successive values, returns an `IAsyncEnumerable<T>`. |
