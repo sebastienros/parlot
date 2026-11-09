@@ -46,6 +46,14 @@ public static partial class Grammar
     private static Parser<string> IdentifierWithPredicates() =>
         Literals.Identifier(static c => c == '@', static c => c == '-').Then(static value => value.ToString());
 
+    // Escape sequences and surrogate pairs are decoded by the embedded runtime
+    [GenerateParser(nameof(TryParseCodePointIdentifier))]
+    private static Parser<string> CodePointIdentifier() =>
+        Literals.Identifier(
+            static c => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
+            static c => c is '$' or '_' || (c < 0x10000 ? char.IsLetterOrDigit((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
+            IdentifierOptions.JavaScript).Then(static value => Parlot.Character.DecodeIdentifier(value).ToString());
+
     // The text is searched for the chars the delimiter can start with
     [GenerateParser(nameof(TryParseTextBefore))]
     private static Parser<string> TextBefore() =>

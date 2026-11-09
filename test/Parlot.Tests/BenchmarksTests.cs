@@ -45,6 +45,20 @@ public class BenchmarksTests
         }
     }
 
+    [Theory]
+    [InlineData("   class a", 7)]
+    [InlineData("  @a @b class a", 13)]
+    public void SequenceStartGrammars(string input, int length)
+    {
+        // The sequence starts at its first parser which matched something, after the white space
+        var benchmark = new SequenceStartBenchmarks { Input = input };
+        Assert.True(benchmark.Runtime());
+        Assert.True(benchmark.RuntimePlainSequence());
+        Assert.True(benchmark.Generated());
+        Assert.True(SequenceStartBenchmarks.TryParseClass(input, out var generated));
+        Assert.Equal(length, generated);
+    }
+
     [Fact]
     public void CommentsGrammar()
     {
@@ -52,6 +66,18 @@ public class BenchmarksTests
         benchmark.Setup();
         Assert.Equal(-64.5m, benchmark.Expression_Spaces().Evaluate());
         Assert.Equal(-64.5m, benchmark.Expression_Comments().Evaluate());
+        Assert.Equal(64, ((Tests.Json.JsonArray)benchmark.Json_WithComments()).Elements.Count);
+        Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_Comments().ToString());
+    }
+
+    [Fact]
+    public void PeekGrammars()
+    {
+        var benchmark = new LookaheadBenchmarks();
+        Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Runtime());
+        Assert.Equal(150, benchmark.Peek_Runtime());
+        Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Generated());
+        Assert.Equal(150, benchmark.Peek_Generated());
     }
 
     [Fact]
@@ -74,6 +100,16 @@ public class BenchmarksTests
         Assert.Equal("value", benchmark.SkippedText());
         Assert.Equal("value", benchmark.BetweenText());
         Assert.Equal("KeYwOrD", benchmark.RetainedText());
+    }
+
+    [Fact]
+    public void BetweenGrammar()
+    {
+        var benchmark = new BetweenBenchmarks();
+        benchmark.Setup();
+        Assert.Equal("key", benchmark.BetweenValue());
+        Assert.Equal(7, benchmark.BetweenSpan());
+        Assert.Equal(" [ 1, 2, 3, 4, 5, 6, 7, 8 ]", benchmark.BetweenWithoutValue());
     }
 
     [Theory]
@@ -104,6 +140,18 @@ public class BenchmarksTests
         Assert.Equal(1400, benchmark.ThenTry());
         Assert.Equal(1400, benchmark.WhenThenGenerated());
         Assert.Equal(1400, benchmark.ThenTryGenerated());
+    }
+
+    [Fact]
+    public void SeekGuardGrammars()
+    {
+        // The setup checks every grammar
+        var benchmark = new SeekGuardBenchmarks();
+        benchmark.Setup();
+        Assert.Equal(225, benchmark.Optional());
+        Assert.Equal(225, benchmark.Workaround());
+        Assert.Equal(200, benchmark.Loop());
+        Assert.Equal(600, benchmark.SeparatedList());
     }
 
     [Fact]
@@ -168,6 +216,19 @@ public class BenchmarksTests
         benchmark.Setup();
         Assert.Equal(expected, benchmark.FoldRuntime());
         Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Arguments", 14)]
+    [InlineData("Mixed", 1652203732534)]
+    public void ValuedLevelsGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the runtime one with a factory per operator
+        var benchmark = new ValuedLevelsBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.PerOperatorRuntime());
+        Assert.Equal(expected, benchmark.ValuedGenerated());
     }
 
     [Theory]
@@ -341,6 +402,18 @@ public class BenchmarksTests
 
         Assert.Equal(success, benchmarks.Lookup());
         Assert.Equal(success, benchmarks.Lookup());
+    }
+
+    [Fact]
+    public void CodePointIdentifierBenchmarks()
+    {
+        var benchmarks = new CodePointIdentifierBenchmarks();
+
+        Assert.Equal(2000, benchmarks.Default());
+        Assert.Equal(2000, benchmarks.CharPredicates());
+        Assert.Equal(2000, benchmarks.CodePoints());
+        Assert.Equal(2000, benchmarks.JavaScript());
+        Assert.Equal(2000, benchmarks.JavaScriptEscapesAndAstralChars());
     }
 
     [Fact]

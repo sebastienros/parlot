@@ -58,7 +58,7 @@ internal sealed class GrammarAnalysis
     private static readonly HashSet<string> s_firstMustSucceed = new(StringComparer.Ordinal)
     {
         "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "When", "ThenTry",
-        "WhenFollowedBy", "WhenNotFollowedBy", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
+        "WhenFollowedBy", "WhenNotFollowedBy", "Peek", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
         "Switch", "Seekable", "IParserAdapter", "OperatorIndex", "LeftAssociative", "LeftAssociativeWithContext", "RightAssociative",
         "RightAssociativeWithContext", "AssociativeWithOperator",
     };
@@ -694,7 +694,7 @@ internal sealed class GrammarAnalysis
 
         if (prefixes is null)
         {
-            if (Array.IndexOf(seekable.ExpectedChars, Fluent.OneOf<object>.OtherSeekableChar) >= 0)
+            if (!SeekableHints.IsExact(seekable.ExpectedChars))
             {
                 return null;
             }
@@ -780,7 +780,7 @@ internal sealed class GrammarAnalysis
                 return Outcome.ThrowsOnFailure;
 
             // A deferred parser fails where it is invoked again, so it isn't followed
-            case "Then" or "PooledString" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex":
+            case "Then" or "PooledString" or "Discard" or "Capture" or "SkipWhiteSpace" or "IParserAdapter" or "OperatorIndex" or "Peek":
                 return FirstInvoked(parser) is { } inner ? GetOutcome(inner, depth + 1) : Outcome.CanFail;
 
             case "Sequence" or "SequenceAndSkip" or "SequenceSkipAnd":

@@ -232,6 +232,20 @@ public class FailureTests
     }
 
     [Theory]
+    [InlineData("((", 0)] // A lookahead that matched doesn't count: the 'x' expected next fails at 0, not after the "(("
+    [InlineData("  ((", 2)] // The 'x' expected next fails after its white space, at the lookahead's text, not after it
+    [InlineData("  (x", 2)] // The lookahead was expected, it fails after its white space
+    [InlineData("", 0)]
+    public void Peek_That_Matched_Doesnt_Count(string text, int offset)
+    {
+        Assert.False(FailureGrammars.Peeked(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.Peeked(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
     [InlineData("abc", 0)]
     [InlineData("  abc", 2)]
     [InlineData("  abd,", 5)]

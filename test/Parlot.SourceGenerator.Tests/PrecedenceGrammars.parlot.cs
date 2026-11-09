@@ -164,6 +164,35 @@ public static partial class PrecedenceGrammars
         return WithRest(expression);
     }
 
+    // Consecutive valued levels between a valued postfix level, a prefix level, a plain level, a conditional and a looser
+    // prefix level, the same table as PrecedenceTests.RuntimeValuedLevels
+    [GenerateParser(nameof(TryParseValuedLevels))]
+    private static Parser<string> BuildValuedLevels()
+    {
+        var expression = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .Postfix((Between(Terms.Char('['), expression, Terms.Char(']')), static (x, index) => PrecedenceAst.Index(x, index)))
+            .RightAssociative(new[] { Terms.Text("**") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/"), Terms.Text("%") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text("+"), Terms.Text("-") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text(">>>"), Terms.Text("<<"), Terms.Text(">>") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text("<="), Terms.Text(">="), Terms.Text("<"), Terms.Text(">") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text("==="), Terms.Text("=="), Terms.Text("!=") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .Unary((Terms.Char('-'), static x => PrecedenceAst.Prefix("-", x)))
+            .LeftAssociative(new[] { Terms.Text("&") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative(new[] { Terms.Text("&&") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .LeftAssociative((Terms.Text("|"), static (a, b) => PrecedenceAst.Binary("|", a, b)))
+            .LeftAssociative(new[] { Terms.Text("||") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => PrecedenceAst.Conditional(c, a, b))
+            .LeftAssociative(new[] { Terms.Text("??") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b))
+            .Unary((Terms.Char('!'), static x => PrecedenceAst.Prefix("!", x)));
+
+        return WithRest(expression);
+    }
+
     [GenerateParser(nameof(TryParseValuedEmpty))]
     private static Parser<string> BuildValuedEmpty() =>
         WithRest(Literals.Text("x").Optional().Then(static x => x.HasValue ? "x" : "").Operators()

@@ -421,6 +421,22 @@ public static partial class Grammars
     private static Parser<string> BuildHelloNotBang() =>
         Terms.Text("hello").And(Not(Terms.Char('!'))).Then(static value => value.Item1);
 
+    [GenerateParser(nameof(TryParsePeekValue))]
+    private static Parser<(long, long)> BuildPeekValue() => Peek(Terms.Integer()).And(Terms.Integer());
+
+    // An automatic semicolon: a ';', or before a '}' which is read next
+    [GenerateParser(nameof(TryParsePeekSemicolon))]
+    private static Parser<string> BuildPeekSemicolon() =>
+        Terms.Identifier()
+            .And(OneOf(Terms.Char(';').Then(static _ => 1), Peek(Terms.Char('}')).Then(static _ => -1)))
+            .AndSkip(Terms.Char('}'))
+            .Then(static value => value.Item1.ToString() + value.Item2);
+
+    // The sequence of the lookahead reads 'a' before it fails, and the next alternative reads it again
+    [GenerateParser(nameof(TryParsePeekFails))]
+    private static Parser<string> BuildPeekFails() =>
+        Peek(Literals.Char('a').And(Literals.Char('b'))).Then(static _ => "peek").Or(Literals.Text("ac"));
+
     [GenerateParser(nameof(TryParseHelloBang))]
     private static Parser<string> BuildHelloBang() =>
         Terms.Text("hello").And(Terms.Char('!')).Then(static value => value.Item1);

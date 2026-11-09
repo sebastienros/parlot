@@ -1,7 +1,6 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
-using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -21,7 +20,7 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnal
     public Seekable(Parser<T> parser, bool skipWhiteSpace, params ReadOnlySpan<char> expectedChars)
     {
         Parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        ExpectedChars = expectedChars.ToArray().Distinct().ToArray();
+        ExpectedChars = SeekableHints.ExpectedChars(expectedChars);
         SkipWhitespace = skipWhiteSpace;
         CanSeek = true;
     }

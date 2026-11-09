@@ -248,9 +248,13 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   starts by skipping white space, like a `Terms` parser, a choice whose alternatives are all `Terms` parsers, or a
   sequence starting with one, reports the start of its content, after the skipped white space, as at runtime. A choice
   whose alternatives don't all skip white space reports the offset where it was entered, before the white space of the
-  alternative that matched, where the runtime reports the start of that alternative's content. A `ThenTry` callback
-  receives the same offsets, and a value it rejects is reported as the furthest failure at its start, like one a `When`
-  rejects.
+  alternative that matched, where the runtime reports the start of that alternative's content. A sequence whose first
+  parsers can match nothing, like `Optional`, `ZeroOrMany`, `Always` or `Else`, starts where the first of its parsers
+  which matched something does, as at runtime: it is emitted part by part, and the start moves past the white space the
+  next part skips while nothing matched. Such a part which matches something, like an `Optional` of a `Terms` parser,
+  reports the start of its content when all the parsers it can start with skip white space, and the offset where it was
+  entered otherwise. A `ThenTry` callback receives the same offsets, and a value it rejects is reported as the furthest
+  failure at its start, like one a `When` rejects.
 
 ### Non-breaking diagnostics
 
@@ -301,7 +305,8 @@ When the parse fails, `failure` is the *furthest failure*: the position where th
 stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white space the expected `FROM` skipped. When the
 grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
 `TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
-like `TextPosition`. The names of the tuple elements are free.
+like `TextPosition`. The names of the tuple elements are free. Runtime parsers report the same position through
+`Cursor.FurthestOffset` and `Cursor.FurthestPosition`, see [Reporting where a parse failed](parsers.md#reporting-where-a-parse-failed).
 
 What a parser read and then rejected is not what moved the attempt forward, so the failure is at its start, where the
 first bad token is:
@@ -309,7 +314,7 @@ first bad token is:
 - A `When` whose condition rejects the value fails at the start of the value, after the white space the parser skips:
   `Terms.Identifier().When(...)` on `  from` reports 2, not 6.
 - `WhenNotFollowedBy` and `Not` fail at the start of what must not match, after the white space it skips.
-- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` matches, nor when the parser of
+- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
 
