@@ -64,6 +64,7 @@
     <EmbeddedResource Include="../Parlot/Character.Generated.cs" LogicalName="Parlot.StandaloneRuntime.Character.Generated.cs" />
     <EmbeddedResource Include="../Parlot/Character.Mask.cs" LogicalName="Parlot.StandaloneRuntime.Character.Mask.cs" />
     <EmbeddedResource Include="../Parlot/Character.SearchValues.cs" LogicalName="Parlot.StandaloneRuntime.Character.SearchValues.cs" />
+    <EmbeddedResource Include="../Parlot/Character.Identifier.cs" LogicalName="Parlot.StandaloneRuntime.Character.Identifier.cs" />
     <EmbeddedResource Include="../Parlot/WhiteSpaceSet.cs" LogicalName="Parlot.StandaloneRuntime.WhiteSpaceSet.cs" />
     <!-- Numbers.Reflection.cs is used only by the runtime library, not by generated parsers. -->
     <EmbeddedResource Include="../Parlot/Numbers.cs" LogicalName="Parlot.StandaloneRuntime.Numbers.cs" />
@@ -77,6 +78,7 @@
     <EmbeddedResource Include="../Parlot/Fluent/ListBuilder.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.ListBuilder.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/OperatorList.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.OperatorList.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/NumberOptions.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.NumberOptions.cs" />
+    <EmbeddedResource Include="../Parlot/Fluent/IdentifierOptions.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.IdentifierOptions.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/DelegateParser.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.DelegateParser.cs" />
     <EmbeddedResource Include="../Parlot/Fluent/TextReaderRefillSource.cs" LogicalName="Parlot.StandaloneRuntime.Fluent.TextReaderRefillSource.cs" />
     <EmbeddedResource Include="StandaloneRuntime/ParserDiagnostics.cs" LogicalName="Parlot.StandaloneRuntime.ParserDiagnostics.cs" />

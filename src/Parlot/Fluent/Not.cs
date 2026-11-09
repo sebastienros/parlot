@@ -41,6 +41,11 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
         {
             // What it read, to find that it doesn't match, says nothing about what follows
             cursor.RestoreRecordedFailure(recorded);
+
+            // Nothing is read: the result is empty, where the parser was invoked, and doesn't keep what the
+            // inner parser could have written before failing
+            result.Set(start, start, default!);
+
             context.ExitParser(this);
             return true;
         }

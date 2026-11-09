@@ -20,11 +20,39 @@ namespace Parlot.Fluent;
 public delegate int SpanScanner(ReadOnlySpan<char> span);
 
 /// <summary>
-/// A parser that matches the token found by a <see cref="SpanScanner"/>.
+/// Scans a token at <paramref name="position"/> in <paramref name="text"/>, which also holds the text before it.
+/// </summary>
+/// <param name="text">
+/// The text available to the parser: the text before the token, from which a scanner can tell whether the token is at the
+/// start of the input or of a line, and the text from <paramref name="position"/> to the end of the available text.
+/// </param>
+/// <param name="position">The index in <paramref name="text"/> where the token starts.</param>
+/// <returns>
+/// The number of chars the token occupies, at most <c>text.Length - position</c>. <c>0</c> when there is no token.
+/// A negative value when there is no token because <paramref name="text"/> ended, such that more text could make one.
+/// </returns>
+/// <remarks>
+/// <para>
+/// When parsing a <see cref="string"/>, <paramref name="text"/> is the whole input and <paramref name="position"/> the
+/// offset of the cursor.
+/// </para>
+/// <para>
+/// When parsing a stream, the text before the token may be partial: <paramref name="text"/> starts with the char before
+/// <paramref name="position"/>, or earlier, unless the token is at the start of the input, where <paramref name="position"/>
+/// is <c>0</c>. With <see cref="Parser{T}.ParseManyAsync(System.IO.TextReader, StreamParseOptions?, System.Threading.CancellationToken)"/>
+/// each value is parsed as its own input, so a value starts its text.
+/// <paramref name="text"/> can also end before the input does, see <see cref="SpanScanner"/>.
+/// </para>
+/// </remarks>
+public delegate int TextScanner(ReadOnlySpan<char> text, int position);
+
+/// <summary>
+/// A parser that matches the token found by a <see cref="SpanScanner"/> or a <see cref="TextScanner"/>.
 /// </summary>
 public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
-    private readonly SpanScanner _scanner;
+    private readonly SpanScanner? _scanner;
+    private readonly TextScanner? _textScanner;
 
     /// <summary>
     /// Creates a parser that matches the token found by <paramref name="scanner"/>.
@@ -32,13 +60,29 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
     /// <param name="scanner">The function that returns the length of the token at the start of a span.</param>
     /// <param name="startChars">The chars a token can start with, used to skip this parser when the current char is not one of them. Empty when unknown.</param>
     public SpanScannerLiteral(SpanScanner scanner, ReadOnlySpan<char> startChars = default)
+        : this(scanner ?? throw new ArgumentNullException(nameof(scanner)), null, startChars)
     {
-        _scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
+    }
+
+    /// <summary>
+    /// Creates a parser that matches the token found by <paramref name="scanner"/>, which also gets the text before the token.
+    /// </summary>
+    /// <param name="scanner">The function that returns the length of the token at a position of the text.</param>
+    /// <param name="startChars">The chars a token can start with, used to skip this parser when the current char is not one of them. Empty when unknown.</param>
+    public SpanScannerLiteral(TextScanner scanner, ReadOnlySpan<char> startChars = default)
+        : this(null, scanner ?? throw new ArgumentNullException(nameof(scanner)), startChars)
+    {
+    }
+
+    private SpanScannerLiteral(SpanScanner? scanner, TextScanner? textScanner, ReadOnlySpan<char> startChars)
+    {
+        _scanner = scanner;
+        _textScanner = textScanner;
 
         if (!startChars.IsEmpty)
         {
             CanSeek = true;
-            ExpectedChars = startChars.ToArray();
+            ExpectedChars = SeekableHints.ExpectedChars(startChars);
         }
 
         Name = "SpanScanner";
@@ -63,7 +107,9 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
 
         var cursor = context.Scanner.Cursor;
         var span = cursor.Span;
-        var size = _scanner(span);
+        var size = _textScanner is null
+            ? _scanner!(span)
+            : _textScanner(cursor.Buffer.AsSpan(), cursor.Buffer.Length - span.Length);
 
         if (size <= 0)
         {
@@ -110,14 +156,16 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
 
         var result = context.CreateResult(typeof(TextSpan));
         var cursorName = context.CursorName;
-        var scannerName = context.RegisterLambda(_scanner);
+        var scannerName = context.RegisterLambda(_textScanner is null ? _scanner! : _textScanner);
 
         var spanName = $"span{context.NextNumber()}";
         var sizeName = $"size{context.NextNumber()}";
         var startName = $"start{context.NextNumber()}";
 
         result.Body.Add($"var {spanName} = {cursorName}.Span;");
-        result.Body.Add($"var {sizeName} = {scannerName}({spanName});");
+        result.Body.Add(_textScanner is null
+            ? $"var {sizeName} = {scannerName}({spanName});"
+            : $"var {sizeName} = {scannerName}(global::System.MemoryExtensions.AsSpan({cursorName}.Buffer), {cursorName}.Buffer.Length - {spanName}.Length);");
         result.Body.Add($"if ({sizeName} > 0)");
         result.Body.Add("{");
         result.Body.Add($"    if ({sizeName} > {spanName}.Length)");

@@ -36,6 +36,9 @@ public static partial class FailureGrammars
     public static partial bool Followed(string text, out string value, out int failureOffset);
     public static partial bool Followed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool Peeked(string text, out string value, out int failureOffset);
+    public static partial bool Peeked(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool Negative(string text, out string value, out int failureOffset);
     public static partial bool Negative(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }

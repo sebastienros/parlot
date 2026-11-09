@@ -97,6 +97,11 @@ internal sealed class CharMap<T> where T : class
 
     public char[] ExpectedChars { get; private set; }
 
+    /// <summary>
+    /// Gets or sets the value of the non-ASCII chars which aren't in the map, <c>null</c> by default.
+    /// </summary>
+    public T? NonAsciiFallback { get; set; }
+
     public T? this[uint c]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -111,7 +116,7 @@ internal sealed class CharMap<T> where T : class
             {
                 T? map = null;
                 _nonAsciiMap?.TryGetValue(c, out map);
-                return map;
+                return map ?? NonAsciiFallback;
             }
         }
     }

@@ -292,6 +292,7 @@ public class DeferredSeekTests
             deferred.Switch(static (_, _) => 0, Literals.Char(';')),
             deferred.WhenFollowedBy(Literals.Char(';')),
             deferred.WhenNotFollowedBy(Literals.Char(';')),
+            Peek(deferred),
             Separated(Literals.Char(','), deferred),
             OneOrMany(deferred),
             If(static () => true, deferred),
