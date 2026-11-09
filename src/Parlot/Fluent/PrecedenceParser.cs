@@ -567,6 +567,32 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new ConditionalGroup<T, TMiddle>(op, factory)])));
     }
 
+    /// <summary>
+    /// Adds a level of conditionals, like <see cref="Ternary{TQuestion, TMiddle, TColon}(Parser{TQuestion}, Parser{TMiddle}, Parser{TColon}, Parser{T}, Func{T, TMiddle, T, T})"/>,
+    /// whose factory also receives the <see cref="ParseContext"/>.
+    /// </summary>
+    /// <typeparam name="TQuestion">The type of the parser before the middle operand.</typeparam>
+    /// <typeparam name="TMiddle">The type of the middle operand.</typeparam>
+    /// <typeparam name="TColon">The type of the parser after the middle operand.</typeparam>
+    /// <param name="question">The parser before the middle operand.</param>
+    /// <param name="middle">The parser of the middle operand.</param>
+    /// <param name="colon">The parser after the middle operand.</param>
+    /// <param name="last">The parser of the last operand, usually the whole expression or an assignment.</param>
+    /// <param name="factory">The function creating the result from the context, the condition, the middle operand and the last operand.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<ParseContext, T, TMiddle, T, T> factory)
+    {
+        ThrowHelper.ThrowIfNull(question, nameof(question));
+        ThrowHelper.ThrowIfNull(middle, nameof(middle));
+        ThrowHelper.ThrowIfNull(colon, nameof(colon));
+        ThrowHelper.ThrowIfNull(last, nameof(last));
+        ThrowHelper.ThrowIfNull(factory, nameof(factory));
+
+        Parser<(TMiddle, T)> op = question.SkipAnd(middle).AndSkip(colon).And(last);
+
+        return Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new ConditionalGroup<T, TMiddle>(op, factory)])));
+    }
+
     private int OperatorCount => _operatorLevels.Length;
 
     private PrecedenceParser<T> Add(OperatorLevel<T> level)
@@ -2139,7 +2165,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             if (group.IsConditional)
             {
                 // The value is the index of the operator and the pair of the middle and last operands
-                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}(climbed, {name}.Item2.Item1, {name}.Item2.Item2);");
+                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}({contextArgument}climbed, {name}.Item2.Item1, {name}.Item2.Item2);");
             }
             else if (group.Factories.Length == 1)
             {

@@ -38,6 +38,8 @@ public static partial class PrecedenceGrammars
     public static partial bool TryParseValuedZeroWidthPrefix(string text, out string value);
     public static partial bool TryParseConditionalLast(string text, out string value);
     public static partial bool TryParseConditionalLast(TextReader reader, out string value);
+    public static partial bool TryParseConditionalLastWithContext(string text, out string value);
+    public static partial bool TryParseConditionalLastWithContext(TextReader reader, out string value);
     public static partial bool TryParseValuedLevels(string text, out string value);
     public static partial bool TryParseValuedLevels(TextReader reader, out string value);
 }
@@ -516,6 +518,42 @@ public class PrecedenceTests
             Assert.Equal(expected, Run(PrecedenceGrammars.TryParseConditionalLast, input));
             Assert.Equal(expected, Run(PrecedenceGrammars.TryParseConditionalLast, input, 1));
         }
+    }
+
+    [Theory]
+    [InlineData("a ? b : c", "(a?b:c)@9 | ")]
+    [InlineData("a ? b : c = d", "(a?b:(c=d))@13 | ")]
+    [InlineData("a ? b : c ? d : e", "(a?b:(c?d:e)@17)@17 | ")]
+    [InlineData("a || b ? c : d, e", "(((a||b)?c:d)@14,e) | ")]
+    [InlineData("a ? b", "a |  ? b")]
+    public void Generated_Conditional_With_Last_Operand_Passes_The_Context(string input, string expected)
+    {
+        Assert.Equal(expected, Run(RuntimeConditionalLastWithContext(), input));
+        Assert.Equal(expected, Run(PrecedenceGrammars.TryParseConditionalLastWithContext, input));
+
+        foreach (var chunk in new[] { 1, 2, int.MaxValue })
+        {
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseConditionalLastWithContext, input, chunk));
+        }
+    }
+
+    private static Parser<string> RuntimeConditionalLastWithContext()
+    {
+        var expression = Deferred<string>();
+        var assignment = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        // The factory receives the context, the conditional ends where the cursor is
+        assignment.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), static (a, b) => PrecedenceAst.Binary("||", a, b)))
+            .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment,
+                static (ParseContext context, string c, string a, string b) => PrecedenceAst.Conditional(c, a, b) + "@" + context.Scanner.Cursor.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .RightAssociative(new[] { Terms.Text("=") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b));
+
+        expression.Parser = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => PrecedenceAst.Binary(",", a, b)));
+
+        return WithRest(expression);
     }
 
     private static Parser<string> RuntimeConditionalLast()

@@ -313,7 +313,8 @@ expression.Parser = primary.Operators()
 
 - `LeftAssociative((op, (context, a, b) => ...))` and `RightAssociative((op, (context, a, b) => ...))` for the plain
   binary levels, `LeftAssociative(operators, (context, a, b, op) => ...)` and `RightAssociative(operators, (context, a, b, op) => ...)`
-  for the valued ones, and `Ternary(question, middle, colon, (context, condition, whenTrue, whenFalse) => ...)`.
+  for the valued ones, and `Ternary(question, middle, colon, (context, condition, whenTrue, whenFalse) => ...)` and
+  `Ternary(question, middle, colon, last, (context, condition, whenTrue, whenFalse) => ...)`.
 - `Unary((op, (context, x, value) => ...))` and `Postfix((op, (context, x, value) => ...))` for the unary levels: a factory
   which needs the context and not the value of its operator ignores the value. There is no `(context, x)` overload of
   the table's `Unary` and `Postfix`, unlike the combinators: its lambdas would take two parameters, like the ones of the

@@ -164,6 +164,27 @@ public static partial class PrecedenceGrammars
         return WithRest(expression);
     }
 
+    // A conditional whose last operand is an assignment, with a factory receiving the context
+    [GenerateParser(nameof(TryParseConditionalLastWithContext))]
+    private static Parser<string> BuildConditionalLastWithContext()
+    {
+        var expression = Deferred<string>();
+        var assignment = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        // The factory receives the context, the conditional ends where the cursor is
+        assignment.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), static (a, b) => PrecedenceAst.Binary("||", a, b)))
+            .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment,
+                static (ParseContext context, string c, string a, string b) => PrecedenceAst.Conditional(c, a, b) + "@" + context.Scanner.Cursor.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .RightAssociative(new[] { Terms.Text("=") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b));
+
+        expression.Parser = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => PrecedenceAst.Binary(",", a, b)));
+
+        return WithRest(expression);
+    }
+
     // A conditional whose last operand is an assignment, looser than the conditional, as in JavaScript
     [GenerateParser(nameof(TryParseConditionalLast))]
     private static Parser<string> BuildConditionalLast()
