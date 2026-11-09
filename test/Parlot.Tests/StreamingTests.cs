@@ -113,6 +113,8 @@ public class StreamingTests
         ["nested-lists"] = new Grammar<object>(CreateNestedLists()),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
+        ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
         // White space parsers that tell their first chars aren't invoked before the other ones, except at the end of the buffer
         ["hinted-comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("./*(", maxSize: 1))).WithWhiteSpaceParser(Capture(OneOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/")))))),
         ["hinted-context"] = new Grammar<IReadOnlyList<long>>(ZeroOrMany(Terms.Integer()), static scanner => new ParseContext(scanner) { WhiteSpaceParser = Capture(ZeroOrMany(Literals.Char('#').Or(Literals.Char(' ')))) }),
@@ -331,6 +333,9 @@ public class StreamingTests
             "(" + string.Join(" ", Enumerable.Range(0, 20).Select(static i => "[" + i + "," + (i + 1) + ",{" + i + "}]")) + ")");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+        Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
+        Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
+        Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");
         Add("hinted-comments", "", "a", "a.b", "a // b\n.c", "a/* b */(c", "a /* b", "a / b", "a/b", "a*/", "// only", "a.\n/", "a/\n/c", "a //");
         Add("hinted-context", "", "1", "1#2 ##3", "12#", "#", "1 2x", "x", "##12 34#");
         string[] separated = ["", "1", "1 , 2", "1\u00A0, 2", "1 ,\u3000 2", "1\t,\n2\r\n,\v\f3", " \u00A01"];

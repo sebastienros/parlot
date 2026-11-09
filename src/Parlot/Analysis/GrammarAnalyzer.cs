@@ -79,7 +79,7 @@ internal sealed class GrammarAnalysis
     private static readonly HashSet<string> s_defaultNames = new(StringComparer.Ordinal)
     {
         "Always", "Fail", "IdentifierLiteral", "Identifier", "NumberLiteral", "NonWhiteSpaceLiteral", "PatternLiteral",
-        "StringLiteral", "SpanScanner", "WhiteSpaceLiteral",
+        "StringLiteral", "SpanScanner", "WhiteSpaceLiteral", "CommentsParser",
     };
 
     // The parsers that build a choice of their operators
@@ -381,7 +381,7 @@ internal sealed class GrammarAnalysis
             {
                 others.Add(Describe(alternative));
                 otherIndexes.Add(index);
-                fixable &= !(FixedText(alternative) is { } text && char.IsWhiteSpace(text.Text[0])) && ParlotTypeName(alternative) != "WhiteSpaceLiteral";
+                fixable &= !(FixedText(alternative) is { } text && char.IsWhiteSpace(text.Text[0])) && ParlotTypeName(alternative) is not ("WhiteSpaceLiteral" or "CommentsParser");
             }
         }
 

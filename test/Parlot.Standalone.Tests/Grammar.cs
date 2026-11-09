@@ -29,6 +29,7 @@ public static partial class Grammar
     public static partial bool TryParseRecursive(string text, out int value);
     public static partial bool TryParseLeftRecursive(string text, out int value);
     public static partial bool TryParseCustomWhitespace(string text, out string value);
+    public static partial bool TryParseComments(string text, out string value);
     public static partial bool TryParseConfigured(string text, GrammarOptions options, out string value);
     public static partial bool TryParseConfiguredWhitespace(string text, GrammarOptions options, out string value);
     public static partial bool TryParseDigits(string text, out string value);

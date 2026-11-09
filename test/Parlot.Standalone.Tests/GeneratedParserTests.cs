@@ -555,6 +555,19 @@ public class GeneratedParserTests
         Assert.False(Grammar.TryParseCustomWhitespace("hello world", out _));
     }
 
+    [Theory]
+    [InlineData("hello world", true)]
+    [InlineData(" /* a */ hello // b\r world", true)]
+    [InlineData("hello/**/world", true)]
+    [InlineData("hello // world", false)]
+    [InlineData("hello /* world", false)]
+    [InlineData("hello / world", false)]
+    public void Comments_Are_Skipped(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseComments(input, out var value));
+        Assert.Equal(success ? "hello" : null, value);
+    }
+
     [Fact]
     public void Configuration_Is_Read_At_Parse_Time_Without_Build_Time_Effects()
     {
