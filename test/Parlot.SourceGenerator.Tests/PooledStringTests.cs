@@ -52,6 +52,17 @@ public class PooledStringTests
 
     [Theory]
     [InlineData("")]
+    [InlineData("'a'")]
+    [InlineData("'a\\nb' \"a\\nb\" 'plain' \"plain\"")]
+    [InlineData("'a\\u0041' 'unterminated")]
+    public void Raw_Strings_Match_The_Runtime_Parser(string input)
+    {
+        Check(ZeroOrMany(Terms.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).ToPooledString()).Eof(),
+            PooledStringGrammars.TryParseRawStrings, PooledStringGrammars.TryParseRawStrings, input);
+    }
+
+    [Theory]
+    [InlineData("")]
     [InlineData("$a;$b;$a;")]
     [InlineData("$a;$")]
     public void Span_Code_Matches_The_Runtime_Parser(string input)
@@ -86,6 +97,10 @@ public class PooledStringTests
         Assert.Equal(["a\nb", "a\nb", "x", "x"], strings);
         Assert.Same(strings[0], strings[1]);
 
+        Assert.True(PooledStringGrammars.TryParseRawStrings("'a\\nb' \"a\\nb\" 'x' 'x'", out var rawStrings));
+        Assert.Equal(["a\\nb", "a\\nb", "x", "x"], rawStrings);
+        Assert.Same(rawStrings[0], rawStrings[1]);
+
         Assert.True(PooledStringGrammars.TryParseSpans("$abc;$abc;", out var spans));
         Assert.Equal(["$abc", "$abc"], spans);
         Assert.Same(spans[0], spans[1]);
@@ -115,6 +130,8 @@ public static partial class PooledStringGrammars
     public static partial bool TryParseIdentifiers(TextReader reader, out IReadOnlyList<string> value);
     public static partial bool TryParseStrings(string text, out IReadOnlyList<string> value);
     public static partial bool TryParseStrings(TextReader reader, out IReadOnlyList<string> value);
+    public static partial bool TryParseRawStrings(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseRawStrings(TextReader reader, out IReadOnlyList<string> value);
     public static partial bool TryParseSpans(string text, out IReadOnlyList<string> value);
     public static partial bool TryParseSpans(TextReader reader, out IReadOnlyList<string> value);
     public static partial bool TryParseMatchedTexts(string text, out IReadOnlyList<string> value);

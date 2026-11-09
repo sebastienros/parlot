@@ -653,7 +653,7 @@ Matches a quoted string literal with escape sequences. Use this parser to parse 
 
 ```c#
 Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble)
-Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes)
+Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true)
 ```
 
 Usage:
@@ -670,7 +670,8 @@ Result:
 ```
 
 The value is a `TextSpan` of the input when the string has no escape sequence, and of a new string otherwise. To get
-strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool.
+strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool
+(unless `returnDecoded` is `false`, see [Without decoding](#without-decoding)).
 
 #### Escape sequences
 
@@ -729,6 +730,21 @@ lines, is `StringEscapes.JavaScript & ~StringEscapes.SingleLine` with `StringLit
 substitutions). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
 own parser. To get the raw text of a literal as well, as a JavaScript AST does, read its offsets in a
 `Then(static (context, start, end, value) => ...)` callback, or wrap the string parser in `Capture()` for the raw text only.
+
+#### Without decoding
+
+Pass `returnDecoded: false` to get the text between the quotes as it is, without decoding the escape sequences. The
+value is then always a `TextSpan` of the input, which is useful when the text is decoded later, or by another component.
+The escape sequences are still read to find the closing quote, so `'it\'s'` is one string, and its value is `it\'s`; an
+escape sequence that the string doesn't accept still fails it, so add `StringEscapes.AnyChar` or
+`StringEscapes.KeepUnknown` to let the other component handle those.
+
+```c#
+var parser = Terms.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false);
+parser.Parse("'a\\nb'"); // a\nb, the backslash and the `n` are kept
+
+var javaScript = Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript, returnDecoded: false);
+```
 
 ### Identifier
 

@@ -3041,6 +3041,77 @@ public class FluentTests
     }
 
     [Theory]
+    [InlineData("\"a\\nb\"", "a\\nb", "a\nb")]
+    [InlineData("'it\\'s'", "it\\'s", "it's")]
+    [InlineData("\"plain\"", "plain", "plain")]
+    [InlineData("\"\"", "", "")]
+    public void StringLiteralShouldOnlyDecodeWhenRequested(string text, string raw, string decoded)
+    {
+        Assert.Equal(raw, new StringLiteral(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).Parse(text).ToString());
+        Assert.Equal(decoded, new StringLiteral(StringLiteralQuotes.SingleOrDouble, returnDecoded: true).Parse(text).ToString());
+        Assert.Equal(decoded, new StringLiteral(StringLiteralQuotes.SingleOrDouble).Parse(text).ToString());
+        Assert.Equal(raw, Literals.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).Parse(text).ToString());
+        Assert.Equal(raw, Terms.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).Parse(" " + text).ToString());
+        Assert.Equal(decoded, Terms.String().Parse(" " + text).ToString());
+    }
+
+    [Fact]
+    public void StringLiteralShouldNotDecodeWhenPooled()
+    {
+        var parser = ZeroOrMany(Terms.String(StringLiteralQuotes.Single, returnDecoded: false).ToPooledString());
+
+        var result = parser.Parse("'a\\nb' 'a\\nb'");
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("a\\nb", result[0]);
+        Assert.Same(result[0], result[1]);
+    }
+
+    [Theory]
+    [InlineData("'a\\$b'", "a\\$b", "a$b")]
+    [InlineData("\"\\u{41}\\101\"", "\\u{41}\\101", "AA")]
+    [InlineData("'it\\'s'", "it\\'s", "it's")]
+    public void StringLiteralShouldOnlyDecodeWhenRequestedWithEscapes(string text, string raw, string decoded)
+    {
+        Assert.Equal(raw, new StringLiteral(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript, returnDecoded: false).Parse(text).ToString());
+        Assert.Equal(decoded, new StringLiteral(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript).Parse(text).ToString());
+        Assert.Equal(raw, Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript, returnDecoded: false).Parse(" " + text).ToString());
+    }
+
+    [Fact]
+    public void StringLiteralWithCustomQuoteShouldOnlyDecodeWhenRequested()
+    {
+        Assert.Equal("a\\nb", new StringLiteral('%', returnDecoded: false).Parse("%a\\nb%").ToString());
+        Assert.Equal("a\nb", new StringLiteral('%').Parse("%a\\nb%").ToString());
+        Assert.False(new StringLiteral('%', returnDecoded: false).ReturnDecoded);
+        Assert.True(new StringLiteral('%').ReturnDecoded);
+    }
+
+    [Fact]
+    public void StringLiteralShouldFailOnInvalidEscapesWhenNotDecoded()
+    {
+        var parser = Literals.String(StringLiteralQuotes.Single, returnDecoded: false);
+        var context = new ParseContext(new Scanner("'a\\qb'"));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        Assert.Equal("a\\qb", Literals.String(StringLiteralQuotes.Single, StringEscapes.Default | StringEscapes.AnyChar, returnDecoded: false).Parse("'a\\qb'").ToString());
+    }
+
+    [Fact]
+    public void StringLiteralShouldResetTheCursorWhenNotDecoded()
+    {
+        var parser = Literals.String(StringLiteralQuotes.Single, returnDecoded: false);
+        var context = new ParseContext(new Scanner("'a\\'b"));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
     [InlineData("from", true)]
     [InlineData("FROM x", true)]
     [InlineData("from(", true)]

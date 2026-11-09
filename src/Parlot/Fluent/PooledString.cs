@@ -20,7 +20,8 @@ namespace Parlot.Fluent;
 /// </para>
 /// <para>
 /// A string literal (<c>Terms.String()</c> or <c>Literals.String()</c>) also decodes its escape sequences into the
-/// pool, without creating a string when the pool has the value.
+/// pool, without creating a string when the pool has the value. One built with <c>returnDecoded: false</c> pools the
+/// text between its quotes as it is.
 /// </para>
 /// </remarks>
 public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable

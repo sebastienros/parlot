@@ -380,15 +380,20 @@ public class LiteralBuilder
     public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Number<double>(numberOptions);
 
     /// <summary>
-    /// Builds a parser that matches an quoted string that can be escaped.
+    /// Builds a parser that matches a quoted string that can be escaped.
     /// </summary>
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
 
     /// <summary>
     /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
-    /// <see cref="StringEscapes.JavaScript"/>.
+    /// <see cref="StringEscapes.JavaScript"/>, and decodes them unless <paramref name="returnDecoded"/> is <c>false</c>.
     /// </summary>
-    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes) => new StringLiteral(quotes, escapes);
+    /// <param name="quotes">The quotes that delimit the string.</param>
+    /// <param name="escapes">The escape sequences the string accepts, and how they are decoded.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
+    /// </param>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => new StringLiteral(quotes, escapes, returnDecoded);
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
@@ -687,15 +692,21 @@ public class TermBuilder
     public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Number<double>(numberOptions);
 
     /// <summary>
-    /// Builds a parser that matches an quoted string that can be escaped.
+    /// Builds a parser that matches a quoted string that can be escaped.
     /// </summary>
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => SkipWhiteSpace(new StringLiteral(quotes));
 
     /// <summary>
     /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
-    /// <see cref="StringEscapes.JavaScript"/>, after white space.
+    /// <see cref="StringEscapes.JavaScript"/>, after white space, and decodes them unless <paramref name="returnDecoded"/>
+    /// is <c>false</c>.
     /// </summary>
-    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes) => SkipWhiteSpace(new StringLiteral(quotes, escapes));
+    /// <param name="quotes">The quotes that delimit the string.</param>
+    /// <param name="escapes">The escape sequences the string accepts, and how they are decoded.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
+    /// </param>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => SkipWhiteSpace(new StringLiteral(quotes, escapes, returnDecoded));
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.

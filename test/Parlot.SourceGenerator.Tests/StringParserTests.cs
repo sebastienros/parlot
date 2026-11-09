@@ -18,6 +18,49 @@ public class StringParserTests
     }
 
     [Theory]
+    [InlineData("\"a\\nb\"", "a\\nb")]
+    [InlineData("  'it\\'s'", "it\\'s")]
+    [InlineData("\"plain\"", "plain")]
+    [InlineData("\"\"", "")]
+    [InlineData("\"unterminated", null)]
+    public void Strings_Are_Not_Decoded_When_Requested(string input, string? expected)
+    {
+        Assert.Equal(expected != null, StringGrammars.TryParseRaw(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    // The escape sequences of the language are read but not decoded, and the ones it rejects still fail the string
+    [InlineData("'a\\$b'", "a\\$b")]
+    [InlineData("\"\\u{41}\\101\"", "\\u{41}\\101")]
+    [InlineData("'a\\u12'", null)]
+    [InlineData("'a\nb'", null)]
+    public void Strings_With_Escapes_Are_Not_Decoded_When_Requested(string input, string? expected)
+    {
+        Assert.Equal(expected != null, StringGrammars.TryParseRawJavaScript(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("%a\\nb%", "a\\nb")]
+    [InlineData("%a\\%b%", "a\\%b")]
+    [InlineData("%a\\qb%", null)]
+    public void Custom_Quote_Strings_Are_Not_Decoded_When_Requested(string input, string? expected)
+    {
+        Assert.Equal(expected != null, StringGrammars.TryParseRawCustomQuote(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("'a\\nb'")]
+    [InlineData("'plain'")]
+    public void Raw_Strings_Can_Be_Captured(string input)
+    {
+        Assert.True(StringGrammars.TryParseRawCaptured(input, out var length));
+        Assert.Equal(input.Length, length);
+    }
+
+    [Theory]
     // The backslash delimiter is also the escape char, so it can't be escaped and the next one ends the string
     [InlineData("\\abc\\", "abc")]
     [InlineData("\\n\\rest", "n")]
@@ -149,6 +192,10 @@ public class StringParserTests
 public static partial class StringGrammars
 {
     public static partial bool TryParseDecoded(string text, out string value);
+    public static partial bool TryParseRaw(string text, out string value);
+    public static partial bool TryParseRawJavaScript(string text, out string value);
+    public static partial bool TryParseRawCustomQuote(string text, out string value);
+    public static partial bool TryParseRawCaptured(string text, out int value);
     public static partial bool TryParseBackslashDelimited(string text, out string value);
     public static partial bool TryParseCaptured(string text, out int value);
     public static partial bool TryParseCapturedStandard(string text, out int value);
