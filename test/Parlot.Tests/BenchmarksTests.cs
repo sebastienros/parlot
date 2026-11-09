@@ -343,6 +343,18 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void CodePointIdentifierBenchmarks()
+    {
+        var benchmarks = new CodePointIdentifierBenchmarks();
+
+        Assert.Equal(2000, benchmarks.Default());
+        Assert.Equal(2000, benchmarks.CharPredicates());
+        Assert.Equal(2000, benchmarks.CodePoints());
+        Assert.Equal(2000, benchmarks.JavaScript());
+        Assert.Equal(2000, benchmarks.JavaScriptEscapesAndAstralChars());
+    }
+
+    [Fact]
     public void PositionBenchmarks()
     {
         var benchmarks = new PositionBenchmarks();

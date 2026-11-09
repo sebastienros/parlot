@@ -606,6 +606,48 @@ Result:
 slice_text
 ```
 
+#### Code points, escape sequences and surrogate pairs
+
+The overload taking code point predicates matches identifiers of any Unicode chars, like those of JavaScript, Java,
+C# or Python. The predicates define the whole sets, and `IdentifierOptions` tells what else is a char:
+
+```c#
+Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options)
+```
+
+| Option | Accepts |
+|---|---|
+| `UnicodeEscapes` | `\uXXXX`, four hexadecimal digits (JavaScript, Java, C#) |
+| `CodePointEscapes` | `\u{X...}`, up to `10FFFF` (JavaScript) |
+| `SurrogatePairs` | chars outside the Basic Multilingual Plane, like `𝒜` (U+1D49C); a lone surrogate is never a char |
+| `JavaScript` | all of the above |
+
+An escape sequence or a surrogate pair is accepted when the predicate accepts the code point it stands for: `1`
+(`1`) can follow the start of an identifier but can't start one. An escape sequence which isn't valid, or whose code
+point isn't accepted, ends the identifier, like any char it doesn't accept. Without `SurrogatePairs`, each surrogate is
+given to the predicates as a code point.
+
+The value is the text of the identifier, escape sequences included. `Character.DecodeIdentifier()` returns the name,
+without allocating when there are no escape sequences:
+
+```c#
+// Mathematical letters stand for the letters outside the BMP here
+static bool IsStart(int c) => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF);
+static bool IsPart(int c) => IsStart(c) || c is 0x200C or 0x200D || (c < 0x10000 && char.IsDigit((char)c));
+
+var identifier = Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript);
+var name = identifier.Then(static x => Character.DecodeIdentifier(x).ToString());
+
+name.Parse(@"ab\u{63}"); // "abc"
+```
+
+The predicates are invoked for each ASCII char when the parser is built, which is then tested with bit masks: they must
+give the same answer for a code point each time, and can't accept a new line. They are only invoked when parsing for
+the other chars, escape sequences and surrogate pairs.
+
+Since the chars the start predicate accepts can't be listed, the identifier has no hints for `OneOf`'s lookup table, like
+`Identifier()` with an `extraStart` predicate. `Lookup()` can give it the chars it starts with, when they are known.
+
 ### Pattern
 
 Matches a consecutive characters with a specific predicate, optionally defining a minimum and maximum size.
