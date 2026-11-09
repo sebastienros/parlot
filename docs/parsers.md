@@ -256,9 +256,26 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
   `a ? b : (c ? d : e)`, as in C. With `rightAssociative: false` it is a value of the tighter levels only:
   `a ? b : c ? d : e` is `(a ? b : c) ? d : e`. The looser levels apply to the whole conditional, so with `??` looser,
   `a ? b : c ?? d` is `(a ? b : c) ?? d` and the last operand can't contain a `??`, while `a ?? b ? c : d` is
-  `a ?? (b ? c : d)`. A last operand that is a whole expression, as in C# where it can be an assignment, can't be a level.
+  `a ?? (b ? c : d)`.
+- `Ternary(question, middle, colon, last, (condition, whenTrue, whenFalse) => ...)` parses the last operand with `last`,
+  which can be looser than the conditional, as in C# and JavaScript where it is an assignment. It is a level of valued
+  postfix operators whose operator is `question.SkipAnd(middle).AndSkip(colon).And(last)`, applied to the condition, a
+  value of the tighter levels. With `last` the whole expression, or a `Deferred` of the assignment level,
+  `a ? b : c = d` is `a ? b : (c = d)` and `a ? b : c ? d : e` is `a ? b : (c ? d : e)`; the looser levels apply to what
+  follows `last`, so with `last` an assignment and `,` looser, `a ? b : c, d` is `(a ? b : c), d`. When `last` is
+  tighter than the conditional, conditionals apply in turn: `a ? b : c ? d : e` is `(a ? b : c) ? d : e`.
+
+  ```csharp
+  var assignment = Deferred<Expression>();
+  assignment.Parser = primary.Operators()
+      .LeftAssociative((Terms.Text("||"), static (a, b) => new Or(a, b)))
+      .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment, static (c, a, b) => new Conditional(c, a, b))
+      .RightAssociative((Terms.Char('='), static (a, b) => new Assign(a, b)));
+  var expression = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => new Sequence(a, b)));
+  ```
 - These levels parse what the equivalent chain parses: a level whose operator is `question.SkipAnd(middle).AndSkip(colon)`
-  for a conditional, or `primary.And(ZeroOrMany(postfix))` folded for the postfix operators of the tightest level, with
+  for a conditional, `tighter.And(ZeroOrMany(question.SkipAnd(middle).AndSkip(colon).And(last)))` folded for a
+  conditional with a `last` parser, or `primary.And(ZeroOrMany(postfix))` folded for the postfix operators of the tightest level, with
   the same results, spans and cursor positions. When `question`, `middle`, `colon` or the last operand doesn't match,
   nothing is read and the looser levels are tried at the position of `question`: a `?` doesn't need to exclude the `??`
   of a looser level.
