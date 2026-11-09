@@ -4,7 +4,6 @@ using Parlot.Fluent;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using Xunit;
 using static Parlot.Fluent.Parsers;
 
@@ -138,15 +137,13 @@ public class SeekGuardTests
         }
     }
 
-    private static readonly PropertyInfo FurthestOffset = typeof(Cursor).GetProperty("FurthestOffset", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
     private static int Furthest<T>(Parser<T> parser, string text)
     {
         var context = new ParseContext(new Scanner(text));
         var result = new ParseResult<T>();
 
         Assert.False(parser.Parse(context, ref result));
-        return (int)FurthestOffset.GetValue(context.Scanner.Cursor)!;
+        return context.Scanner.Cursor.FurthestOffset;
     }
 
     private static string Run<T>(Parser<T> parser, string text)
