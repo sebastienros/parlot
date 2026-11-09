@@ -1644,7 +1644,8 @@ identifier, a parser of white space and comments isn't invoked at all. A parser 
 hints, but `Capture`, `ZeroOrMany`, `ZeroOrOne` and `Optional` are looked through: `Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(),
 Literals.Comments("//"))))`, the parser `WithComments` builds, is invoked only before white space and `/`. A parser that can start
 with any char (one of the alternatives of its choice doesn't tell its chars, like `Literals.Pattern()`), or skips white space
-itself, is invoked before every token. The same applies to `ParseContext.WhiteSpaceParser`.
+itself, is invoked before every token. A parser that declares `OneOf<T>.NonAsciiSeekableChar` is invoked before any char
+above ASCII. The same applies to `ParseContext.WhiteSpaceParser`.
 
 Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
 grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still

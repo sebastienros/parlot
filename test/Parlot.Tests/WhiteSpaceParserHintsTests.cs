@@ -126,6 +126,39 @@ public class WhiteSpaceParserHintsTests
         Assert.Equal(expected, offsets);
     }
 
+    // Skips '~' and any char above ASCII
+    private static int SkipTildeAndNonAscii(ReadOnlySpan<char> span)
+    {
+        var i = 0;
+        while (i < span.Length && (span[i] == '~' || span[i] >= 0x80))
+        {
+            i++;
+        }
+
+        return i;
+    }
+
+    [Theory]
+    [InlineData("a~b")]
+    [InlineData("a\u00E9b")]
+    [InlineData("a\u3000~\uFFFFb")]
+    [InlineData("a\uFFFFb")]
+    public void IsInvokedBeforeAnyNonAsciiCharWithTheNonAsciiHint(string text)
+    {
+        // OneOf<T>.NonAsciiSeekableChar stands for any char above ASCII, not for U+FFFF only
+        var whiteSpace = Literals.Scan(SkipTildeAndNonAscii, "~" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar);
+        var grammar = Terms.Text("a").And(Terms.Text("b")).Then(static x => (IReadOnlyList<TextSpan>)[new TextSpan(x.Item1), new TextSpan(x.Item2)]);
+        var (value, offsets) = Parse(grammar.WithWhiteSpaceParser(whiteSpace), whiteSpace, text);
+
+        Assert.NotNull(value);
+        Assert.Equal([1], offsets);
+
+        // It isn't invoked before an ASCII char it can't start with
+        var (other, otherOffsets) = Parse(grammar.WithWhiteSpaceParser(whiteSpace), whiteSpace, "a#b");
+        Assert.Null(other);
+        Assert.Empty(otherOffsets);
+    }
+
     [Fact]
     public void ContextWhiteSpaceParserUsesItsHints()
     {
