@@ -53,6 +53,9 @@ public static partial class DiscardGrammars
     [GenerateParser(nameof(TryParseNot))]
     private static Parser<string> BuildNot() => Not(MatchedText("keyword")).SkipAnd(MatchedText("value")).Eof();
 
+    [GenerateParser(nameof(TryParsePeek))]
+    private static Parser<string> BuildPeek() => Peek(MatchedText("keyword")).SkipAnd(MatchedText("keyword")).Eof();
+
     [GenerateParser(nameof(TryParseTextBefore))]
     private static Parser<string> BuildTextBefore() =>
         AnyCharBefore(MatchedText("keyword"), consumeDelimiter: true).Then(static span => span.ToString()).Eof();

@@ -343,6 +343,19 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void SameParserWithAnotherStateIsNotReported()
+    {
+        // The state can change what the parser matches, so the later alternative isn't known to start with the earlier one
+        var flag = false;
+        var keyword = If(() => flag, Terms.Text("yield")).Named("keyword");
+        var parser = keyword.Or(keyword.WithState(() => flag, x => flag = x, static _ => true).AndSkip(Terms.Char('(')));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(parser), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal("yield", parser.Parse("yield("));
+        Assert.False(flag);
+    }
+
+    [Fact]
     public void SameParserFirstIsReported()
     {
         var identifier = Terms.Identifier().Named("identifier");

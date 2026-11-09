@@ -28,10 +28,11 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         // The text is searched for the chars the delimiter can start with, unless it can start somewhere else:
         // - with a white space, which is skipped before the expected chars
         // - with any char, which a OneOf with parsers that are not seekable declares with OtherSeekableChar
+        // - with any non-ASCII char, declared with NonAsciiSeekableChar
         if (_delimiter is ISeekable seekable
             && seekable.CanSeek
             && !seekable.SkipWhitespace
-            && Array.IndexOf(seekable.ExpectedChars, OneOf<T>.OtherSeekableChar) < 0)
+            && SeekableHints.IsExact(seekable.ExpectedChars))
         {
             _expectedChars = seekable.ExpectedChars;
 #if NET8_0_OR_GREATER

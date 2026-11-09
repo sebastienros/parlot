@@ -733,7 +733,10 @@ public class FluentTests
         Assert.True(custom.CanSeek);
         Assert.Equal(new[] { 'a', 'b', '-' }, custom.ExpectedChars);
 
-        Assert.False(((ISeekable)Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("b"))).CanSeek);
+        // The start chars of search values are found by testing every char
+        var searchValues = (ISeekable)Literals.Identifier(System.Buffers.SearchValues.Create("a"), System.Buffers.SearchValues.Create("b"));
+        Assert.True(searchValues.CanSeek);
+        Assert.Equal(new[] { 'a' }, searchValues.ExpectedChars);
 #endif
     }
 
@@ -912,6 +915,55 @@ public class FluentTests
     {
         Assert.False(Not(Terms.Decimal()).TryParse("123", out _));
         Assert.True(Not(Terms.Decimal()).TryParse("Text", out _));
+    }
+
+    [Fact]
+    public void NotShouldSetAnEmptyResultWhereItIsInvoked()
+    {
+        var parser = Not(Terms.Char('b'));
+        var context = new ParseContext(new Scanner("x c"));
+        context.Scanner.Cursor.Advance();
+
+        // What a previous parser left in the result is replaced
+        var result = new ParseResult<char>(5, 7, 'z');
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1, result.Start);
+        Assert.Equal(1, result.End);
+        Assert.Equal(default, result.Value);
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void NotShouldRestoreTheCursorWhenItFails()
+    {
+        var parser = Not(Terms.Text("ab"));
+        var context = new ParseContext(new Scanner("x  ab"));
+        context.Scanner.Cursor.Advance();
+        var result = new ParseResult<string>();
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData(" a c", "[1,2]")]
+    [InlineData(" a", "[1,2]")]
+    [InlineData(" ab", null)]
+    public void SequenceEndingWithNotShouldEndWithThePreviousParser(string input, string expected)
+    {
+        var parser = Terms.Char('a').AndSkip(Not(Literals.Char('b'))).Then(static (c, s, e, v) => $"[{s},{e}]");
+
+        Assert.Equal(expected, parser.Parse(input));
+    }
+
+    [Fact]
+    public void SequenceStartingWithNotShouldStartAtItsFirstToken()
+    {
+        // Not reads nothing, so the sequence starts where the next parser read something, after its white space
+        var parser = Literals.Char('x').SkipAnd(Not(Terms.Char('b')).SkipAnd(Terms.Char('a')).Then(static (c, s, e, v) => $"[{s},{e}]"));
+
+        Assert.Equal("[2,3]", parser.Parse("x a"));
     }
 
     [Fact]
@@ -1242,6 +1294,41 @@ public class FluentTests
     {
         Assert.True(Between(Terms.Char('['), Terms.Text("abcd"), Terms.Char(']')).Then(x => x.ToString()).Or(Literals.Text(" [abc")).TryParse(" [abc]", out var result1));
         Assert.Equal(" [abc", result1);
+    }
+
+    [Theory]
+    [InlineData("[x]", "x", 0, 3)]
+    [InlineData(" [ xy ] ", "xy", 1, 7)]
+    [InlineData("[ xy ]]", "xy", 0, 6)]
+    public void BetweenShouldSpanDelimiters(string input, string value, int start, int end)
+    {
+        var key = Terms.Identifier();
+        var between = Between(Terms.Char('['), key, Terms.Char(']'));
+        var sequence = Terms.Char('[').SkipAnd(key).AndSkip(Terms.Char(']'));
+
+        var result = new ParseResult<TextSpan>();
+        Assert.True(between.Parse(new ParseContext(new Scanner(input)), ref result));
+        Assert.Equal((start, end), (result.Start, result.End));
+        Assert.Equal(value, result.Value.ToString());
+
+        // Same span as the equivalent sequence, through the offsets a callback receives
+        Assert.Equal(
+            sequence.Then(static (_, s, e, _) => (s, e)).Parse(input),
+            between.Then(static (_, s, e, _) => (s, e)).Parse(input));
+    }
+
+    [Theory]
+    [InlineData(" xy ]")]   // before fails
+    [InlineData(" [ 1 ]")]  // parser fails
+    [InlineData(" [ xy )")] // after fails
+    [InlineData(" [ xy ")]  // after fails at the end
+    public void BetweenShouldRestorePositionWhenFailingToSpanDelimiters(string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<TextSpan>();
+
+        Assert.False(Between(Terms.Char('['), Terms.Identifier(), Terms.Char(']')).Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 
     [Fact]

@@ -16,6 +16,7 @@ public static partial class Grammar
     public static partial bool TryParseSkippedValues(string text, out string value);
     public static partial bool TryParseIdentifier(string text, out string value);
     public static partial bool TryParseIdentifierWithPredicates(string text, out string value);
+    public static partial bool TryParseCodePointIdentifier(string text, out string value);
     public static partial bool TryParseTextBefore(string text, out string value);
     public static partial bool TryParseTextBeforeChar(string text, out string value);
     public static partial bool TryParsePattern(string text, out string value);
@@ -28,6 +29,7 @@ public static partial class Grammar
     public static partial bool TryParseRecursive(string text, out int value);
     public static partial bool TryParseLeftRecursive(string text, out int value);
     public static partial bool TryParseCustomWhitespace(string text, out string value);
+    public static partial bool TryParseComments(string text, out string value);
     public static partial bool TryParseConfigured(string text, GrammarOptions options, out string value);
     public static partial bool TryParseConfiguredWhitespace(string text, GrammarOptions options, out string value);
     public static partial bool TryParseDigits(string text, out string value);
@@ -78,6 +80,7 @@ public static partial class Grammar
     public static partial bool TryParseSkippedValues(TextReader reader, out string value);
     public static partial bool TryParseIdentifier(TextReader reader, out string value);
     public static partial bool TryParseIdentifierWithPredicates(TextReader reader, out string value);
+    public static partial bool TryParseCodePointIdentifier(TextReader reader, out string value);
     public static partial bool TryParseTextBefore(TextReader reader, out string value);
     public static partial bool TryParseTextBeforeChar(TextReader reader, out string value);
     public static partial bool TryParsePattern(TextReader reader, out string value);

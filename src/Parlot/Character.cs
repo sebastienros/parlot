@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using Parlot.Fluent;
 
 namespace Parlot;
 
@@ -144,6 +145,260 @@ public static partial class Character
             }
 
             // Escape sequences often decode to a single char, like "\n"
+            return dataIndex == 1 && buffer[0] < 128 ? StringPool.Ascii(buffer[0]) : buffer.Slice(0, dataIndex).ToString();
+        }
+        finally
+        {
+            if (rentedBuffer != null)
+            {
+                ArrayPool<char>.Shared.Return(rentedBuffer);
+            }
+        }
+    }
+
+    // The flags that make a backslash start an escape sequence
+    internal const StringEscapes BackslashEscapes = (StringEscapes)((int)StringEscapes.LineContinuation * 2 - 1);
+
+    // The values ReadEscape returns for a sequence that isn't a char
+    internal const int RemovedEscape = -1;
+    internal const int KeptEscape = -2;
+
+    /// <summary>
+    /// Reads the escape sequence that follows a backslash, for escapes other than <see cref="StringEscapes.Default"/>.
+    /// </summary>
+    /// <param name="span">The text after the backslash, not empty.</param>
+    /// <param name="escapes">The escape sequences to accept.</param>
+    /// <param name="quote">The quote that delimits the string.</param>
+    /// <param name="value">The code point, <see cref="RemovedEscape"/> for a line continuation, or <see cref="KeptEscape"/>
+    /// when the backslash and the sequence are kept as is.</param>
+    /// <returns>The length of the sequence after the backslash; 0 when it is invalid, -1 when it is invalid because
+    /// <paramref name="span"/> ends before it does.</returns>
+    internal static int ReadEscape(ReadOnlySpan<char> span, StringEscapes escapes, char quote, out int value)
+    {
+        var c = span[0];
+
+        // A line terminator is a continuation before it is an escaped quote, so that the decoder, which doesn't have
+        // the cursor, reads the same sequences as the scanner
+        if ((escapes & StringEscapes.LineContinuation) != 0 && c is '\n' or '\r' or '\u2028' or '\u2029')
+        {
+            value = RemovedEscape;
+            return c == '\r' && span.Length > 1 && span[1] == '\n' ? 2 : 1;
+        }
+
+        if ((escapes & StringEscapes.Octal) != 0 && IsInRange(c, '0', '7'))
+        {
+            // \0 to \377: up to three digits from \0 to \3, two from \4 to \7. The digits after the first one are
+            // optional, an escape that reaches the end of the span ends there.
+            var octal = c - '0';
+            var length = 1;
+            var maxLength = c <= '3' ? 3 : 2;
+
+            while (length < maxLength && length < span.Length && IsInRange(span[length], '0', '7'))
+            {
+                octal = octal * 8 + (span[length] - '0');
+                length++;
+            }
+
+            value = octal;
+            return length;
+        }
+
+        value = c switch
+        {
+            '\\' => '\\',
+            'n' when (escapes & StringEscapes.NewLineAndTab) != 0 => '\n',
+            'r' when (escapes & StringEscapes.NewLineAndTab) != 0 => '\r',
+            't' when (escapes & StringEscapes.NewLineAndTab) != 0 => '\t',
+            'b' when (escapes & StringEscapes.BackspaceAndFormFeed) != 0 => '\b',
+            'f' when (escapes & StringEscapes.BackspaceAndFormFeed) != 0 => '\f',
+            'v' when (escapes & StringEscapes.VerticalTab) != 0 => '\v',
+            'a' when (escapes & StringEscapes.Alert) != 0 => '\a',
+            '0' when (escapes & StringEscapes.Null) != 0 => '\0',
+            'e' when (escapes & StringEscapes.Escape) != 0 => '\u001b',
+            '/' when (escapes & StringEscapes.Slash) != 0 => '/',
+            '?' when (escapes & StringEscapes.QuestionMark) != 0 => '?',
+            's' when (escapes & StringEscapes.Space) != 0 => ' ',
+            '\'' or '"' when (escapes & StringEscapes.Quotes) != 0 => c,
+            _ => -1,
+        };
+
+        if (value >= 0)
+        {
+            return 1;
+        }
+
+        switch (c)
+        {
+            case 'u' when (escapes & StringEscapes.BracedUnicode) != 0 && (span.Length == 1 || span[1] == '{'):
+                return ReadBracedHex(span, out value);
+            case 'u' when (escapes & StringEscapes.Unicode) != 0:
+                return ReadHex(span, 4, 4, out value);
+            case 'U' when (escapes & StringEscapes.LongUnicode) != 0:
+                var longLength = ReadHex(span, 8, 8, out value);
+                // Eight digits can overflow the value
+                return value is < 0 or > 0x10FFFF ? 0 : longLength;
+            case 'x' when (escapes & StringEscapes.TwoDigitHex) != 0:
+                return ReadHex(span, 2, 2, out value);
+            case 'x' when (escapes & StringEscapes.Hex) != 0:
+                return ReadHex(span, 1, 4, out value);
+        }
+
+        // The chars no flag claims
+        if (c == quote && (escapes & StringEscapes.EscapedQuote) != 0)
+        {
+            value = c;
+            return 1;
+        }
+
+        if ((escapes & StringEscapes.KeepUnknown) != 0)
+        {
+            value = KeptEscape;
+            return 1;
+        }
+
+        if ((escapes & StringEscapes.AnyChar) != 0)
+        {
+            value = c;
+            return 1;
+        }
+
+        value = 0;
+        return 0;
+    }
+
+    // Reads the hex digits after the char at span[0]
+    private static int ReadHex(ReadOnlySpan<char> span, int minDigits, int maxDigits, out int value)
+    {
+        value = 0;
+        var digits = 0;
+
+        while (digits < maxDigits && digits + 1 < span.Length && IsHexDigit(span[digits + 1]))
+        {
+            value = value * 16 + HexValue(span[digits + 1]);
+            digits++;
+        }
+
+        if (digits < minDigits)
+        {
+            // The digits that are there run to the end of the span
+            return digits + 1 == span.Length ? -1 : 0;
+        }
+
+        return digits + 1;
+    }
+
+    // Reads "{", the hex digits of a code point up to U+10FFFF and "}" after the char at span[0]
+    private static int ReadBracedHex(ReadOnlySpan<char> span, out int value)
+    {
+        value = 0;
+
+        if (span.Length == 1)
+        {
+            return -1;
+        }
+
+        var i = 2;
+
+        while (i < span.Length && IsHexDigit(span[i]))
+        {
+            value = value * 16 + HexValue(span[i]);
+
+            if (value > 0x10FFFF)
+            {
+                return 0;
+            }
+
+            i++;
+        }
+
+        if (i == span.Length)
+        {
+            return -1;
+        }
+
+        return i == 2 || span[i] != '}' ? 0 : i + 1;
+    }
+
+    /// <summary>
+    /// Decodes a string with the escape sequences of <paramref name="escapes"/>, delimited by <paramref name="quote"/>,
+    /// taking the result from <paramref name="pool"/> when there is one. The scanner validated it with the same escapes.
+    /// </summary>
+    internal static string DecodeStringInternal(ReadOnlySpan<char> span, StringEscapes escapes, char quote, StringPool? pool)
+    {
+        if (escapes == StringEscapes.Default)
+        {
+            return DecodeStringInternal(span, pool);
+        }
+
+        // No escape sequence is longer once decoded: a code point above U+FFFF has at least six chars, and a kept
+        // sequence its own length
+        char[]? rentedBuffer = null;
+        Span<char> buffer = span.Length <= 128
+            ? stackalloc char[span.Length]
+            : (rentedBuffer = ArrayPool<char>.Shared.Rent(span.Length));
+
+        try
+        {
+            var escapeChar = (escapes & BackslashEscapes) != 0 ? '\\' : quote;
+            var nextChar = (escapes & StringEscapes.DoubledQuote) != 0 ? quote : escapeChar;
+            var dataIndex = 0;
+            var i = 0;
+
+            while (i < span.Length)
+            {
+                var next = span.Slice(i).IndexOfAny(escapeChar, nextChar);
+                var count = next < 0 ? span.Length - i : next;
+
+                span.Slice(i, count).CopyTo(buffer.Slice(dataIndex));
+                dataIndex += count;
+                i += count;
+
+                if (next < 0)
+                {
+                    break;
+                }
+
+                if (span[i] == quote && i + 1 < span.Length && span[i + 1] == quote && (escapes & StringEscapes.DoubledQuote) != 0)
+                {
+                    buffer[dataIndex++] = quote;
+                    i += 2;
+                    continue;
+                }
+
+                // A backslash at the end, or that doesn't start a valid sequence, is kept as is
+                var value = 0;
+                var length = span[i] == '\\' && i + 1 < span.Length ? ReadEscape(span.Slice(i + 1), escapes, quote, out value) : 0;
+
+                if (length <= 0)
+                {
+                    buffer[dataIndex++] = span[i++];
+                    continue;
+                }
+
+                if (value == KeptEscape)
+                {
+                    buffer[dataIndex++] = '\\';
+                    buffer[dataIndex++] = span[i + 1];
+                }
+                else if (value > 0xFFFF)
+                {
+                    value -= 0x10000;
+                    buffer[dataIndex++] = (char)(0xD800 + (value >> 10));
+                    buffer[dataIndex++] = (char)(0xDC00 + (value & 0x3FF));
+                }
+                else if (value != RemovedEscape)
+                {
+                    buffer[dataIndex++] = (char)value;
+                }
+
+                i += length + 1;
+            }
+
+            if (pool != null)
+            {
+                return pool.Get(buffer.Slice(0, dataIndex));
+            }
+
             return dataIndex == 1 && buffer[0] < 128 ? StringPool.Ascii(buffer[0]) : buffer.Slice(0, dataIndex).ToString();
         }
         finally

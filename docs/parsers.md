@@ -45,6 +45,39 @@ A `Deferred` parser that is invoked again at the position where it is already ac
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
 [Left recursion](writing.md#left-recursion). `disableLoopDetection: true` on the `ParseContext` disables it for every parser.
 
+## Reporting where a parse failed
+
+A parse that fails without an error leaves `TryParse` with a `null` error and the cursor where it started. The most
+useful position is then the *furthest failure*: where the attempt which matched the most text stopped. The cursor keeps
+it in `Cursor.FurthestOffset`, and `Cursor.FurthestPosition` adds its line and column, computed when it is read:
+
+```csharp
+var context = new ParseContext(new Scanner(text));
+
+if (!program.TryParse(context, out var value, out var error))
+{
+    // An Error or ElseError reports its own position, the furthest failure is where the longest attempt stopped
+    var position = context.Scanner.Cursor.FurthestPosition;
+    throw new FormatException($"{error?.Message ?? "Syntax error"} at {position}.");
+}
+```
+
+For a program parsed as `ZeroOrMany(statement).AndSkip(Eof().ElseError("Expected a statement"))`, the error is where the
+statements stopped matching, at the start of the statement that failed, while the furthest failure is where that
+statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
+expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
+return, with the same rules for what a parser reads and then rejects (`When`, `Not`, `WhenFollowedBy`,
+`WhenNotFollowedBy`).
+
+The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
+reused for successive parses reports the failure of the last one. A parse which drives `Parse(context, ref result)`
+itself calls `Cursor.ResetFurthestOffset()` first. After a successful parse, `FurthestOffset` is at least where the parse
+ended. For a `TextReader`, `StreamParseOptions.ContextFactory` gives access to the context, whose cursor reports the same
+furthest failure as the one of the `string`.
+
+The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved back
+from on that path only: it doesn't change the time of a successful parse.
+
 ## Collecting diagnostics without stopping
 
 By default, `Error(...)` and `ElseError(...)` throw `ParseException`; `TryParse(..., out error)`
@@ -214,6 +247,14 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
 - `Postfix((op, (x, value) => ...))` passes the value of the operator to its factory. Each call takes operators of one
   type; `Postfix(first, second)` takes two operators of different types in the same level, like a member access and an
   indexer, which apply in any order: `a.b[c].d`.
+- `Unary((op, (x, value) => ...))` is a level of prefix operators whose factory receives the value of the operator,
+  operand first like `Postfix`. A single factory can create the nodes of all the operators of a level, and an operator
+  can return its position, which its node starts at: `Terms.Text("typeof").Then(static (context, start, end, _) => start)`.
+  The level parses like the one of `Unary((op, x => ...))`, mixed with plain prefix levels and postfix levels: its
+  operators are read in the same loop as the ones of the other prefix levels, and apply from the last one once their
+  operand is parsed, so `- - !x` with valued `-` and plain `!` is `-(-(!x))` and the two `-` receive their own values. A
+  chain of valued operators doesn't recurse either, and each one counts as a level of recursion with a
+  `maxRecursionDepth`.
 - `LeftAssociative(operators, (a, b, op) => ...)` and `RightAssociative(operators, (a, b, op) => ...)` are the levels of
   the `LeftAssociative(Parser<TOperator>[], Func<T, T, TOperator, T>)` combinators, whose single factory receives the
   value of the operator.
@@ -223,17 +264,63 @@ expression.Parse("-a.b[i] * 2 == c ? d : e ?? f"); // ((((-(a.b[i])) * 2) == c) 
   `a ? b : (c ? d : e)`, as in C. With `rightAssociative: false` it is a value of the tighter levels only:
   `a ? b : c ? d : e` is `(a ? b : c) ? d : e`. The looser levels apply to the whole conditional, so with `??` looser,
   `a ? b : c ?? d` is `(a ? b : c) ?? d` and the last operand can't contain a `??`, while `a ?? b ? c : d` is
-  `a ?? (b ? c : d)`. A last operand that is a whole expression, as in C# where it can be an assignment, can't be a level.
+  `a ?? (b ? c : d)`.
+- `Ternary(question, middle, colon, last, (condition, whenTrue, whenFalse) => ...)` parses the last operand with `last`,
+  which can be looser than the conditional, as in C# and JavaScript where it is an assignment. It is a level of valued
+  postfix operators whose operator is `question.SkipAnd(middle).AndSkip(colon).And(last)`, applied to the condition, a
+  value of the tighter levels. With `last` the whole expression, or a `Deferred` of the assignment level,
+  `a ? b : c = d` is `a ? b : (c = d)` and `a ? b : c ? d : e` is `a ? b : (c ? d : e)`; the looser levels apply to what
+  follows `last`, so with `last` an assignment and `,` looser, `a ? b : c, d` is `(a ? b : c), d`. When `last` is
+  tighter than the conditional, conditionals apply in turn: `a ? b : c ? d : e` is `(a ? b : c) ? d : e`.
+
+  ```csharp
+  var assignment = Deferred<Expression>();
+  assignment.Parser = primary.Operators()
+      .LeftAssociative((Terms.Text("||"), static (a, b) => new Or(a, b)))
+      .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment, static (c, a, b) => new Conditional(c, a, b))
+      .RightAssociative((Terms.Char('='), static (a, b) => new Assign(a, b)));
+  var expression = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => new Sequence(a, b)));
+  ```
 - These levels parse what the equivalent chain parses: a level whose operator is `question.SkipAnd(middle).AndSkip(colon)`
-  for a conditional, or `primary.And(ZeroOrMany(postfix))` folded for the postfix operators of the tightest level, with
+  for a conditional, `tighter.And(ZeroOrMany(question.SkipAnd(middle).AndSkip(colon).And(last)))` folded for a
+  conditional with a `last` parser, or `primary.And(ZeroOrMany(postfix))` folded for the postfix operators of the tightest level, with
   the same results, spans and cursor positions. When `question`, `middle`, `colon` or the last operand doesn't match,
   nothing is read and the looser levels are tried at the position of `question`: a `?` doesn't need to exclude the `??`
   of a looser level.
-- The table looks up the operator following an operand through a single choice of the operators up to the next level
-  of valued operators, which starts with a check of the first chars of these: when the next char can start one of them,
-  the level that applies them parses them and passes their values to the factories right away, otherwise the looser
-  levels are tried in the same choice. An operator is parsed only once at a position, even when it parses an expression,
-  like an index or the middle of a conditional, and the values are never kept for a looser level.
+- The table looks up the operator following an operand through a single choice of all its operators, in which each level
+  of valued operators is a check of the first chars of these: when the next char can start one of them, the level that
+  applies them parses them and passes their values to the factories right away, otherwise the looser levels are tried in
+  the same choice. An operator is parsed only once at a position, even when it parses an expression, like an index or the
+  middle of a conditional, and the values are never kept for a looser level. A table of valued levels, like a level per
+  precedence of binary operators with a single factory receiving the operator, costs a single choice after an operand,
+  like the same table with a factory per operator. When the next char can start an operator of a valued level that
+  doesn't match, another choice follows, from the next level: with a valued `**` level tighter than a `*` level,
+  `a * b` probes the `**` level, which doesn't match, then looks up the `*` from the next level.
+
+### Factories with the context
+
+Like the combinators, the levels take factories which receive the `ParseContext` first, for nodes which need the state of
+a context, like a map of the lines to compute a line and a column:
+
+```csharp
+expression.Parser = primary.Operators()
+    .Postfix((Terms.Text("++"), static (ParseContext context, Expression x, string op) => new PostIncrement(x, Location(context))))
+    .Unary((Terms.Char('-').Then(static (_, start, _, _) => start), static (ParseContext context, Expression x, int start) => new Negate(x, Location(context, start))))
+    .LeftAssociative((Terms.Char('*'), static (ParseContext context, Expression a, Expression b) => new Multiply(a, b, Location(context))))
+    .LeftAssociative([Terms.Text("+"), Terms.Text("-")], static (ParseContext context, Expression a, Expression b, string op) => new Binary(op, a, b, Location(context)))
+    .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (ParseContext context, Expression c, Expression a, Expression b) => new Conditional(c, a, b, Location(context)));
+```
+
+- `LeftAssociative((op, (context, a, b) => ...))` and `RightAssociative((op, (context, a, b) => ...))` for the plain
+  binary levels, `LeftAssociative(operators, (context, a, b, op) => ...)` and `RightAssociative(operators, (context, a, b, op) => ...)`
+  for the valued ones, and `Ternary(question, middle, colon, (context, condition, whenTrue, whenFalse) => ...)`.
+- `Unary((op, (context, x, value) => ...))` and `Postfix((op, (context, x, value) => ...))` for the unary levels: a factory
+  which needs the context and not the value of its operator ignores the value. There is no `(context, x)` overload of
+  the table's `Unary` and `Postfix`, unlike the combinators: its lambdas would take two parameters, like the ones of the
+  valued levels, and C# couldn't tell which level a call adds.
+- When the types of the parameters of a lambda are not given, C# picks the overload from their number. With
+  `(context, a, b) => ...`, a level of binary operators whose values aren't passed, the types are optional; giving them,
+  as above, documents which overload is used.
 
 ## Terms and Literals
 
@@ -566,6 +653,7 @@ Matches a quoted string literal with escape sequences. Use this parser to parse 
 
 ```c#
 Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble)
+Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes)
 ```
 
 Usage:
@@ -583,6 +671,64 @@ Result:
 
 The value is a `TextSpan` of the input when the string has no escape sequence, and of a new string otherwise. To get
 strings that repeat allocated once, use `ToPooledString()`, which also decodes the escape sequences into its pool.
+
+#### Escape sequences
+
+By default (`StringEscapes.Default`), a string accepts `\0 \\ \a \b \f \n \r \t \v \' \"`, a backslash before its own
+quote, `\u` followed by four hex digits and `\x` followed by one to four hex digits. Any other escape sequence fails the
+string. Raw new lines are allowed.
+
+`StringEscapes` changes this for another language. These presets come with it:
+
+| Preset | Escape sequences |
+| --- | --- |
+| `Default` | Described above. |
+| `CSharp` | `Default`, plus `\e` and `\U` followed by eight hex digits. Raw new lines fail. |
+| `JavaScript` | `\' \" \\ \b \f \n \r \t \v \0`, `\uXXXX`, `\u{...}`, `\xXX`, legacy octal (`\101`), line continuations (a backslash before a new line is removed), and any other char after a backslash stands for itself (`\$` is `$`). Raw `\r` and `\n` fail. |
+| `Json` | `\" \\ \/ \b \f \n \r \t` and `\uXXXX`. Raw control chars (U+0000 to U+001F) fail. |
+| `Python` | `\' \" \\ \a \b \f \n \r \t \v`, octal, `\xXX`, `\uXXXX`, `\UXXXXXXXX` and line continuations. Other escape sequences are kept as is, backslash included (`\d` is `\d`). Raw `\r` and `\n` fail. |
+| `Java` | `\' \" \\ \b \f \n \r \t \s`, octal and `\uXXXX`. Raw `\r` and `\n` fail. |
+| `Sql` | A doubled quote is a quote (`'it''s'`), and a backslash is an ordinary char. |
+
+```c#
+var javaScript = Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript);
+javaScript.Parse(@"'\u{1F600} costs \$5'"); // "😀 costs $5"
+
+var sql = Terms.String(StringLiteralQuotes.Single, StringEscapes.Sql);
+sql.Parse("'it''s'"); // "it's"
+```
+
+For another language, combine the flags of its escape sequences. Whenever one of them adds escape sequences that start
+with a backslash, `\\` is a backslash too; with none of them, as in `StringEscapes.None` or `Sql`, a backslash is an
+ordinary char.
+
+| Flag | Effect |
+| --- | --- |
+| `EscapedQuote` | A backslash before the string's own quote, whichever it is, is that quote. |
+| `Quotes` | `\'` and `\"`, whichever quote delimits the string. |
+| `NewLineAndTab` | `\n`, `\r` and `\t`. |
+| `BackspaceAndFormFeed` | `\b` and `\f`. |
+| `VerticalTab`, `Alert`, `Null`, `Escape` | `\v`, `\a`, `\0` and `\e` (U+001B). |
+| `Slash`, `QuestionMark`, `Space` | `\/`, `\?` and `\s` (a space). |
+| `Unicode`, `LongUnicode` | `\u` followed by four hex digits, `\U` followed by eight. |
+| `BracedUnicode` | `\u{` hex digits `}`, a code point up to U+10FFFF. |
+| `Hex`, `TwoDigitHex` | `\x` followed by one to four hex digits, or by exactly two (`\x41B` is `AB`). |
+| `Octal` | `\0` to `\377`, as in JavaScript and Java. It takes precedence over `Null`. |
+| `AnyChar` | A backslash before any other char is that char. |
+| `KeepUnknown` | A backslash before any other char is kept, with the char. It takes precedence over `AnyChar`. |
+| `LineContinuation` | A backslash before `\n`, `\r\n`, `\r`, U+2028 or U+2029 is removed with it. |
+| `DoubledQuote` | Two quotes that delimit the string are one quote. |
+| `SingleLine` | A raw `\r` or `\n` fails the string. |
+| `NoControlChars` | A raw char from U+0000 to U+001F fails the string. |
+
+Code points above U+FFFF decode to surrogate pairs. A sequence a flag claims but that isn't complete, like `\u12` with
+`Unicode`, fails the string even with `AnyChar` or `KeepUnknown`. For example, Rust strings are
+`StringEscapes.EscapedQuote | StringEscapes.Quotes | StringEscapes.NewLineAndTab | StringEscapes.Null | StringEscapes.TwoDigitHex | StringEscapes.BracedUnicode | StringEscapes.LineContinuation`
+(except that Rust also skips the white space after a line continuation), and a JavaScript template literal, which can span
+lines, is `StringEscapes.JavaScript & ~StringEscapes.SingleLine` with `StringLiteralQuotes.Backtick` (without its `${}`
+substitutions). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
+own parser. To get the raw text of a literal as well, as a JavaScript AST does, read its offsets in a
+`Then(static (context, start, end, value) => ...)` callback, or wrap the string parser in `Capture()` for the raw text only.
 
 ### Identifier
 
@@ -605,6 +751,48 @@ Result:
 ```
 slice_text
 ```
+
+#### Code points, escape sequences and surrogate pairs
+
+The overload taking code point predicates matches identifiers of any Unicode chars, like those of JavaScript, Java,
+C# or Python. The predicates define the whole sets, and `IdentifierOptions` tells what else is a char:
+
+```c#
+Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options)
+```
+
+| Option | Accepts |
+|---|---|
+| `UnicodeEscapes` | `\uXXXX`, four hexadecimal digits (JavaScript, Java, C#) |
+| `CodePointEscapes` | `\u{X...}`, up to `10FFFF` (JavaScript) |
+| `SurrogatePairs` | chars outside the Basic Multilingual Plane, like `𝒜` (U+1D49C); a lone surrogate is never a char |
+| `JavaScript` | all of the above |
+
+An escape sequence or a surrogate pair is accepted when the predicate accepts the code point it stands for: `1`
+(`1`) can follow the start of an identifier but can't start one. An escape sequence which isn't valid, or whose code
+point isn't accepted, ends the identifier, like any char it doesn't accept. Without `SurrogatePairs`, each surrogate is
+given to the predicates as a code point.
+
+The value is the text of the identifier, escape sequences included. `Character.DecodeIdentifier()` returns the name,
+without allocating when there are no escape sequences:
+
+```c#
+// Mathematical letters stand for the letters outside the BMP here
+static bool IsStart(int c) => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF);
+static bool IsPart(int c) => IsStart(c) || c is 0x200C or 0x200D || (c < 0x10000 && char.IsDigit((char)c));
+
+var identifier = Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript);
+var name = identifier.Then(static x => Character.DecodeIdentifier(x).ToString());
+
+name.Parse(@"ab\u{63}"); // "abc"
+```
+
+The predicates are invoked for each ASCII char when the parser is built, which is then tested with bit masks: they must
+give the same answer for a code point each time, and can't accept a new line. They are only invoked when parsing for
+the other chars, escape sequences and surrogate pairs.
+
+Since the chars the start predicate accepts can't be listed, the identifier has no hints for `OneOf`'s lookup table, like
+`Identifier()` with an `extraStart` predicate. `Lookup()` can give it the chars it starts with, when they are known.
 
 ### Pattern
 
@@ -707,6 +895,50 @@ page-title
 Source generated parsers call the scanner directly. It must be a method group or a lambda that captures nothing,
 not even the factory's parameters (`PARLOT015`, `PARLOT021`). At runtime a delegate to a static method goes through a thunk; a `static` lambda calling
 it is slightly faster.
+
+#### Text before the token
+
+A `TextScanner` also gets the text before its token, to match only at the start of the input or of a line, or after
+some char:
+
+```c#
+delegate int TextScanner(ReadOnlySpan<char> text, int position)
+
+Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default)
+```
+
+The token starts at `text[position]`, and the return value is the one of a `SpanScanner` with `span` being
+`text.Slice(position)`. When parsing a `string`, `text` is the whole input and `position` the offset of the cursor. When
+parsing a stream, the text before the token may be partial: `text` starts with the char before `position`, or earlier,
+and `position` is `0` only at the start of the input. `ParseManyAsync` parses each value as its own input, so `position`
+is `0` at the start of each value. With `Terms.Scan`, the white space skipped before the token is part of the text before it.
+
+Usage, the HTML-like close comment of JavaScript (Annex B), a comment only at the start of the input or of a line:
+`x-->y` is `x-- > y`.
+
+```c#
+static int HtmlCloseComment(ReadOnlySpan<char> text, int position)
+{
+    var span = text.Slice(position);
+
+    if (!span.StartsWith("-->"))
+    {
+        // More text could complete a "-->"
+        return span.Length < 3 && "-->".AsSpan().StartsWith(span) ? -1 : 0;
+    }
+
+    if (position > 0 && text[position - 1] is not ('\n' or '\r'))
+    {
+        return 0;
+    }
+
+    // Up to the end of the line
+    var end = span.Slice(3).IndexOfAny('\n', '\r');
+    return end < 0 ? span.Length : 3 + end;
+}
+
+var comment = Literals.Scan(HtmlCloseComment, "-");
+```
 
 ### AnyOf
 
@@ -854,6 +1086,19 @@ Assert.Equal('=', result.Item2);
 Assert.Equal(12, result.Item3);
 ```
 
+A sequence, including the ones of `AndSkip` and `SkipAnd`, starts where the first of its parsers which matched something
+does. A parser which matches nothing, like an `Optional`, a `ZeroOrMany` without elements or `Always`, is at the cursor,
+before the white space the next `Terms` parser skips, so the sequence starts after that white space. When none of its
+parsers matched something, the sequence starts where the first one does. Only the start changes, not the cursor:
+
+```c#
+var decorators = ZeroOrMany(Terms.Char('@').SkipAnd(Terms.Identifier()));
+var cls = decorators.And(Terms.Text("class")).Then((context, start, end, value) => start);
+
+cls.Parse("   class");    // 3, the start of "class"
+cls.Parse("   @a class"); // 3, the start of "@a"
+```
+
 ### AndSkip
 
 Behaves like [And](#And) but skips the later one's result.
@@ -980,6 +1225,10 @@ parser.Parse(""); // HasValue -> false
 
 Use the `OrSome<T>()` method to provide a default value if the `Option<T>` instance has no value.
 
+When the parser tells the chars it can start with, like a sequence starting with a text, it isn't invoked when the next
+char (after the white space it skips) can't start it. `ZeroOrOne`, `ZeroOrMany`, `OneOrMany` and the separator of
+`Separated` do the same, see [Lookup tables](writing.md#lookup-tables).
+
 ### ZeroOrMany
 
 Executes a parser as long as it's successful. The result is a list of all individual results. The method can also be post-fixed. An optional `max` limits the number of matches; `0` (the default) means unlimited.
@@ -1033,7 +1282,9 @@ null
 
 ### Not
 
-Succeeds if the parser is not matching.
+Succeeds if the parser is not matching. It never consumes any input: on success its value is `default` and its
+result is empty, starting and ending where `Not` was invoked, before any white space the parser would skip. A sequence
+ending with `Not`, like `keyword.AndSkip(Not(identifierPart))`, then ends where the previous parser did.
 
 ```c#
 Parser<T> Not<T>(Parser<T> parser)
@@ -1053,6 +1304,41 @@ Result:
 hello // failure
 null // success
 ```
+
+### Peek
+
+Succeeds with the value of a parser when it matches, without consuming any input. This is the positive lookahead
+(PEG `&p`), the counterpart of [Not](#not). Unlike [WhenFollowedBy](#whenfollowedby), it doesn't need a parser before it,
+so it can start an alternative.
+
+```c#
+Parser<T> Peek<T>(Parser<T> parser)
+```
+
+Usage:
+
+```c#
+// An automatic semicolon: a ';', or nothing before a '}'
+var semicolon = OneOf(
+    Terms.Char(';').Then(static _ => true),
+    Peek(Terms.Char('}')).Then(static _ => false));
+
+var parser = Peek(Terms.Integer()).And(Terms.Integer());
+parser.Parse("42");
+parser.Parse("x");
+```
+
+Result:
+
+```
+(42, 42)
+failure
+```
+
+The result starts and ends where the parser was invoked. When the parser fails, `Peek` fails and the cursor is where it
+was. `Peek` tells the chars its parser can start with, so a choice only tries it for these chars. In a choice whose
+alternatives all skip white space, like `semicolon` above, the choice skips the white space once before trying them, so
+the cursor is after the white space when `Peek` succeeds there.
 
 ## Coordination parsers
 
@@ -1138,6 +1424,20 @@ Result:
 0 // failure
 ```
 
+The value is the one of `parser`, but the result's `Start` and `End`, which `Then((context, start, end, value) => ...)`
+receives, span the delimiters, as they do for `before.SkipAnd(parser).AndSkip(after)` and in generated parsers:
+
+```c#
+var key = Terms.Identifier();
+Between(Terms.Char('['), key, Terms.Char(']')).Then(static (c, s, e, v) => (s, e)).Parse(" [x] "); // (1, 4)
+```
+
+For the span of `parser` alone, put the callback on it: `Between(before, parser.Then(...), after)`.
+
+> [!NOTE]
+> Before Parlot 2.0, the result of a runtime `Between` had the `Start` and `End` of `parser`, without the delimiters,
+> while generated parsers already included them.
+
 ### SkipWhiteSpace
 
 Matches a parser after any blank spaces. This parser respects the `Scanner.WhiteSpaceParser` option.
@@ -1207,6 +1507,18 @@ outer.Parse("a.b-c");  // Inner uses '.', outer uses '-' as whitespace
 
 > Note: The custom whitespace parser must return a `TextSpan`. Use `Capture()` to wrap parsers that don't return `TextSpan`.
 
+The parsers that skip white space invoke the custom parser only before the chars it can start with, which it tells with its
+`ISeekable` hints, and at the end of the text, where a stream tells whether more text follows. Before a `.`, a `(` or an
+identifier, a parser of white space and comments isn't invoked at all. A parser that can succeed without reading anything has no
+hints, but `Capture`, `ZeroOrMany`, `ZeroOrOne` and `Optional` are looked through: `Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(),
+Literals.Comments("//"))))`, the parser `WithComments` builds, is invoked only before white space and `/`. A parser that can start
+with any char (one of the alternatives of its choice doesn't tell its chars, like `Literals.Pattern()`), or skips white space
+itself, is invoked before every token. The same applies to `ParseContext.WhiteSpaceParser`.
+
+Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
+grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still
+invokes it before each token.
+
 ### WithWhiteSpaceSet
 
 Selects the chars that are white space for the inner parser, then restores the previous set. It applies to every `Terms` parser,
@@ -1225,7 +1537,8 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 `Default` is the Unicode `White_Space` property: the chars `char.IsWhiteSpace` and the `\s` of .NET regular expressions accept.
 Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
 U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLines` is set. Positions only start a new line at
-`\n`, so like `\r` and `\v` these count as a column, and single line comments end at `\n` only.
+`\n`, so like `\r` and `\v` these count as a column, and single line comments end at `\n` only, unless
+[`WithSingleLine(start, lineTerminators)`](#withcomments) lists their terminators.
 
 > **Changed after Parlot 2.1.** The default set used to be `\t`, `\f`, space, U+00A0, U+1680, U+180E, U+2000-U+200A, U+202F,
 > U+205F, U+3000 and U+FEFF, with `\n`, `\r` and `\v` as new lines. It now follows Unicode:
@@ -1269,7 +1582,8 @@ New lines follow `UseNewLines` as with the default set: when it is `true` the `T
 `Literals.WhiteSpace(includeNewLines: true)` and `NonWhiteSpace(includeNewLines: true)` include the new lines of the set.
 
 Unlike a `WithWhiteSpaceParser` that would match the same chars, a set keeps the white space fast path: skipping is still one
-table lookup per char, and `OneOf` still skips white space once for all its alternatives. A `WhiteSpaceParser`, when one is set,
+table lookup per char, and `OneOf` still skips white space once for all its alternatives. A white space parser is only invoked
+before the chars it can start with, but each invocation costs more than a table lookup. A `WhiteSpaceParser`, when one is set,
 is used instead of the set to skip white space, but the `Literals.WhiteSpace()` it contains reads the set. To skip ASCII white
 space and comments:
 
@@ -1309,6 +1623,7 @@ var world = Terms.Text("world");
 var parser = hello.And(world)
     .WithComments(builder =>
     {
+        builder.WithWhiteSpaceOrNewLine();
         builder.WithSingleLine("--");
         builder.WithSingleLine("#");
         builder.WithMultiLine("/*", "*/");
@@ -1319,6 +1634,43 @@ parser.Parse("hello -- comment\r\n world");
 parser.Parse("hello # comment\n world");
 parser.Parse("hello /* multiline\n comment\n */ world");
 ```
+
+| Builder method | Skips |
+|---|---|
+| `WithWhiteSpace()` | the white space of the context's `WhiteSpaceSet`, without new lines |
+| `WithWhiteSpaceOrNewLine()` | the white space and new lines of the context's `WhiteSpaceSet` |
+| `WithSingleLine(start)` | from `start` to the end of the line, before `"\r\n"` or `"\n"`, or to the end of the text |
+| `WithSingleLine(start, lineTerminators)` | from `start` to the first of the chars of `lineTerminators`, or to the end of the text |
+| `WithMultiLine(start, end)` | from `start` to `end` included |
+| `WithParser(parser)` | what `parser` matches |
+
+Without white space, only the comments are skipped. The line terminators are not part of a single line comment: they are
+skipped as white space, when the builder includes new lines. JavaScript and C# also end a single line comment at `\r`, U+2028
+and U+2029:
+
+```c#
+var parser = grammar.WithComments(builder => builder
+    .WithWhiteSpaceOrNewLine()
+    .WithSingleLine("//", "\r\n\u2028\u2029")
+    .WithMultiLine("/*", "*/"));
+```
+
+A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
+start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, in which case the comment is not skipped.
+
+The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each
+token, a `Terms` parser invokes that parser only, which reads the text directly. Its `ISeekable` hints are the chars of the
+white space and the first char of each comment. When the builder has a parser added with `WithParser()`, or a comment which
+starts with white space, it builds instead the choice of the parsers of its elements, in a loop, in the order they were
+added.
+
+> **Changed after Parlot 2.1.** `CommentsBuilder.Build()` used to return `Capture(ZeroOrMany(OneOf(...)))` of the builder's
+> parsers, which succeeds with an empty span when there is nothing to skip. Like `Literals.WhiteSpace()`, the parser it
+> returns now fails then, without moving the cursor. Skipping white space, which `WithComments` does with it, ignores the
+> result.
+
+With these hints, the context only invokes the parser of the comments before white space and the chars the comments start
+with (see [WithWhiteSpaceParser](#withwhitespaceparser)), not before every token.
 
 ### NoNewLineBefore
 
@@ -1554,6 +1906,46 @@ Result:
 
 > **Note:** The start and end parameters are integer offsets (positions in the input buffer), not `TextPosition` objects.
 
+### ThenTry
+
+Converts the result of a parser with a conversion which can reject it, like a `When` and a `Then` in a single parser and a
+single callback. When the conversion returns `false`, the parser fails and the cursor is moved back to where it was, such
+that a choice tries its next alternative.
+
+```c#
+Parser<U> ThenTry<U>(TryConvert<T, U> conversion)
+Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion)
+
+delegate bool TryConvert<in T, U>(ParseContext context, int start, int end, T value, out U result);
+```
+
+The `TryConvert` overload receives the `ParseContext` and the start and end offsets of the value, like the
+`Then((context, start, end, value) => ...)` overload. Its parameters are typed, since a lambda with an `out` parameter
+can't infer them before C# 14:
+
+```c#
+// An identifier which isn't a reserved word, replacing identifierName.When(...).Then(...)
+var identifier = Terms.Identifier()
+    .ThenTry(static (ParseContext context, int start, int end, TextSpan name, out Identifier result) =>
+    {
+        if (IsReserved(name, ((MyContext)context).Flags))
+        {
+            result = null!;
+            return false;
+        }
+
+        result = new Identifier(name.ToString(), start, end);
+        return true;
+    });
+
+// A number which must fit a byte
+var octet = Terms.Integer().ThenTry(static value => (value is >= 0 and <= 255, (byte)value));
+```
+
+The conversion is invoked on each match, even when the value of the parser isn't used, since it decides whether the parser
+succeeds. A `When(...).Then(...)` pair invokes two parsers and two callbacks on each match: when the condition and the
+conversion read the same value, as a reserved word check before an AST node is built, `ThenTry` does both in one.
+
 ### ToPooledString
 
 Returns the text of a `Parser<TextSpan>` as a string taken from a pool, such that a value the parser matches many times
@@ -1736,7 +2128,8 @@ Adds some additional logic for a parser to succeed. The condition is executed wh
 Parser<T> When(Func<ParseContext, T, bool> predicate)
 ```
 
-To evaluate a condition before a parser is executed use the `If` parser instead.
+To evaluate a condition before a parser is executed use the `If` parser instead. To convert the value once it meets the
+condition, use [`ThenTry`](#thentry), which does both with a single callback.
 
 ### WhenFollowedBy
 
@@ -1811,6 +2204,53 @@ To validate a parsed value instead, use `When`.
 
 The obsolete overloads taking a separate state argument and the `If<C, S, T>` type have been removed
 in this major version. Capture state in the condition or read it from a custom `ParseContext`.
+
+### WithState
+
+Sets a state while a parser runs, then restores the previous one, the way `WithWhiteSpaceSet` does for white space.
+Many grammars depend on the enclosing construct: in JavaScript `yield` is an operator in a generator and an identifier
+elsewhere, and `in` isn't an operator in the head of a `for`. `If`, `Select` and `When` read such a state, `WithState`
+sets it for the parsers it invokes.
+
+```c#
+Parser<T> WithState<C, S>(Func<C, S> get, Action<C, S> set, Func<S, S> update) where C : ParseContext
+Parser<T> WithState<S>(Func<S> get, Action<S> set, Func<S, S> update)
+```
+
+It reads the state with `get`, writes `update` of it with `set`, runs the parser and writes the state it read back,
+whether the parser succeeds, fails or throws. Like any parser it leaves the cursor where it started when it fails.
+
+The state is usually held by a custom `ParseContext`, so that concurrent parses don't share it:
+
+```c#
+[Flags]
+enum Flags { None = 0, Yield = 1, NoIn = 2 }
+
+sealed class JsContext : ParseContext
+{
+    public JsContext(string text) : base(new Scanner(text)) { }
+
+    public Flags Flags { get; set; }
+}
+
+// "yield" is a keyword in a generator, and an identifier elsewhere
+var yieldOrIdentifier = If<JsContext, string>(
+    static c => (c.Flags & Flags.Yield) != 0,
+    Terms.Text("yield"),
+    Terms.Identifier().Then(static x => x.ToString()));
+
+var generatorBody = Between(Terms.Char('{'), yieldOrIdentifier, Terms.Char('}'))
+    .WithState<JsContext, Flags>(static c => c.Flags, static (c, f) => c.Flags = f, static f => (f | Flags.Yield) & ~Flags.NoIn);
+
+generatorBody.Parse(new JsContext("{ yield }"));  // "yield", the keyword
+```
+
+Nested `WithState` parsers each restore the state they read, so the state an inner one sets is only seen by its parser.
+The parser forwards the chars its parser can start with, so a `OneOf` still selects it from the next char.
+
+A [source-generated](source-generation.md) parser runs with Parlot's own context: hold the state in a configuration
+parameter and use the overload without a context, as in
+`body.WithState(() => options.Flags, f => options.Flags = f, static f => f | Flags.Yield)`.
 
 ### Switch
 
@@ -1888,6 +2328,12 @@ Parser<T> Lookup(params ISeekable[] parsers)
 ```
 
 The hints taken from other parsers are only used when every one of them can seek and they all skip white space the same way. Otherwise the resulting parser declares that it can start with any char, like the original one.
+
+A parser that can start with any non-ASCII char lists its ASCII chars and `OneOf<T>.NonAsciiSeekableChar`, so that the choices which hold it don't build an entry for each non-ASCII char. More than 64 non-ASCII chars are listed this way:
+
+```c#
+var identifier = Literals.Pattern(char.IsLetter).Lookup(false, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" + OneOf<TextSpan>.NonAsciiSeekableChar);
+```
 
 ## Other parsers
 

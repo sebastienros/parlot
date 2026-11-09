@@ -203,7 +203,10 @@ An `Operators()` table (see [Operator tables](parsers.md#operator-tables)) is em
 loop: recursive local functions which look for the operator following an operand once, through the
 generated choice of all the operators, instead of one helper per level that tries its own operators after each operand.
 The lookup stops at a level whose operators have a value (valued `Postfix`, `LeftAssociative`, `RightAssociative` and
-`Ternary`), and the case of the loop for that level parses them and passes their values to the factories.
+`Ternary`), and the case of the loop for that level parses them and passes their values to the factories. The operators
+of a valued `Unary` level are matched with the ones of the other prefix levels: the first one keeps its value in a
+local, and the values of the following ones of a chain are kept in a `ListBuilder` of their type until they apply. The
+factories which receive the `ParseContext` are called with the context of the parse.
 
 The generated method creates its per-parse execution context and executes the emitted parser directly.
 Configuration is stored in the existing per-call execution context, without a separate parser or closure
@@ -248,7 +251,13 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   starts by skipping white space, like a `Terms` parser, a choice whose alternatives are all `Terms` parsers, or a
   sequence starting with one, reports the start of its content, after the skipped white space, as at runtime. A choice
   whose alternatives don't all skip white space reports the offset where it was entered, before the white space of the
-  alternative that matched, where the runtime reports the start of that alternative's content.
+  alternative that matched, where the runtime reports the start of that alternative's content. A sequence whose first
+  parsers can match nothing, like `Optional`, `ZeroOrMany`, `Always` or `Else`, starts where the first of its parsers
+  which matched something does, as at runtime: it is emitted part by part, and the start moves past the white space the
+  next part skips while nothing matched. Such a part which matches something, like an `Optional` of a `Terms` parser,
+  reports the start of its content when all the parsers it can start with skip white space, and the offset where it was
+  entered otherwise. A `ThenTry` callback receives the same offsets, and a value it rejects is reported as the furthest
+  failure at its start, like one a `When` rejects.
 
 ### Non-breaking diagnostics
 
@@ -299,7 +308,8 @@ When the parse fails, `failure` is the *furthest failure*: the position where th
 stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white space the expected `FROM` skipped. When the
 grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
 `TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
-like `TextPosition`. The names of the tuple elements are free.
+like `TextPosition`. The names of the tuple elements are free. Runtime parsers report the same position through
+`Cursor.FurthestOffset` and `Cursor.FurthestPosition`, see [Reporting where a parse failed](parsers.md#reporting-where-a-parse-failed).
 
 What a parser read and then rejected is not what moved the attempt forward, so the failure is at its start, where the
 first bad token is:
@@ -307,7 +317,7 @@ first bad token is:
 - A `When` whose condition rejects the value fails at the start of the value, after the white space the parser skips:
   `Terms.Identifier().When(...)` on `  from` reports 2, not 6.
 - `WhenNotFollowedBy` and `Not` fail at the start of what must not match, after the white space it skips.
-- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` matches, nor when the parser of
+- The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
 
@@ -433,10 +443,11 @@ Parameters may be read by inline parse-time callbacks passed to:
 
 - `If`
 - `Select`
-- `Then` and `ThenElse`
+- `Then`, `ThenTry` and `ThenElse`
 - `When`
 - `Switch`
 - `Else`
+- `WithState`
 
 For example:
 
@@ -521,6 +532,20 @@ interchangeable with the runtime library type.
 Pass application-owned state through configuration parameters instead. Context-aware callbacks may use the
 built-in context for parser internals, but public entry points and application state must not depend on
 Parlot context types.
+
+A state that a grammar sets for the duration of a parser, like the flags of a custom context read by `If`, is held by
+a configuration parameter and set with the `WithState` overload without a context:
+
+```csharp
+[GenerateParser(nameof(TryParseProgram))]
+private static Parser<Program> BuildProgram(ParserState state) =>
+    ...
+    functionBody.WithState(() => state.Flags, flags => state.Flags = flags, static flags => flags | Flags.Return)
+    ...
+```
+
+The state is restored when the parser succeeds, fails or throws, so it is back to the value it had when the entry
+point was called. Don't share such a state between concurrent calls.
 
 ## Application models and runtime helpers
 
@@ -784,7 +809,9 @@ shares them between parses. A pooled string literal decodes its escape sequences
 Custom string delimiters use the scanner's single-character overload without allocating a delimiter array
 per token. When `Capture` discards a string parser's decoded value, the generated parser still validates
 escape sequences but skips decoding and its string allocation. Callbacks and predicates that consume the
-value still receive decoded text and execute normally, even when their result is captured or discarded.
+value still receive decoded text and execute normally, even when their result is captured or discarded. String
+literals with `StringEscapes` other than `Default` generate the same scanner and decoder as the runtime parser, with
+the escapes as a constant.
 Helpers are specialized by result mode so the same parser can be used both for capture and for its value.
 
 Generated parsers also use recognition-only helpers for fully skipped `AndSkip`/`SkipAnd` operands,

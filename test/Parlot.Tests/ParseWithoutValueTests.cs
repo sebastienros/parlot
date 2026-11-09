@@ -22,7 +22,7 @@ public class ParseWithoutValueTests
     private static readonly Parser<IReadOnlyList<char>> As = ZeroOrMany(Terms.Char('a'));
     private static readonly Parser<IReadOnlyList<char>> Bs = OneOrMany(Terms.Char('b'));
 
-    private static readonly string[] Inputs = ["", "a", "b", "c", "ab", "abc", "a b b c", " a a b c d", "bbc", "aabbcc", "cba"];
+    private static readonly string[] Inputs = ["", "a", "b", "c", "ab", "abc", "a b b c", " a a b c d", "bbc", "aabbcc", "cba", "  b c", "  c"];
 
     [Fact]
     public void ShouldInvokeTheOverride()
@@ -49,6 +49,13 @@ public class ParseWithoutValueTests
         AssertSameAsParse(ZeroOrOne(Bs));
         AssertSameAsParse(ZeroOrOne(A));
         AssertSameAsParse(Bs.Optional());
+
+        // Over sequences, which aren't invoked when they can't start at the current char
+        AssertSameAsParse(A.And(Bs).Optional());
+        AssertSameAsParse(ZeroOrOne(A.And(B)));
+        AssertSameAsParse(ZeroOrMany(A.And(Bs)));
+        AssertSameAsParse(OneOrMany(B.And(C)));
+        AssertSameAsParse(Separated(B.And(C), A));
     }
 
     [Fact]
@@ -119,10 +126,14 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Bs.Then(static x => x.Count));
         AssertSameAsParse(A.WhenFollowedBy(Bs));
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));
+        AssertSameAsParse(Peek(Bs));
+        AssertSameAsParse(Peek(A.And(Bs)).And(A));
         AssertSameAsParse(SkipWhiteSpace(OneOrMany(Literals.Char('b'))));
         AssertSameAsParse(NoNewLineBefore(OneOrMany(Literals.Char('b'))));
         AssertSameAsParse(A.And(Bs.NoNewLineBefore()));
         AssertSameAsParse(Bs.WithWhiteSpaceSet(WhiteSpaceSet.Ascii));
+        AssertSameAsParse(Bs.WithState<ParseContext, int>(static _ => 0, static (_, _) => { }, static x => x + 1));
+        AssertSameAsParse(A.And(Bs).WithState(static () => 0, static _ => { }, static x => x + 1));
         AssertSameAsParse(A.And(Bs).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char(' ')))));
     }
 

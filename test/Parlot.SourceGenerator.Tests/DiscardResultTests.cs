@@ -46,6 +46,7 @@ public class DiscardResultTests
     [InlineData("Not")]
     [InlineData("FollowedBy")]
     [InlineData("NotFollowedBy")]
+    [InlineData("Peek")]
     [InlineData("TextBefore")]
     [InlineData("Capture")]
     [InlineData("Constant")]
@@ -108,6 +109,7 @@ public class DiscardResultTests
     [InlineData("Not")]
     [InlineData("FollowedBy")]
     [InlineData("NotFollowedBy")]
+    [InlineData("Peek")]
     [InlineData("TextBefore")]
     [InlineData("Capture")]
     [InlineData("Constant")]
@@ -216,6 +218,13 @@ public class DiscardResultTests
         Assert.True(DiscardGrammars.TryParseNot("VaLuE", out value));
         Assert.Equal("VaLuE", value);
         Assert.False(DiscardGrammars.TryParseNot("KeYwOrD", out _));
+        Assert.True(DiscardGrammars.TryParsePeek("KeYwOrD", out value));
+        Assert.Equal("KeYwOrD", value);
+        Assert.False(DiscardGrammars.TryParsePeek("VaLuE", out _));
+        // The text the lookahead read is pinned, and read again from a reader
+        Assert.True(DiscardGrammars.TryParsePeek(new StringReader("KeYwOrD"), out value));
+        Assert.Equal("KeYwOrD", value);
+        Assert.False(DiscardGrammars.TryParsePeek(new StringReader("KeYwOrX"), out _));
         Assert.True(DiscardGrammars.TryParseTextBefore("prefixKeYwOrD", out value));
         Assert.Equal("prefix", value);
         Assert.True(DiscardGrammars.TryParseCapture("KeYwOrD", out value));
@@ -291,6 +300,7 @@ public class DiscardResultTests
             "Not" => Source(Not(text)),
             "FollowedBy" => Source(a.WhenFollowedBy(text)),
             "NotFollowedBy" => Source(a.WhenNotFollowedBy(text)),
+            "Peek" => Source(Peek(text).SkipAnd(a)),
             "TextBefore" => Source(AnyCharBefore(text)),
             "Capture" => Source(Capture(text)),
             "Constant" => Source(text.Then(42)),
@@ -335,6 +345,8 @@ public static partial class DiscardGrammars
     public static partial bool TryParseLookahead(string text, out string value);
     public static partial bool TryParseNegativeLookahead(string text, out string value);
     public static partial bool TryParseNot(string text, out string value);
+    public static partial bool TryParsePeek(string text, out string value);
+    public static partial bool TryParsePeek(TextReader reader, out string value);
     public static partial bool TryParseTextBefore(string text, out string value);
     public static partial bool TryParseCapture(string text, out string value);
     public static partial bool TryParsePartialTuple(string text, out (string, string) value);

@@ -64,7 +64,7 @@ internal static class FactoryParameterUsage
         return method.ContainingType.MetadataName switch
         {
             "Parsers" => method.Name is "If" or "Select",
-            "Parser`1" => method.Name is "Then" or "ThenElse" or "When" or "Switch" or "Else",
+            "Parser`1" => method.Name is "Then" or "ThenTry" or "ThenElse" or "When" or "Switch" or "Else" or "WithState",
             _ => false
         };
     }
