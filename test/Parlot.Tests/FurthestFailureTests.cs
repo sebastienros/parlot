@@ -185,6 +185,17 @@ public class FurthestFailureTests
     private static readonly Parser<string> Rejected =
         Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
 
+    // The same word, rejected by a conversion
+    private static readonly Parser<string> ConversionRejected =
+        Terms.Identifier().ThenTry(static (ParseContext _, int _, int _, TextSpan value, out string result) =>
+        {
+            result = value.ToString();
+            return result != "from";
+        }).AndSkip(Terms.Char(';')).Eof();
+
+    private static readonly Parser<string> ConversionRejectedLiteral =
+        Literals.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())).AndSkip(Terms.Char(';')).Eof();
+
     private static readonly Parser<string> NotFollowed =
         Terms.Identifier().WhenNotFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
@@ -231,6 +242,37 @@ public class FurthestFailureTests
         var context = Context("  word ;");
         Assert.True(Rejected.TryParse(context, out var value, out _));
         Assert.Equal("word", value);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    [InlineData("  ,", 2)]
+    public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start(string text, int offset)
+    {
+        AssertFurthest(ConversionRejected, text, offset);
+
+        var context = Context("  word ;");
+        Assert.True(ConversionRejected.TryParse(context, out var value, out _));
+        Assert.Equal("word", value);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("fromage,", 7)]
+    public void Value_Rejected_By_A_Tuple_Conversion_Fails_At_Its_Start(string text, int offset) => AssertFurthest(ConversionRejectedLiteral, text, offset);
+
+    [Fact]
+    public void Value_Rejected_By_A_Conversion_Doesnt_Stop_A_Longer_Attempt_Being_Reported()
+    {
+        AssertFurthest(Terms.Identifier().SkipAnd(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString()))).Eof(), "  a  from", 5);
+
+        // A failure recorded further before the value is rejected is kept
+        var further = Terms.Text("from").And(Terms.Char('(')).And(Terms.Char(')')).Then(static _ => "call")
+            .Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())));
+        AssertFurthest(further.Eof(), "  from ( x", 9);
     }
 
     [Theory]
