@@ -102,6 +102,17 @@ public static partial class Parsers
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
 
     /// <summary>
+    /// Builds a parser that succeeds with the value of the specified parser when it matches, without consuming any input
+    /// (positive lookahead, the PEG <c>&amp;p</c>).
+    /// </summary>
+    /// <remarks>
+    /// The result starts and ends where the parser is invoked. A choice only tries it for the chars the specified parser
+    /// can start with.
+    /// </remarks>
+    /// <param name="parser">The parser that must match at the current position.</param>
+    public static Parser<T> Peek<T>(Parser<T> parser) => new Peek<T>(parser);
+
+    /// <summary>
     /// Evaluates a condition once and executes <paramref name="parser"/> if it is true.
     /// Otherwise, fails without consuming input or changing the result.
     /// </summary>
@@ -343,6 +354,12 @@ public class LiteralBuilder
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
 
     /// <summary>
+    /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
+    /// <see cref="StringEscapes.JavaScript"/>.
+    /// </summary>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes) => new StringLiteral(quotes, escapes);
+
+    /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
     public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null)
@@ -376,6 +393,23 @@ public class LiteralBuilder
 #endif
 
     /// <summary>
+    /// Builds a parser that matches an identifier whose chars are code points accepted by predicates, which can be written
+    /// as escape sequences or surrogate pairs depending on <paramref name="options"/>.
+    /// </summary>
+    /// <param name="isStart">Whether a code point can start the identifier.</param>
+    /// <param name="isPart">Whether a code point can follow the start.</param>
+    /// <param name="options">The escape sequences and surrogate pairs which are code points,
+    /// <see cref="IdentifierOptions.JavaScript"/> for JavaScript identifiers.</param>
+    /// <returns>A parser returning the text of the identifier, escape sequences included, which
+    /// <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.</returns>
+    /// <remarks>
+    /// The predicates are invoked for each ASCII char when the parser is built, and must give the same answer for a code
+    /// point each time. They can't accept a new line. An escape sequence is accepted when the predicate accepts its code
+    /// point, a surrogate pair is passed to the predicate as the code point it encodes.
+    /// </remarks>
+    public Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options) => new CodePointIdentifier(isStart, isPart, options);
+
+    /// <summary>
     /// Builds a parser that matches a char against a predicate.
     /// </summary>
     /// <param name="predicate">The predicate to match against each char.</param>
@@ -389,6 +423,16 @@ public class LiteralBuilder
     /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
     /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
     public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
+
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the text at the current position, which also gets the text before it.
+    /// </summary>
+    /// <param name="scanner">
+    /// The function that returns the length of the token at a position of the text, <c>0</c> when there is none. It can read the text
+    /// before the token, for instance to match only at the start of the input or of a line. See <see cref="TextScanner"/>.
+    /// </param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
 
 #if NET8_0_OR_GREATER
     /// <summary>
@@ -617,6 +661,12 @@ public class TermBuilder
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => SkipWhiteSpace(new StringLiteral(quotes));
 
     /// <summary>
+    /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
+    /// <see cref="StringEscapes.JavaScript"/>, after white space.
+    /// </summary>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes) => SkipWhiteSpace(new StringLiteral(quotes, escapes));
+
+    /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
     /// </summary>
     public Parser<TextSpan> Identifier(Func<char, bool>? extraStart = null, Func<char, bool>? extraPart = null)
@@ -650,6 +700,23 @@ public class TermBuilder
 #endif
 
     /// <summary>
+    /// Builds a parser that matches an identifier whose chars are code points accepted by predicates, which can be written
+    /// as escape sequences or surrogate pairs depending on <paramref name="options"/>.
+    /// </summary>
+    /// <param name="isStart">Whether a code point can start the identifier.</param>
+    /// <param name="isPart">Whether a code point can follow the start.</param>
+    /// <param name="options">The escape sequences and surrogate pairs which are code points,
+    /// <see cref="IdentifierOptions.JavaScript"/> for JavaScript identifiers.</param>
+    /// <returns>A parser returning the text of the identifier, escape sequences included, which
+    /// <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.</returns>
+    /// <remarks>
+    /// The predicates are invoked for each ASCII char when the parser is built, and must give the same answer for a code
+    /// point each time. They can't accept a new line. An escape sequence is accepted when the predicate accepts its code
+    /// point, a surrogate pair is passed to the predicate as the code point it encodes.
+    /// </remarks>
+    public Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options) => SkipWhiteSpace(new CodePointIdentifier(isStart, isPart, options));
+
+    /// <summary>
     /// Builds a parser that matches a char against a predicate.
     /// </summary>
     /// <param name="predicate">The predicate to match against each char.</param>
@@ -663,6 +730,16 @@ public class TermBuilder
     /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
     /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
     public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
+
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the text at the current position, which also gets the text before it.
+    /// </summary>
+    /// <param name="scanner">
+    /// The function that returns the length of the token at a position of the text, <c>0</c> when there is none. It can read the text
+    /// before the token, for instance to match only at the start of the input or of a line. See <see cref="TextScanner"/>.
+    /// </param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default) => SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
 
 #if NET8_0_OR_GREATER
     /// <summary>

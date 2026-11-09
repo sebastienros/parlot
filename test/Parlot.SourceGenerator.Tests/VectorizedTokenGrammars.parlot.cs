@@ -120,6 +120,22 @@ public static partial class VectorizedTokenGrammars
                 return (span.ToString(), position.Offset, position.Line, position.Column);
             });
 
+    // A text scanner reads the char before its token: "-->" is a comment at the start of the input or of a line only
+    [GenerateParser(nameof(TryParseScanLineStart))]
+    private static Parser<string> BuildScanLineStart() =>
+        ZeroOrMany(Terms.Scan(global::Parlot.Tests.LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment")
+            .Or(Terms.Text("--"))
+            .Or(Terms.Text(">"))
+            .Or(Terms.Identifier().Then(static x => x.ToString())))
+            .Then(static list => string.Join("|", list))
+            .Eof();
+
+    // A text scanner written as a lambda: the rest of the text, when it starts a line
+    [GenerateParser(nameof(TryParseScanTextLambda))]
+    private static Parser<string> BuildScanTextLambda() =>
+        ZeroOrOne(Literals.Char('\n')).SkipAnd(Literals.Scan(static (text, position) => position == 0 || text[position - 1] == '\n' ? text.Length - position : 0))
+            .Then(static span => span.ToString());
+
     // The scanner breaks its contract by returning more chars than the span has
     [GenerateParser(nameof(TryParseScanOversize))]
     private static Parser<string> BuildScanOversize() =>

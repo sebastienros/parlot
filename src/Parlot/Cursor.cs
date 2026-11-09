@@ -504,20 +504,48 @@ public class Cursor
     }
 
     /// <summary>
-    /// The furthest absolute offset the parse reached: the furthest offset the cursor was moved back from, or recorded with
-    /// <see cref="RecordFailure(int)"/>, or the current offset when it is further.
+    /// The furthest absolute offset the parse reached: the furthest offset the cursor was moved back from, or recorded by a
+    /// parser that read further without moving the cursor, or the current offset when it is further.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Parsers move the cursor back when they fail after reading, so when a parse fails this is the classic "furthest
-    /// failure" position: where the longest attempt to match the input stopped.
+    /// failure" position: where the longest attempt to match the input stopped. It is meaningful after a failed parse, a
+    /// successful one reports at least where it ended.
+    /// </para>
+    /// <para>
+    /// The <c>Parse</c>, <c>TryParse</c> and <c>TryMatch</c> methods taking a <c>ParseContext</c> reset it with
+    /// <see cref="ResetFurthestOffset"/> before they parse with a context, so that a context which is reused reports the
+    /// failure of its last parse. A failure through <c>Error</c> or <c>ElseError</c> is reported by the exception's position.
+    /// </para>
     /// </remarks>
-    internal int FurthestOffset
+    public int FurthestOffset
     {
         get
         {
             var offset = _offset + _base;
             return offset > _furthestOffset ? offset : _furthestOffset;
         }
+    }
+
+    /// <summary>
+    /// The position of <see cref="FurthestOffset"/>, with its line and column.
+    /// </summary>
+    /// <remarks>
+    /// The line and the column are computed from the text when it is read, like <see cref="Position"/>.
+    /// </remarks>
+    public TextPosition FurthestPosition => GetPosition(FurthestOffset);
+
+    /// <summary>
+    /// Forgets the failures recorded so far: <see cref="FurthestOffset"/> becomes the current offset.
+    /// </summary>
+    /// <remarks>
+    /// Call it before a parse with a context that was already used, when not parsing through the methods which do it,
+    /// such as <c>TryParse(ParseContext, ...)</c>.
+    /// </remarks>
+    public void ResetFurthestOffset()
+    {
+        _furthestOffset = _offset + _base;
     }
 
     /// <summary>

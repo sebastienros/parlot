@@ -187,6 +187,63 @@ public class Scanner
         Cursor.AdvanceNoNewLines(i);
     }
 
+    /// <summary>
+    /// Skips a single line comment whose start, of <paramref name="startLength"/> chars, is at the cursor: up to the first of
+    /// <paramref name="lineTerminators"/>, which is not skipped, or to the end of the text.
+    /// </summary>
+    /// <remarks>
+    /// Without terminators the comment ends before <c>"\r\n"</c> or <c>"\n"</c>, as with <c>Literals.Comments(start)</c>.
+    /// Shared by <c>CommentsParser</c> and the code it generates.
+    /// </remarks>
+    internal void SkipSingleLineComment(int startLength, ReadOnlySpan<char> lineTerminators)
+    {
+        var span = Cursor.Span;
+        var text = span.Slice(startLength);
+
+        int index;
+
+        if (lineTerminators.IsEmpty)
+        {
+            index = text.IndexOf('\n');
+
+            if (index > 0 && text[index - 1] == '\r')
+            {
+                index--;
+            }
+        }
+        else
+        {
+            index = text.IndexOfAny(lineTerminators);
+        }
+
+        // Reaching the end of the text records it, the line may continue in a stream
+        Cursor.Advance(index < 0 ? span.Length : startLength + index);
+    }
+
+    /// <summary>
+    /// Skips a multi line comment whose start, of <paramref name="startLength"/> chars, is at the cursor, up to its end
+    /// delimiter included.
+    /// </summary>
+    /// <returns>
+    /// Whether the end delimiter was found. When it's not, the cursor is after the start of the comment, where the error is
+    /// reported, and the end of the text is recorded.
+    /// </returns>
+    /// <remarks>Shared by <c>CommentsParser</c> and the code it generates.</remarks>
+    internal bool SkipMultiLineComment(int startLength, ReadOnlySpan<char> end)
+    {
+        var index = Cursor.Span.Slice(startLength).IndexOf(end);
+
+        if (index < 0)
+        {
+            Cursor.Advance(startLength);
+            Cursor.MarkHitEnd();
+            return false;
+        }
+
+        Cursor.Advance(startLength + index + end.Length);
+        return true;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     [Obsolete("Not optimized")]
     public bool ReadFirstThenOthers(Func<char, bool> first, Func<char, bool> other)
@@ -810,6 +867,123 @@ public class Scanner
     /// <summary>
     /// Reads a string token enclosed in quotes or custom characters, and whether it contains escape sequences to decode.
     /// </summary>
+    internal bool ReadQuotedString(char quoteChar, StringEscapes escapes, out ReadOnlySpan<char> result, out bool hasEscape)
+    {
+        // The default escapes keep their own scanner
+        if (escapes == StringEscapes.Default)
+        {
+            return ReadQuotedString(quoteChar, out result, out hasEscape);
+        }
+
+        hasEscape = false;
+
+        // Current is also the null char at the end of the text, where there is no quote to read
+        if (Cursor.Current != quoteChar || Cursor.Eof)
+        {
+            result = default;
+            return false;
+        }
+
+        var span = Cursor.Span;
+
+        // Without backslash escapes the search for the escape char is the search for the quote
+        var backslash = (escapes & Character.BackslashEscapes) != 0;
+        var escapeChar = backslash ? '\\' : quoteChar;
+        var doubledQuote = (escapes & StringEscapes.DoubledQuote) != 0;
+        var checkRawChars = (escapes & (StringEscapes.SingleLine | StringEscapes.NoControlChars)) != 0;
+
+        // The cursor is only moved once the string is read, so a failure has nothing to reset
+        var i = 1;
+
+        while (true)
+        {
+            var next = span.Slice(i).IndexOfAny(quoteChar, escapeChar);
+
+            if (next == -1 || (checkRawChars && HasInvalidRawChar(span.Slice(i, next == -1 ? span.Length - i : next), escapes)))
+            {
+                if (next == -1)
+                {
+                    // No end quote before the end of the buffer
+                    Cursor.MarkHitEnd();
+                }
+
+                result = default;
+                return false;
+            }
+
+            i += next;
+
+            // When the quote is a backslash it can't be escaped, and the string ends at the next one
+            if (span[i] == quoteChar)
+            {
+                if (doubledQuote)
+                {
+                    if (i + 1 == span.Length)
+                    {
+                        // The quote ends the string unless the next buffer starts with another one
+                        Cursor.MarkHitEnd();
+                    }
+                    else if (span[i + 1] == quoteChar)
+                    {
+                        hasEscape = true;
+                        i += 2;
+                        continue;
+                    }
+                }
+
+                i++;
+                break;
+            }
+
+            hasEscape = true;
+
+            var value = 0;
+            var length = i + 1 < span.Length ? Character.ReadEscape(span.Slice(i + 1), escapes, quoteChar, out value) : -1;
+
+            // A raw char the escapes reject can't be escaped either, unless it is a line continuation
+            if (length <= 0 || (checkRawChars && value != Character.RemovedEscape && HasInvalidRawChar(span.Slice(i + 1, 1), escapes)))
+            {
+                if (length < 0)
+                {
+                    Cursor.MarkHitEnd();
+                }
+
+                result = default;
+                return false;
+            }
+
+            i += length + 1;
+        }
+
+        var startOffset = Cursor.Offset;
+        Cursor.Advance(i);
+        result = Cursor.GetSpan(startOffset, i);
+        return true;
+    }
+
+    // Whether a part of a string without escape sequences has a raw char the escapes reject
+    private static bool HasInvalidRawChar(ReadOnlySpan<char> span, StringEscapes escapes)
+    {
+        if ((escapes & StringEscapes.NoControlChars) != 0)
+        {
+#if NET8_0_OR_GREATER
+            return span.IndexOfAnyInRange('\0', '\u001f') != -1;
+#else
+            foreach (var c in span)
+            {
+                if (c < ' ')
+                {
+                    return true;
+                }
+            }
+
+            return false;
+#endif
+        }
+
+        return span.IndexOfAny('\r', '\n') != -1;
+    }
+
     internal bool ReadQuotedString(char quoteChar, out ReadOnlySpan<char> result, out bool hasEscape)
     {
         var startChar = Cursor.Current;

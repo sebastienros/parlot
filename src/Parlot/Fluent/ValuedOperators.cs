@@ -98,7 +98,60 @@ internal abstract class PostfixGroup<T>
     /// </summary>
     public abstract bool WithContext { get; }
 
+    /// <summary>
+    /// Whether the value of <see cref="Choice"/> is a pair of the middle and the last operands of a conditional, and the
+    /// single factory takes the condition, the middle operand and the last operand, in that order.
+    /// </summary>
+    public virtual bool IsConditional => false;
+
     public abstract int Apply(ParseContext context, int position, ref ParseResult<T> result);
+}
+
+/// <summary>
+/// The conditional operator of a <see cref="ValuedPostfix{T}"/>, <c>question middle colon last</c>, whose factory receives
+/// the condition, the middle operand and the last operand. The last operand is parsed by its own parser, which can be
+/// looser than the conditional, like a whole expression.
+/// </summary>
+internal sealed class ConditionalGroup<T, TMiddle> : PostfixGroup<T>
+{
+    private readonly Parser<(int Index, (TMiddle Middle, T Last) Value)> _choice;
+    private readonly Func<T, TMiddle, T, T> _factory;
+
+    public ConditionalGroup(Parser<(TMiddle, T)> op, Func<T, TMiddle, T, T> factory)
+    {
+        _choice = new IndexedOperator<(TMiddle, T)>(op, 0);
+        _factory = factory;
+        Factories = [factory];
+    }
+
+    public override object Choice => _choice;
+
+    public override Type ValueType => typeof((int, (TMiddle, T)));
+
+    public override Delegate[] Factories { get; }
+
+    public override bool IsConditional => true;
+
+    // The factory takes the condition and the operands, not the context
+    public override bool WithContext => false;
+
+    public override int Apply(ParseContext context, int position, ref ParseResult<T> result)
+    {
+        var op = new ParseResult<(int Index, (TMiddle Middle, T Last) Value)>();
+
+        if (!_choice.Parse(context, ref op))
+        {
+            return NoMatch;
+        }
+
+        if (context.Scanner.Cursor.Offset == position)
+        {
+            return Empty;
+        }
+
+        result.Set(result.Start, op.End, _factory(result.Value, op.Value.Value.Middle, op.Value.Value.Last));
+        return Applied;
+    }
 }
 
 internal sealed class PostfixGroup<T, TOperator> : PostfixGroup<T>
