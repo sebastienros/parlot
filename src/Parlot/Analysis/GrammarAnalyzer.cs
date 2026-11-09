@@ -57,7 +57,7 @@ internal sealed class GrammarAnalysis
     // Parlot's parsers which succeed only when the first parser they invoke does, at the position where they are invoked
     private static readonly HashSet<string> s_firstMustSucceed = new(StringComparer.Ordinal)
     {
-        "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "When",
+        "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "When", "ThenTry",
         "WhenFollowedBy", "WhenNotFollowedBy", "Peek", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
         "Switch", "Seekable", "IParserAdapter", "OperatorIndex", "LeftAssociative", "LeftAssociativeWithContext", "RightAssociative",
         "RightAssociativeWithContext", "AssociativeWithOperator",

@@ -105,6 +105,12 @@ public class StreamingTests
         ["peek-value"] = new Grammar<(long, long)>(Peek(Terms.Integer()).And(Terms.Integer())),
         ["followed"] = new Grammar<TextSpan>(Terms.Identifier().WhenFollowedBy(Terms.Char('('))),
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
+        // A rejected value gives the cursor back to the next alternative, here the keyword the identifier rejects
+        ["thentry"] = new Grammar<string>(ZeroOrMany(Terms.Identifier().ThenTry(static (ParseContext _, int start, int end, TextSpan name, out string result) =>
+        {
+            result = $"{name}@{start}-{end}";
+            return !name.Span.SequenceEqual("for");
+        }).Or(Terms.Keyword("for"))).Then(static values => string.Join(",", values))),
         ["separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer())),
         // Optional parsers and loops over sequences don't invoke them when the char after the white space can't start them
         ["guarded-optional"] = new Grammar<string>(Terms.Identifier().And(Terms.Char('?').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(':')).And(Terms.Identifier()).Optional())
@@ -332,6 +338,7 @@ public class StreamingTests
         Add("peek-value", "", "12", "  12", "12 3", "x");
         Add("followed", "", "f", "f(", "f (", "f x", "f");
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
+        Add("thentry", "", "a", "for", "  for  forx", "a for b", " forever for\n for1 1", "fo");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
         Add("guarded-optional", "", "a", "a;", "a ;", "a ? b : c;", "a\n ?\n b :\n c ;", "a ? b ;", "a ? b : ;", "a ?? b;", "a  \n ", "a ?");
         Add("guarded-loop", "", "}", " }", "let a; }", "let a;let b;}", "let a; le }", "let a; let }", "let a;\n\n }", "let a; x }", "let");

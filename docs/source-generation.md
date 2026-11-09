@@ -253,7 +253,8 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   which matched something does, as at runtime: it is emitted part by part, and the start moves past the white space the
   next part skips while nothing matched. Such a part which matches something, like an `Optional` of a `Terms` parser,
   reports the start of its content when all the parsers it can start with skip white space, and the offset where it was
-  entered otherwise.
+  entered otherwise. A `ThenTry` callback receives the same offsets, and a value it rejects is reported as the furthest
+  failure at its start, like one a `When` rejects.
 
 ### Non-breaking diagnostics
 
@@ -439,7 +440,7 @@ Parameters may be read by inline parse-time callbacks passed to:
 
 - `If`
 - `Select`
-- `Then` and `ThenElse`
+- `Then`, `ThenTry` and `ThenElse`
 - `When`
 - `Switch`
 - `Else`
