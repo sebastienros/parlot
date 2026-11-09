@@ -254,6 +254,91 @@ public class SeekGuardTests
         Assert.False(ascii.Parse("a ? b : c"));
     }
 
+    // A parser which can start with an 'a' or with any non-ASCII char, declared with NonAsciiSeekableChar. It reads one char.
+    private static Parser<string> NonAsciiChar() =>
+        Terms.Scan(static span => span.Length > 0 ? 1 : 0, "a" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+    // A separator which can start with a ',' or with any non-ASCII char
+    private static Parser<string> NonAsciiSeparator() =>
+        Terms.Scan(static span => span.Length > 0 ? 1 : 0, "," + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+    [Theory]
+    [InlineData("aé")]
+    [InlineData("a é")]
+    [InlineData("a\n\té")]
+    public void LoopsShouldMatchANonAsciiCharDeclaredAsAnyNonAscii(string text)
+    {
+        var word = NonAsciiChar();
+
+        Assert.Equal(["a", "é"], ZeroOrMany(word).Parse(text));
+        Assert.Equal(["a", "é"], OneOrMany(word).Parse(text));
+    }
+
+    [Theory]
+    [InlineData("é")]
+    [InlineData(" é")]
+    [InlineData("\n\té")]
+    public void OptionalAndZeroOrOneShouldMatchANonAsciiCharDeclaredAsAnyNonAscii(string text)
+    {
+        var word = NonAsciiChar();
+
+        var optional = word.Optional().Parse(text);
+        Assert.True(optional.HasValue);
+        Assert.Equal("é", optional.Value);
+
+        Assert.Equal(["é"], ZeroOrOne(word).Parse(text));
+    }
+
+    [Theory]
+    [InlineData("aéa")]
+    [InlineData("a é a")]
+    public void SeparatedShouldMatchANonAsciiSeparatorDeclaredAsAnyNonAscii(string text)
+    {
+        Assert.Equal(["a", "a"], Separated(NonAsciiSeparator(), Terms.Char('a').Then(static _ => "a")).Parse(text));
+    }
+
+    [Fact]
+    public void GuardsShouldStillSkipAnAsciiCharOutsideTheHints()
+    {
+        var word = NonAsciiChar();
+        var separator = NonAsciiSeparator();
+
+        AssertNotEntered(Terms.Identifier().And(word.Optional()), word, "a #");
+        AssertNotEntered(Terms.Identifier().And(ZeroOrOne(word)), word, "a #");
+        AssertNotEntered(Terms.Identifier().And(ZeroOrMany(word)), word, "a #");
+        AssertNotEntered(Terms.Identifier().And(OneOrMany(word).Optional()), word, "a #");
+        AssertNotEntered(Separated(separator, Terms.Char('a')), separator, "a #");
+    }
+
+    [Fact]
+    public void GuardsShouldEnterAParserWhichCanStartWithAnyNonAsciiChar()
+    {
+        var word = NonAsciiChar();
+        var separator = NonAsciiSeparator();
+
+        var context = Trace(Terms.Identifier().And(word.Optional()), "a é", word, out var entered);
+        Assert.True(entered > 0);
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+
+        context = Trace(Terms.Identifier().And(ZeroOrOne(word)), "a é", word, out entered);
+        Assert.True(entered > 0);
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+
+        context = Trace(Terms.Identifier().And(ZeroOrMany(word)), "a é", word, out entered);
+        Assert.True(entered > 0);
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+
+        context = Trace(Terms.Identifier().And(OneOrMany(word).Optional()), "a é", word, out entered);
+        Assert.True(entered > 0);
+        Assert.Equal(3, context.Scanner.Cursor.Offset);
+
+        context = Trace(Separated(separator, Terms.Char('a')), "a é a", separator, out entered);
+        Assert.True(entered > 0);
+        Assert.Equal(5, context.Scanner.Cursor.Offset);
+    }
+
     private static void AssertNotEntered<T>(Parser<T> parser, object guarded, string text)
     {
         var context = Trace(parser, text, guarded, out var entered);

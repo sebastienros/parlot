@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Parlot.Fluent;
@@ -115,6 +116,111 @@ public class SeekGuardSourceTests
         }
     }
 
+    // The grammar of SeekGuardGrammars, for the runtime parsers
+    private static Parser<string> NonAsciiChar() =>
+        Terms.Scan(static span => span.Length > 0 ? 1 : 0, "a" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+    private static Parser<string> NonAsciiSeparator() =>
+        Terms.Scan(static span => span.Length > 0 ? 1 : 0, "," + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+    [Theory]
+    [InlineData("aé")]
+    [InlineData("a é")]
+    [InlineData("a\n\té")]
+    [InlineData("#")]
+    [InlineData("a #")]
+    [InlineData("")]
+    public void NonAsciiZeroOrMany_Match_The_Runtime(string text)
+    {
+        CheckValue(ZeroOrMany(NonAsciiChar()), SeekGuardGrammars.TryParseNonAsciiWords, SeekGuardGrammars.TryParseNonAsciiWords, text);
+    }
+
+    [Theory]
+    [InlineData("aé")]
+    [InlineData("a é")]
+    [InlineData("a\n\té")]
+    [InlineData("a #")]
+    [InlineData("")]
+    public void NonAsciiOneOrMany_Match_The_Runtime(string text)
+    {
+        CheckValue(OneOrMany(NonAsciiChar()), SeekGuardGrammars.TryParseNonAsciiOneOrMany, SeekGuardGrammars.TryParseNonAsciiOneOrMany, text);
+    }
+
+    [Theory]
+    [InlineData("é")]
+    [InlineData(" é")]
+    [InlineData("\n\té")]
+    [InlineData("#")]
+    [InlineData("a")]
+    [InlineData("")]
+    public void NonAsciiOptional_Match_The_Runtime(string text)
+    {
+        CheckValue(NonAsciiChar().Optional().Then(static x => x.HasValue ? x.Value : ""), SeekGuardGrammars.TryParseNonAsciiOptional, SeekGuardGrammars.TryParseNonAsciiOptional, text);
+        CheckValue(ZeroOrOne(NonAsciiChar()), SeekGuardGrammars.TryParseNonAsciiZeroOrOne, SeekGuardGrammars.TryParseNonAsciiZeroOrOne, text);
+    }
+
+    [Theory]
+    [InlineData("aéa")]
+    [InlineData("a é a")]
+    [InlineData("a #")]
+    [InlineData("a")]
+    [InlineData("")]
+    public void NonAsciiSeparated_Match_The_Runtime(string text)
+    {
+        CheckValue(Separated(NonAsciiSeparator(), Terms.Char('a').Then(static _ => "a")), SeekGuardGrammars.TryParseNonAsciiSeparated, SeekGuardGrammars.TryParseNonAsciiSeparated, text);
+    }
+
+    [Fact]
+    public void GeneratedGuardsAcceptAnyNonAsciiChar()
+    {
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiWords("aé", out var words));
+        Assert.Equal(["a", "é"], words);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiWords("a é", out words));
+        Assert.Equal(["a", "é"], words);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiWords("a\n\té", out words));
+        Assert.Equal(["a", "é"], words);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiOneOrMany("a é", out var many));
+        Assert.Equal(["a", "é"], many);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiOptional("é", out var optional));
+        Assert.Equal("é", optional);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiZeroOrOne(" é", out var one));
+        Assert.Equal(["é"], one);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiSeparated("a é a", out var separated));
+        Assert.Equal(["a", "a"], separated);
+
+        // An ASCII char outside the hints is still skipped
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiWords("a #", out words));
+        Assert.Equal(["a"], words);
+
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiOptional("#", out optional));
+        Assert.Equal("", optional);
+    }
+
+    private delegate bool StringValueParser<T>(string text, out T value);
+    private delegate bool ReaderValueParser<T>(TextReader reader, out T value);
+
+    private static void CheckValue<T>(Parser<T> parser, StringValueParser<T> parseString, ReaderValueParser<T> parseReader, string input)
+    {
+        var expected = parser.TryParse(input, out var expectedValue);
+
+        Assert.Equal(expected, parseString(input, out var value));
+        Assert.Equal(expected ? expectedValue : default, value);
+
+        foreach (var reader in new TextReader[] { new StringReader(input), new ChunkedReader(input, 1), new ChunkedReader(input, 13) })
+        {
+            Assert.Equal(expected, parseReader(reader, out value));
+            Assert.Equal(expected ? expectedValue : default, value);
+        }
+    }
+
     private static void Check(Parser<string> parser, StringParser parseString, ReaderParser parseReader, string input)
     {
         var expected = parser.TryParse(input, out var expectedValue);
@@ -136,4 +242,15 @@ public static partial class SeekGuardGrammars
     public static partial bool TryParseStatements(TextReader reader, out string value);
     public static partial bool TryParseLists(string text, out string value);
     public static partial bool TryParseLists(TextReader reader, out string value);
+
+    public static partial bool TryParseNonAsciiWords(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiWords(TextReader reader, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiOneOrMany(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiOneOrMany(TextReader reader, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiOptional(string text, out string value);
+    public static partial bool TryParseNonAsciiOptional(TextReader reader, out string value);
+    public static partial bool TryParseNonAsciiZeroOrOne(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiZeroOrOne(TextReader reader, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiSeparated(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseNonAsciiSeparated(TextReader reader, out IReadOnlyList<string> value);
 }

@@ -191,7 +191,9 @@ internal sealed class SeekGuard
 
     private static List<(char First, char Last)> ToRanges(char[] chars)
     {
-        var sorted = chars.Distinct().OrderBy(static c => c).ToArray();
+        // The sentinel means any non-ASCII char, not U+FFFF itself: emit the whole range instead
+        var anyNonAscii = Array.IndexOf(chars, OneOf<object>.NonAsciiSeekableChar) >= 0;
+        var sorted = chars.Where(c => !anyNonAscii || c < 128).Distinct().OrderBy(static c => c).ToArray();
         var ranges = new List<(char First, char Last)>();
 
         foreach (var c in sorted)
@@ -204,6 +206,11 @@ internal sealed class SeekGuard
             {
                 ranges.Add((c, c));
             }
+        }
+
+        if (anyNonAscii)
+        {
+            ranges.Add(((char)0x80, char.MaxValue));
         }
 
         return ranges;
@@ -221,18 +228,22 @@ internal sealed class SeekGuard
         private readonly ulong _low;
         private readonly ulong _high;
 
+        // Whether the parser can start with any non-ASCII char, declared with OneOf<T>.NonAsciiSeekableChar
+        private readonly bool _anyNonAscii;
+
 #if NET8_0_OR_GREATER
         private readonly SearchValues<char>? _nonAscii;
 #else
         private readonly char[]? _nonAscii;
 #endif
 
-        private Lookup(bool isActive, bool skipWhiteSpace, ulong low, ulong high, char[]? nonAscii)
+        private Lookup(bool isActive, bool skipWhiteSpace, ulong low, ulong high, bool anyNonAscii, char[]? nonAscii)
         {
             IsActive = isActive;
             SkipWhiteSpace = skipWhiteSpace;
             _low = low;
             _high = high;
+            _anyNonAscii = anyNonAscii;
 
             if (nonAscii is { Length: > 0 })
             {
@@ -253,10 +264,11 @@ internal sealed class SeekGuard
         {
             if (hints is not { } usable)
             {
-                return new Lookup(false, false, 0, 0, null);
+                return new Lookup(false, false, 0, 0, false, null);
             }
 
             ulong low = 0, high = 0;
+            var anyNonAscii = Array.IndexOf(usable.ExpectedChars, OneOf<object>.NonAsciiSeekableChar) >= 0;
             var nonAscii = new List<char>();
 
             foreach (var c in usable.ExpectedChars)
@@ -269,13 +281,13 @@ internal sealed class SeekGuard
                 {
                     high |= 1UL << (c - 64);
                 }
-                else if (!nonAscii.Contains(c))
+                else if (!anyNonAscii && !nonAscii.Contains(c))
                 {
                     nonAscii.Add(c);
                 }
             }
 
-            return new Lookup(true, usable.SkipWhitespace, low, high, nonAscii.ToArray());
+            return new Lookup(true, usable.SkipWhitespace, low, high, anyNonAscii, nonAscii.ToArray());
         }
 
         public bool CanStart(ParseContext context)
@@ -318,7 +330,7 @@ internal sealed class SeekGuard
                 return (_high & (1UL << (c - 64))) != 0;
             }
 
-            return ContainsNonAscii(c);
+            return _anyNonAscii || ContainsNonAscii(c);
         }
 
         private bool ContainsNonAscii(char c)
