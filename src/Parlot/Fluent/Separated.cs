@@ -86,16 +86,19 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
-        analysis.Invoke(_parser);
+        var options = _removeEmptyEntries || _allowLeadingSeparator || _allowTrailingSeparator;
 
-        // Otherwise the separator only follows an element that moved the cursor
-        if (_allowLeadingSeparator)
+        // Without the options a first element that doesn't move the cursor is a value, the separator is then invoked where
+        // the list started. With them it is an empty entry, and the separator only follows one when it can lead the list.
+        var emptyFirst = analysis.Invoke(_parser) && !options;
+
+        if (emptyFirst || _allowLeadingSeparator)
         {
             analysis.Invoke(_separator);
         }
 
-        // The first element must move the cursor
-        return _min == 0;
+        // An element after the first one moves the cursor with its separator
+        return _min == 0 || (emptyFirst && _min == 1);
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
@@ -159,21 +162,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                     context.MovePin(pin);
                 }
 
-                if (context.Scanner.Cursor.Offset == previousOffset)
-                {
-                    if (first && _min > 0)
-                    {
-                        context.Unpin(pin);
-                        context.ExitParser(this);
-                        return false;
-                    }
-
-                    break;
-                }
-
+                // The list ends when a separator and its element don't move the cursor, as they would match again. The first
+                // element has no separator and is only read once, it is a value even when it doesn't move the cursor.
                 if (first)
                 {
                     start = parsed.Start;
+                }
+                else if (context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
                 }
 
                 results.Add(parsed.Value);
@@ -260,21 +257,14 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                 context.MovePin(pin);
             }
 
-            if (context.Scanner.Cursor.Offset == previousOffset)
-            {
-                if (first && _min > 0)
-                {
-                    context.Unpin(pin);
-                    context.ExitParser(this);
-                    return false;
-                }
-
-                break;
-            }
-
+            // The first element is a value even when it doesn't move the cursor, see Parse()
             if (first)
             {
                 start = parsed.Start;
+            }
+            else if (context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
             }
 
             count++;
@@ -513,7 +503,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         context.MovePin(result, pin, "        ");
         result.Body.Add("    }");
 
-        result.Body.Add($"    if ({cursorName}.Offset == {previousOffsetName})");
+        // The first element is a value even when it doesn't move the cursor, see Parse()
+        result.Body.Add($"    if (!{firstName} && {cursorName}.Offset == {previousOffsetName})");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");

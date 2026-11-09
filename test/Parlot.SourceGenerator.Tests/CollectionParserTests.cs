@@ -318,6 +318,43 @@ public class CollectionParserTests
         Assert.False(CollectionGrammars.TryParseSeparatedOptionalOptions(",", out _));
     }
 
+    [Theory]
+    [InlineData("a.b", "a", "b")]
+    [InlineData("a..b", "a", "", "b")]
+    [InlineData(".a.b", "", "a", "b")]
+    [InlineData("..a.b", "", "", "a", "b")]
+    [InlineData(".", "", "")]
+    [InlineData("a.", "a", "")]
+    [InlineData("", "")]
+    public void Separated_Accepts_An_Empty_First_Value(string input, params string[] expected)
+    {
+        Assert.True(CollectionGrammars.TryParseSeparatedEmptyFirst(input, out var values));
+        Assert.Equal(expected, values);
+
+        var runtime = Fluent.Parsers.Separated(Fluent.Parsers.Terms.Char('.'),
+            Fluent.Parsers.OneOf(Fluent.Parsers.Terms.Identifier().Then(static x => x.ToString()), Fluent.Parsers.Always(""))).Eof();
+        Assert.Equal(runtime.Parse(input), values);
+    }
+
+    [Fact]
+    public void Separated_Counts_An_Empty_First_Value()
+    {
+        Assert.True(CollectionGrammars.TryParseCapturedSeparatedEmptyFirst(".a.;", out var captured));
+        Assert.Equal(".a.", captured);
+        Assert.True(CollectionGrammars.TryParseCapturedSeparatedEmptyFirst(";", out captured));
+        Assert.Equal("", captured);
+
+        Assert.True(CollectionGrammars.TryParseBoundedSeparatedEmptyFirst(".;", out var count));
+        Assert.Equal(2, count);
+        Assert.False(CollectionGrammars.TryParseBoundedSeparatedEmptyFirst(";", out _));
+        Assert.False(CollectionGrammars.TryParseBoundedSeparatedEmptyFirst("...;", out _));
+
+        Assert.True(CollectionGrammars.TryParseOptionalSeparatedEmptyFirst(";", out var values));
+        Assert.Equal(['x'], values);
+        Assert.True(CollectionGrammars.TryParseOptionalSeparatedEmptyFirst(".a;", out values));
+        Assert.Equal(['x', 'a'], values);
+    }
+
     private static (bool Success, IReadOnlyList<string> Values) SeparatedResult(
         string input, bool removeEmptyEntries = false, bool allowLeadingSeparator = false, bool allowTrailingSeparator = false)
     {
@@ -419,6 +456,10 @@ public static partial class CollectionGrammars
     public static partial bool TryParseSeparatedUnmatchedRun(string text, out int value);
     public static partial bool TryParseSeparatedLeadingFallback(string text, out int value);
     public static partial bool TryParseSeparatedOptionalOptions(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseSeparatedEmptyFirst(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseCapturedSeparatedEmptyFirst(string text, out string value);
+    public static partial bool TryParseBoundedSeparatedEmptyFirst(string text, out int value);
+    public static partial bool TryParseOptionalSeparatedEmptyFirst(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseTuples(string text, out IReadOnlyList<(int Number, string Text)> value);
     public static partial bool TryParseSeparatedThenQuestion(string text, out int value);
     public static partial bool TryParseCapturedZero(string text, out string value);

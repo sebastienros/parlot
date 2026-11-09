@@ -145,6 +145,11 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Separated(B, OneOrMany(Terms.Char('a')), min: 2, max: 3), ["a b a", "a b a b a b a", "a", "a b", "a b b a"]);
         AssertSameAsParse(Separated(B, As, min: 0, max: 0), ["", "b", "a b a b"]);
 
+        // The first value can match without reading
+        AssertSameAsParse(Separated(B, A.Or(Always('x'))));
+        AssertSameAsParse(Separated(B, A.Or(Always('x')), min: 2, max: 3), ["", "b", "b b", "b a b b", "a b", "c"]);
+        AssertSameAsParse(Separated(ZeroOrOne(B), A.Or(Always('x'))));
+
         // The options parse with the values
         AssertSameAsParse(Separated(B, OneOrMany(Terms.Char('a')), removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true),
             ["b a b b a b", "a b", "b", ""]);

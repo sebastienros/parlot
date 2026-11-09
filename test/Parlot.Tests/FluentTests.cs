@@ -1361,6 +1361,61 @@ public class FluentTests
     }
 
     [Theory]
+    [InlineData("a.b", 3, "a", "b")]
+    [InlineData("a..b", 4, "a", "", "b")]
+    [InlineData(".a.b", 4, "", "a", "b")]
+    [InlineData("..a.b", 5, "", "", "a", "b")]
+    [InlineData(".", 1, "", "")]
+    [InlineData("a.", 2, "a", "")]
+    [InlineData("", 0, "")]
+    [InlineData("+", 0, "")]
+    public void SeparatedShouldAcceptAnEmptyValueAtAnyPosition(string input, int end, params string[] expected)
+    {
+        // A value that matches without consuming input is a value, the first one too (#503)
+        var parser = Separated(Terms.Char('.'), Terms.Identifier().Then(static x => x.ToString()).Or(Always("")));
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<IReadOnlyList<string>>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(expected, result.Value);
+        Assert.Equal(0, result.Start);
+        Assert.Equal(end, result.End);
+        Assert.Equal(end, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void SeparatedShouldAcceptAnEmptyFirstValueBeforeALookahead()
+    {
+        var dot = Terms.Char('.');
+        var parser = Separated(dot, Terms.Identifier().Then(static x => x.ToString()).Or(Peek(dot).Then(""))).Eof();
+
+        Assert.Equal(["", "a", "b"], parser.Parse(".a.b"));
+        Assert.Equal(["", "", "a", "b"], parser.Parse("..a.b"));
+        Assert.Equal(["a", "", "b"], parser.Parse("a..b"));
+
+        // The value after the last separator doesn't match
+        Assert.Null(parser.Parse("."));
+        Assert.Null(parser.Parse(""));
+    }
+
+    [Fact]
+    public void SeparatedShouldCountAnEmptyFirstValue()
+    {
+        var value = Literals.Char('a').Then(static x => x.ToString()).Or(Always(""));
+
+        Assert.Equal([""], Separated(Literals.Char(','), value, min: 0).Parse("+"));
+        Assert.Equal([""], Separated(Literals.Char(','), value, min: 0, max: 1).Parse(",a"));
+        Assert.Equal(["", "a"], Separated(Literals.Char(','), value, min: 2).Parse(",a"));
+
+        // The minimum isn't reached, the cursor is restored
+        var context = new ParseContext(new Scanner("+"));
+        var result = new ParseResult<IReadOnlyList<string>>();
+
+        Assert.False(Separated(Literals.Char(','), value, min: 2).Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
     [InlineData("a,b", false, false, false, 2)]
     [InlineData("a,,b", true, false, false, 2)]
     [InlineData(",a", false, true, false, 1)]

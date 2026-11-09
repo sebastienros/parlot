@@ -408,7 +408,11 @@ public class GrammarsTests
         Assert.True(Grammars.TryParseSeparatedOptional("aaa", out var separated));
         Assert.Equal(3, separated.Count);
         Assert.Equal(['a'], separated[0]);
-        Assert.False(Grammars.TryParseSeparatedOptional("", out _));
+
+        // The first value is read once, the next ones stop when neither the separator nor the value moves the cursor
+        Assert.True(Grammars.TryParseSeparatedOptional("", out separated));
+        Assert.Single(separated);
+        Assert.Empty(separated[0]);
     }
 
     [Fact]
