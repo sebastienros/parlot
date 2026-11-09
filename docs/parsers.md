@@ -1070,6 +1070,10 @@ parser.Parse(""); // HasValue -> false
 
 Use the `OrSome<T>()` method to provide a default value if the `Option<T>` instance has no value.
 
+When the parser tells the chars it can start with, like a sequence starting with a text, it isn't invoked when the next
+char (after the white space it skips) can't start it. `ZeroOrOne`, `ZeroOrMany`, `OneOrMany` and the separator of
+`Separated` do the same, see [Lookup tables](writing.md#lookup-tables).
+
 ### ZeroOrMany
 
 Executes a parser as long as it's successful. The result is a list of all individual results. The method can also be post-fixed. An optional `max` limits the number of matches; `0` (the default) means unlimited.

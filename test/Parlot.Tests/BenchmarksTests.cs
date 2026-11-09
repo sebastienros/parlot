@@ -108,6 +108,18 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void SeekGuardGrammars()
+    {
+        // The setup checks every grammar
+        var benchmark = new SeekGuardBenchmarks();
+        benchmark.Setup();
+        Assert.Equal(225, benchmark.Optional());
+        Assert.Equal(225, benchmark.Workaround());
+        Assert.Equal(200, benchmark.Loop());
+        Assert.Equal(600, benchmark.SeparatedList());
+    }
+
+    [Fact]
     public void WrapperChoiceGrammar()
     {
         // The setup checks both choices

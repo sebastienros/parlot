@@ -19,6 +19,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     private readonly bool _separatorWithoutValue;
     private readonly bool _withoutValue;
 
+    // Whether the separator can start at the current position, so the list ends without invoking it when it can't
+    private readonly SeekGuard _separatorGuard;
+
     public Separated(Parser<U> separator, Parser<T> parser) : this(separator, parser, 1, 0)
     {
     }
@@ -64,6 +67,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         _allowTrailingSeparator = allowTrailingSeparator;
         _separatorWithoutValue = separator.CanParseWithoutValue;
         _withoutValue = parser.CanParseWithoutValue;
+        _separatorGuard = new SeekGuard(separator);
     }
 
     // The hints of the first element, read when they are asked for since it can be a Deferred set later. There are none when
@@ -125,7 +129,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
                 if (!first)
                 {
-                    if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                    if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                     {
                         break;
                     }
@@ -227,7 +231,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
             if (!first)
             {
-                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                 {
                     break;
                 }
@@ -308,7 +312,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             while (true)
             {
                 var beforeSeparator = cursor.Offset;
-                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                 {
                     break;
                 }
@@ -350,7 +354,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         {
             while (_max == 0 || results.Count < _max)
             {
-                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                 {
                     break;
                 }
@@ -371,7 +375,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                     }
 
                     var beforeSeparator = cursor.Offset;
-                    if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
+                    if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                     {
                         break;
                     }
@@ -466,9 +470,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", parserValueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var separatorHelperName = context.WithDiscardResult(true, () => context.Helpers
-            .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
-            .MethodName);
+        var separatorHelperName = context.WithDiscardResult(true, () =>
+        {
+            var helper = context.Helpers
+                .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
+                .MethodName;
+
+            // The list ends without invoking the separator when it can't start at the current position
+            return SeekGuard.GetHelper(context, _separator, helper, typeof(U));
+        });
 
         // The end of the last element is read again when a separator isn't followed by an element
         var pin = context.Pin(result);
@@ -566,9 +576,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         var parserHelper = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", elementTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
-        var separatorHelper = context.WithDiscardResult(true, () => context.Helpers
-            .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorTypeName, () => separatorSourceable.GenerateSource(context))
-            .MethodName);
+        var separatorHelper = context.WithDiscardResult(true, () =>
+        {
+            var helper = context.Helpers
+                .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorTypeName, () => separatorSourceable.GenerateSource(context))
+                .MethodName;
+
+            // The list ends without invoking the separator when it can't start at the current position
+            return SeekGuard.GetHelper(context, _separator, helper, typeof(U));
+        });
         var initial = $"initial{context.NextNumber()}";
         var beforeSeparator = $"beforeSeparator{context.NextNumber()}";
         var beforeValue = $"beforeValue{context.NextNumber()}";

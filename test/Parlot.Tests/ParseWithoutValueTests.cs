@@ -49,6 +49,13 @@ public class ParseWithoutValueTests
         AssertSameAsParse(ZeroOrOne(Bs));
         AssertSameAsParse(ZeroOrOne(A));
         AssertSameAsParse(Bs.Optional());
+
+        // Over sequences, which aren't invoked when they can't start at the current char
+        AssertSameAsParse(A.And(Bs).Optional());
+        AssertSameAsParse(ZeroOrOne(A.And(B)));
+        AssertSameAsParse(ZeroOrMany(A.And(Bs)));
+        AssertSameAsParse(OneOrMany(B.And(C)));
+        AssertSameAsParse(Separated(B.And(C), A));
     }
 
     [Fact]

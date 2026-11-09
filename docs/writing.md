@@ -200,6 +200,17 @@ A `Deferred` parser reads the hints from its `Parser` whenever they are asked fo
 
 `ElseError` doesn't implement `ISeekable`: a choice skipping it for a char its parser doesn't start with would fail where it reports an error.
 
+The parsers which may not invoke their parser use the same hints: `Optional`, `ZeroOrOne`, `ZeroOrMany`, `OneOrMany` (after
+its first element) and the separator of `Separated` don't invoke a parser when the char after the white space it skips
+isn't one of its expected chars. They succeed with no value, stop the loop, or end the list, with the cursor where it was,
+exactly as if the parser had failed on its first char. For an optional sequence, like the conditional tail of an expression
+`'?' expression ':' expression`, this saves entering each level of the sequence before its first literal fails, and makes
+the `OneOf(tail).Optional()` workaround unnecessary. The hints are read the first time the parser is invoked, once the
+grammar is complete, and kept like the lookup table of a choice. A parser without usable hints (`CanSeek == false`, or a
+choice that can start with any char) is always invoked, and so is a parser that reads the cursor itself, like a literal, or a
+`OneOf`: they test the char as fast, and the guard would only skip the white space a second time when they match. Generated parsers test the char the same way before calling the
+parser's method, unless it is generated as span code, which already reads the first char inline.
+
 Parlot's ordinal text and keyword parsers, and the parsers that start with one, also tell choices their whole text, so
 that a choice can skip the alternatives that share a first char with the input but not the rest of their text. A custom
 `ISeekable` parser only tells its first chars.

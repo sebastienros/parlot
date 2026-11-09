@@ -238,6 +238,28 @@ internal sealed class LoopAnalysis
     }
 
     /// <summary>
+    /// Gets whether <paramref name="parser"/> can invoke another parser before it reads, or can't tell: a parser for which
+    /// it returns <see langword="false"/>, like a literal, reads the cursor itself.
+    /// </summary>
+    public static bool InvokesParsersAtStart(object parser)
+    {
+        if (parser is not ILoopAnalyzable analyzable)
+        {
+            return true;
+        }
+
+        // The analysis of a type it doesn't know is written under the lock
+        lock (SyncRoot)
+        {
+            var analysis = new LoopAnalysis();
+            analysis._current = analysis.GetNode(parser);
+            analyzable.AnalyzeStart(analysis);
+
+            return analysis._current.Edges.Count > 0 || analysis._current.Opaque;
+        }
+    }
+
+    /// <summary>
     /// Records that the parser being analyzed can invoke <paramref name="parser"/> while the cursor is still where it was
     /// invoked, and returns whether <paramref name="parser"/> can succeed without moving the cursor.
     /// </summary>
