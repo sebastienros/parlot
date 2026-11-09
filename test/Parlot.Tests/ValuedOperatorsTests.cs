@@ -678,6 +678,61 @@ public class ValuedOperatorsTests
         Assert.Equal(expected, ConditionalWithLast(table: true, wholeExpressionLast: false).Parse(input));
     }
 
+    private sealed class CountingContext : ParseContext
+    {
+        public CountingContext(string text) : base(new Scanner(text))
+        {
+        }
+
+        public int Calls { get; set; }
+    }
+
+    [Theory]
+    [InlineData("a ? b : c = d", 1)]
+    [InlineData("a ? b : c ? d : e", 2)]
+    [InlineData("a ? b ? c : d : e", 2)]
+    [InlineData("a || b ? c : d", 1)]
+    [InlineData("a = b ? c : d = e", 1)]
+    [InlineData("a", 0)]
+    [InlineData("a ? b :", 0)]
+    public void ConditionalWithLastShouldPassTheContextToItsFactory(string input, int conditionals)
+    {
+        static string Count(ParseContext context, string condition, string whenTrue, string whenFalse)
+        {
+            ((CountingContext)context).Calls++;
+            return Conditional(condition, whenTrue, whenFalse);
+        }
+
+        var expression = Deferred<string>();
+        var primary = Atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), Binary("||")))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), expression, static (ParseContext context, string c, string a, string b) => Count(context, c, a, b))
+            .RightAssociative((Terms.Char('='), Binary("=")));
+
+        var context = new CountingContext(input);
+        var result = new ParseResult<string>();
+        var plain = new ParseContext(new Scanner(input));
+        var plainResult = new ParseResult<string>();
+
+        Assert.True(ConditionalWithLast(table: true, wholeExpressionLast: true).Parse(plain, ref plainResult));
+        Assert.True(expression.Parse(context, ref result));
+
+        // The same tree, span and cursor as the factory without the context
+        Assert.Equal(plainResult.Value, result.Value);
+        Assert.Equal(plainResult.Start, result.Start);
+        Assert.Equal(plainResult.End, result.End);
+        Assert.Equal(plain.Scanner.Cursor.Offset, context.Scanner.Cursor.Offset);
+        Assert.Equal(conditionals, context.Calls);
+    }
+
+    [Fact]
+    public void ConditionalWithLastShouldValidateItsContextFactory()
+    {
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), Atom, (Func<ParseContext, string, string, string, string>)null!));
+    }
+
     [Theory]
     [InlineData("a ? b : c", 0, 9)]
     [InlineData("  a ? b : c = d  ", 2, 15)]
