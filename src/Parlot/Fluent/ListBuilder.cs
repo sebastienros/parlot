@@ -264,6 +264,27 @@ internal sealed class ListScratch<T>
     }
 
     /// <summary>
+    /// Gets the item at the top of the stack, which must not be empty.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public T Peek() => Items[Count - 1];
+
+    /// <summary>
+    /// Inserts <paramref name="item"/> below the item at the top of the stack, which must not be empty.
+    /// </summary>
+    public void PushBelowTop(T item)
+    {
+        var top = Items[Count - 1];
+        Push(top);
+        Items[Count - 2] = item;
+    }
+
+    /// <summary>
+    /// Removes the item at the top of the stack, which must not be empty.
+    /// </summary>
+    public void Pop() => Release(Count - 1);
+
+    /// <summary>
     /// Removes the items above <paramref name="start"/>.
     /// </summary>
     public void Release(int start)

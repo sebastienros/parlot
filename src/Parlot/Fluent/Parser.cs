@@ -110,6 +110,26 @@ public abstract partial class Parser<T> : IParser<T>
     }
 
     /// <summary>
+    /// Builds a parser that converts the previous result with a conversion which can reject it: when
+    /// <paramref name="conversion"/> returns <see langword="false"/> the parser fails and the cursor is moved back to where
+    /// it was, like <see cref="When(Func{ParseContext, T, bool})"/>. It replaces a <c>When(...).Then(...)</c> pair with a
+    /// single parser and a single callback.
+    /// </summary>
+    /// <param name="conversion">
+    /// Receives the <see cref="ParseContext"/>, the start and end offsets of the value and the value, and returns whether it
+    /// is converted, the converted value in its <see langword="out"/> parameter.
+    /// </param>
+    public Parser<U> ThenTry<U>(TryConvert<T, U> conversion) => new ThenTry<T, U>(this, conversion);
+
+    /// <summary>
+    /// Builds a parser that converts the previous result with a conversion which can reject it: when
+    /// <paramref name="conversion"/> returns a tuple whose <c>Success</c> is <see langword="false"/> the parser fails and
+    /// the cursor is moved back to where it was, like <see cref="When(Func{ParseContext, T, bool})"/>.
+    /// </summary>
+    /// <param name="conversion">Returns whether the value is converted, and the converted value.</param>
+    public Parser<U> ThenTry<U>(Func<T, (bool Success, U Value)> conversion) => new ThenTry<T, U>(this, conversion);
+
+    /// <summary>
     /// Builds a parser that converts the previous result when it succeeds or returns a default value if it fails.
     /// </summary>
     public Parser<U> ThenElse<U>(Func<T, U> conversion, U elseValue) => new Then<T, U>(this, conversion).Else(elseValue);
@@ -190,6 +210,22 @@ public abstract partial class Parser<T> : IParser<T>
     public Parser<T> Eof() => new Eof<T>(this);
 
     /// <summary>
+    /// Builds a parser that skips the white space and comments before this parser, and fails when they contain a new line of
+    /// <see cref="ParseContext.WhiteSpaceSet"/>, such as JavaScript's "[no LineTerminator here]".
+    /// </summary>
+    /// <remarks>
+    /// <c>Terms.Text("return").And(expression.NoNewLineBefore().Optional())</c> doesn't read an expression on the next line.
+    /// </remarks>
+    public Parser<T> NoNewLineBefore() => new NoNewLineBefore<T>(this);
+
+    /// <summary>
+    /// Builds a parser that skips the white space and comments before this parser, and fails when they contain one of
+    /// <paramref name="newLines"/>.
+    /// </summary>
+    /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
+    public Parser<T> NoNewLineBefore(string newLines) => new NoNewLineBefore<T>(this, newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
     /// Builds a parser that prevents any parser from moving back before the end of the previous parser's match once it succeeds,
     /// such that its text is no longer buffered when the input is streamed.
     /// </summary>
@@ -205,6 +241,47 @@ public abstract partial class Parser<T> : IParser<T>
     /// </para>
     /// </remarks>
     public Parser<T> Commit() => new Commit<T>(this);
+
+    /// <summary>
+    /// Builds a parser that updates a state of a custom parse context while the previous parser runs, then restores it.
+    /// </summary>
+    /// <typeparam name="C">The concrete <see cref="ParseContext" /> type holding the state.</typeparam>
+    /// <typeparam name="S">The type of the state.</typeparam>
+    /// <param name="get">Reads the state from the context.</param>
+    /// <param name="set">Writes the state to the context.</param>
+    /// <param name="update">Returns the state the parser runs with, from the current one.</param>
+    /// <remarks>
+    /// <para>
+    /// The state is restored when the parser succeeds, fails or throws. Parsers invoked by the parser, like <c>If</c>,
+    /// <c>Select</c> or <c>When</c>, read the updated state. For instance, with flags of a custom context:
+    /// <code>
+    /// var functionBody = body.WithState&lt;JsContext, Flags&gt;(static c => c.Flags, static (c, f) => c.Flags = f, static f => (f | Flags.Return) &amp; ~Flags.NoIn);
+    /// </code>
+    /// </para>
+    /// <para>
+    /// A source-generated parser runs with Parlot's own context: use <see cref="WithState{S}(Func{S}, Action{S}, Func{S, S})"/>
+    /// with a state held by a configuration parameter instead.
+    /// </para>
+    /// </remarks>
+    public Parser<T> WithState<C, S>(Func<C, S> get, Action<C, S> set, Func<S, S> update) where C : ParseContext
+        => new WithState<C, S, T>(this, get, set, update);
+
+    /// <summary>
+    /// Builds a parser that updates a state while the previous parser runs, then restores it.
+    /// </summary>
+    /// <typeparam name="S">The type of the state.</typeparam>
+    /// <param name="get">Reads the state.</param>
+    /// <param name="set">Writes the state.</param>
+    /// <param name="update">Returns the state the parser runs with, from the current one.</param>
+    /// <remarks>
+    /// The state is restored when the parser succeeds, fails or throws. Parsers invoked by the parser, like <c>If</c>,
+    /// <c>Select</c> or <c>When</c>, read the updated state. In a source-generated parser the state can be held by a
+    /// configuration parameter: <c>body.WithState(() => options.Flags, f => options.Flags = f, static f => f | Flags.Return)</c>.
+    /// A state shared by concurrent parses must be held by the parse context instead, see
+    /// <see cref="WithState{C, S}(Func{C, S}, Action{C, S}, Func{S, S})"/>.
+    /// </remarks>
+    public Parser<T> WithState<S>(Func<S> get, Action<S> set, Func<S, S> update)
+        => new WithState<ParseContext, S, T>(this, get, set, update);
 
     /// <summary>
     /// Builds a parser that discards the previous result and replaces it by the specified type or value.

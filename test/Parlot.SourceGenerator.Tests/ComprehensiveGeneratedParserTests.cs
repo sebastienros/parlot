@@ -219,4 +219,26 @@ public class ComprehensiveGeneratedParserTests
         Assert.True(Grammars.TryParseHelloBang("hello!", out _));
         Assert.False(Grammars.TryParseHelloBang("hello", out _));
     }
+
+    [Fact]
+    public void Peek_Returns_The_Value_Without_Consuming()
+    {
+        Assert.True(Grammars.TryParsePeekValue(" 12", out var pair));
+        Assert.Equal((12L, 12L), pair);
+        Assert.False(Grammars.TryParsePeekValue("x", out _));
+
+        Assert.True(Grammars.TryParsePeekSemicolon("a;}", out var statement));
+        Assert.Equal("a1", statement);
+        Assert.True(Grammars.TryParsePeekSemicolon("a }", out statement));
+        Assert.Equal("a-1", statement);
+        Assert.False(Grammars.TryParsePeekSemicolon("a", out _));
+        Assert.False(Grammars.TryParsePeekSemicolon("a x}", out _));
+
+        // The cursor is back at the start when the lookahead fails
+        Assert.True(Grammars.TryParsePeekFails("ab", out var text));
+        Assert.Equal("peek", text);
+        Assert.True(Grammars.TryParsePeekFails("ac", out text));
+        Assert.Equal("ac", text);
+        Assert.False(Grammars.TryParsePeekFails("ad", out _));
+    }
 }

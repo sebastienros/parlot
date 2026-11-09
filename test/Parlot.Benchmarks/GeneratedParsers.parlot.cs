@@ -84,6 +84,18 @@ public static partial class GeneratedParsers
     [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
     private static Parser<IJson> BuildJsonWhiteSpaceParser() => BuildJson().WithWhiteSpaceParser(Literals.AnyOf(" \t\r\n"));
 
+    // The JSON grammar with comments, for CommentsBenchmarks
+    [GenerateParser(nameof(TryParseJsonComments))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonComments() =>
+        BuildJson().WithComments(static comments => comments.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+
+    // The same comments with the loop WithComments composed before CommentsParser
+    [GenerateParser(nameof(TryParseJsonComposedComments))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonComposedComments() =>
+        BuildJson().WithWhiteSpaceParser(Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/")))));
+
     [GenerateParser(nameof(TryParseLog))]
     [IncludeUsings("System.Collections.Generic")]
     private static Parser<int> BuildLog()

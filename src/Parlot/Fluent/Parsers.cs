@@ -72,6 +72,37 @@ public static partial class Parsers
     public static Parser<T> SkipWhiteSpace<T>(Parser<T> parser) => new SkipWhiteSpace<T>(parser);
 
     /// <summary>
+    /// Builds a parser that skips the white space and comments before another one, and fails when they contain a new line of
+    /// <see cref="ParseContext.WhiteSpaceSet"/>, such as JavaScript's "[no LineTerminator here]".
+    /// </summary>
+    public static Parser<T> NoNewLineBefore<T>(Parser<T> parser) => new NoNewLineBefore<T>(parser);
+
+    /// <summary>
+    /// Builds a parser that skips the white space and comments before another one, and fails when they contain one of
+    /// <paramref name="newLines"/>.
+    /// </summary>
+    /// <param name="parser">The parser to invoke after the white space.</param>
+    /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
+    public static Parser<T> NoNewLineBefore<T>(Parser<T> parser, string newLines) => new NoNewLineBefore<T>(parser, newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
+    /// Builds a parser that succeeds when the white space and comments at the cursor contain a new line of
+    /// <see cref="ParseContext.WhiteSpaceSet"/>, returning <see langword="null"/>. It doesn't consume them.
+    /// </summary>
+    /// <remarks>
+    /// JavaScript's automatic semicolon insertion is
+    /// <c>OneOf(Terms.Char(';').Then&lt;object?&gt;(null), Always().WhenFollowedBy(Terms.Char('}')), SkipWhiteSpace(Eof()), NewLineAhead())</c>.
+    /// </remarks>
+    public static Parser<object?> NewLineAhead() => new NewLineAhead();
+
+    /// <summary>
+    /// Builds a parser that succeeds when the white space and comments at the cursor contain one of <paramref name="newLines"/>,
+    /// returning <see langword="null"/>. It doesn't consume them.
+    /// </summary>
+    /// <param name="newLines">The chars that are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript.</param>
+    public static Parser<object?> NewLineAhead(string newLines) => new NewLineAhead(newLines ?? throw new ArgumentNullException(nameof(newLines)));
+
+    /// <summary>
     /// Builds a parser that returns an empty list or a list containing one match.
     /// </summary>
     public static Parser<IReadOnlyList<T>> ZeroOrOne<T>(Parser<T> parser) => new ZeroOrOne<T>(parser);
@@ -100,6 +131,17 @@ public static partial class Parsers
     /// Builds a parser that succeeds when the specified parser fails to match.
     /// </summary>
     public static Parser<T> Not<T>(Parser<T> parser) => new Not<T>(parser);
+
+    /// <summary>
+    /// Builds a parser that succeeds with the value of the specified parser when it matches, without consuming any input
+    /// (positive lookahead, the PEG <c>&amp;p</c>).
+    /// </summary>
+    /// <remarks>
+    /// The result starts and ends where the parser is invoked. A choice only tries it for the chars the specified parser
+    /// can start with.
+    /// </remarks>
+    /// <param name="parser">The parser that must match at the current position.</param>
+    public static Parser<T> Peek<T>(Parser<T> parser) => new Peek<T>(parser);
 
     /// <summary>
     /// Evaluates a condition once and executes <paramref name="parser"/> if it is true.
@@ -272,7 +314,7 @@ public class LiteralBuilder
     /// This overload exists so a factory compiled for .NET Framework or .NET Standard 2.0, where a <see cref="string"/>
     /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
     /// </remarks>
-    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText);
+    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => new KeywordLiteral(text, identifierPart ?? throw new ArgumentNullException(nameof(identifierPart)), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText);
 
     /// <summary>
     /// Builds a parser that matches the specified char.
@@ -338,14 +380,20 @@ public class LiteralBuilder
     public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Number<double>(numberOptions);
 
     /// <summary>
-    /// Builds a parser that matches an quoted string that can be escaped.
+    /// Builds a parser that matches a quoted string that can be escaped.
     /// </summary>
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => new StringLiteral(quotes);
 
     /// <summary>
-    /// Builds a parser that matches an quoted string, and decodes its escape sequences only if <paramref name="returnDecoded"/> is <c>true</c>.
+    /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
+    /// <see cref="StringEscapes.JavaScript"/>, and decodes them unless <paramref name="returnDecoded"/> is <c>false</c>.
     /// </summary>
-    public Parser<TextSpan> String(StringLiteralQuotes quotes, bool returnDecoded) => new StringLiteral(quotes, returnDecoded);
+    /// <param name="quotes">The quotes that delimit the string.</param>
+    /// <param name="escapes">The escape sequences the string accepts, and how they are decoded.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
+    /// </param>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => new StringLiteral(quotes, escapes, returnDecoded);
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
@@ -381,6 +429,23 @@ public class LiteralBuilder
 #endif
 
     /// <summary>
+    /// Builds a parser that matches an identifier whose chars are code points accepted by predicates, which can be written
+    /// as escape sequences or surrogate pairs depending on <paramref name="options"/>.
+    /// </summary>
+    /// <param name="isStart">Whether a code point can start the identifier.</param>
+    /// <param name="isPart">Whether a code point can follow the start.</param>
+    /// <param name="options">The escape sequences and surrogate pairs which are code points,
+    /// <see cref="IdentifierOptions.JavaScript"/> for JavaScript identifiers.</param>
+    /// <returns>A parser returning the text of the identifier, escape sequences included, which
+    /// <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.</returns>
+    /// <remarks>
+    /// The predicates are invoked for each ASCII char when the parser is built, and must give the same answer for a code
+    /// point each time. They can't accept a new line. An escape sequence is accepted when the predicate accepts its code
+    /// point, a surrogate pair is passed to the predicate as the code point it encodes.
+    /// </remarks>
+    public Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options) => new CodePointIdentifier(isStart, isPart, options);
+
+    /// <summary>
     /// Builds a parser that matches a char against a predicate.
     /// </summary>
     /// <param name="predicate">The predicate to match against each char.</param>
@@ -394,6 +459,16 @@ public class LiteralBuilder
     /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
     /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
     public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
+
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the text at the current position, which also gets the text before it.
+    /// </summary>
+    /// <param name="scanner">
+    /// The function that returns the length of the token at a position of the text, <c>0</c> when there is none. It can read the text
+    /// before the token, for instance to match only at the start of the input or of a line. See <see cref="TextScanner"/>.
+    /// </param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default) => new SpanScannerLiteral(scanner, startChars);
 
 #if NET8_0_OR_GREATER
     /// <summary>
@@ -551,7 +626,7 @@ public class TermBuilder
     /// This overload exists so a factory compiled for .NET Framework or .NET Standard 2.0, where a <see cref="string"/>
     /// doesn't convert to a <see cref="ReadOnlySpan{T}"/> implicitly, can pass a string literal.
     /// </remarks>
-    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, (identifierPart ?? throw new ArgumentNullException(nameof(identifierPart))).AsSpan(), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText: returnMatchedText));
+    public Parser<string> Keyword(string text, string identifierPart, bool caseInsensitive = false, bool returnMatchedText = false) => SkipWhiteSpace(new KeywordLiteral(text, identifierPart ?? throw new ArgumentNullException(nameof(identifierPart)), caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal, returnMatchedText));
 
     /// <summary>
     /// Builds a parser that matches the specified char.
@@ -617,14 +692,21 @@ public class TermBuilder
     public Parser<double> Double(NumberOptions numberOptions = NumberOptions.Float) => Number<double>(numberOptions);
 
     /// <summary>
-    /// Builds a parser that matches an quoted string that can be escaped.
+    /// Builds a parser that matches a quoted string that can be escaped.
     /// </summary>
     public Parser<TextSpan> String(StringLiteralQuotes quotes = StringLiteralQuotes.SingleOrDouble) => SkipWhiteSpace(new StringLiteral(quotes));
 
     /// <summary>
-    /// Builds a parser that matches an quoted string, and decodes its escape sequences only if <paramref name="returnDecoded"/> is <c>true</c>.
+    /// Builds a parser that matches a quoted string with the escape sequences of <paramref name="escapes"/>, like
+    /// <see cref="StringEscapes.JavaScript"/>, after white space, and decodes them unless <paramref name="returnDecoded"/>
+    /// is <c>false</c>.
     /// </summary>
-    public Parser<TextSpan> String(StringLiteralQuotes quotes, bool returnDecoded) => SkipWhiteSpace(new StringLiteral(quotes, returnDecoded));
+    /// <param name="quotes">The quotes that delimit the string.</param>
+    /// <param name="escapes">The escape sequences the string accepts, and how they are decoded.</param>
+    /// <param name="returnDecoded">
+    /// Whether the escape sequences are decoded. When <c>false</c> the value is the text between the quotes as it is.
+    /// </param>
+    public Parser<TextSpan> String(StringLiteralQuotes quotes, StringEscapes escapes = StringEscapes.Default, bool returnDecoded = true) => SkipWhiteSpace(new StringLiteral(quotes, escapes, returnDecoded));
 
     /// <summary>
     /// Builds a parser that matches an identifier which can have a different starting value that the rest of its chars.
@@ -660,6 +742,23 @@ public class TermBuilder
 #endif
 
     /// <summary>
+    /// Builds a parser that matches an identifier whose chars are code points accepted by predicates, which can be written
+    /// as escape sequences or surrogate pairs depending on <paramref name="options"/>.
+    /// </summary>
+    /// <param name="isStart">Whether a code point can start the identifier.</param>
+    /// <param name="isPart">Whether a code point can follow the start.</param>
+    /// <param name="options">The escape sequences and surrogate pairs which are code points,
+    /// <see cref="IdentifierOptions.JavaScript"/> for JavaScript identifiers.</param>
+    /// <returns>A parser returning the text of the identifier, escape sequences included, which
+    /// <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.</returns>
+    /// <remarks>
+    /// The predicates are invoked for each ASCII char when the parser is built, and must give the same answer for a code
+    /// point each time. They can't accept a new line. An escape sequence is accepted when the predicate accepts its code
+    /// point, a surrogate pair is passed to the predicate as the code point it encodes.
+    /// </remarks>
+    public Parser<TextSpan> Identifier(Func<int, bool> isStart, Func<int, bool> isPart, IdentifierOptions options) => SkipWhiteSpace(new CodePointIdentifier(isStart, isPart, options));
+
+    /// <summary>
     /// Builds a parser that matches a char against a predicate.
     /// </summary>
     /// <param name="predicate">The predicate to match against each char.</param>
@@ -673,6 +772,16 @@ public class TermBuilder
     /// <param name="scanner">The function that returns the length of the token at the start of a span, <c>0</c> when there is none. See <see cref="SpanScanner"/>.</param>
     /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
     public Parser<TextSpan> Scan(SpanScanner scanner, ReadOnlySpan<char> startChars = default) => SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
+
+    /// <summary>
+    /// Builds a parser that matches the token found by a function scanning the text at the current position, which also gets the text before it.
+    /// </summary>
+    /// <param name="scanner">
+    /// The function that returns the length of the token at a position of the text, <c>0</c> when there is none. It can read the text
+    /// before the token, for instance to match only at the start of the input or of a line. See <see cref="TextScanner"/>.
+    /// </param>
+    /// <param name="startChars">The chars a token can start with, used to skip the parser in choices. Empty when unknown.</param>
+    public Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default) => SkipWhiteSpace(new SpanScannerLiteral(scanner, startChars));
 
 #if NET8_0_OR_GREATER
     /// <summary>

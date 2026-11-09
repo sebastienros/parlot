@@ -1,10 +1,11 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<T1> _parser1;
     private readonly Parser<T2> _parser2;
@@ -48,7 +49,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
 
             if (_withoutValue2 ? _parser2.ParseWithoutValue(context, ref parseResult2) : _parser2.Parse(context, ref parseResult2))
             {
-                result.Set(parseResult1.Start, parseResult2.End, parseResult1.Value);
+                result.Set(SequenceStart.Of(in parseResult1, in parseResult2), parseResult2.End, parseResult1.Value);
 
                 context.ExitParser(this);
                 return true;
@@ -78,7 +79,7 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
 
             if (_withoutValue2 ? _parser2.ParseWithoutValue(context, ref parseResult2) : _parser2.Parse(context, ref parseResult2))
             {
-                result.Start = parseResult1.Start;
+                result.Start = SequenceStart.Of(in parseResult1, in parseResult2);
                 result.End = parseResult2.End;
 
                 context.ExitParser(this);
@@ -146,15 +147,17 @@ public sealed class SequenceAndSkip<T1, T2> : Parser<T1>, ISeekablePrefixes, ISo
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser1, _parser2);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser1, typeof(T1), true), (_parser2, typeof(T2), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser1, typeof(T1), true), (_parser2, typeof(T2), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser1} & (skip) {_parser2}";
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2>> _parser;
     private readonly Parser<T3> _lastParser;
@@ -206,7 +209,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
                     tupleResult.Value.Item2
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -236,7 +239,7 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -305,16 +308,18 @@ public sealed class SequenceAndSkip<T1, T2, T3> : Parser<ValueTuple<T1, T2>>, IS
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2>), true), (_lastParser, typeof(T3), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2>), true), (_lastParser, typeof(T3), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3>> _parser;
     private readonly Parser<T4> _lastParser;
@@ -364,7 +369,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
                     tupleResult.Value.Item3
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -394,7 +399,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -463,15 +468,17 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, 
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3>), true), (_lastParser, typeof(T4), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3>), true), (_lastParser, typeof(T4), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4>> _parser;
     private readonly Parser<T5> _lastParser;
@@ -522,7 +529,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
                     tupleResult.Value.Item4
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -552,7 +559,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -621,16 +628,18 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, 
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4>), true), (_lastParser, typeof(T5), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4>), true), (_lastParser, typeof(T5), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5>> _parser;
     private readonly Parser<T6> _lastParser;
@@ -682,7 +691,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
                     tupleResult.Value.Item5
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -712,7 +721,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -781,15 +790,17 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5>), true), (_lastParser, typeof(T6), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5>), true), (_lastParser, typeof(T6), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6>> _parser;
     private readonly Parser<T7> _lastParser;
@@ -842,7 +853,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
                     tupleResult.Value.Item6
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -872,7 +883,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -941,16 +952,18 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTu
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), true), (_lastParser, typeof(T7), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6>), true), (_lastParser, typeof(T7), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 
 }
 
-public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
 {
     private readonly Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>> _parser;
     private readonly Parser<T8> _lastParser;
@@ -1004,7 +1017,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
                     tupleResult.Value.Item7
                 );
 
-                result.Set(tupleResult.Start, lastResult.End, tuple);
+                result.Set(SequenceStart.Of(in tupleResult, in lastResult), lastResult.End, tuple);
 
                 context.ExitParser(this);
                 return true;
@@ -1034,7 +1047,7 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
 
             if (_lastParserWithoutValue ? _lastParser.ParseWithoutValue(context, ref lastResult) : _lastParser.Parse(context, ref lastResult))
             {
-                result.Start = tupleResult.Start;
+                result.Start = SequenceStart.Of(in tupleResult, in lastResult);
                 result.End = lastResult.End;
 
                 context.ExitParser(this);
@@ -1103,10 +1116,12 @@ public sealed class SequenceAndSkip<T1, T2, T3, T4, T5, T6, T7, T8> : Parser<Val
 
     int ISpanSourceable.GetSpanSourceWeight(SourceGenerationContext context) => SpanSource.GetWeight(context, _parser, _lastParser);
 
+    IReadOnlyList<(object Parser, Type ValueType, bool Keep)> ISequenceSourceable.Parts => [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), true), (_lastParser, typeof(T8), false)];
+
+    string ISequenceSourceable.CreateValue(string?[] values) => values[0]!;
+
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
-        => SpanSource.GenerateSequence(writer, valueVariable, fail,
-            [(_parser, typeof(ValueTuple<T1, T2, T3, T4, T5, T6, T7>), true), (_lastParser, typeof(T8), false)],
-            static values => values[0]!);
+        => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
     public override string ToString() => $"{_parser} & (skip) {_lastParser}";
 

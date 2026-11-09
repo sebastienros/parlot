@@ -365,14 +365,16 @@ public class ParseContext
     /// </summary>
     internal bool HasReentrantWhiteSpaceParser => (_flags & ReentrantWhiteSpaceFlag) != 0;
 
+#if !PARLOT_STANDALONE
     /// <summary>
-    /// Sets <see cref="WhiteSpaceParser"/> with whether it can invoke a deferred parser, which the caller already knows.
+    /// Sets <see cref="WhiteSpaceParser"/>, with the chars it can start with, and whether it can invoke a deferred parser, which
+    /// the caller already knows.
     /// </summary>
-    internal void SetWhiteSpaceParser(Parser<TextSpan>? parser, bool reentrant)
+    internal void SetWhiteSpaceParser(CustomWhiteSpace? whiteSpace, bool reentrant)
     {
-        if (!ReferenceEquals(_whiteSpaceParser, parser))
+        if (!ReferenceEquals(_whiteSpace, whiteSpace))
         {
-            _whiteSpaceParser = parser;
+            _whiteSpace = whiteSpace;
 
             // The white spaces skipped by the previous parser are not the ones this one skips
             _cacheOffset = -1;
@@ -380,6 +382,12 @@ public class ParseContext
 
         SetFlag(ReentrantWhiteSpaceFlag, reentrant);
     }
+
+    /// <summary>
+    /// <see cref="WhiteSpaceParser"/>, with the chars it can start with.
+    /// </summary>
+    internal CustomWhiteSpace? CustomWhiteSpace => _whiteSpace;
+#endif
 
     private void SetFlag(byte flag, bool value)
     {
@@ -389,14 +397,29 @@ public class ParseContext
     /// <summary>
     /// The parser that is used to parse whitespaces and comments.
     /// </summary>
+    /// <remarks>
+    /// The parsers that skip white space invoke it only before the chars it can start with, when it tells them with
+    /// <see cref="Rewriting.ISeekable"/>, and at the end of the text. A parser that can succeed without reading, like
+    /// <c>Capture(ZeroOrMany(comment))</c>, tells the chars of <c>comment</c>.
+    /// </remarks>
     public Parser<TextSpan>? WhiteSpaceParser
     {
+#if PARLOT_STANDALONE
         get => _whiteSpaceParser;
+#else
+        get => _whiteSpace?.Parser;
+#endif
         set
         {
+#if PARLOT_STANDALONE
             if (!ReferenceEquals(_whiteSpaceParser, value))
             {
                 _whiteSpaceParser = value;
+#else
+            if (!ReferenceEquals(_whiteSpace?.Parser, value))
+            {
+                _whiteSpace = CustomWhiteSpace.Of(value);
+#endif
 
                 // The white spaces skipped by the previous parser are not the ones this one skips
                 _cacheOffset = -1;
@@ -409,7 +432,12 @@ public class ParseContext
         }
     }
 
+#if PARLOT_STANDALONE
     private Parser<TextSpan>? _whiteSpaceParser;
+#else
+    // WhiteSpaceParser with the chars it can start with, which a generated parser doesn't know
+    private CustomWhiteSpace? _whiteSpace;
+#endif
 
     /// <summary>
     /// The chars that are white space. Default is <see cref="WhiteSpaceSet.Default"/>.
@@ -464,10 +492,35 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Records the failure of what a parser read and then rejected, as generated code does: only the start of what it read
+    /// tells about the input, at <paramref name="start"/> or after the white space there. <paramref name="recorded"/> is
+    /// the failure recorded before the rejected text was read.
+    /// </summary>
+    /// <remarks>Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal void RecordRejected(int start, int recorded, bool skipWhiteSpace)
+    {
+        var cursor = Scanner.Cursor;
+        cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
+
+        if (skipWhiteSpace)
+        {
+            SkipWhiteSpace();
+        }
+
+        cursor.RecordFailure(cursor.Offset);
+    }
+
+    /// <summary>
     /// Whether <see cref="SkipWhiteSpace"/> can skip something at a char, the shortcut of the parsers skipping white space.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if PARLOT_STANDALONE
     internal bool MaySkipWhiteSpace(char ch) => _whiteSpaceParser is not null || Character.HasMask(ch, _skipMask);
+#else
+    internal bool MaySkipWhiteSpace(char ch) => _whiteSpace is null ? Character.HasMask(ch, _skipMask) : _whiteSpace.MayStartWith(ch);
+#endif
 
     // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
@@ -491,15 +544,34 @@ public class ParseContext
         }
 #endif
 
-        if (WhiteSpaceParser is null)
+#if PARLOT_STANDALONE
+        if (_whiteSpaceParser is null)
         {
             SkipWhiteSpaceOfSet();
         }
         else
         {
             ParseResult<TextSpan> _ = default;
-            WhiteSpaceParser.Parse(this, ref _);
+            _whiteSpaceParser.Parse(this, ref _);
         }
+#else
+        if (_whiteSpace is null)
+        {
+            SkipWhiteSpaceOfSet();
+        }
+        else
+        {
+            // The parser isn't invoked before a char it can't read, the shortcut of the white space sets. It is at the end
+            // of the text, NUL, where a stream tells whether more text follows.
+            if (!_whiteSpace.MayStartWith(Scanner.Cursor.Current))
+            {
+                return;
+            }
+
+            ParseResult<TextSpan> _ = default;
+            _whiteSpace.Parser.Parse(this, ref _);
+        }
+#endif
 
         _cacheOffset = offset;
         _cacheEndOffset = Scanner.Cursor.Offset;
@@ -529,6 +601,96 @@ public class ParseContext
             Scanner.SkipWhiteSpaceOrNewLine(_skipMask);
         }
     }
+
+    /// <summary>
+    /// Skips the white space and comments at the cursor, as <see cref="SkipWhiteSpace"/> does, and returns whether they contain
+    /// a new line: one of <paramref name="newLines"/>, or of <see cref="WhiteSpaceSet"/> when it is <see langword="null"/>. The
+    /// cursor is after them either way. Used by <see cref="NoNewLineBefore{T}"/> and <see cref="NewLineAhead"/>.
+    /// </summary>
+    /// <remarks>
+    /// When it finds no new line and the white space reaches the end of the buffer, it marks <see cref="Cursor.HitEnd"/>:
+    /// more text could hold one. In compacting mode the white space is read as a token, so that it stays buffered while it's
+    /// searched and is read again with more text when it reaches the end of the buffer.
+    /// </remarks>
+    internal bool SkipWhiteSpaceAndFindNewLine(string? newLines)
+    {
+#if !PARLOT_STRING_ONLY
+        if ((_flags & CompactingFlag) != 0)
+        {
+            return SkipWhiteSpaceAndFindNewLineCompacting(newLines);
+        }
+#endif
+
+        var cursor = Scanner.Cursor;
+
+        if (!MaySkipWhiteSpace(cursor.Current))
+        {
+            if (cursor.Eof)
+            {
+                cursor.MarkHitEnd();
+            }
+
+            return false;
+        }
+
+        var start = cursor.Offset;
+
+        SkipWhiteSpace();
+
+        var end = cursor.Offset;
+
+        if (end > start)
+        {
+            var span = cursor.GetSpan(start, end - start);
+
+            if ((newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0)
+            {
+                return true;
+            }
+        }
+
+        if (cursor.Eof)
+        {
+            cursor.MarkHitEnd();
+        }
+
+        return false;
+    }
+
+#if !PARLOT_STRING_ONLY
+    private bool SkipWhiteSpaceAndFindNewLineCompacting(string? newLines)
+    {
+        var cursor = Scanner.Cursor;
+        var start = BeginToken();
+
+        try
+        {
+            while (true)
+            {
+                bool found;
+
+                try
+                {
+                    found = SkipWhiteSpaceAndFindNewLine(newLines);
+                }
+                catch (ParseException) when (cursor.HitEnd)
+                {
+                    // A comment of the white space parser might be complete with more text
+                    found = false;
+                }
+
+                if (!RetryToken(start))
+                {
+                    return found;
+                }
+            }
+        }
+        finally
+        {
+            EndToken();
+        }
+    }
+#endif
 
     /// <summary>
     /// Whether the input is streamed through a compacting buffer and no token is being read.
@@ -673,7 +835,10 @@ public class ParseContext
             return false;
         }
 
+        // Not a failure: the token is read again, and records its own failures
+        var recorded = cursor.RecordedFailure;
         cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
         Refill(start);
         cursor.ResetHitEnd();
 
@@ -692,7 +857,9 @@ public class ParseContext
         ThrowIfDiscarded(cursor);
         ThrowIfReadPastBuffer(cursor);
 
-        if (WhiteSpaceParser is null)
+        var whiteSpaceParser = WhiteSpaceParser;
+
+        if (whiteSpaceParser is null)
         {
             // White spaces are read one char at a time so they are skipped from where the buffer ended
             while (true)
@@ -711,9 +878,18 @@ public class ParseContext
         }
         else
         {
+#if !PARLOT_STANDALONE
+            // Between tokens the cursor isn't at the end of the buffer, but when it is the char is NUL and the parser is
+            // invoked, see SkipWhiteSpace()
+            if (!_whiteSpace!.MayStartWith(cursor.Current))
+            {
+                return;
+            }
+#endif
+
             // A custom parser, which can parse comments, is read as a token
             ParseResult<TextSpan> _ = default;
-            ParseToken(WhiteSpaceParser, ref _);
+            ParseToken(whiteSpaceParser, ref _);
         }
 
         _cacheOffset = offset;
@@ -731,6 +907,13 @@ public class ParseContext
             {
                 floor = pins[i];
             }
+        }
+
+        // The char before the floor stays buffered, so a parser can tell whether its text is at the start of the input or of a line
+        // (see TextScanner). The char before each position the parser can be at is buffered since all refills keep it.
+        if (floor > Scanner.Cursor.BufferStart)
+        {
+            floor--;
         }
 
         state.RefillSource!.Refill(Scanner.Cursor, floor, CancellationToken);

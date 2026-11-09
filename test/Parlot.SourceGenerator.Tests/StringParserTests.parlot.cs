@@ -15,6 +15,14 @@ public static partial class StringGrammars
     private static Parser<string> BuildRaw() =>
         SkipWhiteSpace(new StringLiteral(StringLiteralQuotes.SingleOrDouble, returnDecoded: false)).Then(static span => span.ToString()).Eof();
 
+    [GenerateParser(nameof(TryParseRawJavaScript))]
+    private static Parser<string> BuildRawJavaScript() =>
+        Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript, returnDecoded: false).Then(static span => span.ToString()).Eof();
+
+    [GenerateParser(nameof(TryParseRawCustomQuote))]
+    private static Parser<string> BuildRawCustomQuote() =>
+        new StringLiteral('%', returnDecoded: false).Then(static span => span.ToString()).Eof();
+
     [GenerateParser(nameof(TryParseRawCaptured))]
     private static Parser<int> BuildRawCaptured() =>
         Capture(Terms.String(StringLiteralQuotes.Single, returnDecoded: false)).Then(static span => span.Length).Eof();

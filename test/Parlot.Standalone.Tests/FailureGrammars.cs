@@ -22,4 +22,28 @@ public static partial class FailureGrammars
     public static partial bool Span(string text, out string value, out int failureOffset);
 
     public static partial bool Configured(string text, long factor, out long value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool Rejected(string text, out string value, out int failureOffset);
+    public static partial bool Rejected(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedLiteral(string text, out string value, out int failureOffset);
+
+    public static partial bool ConversionRejected(string text, out string value, out int failureOffset);
+    public static partial bool ConversionRejected(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool ConversionRejectedLiteral(string text, out string value, out int failureOffset);
+
+    public static partial bool Second(string text, out string value, out int failureOffset);
+
+    public static partial bool NotFollowed(string text, out string value, out int failureOffset);
+    public static partial bool NotFollowed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool Followed(string text, out string value, out int failureOffset);
+    public static partial bool Followed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool Peeked(string text, out string value, out int failureOffset);
+    public static partial bool Peeked(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool Negative(string text, out string value, out int failureOffset);
+    public static partial bool Negative(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }

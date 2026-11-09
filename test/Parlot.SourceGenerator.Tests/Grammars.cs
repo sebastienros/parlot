@@ -47,6 +47,8 @@ public static partial class Grammars
     public static partial bool TryParseZeroOrManyChars(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseZeroOrOneChar(string text, out IReadOnlyList<char> value);
     public static partial bool TryParseZeroOrOneEmpty(string text, out IReadOnlyList<char> value);
+    public static partial bool TryParseAlwaysDefaultTuple(string input, out (int, string?) value);
+    public static partial bool TryParseAlwaysDefaultStruct(string input, out DateTime value);
     public static partial bool TryParseEofText(string text, out string value);
     public static partial bool TryParseCaptureChar(string text, out string value);
     public static partial bool TryParseOneOfChar(string text, out char value);
@@ -85,6 +87,9 @@ public static partial class Grammars
     public static partial bool TryParseNotX(string text, out char value);
     public static partial bool TryParseHelloNotBang(string text, out string value);
     public static partial bool TryParseHelloBang(string text, out string value);
+    public static partial bool TryParsePeekValue(string text, out (long, long) value);
+    public static partial bool TryParsePeekSemicolon(string text, out string value);
+    public static partial bool TryParsePeekFails(string text, out string value);
     public static partial bool TryParseCountingOneOf(string text, out char value);
     public static partial bool TryParseLateDeferredOneOf(string text, out char value);
     public static partial bool TryParseSeekableWrappers(string text, out char value);

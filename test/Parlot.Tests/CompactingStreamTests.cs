@@ -56,6 +56,46 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void NewLinesAreFoundAcrossRefills()
+    {
+        // The white space is searched as a token: a new line at its end is found once its start was refilled away
+        var parser = NewLineTests.CreateStatements();
+        var spaces = new string(' ', 100);
+        var text = string.Join("", Enumerable.Range(0, 1_000).Select(i => "a" + i + (i % 2 == 0 ? spaces + "\n" : " ;")));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+        Assert.Equal(string.Join("|", Enumerable.Range(0, 1_000).Select(static i => "a" + i)), result);
+
+        // The white space is kept while it's searched, not the statements before it
+        Assert.InRange(peak(), 1, 256);
+
+        // Without the new line the statements need a semicolon
+        Assert.Null(parser.Parse(new ChunkedReader("a" + spaces + "b", 3), options));
+        Assert.Equal("return|a", parser.Parse(new ChunkedReader("return" + spaces + "\na", 3), options));
+        Assert.Equal("return a", parser.Parse(new ChunkedReader("return" + spaces + "a", 3), options));
+    }
+
+    [Fact]
+    public void GuardedRepetitionsKeepTheBufferBounded()
+    {
+        // The loop skips the white space to test whether a statement can start after it, then moves back before it: the
+        // white space stays pinned until the statement or the end is read, and is released after
+        var statement = Terms.Text("let").SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(';'));
+        var parser = ZeroOrMany(statement).AndSkip(Terms.Char('}')).Eof();
+        var padding = new string(' ', 40);
+        var text = string.Join(padding, Enumerable.Range(0, 10_000).Select(static i => "let id" + i + ";")) + padding + "}";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+        Assert.Equal(10_000, result.Count);
+        Assert.Equal("id9999", result[9_999].ToString());
+        Assert.InRange(peak(), 1, 128);
+    }
+
+    [Fact]
     public void AlternativesKeepTheTextTheyCanReadAgain()
     {
         // Both alternatives start with 'a', the first one is read again from the start by the second one
@@ -178,6 +218,23 @@ public class CompactingStreamTests
         Assert.Equal(text, parser.Parse(new ChunkedReader(text, 1), new StreamParseOptions { BufferSize = 1 }).ToString());
     }
 
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, 3)]
+    [InlineData(7, 5)]
+    public void StringEscapesSplitByRefillsAreDecoded(int chunk, int bufferSize)
+    {
+        // Every split of the escape sequences lands at the end of a window with one of the chunk sizes
+        var parser = ZeroOrMany(Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript).ToPooledString()).Eof();
+        var text = string.Concat(Enumerable.Repeat(" 'a\\\r\nb\\\rc\\\nd\\101\\7\\u{1F600}\\x41\\$'", 20));
+        var expected = string.Concat(Enumerable.Repeat("abcdA\u0007\U0001F600A$", 20));
+
+        var result = parser.Parse(new ChunkedReader(text, chunk), new StreamParseOptions { BufferSize = bufferSize })!;
+
+        Assert.Equal(20, result.Count);
+        Assert.Equal(expected, string.Concat(result));
+    }
+
     [Fact]
     public void TextSpansRemainValid()
     {
@@ -270,10 +327,16 @@ public class CompactingStreamTests
         Assert.Throws<InvalidOperationException>(() => Terms.Char('a').Parse(new ChunkedReader("a", 1), options));
     }
 
-    [Fact]
-    public void CustomWhiteSpaceParsersAreTokens()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CustomWhiteSpaceParsersAreTokens(bool hints)
     {
-        var parser = ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+        // With its hints, the white space parser isn't invoked before the identifiers. Without them, as when it can start with
+        // any char, it is.
+        var parser = hints
+            ? ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))
+            : ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/").WithParser(Literals.Pattern(static c => c == '\u0001')));
         var text = string.Join(" /* a comment */ ", Enumerable.Range(0, 100).Select(static i => "id" + i)) + " // end";
 
         var (options, peak) = Observe(new StreamParseOptions { BufferSize = 2 });

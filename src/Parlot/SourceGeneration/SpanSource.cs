@@ -340,6 +340,12 @@ internal static class SpanSource
     }
 
     /// <summary>
+    /// Emits the span code of the sequence <paramref name="sequence"/>.
+    /// </summary>
+    internal static void GenerateSequence(SpanSourceWriter writer, string? valueVariable, SpanLabel fail, ISequenceSourceable sequence)
+        => GenerateSequence(writer, valueVariable, fail, sequence.Parts, sequence.CreateValue);
+
+    /// <summary>
     /// Emits the span code of a sequence.
     /// </summary>
     /// <param name="writer">The span code being emitted.</param>

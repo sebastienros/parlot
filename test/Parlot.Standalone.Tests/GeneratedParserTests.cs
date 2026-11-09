@@ -10,6 +10,25 @@ namespace Parlot.Standalone.Tests;
 public class GeneratedParserTests
 {
     [Theory]
+    [InlineData("a;b", true, "a|b")]
+    [InlineData("a\nb", true, "a|b")]
+    [InlineData("a /* \n */ b", true, "a|b")]
+    [InlineData("return a", true, "return a")]
+    [InlineData("return \v a", true, "return a")]
+    [InlineData("return\na", true, "return|a")]
+    [InlineData("return /* \r\n */ a", true, "return|a")]
+    [InlineData("a b", false, null)]
+    [InlineData("a /* */ b", false, null)]
+    public void New_Lines_Before_A_Token_Are_Found(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseNewLineStatements(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseNewLineStatements(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
     [InlineData("abc-->def", true, "abc")]
     [InlineData("a-b->c-->d", true, "a-b->c")]
     [InlineData("a==>b", true, "a")]
@@ -52,6 +71,24 @@ public class GeneratedParserTests
         Assert.Equal(expected, value);
         using var reader = new StringReader(input);
         Assert.Equal(success, Grammar.TryParseIdentifierWithPredicates(reader, out value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("abc", true, "abc")]
+    [InlineData("\\u0061b\\u{63} d", true, "abc")]
+    [InlineData("\\u{1D4D0}x", true, "\U0001D4D0x")]
+    [InlineData("a\U0001D49Cb", true, "a\U0001D49Cb")]
+    [InlineData("a\\u00", true, "a")]
+    [InlineData("\\u00", false, null)]
+    [InlineData("\\u0031", false, null)]
+    [InlineData("", false, null)]
+    public void Identifier_Of_Code_Points_Reads_Escapes_And_Surrogate_Pairs(string input, bool success, string expected)
+    {
+        Assert.Equal(success, Grammar.TryParseCodePointIdentifier(input, out var value));
+        Assert.Equal(expected, value);
+        using var reader = new StringReader(input);
+        Assert.Equal(success, Grammar.TryParseCodePointIdentifier(reader, out value));
         Assert.Equal(expected, value);
     }
 
@@ -535,6 +572,19 @@ public class GeneratedParserTests
         Assert.True(Grammar.TryParseCustomWhitespace("__hello___world", out var value));
         Assert.Equal("hello", value);
         Assert.False(Grammar.TryParseCustomWhitespace("hello world", out _));
+    }
+
+    [Theory]
+    [InlineData("hello world", true)]
+    [InlineData(" /* a */ hello // b\r world", true)]
+    [InlineData("hello/**/world", true)]
+    [InlineData("hello // world", false)]
+    [InlineData("hello /* world", false)]
+    [InlineData("hello / world", false)]
+    public void Comments_Are_Skipped(string input, bool success)
+    {
+        Assert.Equal(success, Grammar.TryParseComments(input, out var value));
+        Assert.Equal(success ? "hello" : null, value);
     }
 
     [Fact]

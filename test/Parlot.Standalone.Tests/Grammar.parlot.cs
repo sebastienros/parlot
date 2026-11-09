@@ -46,6 +46,14 @@ public static partial class Grammar
     private static Parser<string> IdentifierWithPredicates() =>
         Literals.Identifier(static c => c == '@', static c => c == '-').Then(static value => value.ToString());
 
+    // Escape sequences and surrogate pairs are decoded by the embedded runtime
+    [GenerateParser(nameof(TryParseCodePointIdentifier))]
+    private static Parser<string> CodePointIdentifier() =>
+        Literals.Identifier(
+            static c => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
+            static c => c is '$' or '_' || (c < 0x10000 ? char.IsLetterOrDigit((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
+            IdentifierOptions.JavaScript).Then(static value => Parlot.Character.DecodeIdentifier(value).ToString());
+
     // The text is searched for the chars the delimiter can start with
     [GenerateParser(nameof(TryParseTextBefore))]
     private static Parser<string> TextBefore() =>
@@ -105,6 +113,11 @@ public static partial class Grammar
     private static Parser<string> CustomWhitespace() =>
         Terms.Text("hello").AndSkip(Terms.Text("world")).Eof()
             .WithWhiteSpaceParser(Capture(OneOrMany(Literals.Char('_'))));
+
+    [GenerateParser(nameof(TryParseComments))]
+    private static Parser<string> Comments() =>
+        Terms.Text("hello").AndSkip(Terms.Text("world")).Eof()
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n").WithMultiLine("/*", "*/"));
 
     [GenerateParser(nameof(TryParseConfigured))]
     private static Parser<string> Configured(GrammarOptions options) =>
@@ -266,4 +279,16 @@ public static partial class Grammar
 
             return $"{first} {again} {second} {active} {context.IsParserActiveAtPosition("a")} {context.MaxRecursionDepth} {context.DisableLoopDetection}";
         }).Eof();
+
+    // Statements ended by a semicolon or a new line, with no new line before the argument of return, in comments too
+    [GenerateParser(nameof(TryParseNewLineStatements))]
+    private static Parser<string> NewLineStatements()
+    {
+        var end = OneOf(Terms.Char(';').Then<object>(static _ => null), SkipWhiteSpace(Eof()), NewLineAhead());
+        var returnStatement = Terms.Keyword("return").SkipAnd(Terms.Identifier().NoNewLineBefore("\n\r\u2028\u2029").Then(static x => "return " + x.ToString()).Else("return"));
+        var expression = Terms.Identifier().Then(static x => x.ToString());
+        return ZeroOrMany(OneOf(returnStatement, expression).AndSkip(end)).Eof()
+            .Then(static x => string.Join("|", x))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+    }
 }

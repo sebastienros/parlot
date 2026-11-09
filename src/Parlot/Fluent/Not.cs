@@ -1,3 +1,4 @@
+using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 
@@ -27,7 +28,9 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
 
         // The text is read again when the parser fails
         var pin = context.Pin();
@@ -36,11 +39,20 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
         if (!success)
         {
+            // What it read, to find that it doesn't match, says nothing about what follows
+            cursor.RestoreRecordedFailure(recorded);
+
+            // Nothing is read: the result is empty, where the parser was invoked, and doesn't keep what the
+            // inner parser could have written before failing
+            result.Set(start, start, default!);
+
             context.ExitParser(this);
             return true;
         }
 
-        context.Scanner.Cursor.ResetPosition(start);
+        // The failure is at the start of what matched, wherever it was read up to
+        context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true });
+        cursor.ResetPosition(start);
 
         context.ExitParser(this);
         return false;
@@ -69,21 +81,29 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
         // if (Helper(context, out _))
         // {
+        //     // The failure is at the start of what matched, wherever it was read up to
+        //     context.RecordRejected(start, recorded, skipsWhiteSpace);
         //     cursor.ResetPosition(start);
         //     success = false;
         // }
         // else
         // {
+        //     // What it read, to find that it doesn't match, says nothing about what follows
+        //     cursor.RestoreRecordedFailure(recorded);
         //     success = true;
         // }
+        var recordedName = $"recorded{context.NextNumber()}";
+        result.Body.Add($"var {recordedName} = {cursorName}.RecordedFailure;");
         var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out _)");
         result.Body.Add($"if ({success})");
         result.Body.Add("{");
+        result.Body.Add($"    {context.ParseContextName}.RecordRejected({startName}, {recordedName}, {(_parser is ISeekable { SkipWhitespace: true } ? "true" : "false")});");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add($"    {result.SuccessVariable} = false;");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");
+        result.Body.Add($"    {cursorName}.RestoreRecordedFailure({recordedName});");
         result.Body.Add($"    {result.SuccessVariable} = true;");
         result.Body.Add("}");
 

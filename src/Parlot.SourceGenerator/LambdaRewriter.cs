@@ -222,7 +222,8 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                     SyntaxFactory.ThrowStatement(SyntaxFactory.ParseExpression(
                         "global::Parlot.SourceGeneration.LambdaPointer.CreateEagerCaptureException()")));
             }
-            newBody = CreateDeferredBody(registrationStatement, delegateInvokeMethod, executionBody);
+            newBody = CreateDeferredBody(registrationStatement, delegateInvokeMethod, executionBody,
+                parameters.Select(static parameter => parameter.Identifier.ValueText).ToArray());
         }
         else if (blockBody != null)
         {
@@ -304,6 +305,7 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
 
                 var parameters = method.Parameters.Select((p, i) =>
                     SyntaxFactory.Parameter(SyntaxFactory.Identifier($"arg{i}"))
+                        .WithModifiers(RefKindModifiers(p.RefKind))
                         .WithType(SyntaxFactory.ParseTypeName(p.Type.ToDisplayString() + " ")))
                     .ToArray();
 
@@ -313,15 +315,17 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
                 var registrationStatement = CreatePointerRegistrationStatement(pointer);
 
                 // Build the method invocation
-                var arguments = parameters.Select((_, i) =>
-                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName($"arg{i}")));
+                var arguments = method.Parameters.Select((p, i) =>
+                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName($"arg{i}"))
+                        .WithRefKindKeyword(RefKindKeyword(p.RefKind)));
 
                 var methodCall = SyntaxFactory.InvocationExpression(
                     node.Expression,
                     SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments)));
 
                 var body = CreateDeferredBody(registrationStatement, method, SyntaxFactory.Block(
-                    method.ReturnsVoid ? SyntaxFactory.ExpressionStatement(methodCall) : SyntaxFactory.ReturnStatement(methodCall)));
+                    method.ReturnsVoid ? SyntaxFactory.ExpressionStatement(methodCall) : SyntaxFactory.ReturnStatement(methodCall)),
+                    method.Parameters.Select(static (_, i) => $"arg{i}").ToArray());
 
                 var stubLambda = SyntaxFactory.ParenthesizedLambdaExpression(parameterList, body);
 
@@ -403,21 +407,49 @@ internal sealed class LambdaRewriter : CSharpSyntaxRewriter
         return false;
     }
 
-    private static BlockSyntax CreateStubBody(StatementSyntax registration, IMethodSymbol method)
+    private static SyntaxTokenList RefKindModifiers(RefKind refKind)
+        => RefKindKeyword(refKind) is { RawKind: not (int)SyntaxKind.None } keyword ? SyntaxFactory.TokenList(keyword) : default;
+
+    private static SyntaxToken RefKindKeyword(RefKind refKind) => refKind switch
     {
-        return method.ReturnsVoid
-            ? SyntaxFactory.Block(registration)
-            : SyntaxFactory.Block(
-                registration,
-                SyntaxFactory.ReturnStatement(SyntaxFactory.PostfixUnaryExpression(
-                    SyntaxKind.SuppressNullableWarningExpression,
-                    SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(
-                        method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))));
+        RefKind.Out => SyntaxFactory.Token(SyntaxKind.OutKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+        RefKind.Ref => SyntaxFactory.Token(SyntaxKind.RefKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+        RefKind.In => SyntaxFactory.Token(SyntaxKind.InKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+        _ => default,
+    };
+
+    private static BlockSyntax CreateStubBody(StatementSyntax registration, IMethodSymbol method, IReadOnlyList<string> parameterNames)
+    {
+        var statements = new List<StatementSyntax> { registration };
+
+        // A stub returns before the body assigns the out parameters, like the result of a TryConvert callback
+        for (var i = 0; i < method.Parameters.Length && i < parameterNames.Count; i++)
+        {
+            if (method.Parameters[i].RefKind == RefKind.Out)
+            {
+                statements.Add(SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
+                    SyntaxKind.SimpleAssignmentExpression,
+                    SyntaxFactory.IdentifierName(parameterNames[i]),
+                    SyntaxFactory.PostfixUnaryExpression(
+                        SyntaxKind.SuppressNullableWarningExpression,
+                        SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)))));
+            }
+        }
+
+        if (!method.ReturnsVoid)
+        {
+            statements.Add(SyntaxFactory.ReturnStatement(SyntaxFactory.PostfixUnaryExpression(
+                SyntaxKind.SuppressNullableWarningExpression,
+                SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(
+                    method.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))));
+        }
+
+        return SyntaxFactory.Block(statements);
     }
 
-    private static BlockSyntax CreateDeferredBody(StatementSyntax registration, IMethodSymbol method, BlockSyntax executionBody)
+    private static BlockSyntax CreateDeferredBody(StatementSyntax registration, IMethodSymbol method, BlockSyntax executionBody, IReadOnlyList<string> parameterNames)
     {
-        var registrationBody = CreateStubBody(registration, method);
+        var registrationBody = CreateStubBody(registration, method, parameterNames);
         if (method.ReturnsVoid)
         {
             registrationBody = registrationBody.AddStatements(SyntaxFactory.ReturnStatement());

@@ -62,6 +62,21 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void ChoiceMixingNoNewLineBeforeIsReportedWithoutAFix()
+    {
+        // Skipping the white space before NoNewLineBefore would hide the new line it looks for
+        var parser = NoNewLineBefore(Terms.Text("++")).Or(Terms.Text("!"));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.MixedWhiteSpaceChoice);
+
+        Assert.Contains("wrap the choice of the alternatives it applies to in NoNewLineBefore", finding.Message);
+        Assert.Null(finding.Fix);
+
+        // The wrapped choice has its lookup table
+        Assert.Empty(GrammarAnalyzer.Analyze(NoNewLineBefore(Terms.Text("++").Or(Terms.Text("--")))));
+    }
+
+    [Fact]
     public void ChoicesSkippingWhiteSpaceTheSameWayAreNotReported()
     {
         Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("a").Or(Terms.Text("b"))));
@@ -325,6 +340,19 @@ public class GrammarAnalyzerTests
         Single(GrammarAnalyzer.Analyze(Terms.Text("in").Or(Terms.Keyword("int"))), GrammarRule.ShadowedAlternative);
         Single(GrammarAnalyzer.Analyze(Terms.Char('a').Then(static x => x.ToString()).Or(Terms.Text("ab"))), GrammarRule.ShadowedAlternative);
         Single(GrammarAnalyzer.Analyze(Terms.Text("a", caseInsensitive: true).Or(Terms.Text("AB"))), GrammarRule.ShadowedAlternative);
+    }
+
+    [Fact]
+    public void SameParserWithAnotherStateIsNotReported()
+    {
+        // The state can change what the parser matches, so the later alternative isn't known to start with the earlier one
+        var flag = false;
+        var keyword = If(() => flag, Terms.Text("yield")).Named("keyword");
+        var parser = keyword.Or(keyword.WithState(() => flag, x => flag = x, static _ => true).AndSkip(Terms.Char('(')));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(parser), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal("yield", parser.Parse("yield("));
+        Assert.False(flag);
     }
 
     [Fact]
