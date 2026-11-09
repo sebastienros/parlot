@@ -58,6 +58,8 @@ needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, 
 ### Backtrack floor and pins
 
 A refill drops the text below the *backtrack floor*: the lowest position from which an active parser can read again.
+The char before the floor is kept, so a parser always finds the char before its position in the buffer, as a
+`TextScanner` does to tell whether its token starts a line.
 The parsers which move back to read again keep their position with `ParseContext.Pin()`:
 
 | Parser | Pinned text |

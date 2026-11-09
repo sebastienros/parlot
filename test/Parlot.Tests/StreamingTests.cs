@@ -112,6 +112,9 @@ public class StreamingTests
         ["spacetabcrlf-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("for"), Terms.Text("if"), Terms.Text("\f"))).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
         ["spacetabcrlf-whitespace"] = new Grammar<TextSpan>(Literals.WhiteSpace(includeNewLines: true).WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
         ["spacetabcrlf-nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace().WithWhiteSpaceSet(WhiteSpaceSet.SpaceTabCrLf)),
+        // A scanner reading the char before its token, which a refill must keep
+        ["scan-line-start"] = new Grammar<string>(ZeroOrMany(Terms.Scan(LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment").Or(Terms.Text("--")).Or(Terms.Text(">")).Or(Terms.Identifier().Then(static x => x.ToString()))).Then(static list => string.Join("|", list)).Eof()),
+        ["scan-line-start-literals"] = new Grammar<string>(ZeroOrMany(Literals.Scan(LineStartScanners.HtmlCloseComment, "-").Then(static _ => "comment").Or(Literals.Text("--")).Or(Literals.Text(">")).Or(Literals.Text("\n")).Or(Literals.Identifier().Then(static x => x.ToString()))).Then(static list => string.Join("|", list)).Eof()),
         // The line and column after the match must not depend on how the text is split
         ["position-text"] = new Grammar<(int, int, int)>(Literals.Text("\r\n").Then(static (c, _) => Position(c))),
         ["position-char"] = new Grammar<(int, int, int)>(Literals.Char('\n').Then(static (c, _) => Position(c))),
@@ -298,6 +301,9 @@ public class StreamingTests
         Add("position-pattern", "", "ab\rc", "ab\r", "ab\r\n", "ab\n", "a\n\nb c", new string('a', 70) + "\r" + new string('b', 10) + "\n", new string('a', 70) + "\r\n" + new string('b', 70) + " x");
         Add("position-scan", "", "ab\rc", "ab\n", "a\n\nb c", "\n\n\nab c", new string('a', 70) + "\r\n" + new string('b', 70) + " x",
             new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x");
+        string[] lineStart = ["", "-->", "--> c", "x-->y", "x --> y", "x\n-->y", "x\n--> y\nz", "x\r\n--> y", "x\n\n-->", "a--\n-->", "a--\n>", "--", "x\n--", "abc\n-->\nghi-->jkl"];
+        Add("scan-line-start", lineStart);
+        Add("scan-line-start-literals", lineStart);
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
         Add("position-elseerror", "", "begin", "begin x = 1", "begin x = y", "begin\n", "begin\n x\n =\n 12", "begin\n\n x\n =\n y", "\n\nbegin\r\n  x =\n\n y",
             "begin\r\n" + new string(' ', 70) + "x\n" + new string(' ', 70) + "= z", "\n begin abc\n\n=\n\n\n", "begin 1");

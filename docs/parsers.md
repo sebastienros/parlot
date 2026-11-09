@@ -750,6 +750,50 @@ Source generated parsers call the scanner directly. It must be a method group or
 not even the factory's parameters (`PARLOT015`, `PARLOT021`). At runtime a delegate to a static method goes through a thunk; a `static` lambda calling
 it is slightly faster.
 
+#### Text before the token
+
+A `TextScanner` also gets the text before its token, to match only at the start of the input or of a line, or after
+some char:
+
+```c#
+delegate int TextScanner(ReadOnlySpan<char> text, int position)
+
+Parser<TextSpan> Scan(TextScanner scanner, ReadOnlySpan<char> startChars = default)
+```
+
+The token starts at `text[position]`, and the return value is the one of a `SpanScanner` with `span` being
+`text.Slice(position)`. When parsing a `string`, `text` is the whole input and `position` the offset of the cursor. When
+parsing a stream, the text before the token may be partial: `text` starts with the char before `position`, or earlier,
+and `position` is `0` only at the start of the input. `ParseManyAsync` parses each value as its own input, so `position`
+is `0` at the start of each value. With `Terms.Scan`, the white space skipped before the token is part of the text before it.
+
+Usage, the HTML-like close comment of JavaScript (Annex B), a comment only at the start of the input or of a line:
+`x-->y` is `x-- > y`.
+
+```c#
+static int HtmlCloseComment(ReadOnlySpan<char> text, int position)
+{
+    var span = text.Slice(position);
+
+    if (!span.StartsWith("-->"))
+    {
+        // More text could complete a "-->"
+        return span.Length < 3 && "-->".AsSpan().StartsWith(span) ? -1 : 0;
+    }
+
+    if (position > 0 && text[position - 1] is not ('\n' or '\r'))
+    {
+        return 0;
+    }
+
+    // Up to the end of the line
+    var end = span.Slice(3).IndexOfAny('\n', '\r');
+    return end < 0 ? span.Length : 3 + end;
+}
+
+var comment = Literals.Scan(HtmlCloseComment, "-");
+```
+
 ### AnyOf
 
 Matches any chars from a list of chars.
