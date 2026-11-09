@@ -1849,9 +1849,10 @@ Result:
 On failure the cursor is back before the white space. When there is no white space at the cursor the parser is invoked
 directly, and the white space is only searched when it was skipped, with a vectorized search on .NET 8 and later.
 
-> Note: `NoNewLineBefore` has no lookup hints. A `OneOf` whose alternatives all skip white space skips it once before invoking
-> them, which would hide the new line, so a choice holding a `NoNewLineBefore` alternative tries its alternatives in order. To
-> keep the lookup table of a choice, wrap it instead: `NoNewLineBefore(OneOf(Terms.Text("++"), Terms.Text("--")))`.
+`NoNewLineBefore` tells the chars its parser can start with, and that it skips white space, so it can be an alternative of a
+choice with other `Terms` parsers: when the choice skips the white space once before invoking its alternatives, it searches
+the white space the context skipped last, which ends where it is invoked. The postfix operators of JavaScript are
+`OneOf(NoNewLineBefore(Terms.Text("++")), Terms.Char('.').And(name), ...)`, and the choice keeps its lookup table.
 
 ### NewLineAhead
 

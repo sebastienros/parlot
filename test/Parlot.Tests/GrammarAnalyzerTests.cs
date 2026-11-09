@@ -62,17 +62,10 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
-    public void ChoiceMixingNoNewLineBeforeIsReportedWithoutAFix()
+    public void ChoiceWithANoNewLineBeforeAlternativeIsNotReported()
     {
-        // Skipping the white space before NoNewLineBefore would hide the new line it looks for
-        var parser = NoNewLineBefore(Terms.Text("++")).Or(Terms.Text("!"));
-
-        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.MixedWhiteSpaceChoice);
-
-        Assert.Contains("wrap the choice of the alternatives it applies to in NoNewLineBefore", finding.Message);
-        Assert.Null(finding.Fix);
-
-        // The wrapped choice has its lookup table
+        // NoNewLineBefore skips white space and tells the chars of its parser, the choice keeps its lookup table
+        Assert.Empty(GrammarAnalyzer.Analyze(NoNewLineBefore(Terms.Text("++")).Or(Terms.Text("!"))));
         Assert.Empty(GrammarAnalyzer.Analyze(NoNewLineBefore(Terms.Text("++").Or(Terms.Text("--")))));
     }
 

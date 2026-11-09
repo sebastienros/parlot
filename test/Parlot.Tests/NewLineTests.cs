@@ -120,14 +120,23 @@ public class NewLineTests
     [Fact]
     public void NoNewLineBeforeShouldWorkInAChoice()
     {
-        // The choice can't skip the white space once for its alternatives, that would hide the new line
-        var postfix = Terms.Identifier().And(OneOf(NoNewLineBefore(Terms.Text("++")), NoNewLineBefore(Terms.Text("--")), Terms.Text("!")).Else(""))
+        // The choice skips the white space once for its alternatives, NoNewLineBefore searches the white space it skipped
+        var choice = OneOf(NoNewLineBefore(Terms.Text("++")), NoNewLineBefore(Terms.Text("--")), Terms.Text("!"));
+        var postfix = Terms.Identifier().And(choice.Else(""))
             .Then(static x => x.Item1.ToString() + x.Item2);
 
         Assert.Equal("a++", postfix.Parse("a ++"));
+        Assert.Equal("a++", postfix.Parse("a++"));
         Assert.Equal("a--", postfix.Parse("a --"));
         Assert.Equal("a!", postfix.Parse("a\n!"));
         Assert.Equal("a", postfix.Parse("a\n++"));
+        Assert.Equal("a", postfix.Parse("a \n\t--"));
+
+        // The choice has a lookup table
+        var seekable = (Parlot.Rewriting.ISeekable)choice;
+        Assert.True(seekable.CanSeek);
+        Assert.True(seekable.SkipWhitespace);
+        Assert.Equal(['!', '+', '-'], seekable.ExpectedChars.OrderBy(static c => c));
 
         // Wrapping the choice keeps its lookup table
         var wrapped = Terms.Identifier().And(NoNewLineBefore(OneOf(Terms.Text("++"), Terms.Text("--"))).Else(""))
@@ -135,6 +144,44 @@ public class NewLineTests
 
         Assert.Equal("a--", wrapped.Parse("a --"));
         Assert.Equal("a", wrapped.Parse("a\n--"));
+    }
+
+    [Fact]
+    public void NoNewLineBeforeShouldSeeTheNewLineOfACommentSkippedByAChoice()
+    {
+        // The white space the choice skipped is a comment holding a new line
+        var choice = OneOf(NoNewLineBefore(Terms.Text("++")), Terms.Text("!"));
+        var postfix = WithComments(Terms.Identifier().And(choice.Else("")).Then(static x => x.Item1.ToString() + x.Item2));
+
+        Assert.Equal("a++", postfix.Parse("a /* c */ ++"));
+        Assert.Equal("a", postfix.Parse("a /* \n */ ++"));
+        Assert.Equal("a", postfix.Parse("a // c\n++"));
+        Assert.Equal("a!", postfix.Parse("a /* \n */ !"));
+    }
+
+    [Theory]
+    [InlineData("a", "a")]
+    [InlineData("a++", "(a++)")]
+    [InlineData("a ++ !", "((a++)!)")]
+    [InlineData("a\n++", "a")]
+    [InlineData("a !\n++", "(a!)")]
+    [InlineData("a.b ++", "((a.b)++)")]
+    [InlineData("a\n.b\n++", "(a.b)")]
+    public void NoNewLineBeforeShouldBeAPostfixOperatorOfATable(string input, string expected)
+    {
+        // The member accesses bind the tightest, then the postfix operators
+        var expression = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => $"({x}.{name})"))
+            .Postfix(
+                (NoNewLineBefore(Terms.Text("++")), static x => $"({x}++)"),
+                (Terms.Text("!"), static x => $"({x}!)"));
+
+        Assert.Equal(expected, expression.Parse(input));
+
+        foreach (var chunk in new[] { 1, 2, 7 })
+        {
+            Assert.Equal(expected, expression.Parse(new StreamingTests.ChunkedReader(input, () => chunk, false)));
+        }
     }
 
     [Theory]

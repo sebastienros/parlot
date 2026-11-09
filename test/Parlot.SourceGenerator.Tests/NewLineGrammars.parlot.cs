@@ -55,4 +55,21 @@ public static partial class NewLineGrammars
 
     [GenerateParser(nameof(TryParseAsciiSet))]
     private static Parser<string> BuildAsciiSet() => AsciiSet();
+
+    // A postfix '++' with "[no LineTerminator here]", a choice of the postfix operators of a table which skips the white space
+    // once for its alternatives, with comments
+    internal static Parser<string> PostfixTable()
+    {
+        var end = OneOf(Terms.Char(';').Then<object?>(static _ => null), SkipWhiteSpace(Eof()), NewLineAhead());
+        var expression = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix(
+                (NoNewLineBefore(Terms.Text("++")), static x => x + "++"),
+                (Terms.Text("!"), static x => x + "!"));
+        return ZeroOrMany(OneOf(Terms.Text("++").SkipAnd(Terms.Identifier()).Then(static x => "++" + x.ToString()), expression).AndSkip(end)).Eof()
+            .Then(static x => string.Join("|", x))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+    }
+
+    [GenerateParser(nameof(TryParsePostfixTable))]
+    private static Parser<string> BuildPostfixTable() => PostfixTable();
 }

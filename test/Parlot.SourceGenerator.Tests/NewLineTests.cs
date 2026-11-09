@@ -66,6 +66,31 @@ public class NewLineTests
     [MemberData(nameof(Inputs))]
     public void AsciiSet(string input) => Check(RuntimeNewLineGrammars.AsciiSet(), NewLineGrammars.TryParseAsciiSet, NewLineGrammars.TryParseAsciiSet, input);
 
+    [Theory]
+    [MemberData(nameof(Inputs))]
+    [InlineData("a ++ !\n b")]
+    [InlineData("a /* \n */ ++b")]
+    [InlineData("a // c\n++b ;")]
+    public void PostfixTable(string input)
+    {
+        // An unterminated comment is an error, reported by the runtime and the generated parsers alike
+        var parser = RuntimeNewLineGrammars.PostfixTable();
+        var expected = Outcome(() => parser.TryParse(input, out var value) ? value! : "FAIL");
+
+        Assert.Equal(expected, Outcome(() => NewLineGrammars.TryParsePostfixTable(input, out var value) ? value! : "FAIL"));
+
+        foreach (var chunk in new[] { 1, 3, int.MaxValue })
+        {
+            Assert.Equal(expected, Outcome(() => NewLineGrammars.TryParsePostfixTable(new VectorizedTokenTests.ChunkedReader(input, chunk), out var value) ? value! : "FAIL"));
+        }
+
+        // The postfix operator doesn't apply after a new line
+        if (input == "a\n++b")
+        {
+            Assert.Equal("a|++b", expected);
+        }
+    }
+
     [Fact]
     public void GeneratedParsersFindTheNewLines()
     {
@@ -109,6 +134,8 @@ public static partial class NewLineGrammars
     public static partial bool TryParseCaptured(TextReader reader, out int value);
     public static partial bool TryParseAsciiSet(string text, out string value);
     public static partial bool TryParseAsciiSet(TextReader reader, out string value);
+    public static partial bool TryParsePostfixTable(string text, out string value);
+    public static partial bool TryParsePostfixTable(TextReader reader, out string value);
 }
 
 // The runtime parsers of NewLineGrammars, which the generator executes but the tests don't compile
@@ -133,6 +160,20 @@ public static class RuntimeNewLineGrammars
         Terms.Keyword("return").SkipAnd(Terms.Identifier().NoNewLineBefore("\n\r\u2028\u2029").Then(static x => "return " + x.ToString()).Else("return"))
             .And(NewLineAhead("\n\r\u2028\u2029").Then(static _ => "+nl").Else(""))
             .Then(static x => x.Item1 + x.Item2);
+
+    // A postfix '++' with "[no LineTerminator here]", a choice of the postfix operators of a table which skips the white space
+    // once for its alternatives, with comments
+    public static Parser<string> PostfixTable()
+    {
+        var end = OneOf(Terms.Char(';').Then<object?>(static _ => null), SkipWhiteSpace(Eof()), NewLineAhead());
+        var expression = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix(
+                (NoNewLineBefore(Terms.Text("++")), static x => x + "++"),
+                (Terms.Text("!"), static x => x + "!"));
+        return ZeroOrMany(OneOf(Terms.Text("++").SkipAnd(Terms.Identifier()).Then(static x => "++" + x.ToString()), expression).AndSkip(end)).Eof()
+            .Then(static x => string.Join("|", x))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+    }
 
     // The values aren't used: the parsers are generated without them
     public static Parser<int> Captured() =>

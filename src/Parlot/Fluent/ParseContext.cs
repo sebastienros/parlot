@@ -641,40 +641,41 @@ public class ParseContext
     /// more text could hold one. In compacting mode the white space is read as a token, so that it stays buffered while it's
     /// searched and is read again with more text when it reaches the end of the buffer.
     /// </remarks>
-    internal bool SkipWhiteSpaceAndFindNewLine(string? newLines)
+    internal bool SkipWhiteSpaceAndFindNewLine(string? newLines, bool skippedBefore = false)
     {
 #if !PARLOT_STRING_ONLY
         if ((_flags & CompactingFlag) != 0)
         {
-            return SkipWhiteSpaceAndFindNewLineCompacting(newLines);
+            return SkipWhiteSpaceAndFindNewLineCompacting(newLines, skippedBefore);
         }
 #endif
 
         var cursor = Scanner.Cursor;
-
-        if (!MaySkipWhiteSpace(cursor.Current))
-        {
-            if (cursor.Eof)
-            {
-                cursor.MarkHitEnd();
-            }
-
-            return false;
-        }
-
         var start = cursor.Offset;
 
-        SkipWhiteSpace();
+        // The white space skipped last, which skipping again at the cursor replaces
+        var cacheOffset = _cacheOffset;
+        var cacheEndOffset = _cacheEndOffset;
 
-        var end = cursor.Offset;
-
-        if (end > start)
+        if (MaySkipWhiteSpace(cursor.Current))
         {
-            var span = cursor.GetSpan(start, end - start);
+            SkipWhiteSpace();
 
-            if ((newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0)
+            var end = cursor.Offset;
+
+            if (end > start)
             {
-                return true;
+                if (HasNewLine(cursor.GetSpan(start, end - start), newLines))
+                {
+                    return true;
+                }
+
+                if (cursor.Eof)
+                {
+                    cursor.MarkHitEnd();
+                }
+
+                return false;
             }
         }
 
@@ -683,11 +684,20 @@ public class ParseContext
             cursor.MarkHitEnd();
         }
 
-        return false;
+        // There is no white space at the cursor: when it was skipped before it, as a choice does before trying its
+        // alternatives, it is the one skipped last, which ends at the cursor
+        return skippedBefore
+            && cacheOffset >= cursor.BufferStart
+            && cacheEndOffset == start
+            && cacheOffset < cacheEndOffset
+            && HasNewLine(cursor.GetSpan(cacheOffset, cacheEndOffset - cacheOffset), newLines);
     }
 
+    private bool HasNewLine(ReadOnlySpan<char> span, string? newLines)
+        => (newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0;
+
 #if !PARLOT_STRING_ONLY
-    private bool SkipWhiteSpaceAndFindNewLineCompacting(string? newLines)
+    private bool SkipWhiteSpaceAndFindNewLineCompacting(string? newLines, bool skippedBefore)
     {
         var cursor = Scanner.Cursor;
         var start = BeginToken();
@@ -700,7 +710,7 @@ public class ParseContext
 
                 try
                 {
-                    found = SkipWhiteSpaceAndFindNewLine(newLines);
+                    found = SkipWhiteSpaceAndFindNewLine(newLines, skippedBefore);
                 }
                 catch (ParseException) when (cursor.HitEnd)
                 {
