@@ -79,7 +79,7 @@ internal sealed class SeekGuard
         // A parser which reads the cursor itself, like a literal, tests the char as fast as the guard would, and a choice
         // already selects its alternatives from it: the guard would only skip the white space a second time when it matches.
         // The analysis takes its own lock, so it isn't run under the lock of the hints.
-        if (!LoopAnalysis.InvokesParsersAtStart(SkippedParser(parser)) || IsGeneric(parser, typeof(OneOf<>)))
+        if (!LoopAnalysis.InvokesParsersAtStart(SkippedParser(parser)) || IsGeneric(parser, typeof(OneOf<>)) || IsGeneric(parser, typeof(Longest<>)))
         {
             return null;
         }

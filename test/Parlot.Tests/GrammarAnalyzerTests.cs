@@ -335,6 +335,22 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void LongestAlternativesAreNotReportedAsOrdered()
+    {
+        // The longest match wins whatever the order: a shorter text or a fallback first doesn't hide the next alternatives
+        Assert.Empty(GrammarAnalyzer.Analyze(Longest(Terms.Text("<"), Terms.Text("<="))));
+        Assert.Empty(GrammarAnalyzer.Analyze(Longest(Terms.Text("a").Else("none"), Terms.Text("ab"))));
+        Assert.Empty(GrammarAnalyzer.Analyze(OneOf(Longest(Terms.Text("<"), Terms.Text("<=")), Terms.Text(">"))));
+        Assert.Equal("<=", Longest(Terms.Text("<"), Terms.Text("<=")).Parse("<="));
+
+        // It invokes each alternative where it is invoked
+        var expression = Deferred<long>();
+        expression.Parser = Longest(expression.AndSkip(Terms.Char('+')), Terms.Integer());
+
+        Single(GrammarAnalyzer.Analyze(expression), GrammarRule.LeftRecursion);
+    }
+
+    [Fact]
     public void TextBeforeKeywordIsReported()
     {
         Single(GrammarAnalyzer.Analyze(Terms.Text("in").Or(Terms.Keyword("int"))), GrammarRule.ShadowedAlternative);

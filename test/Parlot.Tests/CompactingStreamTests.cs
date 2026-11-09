@@ -122,6 +122,36 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void LongestAlternativesKeepTheTextTheyCanReadAgain()
+    {
+        // Both alternatives are read from the start, and the cursor moves back to the end of the first one, the longest
+        var parser = Longest(
+            OneOrMany(Terms.Char('a')).AndSkip(Terms.Char(';')).Then(static x => x.Count),
+            Terms.Char('a').Then(static _ => -1));
+
+        var text = new string('a', 1000);
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
+
+        Assert.Equal(1000, parser.Parse(new ChunkedReader(text + ";", 1), options));
+        Assert.True(peak() > 1000, $"Peak {peak()}");
+
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
+
+        Assert.Equal(-1, parser.Parse(new ChunkedReader(text + ".", 1), options));
+
+        // The same text when the alternatives have distinct first chars: a single alternative is invoked
+        var exclusive = Longest(
+            OneOrMany(Terms.Char('a')).AndSkip(Terms.Char(';')).Then(static x => x.Count),
+            Terms.Char('b').SkipAnd(ZeroOrMany(Terms.Char('a'))).Then(static x => -x.Count));
+
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
+
+        Assert.Equal(1000, exclusive.Parse(new ChunkedReader(text + ";", 1), options));
+        Assert.InRange(peak(), 1, 16);
+    }
+
+    [Fact]
     public void DeferredAlternativesSetLaterPinNothing()
     {
         // The deferred declares its first char once the choice first parses, so a single alternative

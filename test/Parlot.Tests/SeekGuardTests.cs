@@ -221,6 +221,19 @@ public class SeekGuardTests
     }
 
     [Fact]
+    public void ShouldNotGuardAChoice()
+    {
+        // A choice selects its alternatives from the char already, the guard would only skip the white space a second time
+        var oneOf = OneOf(Terms.Char('a'), Terms.Char('b'));
+        Trace(ZeroOrMany(oneOf), "a b ;", oneOf, out var entered);
+        Assert.Equal(3, entered);
+
+        var longest = Longest(Terms.Char('a'), Terms.Char('b'));
+        Trace(ZeroOrMany(longest), "a b ;", longest, out entered);
+        Assert.Equal(3, entered);
+    }
+
+    [Fact]
     public void ShouldUseTheWhiteSpaceOfTheContext()
     {
         // The white space parser skips comments, so the '?' after one can start the tail

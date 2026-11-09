@@ -167,6 +167,35 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Removes the diagnostics of a branch that matched, and returns them, for a choice which tries the next branches
+    /// before it knows which one it uses.
+    /// </summary>
+    internal ParseDiagnostic[]? TakeAlternative(in AlternativeDiagnostics alternatives)
+    {
+        if (_coldState?.Diagnostics is not { } diagnostics || diagnostics.Count == alternatives.Checkpoint)
+        {
+            return null;
+        }
+
+        var taken = new ParseDiagnostic[diagnostics.Count - alternatives.Checkpoint];
+        diagnostics.CopyTo(alternatives.Checkpoint, taken, 0, taken.Length);
+        diagnostics.RemoveRange(alternatives.Checkpoint, taken.Length);
+
+        return taken;
+    }
+
+    /// <summary>
+    /// Adds the diagnostics <see cref="TakeAlternative"/> returned for the branch a choice uses.
+    /// </summary>
+    internal void RestoreAlternative(ParseDiagnostic[]? diagnostics)
+    {
+        if (diagnostics is not null)
+        {
+            (GetColdState().Diagnostics ??= new List<ParseDiagnostic>()).AddRange(diagnostics);
+        }
+    }
+
+    /// <summary>
     /// Tracks parser-position pairs to detect infinite recursion at the same position.
     /// </summary>
     /// <remarks>
