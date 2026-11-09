@@ -64,6 +64,13 @@ public class TypeNameHelperTests
     }
 
     [Fact]
+    public void Emits_The_Void_Keyword()
+    {
+        // The return type of an Action callback, which global::System.Void can't name in C#
+        Assert.Equal("void", TypeNameHelper.GetTypeName(typeof(void)));
+    }
+
+    [Fact]
     public void Rejects_Null()
     {
         Assert.Throws<ArgumentNullException>(() => TypeNameHelper.GetTypeName(null!));

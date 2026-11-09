@@ -909,6 +909,18 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void WithState()
+    {
+        var benchmarks = new WithStateBenchmarks();
+        benchmarks.Setup();
+
+        Assert.Equal(64, benchmarks.None());
+        Assert.Equal(64, benchmarks.Custom());
+        Assert.Equal(64, benchmarks.WithState());
+        Assert.Equal(64, benchmarks.Generated());
+    }
+
+    [Fact]
     public void GeneratedSql()
     {
         var benchmarks = new SqlParserBenchmarks

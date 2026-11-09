@@ -288,6 +288,8 @@ public class DeferredSeekTests
             deferred.Error<int>("unexpected"),
             deferred.Eof(),
             deferred.Commit(),
+            deferred.WithState(static () => 0, static _ => { }, static x => x + 1),
+            deferred.WithState<ParseContext, int>(static _ => 0, static (_, _) => { }, static x => x + 1),
             deferred.Discard(0),
             deferred.Switch(static (_, _) => 0, Literals.Char(';')),
             deferred.WhenFollowedBy(Literals.Char(';')),
