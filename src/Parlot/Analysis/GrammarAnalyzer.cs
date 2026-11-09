@@ -694,7 +694,7 @@ internal sealed class GrammarAnalysis
 
         if (prefixes is null)
         {
-            if (Array.IndexOf(seekable.ExpectedChars, Fluent.OneOf<object>.OtherSeekableChar) >= 0)
+            if (!SeekableHints.IsExact(seekable.ExpectedChars))
             {
                 return null;
             }

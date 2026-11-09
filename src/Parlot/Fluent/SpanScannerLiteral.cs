@@ -82,7 +82,7 @@ public sealed class SpanScannerLiteral : Parser<TextSpan>, ISeekable, ISourceabl
         if (!startChars.IsEmpty)
         {
             CanSeek = true;
-            ExpectedChars = startChars.ToArray();
+            ExpectedChars = SeekableHints.ExpectedChars(startChars);
         }
 
         Name = "SpanScanner";

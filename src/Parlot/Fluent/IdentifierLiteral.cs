@@ -2,7 +2,7 @@
 using Parlot.Rewriting;
 using System;
 using System.Buffers;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
@@ -11,16 +11,20 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable, ILoopAnal
     private readonly SearchValues<char> _startSearchValues;
     private readonly SearchValues<char> _partSearchValues;
 
-    // The chars of the start search values can't be listed from them, so they are passed when they are known
+    // The chars of the start search values can't be listed from them, so they are passed when they are known, and found
+    // by testing every char otherwise
     public IdentifierLiteral(SearchValues<char> startSearchValues, SearchValues<char> partSearchValues, char[]? startChars = null)
     {
         _startSearchValues = startSearchValues;
         _partSearchValues = partSearchValues;
 
-        if (startChars is { Length: > 0 })
+        // A large set of non-ASCII chars is declared as any non-ASCII char, see SeekableHints.ExpectedChars()
+        var expectedChars = startChars != null ? SeekableHints.ExpectedChars(startChars) : FindStartChars(startSearchValues);
+
+        if (expectedChars.Length > 0)
         {
             CanSeek = true;
-            ExpectedChars = startChars.Distinct().ToArray();
+            ExpectedChars = expectedChars;
         }
 
         // Since we assume these can't container new lines, we can check this here.
@@ -37,6 +41,36 @@ internal sealed class IdentifierLiteral : Parser<TextSpan>, ISeekable, ILoopAnal
     public char[] ExpectedChars { get; } = [];
 
     public bool SkipWhitespace { get; }
+
+    private static char[] FindStartChars(SearchValues<char> startSearchValues)
+    {
+        var chars = new List<char>();
+        var nonAscii = 0;
+
+        for (var c = 0; c <= char.MaxValue; c++)
+        {
+            if (startSearchValues.Contains((char)c))
+            {
+                if (c < 0x80)
+                {
+                    chars.Add((char)c);
+                }
+                else if (++nonAscii <= SeekableHints.MaxNonAsciiChars)
+                {
+                    chars.Add((char)c);
+                }
+                else
+                {
+                    // The ASCII chars are all listed, the non-ASCII ones are any of them
+                    chars.RemoveAll(static x => x >= 0x80);
+                    chars.Add(OneOf<object>.NonAsciiSeekableChar);
+                    break;
+                }
+            }
+        }
+
+        return chars.ToArray();
+    }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
 

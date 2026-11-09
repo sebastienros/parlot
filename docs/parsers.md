@@ -1945,6 +1945,12 @@ Parser<T> Lookup(params ISeekable[] parsers)
 
 The hints taken from other parsers are only used when every one of them can seek and they all skip white space the same way. Otherwise the resulting parser declares that it can start with any char, like the original one.
 
+A parser that can start with any non-ASCII char lists its ASCII chars and `OneOf<T>.NonAsciiSeekableChar`, so that the choices which hold it don't build an entry for each non-ASCII char. More than 64 non-ASCII chars are listed this way:
+
+```c#
+var identifier = Literals.Pattern(char.IsLetter).Lookup(false, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" + OneOf<TextSpan>.NonAsciiSeekableChar);
+```
+
 ## Other parsers
 
 ### AnyCharBefore

@@ -129,10 +129,34 @@ public class StreamingTests
         // compacting buffer has discarded when the assignment spans a refill
         ["position-elseerror"] = new Grammar<(int, int, int)>(Terms.Text("begin").SkipAnd(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer()).ElseError("Expected an assignment")).Then(static (c, _) => Position(c))),
         // A position read after one read further, by an alternative which failed
+        // The identifier starts with any char above ASCII, which the choice dispatches without an entry for each of them
+        ["non-ascii-choice"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(
+            Terms.Text("if"),
+            Terms.Text("é!").Then(static _ => "e!"),
+            Terms.Scan(ScanWord, ("abcdefghijklmnopqrstuvwxyz" + AboveAscii).AsSpan()).Then(static x => x.ToString()),
+            Terms.Char('(').Then(static _ => "("))).Eof()),
         ["position-backtrack"] = new Grammar<(int, int, int)>(OneOf(
             Terms.Identifier().And(Terms.Char('=').Then(static (c, _) => Position(c))).And(Terms.Char('(')).Then(static (c, x) => x.Item2),
             Terms.Identifier().Then(static (c, _) => Position(c)))),
     };
+
+    // A word starts with a lowercase ASCII letter or any char above ASCII, and ends before a space or a parenthesis
+    private static int ScanWord(ReadOnlySpan<char> span)
+    {
+        if (span.IsEmpty || span[0] is not ((>= 'a' and <= 'z') or >= '\u0080'))
+        {
+            return 0;
+        }
+
+        var length = 1;
+
+        while (length < span.Length && span[length] is not (' ' or '(' or ')'))
+        {
+            length++;
+        }
+
+        return length;
+    }
 
     private static Parser<object> CreateNestedLists()
     {
@@ -312,6 +336,7 @@ public class StreamingTests
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
         Add("position-elseerror", "", "begin", "begin x = 1", "begin x = y", "begin\n", "begin\n x\n =\n 12", "begin\n\n x\n =\n y", "\n\nbegin\r\n  x =\n\n y",
             "begin\r\n" + new string(' ', 70) + "x\n" + new string(' ', 70) + "= z", "\n begin abc\n\n=\n\n\n", "begin 1");
+        Add("non-ascii-choice", "", "if", "if (é) ", "é!", "é!x", "( 中文 ( ℵ )", "€ if", "if #", "ab\u0080 é", "(\uffff");
         Add("position-backtrack", "", "abc", "abc\n =\n (", "abc\n =\n x", "a\r\n=\r\n(", "\n\n abc \n = x", "abc =", "abc\n\n", "1");
         Add("elseerror", "(\n1\n x", "( 12\n )", "\n(\n\n1 \n x", "(1\r\n\r\n");
         Add("integer-eof-error", " 42\n\n x", "\n\n42\n");
