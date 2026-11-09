@@ -93,6 +93,35 @@ public class SeekGuardSourceTests
         Check(Lists(), SeekGuardGrammars.TryParseLists, SeekGuardGrammars.TryParseLists, text);
     }
 
+    private static Parser<string> NonAsciiWords()
+    {
+        var word = Terms.Scan(static span => span.IsEmpty || !(span[0] is 'a' or 'b' || span[0] >= 0x80) ? 0 : span.IndexOfAny(' ', ';') is var end and >= 0 ? end : span.Length, "ab" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar).Then(static x => x.ToString());
+
+        return ZeroOrMany(word).And(Terms.Char(';').SkipAnd(word).Optional())
+            .Then(static t => string.Join(",", t.Item1) + (t.Item2.HasValue ? ";" + t.Item2.Value : ""));
+    }
+
+    [Theory]
+    [InlineData("a é b")]
+    [InlineData("é")]
+    [InlineData("a 日本 x")]
+    [InlineData("x")]
+    [InlineData("a ; ü")]
+    [InlineData(";é")]
+    [InlineData("; x")]
+    [InlineData("")]
+    public void NonAsciiWords_Match_The_Runtime(string text)
+    {
+        Check(NonAsciiWords(), SeekGuardGrammars.TryParseNonAsciiWords, SeekGuardGrammars.TryParseNonAsciiWords, text);
+
+        // Every word is read, whatever its first char above ASCII
+        if (text == "a 日本 x")
+        {
+            Assert.True(SeekGuardGrammars.TryParseNonAsciiWords(text, out var value));
+            Assert.Equal("a,日本", value);
+        }
+    }
+
     [Fact]
     public void Guards_Are_Emitted_For_Parsers_With_Hints()
     {
@@ -136,4 +165,6 @@ public static partial class SeekGuardGrammars
     public static partial bool TryParseStatements(TextReader reader, out string value);
     public static partial bool TryParseLists(string text, out string value);
     public static partial bool TryParseLists(TextReader reader, out string value);
+    public static partial bool TryParseNonAsciiWords(string text, out string value);
+    public static partial bool TryParseNonAsciiWords(TextReader reader, out string value);
 }

@@ -191,7 +191,8 @@ A parser that can start with many non-ASCII chars, like an identifier that start
 chars and `OneOf<T>.NonAsciiSeekableChar` (U+FFFF) rather than each of the non-ASCII ones. A choice then keeps an exact
 entry for each ASCII char, and invokes the parser for every non-ASCII char, in the order of the alternatives, without
 building an entry for each of them (a table of the ~50,000 letters of the BMP took 23 ms and 27 MB for each choice).
-The choice lists the char too, so the choices that hold it forward the hint. `Identifier`, `Scan`, `AnyOf` and `Lookup`
+The choice lists the char too, so the choices that hold it forward the hint, and the optional parsers and loops,
+which test the next char like a choice, invoke the parser before any non-ASCII char too. `Identifier`, `Scan`, `AnyOf` and `Lookup`
 list it themselves when their start chars hold more than 64 non-ASCII chars, and an `Identifier` built from
 `SearchValues` finds its start chars from them. `OneOf<T>.OtherSeekableChar` (`'\0'`) is the hint of a parser that can
 start with any char.

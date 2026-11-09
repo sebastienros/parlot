@@ -264,6 +264,81 @@ public class SeekGuardTests
         Assert.Equal(1, context.Scanner.Cursor.Offset);
     }
 
+    // A word starting with 'a', 'b' or any char above ASCII, declared with OneOf<T>.NonAsciiSeekableChar. Then() invokes the
+    // scanner, so the guards are on: they don't apply to a parser which tests the char itself.
+    private static Parser<string> NonAsciiWord() =>
+        Terms.Scan(ScanWord, "ab" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar).Then(static x => x.ToString());
+
+    private static int ScanWord(ReadOnlySpan<char> span)
+    {
+        if (span.IsEmpty || !(span[0] is 'a' or 'b' || span[0] >= 0x80))
+        {
+            return 0;
+        }
+
+        var end = span.IndexOfAny(' ', ',');
+        return end < 0 ? span.Length : end;
+    }
+
+    [Theory]
+    [InlineData("a é", "a,é")]
+    [InlineData("é", "é")]
+    [InlineData(" \uFFFF", "\uFFFF")]
+    [InlineData("a ç b", "a,ç,b")]
+    [InlineData("a 日本 x", "a,日本")]
+    [InlineData("a x", "a")]
+    [InlineData("x", "")]
+    public void LoopsTryAnyNonAsciiCharWithTheNonAsciiHint(string input, string expected)
+    {
+        Assert.Equal(expected, string.Join(",", ZeroOrMany(NonAsciiWord()).Parse(input)!));
+
+        if (expected.Length > 0)
+        {
+            Assert.Equal(expected, string.Join(",", OneOrMany(NonAsciiWord()).Parse(input)!));
+        }
+        else
+        {
+            Assert.Null(OneOrMany(NonAsciiWord()).Parse(input));
+        }
+    }
+
+    [Theory]
+    [InlineData("é", "é")]
+    [InlineData("  ü", "ü")]
+    [InlineData("a", "a")]
+    [InlineData("x", "")]
+    public void OptionalsTryAnyNonAsciiCharWithTheNonAsciiHint(string input, string expected)
+    {
+        var optional = NonAsciiWord().Optional().Parse(input);
+        Assert.Equal(expected, optional.HasValue ? optional.Value : "");
+
+        Assert.Equal(expected, string.Concat(ZeroOrOne(NonAsciiWord()).Parse(input)!));
+    }
+
+    [Theory]
+    [InlineData("a·b", "a,b")]
+    [InlineData("a · b·c", "a,b,c")]
+    [InlineData("a, b", "a,b")]
+    [InlineData("a;b", "a")]
+    public void SeparatorsTryAnyNonAsciiCharWithTheNonAsciiHint(string input, string expected)
+    {
+        // A ',' or any char above ASCII separates the identifiers
+        var separator = Terms.Scan(static span => span.Length > 0 && (span[0] == ',' || span[0] >= 0x80) ? 1 : 0, "," + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+        Assert.Equal(expected, string.Join(",", Separated(separator, Terms.Identifier()).Parse(input)!));
+    }
+
+    [Fact]
+    public void GuardStillSkipsAnAsciiCharOutsideTheNonAsciiHint()
+    {
+        var word = NonAsciiWord();
+        var context = Trace(Terms.Identifier().And(word.Optional()), "x y", word, out var entered);
+
+        Assert.Equal(0, entered);
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+    }
+
     private static ParseContext Trace<T>(Parser<T> parser, string text, object guarded, out int entered)
     {
         var count = 0;

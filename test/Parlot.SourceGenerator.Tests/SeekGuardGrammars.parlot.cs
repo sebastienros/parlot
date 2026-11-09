@@ -38,6 +38,17 @@ public static partial class SeekGuardGrammars
             .Then(static t => string.Join(";", t.Item1) + t.Item2 + "|" + t.Item3.Count);
     }
 
+    // Words starting with 'a', 'b' or any char above ASCII (OneOf<T>.NonAsciiSeekableChar), up to a space or a ';', in a loop
+    // and as an optional part. Then() invokes the scanner, so the generated code tests the char before invoking it.
+    [GenerateParser(nameof(TryParseNonAsciiWords))]
+    private static Parser<string> BuildNonAsciiWords()
+    {
+        var word = Terms.Scan(static span => span.IsEmpty || !(span[0] is 'a' or 'b' || span[0] >= 0x80) ? 0 : span.IndexOfAny(' ', ';') is var end and >= 0 ? end : span.Length, "ab" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar).Then(static x => x.ToString());
+
+        return ZeroOrMany(word).And(Terms.Char(';').SkipAnd(word).Optional())
+            .Then(static t => string.Join(",", t.Item1) + (t.Item2.HasValue ? ";" + t.Item2.Value : ""));
+    }
+
     // A list whose separator is a sequence, and repeated tails after a first one
     [GenerateParser(nameof(TryParseLists))]
     private static Parser<string> BuildLists()
