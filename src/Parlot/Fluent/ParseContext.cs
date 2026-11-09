@@ -540,13 +540,9 @@ public class ParseContext
 
         if (skipWhiteSpace)
         {
-            if (start == _cacheOffset)
-            {
-                // The white space at the start is the last one that was skipped, as before a single token: this is where
-                // SkipWhiteSpace() would move the cursor, for the caller to move it back
-                valueStart = _cacheEndOffset;
-            }
-            else
+            valueStart = SkippedWhiteSpaceEnd(start);
+
+            if (valueStart < 0)
             {
                 SkipWhiteSpace();
                 valueStart = cursor.Offset;
@@ -569,6 +565,11 @@ public class ParseContext
     // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
     private int _cacheEndOffset;
+
+    // Where the white space at an offset ends when it is the last one that was skipped, as before a single token, and -1
+    // otherwise: where SkipWhiteSpace() would move the cursor, for a failure path which only needs the offset.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int SkippedWhiteSpaceEnd(int start) => start == _cacheOffset ? _cacheEndOffset : -1;
 
     public void SkipWhiteSpace()
     {

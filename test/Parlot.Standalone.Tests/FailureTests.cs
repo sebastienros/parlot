@@ -161,6 +161,38 @@ public class FailureTests
     }
 
     [Theory]
+    [InlineData("  a  from;", "a from")]
+    [InlineData("  a from;", "a from")]
+    [InlineData("\n a\n from;", "a from")]
+    [InlineData("  a  b;", "a b")]
+    public void Rejected_Value_Of_Several_Tokens_Leaves_Its_White_Space_To_The_Next_Parser(string text, string expected)
+    {
+        // The white space before the value isn't the last one that was skipped: it is read again to know where the value
+        // starts, and the cursor is moved back before it
+        Assert.True(FailureGrammars.RejectedPair(text, out var value, out var failureOffset));
+        Assert.Equal(expected, value);
+        Assert.Equal(0, failureOffset);
+
+        Assert.True(FailureGrammars.RejectedPair(new OneCharReader(text), out value, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(expected, value);
+        Assert.Equal(default, failure);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("/* a */ from;", 8)]
+    [InlineData("  /* a */\n  from;", 12)]
+    [InlineData("/* a */ fromage,", 15)]
+    public void Rejected_Value_Fails_After_The_Comments_Of_A_White_Space_Parser(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedAfterComments(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedAfterComments(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
     [InlineData("from;", 0)]
     [InlineData("  from;", 2)]
     [InlineData("\n  from;", 3)]

@@ -133,8 +133,8 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         var innerValueName = $"innerValue{context.NextNumber()}";
         var recordedName = $"recorded{context.NextNumber()}";
-        // Written here rather than with ParseContext.RecordRejected(): a call on this path made the accepted values slower
-        // on .NET 10, 14.8 ns to 28 ns on LookaheadBenchmarks.
+        // Written here rather than with ParseContext.RecordRejected(): the call takes 1.2 ns more for each rejected value
+        // on .NET 10, 18.5 ns to 19.7 ns on LookaheadBenchmarks. Accepted values take the same time either way.
         result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
         result.Body.Add("{");
         result.Body.Add($"    if ({lambdaId}({context.ParseContextName}, {innerValueName}))");
@@ -150,19 +150,20 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         result.Body.Add($"        var {recordedName} = {cursorName}.RecordedFailure;");
         result.Body.Add($"        {cursorName}.ResetPosition({startName});");
         result.Body.Add($"        {cursorName}.RestoreRecordedFailure({recordedName});");
-        if (skipsWhiteSpace && context.IsCompacting)
+        if (skipsWhiteSpace && !context.IsCompacting)
         {
+            result.Body.Add($"        var {valueStartName} = {context.ParseContextName}.SkippedWhiteSpaceEnd({startName});");
+            result.Body.Add($"        if ({valueStartName} < 0)");
+            result.Body.Add("        {");
+            result.Body.Add($"            {context.ParseContextName}.SkipWhiteSpace();");
+            result.Body.Add($"            {valueStartName} = {cursorName}.Offset;");
+            result.Body.Add($"            {cursorName}.ResetPosition({startName});");
+            result.Body.Add("        }");
             result.Body.Add($"        {cursorName}.RecordFailure({valueStartName});");
         }
         else
         {
-            if (skipsWhiteSpace)
-            {
-                result.Body.Add($"        {context.ParseContextName}.SkipWhiteSpace();");
-            }
-
-            result.Body.Add($"        {cursorName}.RecordFailure({cursorName}.Offset);");
-            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+            result.Body.Add($"        {cursorName}.RecordFailure({(skipsWhiteSpace ? valueStartName : startName)});");
         }
         result.Body.Add($"        {result.SuccessVariable} = false;");
         result.Body.Add("    }");

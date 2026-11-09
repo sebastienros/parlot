@@ -99,6 +99,21 @@ public static partial class FailureGrammars
     public static Parser<string> BuildRejectedLiteral() =>
         Literals.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
 
+    // A value of two words: the white space before it isn't the last one that was skipped when it is rejected, and the
+    // other alternative reads it
+    [GenerateParser(nameof(RejectedPair))]
+    public static Parser<string> BuildRejectedPair() =>
+        Terms.Identifier().And(Terms.Identifier()).When(static (_, value) => value.Item2.ToString() != "from")
+            .Then(static value => value.Item1.ToString() + " " + value.Item2.ToString())
+            .Or(Literals.WhiteSpace(includeNewLines: true).SkipAnd(Literals.Identifier()).AndSkip(Terms.Text("from")).Then(static value => value.ToString() + " from"))
+            .AndSkip(Terms.Char(';')).Eof();
+
+    // The same word after comments, which a white space parser skips
+    [GenerateParser(nameof(RejectedAfterComments))]
+    public static Parser<string> BuildRejectedAfterComments() =>
+        Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof()
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+
     [GenerateParser(nameof(Second))]
     public static Parser<string> BuildSecond() =>
         Terms.Identifier().SkipAnd(Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from")).Eof();
