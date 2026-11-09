@@ -42,6 +42,9 @@ public class StreamingTests
         // Valued operators are parsed by the level which applies them, and read again by the looser levels when they fail
         ["valued-operators"] = new Grammar<string>(CreateValuedOperators()),
         ["valued-operators-eof"] = new Grammar<string>(CreateValuedOperators().Eof()),
+        // The values of prefix operators wait for their operand, and an operator that reads nothing drops its value
+        ["valued-prefix"] = new Grammar<string>(CreateValuedPrefix()),
+        ["valued-prefix-eof"] = new Grammar<string>(CreateValuedPrefix().Eof()),
         ["identifier"] = new Grammar<TextSpan>(Terms.Identifier()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
@@ -198,6 +201,14 @@ public class StreamingTests
         ];
         Add("valued-operators", valuedOperators);
         Add("valued-operators-eof", valuedOperators);
+
+        string[] valuedPrefix =
+        [
+            "", "a", "-a", "- ~ a", "---~-a + b", "-a ** -b ** ~c", "not -a + not b", "@-a ** @b + -@c", "not not @ not -a", "-", "--",
+            "- +", "-(-(-a) ** -b)", "-(-", "not @ -", "a ** -", "a + not", "?a", "?-?a", "??a", " -  a ", "-\n~\na", "nota",
+        ];
+        Add("valued-prefix", valuedPrefix);
+        Add("valued-prefix-eof", valuedPrefix);
 
         Add("sql",
             "SELECT * FROM users",
@@ -823,6 +834,26 @@ public class StreamingTests
             .Ternary(Terms.Char('?'), expression, Terms.Char(':'), static (c, a, b) => $"({c}?{a}:{b})", rightAssociative: false)
             .LeftAssociative((Terms.Text("??"), static (a, b) => $"({a}??{b})"))
             .RightAssociative([Terms.Text("=")], static (a, b, op) => $"({a}{op}{b})");
+
+        return expression;
+    }
+
+    private static Parser<string> CreateValuedPrefix()
+    {
+        var expression = Deferred<string>();
+        var primary = Terms.Identifier().Then(static x => x.ToString()).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        // The positions are absolute offsets, which don't depend on how the text is split
+        expression.Parser = primary.Operators()
+            .Unary(
+                // Reads nothing without a '?', and the next operators are tried
+                (ZeroOrOne(Literals.Char('?')).Then(static _ => -1), static (x, _) => $"(?{x})"),
+                (Terms.Char('-').Then(static (context, start, end, _) => end - 1), static (x, position) => $"(-@{position} {x})"),
+                (Terms.Char('~').Then(static (context, start, end, _) => end - 1), static (x, position) => $"(~@{position} {x})"))
+            .RightAssociative((Terms.Text("**"), static (a, b) => $"({a}**{b})"))
+            .Unary((Terms.Char('@'), static x => $"(@{x})"))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => $"({a}+{b})"))
+            .Unary((Terms.Keyword("not"), static (x, op) => $"({op} {x})"));
 
         return expression;
     }
