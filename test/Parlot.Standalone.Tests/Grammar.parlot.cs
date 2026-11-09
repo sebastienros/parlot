@@ -279,4 +279,16 @@ public static partial class Grammar
 
             return $"{first} {again} {second} {active} {context.IsParserActiveAtPosition("a")} {context.MaxRecursionDepth} {context.DisableLoopDetection}";
         }).Eof();
+
+    // Statements ended by a semicolon or a new line, with no new line before the argument of return, in comments too
+    [GenerateParser(nameof(TryParseNewLineStatements))]
+    private static Parser<string> NewLineStatements()
+    {
+        var end = OneOf(Terms.Char(';').Then<object>(static _ => null), SkipWhiteSpace(Eof()), NewLineAhead());
+        var returnStatement = Terms.Keyword("return").SkipAnd(Terms.Identifier().NoNewLineBefore("\n\r\u2028\u2029").Then(static x => "return " + x.ToString()).Else("return"));
+        var expression = Terms.Identifier().Then(static x => x.ToString());
+        return ZeroOrMany(OneOf(returnStatement, expression).AndSkip(end)).Eof()
+            .Then(static x => string.Join("|", x))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+    }
 }

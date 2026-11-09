@@ -126,6 +126,9 @@ public class StreamingTests
         ["state"] = new Grammar<IReadOnlyList<string>>(CreateStateGrammar(), static scanner => new DepthContext(scanner)),
         ["elseerror"] = new Grammar<long>(Terms.Char('(').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(')').ElseError("Expected ')'"))),
         ["comments"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // Statements ended by a semicolon or a new line, with "[no LineTerminator here]" before an argument and a postfix operator
+        ["newlines"] = new Grammar<string>(CreateNewLineStatements()),
+        ["newlines-comments"] = new Grammar<string>(CreateNewLineStatements().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
         ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
         // White space parsers that tell their first chars aren't invoked before the other ones, except at the end of the buffer
@@ -188,6 +191,14 @@ public class StreamingTests
         }
 
         public int Depth { get; set; }
+    }
+
+    private static Parser<string> CreateNewLineStatements()
+    {
+        var end = OneOf(Terms.Char(';').Then<object?>(static _ => null), NewLineAhead(), SkipWhiteSpace(Eof()));
+        var returnStatement = Terms.Keyword("return").SkipAnd(Terms.Identifier().NoNewLineBefore().Then(static x => "return " + x).Else("return"));
+        var expressionStatement = Terms.Identifier().And(NoNewLineBefore(Terms.Text("++")).Else("")).Then(static x => x.Item1.ToString() + x.Item2);
+        return ZeroOrMany(OneOf(returnStatement, expressionStatement).AndSkip(end)).Eof().Then(static x => string.Join("|", x));
     }
 
     // A word starts with a lowercase ASCII letter or any char above ASCII, and ends before a space or a parenthesis
@@ -383,6 +394,15 @@ public class StreamingTests
         Add("state", "", "a", "a {b} c", "{!} a", "{ a { b { c } } d }", "{ a {! } b", "{a", "{ {! a", "a { b } } c", "{" + string.Join(" ", Enumerable.Range(0, 40).Select(static i => "x" + i)) + " {!} {y}}");
         Add("elseerror", "", "(", "(1", "(1)", "(1 x", "( 12 )", "x");
         Add("comments", "", "a", "a // b\n c", "a /* b */ c", "a /* b", "a / b", "// only");
+
+        string[] newLines =
+        [
+            "", "a", "a b", "a;b", "a\nb", "a\r\nb", "a  \n  b", "return", "return a", "return\na", "return\r\n a;", "a++", "a ++ b",
+            "a\n++b", "a\n++", "return a\n++b", "a /* x */ b", "a /* \n */ b", "a // c\n b", "return /* x */ a", "return /* \n */ a",
+            "return // c\n a", "a++ /* c */\n b", "a /* b", "a ;  ", "a  ", "a\n",
+        ];
+        Add("newlines", newLines);
+        Add("newlines-comments", newLines);
         Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
         Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
         Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");

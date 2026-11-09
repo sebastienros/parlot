@@ -56,6 +56,28 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void NewLinesAreFoundAcrossRefills()
+    {
+        // The white space is searched as a token: a new line at its end is found once its start was refilled away
+        var parser = NewLineTests.CreateStatements();
+        var spaces = new string(' ', 100);
+        var text = string.Join("", Enumerable.Range(0, 1_000).Select(i => "a" + i + (i % 2 == 0 ? spaces + "\n" : " ;")));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+        Assert.Equal(string.Join("|", Enumerable.Range(0, 1_000).Select(static i => "a" + i)), result);
+
+        // The white space is kept while it's searched, not the statements before it
+        Assert.InRange(peak(), 1, 256);
+
+        // Without the new line the statements need a semicolon
+        Assert.Null(parser.Parse(new ChunkedReader("a" + spaces + "b", 3), options));
+        Assert.Equal("return|a", parser.Parse(new ChunkedReader("return" + spaces + "\na", 3), options));
+        Assert.Equal("return a", parser.Parse(new ChunkedReader("return" + spaces + "a", 3), options));
+    }
+
+    [Fact]
     public void GuardedRepetitionsKeepTheBufferBounded()
     {
         // The loop skips the white space to test whether a statement can start after it, then moves back before it: the

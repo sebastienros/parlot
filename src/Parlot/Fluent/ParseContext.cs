@@ -603,6 +603,96 @@ public class ParseContext
     }
 
     /// <summary>
+    /// Skips the white space and comments at the cursor, as <see cref="SkipWhiteSpace"/> does, and returns whether they contain
+    /// a new line: one of <paramref name="newLines"/>, or of <see cref="WhiteSpaceSet"/> when it is <see langword="null"/>. The
+    /// cursor is after them either way. Used by <see cref="NoNewLineBefore{T}"/> and <see cref="NewLineAhead"/>.
+    /// </summary>
+    /// <remarks>
+    /// When it finds no new line and the white space reaches the end of the buffer, it marks <see cref="Cursor.HitEnd"/>:
+    /// more text could hold one. In compacting mode the white space is read as a token, so that it stays buffered while it's
+    /// searched and is read again with more text when it reaches the end of the buffer.
+    /// </remarks>
+    internal bool SkipWhiteSpaceAndFindNewLine(string? newLines)
+    {
+#if !PARLOT_STRING_ONLY
+        if ((_flags & CompactingFlag) != 0)
+        {
+            return SkipWhiteSpaceAndFindNewLineCompacting(newLines);
+        }
+#endif
+
+        var cursor = Scanner.Cursor;
+
+        if (!MaySkipWhiteSpace(cursor.Current))
+        {
+            if (cursor.Eof)
+            {
+                cursor.MarkHitEnd();
+            }
+
+            return false;
+        }
+
+        var start = cursor.Offset;
+
+        SkipWhiteSpace();
+
+        var end = cursor.Offset;
+
+        if (end > start)
+        {
+            var span = cursor.GetSpan(start, end - start);
+
+            if ((newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0)
+            {
+                return true;
+            }
+        }
+
+        if (cursor.Eof)
+        {
+            cursor.MarkHitEnd();
+        }
+
+        return false;
+    }
+
+#if !PARLOT_STRING_ONLY
+    private bool SkipWhiteSpaceAndFindNewLineCompacting(string? newLines)
+    {
+        var cursor = Scanner.Cursor;
+        var start = BeginToken();
+
+        try
+        {
+            while (true)
+            {
+                bool found;
+
+                try
+                {
+                    found = SkipWhiteSpaceAndFindNewLine(newLines);
+                }
+                catch (ParseException) when (cursor.HitEnd)
+                {
+                    // A comment of the white space parser might be complete with more text
+                    found = false;
+                }
+
+                if (!RetryToken(start))
+                {
+                    return found;
+                }
+            }
+        }
+        finally
+        {
+            EndToken();
+        }
+    }
+#endif
+
+    /// <summary>
     /// Whether the input is streamed through a compacting buffer and no token is being read.
     /// </summary>
     /// <remarks>

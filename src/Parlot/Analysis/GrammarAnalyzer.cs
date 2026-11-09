@@ -57,8 +57,8 @@ internal sealed class GrammarAnalysis
     // Parlot's parsers which succeed only when the first parser they invoke does, at the position where they are invoked
     private static readonly HashSet<string> s_firstMustSucceed = new(StringComparer.Ordinal)
     {
-        "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "When", "ThenTry",
-        "WhenFollowedBy", "WhenNotFollowedBy", "Peek", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
+        "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "NoNewLineBefore",
+        "When", "ThenTry", "WhenFollowedBy", "WhenNotFollowedBy", "Peek", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
         "Switch", "Seekable", "IParserAdapter", "OperatorIndex", "LeftAssociative", "LeftAssociativeWithContext", "RightAssociative",
         "RightAssociativeWithContext", "AssociativeWithOperator",
     };
@@ -369,6 +369,9 @@ internal sealed class GrammarAnalysis
         // An alternative that can start with white space would never match once white space is skipped before it
         var fixable = true;
 
+        // NoNewLineBefore must see the white space it skips, a choice can't skip it before
+        var noNewLine = false;
+
         foreach (var index in candidates)
         {
             var alternative = alternatives[index];
@@ -382,6 +385,7 @@ internal sealed class GrammarAnalysis
                 others.Add(Describe(alternative));
                 otherIndexes.Add(index);
                 fixable &= !(FixedText(alternative) is { } text && char.IsWhiteSpace(text.Text[0])) && ParlotTypeName(alternative) is not ("WhiteSpaceLiteral" or "CommentsParser");
+                noNewLine |= ParlotTypeName(alternative) == "NoNewLineBefore";
             }
         }
 
@@ -390,9 +394,13 @@ internal sealed class GrammarAnalysis
             return false;
         }
 
+        var advice = noNewLine
+            ? "A NoNewLineBefore alternative reads the white space itself: wrap the choice of the alternatives it applies to in NoNewLineBefore instead."
+            : "Make every alternative skip white space, with Terms parsers, SkipWhiteSpace or Lookup(skipWhiteSpace: true, ...), or none of them.";
+
         Report(GrammarRule.MixedWhiteSpaceChoice, choice,
-            $"{Capitalize(DescribeChoice(choice, alternatives))} has no lookup table, so it tries each alternative in order whatever the next char is: {Join(skipping)} {Plural(skipping.Count, "skips", "skip")} white space and {Join(others)} {Plural(others.Count, "doesn't", "don't")}, or can't tell. Make every alternative skip white space, with Terms parsers, SkipWhiteSpace or Lookup(skipWhiteSpace: true, ...), or none of them.",
-            null, fixable ? new GrammarFix(GrammarFixKind.SkipWhiteSpace, otherIndexes, $"Skip white space in {Join(others)}") : null);
+            $"{Capitalize(DescribeChoice(choice, alternatives))} has no lookup table, so it tries each alternative in order whatever the next char is: {Join(skipping)} {Plural(skipping.Count, "skips", "skip")} white space and {Join(others)} {Plural(others.Count, "doesn't", "don't")}, or can't tell. {advice}",
+            null, fixable && !noNewLine ? new GrammarFix(GrammarFixKind.SkipWhiteSpace, otherIndexes, $"Skip white space in {Join(others)}") : null);
 
         return true;
     }

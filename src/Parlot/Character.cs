@@ -494,6 +494,35 @@ public static partial class Character
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool HasMask(char ch, byte mask) => (_characterData[ch] & mask) != 0;
 
+    // The index of the first new line of a white space set in a span, the set given by its white space bit (see
+    // GetWhiteSpaceMask): a char of the set's white space or new lines which isn't one of its white space. -1 when there is none.
+    internal static int IndexOfNewLine(ReadOnlySpan<char> span, byte whiteSpaceMask)
+    {
+#if NET8_0_OR_GREATER
+        return whiteSpaceMask switch
+        {
+            (byte)CharacterMask.WhiteSpace => span.IndexOfAny(_newLines),
+            (byte)CharacterMask.AsciiWhiteSpace => span.IndexOfAny('\n', '\r', '\v'),
+            _ => span.IndexOfAny('\n', '\r'),
+        };
+#else
+        var whiteSpaceOrNewLineMask = (byte)(whiteSpaceMask << 1);
+        var characterData = _characterData;
+
+        for (var i = 0; i < span.Length; i++)
+        {
+            var data = characterData[span[i]];
+
+            if ((data & whiteSpaceOrNewLineMask) != 0 && (data & whiteSpaceMask) == 0)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+#endif
+    }
+
     private static byte ThrowInvalidWhiteSpaceSet(WhiteSpaceSet set)
         => throw new ArgumentOutOfRangeException(nameof(set), set, "Unknown white space set.");
 

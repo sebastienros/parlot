@@ -129,6 +129,8 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Peek(Bs));
         AssertSameAsParse(Peek(A.And(Bs)).And(A));
         AssertSameAsParse(SkipWhiteSpace(OneOrMany(Literals.Char('b'))));
+        AssertSameAsParse(NoNewLineBefore(OneOrMany(Literals.Char('b'))));
+        AssertSameAsParse(A.And(Bs.NoNewLineBefore()));
         AssertSameAsParse(Bs.WithWhiteSpaceSet(WhiteSpaceSet.Ascii));
         AssertSameAsParse(Bs.WithState<ParseContext, int>(static _ => 0, static (_, _) => { }, static x => x + 1));
         AssertSameAsParse(A.And(Bs).WithState(static () => 0, static _ => { }, static x => x + 1));

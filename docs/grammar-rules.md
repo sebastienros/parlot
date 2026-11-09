@@ -76,7 +76,7 @@ Some findings come with a change of the choice that removes them, which a tool c
 
 | Rule | Fix | Same results |
 |---|---|---|
-| [PARLOT101](#parlot101) | `Literals.X(...)` becomes `Terms.X(...)` | No: the alternatives accept white space before them. Not offered when one can start with white space |
+| [PARLOT101](#parlot101) | `Literals.X(...)` becomes `Terms.X(...)` | No: the alternatives accept white space before them. Not offered when one can start with white space, or is a `NoNewLineBefore` |
 | [PARLOT103](#parlot103) | `p.And(a).Or(p.And(b))` becomes `p.And(a.Or(b))`, for consecutive alternatives | Yes |
 | [PARLOT112](#parlot112) | The alternative that never fails is tried last | No: the alternatives after it are tried |
 | [PARLOT113](#parlot113) | The shadowed alternative is tried before the one that shadows it | No: it can match |
@@ -131,6 +131,10 @@ and that it skips white space, with `Lookup(skipWhiteSpace: true, ...)`.
 
 A parser that starts with another one, like a sequence, reads its hints when the choice builds its table. A sequence
 built before the `Deferred` it starts with is set is not reported.
+
+A `NoNewLineBefore` alternative reads the white space itself, to find a new line in it, so it doesn't declare that it skips
+white space, and the rule offers no fix for it: wrap the choice of the alternatives it applies to instead,
+`NoNewLineBefore(Terms.Text("++").Or(Terms.Text("--")))`.
 
 | Benchmark | Mean |
 |---|---:|

@@ -1672,6 +1672,90 @@ added.
 With these hints, the context only invokes the parser of the comments before white space and the chars the comments start
 with (see [WithWhiteSpaceParser](#withwhitespaceparser)), not before every token.
 
+### NoNewLineBefore
+
+Skips the white space and comments before a parser, like `SkipWhiteSpace`, and fails when they contain a new line. This is
+JavaScript's "[no LineTerminator here]", which applies to the argument of `return`, `throw`, `break` and `continue`, to postfix
+`++` and `--`, and before `=>`. Go, Kotlin, Swift and many configuration languages have similar rules.
+
+```c#
+Parser<T> NoNewLineBefore<T>(Parser<T> parser)
+Parser<T> NoNewLineBefore<T>(Parser<T> parser, string newLines)
+Parser<T> NoNewLineBefore()                  // instance method
+Parser<T> NoNewLineBefore(string newLines)   // instance method
+```
+
+The white space is the one `ParseContext.SkipWhiteSpace()` skips, so it includes the comments of a `WithComments` or
+`WithWhiteSpaceParser` parser: a multi-line comment containing a new line counts as one, and so does the new line that ends a
+single-line comment. The new lines are those of the white space set (`\n`, `\r`, `\v`, U+0085, U+2028 and U+2029 by default, see
+`WithWhiteSpaceSet`), or the chars of `newLines`. With `UseNewLines`, new lines are not white space, so none is found.
+
+Usage:
+
+```c#
+var argument = Terms.Identifier().NoNewLineBefore("\n\r\u2028\u2029").Then(static x => x.ToString());
+var parser = Terms.Keyword("return").SkipAnd(argument.Else("(none)"))
+    .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+
+parser.Parse("return x");
+parser.Parse("return /* x */ x");
+parser.Parse("return\nx");
+parser.Parse("return /* \n */ x");
+```
+
+Result:
+
+```
+"x"
+"x"
+"(none)"
+"(none)"
+```
+
+On failure the cursor is back before the white space. When there is no white space at the cursor the parser is invoked
+directly, and the white space is only searched when it was skipped, with a vectorized search on .NET 8 and later.
+
+> Note: `NoNewLineBefore` has no lookup hints. A `OneOf` whose alternatives all skip white space skips it once before invoking
+> them, which would hide the new line, so a choice holding a `NoNewLineBefore` alternative tries its alternatives in order. To
+> keep the lookup table of a choice, wrap it instead: `NoNewLineBefore(OneOf(Terms.Text("++"), Terms.Text("--")))`.
+
+### NewLineAhead
+
+Succeeds when the white space and comments at the cursor contain a new line, without consuming them, and returns `null`. It
+uses the same white space and new lines as `NoNewLineBefore`. The white space it skipped is cached by the context, so the
+parser that reads the next token doesn't skip it again.
+
+```c#
+Parser<object?> NewLineAhead()
+Parser<object?> NewLineAhead(string newLines)
+```
+
+Usage, JavaScript's automatic semicolon insertion, which ends a statement at a `;`, before a `}`, at the end of the input or at a
+new line:
+
+```c#
+var end = OneOf(
+    Terms.Char(';').Then<object?>(static _ => null),
+    Always().WhenFollowedBy(Terms.Char('}')),
+    SkipWhiteSpace(Eof()),
+    NewLineAhead());
+
+var statement = Terms.Identifier().AndSkip(end);
+var parser = ZeroOrMany(statement).Eof();
+
+parser.Parse("a; b");
+parser.Parse("a\nb");
+parser.Parse("a b");
+```
+
+Result:
+
+```
+["a", "b"]
+["a", "b"]
+null
+```
+
 ### Deferred
 
 Creates a parser that can be referenced before it is actually defined. This is used when there is a cyclic dependency between parsers.

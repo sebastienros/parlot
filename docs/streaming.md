@@ -55,7 +55,8 @@ Only the token is parsed again, never the value. A token is small compared to th
 Between tokens the cursor is never at the end of a non-final window: white space is skipped incrementally, refilling as
 needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, runs as a token. It isn't invoked before a
 char it can't start with (see [WithWhiteSpaceParser](parsers.md#withwhitespaceparser)), but it always is at the end of the
-buffer, the NUL of `Cursor.Current`, to refill it.
+buffer, the NUL of `Cursor.Current`, to refill it. `NoNewLineBefore` and `NewLineAhead` read the
+white space they search for a new line as a token too, so it stays buffered while it's searched.
 
 ### Backtrack floor and pins
 
