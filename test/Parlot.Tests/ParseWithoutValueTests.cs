@@ -106,6 +106,11 @@ public class ParseWithoutValueTests
 
         // All alternatives skip white space
         AssertSameAsParse(OneOf(Terms.Text("ab").And(Bs).Then(static x => x.Item2), Bs));
+
+        // Every alternative is invoked, the longest match wins
+        AssertSameAsParse(Longest(Bs, As, A.And(Bs).Then(static x => x.Item2), ZeroOrOne(C).Then<IReadOnlyList<char>>(static _ => [])));
+        AssertSameAsParse(Longest(Bs, Literals.Pattern(static c => c == 'c').Then<IReadOnlyList<char>>(static _ => [])));
+        AssertSameAsParse(Longest(Terms.Text("ab").And(Bs).Then(static x => x.Item2), Bs));
     }
 
     [Fact]

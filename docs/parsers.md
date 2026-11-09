@@ -1065,6 +1065,102 @@ null
 
 Multiple `Or()` calls can be used in a row, e.g., `a.Or(b).Or(c).Or(d)`
 
+### Longest
+
+A choice which invokes each of its parsers at the same position and continues after the one which reads the furthest,
+the *longest match*. The first parser wins when several matches end at the same offset. When none matches, it fails
+with the cursor where it was.
+
+```c#
+Parser<T> Longest<T>(params Parser<T>[] parsers)
+Parser<T> Longest<T>(Func<LongestMatches<T>, int> selector, params Parser<T>[] parsers)
+Parser<T> Longest<T>(Func<ParseContext, LongestMatches<T>, int> selector, params Parser<T>[] parsers)
+```
+
+`Or` and `OneOf` are ordered choices: the first parser which matches wins. Ordering the parsers is enough when the right
+order is the same for every input, like for texts (`OneOf(Terms.Text("<="), Terms.Text("<"))`), but not when it depends
+on the input. The grammars written for lexers with maximal munch, LR parsers or tree-sitter expect the longest match:
+
+```c#
+var integer = Terms.Integer().Then<object>(static x => x);
+var dec = Terms.Decimal().Then<object>(static x => x);
+
+// OneOf(integer, dec) fails on "12.5", where ".5" is left; OneOf(dec, integer) returns 12 as a decimal
+var number = Longest(integer, dec).Eof();
+number.Parse("12");
+number.Parse("12.5");
+
+// OneOf(expressionStatement, label) fails on "end:", OneOf(label, expressionStatement) on "a := 0"
+var expressionStatement = Terms.Identifier().And(ZeroOrOne(Terms.Text(":=").SkipAnd(Terms.Integer())))
+    .Then(static x => $"expression {x.Item1}");
+var label = Terms.Identifier().AndSkip(Terms.Char(':')).Then(static x => $"label {x}");
+var statement = Longest(expressionStatement, label).Eof();
+statement.Parse("end:");
+statement.Parse("a := 0");
+```
+
+Result:
+
+```
+12 (long)
+12.5 (decimal)
+"label end"
+"expression a"
+```
+
+Like `OneOf`, `Longest` only invokes the parsers which can start with the next char, from the chars they tell (see
+`ISeekable`), skips the white space once when they all skip it, and tells the chars of its parsers to the choices which
+hold it. Unlike `OneOf`, it invokes the parsers after a match too, so each one which can start with the next char costs a
+parse, and parsers which start the same way parse the same text again: `Longest(a.And(b), a.And(c))` parses `a` twice,
+where `a.And(Longest(b, c))` parses it once. The choices among its parsers stop at their first match, as usual: in
+`Longest(OneOf(a, b), c)`, `OneOf(a, b)` competes with `c` with the match of `a` when `a` matches.
+
+The parse continues after the longest match only. When what follows fails, the shorter matches aren't tried:
+`Longest(Literals.Text("ab"), Literals.Text("a")).And(Literals.Text("bc"))` fails on `abc`, like the maximal munch of a
+lexer. Put what follows in each parser to choose by it, as in `Longest(ab.And(bc), a.And(bc))`.
+
+A selector receives the parsers which matched, in their order, and returns the index of the match to keep, or a negative
+value to fail. It ranks the matches by what they parsed, for instance to prefer a keyword over an identifier of the same
+length. Each `LongestMatch<T>` has the index of its parser in `Alternative`, its `Value`, and the offsets where its value
+starts (`Start`) and where its parser stopped reading (`End`). `IndexOfLongest()` returns the match a choice without a
+selector keeps. The selector is only invoked when a parser matches, and the matches are only valid while it runs.
+
+```c#
+var identifier = Terms.Identifier().Then(static x => "identifier " + x);
+var keyword = Terms.Keyword("class").Then(static _ => "keyword");
+
+var parser = Longest(static matches =>
+{
+    var best = matches.IndexOfLongest();
+
+    // A keyword wins over an identifier of the same length
+    for (var i = 0; i < matches.Count; i++)
+    {
+        if (matches[i].Alternative == 1 && matches[i].End == matches[best].End)
+        {
+            return i;
+        }
+    }
+
+    return best;
+}, identifier, keyword);
+
+parser.Parse("class");
+parser.Parse("classes");
+```
+
+Result:
+
+```
+"keyword"
+"identifier classes"
+```
+
+Unless the diagnostics are collected, `Longest` doesn't allocate while it parses, a selector included. When they are (see
+[Collecting diagnostics without stopping](#collecting-diagnostics-without-stopping)), it keeps the ones of the match it
+keeps, and the ones of the parser whose error reaches the furthest when none matches. A rejected match fails where it
+starts, like a value `When` rejects (see [Reporting where a parse failed](#reporting-where-a-parse-failed)).
+
 ### And
 
 Matches two consecutive parsers. The result is a strongly typed tuple containing the two individual results.

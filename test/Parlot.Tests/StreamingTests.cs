@@ -167,6 +167,19 @@ public class StreamingTests
             Terms.Text("é!").Then(static _ => "e!"),
             Terms.Scan(ScanWord, ("abcdefghijklmnopqrstuvwxyz" + AboveAscii).AsSpan()).Then(static x => x.ToString()),
             Terms.Char('(').Then(static _ => "("))).Eof()),
+        // Every alternative is read from the same position, the cursor moves to the end of the longest one
+        ["longest-numbers"] = new Grammar<string>(ZeroOrMany(Longest(
+            Terms.Integer().Then(static x => "i" + x.ToString(CultureInfo.InvariantCulture)),
+            Terms.Decimal().Then(static x => "d" + x.ToString(CultureInfo.InvariantCulture)),
+            Terms.Identifier().Then(static x => "w" + x))).Eof().Then(static x => string.Join(",", x))),
+        ["longest-statements"] = new Grammar<string>(ZeroOrMany(Longest(
+            Terms.Identifier().And(ZeroOrOne(Terms.Text(":=").SkipAnd(Terms.Integer()))).Then(static x => "e:" + x.Item1),
+            Terms.Identifier().AndSkip(Terms.Char(':')).Then(static x => "l:" + x))).Eof().Then(static x => string.Join(",", x))),
+        ["longest-texts"] = new Grammar<string>(ZeroOrMany(Longest(Terms.Text("<"), Terms.Text("<="), Terms.Text("<<"), Terms.Text("<<="), Terms.Text("<<<<"), Terms.Text("<>")))
+            .Eof().Then(static x => string.Join(",", x))),
+        // The shortest match, which the cursor moves back to after reading the longer ones
+        ["longest-selector"] = new Grammar<string>(ZeroOrMany(Longest(static matches => 0, Terms.Text("ab"), Terms.Text("abab"), Terms.Text("ababab"), Terms.Text("b")))
+            .Eof().Then(static x => string.Join(",", x))),
         ["position-backtrack"] = new Grammar<(int, int, int)>(OneOf(
             Terms.Identifier().And(Terms.Char('=').Then(static (c, _) => Position(c))).And(Terms.Char('(')).Then(static (c, x) => x.Item2),
             Terms.Identifier().Then(static (c, _) => Position(c)))),
@@ -436,6 +449,10 @@ public class StreamingTests
         Add("position-elseerror", "", "begin", "begin x = 1", "begin x = y", "begin\n", "begin\n x\n =\n 12", "begin\n\n x\n =\n y", "\n\nbegin\r\n  x =\n\n y",
             "begin\r\n" + new string(' ', 70) + "x\n" + new string(' ', 70) + "= z", "\n begin abc\n\n=\n\n\n", "begin 1");
         Add("non-ascii-choice", "", "if", "if (é) ", "é!", "é!x", "( 中文 ( ℵ )", "€ if", "if #", "ab\u0080 é", "(\uffff");
+        Add("longest-numbers", "", "1", "12", "12.5", "1.", " 1 2.5 abc 3", "1.5.5", "12.5e", "a1", "1a");
+        Add("longest-statements", "", "a", "a:", "a := 0", "end: total := 12 x", "a :=", "a : = 1", "a:b:c:");
+        Add("longest-texts", "", "<", "<<", "<<<", "<<<<", "<<=<=<>", " < <= <<= ", "<<<<<", "<x");
+        Add("longest-selector", "", "ab", "abab", "ababab", "abababab", " ab b ab", "aba", "abx");
         Add("position-backtrack", "", "abc", "abc\n =\n (", "abc\n =\n x", "a\r\n=\r\n(", "\n\n abc \n = x", "abc =", "abc\n\n", "1");
         Add("elseerror", "(\n1\n x", "( 12\n )", "\n(\n\n1 \n x", "(1\r\n\r\n");
         Add("integer-eof-error", " 42\n\n x", "\n\n42\n");

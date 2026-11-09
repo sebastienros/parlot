@@ -258,6 +258,9 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   reports the start of its content when all the parsers it can start with skip white space, and the offset where it was
   entered otherwise. A `ThenTry` callback receives the same offsets, and a value it rejects is reported as the furthest
   failure at its start, like one a `When` rejects.
+- The matches a `Longest` selector receives start where the choice invokes its alternatives, after the white space it
+  skips when they all skip it. When they don't, the runtime reports the start of each match's content, after the white
+  space its alternative skipped.
 
 ### Non-breaking diagnostics
 

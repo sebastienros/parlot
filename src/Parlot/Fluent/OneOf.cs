@@ -1135,7 +1135,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }) + "'";
     }
 
-    private static string BuildCharPattern(IReadOnlyList<char> chars, int rangeThreshold)
+    internal static string BuildCharPattern(IReadOnlyList<char> chars, int rangeThreshold)
     {
         // Sort and de-dup.
         var list = new List<char>(chars);
