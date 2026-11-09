@@ -78,6 +78,56 @@ public class CommentsParserTests
         Check(parser, CommentsGrammars.TryParseCommentsOnly, CommentsGrammars.TryParseCommentsOnly, text);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("a /* b */ c")]
+    [InlineData("a /* b")]
+    [InlineData("a/*")]
+    [InlineData("/*")]
+    [InlineData("a /*- b\n c")]
+    [InlineData("a /*- b */ c")]
+    [InlineData("/**/ a /* b")]
+    [InlineData("a /* b /**/ c")]
+    [InlineData("a * / b")]
+    public void Unterminated_Comments_Which_Are_Not_Comments_Match_The_Runtime(string text)
+    {
+        var parser = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithSingleLine("/*-"))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+        Check(parser, CommentsGrammars.TryParseNotAComment, CommentsGrammars.TryParseNotAComment, text);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("a /* b */ c")]
+    [InlineData("a /* b")]
+    [InlineData("a /* b\n c")]
+    [InlineData("a/*")]
+    [InlineData("/*")]
+    [InlineData("a /**/ b /* c */ d /* e")]
+    public void Unterminated_Comments_To_The_End_Match_The_Runtime(string text)
+    {
+        var parser = ZeroOrMany(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.ToEnd))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+        Check(parser, CommentsGrammars.TryParseToEnd, CommentsGrammars.TryParseToEnd, text);
+    }
+
+    [Theory]
+    [InlineData("a /* b", "a|/|*|b")]
+    [InlineData("a /* b */ c", "a|c")]
+    [InlineData("/*", "/|*")]
+    public void Unterminated_Comments_Which_Are_Not_Comments_Are_Not_Reported(string text, string expected)
+    {
+        Assert.True(CommentsGrammars.TryParseNotACommentDiagnostics(text, out var value, out var errors));
+        Assert.Equal(expected, value);
+        Assert.Empty(errors);
+    }
+
     [Fact]
     public void Unterminated_Comments_Fail()
     {
@@ -174,6 +224,12 @@ public static partial class CommentsGrammars
     public static partial bool TryParseSql(TextReader reader, out string value);
     public static partial bool TryParseCommentsOnly(string text, out string value);
     public static partial bool TryParseCommentsOnly(TextReader reader, out string value);
+    public static partial bool TryParseNotAComment(string text, out string value);
+    public static partial bool TryParseNotAComment(TextReader reader, out string value);
+    public static partial bool TryParseToEnd(string text, out string value);
+    public static partial bool TryParseToEnd(TextReader reader, out string value);
+    public static partial bool TryParseNotACommentDiagnostics(string text, out string value,
+        out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseDiagnostics(string text, out string value,
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
 }

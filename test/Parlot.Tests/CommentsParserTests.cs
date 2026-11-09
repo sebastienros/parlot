@@ -27,8 +27,16 @@ public class CommentsParserTests
     // A single line comment which starts like a multi line one, added first: it wins, as in the choice
     private static readonly Action<CommentsBuilder> _prefixes = static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("/").WithMultiLine("/*", "*/");
 
+    // An unterminated multi line comment which is not one, then the comments added after it can start there
+    private static readonly Action<CommentsBuilder> _notAComment = static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithSingleLine("/").WithSingleLine("#");
+
+    // An unterminated multi line comment which runs to the end of the text
+    private static readonly Action<CommentsBuilder> _toEnd = static c => c.WithWhiteSpace().WithSingleLine("#").WithMultiLine("/*", "*/", UnterminatedComment.ToEnd).WithMultiLine("(*", "*)", UnterminatedComment.ToEnd);
+
     private static readonly Dictionary<string, (Action<CommentsBuilder> Comments, Parser<TextSpan> Composed)> _builders = new()
     {
+        ["not-a-comment"] = (_notAComment, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Capture(Literals.Text("/*").And(AnyCharBefore(Literals.Text("*/"), canBeEmpty: true, failOnEof: true, consumeDelimiter: true))), Literals.Comments("/"), Literals.Comments("#"))))),
+        ["to-end"] = (_toEnd, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(), Literals.Comments("#"), Capture(Literals.Text("/*").And(AnyCharBefore(Literals.Text("*/"), canBeEmpty: true, failOnEof: false, consumeDelimiter: true))), Capture(Literals.Text("(*").And(AnyCharBefore(Literals.Text("*)"), canBeEmpty: true, failOnEof: false, consumeDelimiter: true))))))),
         ["javascript"] = (_javaScript, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/"))))),
         ["sql"] = (_sql, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(), Literals.Comments("--"), Literals.Comments("#"), Literals.Comments("/*", "*/"))))),
         ["comments-only"] = (_commentsOnly, Capture(ZeroOrMany(OneOf(Literals.Comments("#"), Literals.Comments("(*", "*)"))))),
@@ -142,6 +150,99 @@ public class CommentsParserTests
 
         Assert.Equal("End-of-file found, '*/' expected", exception.Message);
         Assert.Equal(new TextPosition(5, 2, 4), exception.Position);
+    }
+
+    [Theory]
+    [InlineData("a /* b */ c", "a|c")]
+    [InlineData("a /* b", "a|/|*|b")]
+    [InlineData("a/*", "a|/|*")]
+    [InlineData("/**/ a /* b", "a|/|*|b")]
+    [InlineData("a /* b /**/ c", "a|c")]
+    public void ShouldReadUnterminatedMultiLineCommentsAsText(string text, string expected)
+    {
+        // xmSQL, as its ANTLR lexer: an unclosed "/*" is a '/' token and a '*' token
+        var parser = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment));
+
+        Assert.Equal(expected, string.Join("|", parser.Parse(text)!));
+
+        var context = new ParseContext(new Scanner(text)) { CollectDiagnostics = true };
+        ParseResult<IReadOnlyList<TextSpan>> result = default;
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(expected, string.Join("|", result.Value));
+        Assert.Empty(context.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("/* a")]
+    [InlineData("/*")]
+    public void ShouldFailWithoutMovingTheCursorOnAnUnterminatedCommentWhichIsNotOne(string text)
+    {
+        var parser = Build(static c => c.WithWhiteSpace().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment));
+        var context = new ParseContext(new Scanner(text));
+        ParseResult<TextSpan> result = default;
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+
+        // The white space before it is skipped
+        context = new ParseContext(new Scanner("  " + text));
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal("  ", result.Value.ToString());
+        Assert.Equal(2, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("a /* b */ c", "a|c")]
+    [InlineData("a /* b", "a")]
+    [InlineData("a /* b\n c", "a")]
+    [InlineData("a /*", "a")]
+    public void ShouldSkipUnterminatedMultiLineCommentsToTheEnd(string text, string expected)
+    {
+        // Eof() doesn't skip white space: an empty skipped parser does
+        var parser = _identifiers.AndSkip(SkipWhiteSpace(Always())).Eof().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.ToEnd));
+
+        Assert.Equal(expected, string.Join("|", parser.Parse(text)!));
+
+        var context = new ParseContext(new Scanner(text)) { CollectDiagnostics = true };
+        ParseResult<IReadOnlyList<TextSpan>> result = default;
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Empty(context.Diagnostics);
+        Assert.Equal(text.Length, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ShouldThrowOnUnterminatedMultiLineCommentsByDefault()
+    {
+        var parser = Terms.Text("a").And(Terms.Text("b")).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.Throw));
+
+        var exception = Assert.Throws<ParseException>(() => parser.Parse("a\n /* b"));
+
+        Assert.Equal("End-of-file found, '*/' expected", exception.Message);
+        Assert.Equal(new TextPosition(5, 2, 4), exception.Position);
+    }
+
+    [Fact]
+    public void ShouldRejectAnUnknownUnterminatedComment()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new CommentsBuilder().WithMultiLine("/*", "*/", (UnterminatedComment)3));
+    }
+
+    [Theory]
+    [InlineData(UnterminatedComment.NotAComment, "a /* b", false)]
+    [InlineData(UnterminatedComment.ToEnd, "a /* b", true)]
+    [InlineData(UnterminatedComment.NotAComment, "a /* b */", true)]
+    public void ShouldComposeUnterminatedComments(UnterminatedComment unterminated, string text, bool expected)
+    {
+        // An empty end, or a parser added with WithParser(), composes the parsers of the elements
+        var builder = new CommentsBuilder().WithWhiteSpace().WithMultiLine("/*", "*/", unterminated).WithParser(Capture(Literals.Text("...")));
+        var parser = builder.Build();
+
+        Assert.IsNotType<CommentsParser>(parser);
+        Assert.Equal(expected, _identifiers.AndSkip(SkipWhiteSpace(Always())).Eof().WithWhiteSpaceParser(parser).TryParse(text, out _));
     }
 
     [Fact]

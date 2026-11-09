@@ -163,12 +163,29 @@ public class CommentsBuilder
     /// comment without its end throws a <see cref="ParseException"/>, or reports an error when the diagnostics are collected.
     /// </summary>
     public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd)
+        => WithMultiLine(multiLineStart, multiLineEnd, UnterminatedComment.Throw);
+
+    /// <summary>
+    /// Skips multi line comments, from <paramref name="multiLineStart"/> to <paramref name="multiLineEnd"/> included.
+    /// </summary>
+    /// <param name="multiLineStart">The text which starts a comment.</param>
+    /// <param name="multiLineEnd">The text which ends a comment.</param>
+    /// <param name="unterminated">What a comment without its end is: an error, not a comment, or a comment running to the
+    /// end of the text.</param>
+    public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated)
     {
         ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
         ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
 
-        _parsers.Add(Literals.Comments(multiLineStart, multiLineEnd));
-        AddComment(new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null));
+        if (unterminated is not (UnterminatedComment.Throw or UnterminatedComment.NotAComment or UnterminatedComment.ToEnd))
+        {
+            throw new ArgumentOutOfRangeException(nameof(unterminated));
+        }
+
+        _parsers.Add(unterminated == UnterminatedComment.Throw
+            ? Literals.Comments(multiLineStart, multiLineEnd)
+            : Capture(Literals.Text(multiLineStart).And(AnyCharBefore(Literals.Text(multiLineEnd), canBeEmpty: true, failOnEof: unterminated == UnterminatedComment.NotAComment, consumeDelimiter: true))));
+        AddComment(new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null, unterminated));
         return this;
     }
 

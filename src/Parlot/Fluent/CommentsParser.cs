@@ -123,6 +123,19 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 return true;
             }
 
+            if (comment.Unterminated == UnterminatedComment.ToEnd)
+            {
+                cursor.Advance(cursor.Span.Length);
+                return true;
+            }
+
+            if (comment.Unterminated == UnterminatedComment.NotAComment)
+            {
+                // The comments added after this one can start here
+                cursor.ResetPosition(commentStart);
+                continue;
+            }
+
             // The error of Literals.Comments(start, end), after the start of the comment
             if (!context.CollectDiagnostics)
             {
@@ -206,8 +219,9 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 else
                 {
                     var commentStartName = $"commentStart{context.NextNumber()}";
+                    var throws = comment.Unterminated == UnterminatedComment.Throw;
 
-                    if (context.CollectDiagnostics)
+                    if (comment.Unterminated == UnterminatedComment.NotAComment || throws && context.CollectDiagnostics)
                     {
                         result.Body.Add($"            var {commentStartName} = {cursorName}.Offset;");
                     }
@@ -217,11 +231,24 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                     result.Body.Add("                continue;");
                     result.Body.Add("            }");
 
-                    ErrorSource.AddReport(result, context, comment.Message!, $"{cursorName}.Position", "            ", context.CollectDiagnostics ? commentStartName : null);
-
-                    if (context.CollectDiagnostics)
+                    if (comment.Unterminated == UnterminatedComment.ToEnd)
                     {
-                        result.Body.Add("            break;");
+                        result.Body.Add($"            {cursorName}.Advance({cursorName}.Span.Length);");
+                        result.Body.Add("            continue;");
+                    }
+                    else if (comment.Unterminated == UnterminatedComment.NotAComment)
+                    {
+                        // The comments added after this one can start here
+                        result.Body.Add($"            {cursorName}.ResetPosition({commentStartName});");
+                    }
+                    else
+                    {
+                        ErrorSource.AddReport(result, context, comment.Message!, $"{cursorName}.Position", "            ", context.CollectDiagnostics ? commentStartName : null);
+
+                        if (context.CollectDiagnostics)
+                        {
+                            result.Body.Add("            break;");
+                        }
                     }
                 }
 
@@ -253,17 +280,21 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     // A comment of the builder: a multi line comment has an end, a single line comment can have line terminators
     internal sealed class CommentSyntax
     {
-        public CommentSyntax(string start, string? end, string? lineTerminators)
+        public CommentSyntax(string start, string? end, string? lineTerminators, UnterminatedComment unterminated = UnterminatedComment.Throw)
         {
             Start = start;
             End = end;
             LineTerminators = lineTerminators;
+            Unterminated = unterminated;
             Message = end is null ? null : $"End-of-file found, '{end}' expected";
         }
 
         public string Start { get; }
 
         public string? End { get; }
+
+        // What a multi line comment without its end is
+        public UnterminatedComment Unterminated { get; }
 
         // null: "\r\n" or "\n", as Literals.Comments(start)
         public string? LineTerminators { get; }

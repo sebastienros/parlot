@@ -1773,6 +1773,7 @@ parser.Parse("hello /* multiline\n comment\n */ world");
 | `WithSingleLine(start)` | from `start` to the end of the line, before `"\r\n"` or `"\n"`, or to the end of the text |
 | `WithSingleLine(start, lineTerminators)` | from `start` to the first of the chars of `lineTerminators`, or to the end of the text |
 | `WithMultiLine(start, end)` | from `start` to `end` included |
+| `WithMultiLine(start, end, unterminated)` | from `start` to `end` included, and a comment without its end as `unterminated` says |
 | `WithParser(parser)` | what `parser` matches |
 
 Without white space, only the comments are skipped. The line terminators are not part of a single line comment: they are
@@ -1788,6 +1789,23 @@ var parser = grammar.WithComments(builder => builder
 
 A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
 start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, in which case the comment is not skipped.
+`WithMultiLine(start, end, unterminated)` chooses another behavior with `UnterminatedComment`:
+
+| `UnterminatedComment` | A comment without its end |
+|---|---|
+| `Throw` | throws, or reports an error when the diagnostics are collected, as `WithMultiLine(start, end)` |
+| `NotAComment` | is not a comment: it is not skipped, without an error, and the comments added after it can start there |
+| `ToEnd` | runs to the end of the text |
+
+In xmSQL, as in the ANTLR lexer its grammar ports, an unclosed `/*` is a `/` token and a `*` token:
+
+```c#
+var tokens = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+    .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment));
+
+tokens.Parse("a /* b */ c"); // a, c
+tokens.Parse("a /* b");      // a, /, *, b
+```
 
 The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each
 token, a `Terms` parser invokes that parser only, which reads the text directly. Its `ISeekable` hints are the chars of the
