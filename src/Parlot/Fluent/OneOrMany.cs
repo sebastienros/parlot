@@ -13,6 +13,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
     // Whether the elements are parsed without their value when the list isn't built
     private readonly bool _withoutValue;
 
+    // Whether the parser can start at the current position, so the loop stops without invoking it when it can't
+    private readonly SeekGuard _guard;
+
     public OneOrMany(Parser<T> parser) : this(parser, 0)
     {
     }
@@ -24,6 +27,7 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         ThrowHelper.ThrowIfNegative(max, nameof(max));
         _max = max;
         _withoutValue = parser.CanParseWithoutValue;
+        _guard = new SeekGuard(parser);
     }
 
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
@@ -71,7 +75,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
             while (_max == 0 || results.Count < _max)
             {
                 previousOffset = context.Scanner.Cursor.Offset;
-                if (!_parser.Parse(context, ref parsed)
+                if (!_guard.CanStart(context)
+                    || !_parser.Parse(context, ref parsed)
                     || context.Scanner.Cursor.Offset == previousOffset)
                 {
                     break;
@@ -122,7 +127,8 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         while (_max == 0 || count < _max)
         {
             previousOffset = context.Scanner.Cursor.Offset;
-            if (!(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
+            if (!_guard.CanStart(context)
+                || !(_withoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed))
                 || context.Scanner.Cursor.Offset == previousOffset)
             {
                 break;
@@ -165,6 +171,9 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
         var helperName = context.Helpers
             .GetOrCreate(sourceable, $"{context.MethodNamePrefix}_OneOrMany_Parser", elementTypeName, () => sourceable.GenerateSource(context))
             .MethodName;
+
+        // An element isn't parsed when it can't start at the current position
+        helperName = SeekGuard.GetHelper(context, _parser, helperName, typeof(T));
 
         if (!context.DiscardResult && !context.IsCompacting)
         {

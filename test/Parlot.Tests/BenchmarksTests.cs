@@ -52,6 +52,18 @@ public class BenchmarksTests
         benchmark.Setup();
         Assert.Equal(-64.5m, benchmark.Expression_Spaces().Evaluate());
         Assert.Equal(-64.5m, benchmark.Expression_Comments().Evaluate());
+        Assert.Equal(64, ((Tests.Json.JsonArray)benchmark.Json_WithComments()).Elements.Count);
+        Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_Comments().ToString());
+    }
+
+    [Fact]
+    public void PeekGrammars()
+    {
+        var benchmark = new LookaheadBenchmarks();
+        Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Runtime());
+        Assert.Equal(150, benchmark.Peek_Runtime());
+        Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Generated());
+        Assert.Equal(150, benchmark.Peek_Generated());
     }
 
     [Fact]
@@ -103,6 +115,18 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmark.RuntimeWrappedOneOf());
         Assert.Equal(expected, benchmark.GeneratedWrappedPrefixDispatch());
         Assert.Equal(expected, benchmark.GeneratedWrappedFirstCharacterLookup());
+    }
+
+    [Fact]
+    public void SeekGuardGrammars()
+    {
+        // The setup checks every grammar
+        var benchmark = new SeekGuardBenchmarks();
+        benchmark.Setup();
+        Assert.Equal(225, benchmark.Optional());
+        Assert.Equal(225, benchmark.Workaround());
+        Assert.Equal(200, benchmark.Loop());
+        Assert.Equal(600, benchmark.SeparatedList());
     }
 
     [Fact]
@@ -167,6 +191,19 @@ public class BenchmarksTests
         benchmark.Setup();
         Assert.Equal(expected, benchmark.FoldRuntime());
         Assert.Equal(expected, benchmark.TableGenerated());
+    }
+
+    [Theory]
+    [InlineData("Atom", 1)]
+    [InlineData("Arguments", 14)]
+    [InlineData("Mixed", 1652203732534)]
+    public void ValuedLevelsGrammar(string input, long expected)
+    {
+        // The setup checks every parser against the runtime one with a factory per operator
+        var benchmark = new ValuedLevelsBenchmarks { Input = input };
+        benchmark.Setup();
+        Assert.Equal(expected, benchmark.PerOperatorRuntime());
+        Assert.Equal(expected, benchmark.ValuedGenerated());
     }
 
     [Theory]
@@ -340,6 +377,18 @@ public class BenchmarksTests
 
         Assert.Equal(success, benchmarks.Lookup());
         Assert.Equal(success, benchmarks.Lookup());
+    }
+
+    [Fact]
+    public void CodePointIdentifierBenchmarks()
+    {
+        var benchmarks = new CodePointIdentifierBenchmarks();
+
+        Assert.Equal(2000, benchmarks.Default());
+        Assert.Equal(2000, benchmarks.CharPredicates());
+        Assert.Equal(2000, benchmarks.CodePoints());
+        Assert.Equal(2000, benchmarks.JavaScript());
+        Assert.Equal(2000, benchmarks.JavaScriptEscapesAndAstralChars());
     }
 
     [Fact]

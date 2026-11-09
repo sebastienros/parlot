@@ -76,6 +76,10 @@ public static partial class FailureGrammars
     public static Parser<string> BuildFollowed() =>
         Terms.Identifier().WhenFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char('x')).Eof();
 
+    [GenerateParser(nameof(Peeked))]
+    public static Parser<string> BuildPeeked() =>
+        Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
+
     [GenerateParser(nameof(Negative))]
     public static Parser<string> BuildNegative() =>
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
