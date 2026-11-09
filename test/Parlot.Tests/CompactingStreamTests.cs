@@ -270,10 +270,16 @@ public class CompactingStreamTests
         Assert.Throws<InvalidOperationException>(() => Terms.Char('a').Parse(new ChunkedReader("a", 1), options));
     }
 
-    [Fact]
-    public void CustomWhiteSpaceParsersAreTokens()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CustomWhiteSpaceParsersAreTokens(bool hints)
     {
-        var parser = ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+        // With its hints, the white space parser isn't invoked before the identifiers. Without them, as when it can start with
+        // any char, it is.
+        var parser = hints
+            ? ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))
+            : ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/").WithParser(Literals.Pattern(static c => c == '\u0001')));
         var text = string.Join(" /* a comment */ ", Enumerable.Range(0, 100).Select(static i => "id" + i)) + " // end";
 
         var (options, peak) = Observe(new StreamParseOptions { BufferSize = 2 });

@@ -1330,6 +1330,18 @@ outer.Parse("a.b-c");  // Inner uses '.', outer uses '-' as whitespace
 
 > Note: The custom whitespace parser must return a `TextSpan`. Use `Capture()` to wrap parsers that don't return `TextSpan`.
 
+The parsers that skip white space invoke the custom parser only before the chars it can start with, which it tells with its
+`ISeekable` hints, and at the end of the text, where a stream tells whether more text follows. Before a `.`, a `(` or an
+identifier, a parser of white space and comments isn't invoked at all. A parser that can succeed without reading anything has no
+hints, but `Capture`, `ZeroOrMany`, `ZeroOrOne` and `Optional` are looked through: `Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(),
+Literals.Comments("//"))))`, the parser `WithComments` builds, is invoked only before white space and `/`. A parser that can start
+with any char (one of the alternatives of its choice doesn't tell its chars, like `Literals.Pattern()`), or skips white space
+itself, is invoked before every token. The same applies to `ParseContext.WhiteSpaceParser`.
+
+Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
+grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still
+invokes it before each token.
+
 ### WithWhiteSpaceSet
 
 Selects the chars that are white space for the inner parser, then restores the previous set. It applies to every `Terms` parser,
@@ -1392,7 +1404,8 @@ New lines follow `UseNewLines` as with the default set: when it is `true` the `T
 `Literals.WhiteSpace(includeNewLines: true)` and `NonWhiteSpace(includeNewLines: true)` include the new lines of the set.
 
 Unlike a `WithWhiteSpaceParser` that would match the same chars, a set keeps the white space fast path: skipping is still one
-table lookup per char, and `OneOf` still skips white space once for all its alternatives. A `WhiteSpaceParser`, when one is set,
+table lookup per char, and `OneOf` still skips white space once for all its alternatives. A white space parser is only invoked
+before the chars it can start with, but each invocation costs more than a table lookup. A `WhiteSpaceParser`, when one is set,
 is used instead of the set to skip white space, but the `Literals.WhiteSpace()` it contains reads the set. To skip ASCII white
 space and comments:
 
@@ -1442,6 +1455,10 @@ parser.Parse("hello -- comment\r\n world");
 parser.Parse("hello # comment\n world");
 parser.Parse("hello /* multiline\n comment\n */ world");
 ```
+
+The parser of the comments is only invoked before white space and the chars the comments start with. On the JSON of
+`CommentsBenchmarks`, indented with spaces and new lines, `WithComments` adds 30% to the parse time of the default white space
+set, down from 54% to 70% when it was invoked before every token.
 
 ### Deferred
 

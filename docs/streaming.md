@@ -53,7 +53,9 @@ In compacting mode they run through `ParseContext.ParseToken`:
 
 Only the token is parsed again, never the value. A token is small compared to the input, so this costs about nothing.
 Between tokens the cursor is never at the end of a non-final window: white space is skipped incrementally, refilling as
-needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, runs as a token.
+needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, runs as a token. It isn't invoked before a
+char it can't start with (see [WithWhiteSpaceParser](parsers.md#withwhitespaceparser)), but it always is at the end of the
+buffer, the NUL of `Cursor.Current`, to refill it.
 
 ### Backtrack floor and pins
 

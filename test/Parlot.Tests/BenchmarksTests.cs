@@ -52,6 +52,8 @@ public class BenchmarksTests
         benchmark.Setup();
         Assert.Equal(-64.5m, benchmark.Expression_Spaces().Evaluate());
         Assert.Equal(-64.5m, benchmark.Expression_Comments().Evaluate());
+        Assert.Equal(64, ((Tests.Json.JsonArray)benchmark.Json_WithComments()).Elements.Count);
+        Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_Comments().ToString());
     }
 
     [Fact]
