@@ -519,7 +519,7 @@ public class FurthestFailureTests
         // the end of the buffer isn't a failure
         var comment = Terms.Char('>').SkipAnd(Terms.Comments("/*", "*/").When(static (_, _) => false)).Eof();
         var quoted = Terms.Char('>').SkipAnd(Terms.String().When(static (_, _) => false)).Eof();
-        var parser = text.Contains('/') ? comment.Then(static _ => 0) : quoted.Then(static _ => 0);
+        var parser = text.IndexOf('/') >= 0 ? comment.Then(static _ => 0) : quoted.Then(static _ => 0);
 
         for (var bufferSize = 1; bufferSize <= 8; bufferSize++)
         {
