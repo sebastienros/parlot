@@ -324,6 +324,11 @@ first bad token is:
 - The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
+- The delimiter of `AnyCharBefore` is a lookahead too: what it reads where it isn't found in the text doesn't count, nor
+  the delimiter which is found unless it is consumed. The text ends before it, where what follows is expected, and a
+  text which is empty and can't be fails where it starts, at the delimiter.
+- Neither does the white space skipped to look for an operator of `Operators()` whose value is passed to the factory: an
+  expression which is rejected fails at its start, like with the other operators.
 
 To also tell input nested too deeply from other failures, add a last `bool` to the tuple, as in
 `out (int Offset, bool NestedTooDeeply)` or `out (int Offset, int Line, int Column, bool NestedTooDeeply)`:
@@ -359,7 +364,8 @@ benchmark document, returning the failure doesn't change the time of a parse, su
 rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and restores it, one load
 and one store around the lookahead, as `Longest` does around the move back from an alternative which matched. A
 `TextReader` overload returns the same failure as the `string` one: the buffer only drops text before positions the
-parse read later.
+parse read later, and a token which is read again with more text, like the text of `AnyCharBefore` whose delimiter the
+buffer ends in, forgets the failures recorded at the end of the buffer.
 
 ### Cancellation
 

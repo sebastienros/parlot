@@ -395,6 +395,229 @@ public class FailureTests
         Assert.Equal(default, failure);
     }
 
+    [Theory]
+    [InlineData(">from;;!", 1)]
+    [InlineData("  >from;;!", 3)]
+    [InlineData("\n>from;;!", 2)]
+    public void Rejected_Text_Before_A_Delimiter_Fails_At_Its_Start(string text, int offset)
+    {
+        // The delimiter is found and not consumed: the cursor is moved back from a delimiter which matched, not a failure
+        // where it ended
+        Assert.False(FailureGrammars.RejectedTextBefore(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBefore(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedTextBefore(">a word;;  !", out var value, out failureOffset));
+        Assert.Equal("a word", value);
+        Assert.Equal(0, failureOffset);
+
+        // A delimiter which skips white space isn't searched for by its first char
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedTextBeforeTerm(">a word  ;;  !", out value, out failureOffset));
+        Assert.Equal("a word", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData(">from ;;!", 1)]
+    [InlineData("  >from  ;;!", 3)]
+    [InlineData(">from\n;;\n!", 1)]
+    // The delimiter is looked for after each white space of the text, which isn't a failure either
+    [InlineData(">from here to there ;;!", 1)]
+    [InlineData("  >from  here ; to\nthere;;!", 3)]
+    public void Rejected_Text_Before_A_Delimiter_After_White_Space_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData(">from;;cd?")]
+    [InlineData(">from;;  cd ?")]
+    [InlineData(">from;;?")]
+    [InlineData(">from;;")]
+    public void Delimiter_Which_Isnt_Consumed_Is_A_Lookahead(string text)
+    {
+        // The first alternative of the delimiter reads further than the one which matches, which says nothing about the
+        // text: the value fails at its start, like one followed by WhenFollowedBy
+        Assert.False(FailureGrammars.RejectedTextBeforeChoice(text, out _, out var failureOffset));
+        Assert.Equal(1, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeChoice(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal((1, 1, 2), failure);
+
+        Assert.True(FailureGrammars.RejectedTextBeforeChoice(">a word;;", out var value, out failureOffset));
+        Assert.Equal("a word", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    // The value is rejected: the delimiter read the `;` of the text, where it wasn't found
+    [InlineData(">from;;!", 1)]
+    [InlineData(">from a; b ; c ;;!", 1)]
+    [InlineData("\n >from ;\n;;!", 3)]
+    // What follows the delimiter isn't found
+    [InlineData(">a; b ;;?", 8)]
+    [InlineData(">a; b ; ; ?", 10)]
+    // The delimiter isn't found: the text ends with the input
+    [InlineData(">a; b ;", 7)]
+    public void Delimiter_Looked_For_In_A_Text_Isnt_A_Failure(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedTextBeforeConsumed(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeConsumed(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedTextBeforeConsumed(">a; word ;; !", out var value, out failureOffset));
+        Assert.Equal("a; word", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData(4091)]
+    [InlineData(4092)]
+    [InlineData(4093)]
+    [InlineData(8189)]
+    public void Rejected_Text_Read_Again_With_More_Text_Fails_At_Its_Start(int length)
+    {
+        // The buffer of the reader, of 4096 chars, ends in or after the white space the delimiter skips: the delimiter isn't
+        // found there, and the text is read again with more text. What was read up to then isn't a failure.
+        var text = ">from" + new string('a', length - 5) + "  ;;!";
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(text, out _, out var failureOffset));
+        Assert.Equal(1, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(new StringReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal((1, 1, 2), failure);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(new OneCharReader(text), out _, out failure));
+        Assert.Equal((1, 1, 2), failure);
+
+        // The start of the text is still buffered when the failure is returned, on another line than the delimiter
+        text = "\n\n >from" + new string('a', length - 9) + "\n\n;;!";
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(new StringReader(text), out _, out failure));
+        Assert.Equal((4, 3, 3), failure);
+    }
+
+    [Theory]
+    // The delimiter is where a text is expected
+    [InlineData(">;;!", 1)]
+    [InlineData("  >;;!", 3)]
+    // What follows the delimiter isn't found
+    [InlineData(">word;;?", 7)]
+    [InlineData(">word;; ?", 8)]
+    // The delimiter isn't found: the text ends with the input, where the delimiter is expected
+    [InlineData(">word;", 6)]
+    [InlineData(">word", 5)]
+    public void Text_Before_A_Delimiter_Reports_The_Furthest_Failure(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedTextBefore(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBefore(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedTextBeforeTerm(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    // The delimiter is where a text is expected
+    [InlineData(">;;!", 1)]
+    [InlineData("  >;;!", 3)]
+    [InlineData(">ab;;?", 5)]
+    [InlineData(">ab;;  ?", 7)]
+    // The delimiter isn't found, and the text ends with the input
+    [InlineData(">ab;", 4)]
+    public void Text_Before_A_Consumed_Delimiter_Reports_The_Furthest_Failure(string text, int offset)
+    {
+        Assert.False(FailureGrammars.TextBeforeConsumed(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.TextBeforeConsumed(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.TextBeforeConsumed(">ab;; !", out var value, out failureOffset));
+        Assert.Equal("ab", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;?", 3)]
+    [InlineData("  >a;b;;", 6)]
+    [InlineData(">;;?", 1)]
+    [InlineData(">ab;", 4)]
+    public void Parser_After_A_Text_Before_A_Delimiter_Fails_Where_It_Starts(string text, int offset)
+    {
+        // The text ends before the delimiter, where the next parser is expected: the delimiter was only looked for
+        Assert.False(FailureGrammars.TextBeforeThenOther(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.TextBeforeThenOther(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.TextBeforeThenOther(">ab;;!", out var value, out failureOffset));
+        Assert.Equal("ab", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData(">ab;", 4)]
+    [InlineData(">ab", 3)]
+    [InlineData(">", 1)]
+    [InlineData("  >a;b;c", 8)]
+    public void Delimiter_Which_Isnt_Found_Fails_At_The_End(string text, int offset)
+    {
+        Assert.False(FailureGrammars.TextBeforeRequired(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.TextBeforeRequired(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.TextBeforeRequired(">a;b;;", out var value, out failureOffset));
+        Assert.Equal("a;b", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    // The value is rejected
+    [InlineData(">1 + 2;", 1)]
+    [InlineData("  >  1  +  2;", 5)]
+    [InlineData(">1 * 5 - 2;", 1)]
+    [InlineData(">3;", 1)]
+    // An operand, or what follows the expression, isn't found
+    [InlineData(">1 + 3 ?", 7)]
+    [InlineData(">1 +", 4)]
+    [InlineData(">1  +  x", 7)]
+    [InlineData(">1 * 2 + ", 9)]
+    public void Rejected_Expression_Of_Valued_Operators_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedValuedOperators(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedValuedOperators(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedValuedOperators(">1 + 2 * 3 ;", out var value, out failureOffset));
+        Assert.Equal(7, value);
+        Assert.Equal(0, failureOffset);
+    }
+
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible
     private sealed class OneCharReader : TextReader
     {
