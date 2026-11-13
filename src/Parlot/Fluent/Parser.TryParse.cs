@@ -83,7 +83,8 @@ public abstract partial class Parser<T>
             error = new ParseError
             {
                 Message = e.Message,
-                Position = e.Position
+                Position = e.Position,
+                IsNestedTooDeeply = e.IsNestedTooDeeply
             };
         }
         catch (OperationCanceledException e)

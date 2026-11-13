@@ -20,6 +20,11 @@ public class ParseExceptionTests
         return EmbeddedType.GetProperty("Position")!.GetValue(exception)!;
     }
 
+    private static bool IsNestedTooDeeply(Exception exception)
+    {
+        return (bool)EmbeddedType.GetProperty("IsNestedTooDeeply")!.GetValue(exception)!;
+    }
+
     [Fact]
     public void EmbeddedParseExceptionShouldHaveTheStandardExceptionConstructors()
     {
@@ -65,6 +70,23 @@ public class ParseExceptionTests
         Assert.IsType(EmbeddedType, copy);
         Assert.Equal("message", copy.Message);
         Assert.Null(copy.InnerException);
+        Assert.Equal(position, Position(copy));
+        Assert.False(IsNestedTooDeeply(copy));
+    }
+
+    [Fact]
+    public void EmbeddedParseExceptionShouldSerializeWhetherTheInputIsNestedTooDeeply()
+    {
+        var position = Activator.CreateInstance(PositionType, 4, 2, 3)!;
+        var exception = Create("message", position);
+
+        // What the context sets when it throws for the recursion limit or the stack of the thread
+        EmbeddedType.GetProperty("IsNestedTooDeeply")!.SetValue(exception, true);
+
+        var copy = RoundTrip(exception);
+
+        Assert.True(IsNestedTooDeeply(exception));
+        Assert.True(IsNestedTooDeeply(copy));
         Assert.Equal(position, Position(copy));
     }
 

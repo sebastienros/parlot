@@ -46,7 +46,8 @@ sealed class GenerateParserAttribute : System.Attribute
     /// Like <c>ParseContext.MaxRecursionDepth</c> at runtime, each entry into a <c>Deferred</c> or <c>Recursive</c> parser and
     /// each prefix operator of <c>Unary</c> or <c>Operators()</c> counts as one level. A parse that exceeds it fails as a whole:
     /// the entry point returns <c>false</c>. Without a limit, input nested too deeply for the remaining stack fails the same way
-    /// instead of overflowing the stack.
+    /// instead of overflowing the stack. An overload ending with <c>out (int Offset, bool NestedTooDeeply)</c> or
+    /// <c>out (int Offset, int Line, int Column, bool NestedTooDeeply)</c> tells both from other failures.
     /// </remarks>
     public int MaxRecursionDepth { get; set; }
 }
