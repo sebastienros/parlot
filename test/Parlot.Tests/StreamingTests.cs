@@ -924,6 +924,267 @@ public class StreamingTests
         }
     }
 
+    // The white space parsers of ParseManyAsyncWindowsDontChangeTheResult: every way a comment can depend on the text after a window
+    private static readonly Dictionary<string, Parser<TextSpan>> WindowedWhiteSpace = new()
+    {
+        ["throw"] = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/").Build(),
+        ["not-a-comment"] = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).Build(),
+        ["to-end"] = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/", UnterminatedComment.ToEnd).Build(),
+        ["terminators"] = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028").WithMultiLine("<!--", "-->").Build(),
+        ["comments-only"] = new CommentsBuilder().WithSingleLine("//").WithMultiLine("/*", "*/").Build(),
+        ["literals"] = Capture(OneOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/")))),
+    };
+
+    public static TheoryData<string, string> WindowedWhiteSpaceCases()
+    {
+        var data = new TheoryData<string, string>();
+
+        string[] texts =
+        [
+            "", "a", " a ", "a /* b */ c", "a /* b", "a /*", "a /", "a / b", "a * b", "/*/ a", "/**/", "/* a */ b /* c\n d */ e /**/", "a/*b*//*c*/d", "a /* b * / c */ d",
+            "a // b\n c", "a // b\r\n c", "a // b\r c", "a // b", "a //", "// only", "a\r\n//\r\n\r\nb", "a\n b /*", "a /* b */\n /* c *", "a // b\u2028c /* d */ e",
+            "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <!--", "a <",
+            "a /* b */ , /* c */ d /* e */", "a /* b */ , /* c */ d , /* e */", "a /* b */ , /* c", "a , // b\n , c", "a /* b */ /* c */ , d // e", "a , , b", "a b", "a\n,\n/*\n*/\n,",
+            // Comments far longer than the first windows, and their ends cut by a window
+            "a /*" + new string('x', 300) + "*/ b //" + new string('y', 200) + "\r\n c /*" + new string('z', 100),
+            string.Join(" /* " + new string('-', 40) + " */\n", Enumerable.Range(0, 20).Select(static i => "id" + i)) + " // end",
+        ];
+
+        foreach (var whiteSpace in WindowedWhiteSpace.Keys)
+        {
+            foreach (var text in texts)
+            {
+                data.Add(whiteSpace, text);
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(WindowedWhiteSpaceCases))]
+    public async Task ParseManyAsyncWindowsDontChangeTheResult(string whiteSpace, string text)
+    {
+        // The items and the error of a stream are the ones of a single window holding the whole text, wherever the windows
+        // end: in a comment, in one of its delimiters, or before the char which tells that a comment doesn't start
+        var comments = WindowedWhiteSpace[whiteSpace];
+        var item = OneOf(Terms.Identifier(), Terms.AnyOf("/*<!-", maxSize: 1));
+        var random = new Random(text.Length * 31 + whiteSpace.Length);
+
+        foreach (var separated in new[] { false, true })
+        {
+            var expected = await ParseAsync(() => int.MaxValue, text.Length + 1);
+
+            // The whole text agrees when it parses
+            var whole = (separated ? Separated(Terms.Char(','), item).AndSkip(Terms.Char(',').Optional()) : ZeroOrMany(item)).Eof();
+
+            if (TryParseWhole(out var values))
+            {
+                Assert.Equal(string.Join("|", values!.Select(static s => s.ToString())) + "|", expected);
+            }
+
+            (Func<int> Chunk, int BufferSize)[] configurations =
+            [
+                (() => 1, 1),
+                (() => 1, 4096),
+                (() => 3, 2),
+                (() => 7, 5),
+                (() => random.Next(1, 6), 1),
+                (() => random.Next(1, 6), 3),
+                (() => int.MaxValue, 1),
+                (() => int.MaxValue, 64),
+            ];
+
+            foreach (var (chunk, bufferSize) in configurations)
+            {
+                var actual = await ParseAsync(chunk, bufferSize);
+
+                Assert.True(expected == actual, $"'{text}' with buffer size {bufferSize}, separated {separated}: expected {expected}, actual {actual}");
+            }
+
+            bool TryParseWhole(out IReadOnlyList<TextSpan>? values)
+            {
+                try
+                {
+                    return whole.TryParse(new ParseContext(new Scanner(text)) { WhiteSpaceParser = comments }, out values, out _);
+                }
+                catch (ParseException)
+                {
+                    values = null;
+                    return false;
+                }
+            }
+
+            async Task<string> ParseAsync(Func<int> chunk, int bufferSize)
+            {
+                var options = new StreamParseOptions
+                {
+                    BufferSize = bufferSize,
+                    ContextFactory = (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments },
+                };
+
+                var reader = new ChunkedReader(text, chunk, yield: false);
+                var items = new List<TextSpan>();
+                var error = "";
+
+                try
+                {
+                    await ToListAsync(separated ? item.ParseManyAsync(reader, Terms.Char(','), options) : item.ParseManyAsync(reader, options), items);
+                }
+                catch (ParseException e)
+                {
+                    error = $"{e.Message} {e.Position.Offset} {e.Position}";
+                }
+
+                return string.Join("|", items.Select(static s => s.ToString())) + "|" + error;
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(UnterminatedComment.Throw, true)]
+    [InlineData(UnterminatedComment.Throw, false)]
+    [InlineData(UnterminatedComment.NotAComment, true)]
+    [InlineData(UnterminatedComment.NotAComment, false)]
+    [InlineData(UnterminatedComment.ToEnd, true)]
+    [InlineData(UnterminatedComment.ToEnd, false)]
+    public async Task ParseManyAsyncReadsACommentFarLongerThanTheWindowOnce(UnterminatedComment unterminated, bool terminated)
+    {
+        // The window doubles until it holds the comment: the retries read a bounded multiple of its text, and the reader
+        // is read once
+        const int Length = 1 << 20;
+
+        var comments = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", unterminated).Build();
+        var text = "a /*" + new string('x', Length) + (terminated ? "*/ b" : "");
+        var windows = 0;
+        var parsed = 0L;
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = 16,
+            ContextFactory = (scanner, ct) =>
+            {
+                windows++;
+                parsed += scanner.Buffer.Length;
+                return new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments };
+            },
+        };
+
+        var reader = new ChunkedReader(text, () => 4096, yield: false);
+        var items = new List<TextSpan>();
+        ParseException? exception = null;
+
+        try
+        {
+            await ToListAsync(Terms.Identifier().ParseManyAsync(reader, options), items);
+        }
+        catch (ParseException e)
+        {
+            exception = e;
+        }
+
+        Assert.Equal(text.Length, reader.Position);
+        Assert.InRange(windows, 1, 24);
+        Assert.InRange(parsed, text.Length, 4L * text.Length);
+
+        if (terminated)
+        {
+            Assert.Null(exception);
+            Assert.Equal(["a", "b"], items.Select(static s => s.ToString()));
+        }
+        else if (unterminated == UnterminatedComment.ToEnd)
+        {
+            Assert.Null(exception);
+            Assert.Equal(["a"], items.Select(static s => s.ToString()));
+        }
+        else
+        {
+            // Decided at the end of the stream only, at its position in the stream
+            Assert.Equal(["a"], items.Select(static s => s.ToString()));
+            Assert.Equal(unterminated == UnterminatedComment.Throw ? "End-of-file found, '*/' expected" : "The input could not be parsed.", exception!.Message);
+            Assert.Equal(new TextPosition(unterminated == UnterminatedComment.Throw ? 4 : 2, 1, unterminated == UnterminatedComment.Throw ? 5 : 3), exception.Position);
+        }
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncDropsCommentsWithTheirItems()
+    {
+        // A window keeps the white space and the comments before the item it retries, not the ones of the items it returned
+        var comments = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/").Build();
+        var text = string.Join(" /* a comment */ // and another\n", Enumerable.Range(0, 1000).Select(static i => "id" + i)) + " // end";
+        var peak = 0;
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = 2,
+            MaxBufferedCharacters = 128,
+            ContextFactory = (scanner, ct) =>
+            {
+                peak = Math.Max(peak, scanner.Buffer.Length);
+                return new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments };
+            },
+        };
+
+        Assert.Equal(1000, (await ToListAsync(Terms.Identifier().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), options))).Count);
+        Assert.InRange(peak, 32, 128);
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncCanBeCanceledInAComment()
+    {
+        using var cts = new CancellationTokenSource();
+
+        var comments = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/").Build();
+        var options = new StreamParseOptions
+        {
+            BufferSize = 4,
+            ContextFactory = (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments },
+        };
+
+        var reader = new ChunkedReader("a /*" + new string('x', 10_000) + "*/ b", () => 16, yield: true) { OnRead = position => { if (position >= 1000) cts.Cancel(); } };
+        var items = new List<TextSpan>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ToListAsync(Terms.Identifier().ParseManyAsync(reader, options, cts.Token), items));
+
+        Assert.Single(items);
+        Assert.InRange(reader.Position, 1000, 2100);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParseManyAsyncKeepsThePositionOfAWhiteSpaceParserException(bool positioned)
+    {
+        // An exception of the white space parser which the end of the window doesn't explain is the one of the whole text:
+        // its position is converted when it has one
+        var whiteSpace = Capture(OneOrMany(OneOf(
+            Literals.WhiteSpace(includeNewLines: true),
+            Literals.Char('#').Then<TextSpan>(positioned
+                ? static (context, _) => throw new ParseException("No comments", context.Scanner.Cursor.Position)
+                : static (context, _) => throw new ParseException("No comments")))));
+
+        foreach (var delimited in new[] { false, true })
+        {
+            var options = new StreamParseOptions
+            {
+                BufferSize = 2,
+                ContextFactory = (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = whiteSpace },
+            };
+
+            var reader = new ChunkedReader("a\nb\nc\n d #x e", () => 1, yield: false);
+            var items = new List<TextSpan>();
+            var parser = Terms.Identifier();
+
+            var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(delimited ? parser.ParseManyAsync(reader, '\n', options) : parser.ParseManyAsync(reader, options), items));
+
+            Assert.Equal("No comments", exception.Message);
+            Assert.Equal(positioned ? new TextPosition(10, 4, 5) : default, exception.Position);
+
+            // The line of the delimited value is parsed to its end before the value is returned
+            Assert.Equal(delimited ? ["a", "b", "c"] : ["a", "b", "c", "d"], items.Select(static s => s.ToString()));
+        }
+    }
+
     [Fact]
     public async Task TextSpansRemainValid()
     {
