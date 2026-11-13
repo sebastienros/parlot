@@ -55,6 +55,13 @@ public partial class ThenTryBenchmarks
     [Benchmark]
     public object? ThenTryTokenRejected() => RuntimeThenTryToken.Parse("  return");
 
+    // A reserved word with no white space before it: it starts where its parser is invoked
+    [Benchmark]
+    public object? WhenThenTokenRejectedAtStart() => RuntimeWhenThenToken.Parse("return");
+
+    [Benchmark]
+    public object? ThenTryTokenRejectedAtStart() => RuntimeThenTryToken.Parse("return");
+
     [Benchmark]
     public object? WhenThenTokenGenerated() => TryParseWhenThenToken("  total", out var value) ? value : null;
 

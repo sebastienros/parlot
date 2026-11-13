@@ -164,6 +164,18 @@ public class BenchmarksTests
         Assert.Equal(1400, benchmark.ThenTry());
         Assert.Equal(1400, benchmark.WhenThenGenerated());
         Assert.Equal(1400, benchmark.ThenTryGenerated());
+
+        // A single identifier, and a reserved word, which is rejected
+        Assert.NotNull(benchmark.WhenThenToken());
+        Assert.NotNull(benchmark.ThenTryToken());
+        Assert.NotNull(benchmark.WhenThenTokenGenerated());
+        Assert.NotNull(benchmark.ThenTryTokenGenerated());
+        Assert.Null(benchmark.WhenThenTokenRejected());
+        Assert.Null(benchmark.ThenTryTokenRejected());
+        Assert.Null(benchmark.WhenThenTokenRejectedAtStart());
+        Assert.Null(benchmark.ThenTryTokenRejectedAtStart());
+        Assert.False(benchmark.WhenThenTokenRejectedGenerated());
+        Assert.False(benchmark.ThenTryTokenRejectedGenerated());
     }
 
     [Fact]
