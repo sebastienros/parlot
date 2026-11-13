@@ -331,6 +331,9 @@ public class ParseContext
         // The offset of the last Commit(), no parser can read the text before it again
         public int CommitOffset;
 
+        // The failure recorded when the token being read started, see RetryToken
+        public int TokenRecordedFailure;
+
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -525,7 +528,10 @@ public class ParseContext
     /// tells about the input, at <paramref name="start"/> or after the white space there. <paramref name="recorded"/> is
     /// the failure recorded before the rejected text was read.
     /// </summary>
-    /// <remarks>Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it.</remarks>
+    /// <remarks>
+    /// Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it: it is left at
+    /// <paramref name="start"/>, or after the white space there when it had to be read again.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal void RecordRejected(int start, int recorded, bool skipWhiteSpace)
     {
@@ -533,12 +539,20 @@ public class ParseContext
         cursor.ResetPosition(start);
         cursor.RestoreRecordedFailure(recorded);
 
+        var valueStart = start;
+
         if (skipWhiteSpace)
         {
-            SkipWhiteSpace();
+            valueStart = SkippedWhiteSpaceEnd(start);
+
+            if (valueStart < 0)
+            {
+                SkipWhiteSpace();
+                valueStart = cursor.Offset;
+            }
         }
 
-        cursor.RecordFailure(cursor.Offset);
+        cursor.RecordFailure(valueStart);
     }
 
     /// <summary>
@@ -554,6 +568,11 @@ public class ParseContext
     // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
     private int _cacheEndOffset;
+
+    // Where the white space at an offset ends when it is the last one that was skipped, as before a single token, and -1
+    // otherwise: where SkipWhiteSpace() would move the cursor, for a failure path which only needs the offset.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int SkippedWhiteSpaceEnd(int start) => start == _cacheOffset ? _cacheEndOffset : -1;
 
     public void SkipWhiteSpace()
     {
@@ -851,6 +870,7 @@ public class ParseContext
 
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
+        _coldState!.TokenRecordedFailure = cursor.RecordedFailure;
 
         return cursor.Offset;
     }
@@ -865,10 +885,10 @@ public class ParseContext
             return false;
         }
 
-        // Not a failure: the token is read again, and records its own failures
-        var recorded = cursor.RecordedFailure;
+        // Not a failure: the token is read again, and records its own failures. The ones its parsers recorded so far are
+        // forgotten, like the delimiter of TextBefore which didn't match where the buffer ended.
         cursor.ResetPosition(start);
-        cursor.RestoreRecordedFailure(recorded);
+        cursor.RestoreRecordedFailure(_coldState!.TokenRecordedFailure);
         Refill(start);
         cursor.ResetHitEnd();
 

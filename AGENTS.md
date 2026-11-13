@@ -147,6 +147,11 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   Span code moves back with it too, to before the white space it skipped when what follows wasn't found. Leave
   `ResetPositionNotInlined` as it is: the parsers which reset the cursor the most inline it, and recording only the
   moves back there, two instructions, cost `ExprBench.ParlotFluentBig` 3% with dynamic PGO, nothing without it.
+- Where the cursor moves back from text which matched (an alternative of `Longest`, the white space before a valued
+  operator), read `Cursor.RecordedFailure` before `ResetPosition` and call `RestoreRecordedFailure` after: a match isn't
+  a failure where it ends. A lookahead (`WhenFollowedBy`, `Not`, the delimiter `TextBefore` looks for) reads it before
+  its parser instead, which also forgets what that parser recorded. Test it with a `When` rejecting what was read, in
+  `FurthestFailureTests` and the standalone `FailureTests`, string and `TextReader`.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.
