@@ -486,6 +486,49 @@ public class Cursor
         }
     }
 
+    /// <summary>
+    /// Moves the cursor to an absolute offset which was read up to already: forward over text that matched (white space
+    /// which was skipped before, what a parser read without moving the cursor, a match that is kept), or back to where
+    /// such a parser reads on from, after what it looked for further wasn't there.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ResetPosition(int)"/>, the offset the cursor leaves is a candidate for the furthest failure only
+    /// when the cursor moves back. What was read up to an offset it moves forward from matched, and a value that is
+    /// rejected after it would be reported there instead of at its start.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void MoveTo(int offset)
+    {
+        if (offset - _base != _offset)
+        {
+            MoveToNotInlined(offset);
+        }
+    }
+
+    // ResetPositionNotInlined, recording only the moves back. It isn't shared with it: the parsers which reset the cursor
+    // the most inline that method, and the code of the expression benchmarks changed with its size.
+    private void MoveToNotInlined(int offset)
+    {
+        var from = _offset + _base;
+
+        if (from > offset)
+        {
+            RecordFailure(from);
+        }
+
+        _offset = offset - _base;
+
+        if (unchecked((uint)_offset) < (uint)Buffer.Length)
+        {
+            Current = Buffer[_offset];
+            Eof = false;
+        }
+        else
+        {
+            ResetPositionOutsideBuffer();
+        }
+    }
+
     private void ResetPositionOutsideBuffer()
     {
         Current = NullChar;
