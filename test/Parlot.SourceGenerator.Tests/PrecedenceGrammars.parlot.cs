@@ -185,6 +185,27 @@ public static partial class PrecedenceGrammars
         return WithRest(expression);
     }
 
+    // The same table, with a conditional whose factory receives the context
+    [GenerateParser(nameof(TryParseConditionalLastWithContext))]
+    private static Parser<string> BuildConditionalLastWithContext()
+    {
+        var expression = Deferred<string>();
+        var assignment = Deferred<string>();
+        var atom = Terms.Identifier().Then(static x => x.ToString()).Or(Terms.Integer().Then(static x => PrecedenceAst.Integer(x)));
+        var primary = atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        assignment.Parser = primary.Operators()
+            .Postfix((Terms.Char('.').SkipAnd(Terms.Identifier()), static (x, name) => PrecedenceAst.Member(x, name.ToString())))
+            .LeftAssociative((Terms.Text("||"), static (a, b) => PrecedenceAst.Binary("||", a, b)))
+            .Ternary(Terms.Char('?'), assignment, Terms.Char(':'), assignment, static (ParseContext context, string c, string a, string b) => PrecedenceAst.Conditional(c, a, b) + "@" + context.Scanner.Cursor.Offset)
+            .LeftAssociative((Terms.Text("??"), static (a, b) => PrecedenceAst.Binary("??", a, b)))
+            .RightAssociative(new[] { Terms.Text("="), Terms.Text("+=") }, static (a, b, op) => PrecedenceAst.Binary(op, a, b));
+
+        expression.Parser = assignment.Operators().LeftAssociative((Terms.Char(','), static (a, b) => PrecedenceAst.Binary(",", a, b)));
+
+        return WithRest(expression);
+    }
+
     // Consecutive valued levels between a valued postfix level, a prefix level, a plain level, a conditional and a looser
     // prefix level, the same table as PrecedenceTests.RuntimeValuedLevels
     [GenerateParser(nameof(TryParseValuedLevels))]

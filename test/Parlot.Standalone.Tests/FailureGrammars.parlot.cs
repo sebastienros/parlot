@@ -45,6 +45,10 @@ public static partial class FailureGrammars
     public static Parser<long> BuildError() =>
         Terms.Char('[').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(']').ElseError("Expected ']'"));
 
+    [GenerateParser(nameof(ErrorNesting))]
+    public static Parser<long> BuildErrorNesting() =>
+        Terms.Char('[').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(']').ElseError("Expected ']'"));
+
     // Span code: the cursor doesn't move until the whole sequence matched
     [GenerateParser(nameof(Span))]
     public static Parser<string> BuildSpan() =>
@@ -73,6 +77,28 @@ public static partial class FailureGrammars
     public static Parser<string> BuildConversionRejectedLiteral() =>
         Literals.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())).AndSkip(Terms.Char(';')).Eof();
 
+    // A value that a conversion rejects after another word
+    [GenerateParser(nameof(ConversionSecond))]
+    public static Parser<string> BuildConversionSecond() =>
+        Terms.Identifier().SkipAnd(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString()))).Eof();
+
+    // A longer attempt fails before the value is rejected
+    [GenerateParser(nameof(ConversionFurther))]
+    public static Parser<string> BuildConversionFurther() =>
+        Terms.Text("from").And(Terms.Char('(')).And(Terms.Char(')')).Then(static _ => "call")
+            .Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString()))).Eof();
+
+    // The word after comments, which a parser skips instead of the white space set
+    [GenerateParser(nameof(ConversionRejectedAfterComments))]
+    public static Parser<string> BuildConversionRejectedAfterComments() =>
+        BuildConversionRejected().WithComments(static comments => comments.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+
+    // The word after a text which isn't there: its white space was skipped before the word is read
+    [GenerateParser(nameof(ConversionRejectedAlternative))]
+    public static Parser<string> BuildConversionRejectedAlternative() =>
+        Terms.Text("select").Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())))
+            .AndSkip(Terms.Char(';')).Eof();
+
     [GenerateParser(nameof(RejectedLiteral))]
     public static Parser<string> BuildRejectedLiteral() =>
         Literals.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
@@ -96,4 +122,40 @@ public static partial class FailureGrammars
     [GenerateParser(nameof(Negative))]
     public static Parser<string> BuildNegative() =>
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // A value of two words, read by moving the cursor forward over the white space between them, that the condition rejects
+    [GenerateParser(nameof(RejectedWords))]
+    public static Parser<string> BuildRejectedWords() =>
+        Terms.Identifier().And(Terms.Identifier()).When(static (_, value) => value.Item2.ToString() != "from")
+            .Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // The same words, rejected by a conversion
+    [GenerateParser(nameof(ConversionRejectedWords))]
+    public static Parser<string> BuildConversionRejectedWords() =>
+        Terms.Identifier().And(Terms.Identifier()).ThenTry(static value => (value.Item2.ToString() != "from", value.Item1.ToString()))
+            .AndSkip(Terms.Char(';')).Eof();
+
+    // A word and the longest of two texts, where the cursor is moved forward to the end of the one a selector keeps
+    [GenerateParser(nameof(RejectedLongest))]
+    public static Parser<string> BuildRejectedLongest() =>
+        Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")))
+            .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // The same, without a selector: the cursor is moved back from each text which matched, to read the next one
+    [GenerateParser(nameof(RejectedLongestText))]
+    public static Parser<string> BuildRejectedLongestText() =>
+        Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("from")))
+            .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // The same, with an alternative which isn't a text
+    [GenerateParser(nameof(RejectedLongestWord))]
+    public static Parser<string> BuildRejectedLongestWord() =>
+        Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Identifier().Then(static value => value.ToString())))
+            .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // Span code which moves the cursor to skip white space, doesn't find an optional text after it, and reads on or ends
+    // before the white space: the cursor is moved back
+    [GenerateParser(nameof(SpanBacktracking))]
+    public static Parser<string> BuildSpanBacktracking() =>
+        Terms.Text("a").AndSkip(Terms.Text("b").AndSkip(Terms.Text("c")).Optional()).AndSkip(Terms.Text("d").Optional()).Eof();
 }

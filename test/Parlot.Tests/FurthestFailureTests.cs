@@ -185,6 +185,31 @@ public class FurthestFailureTests
     private static readonly Parser<string> Rejected =
         Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
 
+    // The same word, rejected by a conversion
+    private static readonly Parser<string> ConversionRejected =
+        Terms.Identifier().ThenTry(static (ParseContext _, int _, int _, TextSpan value, out string result) =>
+        {
+            result = value.ToString();
+            return result != "from";
+        }).AndSkip(Terms.Char(';')).Eof();
+
+    private static readonly Parser<string> ConversionRejectedLiteral =
+        Literals.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())).AndSkip(Terms.Char(';')).Eof();
+
+    // A value of two words that a conversion rejects: the white space before it isn't the last one which was skipped
+    private static readonly Parser<string> ConversionRejectedWords =
+        Terms.Identifier().And(Terms.Identifier()).ThenTry(static value => (value.Item2.ToString() != "from", value.Item1.ToString()))
+            .AndSkip(Terms.Char(';')).Eof();
+
+    // The word after comments, which a parser skips instead of the white space set
+    private static readonly Parser<string> ConversionRejectedAfterComments =
+        ConversionRejected.WithComments(static comments => comments.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+
+    // The word after a text which isn't there: its white space was skipped before the word is read
+    private static readonly Parser<string> ConversionRejectedAlternative =
+        Terms.Text("select").Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())))
+            .AndSkip(Terms.Char(';')).Eof();
+
     private static readonly Parser<string> NotFollowed =
         Terms.Identifier().WhenNotFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
@@ -234,6 +259,61 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    [InlineData("  ,", 2)]
+    public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start(string text, int offset)
+    {
+        AssertFurthest(ConversionRejected, text, offset);
+
+        var context = Context("  word ;");
+        Assert.True(ConversionRejected.TryParse(context, out var value, out _));
+        Assert.Equal("word", value);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("fromage,", 7)]
+    public void Value_Rejected_By_A_Tuple_Conversion_Fails_At_Its_Start(string text, int offset) => AssertFurthest(ConversionRejectedLiteral, text, offset);
+
+    [Fact]
+    public void Value_Rejected_By_A_Conversion_Doesnt_Stop_A_Longer_Attempt_Being_Reported()
+    {
+        AssertFurthest(Terms.Identifier().SkipAnd(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString()))).Eof(), "  a  from", 5);
+
+        // A failure recorded further before the value is rejected is kept
+        var further = Terms.Text("from").And(Terms.Char('(')).And(Terms.Char(')')).Then(static _ => "call")
+            .Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())));
+        AssertFurthest(further.Eof(), "  from ( x", 9);
+    }
+
+    [Theory]
+    [InlineData("a from;", 0)]
+    [InlineData("  a from;", 2)]
+    [InlineData("  a  from;", 2)]
+    [InlineData("\n a\n from;", 2)]
+    [InlineData("  a  b,", 6)]
+    [InlineData("  a  ,", 5)]
+    public void Value_Of_Several_Tokens_Rejected_By_A_Conversion_Fails_At_Its_Start(string text, int offset) => AssertFurthest(ConversionRejectedWords, text, offset);
+
+    [Theory]
+    [InlineData("  from;", 2)]
+    [InlineData("/* a */ from;", 8)]
+    [InlineData(" /* a */\n /* b */ from;", 18)]
+    [InlineData(" /* a */ fromage,", 16)]
+    [InlineData(" /* a */ /from;", 9)]
+    public void Value_Rejected_By_A_Conversion_Fails_After_The_Comments_Before_It(string text, int offset) => AssertFurthest(ConversionRejectedAfterComments, text, offset);
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start_After_Another_Alternative(string text, int offset) => AssertFurthest(ConversionRejectedAlternative, text, offset);
+
+    [Theory]
     [InlineData("abc((", 3)]
     [InlineData("abc  ((;", 5)]
     [InlineData("abc  (;", 5)]
@@ -252,6 +332,76 @@ public class FurthestFailureTests
     [InlineData("  abc", 2)]
     [InlineData("  abd,", 5)]
     public void Not_Fails_At_What_Matched(string text, int offset) => AssertFurthest(Negative, text, offset);
+
+    [Theory]
+    [InlineData("a from", 0)]
+    [InlineData("  a from", 2)]
+    [InlineData("  a  from", 2)]
+    [InlineData("\n a\n from", 2)]
+    public void Moving_Forward_In_A_Rejected_Value_Isnt_A_Failure(string text, int offset)
+    {
+        // The lookahead skips the white space after the first word, and the second word then moves the cursor over it,
+        // forward, without reading it again
+        var words = Terms.Identifier().WhenFollowedBy(Terms.Identifier()).And(Terms.Identifier());
+        AssertFurthest(words.When(static (_, _) => false).Eof(), text, offset);
+
+        // The cursor is moved forward to the end of the match that a selector keeps
+        var selected = Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")));
+        AssertFurthest(selected.When(static (_, _) => false).Eof(), text, offset);
+
+        // A conversion rejects these values at the same place
+        AssertFurthest(words.ThenTry(static _ => (false, 0)).Eof(), text, offset);
+        AssertFurthest(selected.ThenTry(static _ => (false, 0)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("a from", 0)]
+    [InlineData("  a from", 2)]
+    [InlineData("\n a\n from", 2)]
+    public void Rejected_Value_Ending_With_The_Longest_Match_Fails_At_Its_Start(string text, int offset)
+    {
+        // The cursor is moved back from each alternative which matched, to read the next one: not a failure where it ended
+        var word = Terms.Identifier().Then(static value => value.ToString());
+
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("from"))).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("from"), Terms.Text("fr"))).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), word)).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("fro"), word)).When(static (_, _) => false).Eof(), text, offset);
+
+        // The alternatives are read without their value
+        AssertFurthest(Terms.Identifier().AndSkip(Longest(Terms.Text("fr"), Terms.Text("from"))).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().AndSkip(Longest(Terms.Text("fr"), word)).When(static (_, _) => false).Eof(), text, offset);
+
+        // Rejected by a conversion
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("from"))).ThenTry(static _ => (false, 0)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("a from?", 6)]
+    [InlineData("  a from?", 8)]
+    public void Rejected_Value_Reports_An_Alternative_Of_Longest_Which_Failed_Further(string text, int offset)
+    {
+        // "from" isn't followed by '!': that alternative fails after the match that is kept, and stays the furthest failure
+        var longest = Longest(Terms.Text("fr"), Terms.Text("from").AndSkip(Literals.Char('!')));
+
+        AssertFurthest(Terms.Identifier().And(longest).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().AndSkip(longest).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from").AndSkip(Literals.Char('!')))).When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("a  x", 3)]
+    [InlineData("a  b  x", 6)]
+    [InlineData("a  b  c  x", 9)]
+    [InlineData("a\n b\n x", 6)]
+    [InlineData("a b c x", 6)]
+    [InlineData("ax", 1)]
+    public void Optional_Text_Fails_After_The_White_Space_Before_It(string text, int offset)
+    {
+        // What follows is read from before that white space: generated span code moves the cursor back there
+        var parser = Terms.Text("a").AndSkip(Terms.Text("b").AndSkip(Terms.Text("c")).Optional()).AndSkip(Terms.Text("d").Optional()).Eof();
+        AssertFurthest(parser, text, offset);
+    }
 
     [Theory]
     [InlineData("1 + (2 + 3", 10)]

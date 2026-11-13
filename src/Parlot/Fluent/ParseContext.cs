@@ -561,7 +561,8 @@ public class ParseContext
 
         if (offset == _cacheOffset)
         {
-            Scanner.Cursor.ResetPosition(_cacheEndOffset);
+            // Forward, over the white space which was skipped before: not a failure where it starts
+            Scanner.Cursor.MoveTo(_cacheEndOffset);
             return;
         }
 
@@ -1163,7 +1164,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowRecursionDepthExceeded(int maxRecursionDepth)
     {
-        throw new ParseException($"The maximum parser recursion depth of {maxRecursionDepth} was exceeded.", Scanner.Cursor.Position);
+        throw new ParseException($"The maximum parser recursion depth of {maxRecursionDepth} was exceeded.", Scanner.Cursor.Position) { IsNestedTooDeeply = true };
     }
 
     /// <summary>
@@ -1210,7 +1211,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowInsufficientStack()
     {
-        throw new ParseException("The input is nested too deeply to be parsed on the remaining stack.", Scanner.Cursor.Position);
+        throw new ParseException("The input is nested too deeply to be parsed on the remaining stack.", Scanner.Cursor.Position) { IsNestedTooDeeply = true };
     }
 
     /// <summary>

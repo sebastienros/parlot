@@ -238,7 +238,8 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   reached. `[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` sets a limit that doesn't depend on the stack,
   counted like `ParseContext.MaxRecursionDepth`: the entry point returns `false` when a parse exceeds it, and the
   diagnostics overload returns "The maximum parser recursion depth of 128 was exceeded.". Both fail the whole parse, a
-  choice doesn't try another alternative. The code counting the levels is only generated with a limit.
+  choice doesn't try another alternative. The code counting the levels is only generated with a limit. A
+  [failure overload](#failure-position) whose tuple ends with a `bool` tells both from other failures.
 - `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
   target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
   the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
@@ -318,11 +319,28 @@ What a parser read and then rejected is not what moved the attempt forward, so t
 first bad token is:
 
 - A `When` whose condition rejects the value fails at the start of the value, after the white space the parser skips:
-  `Terms.Identifier().When(...)` on `  from` reports 2, not 6.
+  `Terms.Identifier().When(...)` on `  from` reports 2, not 6. So does a `ThenTry` whose conversion rejects it.
 - `WhenNotFollowedBy` and `Not` fail at the start of what must not match, after the white space it skips.
 - The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
+
+To also tell input nested too deeply from other failures, add a last `bool` to the tuple, as in
+`out (int Offset, bool NestedTooDeeply)` or `out (int Offset, int Line, int Column, bool NestedTooDeeply)`:
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value, out (int Offset, bool NestedTooDeeply) failure);
+
+if (!Sql.TryParse(query, out var value, out (int Offset, bool NestedTooDeeply) failure))
+{
+    throw new FormatException(failure.NestedTooDeeply ? "The query is too complex." : $"Syntax error at {failure.Offset}.");
+}
+```
+
+It is `true` when the parse exceeded `MaxRecursionDepth` or the stack of the thread, where `Offset` is the position that
+was reached, and `false` for every other failure, an `Error`, an `ElseError` and a `ParseException` thrown by a callback
+included. It is what `ParseException.IsNestedTooDeeply` and `ParseError.IsNestedTooDeeply` report at runtime. It costs
+nothing until such a failure: the entry point reads it in the handler of the exception which ended the parse.
 
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
@@ -331,13 +349,17 @@ a `TextReader` overload each have their own parser, as above, and can both retur
 return diagnostics can't also return the failure, the diagnostics having positions already.
 
 The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved
-back from: four instructions, without a branch, on that path only. Span code covering several parsers, which doesn't
-move the cursor until it matches, records the position of its failing check on its failure path. The overloads which
-don't return the failure run the same code, and the line and column of the failure are only computed when they are
-returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse, successful or not,
-nor its allocations. A rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and
-restores it, one load and one store around the lookahead. A `TextReader` overload returns the same failure as the
-`string` one: the buffer only drops text before positions the parse read later.
+back from: four instructions, without a branch, on that path only. They move it forward without recording anything, over
+white space which was already skipped or to where a span was read up to: what was read up to there matched. Span code
+covering several parsers, which doesn't move the cursor until it matches, records the position of its failing check on
+its failure path. It moves the cursor to skip white space: when what follows isn't found and it reads on from before
+that white space, the cursor is moved back and keeps the offset it leaves. The overloads which don't return the failure
+run the same code, and the line and column of the failure are only computed when they are returned. On the JSON
+benchmark document, returning the failure doesn't change the time of a parse, successful or not, nor its allocations. A
+rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and restores it, one load
+and one store around the lookahead, as `Longest` does around the move back from an alternative which matched. A
+`TextReader` overload returns the same failure as the `string` one: the buffer only drops text before positions the
+parse read later.
 
 ### Cancellation
 
@@ -677,7 +699,8 @@ and the [`IncludeFiles` containment guidance](security.md#includefiles-containme
 
 The generator emits the parser implementation plus shared scanner, cursor, character, number, result, and
 context support into the consuming assembly. These support types are internal and live under
-`Parlot.Generated`.
+`Parlot.Generated`. Its `ParseException` has the standard exception constructors, and below .NET 8 it is
+`[Serializable]`, so checks which create or serialize every exception type of an assembly accept it.
 
 Every generated shared-support source file retains Parlot's original BSD-3-Clause license notice, and the
 `Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a Parlot runtime

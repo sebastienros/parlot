@@ -23,7 +23,7 @@ var context = new ParseContext(new Scanner(input), maxRecursionDepth: 128);
 
 if (!parser.TryParse(context, out var result, out var error))
 {
-    // error reports when the configured recursion limit was exceeded
+    // error.IsNestedTooDeeply tells when the configured recursion limit was exceeded
 }
 ```
 
@@ -40,6 +40,12 @@ and on the stack each level of the grammar takes; a limit makes it independent o
 and the stack is checked on every 16th one, so a grammar recurses at most 16 levels past a check, which the runtime's
 margin (64 KB or more) leaves room for. `Unary` and the prefix operators of an operator table read their operators in a
 loop, so a chain of operators doesn't use the stack, whatever its length; the levels they count are only for the limit.
+
+Both failures set `IsNestedTooDeeply` on the `ParseException`, and on the `ParseError` that `TryParse` and `TryMatch` return,
+to tell them from a syntax error without comparing messages: an application can then reject the input as too complex
+rather than as invalid. It is `false` for every other error, those of `Error` and `ElseError` and the `ParseException` a
+callback throws included. A source-generated parser returns it from a
+[failure overload](source-generation.md#failure-position).
 
 A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see
@@ -66,7 +72,7 @@ For a program parsed as `ZeroOrMany(statement).AndSkip(Eof().ElseError("Expected
 statements stopped matching, at the start of the statement that failed, while the furthest failure is where that
 statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
 expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
-return, with the same rules for what a parser reads and then rejects (`When`, `Not`, `WhenFollowedBy`,
+return, with the same rules for what a parser reads and then rejects (`When`, `ThenTry`, `Not`, `WhenFollowedBy`,
 `WhenNotFollowedBy`).
 
 The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
@@ -313,7 +319,8 @@ expression.Parser = primary.Operators()
 
 - `LeftAssociative((op, (context, a, b) => ...))` and `RightAssociative((op, (context, a, b) => ...))` for the plain
   binary levels, `LeftAssociative(operators, (context, a, b, op) => ...)` and `RightAssociative(operators, (context, a, b, op) => ...)`
-  for the valued ones, and `Ternary(question, middle, colon, (context, condition, whenTrue, whenFalse) => ...)`.
+  for the valued ones, and `Ternary(question, middle, colon, (context, condition, whenTrue, whenFalse) => ...)` and
+  `Ternary(question, middle, colon, last, (context, condition, whenTrue, whenFalse) => ...)` for the conditionals.
 - `Unary((op, (context, x, value) => ...))` and `Postfix((op, (context, x, value) => ...))` for the unary levels: a factory
   which needs the context and not the value of its operator ignores the value. There is no `(context, x)` overload of
   the table's `Unary` and `Postfix`, unlike the combinators: its lambdas would take two parameters, like the ones of the
@@ -1773,6 +1780,7 @@ parser.Parse("hello /* multiline\n comment\n */ world");
 | `WithSingleLine(start)` | from `start` to the end of the line, before `"\r\n"` or `"\n"`, or to the end of the text |
 | `WithSingleLine(start, lineTerminators)` | from `start` to the first of the chars of `lineTerminators`, or to the end of the text |
 | `WithMultiLine(start, end)` | from `start` to `end` included |
+| `WithMultiLine(start, end, unterminated)` | from `start` to `end` included, and a comment without its end as `unterminated` says |
 | `WithParser(parser)` | what `parser` matches |
 
 Without white space, only the comments are skipped. The line terminators are not part of a single line comment: they are
@@ -1788,6 +1796,23 @@ var parser = grammar.WithComments(builder => builder
 
 A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
 start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, in which case the comment is not skipped.
+`WithMultiLine(start, end, unterminated)` chooses another behavior with `UnterminatedComment`:
+
+| `UnterminatedComment` | A comment without its end |
+|---|---|
+| `Throw` | throws, or reports an error when the diagnostics are collected, as `WithMultiLine(start, end)` |
+| `NotAComment` | is not a comment: it is not skipped, without an error or a [furthest failure](#reporting-where-a-parse-failed), and the comments added after it can start there |
+| `ToEnd` | runs to the end of the text |
+
+In xmSQL, as in the ANTLR lexer its grammar ports, an unclosed `/*` is a `/` token and a `*` token:
+
+```c#
+var tokens = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+    .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment));
+
+tokens.Parse("a /* b */ c"); // a, c
+tokens.Parse("a /* b");      // a, /, *, b
+```
 
 The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each
 token, a `Terms` parser invokes that parser only, which reads the text directly. Its `ISeekable` hints are the chars of the
@@ -2076,6 +2101,9 @@ var octet = Terms.Integer().ThenTry(static value => (value is >= 0 and <= 255, (
 The conversion is invoked on each match, even when the value of the parser isn't used, since it decides whether the parser
 succeeds. A `When(...).Then(...)` pair invokes two parsers and two callbacks on each match: when the condition and the
 conversion read the same value, as a reserved word check before an AST node is built, `ThenTry` does both in one.
+
+A value the conversion rejects is reported as the furthest failure at its start, after the white space the parser skips,
+like one a `When` rejects (see [Reporting where a parse failed](#reporting-where-a-parse-failed)).
 
 ### ToPooledString
 

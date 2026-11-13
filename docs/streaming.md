@@ -246,7 +246,8 @@ other overloads could wait for more text than the next value needs before parsin
 
 ## Semantics
 
-- **Positions.** Lines and columns, and the positions of `ParseException`, are those of the whole text.
+- **Positions.** Lines and columns, and the positions of `ParseException`, are those of the whole text. A
+  `ParseException` created without a position, like one a callback throws, keeps its default position.
   In compacting mode `Cursor.Offset` and `ParseResult` offsets are absolute too. With `ParseManyAsync` they are
   relative to the window. A `TextSpan` references the window string it was parsed from (which it keeps alive), and
   its `Offset` is relative to that string. Call `ToString()` to keep only its text.
