@@ -64,10 +64,11 @@ public class ParseException : Exception
     protected ParseException(SerializationInfo info, StreamingContext context) : base(info, context)
     {
         Position = new TextPosition(info.GetInt32(nameof(TextPosition.Offset)), info.GetInt32(nameof(TextPosition.Line)), info.GetInt32(nameof(TextPosition.Column)));
+        IsNestedTooDeeply = info.GetBoolean(nameof(IsNestedTooDeeply));
     }
 
     /// <summary>
-    /// Adds the position to the serialized data of the exception.
+    /// Adds the position, and whether the input is nested too deeply, to the serialized data of the exception.
     /// </summary>
     /// <param name="info">The serialized data of the exception.</param>
     /// <param name="context">The destination of the serialized data.</param>
@@ -80,6 +81,7 @@ public class ParseException : Exception
         info.AddValue(nameof(TextPosition.Offset), Position.Offset);
         info.AddValue(nameof(TextPosition.Line), Position.Line);
         info.AddValue(nameof(TextPosition.Column), Position.Column);
+        info.AddValue(nameof(IsNestedTooDeeply), IsNestedTooDeeply);
     }
 #endif
 

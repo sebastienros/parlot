@@ -76,6 +76,27 @@ public class ParseExceptionTests
         Assert.Equal("message", copy.Message);
         Assert.Null(copy.InnerException);
         Assert.Equal(new TextPosition(4, 2, 3), copy.Position);
+        Assert.False(copy.IsNestedTooDeeply);
+    }
+
+    [Fact]
+    public void ShouldSerializeWhetherTheInputIsNestedTooDeeply()
+    {
+        var list = Parsers.Recursive<int>(static list =>
+            Parsers.Between(Parsers.Literals.Char('['), list, Parsers.Literals.Char(']')).Or(Parsers.Literals.Text("item").Then(0)));
+
+        var exception = Assert.Throws<ParseException>(() =>
+        {
+            var result = new ParseResult<int>();
+            list.Parse(new ParseContext(new Scanner("[[[[item]]]]"), maxRecursionDepth: 3), ref result);
+        });
+
+        var copy = RoundTrip(exception);
+
+        Assert.True(exception.IsNestedTooDeeply);
+        Assert.True(copy.IsNestedTooDeeply);
+        Assert.Equal(exception.Message, copy.Message);
+        Assert.Equal(exception.Position, copy.Position);
     }
 
     [Fact]
