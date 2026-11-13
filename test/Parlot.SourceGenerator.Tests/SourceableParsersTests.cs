@@ -209,6 +209,20 @@ public class SourceableParsersTests
         Assert.Equal("+-.0123456789".ToCharArray(), ((ISeekable)choice).ExpectedChars.Where(static c => c != 'x').OrderBy(static c => c));
     }
 
+    [Fact]
+    public void Always_Emits_Default_For_A_Default_Value_Without_A_Literal()
+    {
+        Assert.Contains(Generate(Always<(int, string)>()).Body, static line => line.EndsWith(" = default;", StringComparison.Ordinal));
+        Assert.Contains(Generate(Always(new DateTime())).Body, static line => line.EndsWith(" = default;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Always_Still_Rejects_Other_Values_Without_A_Literal()
+    {
+        Assert.Throws<NotSupportedException>(() => Generate(Always((1, "a"))));
+        Assert.Throws<NotSupportedException>(() => Generate(Always(new DateTime(2020, 1, 1))));
+    }
+
     private static SourceResult Generate<T>(Parser<T> parser) =>
         Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(new SourceGenerationContext());
 

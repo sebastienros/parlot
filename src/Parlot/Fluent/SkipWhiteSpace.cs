@@ -4,9 +4,11 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISkipsWhiteSpace
 {
     public Parser<T> Parser { get; }
+
+    object ISkipsWhiteSpace.Parser => Parser;
 
     // Whether the parser is invoked without its value when this one's isn't used
     private readonly bool _withoutValue;
@@ -170,4 +172,13 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
     }
 
 public override string ToString() => $"{Parser} (Skip WS)";
+}
+
+/// <summary>
+/// A <see cref="SkipWhiteSpace{T}"/> of any type, whose parser is read without knowing its type, nor reflection, which
+/// native AOT trims.
+/// </summary>
+internal interface ISkipsWhiteSpace
+{
+    object Parser { get; }
 }

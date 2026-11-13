@@ -67,6 +67,8 @@ public class LoopAnalysisTests
     [InlineData("select")]
     [InlineData("switch")]
     [InlineData("separated")]
+    [InlineData("separatedEmptyFirst")]
+    [InlineData("separatorAfterEmptyFirst")]
     [InlineData("between")]
     [InlineData("unary")]
     [InlineData("leftAssociative")]
@@ -78,6 +80,8 @@ public class LoopAnalysisTests
     [InlineData("if")]
     [InlineData("eof")]
     [InlineData("always")]
+    [InlineData("peek")]
+    [InlineData("peekNullable")]
     [InlineData("skipWhiteSpace")]
     [InlineData("withWhiteSpaceParser")]
     [InlineData("customEmptyLeaf")]
@@ -99,12 +103,17 @@ public class LoopAnalysisTests
             "oneOrMany" => OneOrMany(a.AndSkip(z)).Then(static x => string.Concat(x)),
             "not" => Not(Literals.Char('y')).SkipAnd(a),
             "whenFollowedBy" => Always("w").WhenFollowedBy(a),
+            "peek" => Peek(a).AndSkip(z),
+            "peekNullable" => Peek(Literals.Char('y')).SkipAnd(a),
             "whenNotFollowedBy" => Always("w").WhenNotFollowedBy(a).AndSkip(z),
             "else" => a.AndSkip(z).Else("e").AndSkip(z),
             "nested" => b,
             "select" => Select<ParseContext, string>(static _ => 0, a.AndSkip(z)),
             "switch" => Literals.Char('-').Optional().Switch(static (_, _) => 0, a.AndSkip(z)),
             "separated" => Separated(Literals.Char(','), a.AndSkip(z)).Then(static x => string.Concat(x)),
+            // A first value that doesn't read is a value, the separator then reads where the list started
+            "separatedEmptyFirst" => Separated(Literals.Char(','), Always("s")).SkipAnd(a),
+            "separatorAfterEmptyFirst" => Separated(a.AndSkip(z), Always("s")).Then(static x => string.Concat(x)),
             "between" => Between(Literals.Char('(').Optional(), a, z),
             "unary" => a.AndSkip(z).Unary((Literals.Char('-'), static x => "-" + x)),
             "leftAssociative" => a.AndSkip(z).LeftAssociative((Literals.Char('+'), static (x, y) => x + y)),
@@ -192,6 +201,28 @@ public class LoopAnalysisTests
         prefixed.Parser = Terms.Text("1").Operators().Unary((ZeroOrOne(Terms.Char('-')).Then(static _ => 0).Or(prefixed.Then(static _ => 0)), static x => x));
 
         Assert.False(IsElided(prefixed));
+    }
+
+    [Fact]
+    public void SeparatedThatMovesTheCursorDoesNotPreventElision()
+    {
+        var empty = Always("s");
+
+        // The second value follows a separator that moved the cursor
+        var a = Deferred<string>();
+        a.Parser = Separated(Literals.Char(','), empty, min: 2).SkipAnd(a).Or(Literals.Text("x"));
+
+        Assert.True(IsElided(a));
+        Assert.True(a.TryParse(",,x", out var result));
+        Assert.Equal("x", result);
+
+        // With the options a value that doesn't read is an empty entry
+        var b = Deferred<string>();
+        b.Parser = Separated(Literals.Char(','), empty, removeEmptyEntries: true).SkipAnd(b).Or(Literals.Text("x"));
+
+        Assert.True(IsElided(b));
+        Assert.True(b.TryParse("x", out result));
+        Assert.Equal("x", result);
     }
 
     [Fact]

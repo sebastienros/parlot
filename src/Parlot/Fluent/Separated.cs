@@ -19,6 +19,9 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     private readonly bool _separatorWithoutValue;
     private readonly bool _withoutValue;
 
+    // Whether the separator can start at the current position, so the list ends without invoking it when it can't
+    private readonly SeekGuard _separatorGuard;
+
     public Separated(Parser<U> separator, Parser<T> parser) : this(separator, parser, 1, 0)
     {
     }
@@ -64,6 +67,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         _allowTrailingSeparator = allowTrailingSeparator;
         _separatorWithoutValue = separator.CanParseWithoutValue;
         _withoutValue = parser.CanParseWithoutValue;
+        _separatorGuard = new SeekGuard(separator);
     }
 
     // The hints of the first element, read when they are asked for since it can be a Deferred set later. There are none when
@@ -82,16 +86,19 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
     {
-        analysis.Invoke(_parser);
+        var options = _removeEmptyEntries || _allowLeadingSeparator || _allowTrailingSeparator;
 
-        // Otherwise the separator only follows an element that moved the cursor
-        if (_allowLeadingSeparator)
+        // Without the options a first element that doesn't move the cursor is a value, the separator is then invoked where
+        // the list started. With them it is an empty entry, and the separator only follows one when it can lead the list.
+        var emptyFirst = analysis.Invoke(_parser) && !options;
+
+        if (emptyFirst || _allowLeadingSeparator)
         {
             analysis.Invoke(_separator);
         }
 
-        // The first element must move the cursor
-        return _min == 0;
+        // An element after the first one moves the cursor with its separator
+        return _min == 0 || (emptyFirst && _min == 1);
     }
 
     public override bool Parse(ParseContext context, ref ParseResult<IReadOnlyList<T>> result)
@@ -125,7 +132,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
                 if (!first)
                 {
-                    if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                    if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                     {
                         break;
                     }
@@ -155,21 +162,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                     context.MovePin(pin);
                 }
 
-                if (context.Scanner.Cursor.Offset == previousOffset)
-                {
-                    if (first && _min > 0)
-                    {
-                        context.Unpin(pin);
-                        context.ExitParser(this);
-                        return false;
-                    }
-
-                    break;
-                }
-
+                // The list ends when a separator and its element don't move the cursor, as they would match again. The first
+                // element has no separator and is only read once, it is a value even when it doesn't move the cursor.
                 if (first)
                 {
                     start = parsed.Start;
+                }
+                else if (context.Scanner.Cursor.Offset == previousOffset)
+                {
+                    break;
                 }
 
                 results.Add(parsed.Value);
@@ -227,7 +228,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
             if (!first)
             {
-                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                 {
                     break;
                 }
@@ -256,21 +257,14 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                 context.MovePin(pin);
             }
 
-            if (context.Scanner.Cursor.Offset == previousOffset)
-            {
-                if (first && _min > 0)
-                {
-                    context.Unpin(pin);
-                    context.ExitParser(this);
-                    return false;
-                }
-
-                break;
-            }
-
+            // The first element is a value even when it doesn't move the cursor, see Parse()
             if (first)
             {
                 start = parsed.Start;
+            }
+            else if (context.Scanner.Cursor.Offset == previousOffset)
+            {
+                break;
             }
 
             count++;
@@ -308,7 +302,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             while (true)
             {
                 var beforeSeparator = cursor.Offset;
-                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                 {
                     break;
                 }
@@ -350,7 +344,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         {
             while (_max == 0 || results.Count < _max)
             {
-                if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
+                if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
                 {
                     break;
                 }
@@ -371,7 +365,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                     }
 
                     var beforeSeparator = cursor.Offset;
-                    if (!(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
+                    if (!_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) || cursor.Offset == beforeSeparator)
                     {
                         break;
                     }
@@ -466,9 +460,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", parserValueTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
 
-        var separatorHelperName = context.WithDiscardResult(true, () => context.Helpers
-            .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
-            .MethodName);
+        var separatorHelperName = context.WithDiscardResult(true, () =>
+        {
+            var helper = context.Helpers
+                .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorValueTypeName, () => separatorSourceable.GenerateSource(context))
+                .MethodName;
+
+            // The list ends without invoking the separator when it can't start at the current position
+            return SeekGuard.GetHelper(context, _separator, helper, typeof(U));
+        });
 
         // The end of the last element is read again when a separator isn't followed by an element
         var pin = context.Pin(result);
@@ -503,7 +503,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         context.MovePin(result, pin, "        ");
         result.Body.Add("    }");
 
-        result.Body.Add($"    if ({cursorName}.Offset == {previousOffsetName})");
+        // The first element is a value even when it doesn't move the cursor, see Parse()
+        result.Body.Add($"    if (!{firstName} && {cursorName}.Offset == {previousOffsetName})");
         result.Body.Add("    {");
         result.Body.Add("        break;");
         result.Body.Add("    }");
@@ -566,9 +567,15 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         var parserHelper = context.Helpers
             .GetOrCreate(parserSourceable, $"{context.MethodNamePrefix}_Separated_Parser", elementTypeName, () => parserSourceable.GenerateSource(context))
             .MethodName;
-        var separatorHelper = context.WithDiscardResult(true, () => context.Helpers
-            .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorTypeName, () => separatorSourceable.GenerateSource(context))
-            .MethodName);
+        var separatorHelper = context.WithDiscardResult(true, () =>
+        {
+            var helper = context.Helpers
+                .GetOrCreate(separatorSourceable, $"{context.MethodNamePrefix}_Separated_Separator", separatorTypeName, () => separatorSourceable.GenerateSource(context))
+                .MethodName;
+
+            // The list ends without invoking the separator when it can't start at the current position
+            return SeekGuard.GetHelper(context, _separator, helper, typeof(U));
+        });
         var initial = $"initial{context.NextNumber()}";
         var beforeSeparator = $"beforeSeparator{context.NextNumber()}";
         var beforeValue = $"beforeValue{context.NextNumber()}";

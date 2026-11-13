@@ -35,6 +35,9 @@ public class SpanScannerBenchmarks
     // A delegate to a static method goes through a thunk, unlike a static lambda
     private static readonly Parser<TextSpan> _scanStaticLambda = Terms.Scan(static span => LiquidScanners.Identifier(span), LiquidScanners.StartChars);
 
+    // A text scanner, which also gets the text before the token
+    private static readonly Parser<TextSpan> _scanText = Terms.Scan(static (text, position) => LiquidScanners.Identifier(text.Slice(position)), LiquidScanners.StartChars);
+
     private static readonly string _text = string.Join(" ", Enumerable.Range(0, 1000).Select(static i => (i % 4) switch
     {
         0 => "product",
@@ -49,6 +52,7 @@ public class SpanScannerBenchmarks
         if (HandWrittenSpan() != 1000) throw new InvalidOperationException(nameof(HandWrittenSpan));
         if (Scan() != 1000) throw new InvalidOperationException(nameof(Scan));
         if (ScanStaticLambda() != 1000) throw new InvalidOperationException(nameof(ScanStaticLambda));
+        if (ScanText() != 1000) throw new InvalidOperationException(nameof(ScanText));
     }
 
     [Benchmark(Baseline = true)]
@@ -62,6 +66,9 @@ public class SpanScannerBenchmarks
 
     [Benchmark]
     public int ScanStaticLambda() => Count(_scanStaticLambda);
+
+    [Benchmark]
+    public int ScanText() => Count(_scanText);
 
     // A single context reads every identifier, the allocations are the context's
     private static int Count(Parser<TextSpan> parser)

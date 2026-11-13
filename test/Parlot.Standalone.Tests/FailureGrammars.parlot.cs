@@ -58,4 +58,46 @@ public static partial class FailureGrammars
     [GenerateParser(nameof(Configured))]
     public static Parser<long> BuildConfigured(long factor) =>
         Terms.Integer().Then(value => value * factor).AndSkip(Terms.Char(';')).Eof();
+
+    // A word that the condition rejects, like a keyword read as a word
+    [GenerateParser(nameof(Rejected))]
+    public static Parser<string> BuildRejected() =>
+        Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
+
+    // The same word, rejected by a conversion
+    [GenerateParser(nameof(ConversionRejected))]
+    public static Parser<string> BuildConversionRejected() =>
+        Terms.Identifier().ThenTry(static (ParseContext _, int _, int _, TextSpan value, out string result) =>
+        {
+            result = value.ToString();
+            return result != "from";
+        }).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(ConversionRejectedLiteral))]
+    public static Parser<string> BuildConversionRejectedLiteral() =>
+        Literals.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(RejectedLiteral))]
+    public static Parser<string> BuildRejectedLiteral() =>
+        Literals.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(Second))]
+    public static Parser<string> BuildSecond() =>
+        Terms.Identifier().SkipAnd(Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from")).Eof();
+
+    [GenerateParser(nameof(NotFollowed))]
+    public static Parser<string> BuildNotFollowed() =>
+        Terms.Identifier().WhenNotFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(Followed))]
+    public static Parser<string> BuildFollowed() =>
+        Terms.Identifier().WhenFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char('x')).Eof();
+
+    [GenerateParser(nameof(Peeked))]
+    public static Parser<string> BuildPeeked() =>
+        Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
+
+    [GenerateParser(nameof(Negative))]
+    public static Parser<string> BuildNegative() =>
+        Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 }

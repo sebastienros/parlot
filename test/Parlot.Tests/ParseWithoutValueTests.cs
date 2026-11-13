@@ -22,7 +22,7 @@ public class ParseWithoutValueTests
     private static readonly Parser<IReadOnlyList<char>> As = ZeroOrMany(Terms.Char('a'));
     private static readonly Parser<IReadOnlyList<char>> Bs = OneOrMany(Terms.Char('b'));
 
-    private static readonly string[] Inputs = ["", "a", "b", "c", "ab", "abc", "a b b c", " a a b c d", "bbc", "aabbcc", "cba"];
+    private static readonly string[] Inputs = ["", "a", "b", "c", "ab", "abc", "a b b c", " a a b c d", "bbc", "aabbcc", "cba", "  b c", "  c"];
 
     [Fact]
     public void ShouldInvokeTheOverride()
@@ -49,6 +49,13 @@ public class ParseWithoutValueTests
         AssertSameAsParse(ZeroOrOne(Bs));
         AssertSameAsParse(ZeroOrOne(A));
         AssertSameAsParse(Bs.Optional());
+
+        // Over sequences, which aren't invoked when they can't start at the current char
+        AssertSameAsParse(A.And(Bs).Optional());
+        AssertSameAsParse(ZeroOrOne(A.And(B)));
+        AssertSameAsParse(ZeroOrMany(A.And(Bs)));
+        AssertSameAsParse(OneOrMany(B.And(C)));
+        AssertSameAsParse(Separated(B.And(C), A));
     }
 
     [Fact]
@@ -99,6 +106,11 @@ public class ParseWithoutValueTests
 
         // All alternatives skip white space
         AssertSameAsParse(OneOf(Terms.Text("ab").And(Bs).Then(static x => x.Item2), Bs));
+
+        // Every alternative is invoked, the longest match wins
+        AssertSameAsParse(Longest(Bs, As, A.And(Bs).Then(static x => x.Item2), ZeroOrOne(C).Then<IReadOnlyList<char>>(static _ => [])));
+        AssertSameAsParse(Longest(Bs, Literals.Pattern(static c => c == 'c').Then<IReadOnlyList<char>>(static _ => [])));
+        AssertSameAsParse(Longest(Terms.Text("ab").And(Bs).Then(static x => x.Item2), Bs));
     }
 
     [Fact]
@@ -119,8 +131,14 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Bs.Then(static x => x.Count));
         AssertSameAsParse(A.WhenFollowedBy(Bs));
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));
+        AssertSameAsParse(Peek(Bs));
+        AssertSameAsParse(Peek(A.And(Bs)).And(A));
         AssertSameAsParse(SkipWhiteSpace(OneOrMany(Literals.Char('b'))));
+        AssertSameAsParse(NoNewLineBefore(OneOrMany(Literals.Char('b'))));
+        AssertSameAsParse(A.And(Bs.NoNewLineBefore()));
         AssertSameAsParse(Bs.WithWhiteSpaceSet(WhiteSpaceSet.Ascii));
+        AssertSameAsParse(Bs.WithState<ParseContext, int>(static _ => 0, static (_, _) => { }, static x => x + 1));
+        AssertSameAsParse(A.And(Bs).WithState(static () => 0, static _ => { }, static x => x + 1));
         AssertSameAsParse(A.And(Bs).WithWhiteSpaceParser(Capture(ZeroOrMany(Literals.Char(' ')))));
     }
 
@@ -131,6 +149,11 @@ public class ParseWithoutValueTests
         AssertSameAsParse(Separated(Bs, A));
         AssertSameAsParse(Separated(B, OneOrMany(Terms.Char('a')), min: 2, max: 3), ["a b a", "a b a b a b a", "a", "a b", "a b b a"]);
         AssertSameAsParse(Separated(B, As, min: 0, max: 0), ["", "b", "a b a b"]);
+
+        // The first value can match without reading
+        AssertSameAsParse(Separated(B, A.Or(Always('x'))));
+        AssertSameAsParse(Separated(B, A.Or(Always('x')), min: 2, max: 3), ["", "b", "b b", "b a b b", "a b", "c"]);
+        AssertSameAsParse(Separated(ZeroOrOne(B), A.Or(Always('x'))));
 
         // The options parse with the values
         AssertSameAsParse(Separated(B, OneOrMany(Terms.Char('a')), removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true),

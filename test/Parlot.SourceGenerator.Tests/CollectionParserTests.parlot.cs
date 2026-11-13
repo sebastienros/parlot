@@ -60,6 +60,24 @@ public static partial class CollectionGrammars
             ZeroOrOne(Literals.Char('a')).Then(static values => values.Count == 0 ? '\0' : values[0]),
             removeEmptyEntries: true, allowLeadingSeparator: true).Eof();
 
+    // The first value can match without reading (#503)
+    [GenerateParser(nameof(TryParseSeparatedEmptyFirst))]
+    private static Parser<IReadOnlyList<string>> BuildSeparatedEmptyFirst() =>
+        Separated(Terms.Char('.'), Terms.Identifier().Then(static x => x.ToString()).Or(Always(""))).Eof();
+
+    [GenerateParser(nameof(TryParseCapturedSeparatedEmptyFirst))]
+    private static Parser<string> BuildCapturedSeparatedEmptyFirst() =>
+        Capture(Separated(Literals.Char('.'), Literals.Char('a').Or(Always('x')))).Then(static x => x.ToString()).AndSkip(Literals.Char(';')).Eof();
+
+    [GenerateParser(nameof(TryParseBoundedSeparatedEmptyFirst))]
+    private static Parser<int> BuildBoundedSeparatedEmptyFirst() =>
+        Separated(Literals.Char('.'), Literals.Char('a').Or(Always('x')), min: 2, max: 3)
+            .Then(static values => values.Count).AndSkip(Literals.Char(';')).Eof();
+
+    [GenerateParser(nameof(TryParseOptionalSeparatedEmptyFirst))]
+    private static Parser<IReadOnlyList<char>> BuildOptionalSeparatedEmptyFirst() =>
+        Separated(Literals.Char('.'), Literals.Char('a').Or(Always('x')), min: 0).AndSkip(Literals.Char(';')).Eof();
+
     [GenerateParser(nameof(TryParseTuples))]
     private static Parser<IReadOnlyList<(int Number, string Text)>> BuildTuples() =>
         ZeroOrMany(Literals.Text("x").Then(static text => (1, text))).Eof();

@@ -31,6 +31,7 @@ internal static class StandaloneRuntimeSources
         "Character.Generated.cs",
         "Character.Mask.cs",
         "Character.SearchValues.cs",
+        "Character.Identifier.cs",
         "WhiteSpaceSet.cs",
         "Numbers.cs",
         "HexConverter.cs",
@@ -41,8 +42,11 @@ internal static class StandaloneRuntimeSources
         "Fluent.ParseContext.cs",
         "Fluent.HybridList.cs",
         "Fluent.ListBuilder.cs",
+        "Fluent.LongestMatch.cs",
         "Fluent.OperatorList.cs",
         "Fluent.NumberOptions.cs",
+        "Fluent.StringEscapes.cs",
+        "Fluent.IdentifierOptions.cs",
         "Fluent.DelegateParser.cs",
         "Fluent.Parser.cs",
     ];
@@ -364,8 +368,8 @@ internal static class StandaloneRuntimeSources
                 (false, "Scanner" or "Cursor" or "TextPosition" or "TextSpan" or "StringPool" or "CaseCache" or "ParseException"
                     or "ParseError" or "ParseDiagnostic" or "ParseDiagnosticSeverity" or "Character" or "CharacterMask" or "WhiteSpaceSet" or "Numbers" or "HexConverter" or "ThrowHelper", 0) => true,
                 (false, "ParseResult" or "Option", 1) => true,
-                (true, "ParseContext" or "NumberOptions" or "StreamRefillSource" or "TextReaderRefillSource" or "OperatorList", 0) => true,
-                (true, "Parser" or "HybridList" or "ListBuilder" or "ListScratch" or "DelegateParser", 1) => true,
+                (true, "ParseContext" or "NumberOptions" or "StringEscapes" or "IdentifierOptions" or "StreamRefillSource" or "TextReaderRefillSource" or "OperatorList", 0) => true,
+                (true, "Parser" or "HybridList" or "ListBuilder" or "ListScratch" or "DelegateParser" or "LongestMatch" or "LongestMatches", 1) => true,
                 _ => false,
             };
         }

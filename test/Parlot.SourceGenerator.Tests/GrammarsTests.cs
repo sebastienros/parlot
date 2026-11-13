@@ -408,7 +408,11 @@ public class GrammarsTests
         Assert.True(Grammars.TryParseSeparatedOptional("aaa", out var separated));
         Assert.Equal(3, separated.Count);
         Assert.Equal(['a'], separated[0]);
-        Assert.False(Grammars.TryParseSeparatedOptional("", out _));
+
+        // The first value is read once, the next ones stop when neither the separator nor the value moves the cursor
+        Assert.True(Grammars.TryParseSeparatedOptional("", out separated));
+        Assert.Single(separated);
+        Assert.Empty(separated[0]);
     }
 
     [Fact]
@@ -434,5 +438,16 @@ public class GrammarsTests
         Assert.Equal(new SimpleValue("test"), value);
         Assert.True(ClassLevelAttributeGrammars.TryParseText("hello", out var text));
         Assert.Equal("hello", text);
+    }
+
+    [Fact]
+    public void Always_Default_Of_A_Type_Without_Literals_Is_Generated()
+    {
+        Assert.True(Grammars.TryParseAlwaysDefaultTuple("", out var tuple));
+        Assert.Equal(default, tuple);
+
+        Assert.True(Grammars.TryParseAlwaysDefaultStruct(" x", out var date));
+        Assert.Equal(default, date);
+        Assert.False(Grammars.TryParseAlwaysDefaultStruct(" y", out _));
     }
 }

@@ -21,6 +21,19 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     // be invoked when there is no match.
 
     public const char OtherSeekableChar = '\0';
+
+    /// <summary>
+    /// The char an <see cref="ISeekable"/> parser lists in its <see cref="ISeekable.ExpectedChars"/> when it can start with any
+    /// non-ASCII char (U+0080 and above), like an identifier that can start with any Unicode letter.
+    /// </summary>
+    /// <remarks>
+    /// A lookup table keeps an entry for each ASCII char, and invokes such a parser for every non-ASCII char, rather than
+    /// building an entry for each of the chars it can start with. The other chars it lists are the ASCII ones it can start
+    /// with. A choice holding such an alternative lists it too. U+FFFF is a noncharacter: a parser that lists it as a char
+    /// it starts with is invoked for every non-ASCII char, which is only slower.
+    /// </remarks>
+    public const char NonAsciiSeekableChar = '\uFFFF';
+
     // The lookup groups are arrays, iterated without the bounds and version checks of List<T>.
     // They are rebuilt by EnsureResolved() when an alternative declared its hints late.
     internal CharMap<Parser<T>[]>? _map;
@@ -159,6 +172,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             }
         }
 
+        // The alternatives a nested choice invokes for the char, flattened in this table
+        static IReadOnlyList<Parser<T>> SubParsers(Parser<T> parser, char c) => parser is OneOf<T> oneof ? oneof._map?[c] ?? [parser] : [parser];
+
         static void AddUniqueSingle(List<Parser<T>> target, Parser<T> item)
         {
             for (var j = 0; j < target.Count; j++)
@@ -218,9 +234,21 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                 {
                     foreach (var c in seekable.ExpectedChars)
                     {
-                        IReadOnlyList<Parser<T>> subParsers = parser is OneOf<T> oneof ? oneof._map?[c] ?? [parser] : [parser];
+                        var subParsers = SubParsers(parser, c);
 
-                        if (c != OtherSeekableChar)
+                        if (c == NonAsciiSeekableChar)
+                        {
+                            // The parser can start with any non-ASCII char: the ones of the table, and the others, which select
+                            // the entry of this char
+                            foreach (var entry in lookupTable)
+                            {
+                                if (entry.Key >= 0x80)
+                                {
+                                    AddUniqueRange(entry.Value, SubParsers(parser, entry.Key));
+                                }
+                            }
+                        }
+                        else if (c != OtherSeekableChar)
                         {
                             AddUniqueRange(lookupTable[c], subParsers);
                         }
@@ -290,6 +318,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             {
                 _map = new CharMap<Parser<T>[]>(lookupTable.Select(static entry => new KeyValuePair<char, Parser<T>[]>(entry.Key, entry.Value.ToArray())));
 
+                // The non-ASCII chars without an entry select the alternatives which can start with any of them, and the ones
+                // that can't tell what they start with, in order
+                if (lookupTable.ContainsKey(NonAsciiSeekableChar))
+                {
+                    _map.NonAsciiFallback = _map[NonAsciiSeekableChar];
+                }
+
                 // This parser is only seekable if there isn't a parser
                 // that can't be reached without a lookup.
                 // However we use a trick to match other parsers
@@ -324,7 +359,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         foreach (var c in map.ExpectedChars)
         {
             // Every choice is built through here, and most chars have fewer alternatives than a dispatch needs
-            if (c != OtherSeekableChar && map[c] is { Length: >= PrefixDispatch.MinimumAlternatives } parsers && PrefixDispatch.TryCreate(c, parsers) is { } dispatch)
+            if (c != OtherSeekableChar && c != NonAsciiSeekableChar && map[c] is { Length: >= PrefixDispatch.MinimumAlternatives } parsers && PrefixDispatch.TryCreate(c, parsers) is { } dispatch)
             {
                 nodes ??= [];
                 nodes.Add(new KeyValuePair<char, PrefixNode>(c, dispatch.CreateNode()));
@@ -341,7 +376,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     // A method of its own, so that the closures are only allocated for the choices which have a prefix map
     private static CharMap<Parser<T>[]> WithoutAlternatives(CharMap<Parser<T>[]> map, List<KeyValuePair<char, PrefixNode>> nodes)
     {
-        return new CharMap<Parser<T>[]>(map.ExpectedChars.Select(c => new KeyValuePair<char, Parser<T>[]>(c, nodes.Exists(node => node.Key == c) ? [] : map[c]!)));
+        return new CharMap<Parser<T>[]>(map.ExpectedChars.Select(c => new KeyValuePair<char, Parser<T>[]>(c, nodes.Exists(node => node.Key == c) ? [] : map[c]!)))
+        {
+            NonAsciiFallback = map.NonAsciiFallback,
+        };
     }
 
     public bool CanSeek { get; private set; }
@@ -377,8 +415,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     {
         var map = _map;
 
-        // The choice can start with any text when one of its alternatives can
-        if (!CanSeek || map == null || _otherParsers != null)
+        // The choice can start with any text when one of its alternatives can, or with any non-ASCII one
+        if (!CanSeek || map == null || _otherParsers != null || map.NonAsciiFallback != null)
         {
             return null;
         }
@@ -733,8 +771,8 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
             foreach (var ch in _map.ExpectedChars)
             {
-                // Skip '\0' as it represents "no match" / default case
-                if (ch == '\0')
+                // Skip '\0' as it represents "no match" / default case, and the non-ASCII chars without an entry of their own
+                if (ch == OtherSeekableChar || ch == NonAsciiSeekableChar)
                 {
                     continue;
                 }
@@ -838,7 +876,30 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                 localFunctions.Add("}");
             }
 
-            if (defaultGroup is not null)
+            // The non-ASCII chars without an entry select the alternatives which can start with any of them, see Build()
+            var nonAsciiParsers = _map.NonAsciiFallback;
+
+            if (nonAsciiParsers is not null)
+            {
+                result.Body.Add("    default:");
+                result.Body.Add("    {");
+                result.Body.Add($"        if ({currentName} >= '\\u0080')");
+                result.Body.Add("        {");
+                EmitParsers(nonAsciiParsers, result, ctx, indent: "            ", getHelper: GetHelper, context);
+                result.Body.Add("        }");
+
+                if (defaultGroup is not null)
+                {
+                    result.Body.Add("        else");
+                    result.Body.Add("        {");
+                    EmitParsers(defaultGroup.Parsers, result, ctx, indent: "            ", getHelper: GetHelper, context);
+                    result.Body.Add("        }");
+                }
+
+                result.Body.Add("        break;");
+                result.Body.Add("    }");
+            }
+            else if (defaultGroup is not null)
             {
                 result.Body.Add("    default:");
                 result.Body.Add("    {");
@@ -1074,7 +1135,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }) + "'";
     }
 
-    private static string BuildCharPattern(IReadOnlyList<char> chars, int rangeThreshold)
+    internal static string BuildCharPattern(IReadOnlyList<char> chars, int rangeThreshold)
     {
         // Sort and de-dup.
         var list = new List<char>(chars);

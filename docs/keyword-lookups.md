@@ -395,8 +395,8 @@ included.
 
 An internal `ISeekablePrefixes` refines `ISeekable`: a parser tells the texts the input
 starts with when it matches, not only their first chars. Ordinal `Text` and `Keyword`
-parsers tell their text. `Then`, `When`, `Error`, `Capture`, `Commit`, `Switch`,
-`SkipWhiteSpace`, `WhenFollowedBy`, `WhenNotFollowedBy`, `Between`, `OneOrMany`,
+parsers tell their text. `Then`, `When`, `Error`, `Capture`, `Commit`, `WithState`, `Switch`,
+`SkipWhiteSpace`, `WhenFollowedBy`, `WhenNotFollowedBy`, `Peek`, `Between`, `OneOrMany`,
 `Separated`, the sequences, `OperatorIndex` and `Deferred` forward the prefixes of the
 parser that reads first, and a `OneOf` tells those of its alternatives. A parser that
 doesn't implement it, including any custom `ISeekable`, tells its expected chars as

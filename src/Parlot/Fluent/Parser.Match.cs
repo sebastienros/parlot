@@ -114,6 +114,8 @@ public abstract partial class Parser<T>
 
         error = null;
 
+        context.Scanner.Cursor.ResetFurthestOffset();
+
         try
         {
             var start = context.Scanner.Cursor.Offset;

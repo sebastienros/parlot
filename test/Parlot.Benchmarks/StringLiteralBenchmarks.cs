@@ -20,6 +20,7 @@ namespace Parlot.Benchmarks;
 public class StringLiteralBenchmarks
 {
     private readonly Parser<TextSpan> _parser = Literals.String();
+    private readonly Parser<TextSpan> _javaScriptParser = Literals.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript);
 
     private ParseContext _plainContext;
     private ParseContext _escapedContext;
@@ -33,7 +34,8 @@ public class StringLiteralBenchmarks
         _plainContext = new ParseContext(new Scanner($"\"{new string('a', Length)}\""));
         _escapedContext = new ParseContext(new Scanner($"\"{new string('a', Length - 2)}\\n\""));
 
-        if (Plain().Length != Length || Escaped().Length != Length - 1)
+        if (Plain().Length != Length || Escaped().Length != Length - 1
+            || JavaScriptPlain().Length != Length || JavaScriptEscaped().Length != Length - 1)
         {
             throw new InvalidOperationException("Incorrect string parsing.");
         }
@@ -45,12 +47,21 @@ public class StringLiteralBenchmarks
     [Benchmark]
     public TextSpan Escaped() => Parse(_escapedContext);
 
-    private TextSpan Parse(ParseContext context)
+    // The same strings with the escapes of JavaScript, which have their own scanner and decoder
+    [Benchmark]
+    public TextSpan JavaScriptPlain() => Parse(_plainContext, _javaScriptParser);
+
+    [Benchmark]
+    public TextSpan JavaScriptEscaped() => Parse(_escapedContext, _javaScriptParser);
+
+    private TextSpan Parse(ParseContext context) => Parse(context, _parser);
+
+    private static TextSpan Parse(ParseContext context, Parser<TextSpan> parser)
     {
         var result = new ParseResult<TextSpan>();
 
         context.Scanner.Cursor.ResetPosition(TextPosition.Start);
-        _parser.Parse(context, ref result);
+        parser.Parse(context, ref result);
 
         return result.Value;
     }

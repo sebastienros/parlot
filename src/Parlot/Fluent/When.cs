@@ -43,17 +43,53 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
 
-        var valid = _parser.Parse(context, ref result) && _action(context, result.Value);
+        // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to, as in generated
+        // code. The start is known after the white space the parser skips, which only the failure path looks for. A
+        // compacting buffer can't be read again from the start, so it is skipped first.
+        var valueStart = -1;
 
-        if (!valid)
+        if (context.IsCompacting && _parser is ISeekable { SkipWhitespace: true })
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            if (context.MaySkipWhiteSpace(cursor.Current))
+            {
+                context.SkipWhiteSpace();
+            }
+
+            valueStart = cursor.Offset;
+        }
+
+        if (!_parser.Parse(context, ref result))
+        {
+            cursor.ResetPosition(start);
+            context.ExitParser(this);
+            return false;
+        }
+
+        if (!_action(context, result.Value))
+        {
+            var recorded = cursor.RecordedFailure;
+
+            if (valueStart >= 0)
+            {
+                cursor.ResetPosition(start);
+                cursor.RestoreRecordedFailure(recorded);
+                cursor.RecordFailure(valueStart);
+            }
+            else
+            {
+                context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true });
+                cursor.ResetPosition(start);
+            }
+
+            context.ExitParser(this);
+            return false;
         }
 
         context.ExitParser(this);
-        return valid;
+        return true;
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)
@@ -80,25 +116,56 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         // Register the action lambda
         var lambdaId = context.RegisterLambda(_action);
 
-        // if (Helper(context, out var innerValue) && _action(context, innerValue))
-        // {
-        //     success = true;
-        //     value = innerValue;
-        // }
-        // else
-        // {
-        //     cursor.ResetPosition(start);
-        //     success = false;
-        // }
-        
+        // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to. The start is
+        // known after the white space the parser skips, which only the failure path looks for. A compacting buffer can't
+        // be read again from the start, so it is skipped first.
+        var skipsWhiteSpace = _parser is ISeekable { SkipWhitespace: true };
+        var valueStartName = $"valueStart{context.NextNumber()}";
+
+        if (skipsWhiteSpace && context.IsCompacting)
+        {
+            result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
+            result.Body.Add("{");
+            result.Body.Add($"    {context.ParseContextName}.SkipWhiteSpace();");
+            result.Body.Add("}");
+            result.Body.Add($"var {valueStartName} = {cursorName}.Offset;");
+        }
+
         var innerValueName = $"innerValue{context.NextNumber()}";
-        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}) && {lambdaId}({context.ParseContextName}, {innerValueName}))");
+        var recordedName = $"recorded{context.NextNumber()}";
+        // Written here rather than with ParseContext.RecordRejected(): a call on this path made the accepted values slower
+        // on .NET 10, 14.8 ns to 28 ns on LookaheadBenchmarks.
+        result.Body.Add($"if ({helperName}({context.ParseContextName}, out var {innerValueName}))");
         result.Body.Add("{");
-        result.Body.Add($"    {result.SuccessVariable} = true;");
+        result.Body.Add($"    if ({lambdaId}({context.ParseContextName}, {innerValueName}))");
+        result.Body.Add("    {");
+        result.Body.Add($"        {result.SuccessVariable} = true;");
         if (!context.DiscardResult)
         {
-            result.Body.Add($"    {result.ValueVariable} = {innerValueName};");
+            result.Body.Add($"        {result.ValueVariable} = {innerValueName};");
         }
+        result.Body.Add("    }");
+        result.Body.Add("    else");
+        result.Body.Add("    {");
+        result.Body.Add($"        var {recordedName} = {cursorName}.RecordedFailure;");
+        result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        result.Body.Add($"        {cursorName}.RestoreRecordedFailure({recordedName});");
+        if (skipsWhiteSpace && context.IsCompacting)
+        {
+            result.Body.Add($"        {cursorName}.RecordFailure({valueStartName});");
+        }
+        else
+        {
+            if (skipsWhiteSpace)
+            {
+                result.Body.Add($"        {context.ParseContextName}.SkipWhiteSpace();");
+            }
+
+            result.Body.Add($"        {cursorName}.RecordFailure({cursorName}.Offset);");
+            result.Body.Add($"        {cursorName}.ResetPosition({startName});");
+        }
+        result.Body.Add($"        {result.SuccessVariable} = false;");
+        result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add("else");
         result.Body.Add("{");

@@ -19,6 +19,10 @@ public static partial class PooledStringGrammars
     private static Parser<IReadOnlyList<string>> BuildStrings() =>
         ZeroOrMany(Terms.String().ToPooledString()).Eof();
 
+    [GenerateParser(nameof(TryParseRawStrings))]
+    private static Parser<IReadOnlyList<string>> BuildRawStrings() =>
+        ZeroOrMany(Terms.String(StringLiteralQuotes.SingleOrDouble, returnDecoded: false).ToPooledString()).Eof();
+
     // The pooled string of a sequence which only reads the text is generated as span code
     [GenerateParser(nameof(TryParseSpans))]
     private static Parser<IReadOnlyList<string>> BuildSpans() =>
