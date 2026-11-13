@@ -650,6 +650,82 @@ public class StandaloneGeneratorTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Failure_Overloads_Ending_With_A_Bool_Call_The_Parser_Of_The_Other_Overload(bool designTime)
+    {
+        const string declaration = """
+            public static partial class Grammar
+            {
+                public static partial bool TryParse(string text, out int value);
+                public static partial bool TryParse(string text, out int value, out int failureOffset);
+                public static partial bool TryParse(string text, out int value, out (int Offset, bool NestedTooDeeply) failure);
+                public static partial bool TryParse(string text, out int value, out (int Offset, int Line, int Column) failure);
+                public static partial bool TryParse(string text, out int value, out (int Offset, int Line, int Column, bool NestedTooDeeply) failure);
+                public static partial bool TryParse(System.IO.TextReader reader, out int value, out (int, bool) failure);
+            }
+            """;
+        var (result, compilation) = Generate(declaration, Grammar.Replace(".Eof()", ".AndSkip(Terms.Char(';')).Eof()", StringComparison.Ordinal), designTime);
+        AssertNoErrors(result, compilation);
+        var sources = result.Results.SelectMany(static result => result.GeneratedSources)
+            .Where(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal)).ToArray();
+
+        // One parser for the string overloads, one for the TextReader overload
+        Assert.Equal(2, sources.Length);
+        if (designTime)
+        {
+            return;
+        }
+
+        var cores = sources.SelectMany(static source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(static method => method.Identifier.ValueText.EndsWith("_Core", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, cores.Length);
+
+        using var stream = new MemoryStream();
+        Assert.True(compilation.Emit(stream).Success);
+        var methods = Assembly.Load(stream.ToArray()).GetType("Grammar").GetMethods().Where(static method => method.Name == "TryParse").ToArray();
+        Assert.Equal(6, methods.Length);
+        foreach (var method in methods.Where(static method => method.GetParameters().Length == 3))
+        {
+            object[] arguments = [Input(method, "  12 ,"), null, null];
+            Assert.False((bool)method.Invoke(null, arguments));
+            Assert.Equal(arguments[2] switch
+            {
+                int => 5,
+                (int, bool) => (5, false),
+                (int, int, int) => (5, 1, 6),
+                _ => (5, 1, 6, false),
+            }, arguments[2]);
+
+            arguments = [Input(method, "  12 ;"), null, null];
+            Assert.True((bool)method.Invoke(null, arguments));
+            Assert.Equal(12, arguments[1]);
+            Assert.Equal(Activator.CreateInstance(arguments[2].GetType()), arguments[2]);
+        }
+
+        static object Input(MethodInfo method, string text) =>
+            method.GetParameters()[0].ParameterType == typeof(string) ? text : new StringReader(text);
+    }
+
+    [Theory]
+    [InlineData("(int Offset, int Line, bool NestedTooDeeply)")]
+    [InlineData("(bool NestedTooDeeply, int Offset)")]
+    [InlineData("(int Offset, bool NestedTooDeeply, bool Other)")]
+    [InlineData("(int Offset, int Line, int Column, int Other)")]
+    [InlineData("(long Offset, bool NestedTooDeeply)")]
+    [InlineData("bool")]
+    public void Unsupported_Failure_Outputs_Are_Reported_With_The_Supported_Ones(string type)
+    {
+        var declaration = Declaration.Replace("out int value", $"out int value, out {type} failure", StringComparison.Ordinal);
+        var (result, _) = Generate(declaration, Grammar);
+        var diagnostic = Assert.Single(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT023");
+        var message = diagnostic.GetMessage();
+        Assert.Contains("out (int Offset, int Line, int Column)", message, StringComparison.Ordinal);
+        Assert.Contains("out (int Offset, bool NestedTooDeeply)", message, StringComparison.Ordinal);
+        Assert.Contains("out (int Offset, int Line, int Column, bool NestedTooDeeply)", message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Multiple_Parsers_Share_One_Runtime()
     {

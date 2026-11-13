@@ -610,7 +610,9 @@ public sealed partial class ParserSourceGenerator
             + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result. "
             + "Other overloads with the same name may take a TextReader instead of the string, or add a last "
             + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics, "
-            + "or a last out int or out (int Offset, int Line, int Column) receiving the furthest failure.";
+            + "or a last out int or out (int Offset, int Line, int Column) receiving the furthest failure, or one of these with "
+            + "whether the input is nested too deeply: out (int Offset, bool NestedTooDeeply) or "
+            + "out (int Offset, int Line, int Column, bool NestedTooDeeply).";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -696,7 +698,7 @@ public sealed partial class ParserSourceGenerator
     }
 
     // Whether the entry point ends with the out result followed by an out int, or an out (int Offset, int Line, int Column),
-    // receiving the furthest failure
+    // receiving the furthest failure, or by a tuple of one of these and a bool, receiving whether the input is nested too deeply
     private static FailureOutput GetFailureOutput(IMethodSymbol method, IMethodSymbol factory, ITypeSymbol resultType)
     {
         if (method.Parameters.Length < factory.Parameters.Length + 3)
