@@ -100,7 +100,8 @@ internal abstract class PostfixGroup<T>
 
     /// <summary>
     /// Whether the value of <see cref="Choice"/> is a pair of the middle and the last operands of a conditional, and the
-    /// single factory takes the condition, the middle operand and the last operand, in that order.
+    /// single factory takes the condition, the middle operand and the last operand, in that order, after the
+    /// <see cref="ParseContext"/> when <see cref="WithContext"/> is set.
     /// </summary>
     public virtual bool IsConditional => false;
 
@@ -109,18 +110,26 @@ internal abstract class PostfixGroup<T>
 
 /// <summary>
 /// The conditional operator of a <see cref="ValuedPostfix{T}"/>, <c>question middle colon last</c>, whose factory receives
-/// the condition, the middle operand and the last operand. The last operand is parsed by its own parser, which can be
-/// looser than the conditional, like a whole expression.
+/// the condition, the middle operand and the last operand, and the <see cref="ParseContext"/> first when it takes it. The
+/// last operand is parsed by its own parser, which can be looser than the conditional, like a whole expression.
 /// </summary>
 internal sealed class ConditionalGroup<T, TMiddle> : PostfixGroup<T>
 {
     private readonly Parser<(int Index, (TMiddle Middle, T Last) Value)> _choice;
-    private readonly Func<T, TMiddle, T, T> _factory;
+    private readonly Func<T, TMiddle, T, T>? _factory;
+    private readonly Func<ParseContext, T, TMiddle, T, T>? _contextFactory;
 
     public ConditionalGroup(Parser<(TMiddle, T)> op, Func<T, TMiddle, T, T> factory)
     {
         _choice = new IndexedOperator<(TMiddle, T)>(op, 0);
         _factory = factory;
+        Factories = [factory];
+    }
+
+    public ConditionalGroup(Parser<(TMiddle, T)> op, Func<ParseContext, T, TMiddle, T, T> factory)
+    {
+        _choice = new IndexedOperator<(TMiddle, T)>(op, 0);
+        _contextFactory = factory;
         Factories = [factory];
     }
 
@@ -132,8 +141,7 @@ internal sealed class ConditionalGroup<T, TMiddle> : PostfixGroup<T>
 
     public override bool IsConditional => true;
 
-    // The factory takes the condition and the operands, not the context
-    public override bool WithContext => false;
+    public override bool WithContext => _contextFactory is not null;
 
     public override int Apply(ParseContext context, int position, ref ParseResult<T> result)
     {
@@ -149,7 +157,11 @@ internal sealed class ConditionalGroup<T, TMiddle> : PostfixGroup<T>
             return Empty;
         }
 
-        result.Set(result.Start, op.End, _factory(result.Value, op.Value.Value.Middle, op.Value.Value.Last));
+        var value = _factory is not null
+            ? _factory(result.Value, op.Value.Value.Middle, op.Value.Value.Last)
+            : _contextFactory!(context, result.Value, op.Value.Value.Middle, op.Value.Value.Last);
+
+        result.Set(result.Start, op.End, value);
         return Applied;
     }
 }
