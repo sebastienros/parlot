@@ -175,15 +175,18 @@ internal sealed class SeekGuard
 
     private static string GenerateTest(SourceGenerationContext context, string variable, List<(char First, char Last)> ranges)
     {
+        // No char is above the last one: a range which ends with it, like the non-ASCII chars, is tested with its first char
         if (context.SupportsCSharp9SwitchPatterns)
         {
-            return $"{variable} is " + string.Join(" or ", ranges.Select(static r => r.First == r.Last
-                ? LiteralHelper.CharToLiteral(r.First)
+            return $"{variable} is " + string.Join(" or ", ranges.Select(static r =>
+                r.First == r.Last ? LiteralHelper.CharToLiteral(r.First)
+                : r.Last == char.MaxValue ? $">= {LiteralHelper.CharToLiteral(r.First)}"
                 : $">= {LiteralHelper.CharToLiteral(r.First)} and <= {LiteralHelper.CharToLiteral(r.Last)}"));
         }
 
-        return string.Join(" || ", ranges.Select(r => r.First == r.Last
-            ? $"{variable} == {LiteralHelper.CharToLiteral(r.First)}"
+        return string.Join(" || ", ranges.Select(r =>
+            r.First == r.Last ? $"{variable} == {LiteralHelper.CharToLiteral(r.First)}"
+            : r.Last == char.MaxValue ? $"{variable} >= {LiteralHelper.CharToLiteral(r.First)}"
             : $"({variable} >= {LiteralHelper.CharToLiteral(r.First)} && {variable} <= {LiteralHelper.CharToLiteral(r.Last)})"));
     }
 
@@ -208,7 +211,15 @@ internal sealed class SeekGuard
 
         if (anyNonAscii)
         {
-            ranges.Add(((char)0x80, char.MaxValue));
+            // They follow the last ASCII char
+            if (ranges.Count > 0 && ranges[ranges.Count - 1].Last == 0x7F)
+            {
+                ranges[ranges.Count - 1] = (ranges[ranges.Count - 1].First, char.MaxValue);
+            }
+            else
+            {
+                ranges.Add(((char)0x80, char.MaxValue));
+            }
         }
 
         return ranges;

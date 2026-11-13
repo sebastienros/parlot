@@ -244,6 +244,32 @@ public class SeekGuardSourceTests
         Assert.Equal(["a"], ascii);
     }
 
+    [Fact]
+    public void Guards_Test_Any_NonAscii_Char_With_A_Lower_Bound()
+    {
+        // Every char is at most U+FFFF: the chars from U+0080 are tested with one comparison
+        Assert.Matches(@"^if \(current\d+ is 'a' or >= '\\u0080'\)$", Test("a", languageVersion: 10));
+        Assert.Matches(@"^if \(current\d+ == 'a' \|\| current\d+ >= '\\u0080'\)$", Test("a", languageVersion: 8));
+
+        // The chars it lists are part of them, and the last ASCII char is next to them
+        Assert.Matches(@"^if \(current\d+ is >= 'a' and <= 'c' or >= '\\u0080'\)$", Test("abcéü", languageVersion: 10));
+        Assert.Matches(@"^if \(current\d+ is 'a' or >= '\\u007f'\)$", Test("a\u007F", languageVersion: 10));
+        Assert.Matches(@"^if \(current\d+ >= '\\u0080'\)$", Test("", languageVersion: 8));
+
+        static string Test(string startChars, int languageVersion)
+        {
+            var parser = Literals.Scan(static span => span.Length > 0 ? 1 : 0, startChars + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+                .Then(static x => x.ToString())
+                .Optional();
+
+            var context = new SourceGenerationContext("context", null, null, languageVersion);
+            Assert.IsAssignableFrom<ISourceable>(parser).GenerateSource(context);
+
+            var guard = Assert.Single(context.Helpers.Enumerate(), static helper => helper.MethodName.Contains("_SeekGuard", StringComparison.Ordinal));
+            return Assert.Single(guard.Result.Body, static line => line.StartsWith("if (", StringComparison.Ordinal));
+        }
+    }
+
     private delegate bool StringValueParser<T>(string text, out T value);
     private delegate bool ReaderValueParser<T>(TextReader reader, out T value);
 
