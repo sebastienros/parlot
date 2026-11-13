@@ -3237,5 +3237,58 @@ public class FluentTests
 
         Assert.False(error.IsNestedTooDeeply);
     }
+
+    [Fact]
+    public void ParseErrorOfTheRecursionLimitIsNestedTooDeeply()
+    {
+        const string Text = "[[[[item]]]]";
+        var list = Recursive<int>(static list => Between(Literals.Char('['), list, Literals.Char(']')).Or(Literals.Text("item").Then(0)));
+
+        Assert.False(list.TryParse(new ParseContext(new Scanner(Text), maxRecursionDepth: 3), out _, out var error));
+        Assert.True(error.IsNestedTooDeeply);
+        Assert.Equal(3, error.Position.Offset);
+
+        Assert.False(list.TryMatch(new ParseContext(new Scanner(Text), maxRecursionDepth: 3), out _, out error));
+        Assert.True(error.IsNestedTooDeeply);
+
+        var options = new StreamParseOptions { ContextFactory = static (scanner, _) => new ParseContext(scanner, maxRecursionDepth: 3) };
+        using var reader = new System.IO.StringReader(Text);
+        Assert.False(list.TryParse(reader, out _, out error, options));
+        Assert.True(error.IsNestedTooDeeply);
+
+        // The limit allows this one
+        Assert.True(list.TryParse(new ParseContext(new Scanner("[[item]]"), maxRecursionDepth: 3), out _, out error));
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void ParseErrorOfAnErrorIsNotNestedTooDeeply()
+    {
+        var parser = Literals.Char('a').ElseError("Expected a");
+
+        Assert.False(parser.TryParse("b", out _, out var error));
+        Assert.Equal("Expected a", error.Message);
+        Assert.False(error.IsNestedTooDeeply);
+
+        Assert.False(parser.TryMatch("b", out _, out error));
+        Assert.False(error.IsNestedTooDeeply);
+
+        using var reader = new System.IO.StringReader("b");
+        Assert.False(parser.TryParse(reader, out _, out error));
+        Assert.False(error.IsNestedTooDeeply);
+    }
+
+    [Fact]
+    public void ParseExceptionOfACallbackIsNotNestedTooDeeply()
+    {
+        // The exception of a callback is the application's, even when it's thrown at the depth of a limit
+        var list = Recursive<int>(static list => Between(Literals.Char('['), list, Literals.Char(']'))
+            .Or(Literals.Text("item").Then<int>(static (context, _) => throw new ParseException("Rejected", context.Scanner.Cursor.Position))));
+
+        var context = new ParseContext(new Scanner("[[item]]"), maxRecursionDepth: 3);
+        Assert.False(list.TryParse(context, out _, out var error));
+        Assert.Equal("Rejected", error.Message);
+        Assert.False(error.IsNestedTooDeeply);
+    }
 }
 
