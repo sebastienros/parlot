@@ -1794,7 +1794,7 @@ start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, 
 | `UnterminatedComment` | A comment without its end |
 |---|---|
 | `Throw` | throws, or reports an error when the diagnostics are collected, as `WithMultiLine(start, end)` |
-| `NotAComment` | is not a comment: it is not skipped, without an error, and the comments added after it can start there |
+| `NotAComment` | is not a comment: it is not skipped, without an error or a [furthest failure](#reporting-where-a-parse-failed), and the comments added after it can start there |
 | `ToEnd` | runs to the end of the text |
 
 In xmSQL, as in the ANTLR lexer its grammar ports, an unclosed `/*` is a `/` token and a `*` token:

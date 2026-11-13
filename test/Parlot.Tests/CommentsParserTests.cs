@@ -195,6 +195,25 @@ public class CommentsParserTests
     }
 
     [Theory]
+    [InlineData("a /* b", 2)]
+    [InlineData("a /*", 2)]
+    [InlineData("a\n  /* b\n", 4)]
+    [InlineData("a / b", 2)]
+    [InlineData("a /* b */ 1", 10)]
+    public void ShouldNotRecordAFailureForAnUnterminatedCommentWhichIsNotOne(string text, int offset)
+    {
+        // "/*" is then no more a comment than "/" is: the furthest failure is the token which doesn't match, not the
+        // position after the start of the comment
+        var parser = Terms.Identifier().And(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment));
+        var context = new ParseContext(new Scanner(text));
+
+        Assert.False(parser.TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(offset, context.Scanner.Cursor.FurthestOffset);
+    }
+
+    [Theory]
     [InlineData("a /* b */ c", "a|c")]
     [InlineData("a /* b", "a")]
     [InlineData("a /* b\n c", "a")]

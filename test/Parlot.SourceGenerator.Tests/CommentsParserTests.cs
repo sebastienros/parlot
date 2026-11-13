@@ -128,6 +128,32 @@ public class CommentsParserTests
         Assert.Empty(errors);
     }
 
+    [Theory]
+    [InlineData("a /* b", 2)]
+    [InlineData("a /*", 2)]
+    [InlineData("a\n  /* b\n", 4)]
+    [InlineData("a / b", 2)]
+    [InlineData("a /* b */ 1", 10)]
+    public void Unterminated_Comments_Which_Are_Not_Comments_Are_Not_The_Furthest_Failure(string text, int offset)
+    {
+        // As at runtime, the failure is the token which doesn't match, not the position after the start of the comment
+        var parser = Terms.Identifier().And(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment));
+        var context = new ParseContext(new Scanner(text));
+
+        Assert.False(parser.TryParse(context, out _, out _));
+        Assert.Equal(offset, context.Scanner.Cursor.FurthestOffset);
+
+        Assert.False(CommentsGrammars.TryParseNotACommentFailure(text, out _, out int failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        for (var chunk = 1; chunk <= 3; chunk++)
+        {
+            Assert.False(CommentsGrammars.TryParseNotACommentFailure(new ChunkedReader(text, chunk), out _, out (int Offset, int Line, int Column) failure));
+            Assert.Equal(offset, failure.Offset);
+        }
+    }
+
     [Fact]
     public void Unterminated_Comments_Fail()
     {
@@ -230,6 +256,8 @@ public static partial class CommentsGrammars
     public static partial bool TryParseToEnd(TextReader reader, out string value);
     public static partial bool TryParseNotACommentDiagnostics(string text, out string value,
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
+    public static partial bool TryParseNotACommentFailure(string text, out string value, out int failureOffset);
+    public static partial bool TryParseNotACommentFailure(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseDiagnostics(string text, out string value,
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
 }

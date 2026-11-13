@@ -131,8 +131,11 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
             if (comment.Unterminated == UnterminatedComment.NotAComment)
             {
-                // The comments added after this one can start here
+                // The comments added after this one can start here. Like a start which doesn't match, it is not a failure
+                // of the parse: the cursor goes back without recording where the search for the end began
+                var recorded = cursor.RecordedFailure;
                 cursor.ResetPosition(commentStart);
+                cursor.RestoreRecordedFailure(recorded);
                 continue;
             }
 
@@ -238,8 +241,12 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                     }
                     else if (comment.Unterminated == UnterminatedComment.NotAComment)
                     {
-                        // The comments added after this one can start here
+                        // The comments added after this one can start here, and it is not a failure of the parse
+                        var recordedName = $"recorded{context.NextNumber()}";
+
+                        result.Body.Add($"            var {recordedName} = {cursorName}.RecordedFailure;");
                         result.Body.Add($"            {cursorName}.ResetPosition({commentStartName});");
+                        result.Body.Add($"            {cursorName}.RestoreRecordedFailure({recordedName});");
                     }
                     else
                     {

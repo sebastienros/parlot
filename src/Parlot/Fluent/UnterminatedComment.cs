@@ -14,7 +14,7 @@ public enum UnterminatedComment
 
     /// <summary>
     /// The start of the comment is not a comment: it is not skipped, and the cursor stays before it. The comments added
-    /// after it can still start there.
+    /// after it can still start there. Like a start which doesn't match, it doesn't move <see cref="Cursor.FurthestOffset"/>.
     /// </summary>
     NotAComment,
 

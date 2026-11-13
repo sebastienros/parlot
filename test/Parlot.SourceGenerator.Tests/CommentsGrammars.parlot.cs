@@ -57,6 +57,13 @@ public static partial class CommentsGrammars
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment))
             .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
 
+    // The furthest failure after an unterminated comment which is not one: where a token doesn't match
+    [GenerateParser(nameof(TryParseNotACommentFailure))]
+    private static Parser<string> BuildNotACommentFailure() =>
+        Terms.Identifier().And(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment))
+            .Then(static x => x.Item1.ToString() + "|" + x.Item2.ToString());
+
     // The diagnostics of an unterminated comment
     [GenerateParser(nameof(TryParseDiagnostics))]
     private static Parser<string> BuildDiagnostics() =>
