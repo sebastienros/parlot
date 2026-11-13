@@ -192,6 +192,20 @@ public static partial class FailureGrammars
         Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), failOnEof: true))
             .Then(static value => value.ToString()).AndSkip(Literals.Text(";;")).Eof();
 
+    // A delimiter whose first alternative reads further than the one which matches, and which isn't consumed: a lookahead
+    [GenerateParser(nameof(RejectedTextBeforeChoice))]
+    public static Parser<string> BuildRejectedTextBeforeChoice() =>
+        Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;")))
+            .Then(static value => value.ToString()).When(static (_, value) => !value.StartsWith("from", System.StringComparison.Ordinal)))
+            .AndSkip(Literals.Text(";;")).Eof();
+
+    // A delimiter of two parsers, which reads a `;` wherever there is one in the text, and is consumed
+    [GenerateParser(nameof(RejectedTextBeforeConsumed))]
+    public static Parser<string> BuildRejectedTextBeforeConsumed() =>
+        Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Char(';').And(Terms.Char(';')), consumeDelimiter: true)
+            .Then(static value => value.ToString()).When(static (_, value) => !value.StartsWith("from", System.StringComparison.Ordinal)))
+            .AndSkip(Terms.Char('!')).Eof();
+
     // An expression whose factories receive the operators, that the condition rejects: the cursor is moved back over the
     // white space skipped to look for an operator, for the level which parses it
     [GenerateParser(nameof(RejectedValuedOperators))]

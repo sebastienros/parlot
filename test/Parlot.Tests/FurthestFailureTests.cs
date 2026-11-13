@@ -220,7 +220,7 @@ public class FurthestFailureTests
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
     // The furthest failure of the string and of the TextReader parsers, which match the generated ones (standalone FailureTests)
-    private static void AssertFurthest<T>(Parser<T> parser, string text, int offset)
+    private static void AssertFurthest<T>(Parser<T> parser, string text, int offset, int bufferSize = 1)
     {
         var context = Context(text);
         Assert.False(parser.TryParse(context, out _, out _));
@@ -230,7 +230,7 @@ public class FurthestFailureTests
         ParseContext readerContext = null!;
         var options = new StreamParseOptions
         {
-            BufferSize = 1,
+            BufferSize = bufferSize,
             ContextFactory = (scanner, token) => readerContext = new ParseContext(scanner, token),
         };
 
@@ -394,6 +394,8 @@ public class FurthestFailureTests
     [InlineData("  >ab;;", 3)]
     [InlineData(">a;b;;", 1)]
     [InlineData(">ab ;;", 1)]
+    [InlineData(">a b ;;", 1)]
+    [InlineData("  >two words  and ; more ;;", 3)]
     public void Rejected_Text_Before_A_Delimiter_Fails_At_Its_Start(string text, int offset)
     {
         // The delimiter is found and not consumed: the cursor is moved back from a delimiter which matched, not a failure
@@ -414,6 +416,31 @@ public class FurthestFailureTests
 
         // A delimiter which is consumed is part of the value
         AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+
+        // A delimiter which reads some text before it fails, where it is looked for in the text
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Char(';').And(Literals.Char(';'))).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Char(';').And(Terms.Char(';')), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab", 1)]
+    [InlineData(">a b", 1)]
+    [InlineData("  >two words  and ; more", 3)]
+    public void Rejected_Text_Up_To_The_End_Fails_At_Its_Start(string text, int offset)
+    {
+        // The delimiter isn't found: where it was looked for in the text isn't a failure either
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;")).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Char(';').And(Terms.Char(';')), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">12 foo bar: x", 7)]
+    [InlineData(">foo  bar baz :", 9)]
+    public void Delimiter_Looked_For_Past_The_End_Of_The_Text_Isnt_A_Failure(string text, int offset)
+    {
+        // `foo` isn't followed by a colon: the delimiter is looked for from there up to `bar`, past where the text ends
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Identifier().And(Terms.Char(':')))).AndSkip(Literals.Char('!')).Eof(), text, offset);
     }
 
     [Theory]
@@ -462,10 +489,42 @@ public class FurthestFailureTests
     {
         AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"))).AndSkip(Literals.Text(";;")).AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
         AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), consumeDelimiter: true)).AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
+    }
 
-        // A value which is rejected keeps the failure of a delimiter which read further and didn't match
-        var delimiter = Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!'));
-        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(delimiter.Or(Literals.Text(";;"))).When(static (_, _) => false)).Eof(), text, offset);
+    [Theory]
+    [InlineData(">ab;;cd?", 7)]
+    [InlineData(">ab;;  cd ?", 10)]
+    [InlineData(">ab;;?", 5)]
+    public void Alternative_Of_A_Delimiter_Counts_When_The_Delimiter_Is_Consumed(string text, int offset)
+    {
+        // The first alternative reads further than the one which matches
+        var delimiter = Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;"));
+
+        // A delimiter which is consumed is part of the value, like the alternatives of a choice in it
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(delimiter, consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+
+        // One which isn't consumed is a lookahead, like the one of WhenFollowedBy
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(delimiter).When(static (_, _) => false)).Eof(), text, 1);
+        AssertFurthest(Terms.Char('>').SkipAnd(Literals.Text("ab").WhenFollowedBy(delimiter).When(static (_, _) => false)).Eof(), text, 1);
+    }
+
+    [Theory]
+    [InlineData(">/* a comment */", 1)]
+    [InlineData("  >/* a comment */", 3)]
+    [InlineData(">'a\\'b' ", 1)]
+    [InlineData(">  'a\\'b' ", 3)]
+    public void Token_Read_Again_With_More_Text_Forgets_What_It_Recorded(string text, int offset)
+    {
+        // A token which ends with the buffer fails there and moves the cursor back, then is read again with more text:
+        // the end of the buffer isn't a failure
+        var comment = Terms.Char('>').SkipAnd(Terms.Comments("/*", "*/").When(static (_, _) => false)).Eof();
+        var quoted = Terms.Char('>').SkipAnd(Terms.String().When(static (_, _) => false)).Eof();
+        var parser = text.Contains('/') ? comment.Then(static _ => 0) : quoted.Then(static _ => 0);
+
+        for (var bufferSize = 1; bufferSize <= 8; bufferSize++)
+        {
+            AssertFurthest(parser, text, offset, bufferSize);
+        }
     }
 
     [Theory]

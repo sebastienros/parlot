@@ -93,6 +93,12 @@ public static partial class FailureGrammars
     public static partial bool TextBeforeRequired(string text, out string value, out int failureOffset);
     public static partial bool TextBeforeRequired(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool RejectedTextBeforeChoice(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBeforeChoice(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBeforeConsumed(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBeforeConsumed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool RejectedValuedOperators(string text, out long value, out int failureOffset);
     public static partial bool RejectedValuedOperators(TextReader reader, out long value, out (int Offset, int Line, int Column) failure);
 }
