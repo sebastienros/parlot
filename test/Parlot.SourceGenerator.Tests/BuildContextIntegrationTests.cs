@@ -175,6 +175,11 @@ public class BuildContextIntegrationTests
                 process.StartInfo.Environment.Remove(name);
             }
         }
+        // Nothing may outlive the command: the tests delete the directory it built in. Since the .NET 11 SDK a build runs
+        // in an MSBuild server, which keeps the task assemblies it loaded from the packages restored there (the Native
+        // AOT compiler's), and Windows can't delete a file which is loaded. Worker nodes are kept the same way.
+        process.StartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
+        process.StartInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         process.StartInfo.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en-US";
         process.StartInfo.Environment["DOTNET_NOLOGO"] = "true";
         foreach (var argument in arguments)
