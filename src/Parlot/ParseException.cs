@@ -5,6 +5,9 @@ using System.Runtime.Serialization;
 
 namespace Parlot;
 
+/// <summary>
+/// The exception thrown when a text can't be parsed, with the position of the failure in the text.
+/// </summary>
 #if !NET8_0_OR_GREATER
 [Serializable]
 #endif
@@ -13,6 +16,7 @@ public class ParseException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="ParseException"/> class, without a position.
     /// </summary>
+    /// <remarks><see cref="Position"/> is left at its default value.</remarks>
     public ParseException()
     {
     }
@@ -20,6 +24,8 @@ public class ParseException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="ParseException"/> class with a message, without a position.
     /// </summary>
+    /// <param name="message">The message that describes the failure.</param>
+    /// <remarks><see cref="Position"/> is left at its default value.</remarks>
     public ParseException(string? message) : base(message)
     {
     }
@@ -27,10 +33,18 @@ public class ParseException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="ParseException"/> class with a message and the exception which caused it, without a position.
     /// </summary>
+    /// <param name="message">The message that describes the failure.</param>
+    /// <param name="innerException">The exception which caused the failure, or <see langword="null"/>.</param>
+    /// <remarks><see cref="Position"/> is left at its default value.</remarks>
     public ParseException(string? message, Exception? innerException) : base(message, innerException)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ParseException"/> class with a message and the position of the failure.
+    /// </summary>
+    /// <param name="message">The message that describes the failure.</param>
+    /// <param name="position">The position of the failure in the text.</param>
 #if !PARLOT_STANDALONE
     // An untyped second argument, like default or new(), keeps selecting this constructor rather than being ambiguous with
     // the one which takes an inner exception. The embedded runtime compiles with C# 10, which doesn't know the attribute.
@@ -45,6 +59,8 @@ public class ParseException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="ParseException"/> class from serialized data.
     /// </summary>
+    /// <param name="info">The serialized data of the exception.</param>
+    /// <param name="context">The source of the serialized data.</param>
     protected ParseException(SerializationInfo info, StreamingContext context) : base(info, context)
     {
         Position = new TextPosition(info.GetInt32(nameof(TextPosition.Offset)), info.GetInt32(nameof(TextPosition.Line)), info.GetInt32(nameof(TextPosition.Column)));
@@ -53,6 +69,8 @@ public class ParseException : Exception
     /// <summary>
     /// Adds the position to the serialized data of the exception.
     /// </summary>
+    /// <param name="info">The serialized data of the exception.</param>
+    /// <param name="context">The destination of the serialized data.</param>
     // Exception.GetObjectData is security critical on .NET Framework, where an override must be too: a transparent one,
     // which it is in an assembly that allows partially trusted callers, prevents the type from loading.
     [System.Security.SecurityCritical]
@@ -65,5 +83,9 @@ public class ParseException : Exception
     }
 #endif
 
+    /// <summary>
+    /// The position of the failure in the text. An exception created without a position has the default
+    /// <see cref="TextPosition"/>, whose line is 0, which no position in a text has.
+    /// </summary>
     public TextPosition Position { get; set; }
 }
