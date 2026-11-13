@@ -182,11 +182,32 @@ public class CommentsBuilder
             throw new ArgumentOutOfRangeException(nameof(unterminated));
         }
 
-        _parsers.Add(unterminated == UnterminatedComment.Throw
-            ? Literals.Comments(multiLineStart, multiLineEnd)
-            : Capture(Literals.Text(multiLineStart).And(AnyCharBefore(Literals.Text(multiLineEnd), canBeEmpty: true, failOnEof: unterminated == UnterminatedComment.NotAComment, consumeDelimiter: true))));
-        AddComment(new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null, unterminated));
+        var comment = new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null, unterminated);
+
+        _parsers.Add(ComposedMultiLine(comment));
+        AddComment(comment);
         return this;
+    }
+
+    // The parser of a multi line comment, for a builder which composes the parsers of its elements
+    private static Parser<TextSpan> ComposedMultiLine(CommentsParser.CommentSyntax comment)
+    {
+        var start = comment.Start;
+        var end = comment.End!;
+
+        if (comment.Unterminated == UnterminatedComment.Throw)
+        {
+            return Literals.Comments(start, end);
+        }
+
+        // A CommentsParser of this comment alone, without white space, reads an unterminated one the same way in both
+        // builders. It needs the first char of the start, and an end to search for
+        if (start.Length > 0 && end.Length > 0)
+        {
+            return new CommentsParser(skipWhiteSpace: false, includeNewLines: false, [comment]);
+        }
+
+        return Capture(Literals.Text(start).And(AnyCharBefore(Literals.Text(end), canBeEmpty: true, failOnEof: comment.Unterminated == UnterminatedComment.NotAComment, consumeDelimiter: true)));
     }
 
     private void AddComment(CommentsParser.CommentSyntax comment)

@@ -147,11 +147,39 @@ public class CommentsParserTests
         Assert.False(CommentsGrammars.TryParseNotACommentFailure(text, out _, out int failureOffset));
         Assert.Equal(offset, failureOffset);
 
+        // The same when the builder composes the parsers of its elements
+        Assert.False(CommentsGrammars.TryParseComposedNotACommentFailure(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
         for (var chunk = 1; chunk <= 3; chunk++)
         {
             Assert.False(CommentsGrammars.TryParseNotACommentFailure(new ChunkedReader(text, chunk), out _, out (int Offset, int Line, int Column) failure));
             Assert.Equal(offset, failure.Offset);
+
+            Assert.False(CommentsGrammars.TryParseComposedNotACommentFailure(new ChunkedReader(text, chunk), out _, out failure));
+            Assert.Equal(offset, failure.Offset);
         }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("a /* b */ c")]
+    [InlineData("a /* b")]
+    [InlineData("a/*")]
+    [InlineData("a ... b /* c")]
+    [InlineData("a .. b")]
+    [InlineData("a (* b *) c (* d\n e")]
+    [InlineData("a (* b /* c")]
+    [InlineData("a /* b (* c")]
+    [InlineData("/**//**/(**)...a")]
+    public void Composed_Unterminated_Comments_Match_The_Runtime(string text)
+    {
+        var parser = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithParser(Capture(Literals.Text("..."))).WithMultiLine("(*", "*)", UnterminatedComment.ToEnd))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+        Check(parser, CommentsGrammars.TryParseComposedUnterminated, CommentsGrammars.TryParseComposedUnterminated, text);
     }
 
     [Fact]
@@ -258,6 +286,10 @@ public static partial class CommentsGrammars
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
     public static partial bool TryParseNotACommentFailure(string text, out string value, out int failureOffset);
     public static partial bool TryParseNotACommentFailure(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseComposedUnterminated(string text, out string value);
+    public static partial bool TryParseComposedUnterminated(TextReader reader, out string value);
+    public static partial bool TryParseComposedNotACommentFailure(string text, out string value, out int failureOffset);
+    public static partial bool TryParseComposedNotACommentFailure(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseDiagnostics(string text, out string value,
         out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> errors);
 }

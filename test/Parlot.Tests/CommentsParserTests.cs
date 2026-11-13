@@ -43,21 +43,21 @@ public class CommentsParserTests
         ["prefixes"] = (_prefixes, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("/"), Literals.Comments("/*", "*/"))))),
     };
 
+    private static readonly string[] _texts =
+    [
+        "", "a", " a ", "a b", "a // b\n c", "a // b\r\n c", "a // b\r c", "a // b\u2028 c", "a //", "a // b", "//", "// a\n",
+        "a /* b */ c", "a /**/ c", "a/*b*//*c*/d", "a /* b * / */ c", "a /* b", "a /*", "a /", "a / b", "/*/ a", "/* a */",
+        "a -- b\n c", "a # b\n c", "a#b\nc", "a\n#b\n--c\nd", "a\tb", "a\r\n\r\nb", "a (* b *) c", "a(*b*)c", "a(*b", "a(b",
+        "#", "(*", "(**)", "a\u00A0b", "a /* b */\n// c\n d /* e", "  ", "\n",
+    ];
+
     public static TheoryData<string, string> Inputs()
     {
-        var texts = new[]
-        {
-            "", "a", " a ", "a b", "a // b\n c", "a // b\r\n c", "a // b\r c", "a // b\u2028 c", "a //", "a // b", "//", "// a\n",
-            "a /* b */ c", "a /**/ c", "a/*b*//*c*/d", "a /* b * / */ c", "a /* b", "a /*", "a /", "a / b", "/*/ a", "/* a */",
-            "a -- b\n c", "a # b\n c", "a#b\nc", "a\n#b\n--c\nd", "a\tb", "a\r\n\r\nb", "a (* b *) c", "a(*b*)c", "a(*b", "a(b",
-            "#", "(*", "(**)", "a\u00A0b", "a /* b */\n// c\n d /* e", "  ", "\n",
-        };
-
         var data = new TheoryData<string, string>();
 
         foreach (var builder in _builders.Keys)
         {
-            foreach (var text in texts)
+            foreach (var text in _texts)
             {
                 data.Add(builder, text);
             }
@@ -211,6 +211,17 @@ public class CommentsParserTests
         Assert.False(parser.TryParse(context, out _, out _));
         Assert.Equal(0, context.Scanner.Cursor.Offset);
         Assert.Equal(offset, context.Scanner.Cursor.FurthestOffset);
+
+        // The same when the builder composes the parsers of its elements
+        var composed = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithParser(Capture(Literals.Text("..."))).Build();
+
+        Assert.IsNotType<CommentsParser>(composed);
+
+        context = new ParseContext(new Scanner(text));
+
+        Assert.False(Terms.Identifier().And(Terms.Identifier()).WithWhiteSpaceParser(composed).TryParse(context, out _, out _));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(offset, context.Scanner.Cursor.FurthestOffset);
     }
 
     [Theory]
@@ -262,6 +273,25 @@ public class CommentsParserTests
 
         Assert.IsNotType<CommentsParser>(parser);
         Assert.Equal(expected, _identifiers.AndSkip(SkipWhiteSpace(Always())).Eof().WithWhiteSpaceParser(parser).TryParse(text, out _));
+    }
+
+    [Theory]
+    [InlineData(UnterminatedComment.NotAComment)]
+    [InlineData(UnterminatedComment.ToEnd)]
+    public void ShouldComposeUnterminatedCommentsAsTheSingleParserReadsThem(UnterminatedComment unterminated)
+    {
+        // A parser which never matches makes the builder compose the parsers of its elements
+        var single = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", unterminated).WithSingleLine("/").Build();
+        var composed = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", unterminated).WithSingleLine("/").WithParser(Capture(Literals.Text("\u0001"))).Build();
+
+        Assert.IsType<CommentsParser>(single);
+        Assert.IsNotType<CommentsParser>(composed);
+
+        foreach (var text in _texts)
+        {
+            Assert.Equal(Describe(_identifiers.WithWhiteSpaceParser(single), text), Describe(_identifiers.WithWhiteSpaceParser(composed), text));
+            Assert.Equal(DescribeDiagnostics(_identifiers.WithWhiteSpaceParser(single), text), DescribeDiagnostics(_identifiers.WithWhiteSpaceParser(composed), text));
+        }
     }
 
     [Fact]
@@ -365,6 +395,18 @@ public class CommentsParserTests
     public void ShouldComposeCommentsWithAnEmptyEnd()
     {
         Assert.IsNotType<CommentsParser>(new CommentsBuilder().WithMultiLine("/*", "").Build());
+    }
+
+    [Theory]
+    [InlineData(UnterminatedComment.Throw)]
+    [InlineData(UnterminatedComment.NotAComment)]
+    [InlineData(UnterminatedComment.ToEnd)]
+    public void ShouldReadACommentWithAnEmptyEndAsItsStart(UnterminatedComment unterminated)
+    {
+        var parser = new CommentsBuilder().WithWhiteSpace().WithMultiLine("/*", "", unterminated).Build();
+
+        Assert.IsNotType<CommentsParser>(parser);
+        Assert.Equal("a|b", string.Join("|", _identifiers.WithWhiteSpaceParser(parser).Parse("a /* b")!));
     }
 
     [Fact]
