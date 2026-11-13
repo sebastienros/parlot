@@ -16,6 +16,7 @@ namespace Parlot.Benchmarks;
 // the frameworks without SearchValues did so, and read the whole text at each false start.
 // This project only targets net10.0, which jumps with SearchValues.
 // The sparse text holds no expected char before the delimiter, like a comment: the jump reads it once.
+// The text of 16 chars is the one where finding the delimiter, and moving the cursor back from it, costs the most.
 
 [MemoryDiagnoser, ShortRunJob]
 public partial class TextBeforeBenchmarks
@@ -27,7 +28,7 @@ public partial class TextBeforeBenchmarks
     private string _text;
     private string _sparseText;
 
-    [Params(1_000, 4_000, 16_000)]
+    [Params(16, 1_000, 4_000, 16_000)]
     public int Length { get; set; }
 
     [GlobalSetup]
