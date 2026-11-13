@@ -291,7 +291,12 @@ internal sealed class StreamingDriver : IDisposable
 
     public ParseException ToAbsolute(ParseException exception)
     {
-        exception.Position = ToAbsolute(exception.Position);
+        // An exception created without a position, like a callback's, has line 0, which no position in a text has
+        if (exception.Position.Line != 0)
+        {
+            exception.Position = ToAbsolute(exception.Position);
+        }
+
         return exception;
     }
 

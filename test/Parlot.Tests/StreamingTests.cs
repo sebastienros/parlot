@@ -700,6 +700,20 @@ public class StreamingTests
         Assert.Equal(3, exception.Position.Column);
     }
 
+    [Fact]
+    public async Task ParseManyAsyncLeavesParseExceptionsWithoutPositionAsTheyAre()
+    {
+        // A callback's exception has no position in the window, which is not one to make absolute
+        var parser = Terms.Integer().Then<long>(static value => value == 3 ? throw new ParseException("three") : value);
+
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(parser.ParseManyAsync(new ChunkedReader("1\n2\n3\n4", () => 1, yield: false), new StreamParseOptions { BufferSize = 1 })));
+
+        Assert.Equal("three", exception.Message);
+        Assert.Equal(0, exception.Position.Offset);
+        Assert.Equal(0, exception.Position.Line);
+        Assert.Equal(0, exception.Position.Column);
+    }
+
     [Theory]
     [InlineData("a b\nc\n\n  d\r\n e", false)]
     [InlineData("a\n(b)\n  c (\n d )", false)]
