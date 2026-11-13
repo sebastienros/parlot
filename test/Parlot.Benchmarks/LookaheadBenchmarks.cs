@@ -49,6 +49,13 @@ public partial class LookaheadBenchmarks
     [Benchmark]
     public bool WhenRejected() => TryParseWhen("  from", out _);
 
+    // What must not follow, or must not match, is there: the failure is at its start, after the white space it skips
+    [Benchmark]
+    public bool NotFollowedRejected() => TryParseNotFollowed("  word  (", out _);
+
+    [Benchmark]
+    public bool NegativeRejected() => TryParseNot("  from", out _);
+
     // The same grammars at runtime, see LookaheadBenchmarks.parlot.cs
     private static readonly Parser<string> FollowedParser =
         Terms.Identifier().WhenFollowedBy(Terms.Char('(')).Then(static value => "");
@@ -76,6 +83,13 @@ public partial class LookaheadBenchmarks
 
     [Benchmark]
     public bool RuntimeWhenRejected() => WhenParser.TryParse("  from", out _);
+
+    [Benchmark]
+    public bool RuntimeNotFollowedRejected() => NotFollowedParser.TryParse("  word  (", out _);
+
+    [Benchmark]
+    public bool RuntimeNegativeRejected() => NotParser.TryParse("  from", out _);
+
     [Benchmark, BenchmarkCategory("Peek")]
     public int AlwaysWhenFollowedBy_Runtime() => FollowedBlocks.Parse(BlocksText);
 

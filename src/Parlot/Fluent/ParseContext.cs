@@ -528,7 +528,10 @@ public class ParseContext
     /// tells about the input, at <paramref name="start"/> or after the white space there. <paramref name="recorded"/> is
     /// the failure recorded before the rejected text was read.
     /// </summary>
-    /// <remarks>Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it.</remarks>
+    /// <remarks>
+    /// Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it: it is left at
+    /// <paramref name="start"/>, or after the white space there when it had to be read again.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal void RecordRejected(int start, int recorded, bool skipWhiteSpace)
     {
@@ -536,12 +539,20 @@ public class ParseContext
         cursor.ResetPosition(start);
         cursor.RestoreRecordedFailure(recorded);
 
+        var valueStart = start;
+
         if (skipWhiteSpace)
         {
-            SkipWhiteSpace();
+            valueStart = SkippedWhiteSpaceEnd(start);
+
+            if (valueStart < 0)
+            {
+                SkipWhiteSpace();
+                valueStart = cursor.Offset;
+            }
         }
 
-        cursor.RecordFailure(cursor.Offset);
+        cursor.RecordFailure(valueStart);
     }
 
     /// <summary>
@@ -557,6 +568,11 @@ public class ParseContext
     // The offset white space was last skipped from, and the offset it ended at
     private int _cacheOffset = -1;
     private int _cacheEndOffset;
+
+    // Where the white space at an offset ends when it is the last one that was skipped, as before a single token, and -1
+    // otherwise: where SkipWhiteSpace() would move the cursor, for a failure path which only needs the offset.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int SkippedWhiteSpaceEnd(int start) => start == _cacheOffset ? _cacheEndOffset : -1;
 
     public void SkipWhiteSpace()
     {

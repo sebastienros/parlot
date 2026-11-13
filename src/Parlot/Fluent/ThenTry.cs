@@ -132,7 +132,9 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
     // The parser fails where it was invoked. A value that the conversion rejects is the failure, at its start, wherever
     // it was read up to, as in generated code and as one that a When rejects. Not inlined, so that only this path pays
-    // for it.
+    // for it. Written here rather than with ParseContext.RecordRejected(), which looks for white space without
+    // reading the char at the cursor first: the call takes 2 to 3 ns more for a value without white space before it,
+    // and about 1 ns more after white space (.NET 10).
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void Reject(ParseContext context, int start)
     {
@@ -144,13 +146,20 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
         var valueStart = start;
 
-        // The value starts after the white space the parser skips, which is read again when there is some. In
-        // compacting mode it was skipped before the value was read.
+        // The value starts after the white space the parser skips. In compacting mode it was skipped before the value
+        // was read. The char at the cursor is looked at first: a value with no white space before it, which nothing
+        // was skipped before either, doesn't pay for asking the parser whether it skips some.
         if (!context.IsCompacting && context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
         {
-            context.SkipWhiteSpace();
-            valueStart = cursor.Offset;
-            cursor.ResetPosition(start);
+            // The last white space that was skipped, as before a single token, isn't read again
+            valueStart = context.SkippedWhiteSpaceEnd(start);
+
+            if (valueStart < 0)
+            {
+                context.SkipWhiteSpace();
+                valueStart = cursor.Offset;
+                cursor.ResetPosition(start);
+            }
         }
 
         cursor.RecordFailure(valueStart);
