@@ -562,7 +562,7 @@ public class ParseContext
         if (offset == _cacheOffset)
         {
             // Forward, over the white space which was skipped before: not a failure where it starts
-            Scanner.Cursor.AdvanceTo(_cacheEndOffset);
+            Scanner.Cursor.MoveTo(_cacheEndOffset);
             return;
         }
 

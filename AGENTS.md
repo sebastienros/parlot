@@ -141,11 +141,12 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
 - The furthest failure (`out int` / `out (int Offset, int Line, int Column)` overloads) is kept by the cursor
   (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only); span code calls `Cursor.RecordFailure` at its
   failure label. Keep any new `RecordFailure` on failure paths only.
-- `ResetPosition` records the offset the cursor leaves, whichever way it moves. Move the cursor forward over text which
-  was read already (white space skipped before, a span, a match that is kept) with the internal `Cursor.AdvanceTo`: a
-  value that `When` rejects after it would be reported there. Leave `ResetPositionNotInlined` as it is: the parsers
-  which reset the cursor the most inline it, and recording only the moves back there, two instructions, cost
-  `ExprBench.ParlotFluentBig` 3% with dynamic PGO, nothing without it.
+- `ResetPosition` records the offset the cursor leaves, whichever way it moves. Where the cursor can move forward over
+  text which was read already (white space skipped before, a span, a match that is kept), move it with the internal
+  `Cursor.MoveTo`, which only records the moves back: a value that `When` rejects after it would be reported there.
+  Span code moves back with it too, to before the white space it skipped when what follows wasn't found. Leave
+  `ResetPositionNotInlined` as it is: the parsers which reset the cursor the most inline it, and recording only the
+  moves back there, two instructions, cost `ExprBench.ParlotFluentBig` 3% with dynamic PGO, nothing without it.
 - Leave generated helper and callback inlining to the JIT. Locally small helpers can transitively expand
   large parser graphs; do not force `AggressiveInlining` along these chains. Only the entry core retains
   a bounded hint for inlining into the public wrapper. Shared runtime helpers keep their existing hints.

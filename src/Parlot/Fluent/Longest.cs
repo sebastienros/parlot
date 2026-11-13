@@ -220,7 +220,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             return false;
         }
 
-        cursor.AdvanceTo(bestEnd);
+        cursor.MoveTo(bestEnd);
         return true;
     }
 
@@ -305,7 +305,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             return false;
         }
 
-        cursor.AdvanceTo(bestEnd);
+        cursor.MoveTo(bestEnd);
         return true;
     }
 
@@ -414,7 +414,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
                 if (bestEnd >= 0)
                 {
-                    cursor.AdvanceTo(bestEnd);
+                    cursor.MoveTo(bestEnd);
                     context.RestoreAlternative(bestDiagnostics);
                     success = true;
                 }
@@ -798,10 +798,10 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             ListBuilderSource.ReleaseInFinally(result, bodyStart, matchesName);
         }
 
-        // if (end >= 0) { cursor.AdvanceTo(end); success = true; } else { cursor.ResetPosition(start); }
+        // if (end >= 0) { cursor.MoveTo(end); success = true; } else { cursor.ResetPosition(start); }
         result.Body.Add($"if ({endName} >= 0)");
         result.Body.Add("{");
-        result.Body.Add($"    {cursor}.AdvanceTo({endName});");
+        result.Body.Add($"    {cursor}.MoveTo({endName});");
 
         if (collecting)
         {

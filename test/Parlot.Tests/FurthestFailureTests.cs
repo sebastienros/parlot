@@ -271,6 +271,20 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData("a  x", 3)]
+    [InlineData("a  b  x", 6)]
+    [InlineData("a  b  c  x", 9)]
+    [InlineData("a\n b\n x", 6)]
+    [InlineData("a b c x", 6)]
+    [InlineData("ax", 1)]
+    public void Optional_Text_Fails_After_The_White_Space_Before_It(string text, int offset)
+    {
+        // What follows is read from before that white space: generated span code moves the cursor back there
+        var parser = Terms.Text("a").AndSkip(Terms.Text("b").AndSkip(Terms.Text("c")).Optional()).AndSkip(Terms.Text("d").Optional()).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
     [InlineData("1 + (2 + 3", 10)]
     [InlineData("((1)\n+\n(2 +\nx))", 12)]
     public void TextReader_Context_Reports_The_Furthest_Failure(string text, int offset) => AssertFurthest(Expression, text, offset);

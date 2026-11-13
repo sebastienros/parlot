@@ -114,4 +114,10 @@ public static partial class FailureGrammars
     public static Parser<string> BuildRejectedLongest() =>
         Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")))
             .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // Span code which moves the cursor to skip white space, doesn't find an optional text after it, and reads on or ends
+    // before the white space: the cursor is moved back
+    [GenerateParser(nameof(SpanBacktracking))]
+    public static Parser<string> BuildSpanBacktracking() =>
+        Terms.Text("a").AndSkip(Terms.Text("b").AndSkip(Terms.Text("c")).Optional()).AndSkip(Terms.Text("d").Optional()).Eof();
 }

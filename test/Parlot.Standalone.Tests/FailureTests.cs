@@ -303,6 +303,28 @@ public class FailureTests
         Assert.Equal(0, failureOffset);
     }
 
+    [Theory]
+    [InlineData("a  x", 3, 1, 4)]
+    [InlineData("a  b  x", 6, 1, 7)]
+    [InlineData("a  b  c  x", 9, 1, 10)]
+    [InlineData("a\n b\n x", 6, 3, 2)]
+    [InlineData("a b c x", 6, 1, 7)]
+    [InlineData("ax", 1, 1, 2)]
+    public void Span_Code_Moved_Back_Over_White_Space_Fails_After_It(string text, int offset, int line, int column)
+    {
+        // An optional text isn't found after the white space the cursor skipped, and the span code reads on, or ends,
+        // before that white space: the cursor is moved back from where the text was looked for, like at runtime
+        Assert.False(FailureGrammars.SpanBacktracking(text, out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal((offset, line, column), failure);
+
+        Assert.False(FailureGrammars.SpanBacktracking(new OneCharReader(text), out _, out var readerFailure));
+        Assert.Equal((offset, line, column), readerFailure);
+
+        Assert.True(FailureGrammars.SpanBacktracking("a  b  c  d", out var value, out failure));
+        Assert.Equal("a", value);
+        Assert.Equal(default, failure);
+    }
+
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible
     private sealed class OneCharReader : TextReader
     {
