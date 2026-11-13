@@ -877,6 +877,33 @@ public class StreamingTests
         Assert.Equal(1, exception.Position.Offset);
     }
 
+    [Theory]
+    [InlineData("a\n/* b")]
+    [InlineData("a\n\n b /* c\n")]
+    [InlineData("a /* b */\n  /*\n")]
+    public async Task ParseManyAsyncReportsAbsolutePositionsOfCommentsInDelimitedValues(string text)
+    {
+        // Each line is parsed on its own, and its white space is skipped before and after its value
+        var comments = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/").Build();
+        var item = Terms.Identifier();
+
+        Assert.False(ZeroOrMany(item).TryParse(new ParseContext(new Scanner(text)) { WhiteSpaceParser = comments }, out _, out var error));
+
+        foreach (var chunk in new[] { 1, 2, 4096 })
+        {
+            var options = new StreamParseOptions
+            {
+                BufferSize = 1,
+                ContextFactory = (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments },
+            };
+
+            var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(item.ParseManyAsync(new ChunkedReader(text, () => chunk, yield: false), '\n', options)));
+
+            Assert.Equal(error!.Message, exception.Message);
+            Assert.Equal(error.Position, exception.Position);
+        }
+    }
+
     [Fact]
     public async Task TextSpansRemainValid()
     {
