@@ -204,19 +204,62 @@ public class SeekGuardSourceTests
         Assert.Equal("", optional);
     }
 
+    [Fact]
+    public void NonAsciiGuards_Match_The_Runtime_Before_Every_Kind_Of_Char()
+    {
+        // The last ASCII char, the first and the last non-ASCII ones, surrogates, the char of NonAsciiSeekableChar itself,
+        // white space which isn't ASCII, and ASCII chars outside the hints
+        foreach (var c in new[] { '\u007F', '\u0080', 'é', '\uD83D', '\uDE00', '\uFFFE', '\uFFFF', '\u00A0', '\u3000', '#', '\u0001' })
+        {
+            foreach (var text in new[] { $"a{c}", $"a {c}", $"a{c}a", $"a {c} a", $"{c}", $" {c}a" })
+            {
+                CheckValue(ZeroOrMany(NonAsciiChar()), SeekGuardGrammars.TryParseNonAsciiWords, SeekGuardGrammars.TryParseNonAsciiWords, text);
+                CheckValue(NonAsciiChar().Optional().Then(static x => x.HasValue ? x.Value : ""), SeekGuardGrammars.TryParseNonAsciiOptional, SeekGuardGrammars.TryParseNonAsciiOptional, text);
+                CheckValue(ZeroOrOne(NonAsciiChar()), SeekGuardGrammars.TryParseNonAsciiZeroOrOne, SeekGuardGrammars.TryParseNonAsciiZeroOrOne, text);
+                CheckValue(Separated(NonAsciiSeparator(), Terms.Char('a').Then(static _ => "a")), SeekGuardGrammars.TryParseNonAsciiSeparated, SeekGuardGrammars.TryParseNonAsciiSeparated, text);
+
+                // The runtime parser doesn't test the char before its first element, which has to match. The scanner of these
+                // grammars reads any char, so that an element which is skipped shows: only a declared char can be the first one.
+                if (text[0] == 'a')
+                {
+                    CheckValue(OneOrMany(NonAsciiChar()), SeekGuardGrammars.TryParseNonAsciiOneOrMany, SeekGuardGrammars.TryParseNonAsciiOneOrMany, text);
+                }
+            }
+        }
+
+        foreach (var c in new[] { '\u0080', 'é', '\uD83D', '\uDE00', '\uFFFE', '\uFFFF' })
+        {
+            Assert.True(SeekGuardGrammars.TryParseNonAsciiWords($"a {c}", out var words));
+            Assert.Equal(["a", c.ToString()], words);
+
+            Assert.True(SeekGuardGrammars.TryParseNonAsciiOptional($"{c}", out var optional));
+            Assert.Equal(c.ToString(), optional);
+
+            Assert.True(SeekGuardGrammars.TryParseNonAsciiSeparated($"a{c}a", out var separated));
+            Assert.Equal(["a", "a"], separated);
+        }
+
+        // The last ASCII char isn't a non-ASCII char
+        Assert.True(SeekGuardGrammars.TryParseNonAsciiWords("a \u007F", out var ascii));
+        Assert.Equal(["a"], ascii);
+    }
+
     private delegate bool StringValueParser<T>(string text, out T value);
     private delegate bool ReaderValueParser<T>(TextReader reader, out T value);
 
     private static void CheckValue<T>(Parser<T> parser, StringValueParser<T> parseString, ReaderValueParser<T> parseReader, string input)
     {
         var expected = parser.TryParse(input, out var expectedValue);
+        var escaped = string.Concat(input.Select(static c => c is >= ' ' and < '\u007F' ? c.ToString() : $"\\u{(int)c:X4}"));
 
-        Assert.Equal(expected, parseString(input, out var value));
+        Assert.True(expected == parseString(input, out var value), $"'{escaped}' from a string: {!expected} instead of {expected}");
         Assert.Equal(expected ? expectedValue : default, value);
 
-        foreach (var reader in new TextReader[] { new StringReader(input), new ChunkedReader(input, 1), new ChunkedReader(input, 13) })
+        foreach (var chunkSize in new[] { 0, 1, 13 })
         {
-            Assert.Equal(expected, parseReader(reader, out value));
+            TextReader reader = chunkSize == 0 ? new StringReader(input) : new ChunkedReader(input, chunkSize);
+
+            Assert.True(expected == parseReader(reader, out value), $"'{escaped}' from a reader in chunks of {chunkSize}: {!expected} instead of {expected}");
             Assert.Equal(expected ? expectedValue : default, value);
         }
     }

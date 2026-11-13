@@ -21,6 +21,11 @@ public class SeekGuardTests
     private static Parser<(TextSpan, TextSpan)> Tail() =>
         Terms.Char('?').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(':')).And(Terms.Identifier());
 
+    // The same tail starting with a parser which declares it can start with a '?' or with any non-ASCII char
+    private static Parser<(TextSpan, TextSpan)> NonAsciiTail() =>
+        Terms.Scan(static span => span.Length > 0 && (span[0] == '?' || span[0] >= 0x80) ? 1 : 0, "?" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(':')).And(Terms.Identifier());
+
     // The same parser without hints: a sequence which starts with a parser that doesn't read can start with any char
     private static Parser<T> WithoutHints<T>(Parser<T> parser) => Always().SkipAnd(parser);
 
@@ -28,13 +33,20 @@ public class SeekGuardTests
     [
         "", " ", "a", "a;", "a ;", "a?b:c", "a ? b : c;", "a ?b", "a ? b :", "a ? 1 : c", "a\n\t? b\n: c ;", "a ?? b",
         "a ? b : c ? d : e", "a ? b : c x", "a  ", "?b:c", " ? b : c", "a?b:c?d:e?f:g;", "a , b", "a, b ,c", "a,", "a ,; b", "a,|b,|c",
+
+        // Non-ASCII chars where the guarded parser is tried: the first and the last ones, a surrogate pair, a lone surrogate,
+        // the char of NonAsciiSeekableChar itself, the last ASCII char, and white space which isn't ASCII
+        "a é b : c", "aéb:c", "a é b : c é d : e;", "a é", "a é ", "a é b", "a \u0080 b : c", "a\u0080b:c", "a \uFFFF b : c", "a\uFFFFb:c",
+        "a \u007F b : c", "a\u007Fb:c", "a \uD83D\uDE00 b : c", "a \uD83D b : c", "a \uDE00b:c", "a\u00A0é b : c", "a \u3000 ? b : c", "a\u00A0",
+        "é b : c", "é", "a é b : c ? d : e é f : g", "a é b , c", "aéb", "a é| b é c", "a é é b", "a \u0080", "a\uFFFF",
     ];
 
     public static IEnumerable<object[]> Grammars()
     {
         foreach (var name in GrammarNames)
         {
-            yield return [name];
+            yield return [name, false];
+            yield return [name, true];
         }
     }
 
@@ -42,29 +54,34 @@ public class SeekGuardTests
         ["optional", "zeroorone", "zeroormany", "oneormany", "separated", "separated-options", "capture", "deferred", "zeroormany-max"];
 
     // The grammar, and the same grammar where the guarded parser declares no hints
-    private static (Parser<string> Guarded, Parser<string> Reference) Create(string name) => name switch
+    // With nonAscii, the guarded parser declares it can start with any non-ASCII char
+    private static (Parser<string> Guarded, Parser<string> Reference) Create(string name, bool nonAscii) => name switch
     {
-        "optional" => Pair(static tail => Terms.Identifier().And(tail.Optional())
+        "optional" => Pair(nonAscii, static tail => Terms.Identifier().And(tail.Optional())
             .Then(static t => t.Item1.ToString() + (t.Item2.HasValue ? $"?{t.Item2.Value.Item1}:{t.Item2.Value.Item2}" : ""))),
-        "zeroorone" => Pair(static tail => Terms.Identifier().And(ZeroOrOne(tail))
+        "zeroorone" => Pair(nonAscii, static tail => Terms.Identifier().And(ZeroOrOne(tail))
             .Then(static t => t.Item1.ToString() + string.Concat(t.Item2.Select(static x => $"?{x.Item1}:{x.Item2}")))),
-        "zeroormany" => Pair(static tail => Terms.Identifier().And(ZeroOrMany(tail))
+        "zeroormany" => Pair(nonAscii, static tail => Terms.Identifier().And(ZeroOrMany(tail))
             .Then(static t => t.Item1.ToString() + string.Concat(t.Item2.Select(static x => $"?{x.Item1}:{x.Item2}")))),
-        "zeroormany-max" => Pair(static tail => Terms.Identifier().And(ZeroOrMany(tail, 2))
+        "zeroormany-max" => Pair(nonAscii, static tail => Terms.Identifier().And(ZeroOrMany(tail, 2))
             .Then(static t => t.Item1.ToString() + string.Concat(t.Item2.Select(static x => $"?{x.Item1}:{x.Item2}")))),
-        "oneormany" => Pair(static tail => Terms.Identifier().And(OneOrMany(tail).Optional())
+        "oneormany" => Pair(nonAscii, static tail => Terms.Identifier().And(OneOrMany(tail).Optional())
             .Then(static t => t.Item1.ToString() + (t.Item2.HasValue ? string.Concat(t.Item2.Value.Select(static x => $"?{x.Item1}:{x.Item2}")) : ""))),
-        "separated" => (Separated(Separator(), Terms.Identifier()).Then(Join), Separated(WithoutHints(Separator()), Terms.Identifier()).Then(Join)),
-        "separated-options" => (
-            Separated(Separator(), Terms.Identifier(), allowTrailingSeparator: true).Then(Join),
-            Separated(WithoutHints(Separator()), Terms.Identifier(), allowTrailingSeparator: true).Then(Join)),
+        "separated" => nonAscii
+            ? (Separated(SequenceWithNonAsciiSeparator(), Terms.Identifier()).Then(Join), Separated(WithoutHints(SequenceWithNonAsciiSeparator()), Terms.Identifier()).Then(Join))
+            : (Separated(Separator(), Terms.Identifier()).Then(Join), Separated(WithoutHints(Separator()), Terms.Identifier()).Then(Join)),
+        "separated-options" => nonAscii
+            ? (Separated(SequenceWithNonAsciiSeparator(), Terms.Identifier(), allowTrailingSeparator: true).Then(Join),
+                Separated(WithoutHints(SequenceWithNonAsciiSeparator()), Terms.Identifier(), allowTrailingSeparator: true).Then(Join))
+            : (Separated(Separator(), Terms.Identifier(), allowTrailingSeparator: true).Then(Join),
+                Separated(WithoutHints(Separator()), Terms.Identifier(), allowTrailingSeparator: true).Then(Join)),
 
         // The white space before the parser is captured, the guard moves the cursor back before invoking it
-        "capture" => Pair(static tail => Terms.Identifier().And(Capture(tail).Optional())
+        "capture" => Pair(nonAscii, static tail => Terms.Identifier().And(Capture(tail).Optional())
             .Then(static t => t.Item1.ToString() + (t.Item2.HasValue ? $"[{t.Item2.Value}]" : ""))),
 
         // The hints are those of the parser the deferred parser is set to after the optional is built
-        "deferred" => Pair(static tail =>
+        "deferred" => Pair(nonAscii, static tail =>
         {
             var deferred = Deferred<(TextSpan, TextSpan)>();
             var parser = Terms.Identifier().And(deferred.Optional())
@@ -77,37 +94,43 @@ public class SeekGuardTests
 
     private static Parser<(char, Option<char>)> Separator() => Terms.Char(',').And(Literals.Char('|').Optional());
 
+    // A separator which declares it can start with a ',' or with any non-ASCII char
+    private static Parser<(TextSpan, Option<char>)> SequenceWithNonAsciiSeparator() =>
+        Terms.Scan(static span => span.Length > 0 && (span[0] == ',' || span[0] >= 0x80) ? 1 : 0, "," + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .And(Literals.Char('|').Optional());
+
     private static string Join(IReadOnlyList<TextSpan> items) => string.Join(",", items);
 
-    private static (Parser<string>, Parser<string>) Pair(Func<Parser<(TextSpan, TextSpan)>, Parser<string>> create) =>
-        (create(Tail()), create(WithoutHints(Tail())));
+    private static (Parser<string>, Parser<string>) Pair(bool nonAscii, Func<Parser<(TextSpan, TextSpan)>, Parser<string>> create) => nonAscii
+        ? (create(NonAsciiTail()), create(WithoutHints(NonAsciiTail())))
+        : (create(Tail()), create(WithoutHints(Tail())));
 
     [Theory]
     [MemberData(nameof(Grammars))]
-    public void ShouldMatchTheParserWithoutHints(string name)
+    public void ShouldMatchTheParserWithoutHints(string name, bool nonAscii)
     {
-        var (guarded, reference) = Create(name);
+        var (guarded, reference) = Create(name, nonAscii);
 
         foreach (var text in Inputs)
         {
             var expected = Run(reference, text);
             var actual = Run(guarded, text);
 
-            Assert.True(expected == actual, $"{name} on '{text}': {actual} instead of {expected}");
+            Assert.True(expected == actual, $"{name} ({nonAscii}) on '{text}': {actual} instead of {expected}");
 
             // Followed by a parser which fails, so that the furthest failure is the one a parse would report
             var expectedFurthest = Furthest(reference.AndSkip(Terms.Char('#')), text);
             var actualFurthest = Furthest(guarded.AndSkip(Terms.Char('#')), text);
 
-            Assert.True(expectedFurthest == actualFurthest, $"{name} on '{text}': furthest failure {actualFurthest} instead of {expectedFurthest}");
+            Assert.True(expectedFurthest == actualFurthest, $"{name} ({nonAscii}) on '{text}': furthest failure {actualFurthest} instead of {expectedFurthest}");
         }
     }
 
     [Theory]
     [MemberData(nameof(Grammars))]
-    public void ShouldMatchTheParserWithoutHintsWithoutValue(string name)
+    public void ShouldMatchTheParserWithoutHintsWithoutValue(string name, bool nonAscii)
     {
-        var (guarded, reference) = Create(name);
+        var (guarded, reference) = Create(name, nonAscii);
         var guardedCapture = Capture(guarded);
         var referenceCapture = Capture(reference);
 
@@ -119,9 +142,9 @@ public class SeekGuardTests
 
     [Theory]
     [MemberData(nameof(Grammars))]
-    public void ShouldMatchTheParserWithoutHintsOnStreams(string name)
+    public void ShouldMatchTheParserWithoutHintsOnStreams(string name, bool nonAscii)
     {
-        var (guarded, reference) = Create(name);
+        var (guarded, reference) = Create(name, nonAscii);
 
         foreach (var text in Inputs)
         {
@@ -131,7 +154,7 @@ public class SeekGuardTests
                 var expected = reference.TryParse(new StreamingTests.ChunkedReader(text, () => 1, yield: false), out var expectedValue, options);
                 var actual = guarded.TryParse(new StreamingTests.ChunkedReader(text, () => 1, yield: false), out var actualValue, options);
 
-                Assert.True(expected == actual, $"{name} on '{text}' with buffer size {bufferSize}");
+                Assert.True(expected == actual, $"{name} ({nonAscii}) on '{text}' with buffer size {bufferSize}");
                 Assert.Equal(expectedValue, actualValue);
             }
         }
@@ -338,6 +361,83 @@ public class SeekGuardTests
         Assert.True(entered > 0);
         Assert.Equal(5, context.Scanner.Cursor.Offset);
     }
+
+    [Theory]
+    [InlineData('\u0080')]
+    [InlineData('\u00E9')]
+    [InlineData('\uD83D')]
+    [InlineData('\uDE00')]
+    [InlineData('\uFFFE')]
+    [InlineData('\uFFFF')]
+    public void GuardsShouldEnterAParserBeforeEveryNonAsciiChar(char c)
+    {
+        var word = NonAsciiChar();
+        var separator = NonAsciiSeparator();
+
+        foreach (var text in new[] { $"a{c}", $"a {c}", $"a\n\t{c}" })
+        {
+            Assert.Equal(["a", c.ToString()], ZeroOrMany(word).Parse(text));
+            Assert.Equal(["a", c.ToString()], OneOrMany(word).Parse(text));
+            Assert.Equal(c.ToString(), Terms.Char('a').SkipAnd(word.Optional()).Parse(text).Value);
+            Assert.Equal([c.ToString()], Terms.Char('a').SkipAnd(ZeroOrOne(word)).Parse(text));
+            Assert.Equal(["a", "a"], Separated(separator, Terms.Char('a').Then(static _ => "a")).Parse(text + "a"));
+        }
+    }
+
+    [Theory]
+    [InlineData("a \u007F")]
+    [InlineData("a #")]
+    [InlineData("a \u0001")]
+    [InlineData("a ")]
+    [InlineData("a \n")]
+    public void GuardsOfAnyNonAsciiCharShouldSkipAnAsciiCharAndTheEndOfTheText(string text)
+    {
+        // The last ASCII char isn't one of the non-ASCII chars, and neither is the NUL the cursor reads at the end of the text
+        var word = NonAsciiChar();
+        var separator = NonAsciiSeparator();
+
+        AssertNotEntered(Terms.Identifier().And(word.Optional()), word, text);
+        AssertNotEntered(Terms.Identifier().And(ZeroOrOne(word)), word, text);
+        AssertNotEntered(Terms.Identifier().And(ZeroOrMany(word)), word, text);
+        AssertNotEntered(Terms.Identifier().And(OneOrMany(word).Optional()), word, text);
+        AssertNotEntered(Separated(separator, Terms.Char('a')), separator, text);
+    }
+
+    [Fact]
+    public void GuardsShouldOnlyEnterAParserBeforeTheNonAsciiCharsItLists()
+    {
+        // Without NonAsciiSeekableChar, the non-ASCII chars are the ones the parser lists
+        var word = Terms.Char('é').Then(static x => x.ToString());
+
+        AssertNotEntered(Terms.Identifier().And(word.Optional()), word, "a ü");
+        AssertNotEntered(Terms.Identifier().And(ZeroOrMany(word)), word, "a \uFFFF");
+        AssertNotEntered(Terms.Identifier().And(ZeroOrMany(word)), word, "a \u0080");
+
+        var context = Trace(Terms.Identifier().And(ZeroOrMany(word)), "a é é ü", word, out var entered);
+        Assert.Equal(2, entered);
+        Assert.Equal(5, context.Scanner.Cursor.Offset);
+    }
+
+#if NET8_0_OR_GREATER
+    [Fact]
+    public void LoopsShouldMatchIdentifiersStartingWithANonAsciiLetter()
+    {
+        // More than SeekableHints.MaxNonAsciiChars start chars: the identifier declares NonAsciiSeekableChar itself
+        var letters = string.Concat(Enumerable.Range(0, char.MaxValue + 1).Select(static c => (char)c).Where(char.IsLetter));
+        var identifier = Terms.Identifier(letters, letters).Then(static x => x.ToString());
+
+        Assert.Contains(Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar, Assert.IsAssignableFrom<Parlot.Rewriting.ISeekable>(identifier).ExpectedChars);
+
+        Assert.Equal(["a", "é", "日本語", "ૹ", "b"], ZeroOrMany(identifier).Parse("a é 日本語 ૹ b"));
+        Assert.Equal(["日本語", "a"], OneOrMany(identifier).Parse("日本語 a 1"));
+        Assert.Equal("é", identifier.Optional().Parse(" é").Value);
+        Assert.Equal(["x", "é", "ü"], Separated(Terms.Char(','), identifier).Parse("x, é ,ü"));
+
+        // A non-ASCII char which isn't a letter is tried, and rejected by the identifier
+        Assert.Equal(["a"], ZeroOrMany(identifier).Parse("a ± b"));
+        Assert.False(identifier.Optional().Parse("±").HasValue);
+    }
+#endif
 
     private static void AssertNotEntered<T>(Parser<T> parser, object guarded, string text)
     {
