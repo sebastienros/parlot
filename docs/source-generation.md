@@ -324,8 +324,9 @@ first bad token is:
 - The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
-- The delimiter `AnyCharBefore` finds doesn't count unless it is consumed: the text ends before it, where what follows
-  is expected. A text which is empty and can't be fails where it starts, at the delimiter.
+- The delimiter of `AnyCharBefore` is a lookahead too: what it reads where it isn't found in the text doesn't count, nor
+  the delimiter which is found unless it is consumed. The text ends before it, where what follows is expected, and a
+  text which is empty and can't be fails where it starts, at the delimiter.
 - Neither does the white space skipped to look for an operator of `Operators()` whose value is passed to the factory: an
   expression which is rejected fails at its start, like with the other operators.
 
