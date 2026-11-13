@@ -13,9 +13,13 @@ public static partial class RecursionGrammars
     public static partial bool Nested(string text, out int value, out (int Offset, int Line, int Column, bool NestedTooDeeply) failure);
     public static partial bool Nested(TextReader text, out int value, out (int Offset, bool NestedTooDeeply) failure);
     public static partial bool LimitedNested(string text, out int value, out (int Offset, bool NestedTooDeeply) failure);
+    public static partial bool LimitedNested(TextReader text, out int value, out (int Offset, int Line, int Column, bool NestedTooDeeply) failure);
     public static partial bool Negation(string text, out int value);
     public static partial bool LimitedNegation(string text, out int value);
+    public static partial bool LimitedNegation(string text, out int value, out (int Offset, bool NestedTooDeeply) failure);
     public static partial bool Prefix(string text, out int value);
     public static partial bool LimitedPrefix(string text, out int value);
+    public static partial bool LimitedPrefix(string text, out int value, out (int Offset, bool NestedTooDeeply) failure);
+    public static partial bool Rejecting(string text, out int value, out (int Offset, bool NestedTooDeeply) failure);
     public static partial bool LimitOfContext(string text, out int value);
 }

@@ -34,6 +34,12 @@ public static partial class RecursionGrammars
     [GenerateParser(nameof(LimitOfContext), MaxRecursionDepth = 7)]
     public static Parser<int> BuildLimitOfContext() => Literals.Char('x').Then(static (context, _) => context.MaxRecursionDepth);
 
+    // A callback which throws at the depth of the limit
+    [GenerateParser(nameof(Rejecting), MaxRecursionDepth = 3)]
+    public static Parser<int> BuildRejecting() =>
+        Recursive<int>(static list => Between(Literals.Char('['), list, Literals.Char(']'))
+            .Or(Literals.Text("item").Then<int>(static (context, _) => throw new ParseException("Rejected", context.Scanner.Cursor.Position))));
+
     // The nesting depth of brackets around "item"
     private static Parser<int> ListGrammar() =>
         Recursive<int>(static list => Between(Literals.Char('['), list, Literals.Char(']')).Then(static depth => depth + 1)

@@ -76,6 +76,56 @@ public class RecursionTests
     }
 
     [Fact]
+    public void Reader_Failure_Tells_The_Recursion_Limit_Like_The_String_One()
+    {
+        Assert.False(RecursionGrammars.LimitedNested("[[[item]]]", out _, out (int Offset, bool NestedTooDeeply) failure));
+        Assert.Equal((3, true), failure);
+
+        using var deep = new StringReader("[[[item]]]");
+        Assert.False(RecursionGrammars.LimitedNested(deep, out _, out (int Offset, int Line, int Column, bool NestedTooDeeply) readerFailure));
+        Assert.Equal((3, 1, 4, true), readerFailure);
+
+        using var wrong = new StringReader("[[oops");
+        Assert.False(RecursionGrammars.LimitedNested(wrong, out _, out readerFailure));
+        Assert.Equal((2, 1, 3, false), readerFailure);
+
+        using var valid = new StringReader("[[item]]");
+        Assert.True(RecursionGrammars.LimitedNested(valid, out var depth, out readerFailure));
+        Assert.Equal(2, depth);
+        Assert.Equal(default, readerFailure);
+    }
+
+    [Fact]
+    public void Failure_Tells_The_Recursion_Limit_Of_Operators()
+    {
+        // Unary and the prefix operators of a table count their levels in a loop
+        Assert.False(RecursionGrammars.LimitedNegation("---a", out _, out (int Offset, bool NestedTooDeeply) failure));
+        Assert.True(failure.NestedTooDeeply);
+        Assert.False(RecursionGrammars.LimitedNegation("--b", out _, out failure));
+        Assert.Equal((2, false), failure);
+        Assert.True(RecursionGrammars.LimitedNegation("--a", out _, out failure));
+        Assert.Equal(default, failure);
+
+        Assert.False(RecursionGrammars.LimitedPrefix("---a", out _, out failure));
+        Assert.True(failure.NestedTooDeeply);
+        Assert.False(RecursionGrammars.LimitedPrefix("--b", out _, out failure));
+        Assert.Equal((2, false), failure);
+        Assert.True(RecursionGrammars.LimitedPrefix("--a", out _, out failure));
+        Assert.Equal(default, failure);
+    }
+
+    [Fact]
+    public void Failure_Of_A_Callback_Is_Not_Nested_Too_Deeply()
+    {
+        // The callback throws its own ParseException, at the last level the limit allows
+        Assert.False(RecursionGrammars.Rejecting("[[item]]", out _, out var failure));
+        Assert.Equal((6, false), failure);
+
+        Assert.False(RecursionGrammars.Rejecting("[[[item]]]", out _, out failure));
+        Assert.Equal((3, true), failure);
+    }
+
+    [Fact]
     public void Deep_Input_Is_Reported_By_The_Diagnostics_Overload()
     {
         OnSmallStack(static () =>
