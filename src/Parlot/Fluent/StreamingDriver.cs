@@ -366,7 +366,20 @@ internal sealed class StreamingItemReader<T, TSeparator>
 
             if (_skipWhiteSpace)
             {
-                context.SkipWhiteSpace();
+                // A white space parser can throw too, for a comment which the window doesn't end
+                try
+                {
+                    context.SkipWhiteSpace();
+                }
+                catch (ParseException) when (cursor.HitEnd)
+                {
+                    RetryOffset = start;
+                    return StreamingStep.NeedMore;
+                }
+                catch (ParseException e)
+                {
+                    throw _driver.ToAbsolute(e);
+                }
 
                 // Don't retain the white space unless it might continue
                 if (!cursor.HitEnd)

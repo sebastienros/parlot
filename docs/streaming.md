@@ -162,8 +162,9 @@ While more text may follow, the window is *non-final*: its `Cursor` has `IsFinal
 
 `HitEnd` is sticky for an attempt: `ResetPosition` doesn't clear it, so a branch that reached the end of the
 window and then backtracked still makes the attempt inconclusive. A `ParseException` thrown while `HitEnd`
-is set is inconclusive too, since more text could have avoided it. Only the item which spans the end of the window
-is retried, and the doubling bounds the cost of the retries.
+is set is inconclusive too, since more text could have avoided it: the one of a `WhiteSpaceParser` whose comment the
+window doesn't end, as much as the one of a value. Only the item which spans the end of the window, with the white space
+before it, is retried, and the doubling bounds the cost of the retries.
 
 ### What sets `HitEnd`
 

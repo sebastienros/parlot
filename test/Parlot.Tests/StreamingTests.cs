@@ -800,6 +800,83 @@ public class StreamingTests
         Assert.Equal([1L, 2, 3], values);
     }
 
+    [Theory]
+    [InlineData("a /* b */ c", false)]
+    [InlineData("/* a */ b /* c\n d */ e /**/", false)]
+    [InlineData("a /* a comment which is longer than the first windows, whatever their size * / */ b\n/* c */", false)]
+    [InlineData("a /* b", false)]
+    [InlineData("a\n b /*", false)]
+    [InlineData("a /* b */\n /* a comment which is longer than the first windows *", false)]
+    [InlineData("/*/ a", false)]
+    [InlineData("a /* b */ , /* c */ d /* e */", true)]
+    [InlineData("a /* b */ , /* c */ d , /* e */", true)]
+    [InlineData("a /* b */ , /* c", true)]
+    [InlineData("a /* b", true)]
+    public async Task ParseManyAsyncSkipsCommentsSpanningWindows(string text, bool separated)
+    {
+        // A comment which a window doesn't end is only unterminated when no more text follows. The white space parser
+        // throws either way, before the items and the separators
+        var comments = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/").Build();
+        var item = Terms.Identifier();
+        var whole = separated ? Separated(Terms.Char(','), item).AndSkip(Terms.Char(',').Optional()) : ZeroOrMany(item);
+
+        whole.TryParse(new ParseContext(new Scanner(text)) { WhiteSpaceParser = comments }, out var expected, out var error);
+
+        var expectedError = error == null ? null : $"{error.Message} {error.Position.Offset} {error.Position}";
+
+        foreach (var (chunk, bufferSize) in new[] { (1, 1), (1, 4096), (3, 2), (7, 5), (int.MaxValue, 1) })
+        {
+            var options = new StreamParseOptions
+            {
+                BufferSize = bufferSize,
+                ContextFactory = (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments },
+            };
+
+            var reader = new ChunkedReader(text, () => chunk, yield: false);
+            var items = new List<TextSpan>();
+            string? actualError = null;
+
+            try
+            {
+                await ToListAsync(separated ? item.ParseManyAsync(reader, Terms.Char(','), options) : item.ParseManyAsync(reader, options), items);
+            }
+            catch (ParseException e)
+            {
+                actualError = $"{e.Message} {e.Position.Offset} {e.Position}";
+            }
+
+            Assert.Equal(expectedError, actualError);
+
+            if (expectedError == null)
+            {
+                Assert.Equal(expected!.Select(static s => s.ToString()), items.Select(static s => s.ToString()));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncLimitsCommentSize()
+    {
+        // The white space before a value is buffered with it while it might continue
+        var comments = new CommentsBuilder().WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/").Build();
+        var options = new StreamParseOptions
+        {
+            BufferSize = 8,
+            MaxBufferedCharacters = 32,
+            ContextFactory = (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = comments },
+        };
+
+        var items = new List<TextSpan>();
+
+        Assert.Equal(["a", "c"], (await ToListAsync(Terms.Identifier().ParseManyAsync(new ChunkedReader("a /*" + new string('b', 20) + "*/ c", () => 5, false), options))).Select(static s => s.ToString()));
+
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Terms.Identifier().ParseManyAsync(new ChunkedReader("a /*" + new string('b', 100) + "*/ c", () => 5, false), options), items));
+
+        Assert.Single(items);
+        Assert.Equal("The input requires more than 32 buffered characters to be parsed.", exception.Message);
+        Assert.Equal(1, exception.Position.Offset);
+    }
+
     [Fact]
     public async Task TextSpansRemainValid()
     {
