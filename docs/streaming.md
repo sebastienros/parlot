@@ -163,8 +163,8 @@ While more text may follow, the window is *non-final*: its `Cursor` has `IsFinal
 `HitEnd` is sticky for an attempt: `ResetPosition` doesn't clear it, so a branch that reached the end of the
 window and then backtracked still makes the attempt inconclusive. A `ParseException` thrown while `HitEnd`
 is set is inconclusive too, since more text could have avoided it: the one of a `WhiteSpaceParser` whose comment the
-window doesn't end, as much as the one of a value. Only the item which spans the end of the window, with the white space
-before it, is retried, and the doubling bounds the cost of the retries.
+window doesn't end, as much as the one of a value. Only the item which spans the end of the window is retried, with the
+white space before it when a `WhiteSpaceParser` reads it, and the doubling bounds the cost of the retries.
 
 ### What sets `HitEnd`
 
@@ -219,7 +219,7 @@ On .NET Framework and .NET Standard, `IAsyncEnumerable<T>` comes from the `Micro
 | Option | Default | Description |
 |---|---|---|
 | `BufferSize` | 4096 | Number of characters read at once, and before parsing. A refill reads at least as many characters as it retains. |
-| `MaxBufferedCharacters` | `int.MaxValue` | Maximum characters buffered: the retained text of the compacting buffer, or the window of a value for `ParseManyAsync`. Exceeding it throws a `ParseException` at the start of the token or value which doesn't fit. Set it for untrusted input. |
+| `MaxBufferedCharacters` | `int.MaxValue` | Maximum characters buffered: the retained text of the compacting buffer, or the window of a value for `ParseManyAsync`, with the white space and comments which a `WhiteSpaceParser` reads before it. Exceeding it throws a `ParseException` at the start of the token or value which doesn't fit. Set it for untrusted input. |
 | `SkipWhiteSpace` | `true` | Whether `ParseManyAsync` skips white space before each item, separator and the end. |
 | `ContextFactory` | `null` | Creates the `ParseContext` of the parse (of each window for `ParseManyAsync`), for instance to set `WhiteSpaceParser` or use a derived context. It must use the provided scanner and pass the cancellation token. |
 
@@ -239,13 +239,20 @@ with the next one, so memory is bounded by the largest value, not by the input. 
 contain values (and separators and white space). A value which doesn't match throws a `ParseException`,
 and a value matching an empty text throws an `InvalidOperationException` to avoid an infinite loop.
 
-The white space before a value, with the comments of a `WhiteSpaceParser`, is buffered with the value while a window ends
-in it: a comment is read from its start once the window holds its end, and it is only unterminated at the end of the
-input. It counts in `MaxBufferedCharacters`, so a comment longer than the limit fails like a value which is.
+The white space between the values isn't buffered: the chars of the context's `WhiteSpaceSet` are white space whatever
+follows them, so a window which ends in them drops them and the next one continues after them. Blank lines or padding
+of any length are read through windows of `BufferSize` chars and don't count in `MaxBufferedCharacters`. The white space
+inside a value is part of the value.
+
+With a `WhiteSpaceParser`, what is skipped can depend on the text which follows the window, so the white space and the
+comments it reads before a value are buffered with the value while a window ends in them: a comment is read from its
+start once the window holds its end, and it is only unterminated at the end of the input. They count in
+`MaxBufferedCharacters`, so a comment or a run of white space longer than the limit fails like a value which is.
 
 The delimited overload reads until it finds the delimiter and parses each delimited text on its own. The
 parser must match the whole text, except white space when `SkipWhiteSpace` is enabled, and empty or white
-space only texts are skipped. Use it for interactive sources, such as a terminal or a socket, where the
+space only texts are skipped. A delimited text is buffered whole, with its white space, before it is parsed; empty
+ones, like blank lines, are dropped one by one. Use it for interactive sources, such as a terminal or a socket, where the
 other overloads could wait for more text than the next value needs before parsing it.
 
 ## Semantics
