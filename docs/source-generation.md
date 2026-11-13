@@ -681,7 +681,8 @@ and the [`IncludeFiles` containment guidance](security.md#includefiles-containme
 
 The generator emits the parser implementation plus shared scanner, cursor, character, number, result, and
 context support into the consuming assembly. These support types are internal and live under
-`Parlot.Generated`.
+`Parlot.Generated`. Its `ParseException` has the standard exception constructors, and below .NET 8 it is
+`[Serializable]`, so checks which create or serialize every exception type of an assembly accept it.
 
 Every generated shared-support source file retains Parlot's original BSD-3-Clause license notice, and the
 `Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a Parlot runtime
