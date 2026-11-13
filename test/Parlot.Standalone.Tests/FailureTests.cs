@@ -189,6 +189,52 @@ public class FailureTests
     }
 
     [Fact]
+    public void Value_Rejected_By_A_Conversion_Doesnt_Stop_A_Longer_Attempt_Being_Reported()
+    {
+        Assert.False(FailureGrammars.ConversionSecond("  a  from", out _, out var failureOffset));
+        Assert.Equal(5, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionSecond(new OneCharReader("  a  from"), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(5, failure.Offset);
+
+        // A failure recorded further before the value is rejected is kept
+        Assert.False(FailureGrammars.ConversionFurther("  from ( x", out _, out failureOffset));
+        Assert.Equal(9, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionFurther(new OneCharReader("  from ( x"), out _, out failure));
+        Assert.Equal(9, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("  from;", 2)]
+    [InlineData("/* a */ from;", 8)]
+    [InlineData(" /* a */\n /* b */ from;", 18)]
+    [InlineData(" /* a */ fromage,", 16)]
+    [InlineData(" /* a */ /from;", 9)]
+    public void Value_Rejected_By_A_Conversion_Fails_After_The_Comments_Before_It(string text, int offset)
+    {
+        Assert.False(FailureGrammars.ConversionRejectedAfterComments(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionRejectedAfterComments(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start_After_Another_Alternative(string text, int offset)
+    {
+        Assert.False(FailureGrammars.ConversionRejectedAlternative(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionRejectedAlternative(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Fact]
     public void Rejected_Value_Doesnt_Stop_A_Longer_Attempt_Being_Reported()
     {
         Assert.False(FailureGrammars.Second("  a  from", out _, out var failureOffset));

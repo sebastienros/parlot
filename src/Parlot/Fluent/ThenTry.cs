@@ -1,6 +1,7 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -66,8 +67,49 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
+        if (context.IsCompacting)
+        {
+            return ParseCompacting(context, ref result);
+        }
+
         context.EnterParser(this);
 
+        var success = ParseValue(context, ref result);
+
+        context.ExitParser(this);
+        return success;
+    }
+
+    // A compacting buffer can't be read again from where the parser is invoked to find where a rejected value starts:
+    // the white space the parser skips is skipped first, and the value is rejected where it is then read from. A
+    // separate method, so that parsing a string doesn't keep the position across its calls.
+    private bool ParseCompacting(ParseContext context, ref ParseResult<U> result)
+    {
+        context.EnterParser(this);
+
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+
+        if (context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
+        {
+            context.SkipWhiteSpace();
+        }
+
+        var success = ParseValue(context, ref result);
+
+        if (!success)
+        {
+            cursor.ResetPosition(start);
+        }
+
+        context.ExitParser(this);
+        return success;
+    }
+
+    // Reads the value at the cursor and converts it. Inlined, so that Parse is compiled as when it held this code.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool ParseValue(ParseContext context, ref ParseResult<U> result)
+    {
         var start = context.Scanner.Cursor.Offset;
         var parsed = new ParseResult<T>();
 
@@ -79,16 +121,39 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
                 result.Start = parsed.Start;
                 result.End = parsed.End;
 
-                context.ExitParser(this);
                 return true;
             }
 
-            // The value is rejected, the parser fails where it was invoked
-            context.Scanner.Cursor.ResetPosition(start);
+            Reject(context, start);
         }
 
-        context.ExitParser(this);
         return false;
+    }
+
+    // The parser fails where it was invoked. A value that the conversion rejects is the failure, at its start, wherever
+    // it was read up to, as in generated code and as one that a When rejects. Not inlined, so that only this path pays
+    // for it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void Reject(ParseContext context, int start)
+    {
+        var cursor = context.Scanner.Cursor;
+        var recorded = cursor.RecordedFailure;
+
+        cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
+
+        var valueStart = start;
+
+        // The value starts after the white space the parser skips, which is read again when there is some. In
+        // compacting mode it was skipped before the value was read.
+        if (!context.IsCompacting && context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
+        {
+            context.SkipWhiteSpace();
+            valueStart = cursor.Offset;
+            cursor.ResetPosition(start);
+        }
+
+        cursor.RecordFailure(valueStart);
     }
 
     private bool Convert(T value, ref ParseResult<U> result)
