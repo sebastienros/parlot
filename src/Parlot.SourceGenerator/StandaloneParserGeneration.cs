@@ -113,6 +113,12 @@ public sealed partial class ParserSourceGenerator
 
         // out (int Offset, int Line, int Column)
         Position,
+
+        // out (int Offset, bool NestedTooDeeply)
+        OffsetAndNesting,
+
+        // out (int Offset, int Line, int Column, bool NestedTooDeeply)
+        PositionAndNesting,
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
@@ -604,7 +610,9 @@ public sealed partial class ParserSourceGenerator
             + "taking string input, the factory's configuration arguments, an optional extra CancellationToken, and an out result. "
             + "Other overloads with the same name may take a TextReader instead of the string, or add a last "
             + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics, "
-            + "or a last out int or out (int Offset, int Line, int Column) receiving the furthest failure.";
+            + "or a last out int or out (int Offset, int Line, int Column) receiving the furthest failure, or one of these with "
+            + "whether the input is nested too deeply: out (int Offset, bool NestedTooDeeply) or "
+            + "out (int Offset, int Line, int Column, bool NestedTooDeeply).";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -690,7 +698,7 @@ public sealed partial class ParserSourceGenerator
     }
 
     // Whether the entry point ends with the out result followed by an out int, or an out (int Offset, int Line, int Column),
-    // receiving the furthest failure
+    // receiving the furthest failure, or by a tuple of one of these and a bool, receiving whether the input is nested too deeply
     private static FailureOutput GetFailureOutput(IMethodSymbol method, IMethodSymbol factory, ITypeSymbol resultType)
     {
         if (method.Parameters.Length < factory.Parameters.Length + 3)
@@ -711,11 +719,28 @@ public sealed partial class ParserSourceGenerator
             return FailureOutput.Offset;
         }
 
-        return failure.Type is INamedTypeSymbol { IsTupleType: true } tuple
-            && tuple.TupleElements.Length == 3
-            && tuple.TupleElements.All(static element => element.Type.SpecialType == SpecialType.System_Int32)
-                ? FailureOutput.Position
-                : FailureOutput.None;
+        if (failure.Type is not INamedTypeSymbol { IsTupleType: true } tuple)
+        {
+            return FailureOutput.None;
+        }
+
+        // A last bool tells that the input is nested too deeply
+        var elements = tuple.TupleElements;
+        var nesting = elements[elements.Length - 1].Type.SpecialType == SpecialType.System_Boolean;
+        var positions = nesting ? elements.Length - 1 : elements.Length;
+
+        if (elements.Take(positions).Any(static element => element.Type.SpecialType != SpecialType.System_Int32))
+        {
+            return FailureOutput.None;
+        }
+
+        return (positions, nesting) switch
+        {
+            (1, true) => FailureOutput.OffsetAndNesting,
+            (3, false) => FailureOutput.Position,
+            (3, true) => FailureOutput.PositionAndNesting,
+            _ => FailureOutput.None,
+        };
     }
 
     // Whether the entry point ends with the out result followed by an
@@ -828,14 +853,22 @@ public sealed partial class ParserSourceGenerator
         {
             // Read while the buffer of a TextReader is still held. The parsers moved the cursor back from where they failed.
             var furthest = prefix + "_furthest";
-            if (standalone.Failure == FailureOutput.Offset)
+            switch (standalone.Failure)
             {
-                source.AppendLine($"                {failure} = {context}.Scanner.Cursor.FurthestOffset;");
-            }
-            else
-            {
-                source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
-                source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column);");
+                case FailureOutput.Offset:
+                    source.AppendLine($"                {failure} = {context}.Scanner.Cursor.FurthestOffset;");
+                    break;
+                case FailureOutput.OffsetAndNesting:
+                    source.AppendLine($"                {failure} = ({context}.Scanner.Cursor.FurthestOffset, false);");
+                    break;
+                case FailureOutput.Position:
+                    source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
+                    source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column);");
+                    break;
+                default:
+                    source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
+                    source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column, false);");
+                    break;
             }
         }
         source.AppendLine("            }");
@@ -853,9 +886,13 @@ public sealed partial class ParserSourceGenerator
             if (failure is not null)
             {
                 // An Error or ElseError parser reports where it failed
-                source.AppendLine(standalone.Failure == FailureOutput.Offset
-                    ? $"                {failure} = {exception}.Position.Offset;"
-                    : $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column);");
+                source.AppendLine(standalone.Failure switch
+                {
+                    FailureOutput.Offset => $"                {failure} = {exception}.Position.Offset;",
+                    FailureOutput.OffsetAndNesting => $"                {failure} = ({exception}.Position.Offset, {exception}.IsNestedTooDeeply);",
+                    FailureOutput.Position => $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column);",
+                    _ => $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column, {exception}.IsNestedTooDeeply);",
+                });
             }
             source.AppendLine("                return false;");
             source.AppendLine("            }");

@@ -23,7 +23,7 @@ var context = new ParseContext(new Scanner(input), maxRecursionDepth: 128);
 
 if (!parser.TryParse(context, out var result, out var error))
 {
-    // error reports when the configured recursion limit was exceeded
+    // error.IsNestedTooDeeply tells when the configured recursion limit was exceeded
 }
 ```
 
@@ -40,6 +40,12 @@ and on the stack each level of the grammar takes; a limit makes it independent o
 and the stack is checked on every 16th one, so a grammar recurses at most 16 levels past a check, which the runtime's
 margin (64 KB or more) leaves room for. `Unary` and the prefix operators of an operator table read their operators in a
 loop, so a chain of operators doesn't use the stack, whatever its length; the levels they count are only for the limit.
+
+Both failures set `IsNestedTooDeeply` on the `ParseException`, and on the `ParseError` that `TryParse` and `TryMatch` return,
+to tell them from a syntax error without comparing messages: an application can then reject the input as too complex
+rather than as invalid. It is `false` for every other error, those of `Error` and `ElseError` and the `ParseException` a
+callback throws included. A source-generated parser returns it from a
+[failure overload](source-generation.md#failure-position).
 
 A `Deferred` parser that is invoked again at the position where it is already active (left recursion) fails at that position
 instead of overflowing the stack. The parsers which can't be invoked again where they are active skip this check, see

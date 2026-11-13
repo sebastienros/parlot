@@ -28,6 +28,7 @@ public class StackGuardTests
             Assert.False(list.TryParse(DeepList, out _, out var error));
             Assert.Equal(Message, error.Message);
             Assert.InRange(error.Position.Offset, 1, Depth - 1);
+            Assert.True(error.IsNestedTooDeeply);
 
             // Loop detection and the recursion limit take another path
             Assert.False(list.TryParse(new ParseContext(new Scanner(DeepList), disableLoopDetection: true), out _, out error));
@@ -35,7 +36,7 @@ public class StackGuardTests
             Assert.False(list.TryParse(new ParseContext(new Scanner(DeepList), maxRecursionDepth: int.MaxValue), out _, out error));
             Assert.Equal(Message, error.Message);
 
-            Assert.Throws<ParseException>(() => list.Parse(DeepList));
+            Assert.True(Assert.Throws<ParseException>(() => list.Parse(DeepList)).IsNestedTooDeeply);
 
             Assert.True(list.TryParse("[[[item]]]", out var depth));
             Assert.Equal(3, depth);
