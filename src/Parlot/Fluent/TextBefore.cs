@@ -107,13 +107,23 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
 
                 if (!_consumeDelimiter)
                 {
-                    context.Scanner.Cursor.ResetPosition(previous);
+                    // The delimiter matched: it isn't a failure where it ends
+                    var cursor = context.Scanner.Cursor;
+                    var recorded = cursor.RecordedFailure;
+                    cursor.ResetPosition(previous);
+                    cursor.RestoreRecordedFailure(recorded);
                 }
 
                 if (length == 0 && !_canBeEmpty)
                 {
-                    // The delimiter might have been consumed
-                    context.Scanner.Cursor.ResetPosition(start);
+                    if (_consumeDelimiter)
+                    {
+                        // The text is empty, which is the failure, where it starts: the delimiter matched there
+                        var cursor = context.Scanner.Cursor;
+                        var recorded = cursor.RecordedFailure;
+                        cursor.ResetPosition(start);
+                        cursor.RestoreRecordedFailure(recorded);
+                    }
 
                     context.ExitParser(this);
                     return false;
@@ -262,9 +272,24 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         result.Body.Add("    {");
         result.Body.Add($"        var {lengthName} = {previousName} - {startName};");
 
+        // The delimiter matched: it isn't a failure where it ends, whether the cursor is moved back for what follows the
+        // text to read it, or because the text is empty, which is the failure, where it starts.
+        //
+        // var recorded = cursor.RecordedFailure;
+        // cursor.ResetPosition(previous);
+        // cursor.RestoreRecordedFailure(recorded);
+        var recordedName = $"recorded{context.NextNumber()}";
+
+        void MoveBack(string indent)
+        {
+            result.Body.Add($"{indent}var {recordedName} = {cursorName}.RecordedFailure;");
+            result.Body.Add($"{indent}{cursorName}.ResetPosition({previousName});");
+            result.Body.Add($"{indent}{cursorName}.RestoreRecordedFailure({recordedName});");
+        }
+
         if (!_consumeDelimiter)
         {
-            result.Body.Add($"        {cursorName}.ResetPosition({previousName});");
+            MoveBack("        ");
         }
 
         if (!_canBeEmpty)
@@ -273,7 +298,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
             result.Body.Add("        {");
             if (_consumeDelimiter)
             {
-                result.Body.Add($"            {cursorName}.ResetPosition({startName});");
+                MoveBack("            ");
             }
             result.Body.Add($"            {result.SuccessVariable} = false;");
             result.Body.Add("            break;");
