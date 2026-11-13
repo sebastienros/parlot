@@ -60,6 +60,12 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
 
         var start = context.Scanner.Cursor.Offset;
 
+        // The delimiter is a lookahead, like the parser of Not: what it reads where it isn't found says nothing about the
+        // text, and neither does what it matched when it isn't consumed. The failure is restored when the text ends, and
+        // after each delimiter which isn't found only when the one which is found keeps what it recorded. The cursor isn't
+        // kept in a local: one more grew the frame, 4% of TextBeforeBenchmarks.Sparse on its text of 16 chars.
+        var recorded = context.Scanner.Cursor.RecordedFailure;
+
         var parsed = new ParseResult<T>();
 
         while (true)
@@ -93,6 +99,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
                     return false;
                 }
 
+                context.Scanner.Cursor.RestoreRecordedFailure(recorded);
                 result.Set(start, previous, context.Scanner.Cursor.CreateSpan(start, length));
 
                 context.ExitParser(this);
@@ -107,11 +114,8 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
 
                 if (!_consumeDelimiter)
                 {
-                    // The delimiter matched: it isn't a failure where it ends
-                    var cursor = context.Scanner.Cursor;
-                    var recorded = cursor.RecordedFailure;
-                    cursor.ResetPosition(previous);
-                    cursor.RestoreRecordedFailure(recorded);
+                    context.Scanner.Cursor.ResetPosition(previous);
+                    context.Scanner.Cursor.RestoreRecordedFailure(recorded);
                 }
 
                 if (length == 0 && !_canBeEmpty)
@@ -119,10 +123,8 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
                     if (_consumeDelimiter)
                     {
                         // The text is empty, which is the failure, where it starts: the delimiter matched there
-                        var cursor = context.Scanner.Cursor;
-                        var recorded = cursor.RecordedFailure;
-                        cursor.ResetPosition(start);
-                        cursor.RestoreRecordedFailure(recorded);
+                        context.Scanner.Cursor.ResetPosition(start);
+                        context.Scanner.Cursor.RestoreRecordedFailure(recorded);
                     }
 
                     context.ExitParser(this);
@@ -134,6 +136,12 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
 
                 context.ExitParser(this);
                 return true;
+            }
+
+            if (_consumeDelimiter)
+            {
+                // Not found here: forgotten now, the delimiter which is found is kept
+                context.Scanner.Cursor.RestoreRecordedFailure(recorded);
             }
 
             context.Scanner.Cursor.Advance();
@@ -219,7 +227,13 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         var previousName = $"previous{context.NextNumber()}";
         var lengthName = $"length{context.NextNumber()}";
 
+        var recordedName = $"recorded{context.NextNumber()}";
+
+        // The delimiter is a lookahead: what it reads where it isn't found isn't a failure, nor what it matched when it isn't
+        // consumed. The failure is restored when the text ends, and after each delimiter which isn't found only when the one
+        // which is found keeps what it recorded: a store for each of them cost TextBeforeBenchmarks.FalseStartsGenerated 15%.
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
+        result.Body.Add($"var {recordedName} = {cursorName}.RecordedFailure;");
 
         var delimiterValueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
@@ -256,6 +270,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
                 result.Body.Add("            break;");
                 result.Body.Add("        }");
             }
+            result.Body.Add($"        {cursorName}.RestoreRecordedFailure({recordedName});");
             if (!context.DiscardResult)
             {
                 result.Body.Add($"        {result.ValueVariable} = {context.CursorName}.CreateSpan({startName}, {lengthName});");
@@ -272,17 +287,10 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         result.Body.Add("    {");
         result.Body.Add($"        var {lengthName} = {previousName} - {startName};");
 
-        // The delimiter matched: it isn't a failure where it ends, whether the cursor is moved back for what follows the
-        // text to read it, or because the text is empty, which is the failure, where it starts.
-        //
-        // var recorded = cursor.RecordedFailure;
-        // cursor.ResetPosition(previous);
-        // cursor.RestoreRecordedFailure(recorded);
-        var recordedName = $"recorded{context.NextNumber()}";
-
+        // The cursor is moved back from the delimiter for what follows the text to read it, or because the text is empty,
+        // which is the failure, where it starts
         void MoveBack(string indent)
         {
-            result.Body.Add($"{indent}var {recordedName} = {cursorName}.RecordedFailure;");
             result.Body.Add($"{indent}{cursorName}.ResetPosition({previousName});");
             result.Body.Add($"{indent}{cursorName}.RestoreRecordedFailure({recordedName});");
         }
@@ -312,6 +320,10 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         result.Body.Add($"        {result.SuccessVariable} = true;");
         result.Body.Add("        break;");
         result.Body.Add("    }");
+        if (_consumeDelimiter)
+        {
+            result.Body.Add($"    {cursorName}.RestoreRecordedFailure({recordedName});");
+        }
         result.Body.Add($"    {cursorName}.Advance();");
         result.Body.Add("}");
 
