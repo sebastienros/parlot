@@ -1310,8 +1310,14 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         {
             if (operatorResult.Value < 0)
             {
-                // The probe of a level of valued operators, whose choice may have skipped white space
-                context.Scanner.Cursor.ResetPosition(next.Offset);
+                // The probe of a level of valued operators, whose choice may have skipped white space. The level reads the
+                // operators from before it: an operator which can be there isn't a failure where it starts. The failure is
+                // restored whether the cursor moved or not: testing it first, as the generated lookup does, cost
+                // ValuedLevelsBenchmarks.ValuedRuntime 4% on its input with arguments.
+                var cursor = context.Scanner.Cursor;
+                var recorded = cursor.RecordedFailure;
+                cursor.ResetPosition(next.Offset);
+                cursor.RestoreRecordedFailure(recorded);
             }
 
             next.Operator = operatorResult.Value;
@@ -1784,14 +1790,22 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         Line($"    nextPosition = {cursor}.Offset;");
 
         // A choice tries the operators of all the levels from where it starts, and returns the operator of a level of valued
-        // operators when it matched their probe, which may have skipped white space
+        // operators when it matched their probe, which may have skipped white space: the cursor is moved back for the level
+        // which parses the operators, and an operator which can be there isn't a failure where it starts. Most operators
+        // follow their operand: only the ones after white space restore the failure, which cost
+        // ValuedOperatorsBenchmarks.TableGenerated 1.4% on its mixed input otherwise.
         void Choice(string? helper)
         {
             if (helper is not null)
             {
                 Line($"        if ({helper}({ctx}, out next))");
                 Line("        {");
-                Line($"            if (next < 0) {cursor}.ResetPosition(nextPosition);");
+                Line($"            if (next < 0 && {cursor}.Offset != nextPosition)");
+                Line("            {");
+                Line($"                var recorded = {cursor}.RecordedFailure;");
+                Line($"                {cursor}.ResetPosition(nextPosition);");
+                Line($"                {cursor}.RestoreRecordedFailure(recorded);");
+                Line("            }");
                 Line("            return true;");
                 Line("        }");
             }
