@@ -161,23 +161,31 @@ public abstract partial class Parser<T>
 
         value = default!;
 
-        if (skipWhiteSpace)
-        {
-            context.SkipWhiteSpace();
-
-            if (cursor.Eof)
-            {
-                return false;
-            }
-        }
-
         var start = cursor.Offset;
         var result = new ParseResult<T>();
         bool success;
 
+        // The frame is final, so an exception is conclusive. A white space parser can throw too, for an unterminated comment
         try
         {
+            if (skipWhiteSpace)
+            {
+                context.SkipWhiteSpace();
+
+                if (cursor.Eof)
+                {
+                    return false;
+                }
+
+                start = cursor.Offset;
+            }
+
             success = Parse(context, ref result);
+
+            if (success && skipWhiteSpace)
+            {
+                context.SkipWhiteSpace();
+            }
         }
         catch (ParseException e)
         {
@@ -187,11 +195,6 @@ public abstract partial class Parser<T>
         if (!success)
         {
             throw new ParseException("The input could not be parsed.", driver.ToAbsolute(cursor.GetPosition(start)));
-        }
-
-        if (skipWhiteSpace)
-        {
-            context.SkipWhiteSpace();
         }
 
         if (!cursor.Eof)

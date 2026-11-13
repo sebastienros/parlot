@@ -42,6 +42,29 @@ public class NewLineTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StatementsWithCommentsCutByTheBuffer(bool terminated)
+    {
+        // The buffer of a generated reader starts at 4096 chars: a comment which it doesn't end is read again with more
+        // text, and is only unterminated at the end of the input
+        foreach (var length in new[] { 4090, 4094, 4095, 4096, 10_000 })
+        {
+            var input = "a;/*" + new string('x', length) + (terminated ? "*/ b\n/* " + new string('y', length) + " */ c" : "");
+            var parser = RuntimeNewLineGrammars.StatementsWithComments();
+            var expected = Outcome(() => parser.TryParse(input, out var value) ? value! : "FAIL");
+
+            Assert.Equal(terminated ? "a|b|c" : "FAIL", expected);
+            Assert.Equal(expected, Outcome(() => NewLineGrammars.TryParseStatementsWithComments(input, out var value) ? value! : "FAIL"));
+
+            foreach (var chunk in new[] { 1, 3, int.MaxValue })
+            {
+                Assert.Equal(expected, Outcome(() => NewLineGrammars.TryParseStatementsWithComments(new VectorizedTokenTests.ChunkedReader(input, chunk), out var value) ? value! : "FAIL"));
+            }
+        }
+    }
+
     private static string Outcome(Func<string> parse)
     {
         try

@@ -162,8 +162,9 @@ While more text may follow, the window is *non-final*: its `Cursor` has `IsFinal
 
 `HitEnd` is sticky for an attempt: `ResetPosition` doesn't clear it, so a branch that reached the end of the
 window and then backtracked still makes the attempt inconclusive. A `ParseException` thrown while `HitEnd`
-is set is inconclusive too, since more text could have avoided it. Only the item which spans the end of the window
-is retried, and the doubling bounds the cost of the retries.
+is set is inconclusive too, since more text could have avoided it: the one of a `WhiteSpaceParser` whose comment the
+window doesn't end, as much as the one of a value. Only the item which spans the end of the window, with the white space
+before it, is retried, and the doubling bounds the cost of the retries.
 
 ### What sets `HitEnd`
 
@@ -237,6 +238,10 @@ An input which fits in the first `BufferSize` chars, and a `StringReader` in the
 with the next one, so memory is bounded by the largest value, not by the input. The text must only
 contain values (and separators and white space). A value which doesn't match throws a `ParseException`,
 and a value matching an empty text throws an `InvalidOperationException` to avoid an infinite loop.
+
+The white space before a value, with the comments of a `WhiteSpaceParser`, is buffered with the value while a window ends
+in it: a comment is read from its start once the window holds its end, and it is only unterminated at the end of the
+input. It counts in `MaxBufferedCharacters`, so a comment longer than the limit fails like a value which is.
 
 The delimited overload reads until it finds the delimiter and parses each delimited text on its own. The
 parser must match the whole text, except white space when `SkipWhiteSpace` is enabled, and empty or white
