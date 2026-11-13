@@ -53,6 +53,9 @@ public class ParseException : Exception
     /// <summary>
     /// Adds the position to the serialized data of the exception.
     /// </summary>
+    // Exception.GetObjectData is security critical on .NET Framework, where an override must be too: a transparent one,
+    // which it is in an assembly that allows partially trusted callers, prevents the type from loading.
+    [System.Security.SecurityCritical]
     public override void GetObjectData(SerializationInfo info, StreamingContext context)
     {
         base.GetObjectData(info, context);

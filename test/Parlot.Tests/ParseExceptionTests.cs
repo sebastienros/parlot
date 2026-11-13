@@ -90,6 +90,16 @@ public class ParseExceptionTests
         Assert.Equal(default, copy.Position);
     }
 
+    [Fact]
+    public void GetObjectDataShouldBeSecurityCritical()
+    {
+        // Exception.GetObjectData is security critical on .NET Framework, where an override must be too: a transparent one
+        // fails to load the type in an assembly which allows partially trusted callers
+        var method = typeof(ParseException).GetMethod(nameof(ParseException.GetObjectData))!;
+
+        Assert.NotNull(Attribute.GetCustomAttribute(method, typeof(System.Security.SecurityCriticalAttribute), inherit: false));
+    }
+
     private static ParseException RoundTrip(ParseException exception)
     {
         using var stream = new System.IO.MemoryStream();
