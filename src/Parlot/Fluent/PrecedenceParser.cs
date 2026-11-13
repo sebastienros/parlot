@@ -554,18 +554,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     ///     .RightAssociative((Terms.Char('='), static (a, b) => new Assign(a, b)));
     /// </code>
     /// </example>
-    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<T, TMiddle, T, T> factory)
-    {
-        ThrowHelper.ThrowIfNull(question, nameof(question));
-        ThrowHelper.ThrowIfNull(middle, nameof(middle));
-        ThrowHelper.ThrowIfNull(colon, nameof(colon));
-        ThrowHelper.ThrowIfNull(last, nameof(last));
-        ThrowHelper.ThrowIfNull(factory, nameof(factory));
-
-        Parser<(TMiddle, T)> op = question.SkipAnd(middle).AndSkip(colon).And(last);
-
-        return Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new ConditionalGroup<T, TMiddle>(op, factory)])));
-    }
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<T, TMiddle, T, T> factory) =>
+        AddConditional(new ConditionalGroup<T, TMiddle>(ConditionalOperator(question, middle, colon, last, factory), factory));
 
     /// <summary>
     /// Returns a parser with an additional level of a conditional operator <c>condition ? whenTrue : whenFalse</c> whose
@@ -585,7 +575,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     /// <param name="last">The parser of the last operand, usually the whole expression or an assignment.</param>
     /// <param name="factory">The function creating the result from the context, the condition, the middle operand and the last operand.</param>
     /// <returns>A new parser with the additional level.</returns>
-    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<ParseContext, T, TMiddle, T, T> factory)
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<ParseContext, T, TMiddle, T, T> factory) =>
+        AddConditional(new ConditionalGroup<T, TMiddle>(ConditionalOperator(question, middle, colon, last, factory), factory));
+
+    // The operator of a conditional with a last operand, which reads its middle and last operands
+    private static Parser<(TMiddle, T)> ConditionalOperator<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Delegate factory)
     {
         ThrowHelper.ThrowIfNull(question, nameof(question));
         ThrowHelper.ThrowIfNull(middle, nameof(middle));
@@ -593,10 +587,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         ThrowHelper.ThrowIfNull(last, nameof(last));
         ThrowHelper.ThrowIfNull(factory, nameof(factory));
 
-        Parser<(TMiddle, T)> op = question.SkipAnd(middle).AndSkip(colon).And(last);
-
-        return Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new ConditionalGroup<T, TMiddle>(op, factory)])));
+        return question.SkipAnd(middle).AndSkip(colon).And(last);
     }
+
+    private PrecedenceParser<T> AddConditional(PostfixGroup<T> conditional) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([conditional])));
 
     private int OperatorCount => _operatorLevels.Length;
 
