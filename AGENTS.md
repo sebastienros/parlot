@@ -205,6 +205,9 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   new public API.
 - Tests cover the failure path, not just the match. `test/Parlot.Tests/BenchmarksTests.cs` re-runs the benchmark
   grammars as correctness tests (net10.0 only), so benchmark code must stay valid.
+- A test of `Parlot.SourceGenerator.Tests` which runs commands in a temporary directory runs in `TestDirectory.Run` /
+  `RunAsync`, not in a `try` whose `finally` deletes the directory: a delete that fails there replaces the failure of
+  the test. A delete that fails after a test which passed still fails it, since something outlived a command.
 - Code that runs when parsing (parsers, `SeekGuard`, `LoopAnalysis`) doesn't read members by reflection: native AOT
   trims them. Expose what another parser needs with an internal interface (`ISkipsWhiteSpace`, `IReadsWith`), or check
   `RuntimeFeature.IsDynamicCodeSupported` first like `LoopAnalysis.IsLeaf`. `NativeAotRuntimeTests` publishes a runtime

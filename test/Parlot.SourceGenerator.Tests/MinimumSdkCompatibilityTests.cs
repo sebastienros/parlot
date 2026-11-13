@@ -18,7 +18,7 @@ public class MinimumSdkCompatibilityTests
         var sdkVersion = manifest.RootElement.GetProperty("sdk").GetProperty("version").GetString();
         var directory = Directory.CreateDirectory(Path.Combine(
             Path.GetTempPath(), "Parlot.MinimumSdk.Tests", Guid.NewGuid().ToString("N"))).FullName;
-        try
+        await TestDirectory.RunAsync(directory, async () =>
         {
             File.Copy(sdkManifest, Path.Combine(directory, "global.json"));
             Assert.Equal(sdkVersion, (await BuildContextIntegrationTests.RunDotnet(directory, "--version")).Trim());
@@ -81,10 +81,6 @@ public class MinimumSdkCompatibilityTests
                 static path => Path.GetFileName(path).StartsWith("StandaloneParser", StringComparison.Ordinal));
             Assert.Equal("42", (await BuildContextIntegrationTests.RunDotnet(directory, "run",
                 "--no-build", "--configuration", configuration)).Trim());
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
+        });
     }
 }

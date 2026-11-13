@@ -32,7 +32,7 @@ public class StandalonePackageTests
         var consumerFramework = frameworks.Length > 1 || targetFramework == "netstandard2.0" ? "net10.0" : targetFramework;
         var directory = Directory.CreateDirectory(Path.Combine(
             Path.GetTempPath(), "Parlot.StandalonePackage.Tests", Guid.NewGuid().ToString("N"))).FullName;
-        try
+        await TestDirectory.RunAsync(directory, async () =>
         {
             var feed = Directory.CreateDirectory(Path.Combine(directory, "feed")).FullName;
             var author = Directory.CreateDirectory(Path.Combine(directory, "author")).FullName;
@@ -274,12 +274,7 @@ public class StandalonePackageTests
                 Assert.DoesNotContain(Directory.GetFiles(publish),
                     static path => Path.GetFileName(path).StartsWith("Parlot", StringComparison.Ordinal));
             }
-        }
-
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
+        });
     }
 
     [Fact]
@@ -291,7 +286,7 @@ public class StandalonePackageTests
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent.Name;
         var directory = Directory.CreateDirectory(Path.Combine(
             Path.GetTempPath(), "Parlot.StandalonePackage.Tests", Guid.NewGuid().ToString("N"))).FullName;
-        try
+        await TestDirectory.RunAsync(directory, async () =>
         {
             var feed = Directory.CreateDirectory(Path.Combine(directory, "feed")).FullName;
             var author = Directory.CreateDirectory(Path.Combine(directory, "author")).FullName;
@@ -390,11 +385,7 @@ public class StandalonePackageTests
             var output = await BuildContextIntegrationTests.RunDotnet(consumer, "run", "--no-restore",
                 "--configuration", configuration, "-p:UseSharedCompilation=false");
             Assert.Equal("42", output.Trim());
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
+        });
     }
 
     private static void AssertRuntimePackageDependencies(ZipArchive package, string[] frameworks)
