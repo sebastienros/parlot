@@ -72,7 +72,7 @@ For a program parsed as `ZeroOrMany(statement).AndSkip(Eof().ElseError("Expected
 statements stopped matching, at the start of the statement that failed, while the furthest failure is where that
 statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
 expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
-return, with the same rules for what a parser reads and then rejects (`When`, `Not`, `WhenFollowedBy`,
+return, with the same rules for what a parser reads and then rejects (`When`, `ThenTry`, `Not`, `WhenFollowedBy`,
 `WhenNotFollowedBy`).
 
 The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
@@ -2082,6 +2082,9 @@ var octet = Terms.Integer().ThenTry(static value => (value is >= 0 and <= 255, (
 The conversion is invoked on each match, even when the value of the parser isn't used, since it decides whether the parser
 succeeds. A `When(...).Then(...)` pair invokes two parsers and two callbacks on each match: when the condition and the
 conversion read the same value, as a reserved word check before an AST node is built, `ThenTry` does both in one.
+
+A value the conversion rejects is reported as the furthest failure at its start, after the white space the parser skips,
+like one a `When` rejects (see [Reporting where a parse failed](#reporting-where-a-parse-failed)).
 
 ### ToPooledString
 
