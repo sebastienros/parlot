@@ -304,6 +304,90 @@ public class FailureTests
         Assert.Equal(offset, failure.Offset);
     }
 
+    [Theory]
+    [InlineData("a from;", 0)]
+    [InlineData("  a from;", 2)]
+    [InlineData("  a  from;", 2)]
+    [InlineData("\n a\n from;", 2)]
+    [InlineData("  a  b,", 6)]
+    [InlineData("  a  ,", 5)]
+    public void Rejected_Value_Of_Several_Tokens_Fails_At_Its_Start(string text, int offset)
+    {
+        // The cursor moves forward over the white space between the words, which isn't a failure there
+        Assert.False(FailureGrammars.RejectedWords(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedWords(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.False(FailureGrammars.ConversionRejectedWords(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.ConversionRejectedWords(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedWords("  a  b ;", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("a from;", 0)]
+    [InlineData("  a from;", 2)]
+    [InlineData("\n a\n from;", 2)]
+    [InlineData("  a  fr,", 7)]
+    public void Rejected_Value_Ending_With_The_Longest_Match_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedLongest(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedLongest(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedLongest("  a  fr ;", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+
+        // Without a selector, the cursor is moved back from each alternative which matched: not a failure where it ended
+        Assert.False(FailureGrammars.RejectedLongestText(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedLongestText(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.False(FailureGrammars.RejectedLongestWord(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedLongestWord(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedLongestWord("  a  fr ;", out value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("a  x", 3, 1, 4)]
+    [InlineData("a  b  x", 6, 1, 7)]
+    [InlineData("a  b  c  x", 9, 1, 10)]
+    [InlineData("a\n b\n x", 6, 3, 2)]
+    [InlineData("a b c x", 6, 1, 7)]
+    [InlineData("ax", 1, 1, 2)]
+    public void Span_Code_Moved_Back_Over_White_Space_Fails_After_It(string text, int offset, int line, int column)
+    {
+        // An optional text isn't found after the white space the cursor skipped, and the span code reads on, or ends,
+        // before that white space: the cursor is moved back from where the text was looked for, like at runtime
+        Assert.False(FailureGrammars.SpanBacktracking(text, out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal((offset, line, column), failure);
+
+        Assert.False(FailureGrammars.SpanBacktracking(new OneCharReader(text), out _, out var readerFailure));
+        Assert.Equal((offset, line, column), readerFailure);
+
+        Assert.True(FailureGrammars.SpanBacktracking("a  b  c  d", out var value, out failure));
+        Assert.Equal("a", value);
+        Assert.Equal(default, failure);
+    }
+
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible
     private sealed class OneCharReader : TextReader
     {

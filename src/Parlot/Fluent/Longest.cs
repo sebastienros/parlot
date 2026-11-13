@@ -210,7 +210,10 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
                 if (i < last)
                 {
+                    // A match isn't a failure where it ends, the cursor ends after the longest one
+                    var recorded = cursor.RecordedFailure;
                     cursor.ResetPosition(from);
+                    cursor.RestoreRecordedFailure(recorded);
                 }
             }
         }
@@ -220,7 +223,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             return false;
         }
 
-        cursor.ResetPosition(bestEnd);
+        cursor.MoveTo(bestEnd);
         return true;
     }
 
@@ -295,7 +298,10 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
                 if (i < last)
                 {
+                    // A match isn't a failure where it ends, the cursor ends after the longest one
+                    var recorded = cursor.RecordedFailure;
                     cursor.ResetPosition(from);
+                    cursor.RestoreRecordedFailure(recorded);
                 }
             }
         }
@@ -305,7 +311,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             return false;
         }
 
-        cursor.ResetPosition(bestEnd);
+        cursor.MoveTo(bestEnd);
         return true;
     }
 
@@ -366,23 +372,19 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
                             {
                                 (matchDiagnostics ??= []).Add(diagnostics);
                             }
-
-                            // A match isn't a failure where it ends, the selector can keep a shorter one or none
-                            var recorded = cursor.RecordedFailure;
-                            cursor.ResetPosition(from);
-                            cursor.RestoreRecordedFailure(recorded);
                         }
-                        else
+                        else if (end > bestEnd)
                         {
-                            if (end > bestEnd)
-                            {
-                                bestEnd = end;
-                                bestDiagnostics = diagnostics;
-                                result = parsed;
-                            }
-
-                            cursor.ResetPosition(from);
+                            bestEnd = end;
+                            bestDiagnostics = diagnostics;
+                            result = parsed;
                         }
+
+                        // A match isn't a failure where it ends: the selector can keep a shorter one or none, and the
+                        // cursor ends after the longest one otherwise
+                        var recorded = cursor.RecordedFailure;
+                        cursor.ResetPosition(from);
+                        cursor.RestoreRecordedFailure(recorded);
                     }
                     else if (collecting)
                     {
@@ -414,7 +416,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
                 if (bestEnd >= 0)
                 {
-                    cursor.ResetPosition(bestEnd);
+                    cursor.MoveTo(bestEnd);
                     context.RestoreAlternative(bestDiagnostics);
                     success = true;
                 }
@@ -566,7 +568,9 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
         // if (Alternative(context, out var value))
         // {
         //     if (cursor.Offset > end) { end = cursor.Offset; result = value; }
+        //     var recorded = cursor.RecordedFailure;
         //     cursor.ResetPosition(from);
+        //     cursor.RestoreRecordedFailure(recorded);
         // }
         void EmitAlternative(Parser<T> parser, int index, bool single, bool last, string indent)
         {
@@ -636,10 +640,14 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
                 }
 
                 // The cursor moves to the end of the longest match after the last alternative, it is already there when
-                // the last one is the longest
+                // the last one is the longest. A match isn't a failure where it ends.
                 if (!last)
                 {
+                    var recordedName = $"longestRecorded{context.NextNumber()}";
+
+                    result.Body.Add($"{inner}var {recordedName} = {cursor}.RecordedFailure;");
                     result.Body.Add($"{inner}{cursor}.ResetPosition({fromName});");
+                    result.Body.Add($"{inner}{cursor}.RestoreRecordedFailure({recordedName});");
                 }
             }
 
@@ -798,10 +806,10 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             ListBuilderSource.ReleaseInFinally(result, bodyStart, matchesName);
         }
 
-        // if (end >= 0) { cursor.ResetPosition(end); success = true; } else { cursor.ResetPosition(start); }
+        // if (end >= 0) { cursor.MoveTo(end); success = true; } else { cursor.ResetPosition(start); }
         result.Body.Add($"if ({endName} >= 0)");
         result.Body.Add("{");
-        result.Body.Add($"    {cursor}.ResetPosition({endName});");
+        result.Body.Add($"    {cursor}.MoveTo({endName});");
 
         if (collecting)
         {
