@@ -542,6 +542,7 @@ public class PrecedenceTests
     public void Generated_Conditional_With_Last_Operand_And_Context_Parses_The_Same_Trees()
     {
         var plain = RuntimeConditionalLast();
+        var runtime = RuntimeConditionalLastWithContext();
         string[] tokens = ["a", "b", "1", "(", ")", ".", ".b", "||", "??", "=", "+=", "?", ":", ","];
         var random = new Random(37);
 
@@ -558,9 +559,12 @@ public class PrecedenceTests
 
             var input = sb.ToString();
 
+            var expected = Run(runtime, input);
+
             // The factory with the context builds the tree of the plain one, with the offset of the cursor after each conditional
-            Assert.Equal(Run(plain, input), StripOffsets(Run(PrecedenceGrammars.TryParseConditionalLastWithContext, input)));
-            Assert.Equal(Run(RuntimeConditionalLastWithContext(), input), Run(PrecedenceGrammars.TryParseConditionalLastWithContext, input));
+            Assert.Equal(Run(plain, input), StripOffsets(expected));
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseConditionalLastWithContext, input));
+            Assert.Equal(expected, Run(PrecedenceGrammars.TryParseConditionalLastWithContext, input, 1));
         }
     }
 
