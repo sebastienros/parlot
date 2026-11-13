@@ -43,6 +43,10 @@ public partial class FailurePositionBenchmarks
     [Benchmark, BenchmarkCategory("Failure")]
     public int FailurePosition() => TryParse(_invalid, out _, out (int Offset, int Line, int Column) failure) ? -1 : failure.Line;
 
+    // The same failure with whether the input is nested too deeply, which an ordinary failure only stores
+    [Benchmark, BenchmarkCategory("Failure")]
+    public int FailureNesting() => TryParse(_invalid, out _, out (int Offset, bool NestedTooDeeply) failure) || failure.NestedTooDeeply ? -1 : failure.Offset;
+
     // The same grammar at runtime, see FailurePositionBenchmarks.parlot.cs
     private static readonly Parser<IJson> Runtime = BuildRuntimeJson();
 
@@ -87,4 +91,5 @@ public partial class FailurePositionBenchmarks
     private static partial bool TryParse(string input, out IJson value);
     private static partial bool TryParse(string input, out IJson value, out int failureOffset);
     private static partial bool TryParse(string input, out IJson value, out (int Offset, int Line, int Column) failure);
+    private static partial bool TryParse(string input, out IJson value, out (int Offset, bool NestedTooDeeply) failure);
 }
