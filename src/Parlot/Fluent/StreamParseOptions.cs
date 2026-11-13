@@ -29,7 +29,8 @@ public sealed class StreamParseOptions
     /// or region that parsers can move back to. A parse that needs more fails with a <see cref="ParseException"/> at the start
     /// of the token that doesn't fit.
     /// For <see cref="Parser{T}.ParseManyAsync(System.IO.TextReader, StreamParseOptions?, CancellationToken)"/>
-    /// this limits the size of each item, and a value that needs more characters fails with a <see cref="ParseException"/>.
+    /// this limits the size of each item with the white space and comments before it, and a value that needs more
+    /// characters fails with a <see cref="ParseException"/>.
     /// </remarks>
     public int MaxBufferedCharacters { get; set; } = int.MaxValue;
 

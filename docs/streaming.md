@@ -239,6 +239,10 @@ with the next one, so memory is bounded by the largest value, not by the input. 
 contain values (and separators and white space). A value which doesn't match throws a `ParseException`,
 and a value matching an empty text throws an `InvalidOperationException` to avoid an infinite loop.
 
+The white space before a value, with the comments of a `WhiteSpaceParser`, is buffered with the value while a window ends
+in it: a comment is read from its start once the window holds its end, and it is only unterminated at the end of the
+input. It counts in `MaxBufferedCharacters`, so a comment longer than the limit fails like a value which is.
+
 The delimited overload reads until it finds the delimiter and parses each delimited text on its own. The
 parser must match the whole text, except white space when `SkipWhiteSpace` is enabled, and empty or white
 space only texts are skipped. Use it for interactive sources, such as a terminal or a socket, where the
