@@ -52,6 +52,9 @@ public static partial class FailureGrammars
     public static partial bool RejectedAfterComments(string text, out string value, out int failureOffset);
     public static partial bool RejectedAfterComments(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool RejectedWhiteSpace(string text, out string value, out int failureOffset);
+    public static partial bool RejectedWhiteSpace(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool Second(string text, out string value, out int failureOffset);
 
     public static partial bool NotFollowed(string text, out string value, out int failureOffset);

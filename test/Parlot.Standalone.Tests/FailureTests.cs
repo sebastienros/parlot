@@ -200,6 +200,21 @@ public class FailureTests
     }
 
     [Theory]
+    [InlineData("  y")]
+    [InlineData("  ")]
+    [InlineData("y")]
+    public void Rejected_Value_Fails_Where_A_Parser_Which_Skips_No_White_Space_Is_Invoked(string text)
+    {
+        // The white space was skipped from there by another parser, a lookahead which doesn't match: it is the value,
+        // not what comes before it
+        Assert.False(FailureGrammars.RejectedWhiteSpace(text, out _, out var failureOffset));
+        Assert.Equal(0, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedWhiteSpace(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(0, failure.Offset);
+    }
+
+    [Theory]
     [InlineData("from;", 0)]
     [InlineData("  from;", 2)]
     [InlineData("\n  from;", 3)]

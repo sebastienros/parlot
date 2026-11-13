@@ -118,6 +118,11 @@ public static partial class FailureGrammars
         Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from").AndSkip(Terms.Char(';')).Eof()
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
 
+    // White space which is read as a value, by a parser which doesn't skip any, where a lookahead skipped it first
+    [GenerateParser(nameof(RejectedWhiteSpace))]
+    public static Parser<string> BuildRejectedWhiteSpace() =>
+        Not(Terms.Char('x')).SkipAnd(Literals.WhiteSpace().When(static (_, _) => false).Then(static value => value.ToString())).Eof();
+
     [GenerateParser(nameof(Second))]
     public static Parser<string> BuildSecond() =>
         Terms.Identifier().SkipAnd(Terms.Identifier().Then(static value => value.ToString()).When(static (_, value) => value != "from")).Eof();
