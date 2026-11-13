@@ -348,6 +348,10 @@ public class FurthestFailureTests
         // The cursor is moved forward to the end of the match that a selector keeps
         var selected = Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")));
         AssertFurthest(selected.When(static (_, _) => false).Eof(), text, offset);
+
+        // A conversion rejects these values at the same place
+        AssertFurthest(words.ThenTry(static _ => (false, 0)).Eof(), text, offset);
+        AssertFurthest(selected.ThenTry(static _ => (false, 0)).Eof(), text, offset);
     }
 
     [Theory]
@@ -367,6 +371,9 @@ public class FurthestFailureTests
         // The alternatives are read without their value
         AssertFurthest(Terms.Identifier().AndSkip(Longest(Terms.Text("fr"), Terms.Text("from"))).When(static (_, _) => false).Eof(), text, offset);
         AssertFurthest(Terms.Identifier().AndSkip(Longest(Terms.Text("fr"), word)).When(static (_, _) => false).Eof(), text, offset);
+
+        // Rejected by a conversion
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("from"))).ThenTry(static _ => (false, 0)).Eof(), text, offset);
     }
 
     [Theory]
