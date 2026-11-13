@@ -34,6 +34,50 @@ public static partial class CommentsGrammars
             .WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))
             .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
 
+    // An unterminated comment read as tokens, then the comments added after it can start there
+    [GenerateParser(nameof(TryParseNotAComment))]
+    private static Parser<string> BuildNotAComment() =>
+        ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithSingleLine("/*-"))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+    // An unterminated comment running to the end of the text
+    [GenerateParser(nameof(TryParseToEnd))]
+    private static Parser<string> BuildToEnd() =>
+        ZeroOrMany(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.ToEnd))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+    // The diagnostics of an unterminated comment, and none for one which is not a comment
+    [GenerateParser(nameof(TryParseNotACommentDiagnostics))]
+    private static Parser<string> BuildNotACommentDiagnostics() =>
+        ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment))
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+    // The furthest failure after an unterminated comment which is not one: where a token doesn't match
+    [GenerateParser(nameof(TryParseNotACommentFailure))]
+    private static Parser<string> BuildNotACommentFailure() =>
+        Terms.Identifier().And(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment))
+            .Then(static x => x.Item1.ToString() + "|" + x.Item2.ToString());
+
+    // A builder with a parser composes the parsers of its elements, which read unterminated comments the same way
+    [GenerateParser(nameof(TryParseComposedUnterminated))]
+    private static Parser<string> BuildComposedUnterminated() =>
+        ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1)))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithParser(Capture(Literals.Text("..."))).WithMultiLine("(*", "*)", UnterminatedComment.ToEnd))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+    [GenerateParser(nameof(TryParseComposedNotACommentFailure))]
+    private static Parser<string> BuildComposedNotACommentFailure() =>
+        Terms.Identifier().And(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithParser(Capture(Literals.Text("..."))))
+            .Then(static x => x.Item1.ToString() + "|" + x.Item2.ToString());
+
     // The diagnostics of an unterminated comment
     [GenerateParser(nameof(TryParseDiagnostics))]
     private static Parser<string> BuildDiagnostics() =>
