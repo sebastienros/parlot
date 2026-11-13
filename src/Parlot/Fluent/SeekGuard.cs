@@ -91,9 +91,7 @@ internal sealed class SeekGuard
     }
 
     // The parser a white space skip invokes, like the literal of a Terms parser, which then also tests the char as fast
-    private static object SkippedParser(object parser) => IsGeneric(parser, typeof(SkipWhiteSpace<>))
-        ? parser.GetType().GetProperty(nameof(SkipWhiteSpace<object>.Parser))!.GetValue(parser)!
-        : parser;
+    private static object SkippedParser(object parser) => parser is ISkipsWhiteSpace skip ? skip.Parser : parser;
 
     private static bool IsGeneric(object parser, Type definition) => parser.GetType() is { IsGenericType: true } type && type.GetGenericTypeDefinition() == definition;
 
