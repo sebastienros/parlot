@@ -271,6 +271,38 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData("a from", 0)]
+    [InlineData("  a from", 2)]
+    [InlineData("\n a\n from", 2)]
+    public void Rejected_Value_Ending_With_The_Longest_Match_Fails_At_Its_Start(string text, int offset)
+    {
+        // The cursor is moved back from each alternative which matched, to read the next one: not a failure where it ended
+        var word = Terms.Identifier().Then(static value => value.ToString());
+
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("from"))).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("from"), Terms.Text("fr"))).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), word)).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("fro"), word)).When(static (_, _) => false).Eof(), text, offset);
+
+        // The alternatives are read without their value
+        AssertFurthest(Terms.Identifier().AndSkip(Longest(Terms.Text("fr"), Terms.Text("from"))).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().AndSkip(Longest(Terms.Text("fr"), word)).When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("a from?", 6)]
+    [InlineData("  a from?", 8)]
+    public void Rejected_Value_Reports_An_Alternative_Of_Longest_Which_Failed_Further(string text, int offset)
+    {
+        // "from" isn't followed by '!': that alternative fails after the match that is kept, and stays the furthest failure
+        var longest = Longest(Terms.Text("fr"), Terms.Text("from").AndSkip(Literals.Char('!')));
+
+        AssertFurthest(Terms.Identifier().And(longest).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().AndSkip(longest).When(static (_, _) => false).Eof(), text, offset);
+        AssertFurthest(Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from").AndSkip(Literals.Char('!')))).When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Theory]
     [InlineData("a  x", 3)]
     [InlineData("a  b  x", 6)]
     [InlineData("a  b  c  x", 9)]

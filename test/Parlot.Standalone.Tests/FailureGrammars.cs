@@ -56,6 +56,12 @@ public static partial class FailureGrammars
     public static partial bool RejectedLongest(string text, out string value, out int failureOffset);
     public static partial bool RejectedLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool RejectedLongestText(string text, out string value, out int failureOffset);
+    public static partial bool RejectedLongestText(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedLongestWord(string text, out string value, out int failureOffset);
+    public static partial bool RejectedLongestWord(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool SpanBacktracking(string text, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool SpanBacktracking(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }

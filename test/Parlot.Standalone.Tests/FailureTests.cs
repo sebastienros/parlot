@@ -301,6 +301,23 @@ public class FailureTests
         Assert.True(FailureGrammars.RejectedLongest("  a  fr ;", out var value, out failureOffset));
         Assert.Equal("a", value);
         Assert.Equal(0, failureOffset);
+
+        // Without a selector, the cursor is moved back from each alternative which matched: not a failure where it ended
+        Assert.False(FailureGrammars.RejectedLongestText(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedLongestText(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.False(FailureGrammars.RejectedLongestWord(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedLongestWord(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedLongestWord("  a  fr ;", out value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
     }
 
     [Theory]

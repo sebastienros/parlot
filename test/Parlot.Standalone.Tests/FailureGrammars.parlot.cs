@@ -115,6 +115,18 @@ public static partial class FailureGrammars
         Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from")))
             .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
 
+    // The same, without a selector: the cursor is moved back from each text which matched, to read the next one
+    [GenerateParser(nameof(RejectedLongestText))]
+    public static Parser<string> BuildRejectedLongestText() =>
+        Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Text("from")))
+            .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // The same, with an alternative which isn't a text
+    [GenerateParser(nameof(RejectedLongestWord))]
+    public static Parser<string> BuildRejectedLongestWord() =>
+        Terms.Identifier().And(Longest(Terms.Text("fr"), Terms.Identifier().Then(static value => value.ToString())))
+            .When(static (_, value) => value.Item2 != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
     // Span code which moves the cursor to skip white space, doesn't find an optional text after it, and reads on or ends
     // before the white space: the cursor is moved back
     [GenerateParser(nameof(SpanBacktracking))]

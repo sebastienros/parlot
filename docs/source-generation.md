@@ -339,8 +339,9 @@ that white space, the cursor is moved back and keeps the offset it leaves. The o
 run the same code, and the line and column of the failure are only computed when they are returned. On the JSON
 benchmark document, returning the failure doesn't change the time of a parse, successful or not, nor its allocations. A
 rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and restores it, one load
-and one store around the lookahead. A `TextReader` overload returns the same failure as the `string` one: the buffer
-only drops text before positions the parse read later.
+and one store around the lookahead, as `Longest` does around the move back from an alternative which matched. A
+`TextReader` overload returns the same failure as the `string` one: the buffer only drops text before positions the
+parse read later.
 
 ### Cancellation
 
