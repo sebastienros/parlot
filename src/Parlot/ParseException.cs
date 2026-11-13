@@ -31,6 +31,11 @@ public class ParseException : Exception
     {
     }
 
+#if !PARLOT_STANDALONE
+    // An untyped second argument, like default or new(), keeps selecting this constructor rather than being ambiguous with
+    // the one which takes an inner exception. The embedded runtime compiles with C# 10, which doesn't know the attribute.
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+#endif
     public ParseException(string message, TextPosition position) : base(message)
     {
         Position = position;
