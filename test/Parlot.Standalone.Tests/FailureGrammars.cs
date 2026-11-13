@@ -18,6 +18,7 @@ public static partial class FailureGrammars
     public static partial bool Pair(string text, out (long, long) value, out int failureOffset);
 
     public static partial bool Error(string text, out long value, out (int Offset, int Line, int Column) failure);
+    public static partial bool ErrorNesting(string text, out long value, out (int Offset, bool NestedTooDeeply) failure);
 
     public static partial bool Span(string text, out string value, out int failureOffset);
 

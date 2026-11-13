@@ -238,7 +238,8 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   reached. `[GenerateParser(nameof(TryParse), MaxRecursionDepth = 128)]` sets a limit that doesn't depend on the stack,
   counted like `ParseContext.MaxRecursionDepth`: the entry point returns `false` when a parse exceeds it, and the
   diagnostics overload returns "The maximum parser recursion depth of 128 was exceeded.". Both fail the whole parse, a
-  choice doesn't try another alternative. The code counting the levels is only generated with a limit.
+  choice doesn't try another alternative. The code counting the levels is only generated with a limit. A
+  [failure overload](#failure-position) whose tuple ends with a `bool` tells both from other failures.
 - `Number<T>`, `Hexadecimal<T>`, `Octal<T>` and `Binary<T>` accept every numeric type the consuming
   target supports: on .NET 8 or later this includes `Half`, `Int128`, `UInt128`, `nint` and `nuint`, which
   the generator host itself cannot name. A .NET Framework or .NET Standard 2.0 consumer is limited to the
@@ -327,6 +328,23 @@ first bad token is:
   is expected. A text which is empty and can't be fails where it starts, at the delimiter.
 - Neither does the white space skipped to look for an operator of `Operators()` whose value is passed to the factory: an
   expression which is rejected fails at its start, like with the other operators.
+
+To also tell input nested too deeply from other failures, add a last `bool` to the tuple, as in
+`out (int Offset, bool NestedTooDeeply)` or `out (int Offset, int Line, int Column, bool NestedTooDeeply)`:
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value, out (int Offset, bool NestedTooDeeply) failure);
+
+if (!Sql.TryParse(query, out var value, out (int Offset, bool NestedTooDeeply) failure))
+{
+    throw new FormatException(failure.NestedTooDeeply ? "The query is too complex." : $"Syntax error at {failure.Offset}.");
+}
+```
+
+It is `true` when the parse exceeded `MaxRecursionDepth` or the stack of the thread, where `Offset` is the position that
+was reached, and `false` for every other failure, an `Error`, an `ElseError` and a `ParseException` thrown by a callback
+included. It is what `ParseException.IsNestedTooDeeply` and `ParseError.IsNestedTooDeeply` report at runtime. It costs
+nothing until such a failure: the entry point reads it in the handler of the exception which ended the parse.
 
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
@@ -686,7 +704,8 @@ and the [`IncludeFiles` containment guidance](security.md#includefiles-containme
 
 The generator emits the parser implementation plus shared scanner, cursor, character, number, result, and
 context support into the consuming assembly. These support types are internal and live under
-`Parlot.Generated`.
+`Parlot.Generated`. Its `ParseException` has the standard exception constructors, and below .NET 8 it is
+`[Serializable]`, so checks which create or serialize every exception type of an assembly accept it.
 
 Every generated shared-support source file retains Parlot's original BSD-3-Clause license notice, and the
 `Parlot.SourceGenerator` package includes the repository `LICENSE`. Applications do not acquire a Parlot runtime

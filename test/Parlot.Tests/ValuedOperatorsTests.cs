@@ -678,6 +678,229 @@ public class ValuedOperatorsTests
         Assert.Equal(expected, ConditionalWithLast(table: true, wholeExpressionLast: false).Parse(input));
     }
 
+    private sealed class CountingContext : ParseContext
+    {
+        public CountingContext(string text, int maxRecursionDepth = 0) : base(new Scanner(text), maxRecursionDepth: maxRecursionDepth)
+        {
+        }
+
+        public int Calls { get; set; }
+    }
+
+    [Theory]
+    [InlineData("a ? b : c = d", 1)]
+    [InlineData("a ? b : c ? d : e", 2)]
+    [InlineData("a ? b ? c : d : e", 2)]
+    [InlineData("a || b ? c : d", 1)]
+    [InlineData("a = b ? c : d = e", 1)]
+    [InlineData("a", 0)]
+    [InlineData("a ? b :", 0)]
+    public void ConditionalWithLastShouldPassTheContextToItsFactory(string input, int conditionals)
+    {
+        static string Count(ParseContext context, string condition, string whenTrue, string whenFalse)
+        {
+            ((CountingContext)context).Calls++;
+            return Conditional(condition, whenTrue, whenFalse);
+        }
+
+        var expression = Deferred<string>();
+        var primary = Atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        expression.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), Binary("||")))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), expression, static (ParseContext context, string c, string a, string b) => Count(context, c, a, b))
+            .RightAssociative((Terms.Char('='), Binary("=")));
+
+        var context = new CountingContext(input);
+        var result = new ParseResult<string>();
+        var plain = new ParseContext(new Scanner(input));
+        var plainResult = new ParseResult<string>();
+
+        Assert.True(ConditionalWithLast(table: true, wholeExpressionLast: true).Parse(plain, ref plainResult));
+        Assert.True(expression.Parse(context, ref result));
+
+        // The same tree, span and cursor as the factory without the context
+        Assert.Equal(plainResult.Value, result.Value);
+        Assert.Equal(plainResult.Start, result.Start);
+        Assert.Equal(plainResult.End, result.End);
+        Assert.Equal(plain.Scanner.Cursor.Offset, context.Scanner.Cursor.Offset);
+        Assert.Equal(conditionals, context.Calls);
+    }
+
+    /// <summary>
+    /// The table of <see cref="ConditionalWithLast"/> whose conditional has a factory which receives the context. The
+    /// types of the parameters of the lambda are not given: their number picks the overload.
+    /// </summary>
+    private static Parser<string> ConditionalWithLastAndContext(bool wholeExpressionLast)
+    {
+        var expression = Deferred<string>();
+        var primary = Atom.Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+        var last = wholeExpressionLast ? expression : primary;
+
+        expression.Parser = primary.Operators()
+            .LeftAssociative((Terms.Text("||"), Binary("||")))
+            .Ternary(Terms.Char('?'), expression, Terms.Char(':'), last, static (context, c, a, b) =>
+            {
+                ((CountingContext)context).Calls++;
+                return Conditional(c, a, b);
+            })
+            .RightAssociative((Terms.Char('='), Binary("=")));
+
+        return expression;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConditionalWithLastAndContextShouldParseLikeThePlainOne(bool wholeExpressionLast)
+    {
+        var plain = ConditionalWithLast(table: true, wholeExpressionLast);
+        var withContext = ConditionalWithLastAndContext(wholeExpressionLast);
+
+        string[] tokens = ["a", "b", "?", ":", "=", "||", "(", ")"];
+        var inputs = new List<string> { "" };
+        var previous = new List<string> { "" };
+
+        // All the sequences of up to 6 tokens
+        for (var length = 1; length <= 6; length++)
+        {
+            var next = new List<string>();
+
+            foreach (var prefix in previous)
+            {
+                foreach (var token in tokens)
+                {
+                    next.Add(prefix.Length == 0 ? token : prefix + " " + token);
+                }
+            }
+
+            inputs.AddRange(next);
+            previous = next;
+        }
+
+        var conditionals = 0;
+        var failures = 0;
+
+        foreach (var input in inputs)
+        {
+            var expected = Run(plain, input);
+            var context = new CountingContext(input);
+            var result = new ParseResult<string>();
+
+            // The same value, span and cursor, and the same cursor when the table or one of its conditionals fails
+            var actual = withContext.Parse(context, ref result)
+                ? $"{result.Value} [{result.Start}..{result.End}] @{context.Scanner.Cursor.Offset}"
+                : $"failed @{context.Scanner.Cursor.Offset}";
+
+            Assert.True(expected == actual, $"'{input}': plain {expected}, with the context {actual}");
+
+            // The factory is called for each conditional of the result, and for the ones of the operands which were read
+            // before their own conditional failed
+            var count = expected.Split('?').Length - 1;
+
+            Assert.True(context.Calls >= count, $"'{input}': {context.Calls} calls for {count} conditionals");
+
+            if (expected.StartsWith("failed", StringComparison.Ordinal))
+            {
+                failures++;
+            }
+            else if (count > 0)
+            {
+                conditionals++;
+            }
+        }
+
+        Assert.True(conditionals > 50, $"{conditionals} conditionals");
+        Assert.True(failures > 50, $"{failures} failures");
+    }
+
+    [Theory]
+    [InlineData("?")]
+    [InlineData("? a : b")]
+    [InlineData("(a ? b : c")]
+    [InlineData("(a ? b :")]
+    public void ConditionalWithLastAndContextShouldRestoreTheCursorWhenTheTableFails(string input)
+    {
+        var context = new CountingContext(input);
+        var result = new ParseResult<string>();
+
+        Assert.False(ConditionalWithLastAndContext(wholeExpressionLast: true).Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("a ?", 0)]
+    [InlineData("a ? b", 0)]
+    [InlineData("a ? : c", 0)]
+    [InlineData("a ? b : )", 0)]
+    // The conditional of the middle operand is created before the one it belongs to fails
+    [InlineData("a ? b ? c : d", 1)]
+    [InlineData("a ? b ? c : d :", 1)]
+    public void ConditionalWithLastAndContextShouldNotCallTheFactoryOfAConditionalWhichFails(string input, int calls)
+    {
+        var context = new CountingContext(input);
+        var result = new ParseResult<string>();
+
+        Assert.True(ConditionalWithLastAndContext(wholeExpressionLast: true).Parse(context, ref result));
+        Assert.Equal("a", result.Value);
+        Assert.Equal(1, result.End);
+        Assert.Equal(1, context.Scanner.Cursor.Offset);
+        Assert.Equal(calls, context.Calls);
+    }
+
+    [Fact]
+    public void ConditionalWithLastAndContextShouldCountTheRecursionOfItsOperandsLikeThePlainOne()
+    {
+        static string Limited(Parser<string> parser, ParseContext context)
+        {
+            var result = new ParseResult<string>();
+
+            try
+            {
+                return parser.Parse(context, ref result) ? $"{result.Value} @{context.Scanner.Cursor.Offset}" : $"failed @{context.Scanner.Cursor.Offset}";
+            }
+            catch (ParseException e)
+            {
+                return $"{e.Message} @{e.Position.Offset}";
+            }
+        }
+
+        var plain = ConditionalWithLast(table: true, wholeExpressionLast: true);
+        var withContext = ConditionalWithLastAndContext(wholeExpressionLast: true);
+
+        foreach (var input in new[] { "a ? b : c ? d : e ? f : g", "a ? b ? c ? d : e : f : g", "a ? (b ? (c) : d) : e" })
+        {
+            var exceeded = 0;
+
+            for (var depth = 1; depth <= 12; depth++)
+            {
+                var expected = Limited(plain, new ParseContext(new Scanner(input), maxRecursionDepth: depth));
+
+                Assert.Equal(expected, Limited(withContext, new CountingContext(input, depth)));
+
+                if (expected.StartsWith("The maximum parser recursion depth", StringComparison.Ordinal))
+                {
+                    exceeded++;
+                }
+            }
+
+            // The smallest limits are exceeded, and the largest ones are not
+            Assert.InRange(exceeded, 1, 11);
+        }
+    }
+
+    [Fact]
+    public void ConditionalWithLastShouldValidateItsContextFactory()
+    {
+        static string Factory(ParseContext context, string condition, string whenTrue, string whenFalse) => Conditional(condition, whenTrue, whenFalse);
+
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary((Parser<char>)null!, Atom, Terms.Char(':'), Atom, Factory));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), (Parser<string>)null!, Terms.Char(':'), Atom, Factory));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, (Parser<char>)null!, Atom, Factory));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), (Parser<string>)null!, Factory));
+        Assert.Throws<ArgumentNullException>(() => Atom.Operators().Ternary(Terms.Char('?'), Atom, Terms.Char(':'), Atom, (Func<ParseContext, string, string, string, string>)null!));
+    }
+
     [Theory]
     [InlineData("a ? b : c", 0, 9)]
     [InlineData("  a ? b : c = d  ", 2, 15)]

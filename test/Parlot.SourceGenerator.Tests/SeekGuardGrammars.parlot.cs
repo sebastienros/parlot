@@ -53,4 +53,29 @@ public static partial class SeekGuardGrammars
         return item.And(OneOrMany(tail).Optional())
             .Then(static t => t.Item1 + (t.Item2.HasValue ? "?" + string.Join("?", t.Item2.Value) : ""));
     }
+
+    // A parser which can start with an 'a' or with any non-ASCII char, declared with NonAsciiSeekableChar. It reads one char.
+    private static Parser<string> NonAsciiChar() =>
+        Terms.Scan(static span => span.Length > 0 ? 1 : 0, "a" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+    // A separator which can start with a ',' or with any non-ASCII char
+    private static Parser<string> NonAsciiSeparator() =>
+        Terms.Scan(static span => span.Length > 0 ? 1 : 0, "," + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar)
+            .Then(static x => x.ToString());
+
+    [GenerateParser(nameof(TryParseNonAsciiWords))]
+    private static Parser<IReadOnlyList<string>> BuildNonAsciiWords() => ZeroOrMany(NonAsciiChar());
+
+    [GenerateParser(nameof(TryParseNonAsciiOneOrMany))]
+    private static Parser<IReadOnlyList<string>> BuildNonAsciiOneOrMany() => OneOrMany(NonAsciiChar());
+
+    [GenerateParser(nameof(TryParseNonAsciiOptional))]
+    private static Parser<string> BuildNonAsciiOptional() => NonAsciiChar().Optional().Then(static x => x.HasValue ? x.Value : "");
+
+    [GenerateParser(nameof(TryParseNonAsciiZeroOrOne))]
+    private static Parser<IReadOnlyList<string>> BuildNonAsciiZeroOrOne() => ZeroOrOne(NonAsciiChar());
+
+    [GenerateParser(nameof(TryParseNonAsciiSeparated))]
+    private static Parser<IReadOnlyList<string>> BuildNonAsciiSeparated() => Separated(NonAsciiSeparator(), Terms.Char('a').Then(static _ => "a"));
 }

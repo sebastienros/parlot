@@ -163,13 +163,51 @@ public class CommentsBuilder
     /// comment without its end throws a <see cref="ParseException"/>, or reports an error when the diagnostics are collected.
     /// </summary>
     public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd)
+        => WithMultiLine(multiLineStart, multiLineEnd, UnterminatedComment.Throw);
+
+    /// <summary>
+    /// Skips multi line comments, from <paramref name="multiLineStart"/> to <paramref name="multiLineEnd"/> included.
+    /// </summary>
+    /// <param name="multiLineStart">The text which starts a comment.</param>
+    /// <param name="multiLineEnd">The text which ends a comment.</param>
+    /// <param name="unterminated">What a comment without its end is: an error, not a comment, or a comment running to the
+    /// end of the text.</param>
+    public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated)
     {
         ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
         ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
 
-        _parsers.Add(Literals.Comments(multiLineStart, multiLineEnd));
-        AddComment(new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null));
+        if (unterminated is not (UnterminatedComment.Throw or UnterminatedComment.NotAComment or UnterminatedComment.ToEnd))
+        {
+            throw new ArgumentOutOfRangeException(nameof(unterminated));
+        }
+
+        var comment = new CommentsParser.CommentSyntax(multiLineStart, multiLineEnd, lineTerminators: null, unterminated);
+
+        _parsers.Add(ComposedMultiLine(comment));
+        AddComment(comment);
         return this;
+    }
+
+    // The parser of a multi line comment, for a builder which composes the parsers of its elements
+    private static Parser<TextSpan> ComposedMultiLine(CommentsParser.CommentSyntax comment)
+    {
+        var start = comment.Start;
+        var end = comment.End!;
+
+        if (comment.Unterminated == UnterminatedComment.Throw)
+        {
+            return Literals.Comments(start, end);
+        }
+
+        // A CommentsParser of this comment alone, without white space, reads an unterminated one the same way in both
+        // builders. It needs the first char of the start, and an end to search for
+        if (start.Length > 0 && end.Length > 0)
+        {
+            return new CommentsParser(skipWhiteSpace: false, includeNewLines: false, [comment]);
+        }
+
+        return Capture(Literals.Text(start).And(AnyCharBefore(Literals.Text(end), canBeEmpty: true, failOnEof: comment.Unterminated == UnterminatedComment.NotAComment, consumeDelimiter: true)));
     }
 
     private void AddComment(CommentsParser.CommentSyntax comment)

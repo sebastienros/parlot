@@ -554,7 +554,32 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     ///     .RightAssociative((Terms.Char('='), static (a, b) => new Assign(a, b)));
     /// </code>
     /// </example>
-    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<T, TMiddle, T, T> factory)
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<T, TMiddle, T, T> factory) =>
+        AddConditional(new ConditionalGroup<T, TMiddle>(ConditionalOperator(question, middle, colon, last, factory), factory));
+
+    /// <summary>
+    /// Returns a parser with an additional level of a conditional operator <c>condition ? whenTrue : whenFalse</c> whose
+    /// last operand is parsed by <paramref name="last"/> and whose factory receives the <see cref="ParseContext"/>, which
+    /// binds less tightly than the existing levels.
+    /// </summary>
+    /// <remarks>
+    /// The level is the one of
+    /// <see cref="Ternary{TQuestion, TMiddle, TColon}(Parser{TQuestion}, Parser{TMiddle}, Parser{TColon}, Parser{T}, Func{T, TMiddle, T, T})"/>.
+    /// </remarks>
+    /// <typeparam name="TQuestion">The type of the parser before the middle operand.</typeparam>
+    /// <typeparam name="TMiddle">The type of the middle operand.</typeparam>
+    /// <typeparam name="TColon">The type of the parser after the middle operand.</typeparam>
+    /// <param name="question">The parser before the middle operand.</param>
+    /// <param name="middle">The parser of the middle operand.</param>
+    /// <param name="colon">The parser after the middle operand.</param>
+    /// <param name="last">The parser of the last operand, usually the whole expression or an assignment.</param>
+    /// <param name="factory">The function creating the result from the context, the condition, the middle operand and the last operand.</param>
+    /// <returns>A new parser with the additional level.</returns>
+    public PrecedenceParser<T> Ternary<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Func<ParseContext, T, TMiddle, T, T> factory) =>
+        AddConditional(new ConditionalGroup<T, TMiddle>(ConditionalOperator(question, middle, colon, last, factory), factory));
+
+    // The operator of a conditional with a last operand, which reads its middle and last operands
+    private static Parser<(TMiddle, T)> ConditionalOperator<TQuestion, TMiddle, TColon>(Parser<TQuestion> question, Parser<TMiddle> middle, Parser<TColon> colon, Parser<T> last, Delegate factory)
     {
         ThrowHelper.ThrowIfNull(question, nameof(question));
         ThrowHelper.ThrowIfNull(middle, nameof(middle));
@@ -562,10 +587,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         ThrowHelper.ThrowIfNull(last, nameof(last));
         ThrowHelper.ThrowIfNull(factory, nameof(factory));
 
-        Parser<(TMiddle, T)> op = question.SkipAnd(middle).AndSkip(colon).And(last);
-
-        return Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([new ConditionalGroup<T, TMiddle>(op, factory)])));
+        return question.SkipAnd(middle).AndSkip(colon).And(last);
     }
+
+    private PrecedenceParser<T> AddConditional(PostfixGroup<T> conditional) =>
+        Add(OperatorLevel<T>.CreateValued(OperatorKind.Postfix, OperatorCount, new ValuedPostfix<T>([conditional])));
 
     private int OperatorCount => _operatorLevels.Length;
 
@@ -2153,7 +2179,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             if (group.IsConditional)
             {
                 // The value is the index of the operator and the pair of the middle and last operands
-                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}(climbed, {name}.Item2.Item1, {name}.Item2.Item2);");
+                Line($"                    climbed = {context.RegisterLambda(group.Factories[0])}({contextArgument}climbed, {name}.Item2.Item1, {name}.Item2.Item2);");
             }
             else if (group.Factories.Length == 1)
             {
