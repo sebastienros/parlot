@@ -132,7 +132,8 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
     // The parser fails where it was invoked. A value that the conversion rejects is the failure, at its start, wherever
     // it was read up to, as in generated code and as one that a When rejects. Not inlined, so that only this path pays
-    // for it.
+    // for it. Written here rather than with ParseContext.RecordRejected(): the call takes 2.4 ns more for a value
+    // without white space before it, and 0.7 to 1.4 ns more after white space (.NET 10).
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void Reject(ParseContext context, int start)
     {
@@ -144,13 +145,24 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
         var valueStart = start;
 
-        // The value starts after the white space the parser skips, which is read again when there is some. In
-        // compacting mode it was skipped before the value was read.
-        if (!context.IsCompacting && context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
+        // The value starts after the white space the parser skips. In compacting mode it was skipped before the value
+        // was read.
+        if (!context.IsCompacting && _parser is ISeekable { SkipWhitespace: true })
         {
-            context.SkipWhiteSpace();
-            valueStart = cursor.Offset;
-            cursor.ResetPosition(start);
+            // The last white space that was skipped, as before a single token, isn't read again
+            valueStart = context.SkippedWhiteSpaceEnd(start);
+
+            if (valueStart < 0)
+            {
+                valueStart = start;
+
+                if (context.MaySkipWhiteSpace(cursor.Current))
+                {
+                    context.SkipWhiteSpace();
+                    valueStart = cursor.Offset;
+                    cursor.ResetPosition(start);
+                }
+            }
         }
 
         cursor.RecordFailure(valueStart);

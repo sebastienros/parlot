@@ -332,11 +332,13 @@ public class FurthestFailureTests
         var whiteSpace = Not(Terms.Char('x')).SkipAnd(Literals.WhiteSpace());
 
         AssertFurthest(whiteSpace.When(static (_, _) => false).Eof(), "  y", 0);
+        AssertFurthest(whiteSpace.ThenTry(static value => (false, value)).Eof(), "  y", 0);
         AssertFurthest(Terms.Identifier().WhenNotFollowedBy(whiteSpace).Eof(), "a  y", 1);
         AssertFurthest(Not(whiteSpace).Eof(), "  y", 0);
 
         // Whereas a parser which skips it reads its value after it, whoever skipped it first
         AssertFurthest(Not(Terms.Char('x')).SkipAnd(Terms.Identifier().When(static (_, _) => false)).Eof(), "  y", 2);
+        AssertFurthest(Not(Terms.Char('x')).SkipAnd(Terms.Identifier().ThenTry(static value => (false, value))).Eof(), "  y", 2);
     }
 
     [Theory]
