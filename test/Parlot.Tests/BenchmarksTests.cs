@@ -84,6 +84,27 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void LookaheadGrammars()
+    {
+        var benchmark = new LookaheadBenchmarks();
+        Assert.True(benchmark.Followed());
+        Assert.True(benchmark.NotFollowed());
+        Assert.True(benchmark.Negative());
+        Assert.True(benchmark.WhenAccepted());
+        Assert.False(benchmark.WhenRejected());
+        Assert.False(benchmark.NotFollowedRejected());
+        Assert.False(benchmark.NegativeRejected());
+
+        Assert.True(benchmark.RuntimeFollowed());
+        Assert.True(benchmark.RuntimeNotFollowed());
+        Assert.True(benchmark.RuntimeNegative());
+        Assert.True(benchmark.RuntimeWhenAccepted());
+        Assert.False(benchmark.RuntimeWhenRejected());
+        Assert.False(benchmark.RuntimeNotFollowedRejected());
+        Assert.False(benchmark.RuntimeNegativeRejected());
+    }
+
+    [Fact]
     public void ParseWithoutValueGrammars()
     {
         var benchmark = new ParseWithoutValueBenchmarks();
@@ -143,6 +164,18 @@ public class BenchmarksTests
         Assert.Equal(1400, benchmark.ThenTry());
         Assert.Equal(1400, benchmark.WhenThenGenerated());
         Assert.Equal(1400, benchmark.ThenTryGenerated());
+
+        // A single identifier, and a reserved word, which is rejected
+        Assert.NotNull(benchmark.WhenThenToken());
+        Assert.NotNull(benchmark.ThenTryToken());
+        Assert.NotNull(benchmark.WhenThenTokenGenerated());
+        Assert.NotNull(benchmark.ThenTryTokenGenerated());
+        Assert.Null(benchmark.WhenThenTokenRejected());
+        Assert.Null(benchmark.ThenTryTokenRejected());
+        Assert.Null(benchmark.WhenThenTokenRejectedAtStart());
+        Assert.Null(benchmark.ThenTryTokenRejectedAtStart());
+        Assert.False(benchmark.WhenThenTokenRejectedGenerated());
+        Assert.False(benchmark.ThenTryTokenRejectedGenerated());
     }
 
     [Fact]
