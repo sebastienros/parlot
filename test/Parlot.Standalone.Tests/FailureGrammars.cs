@@ -76,4 +76,22 @@ public static partial class FailureGrammars
 
     public static partial bool SpanBacktracking(string text, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool SpanBacktracking(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBefore(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBefore(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBeforeTerm(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBeforeTerm(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool TextBeforeConsumed(string text, out string value, out int failureOffset);
+    public static partial bool TextBeforeConsumed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool TextBeforeThenOther(string text, out string value, out int failureOffset);
+    public static partial bool TextBeforeThenOther(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool TextBeforeRequired(string text, out string value, out int failureOffset);
+    public static partial bool TextBeforeRequired(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedValuedOperators(string text, out long value, out int failureOffset);
+    public static partial bool RejectedValuedOperators(TextReader reader, out long value, out (int Offset, int Line, int Column) failure);
 }

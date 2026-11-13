@@ -390,6 +390,129 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData(">ab;;", 1)]
+    [InlineData("  >ab;;", 3)]
+    [InlineData(">a;b;;", 1)]
+    [InlineData(">ab ;;", 1)]
+    public void Rejected_Text_Before_A_Delimiter_Fails_At_Its_Start(string text, int offset)
+    {
+        // The delimiter is found and not consumed: the cursor is moved back from a delimiter which matched, not a failure
+        // where it ended
+        var literal = Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;")).And(Literals.Char(';')).When(static (_, _) => false)).Eof();
+        AssertFurthest(literal, text, offset);
+
+        // A delimiter which skips white space isn't searched for by its first chars
+        var term = Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;")).And(Terms.Char(';')).When(static (_, _) => false)).Eof();
+        AssertFurthest(term, text, offset);
+
+        // The text alone, and the text followed by its delimiter
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;")).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;")).AndSkip(Terms.Text(";;")).When(static (_, _) => false)).Eof(), text, offset);
+
+        // Rejected by a conversion
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;")).And(Literals.Char(';')).ThenTry(static _ => (false, 0))).Eof(), text, offset);
+
+        // A delimiter which is consumed is part of the value
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;?", 3)]
+    [InlineData(">a;b;;?", 4)]
+    [InlineData(">a;b;;", 4)]
+    [InlineData(">;;?", 1)]
+    public void Parser_After_A_Text_Before_A_Delimiter_Fails_Where_It_Starts(string text, int offset)
+    {
+        // The text ends before the delimiter, where the next parser is expected: the delimiter was only looked for
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), canBeEmpty: true)).AndSkip(Literals.Char('!')).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), canBeEmpty: true)).AndSkip(Literals.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">;;", 1)]
+    [InlineData("  >;;!", 3)]
+    [InlineData("  > ;;!", 3)]
+    public void Empty_Text_Before_A_Delimiter_Fails_At_The_Delimiter(string text, int offset)
+    {
+        // The delimiter matched where a text is expected, like what Not finds: nothing was read further
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"))).AndSkip(Terms.Text(";;")).AndSkip(Terms.Char('!')).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), consumeDelimiter: true)).AndSkip(Terms.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;", 4)]
+    [InlineData(">ab", 3)]
+    [InlineData(">", 1)]
+    [InlineData(">a;b;c", 6)]
+    public void Delimiter_Which_Isnt_Found_Fails_At_The_End(string text, int offset)
+    {
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), failOnEof: true)).AndSkip(Literals.Text(";;")).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), failOnEof: true)).AndSkip(Terms.Text(";;")).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), failOnEof: true, consumeDelimiter: true)).Eof(), text, offset);
+
+        // The whole text is read when the end isn't a failure, and the delimiter is expected there
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), canBeEmpty: true)).AndSkip(Literals.Text(";;")).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;cd?", 7)]
+    [InlineData(">ab;;  cd ?", 10)]
+    [InlineData(">ab;;?", 5)]
+    public void Parser_Failing_After_The_Delimiter_Is_Still_The_Furthest_Failure(string text, int offset)
+    {
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"))).AndSkip(Literals.Text(";;")).AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), consumeDelimiter: true)).AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
+
+        // A value which is rejected keeps the failure of a delimiter which read further and didn't match
+        var delimiter = Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!'));
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(delimiter.Or(Literals.Text(";;"))).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">1 + 2", 1)]
+    [InlineData(">1  +  2", 1)]
+    [InlineData("  >  1 + 2 * 3", 5)]
+    [InlineData(">1 * 2 + 3", 1)]
+    [InlineData(">1", 1)]
+    public void Rejected_Expression_Of_Valued_Operators_Fails_At_Its_Start(string text, int offset)
+    {
+        // The white space before an operator whose value is passed to the factory is skipped to look for it, and the
+        // cursor is moved back for the level which parses the operator: not a failure
+        var valued = Terms.Integer().Operators()
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => op == "*" ? a * b : a / b)
+            .LeftAssociative([Terms.Text("+"), Terms.Text("-")], static (a, b, op) => op == "+" ? a + b : a - b);
+
+        AssertFurthest(Terms.Char('>').SkipAnd(valued.When(static (_, _) => false)).Eof(), text, offset);
+
+        // The same table, whose factories don't receive the operators
+        var plain = Terms.Integer().Operators()
+            .LeftAssociative((Terms.Text("*"), static (a, b) => a * b), (Terms.Text("/"), static (a, b) => a / b))
+            .LeftAssociative((Terms.Text("+"), static (a, b) => a + b), (Terms.Text("-"), static (a, b) => a - b));
+
+        AssertFurthest(Terms.Char('>').SkipAnd(plain.When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">1 + 2 ?", 7)]
+    [InlineData(">1 +", 4)]
+    [InlineData(">1  +  x", 7)]
+    [InlineData(">1 * 2 + ", 9)]
+    public void Expression_Of_Valued_Operators_Reports_What_Follows_It(string text, int offset)
+    {
+        var valued = Terms.Integer().Operators()
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => op == "*" ? a * b : a / b)
+            .LeftAssociative([Terms.Text("+"), Terms.Text("-")], static (a, b, op) => op == "+" ? a + b : a - b);
+
+        AssertFurthest(Terms.Char('>').SkipAnd(valued).Eof(), text, offset);
+
+        var plain = Terms.Integer().Operators()
+            .LeftAssociative((Terms.Text("*"), static (a, b) => a * b), (Terms.Text("/"), static (a, b) => a / b))
+            .LeftAssociative((Terms.Text("+"), static (a, b) => a + b), (Terms.Text("-"), static (a, b) => a - b));
+
+        AssertFurthest(Terms.Char('>').SkipAnd(plain).Eof(), text, offset);
+    }
+
+    [Theory]
     [InlineData("a  x", 3)]
     [InlineData("a  b  x", 6)]
     [InlineData("a  b  c  x", 9)]
