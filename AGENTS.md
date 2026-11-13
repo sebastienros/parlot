@@ -199,6 +199,10 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   new public API.
 - Tests cover the failure path, not just the match. `test/Parlot.Tests/BenchmarksTests.cs` re-runs the benchmark
   grammars as correctness tests (net10.0 only), so benchmark code must stay valid.
+- Code that runs when parsing (parsers, `SeekGuard`, `LoopAnalysis`) doesn't read members by reflection: native AOT
+  trims them. Expose what another parser needs with an internal interface (`ISkipsWhiteSpace`, `IReadsWith`), or check
+  `RuntimeFeature.IsDynamicCodeSupported` first like `LoopAnalysis.IsLeaf`. `NativeAotRuntimeTests` publishes a runtime
+  grammar with native AOT and runs it.
 
 ## Pull requests
 
