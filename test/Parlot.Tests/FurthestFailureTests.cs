@@ -196,6 +196,20 @@ public class FurthestFailureTests
     private static readonly Parser<string> ConversionRejectedLiteral =
         Literals.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())).AndSkip(Terms.Char(';')).Eof();
 
+    // A value of two words that a conversion rejects: the white space before it isn't the last one which was skipped
+    private static readonly Parser<string> ConversionRejectedWords =
+        Terms.Identifier().And(Terms.Identifier()).ThenTry(static value => (value.Item2.ToString() != "from", value.Item1.ToString()))
+            .AndSkip(Terms.Char(';')).Eof();
+
+    // The word after comments, which a parser skips instead of the white space set
+    private static readonly Parser<string> ConversionRejectedAfterComments =
+        ConversionRejected.WithComments(static comments => comments.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+
+    // The word after a text which isn't there: its white space was skipped before the word is read
+    private static readonly Parser<string> ConversionRejectedAlternative =
+        Terms.Text("select").Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())))
+            .AndSkip(Terms.Char(';')).Eof();
+
     private static readonly Parser<string> NotFollowed =
         Terms.Identifier().WhenNotFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
@@ -274,6 +288,30 @@ public class FurthestFailureTests
             .Or(Terms.Identifier().ThenTry(static value => (value.ToString() != "from", value.ToString())));
         AssertFurthest(further.Eof(), "  from ( x", 9);
     }
+
+    [Theory]
+    [InlineData("a from;", 0)]
+    [InlineData("  a from;", 2)]
+    [InlineData("  a  from;", 2)]
+    [InlineData("\n a\n from;", 2)]
+    [InlineData("  a  b,", 6)]
+    [InlineData("  a  ,", 5)]
+    public void Value_Of_Several_Tokens_Rejected_By_A_Conversion_Fails_At_Its_Start(string text, int offset) => AssertFurthest(ConversionRejectedWords, text, offset);
+
+    [Theory]
+    [InlineData("  from;", 2)]
+    [InlineData("/* a */ from;", 8)]
+    [InlineData(" /* a */\n /* b */ from;", 18)]
+    [InlineData(" /* a */ fromage,", 16)]
+    [InlineData(" /* a */ /from;", 9)]
+    public void Value_Rejected_By_A_Conversion_Fails_After_The_Comments_Before_It(string text, int offset) => AssertFurthest(ConversionRejectedAfterComments, text, offset);
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("  from;", 2)]
+    [InlineData("\n  from;", 3)]
+    [InlineData("  fromage,", 9)]
+    public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start_After_Another_Alternative(string text, int offset) => AssertFurthest(ConversionRejectedAlternative, text, offset);
 
     [Theory]
     [InlineData("abc((", 3)]
