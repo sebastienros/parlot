@@ -67,7 +67,7 @@ statements stopped matching, at the start of the statement that failed, while th
 statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
 expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
 return, with the same rules for what a parser reads and then rejects (`When`, `ThenTry`, `Not`, `WhenFollowedBy`,
-`WhenNotFollowedBy`).
+`WhenNotFollowedBy`) or only looks for (the delimiter of `AnyCharBefore` which isn't consumed).
 
 The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
 reused for successive parses reports the failure of the last one. A parse which drives `Parse(context, ref result)`

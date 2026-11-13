@@ -323,6 +323,10 @@ first bad token is:
 - The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
   `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
   which was expected there.
+- The delimiter `AnyCharBefore` finds doesn't count unless it is consumed: the text ends before it, where what follows
+  is expected. A text which is empty and can't be fails where it starts, at the delimiter.
+- Neither does the white space skipped to look for an operator of `Operators()` whose value is passed to the factory: an
+  expression which is rejected fails at its start, like with the other operators.
 
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a
@@ -341,7 +345,8 @@ benchmark document, returning the failure doesn't change the time of a parse, su
 rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and restores it, one load
 and one store around the lookahead, as `Longest` does around the move back from an alternative which matched. A
 `TextReader` overload returns the same failure as the `string` one: the buffer only drops text before positions the
-parse read later.
+parse read later, and a token which is read again with more text, like the text of `AnyCharBefore` whose delimiter the
+buffer ends in, forgets the failures recorded at the end of the buffer.
 
 ### Cancellation
 
