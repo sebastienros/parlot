@@ -111,6 +111,13 @@ public class FailureTests
     }
 
     [Fact]
+    public void Error_Is_Not_Nested_Too_Deeply()
+    {
+        Assert.False(FailureGrammars.ErrorNesting("[ 12 )", out _, out var failure));
+        Assert.Equal((4, false), failure);
+    }
+
+    [Fact]
     public void Error_Reports_Its_Position()
     {
         // ElseError reports where the parser it wraps was invoked, before the white space it skipped

@@ -42,6 +42,90 @@ public class RecursionTests
     }
 
     [Fact]
+    public void Failure_Tells_Deep_Input_From_Other_Failures()
+    {
+        OnSmallStack(static () =>
+        {
+            Assert.False(RecursionGrammars.Nested(DeepList, out _, out (int Offset, int Line, int Column, bool NestedTooDeeply) failure));
+            Assert.True(failure.NestedTooDeeply);
+            Assert.True(failure.Offset > 0);
+
+            using var reader = new StringReader(DeepList);
+            Assert.False(RecursionGrammars.Nested(reader, out _, out (int Offset, bool NestedTooDeeply) readerFailure));
+            Assert.True(readerFailure.NestedTooDeeply);
+
+            // An ordinary failure, also deeper than the limit of the other grammar
+            Assert.False(RecursionGrammars.Nested("[[[[[oops", out _, out failure));
+            Assert.Equal((5, 1, 6, false), failure);
+
+            Assert.True(RecursionGrammars.Nested("[[item]]", out var depth, out failure));
+            Assert.Equal(2, depth);
+            Assert.Equal(default, failure);
+        });
+    }
+
+    [Theory]
+    [InlineData("[[item]]", true, false)] // The limit counts each entry, "item" included
+    [InlineData("[[[item]]]", false, true)]
+    [InlineData("[[oops", false, false)]
+    [InlineData("oops", false, false)]
+    public void Failure_Tells_The_Recursion_Limit_From_Other_Failures(string text, bool success, bool nestedTooDeeply)
+    {
+        Assert.Equal(success, RecursionGrammars.LimitedNested(text, out _, out (int Offset, bool NestedTooDeeply) failure));
+        Assert.Equal(nestedTooDeeply, failure.NestedTooDeeply);
+    }
+
+    [Fact]
+    public void Reader_Failure_Tells_The_Recursion_Limit_Like_The_String_One()
+    {
+        Assert.False(RecursionGrammars.LimitedNested("[[[item]]]", out _, out (int Offset, bool NestedTooDeeply) failure));
+        Assert.Equal((3, true), failure);
+
+        using var deep = new StringReader("[[[item]]]");
+        Assert.False(RecursionGrammars.LimitedNested(deep, out _, out (int Offset, int Line, int Column, bool NestedTooDeeply) readerFailure));
+        Assert.Equal((3, 1, 4, true), readerFailure);
+
+        using var wrong = new StringReader("[[oops");
+        Assert.False(RecursionGrammars.LimitedNested(wrong, out _, out readerFailure));
+        Assert.Equal((2, 1, 3, false), readerFailure);
+
+        using var valid = new StringReader("[[item]]");
+        Assert.True(RecursionGrammars.LimitedNested(valid, out var depth, out readerFailure));
+        Assert.Equal(2, depth);
+        Assert.Equal(default, readerFailure);
+    }
+
+    [Fact]
+    public void Failure_Tells_The_Recursion_Limit_Of_Operators()
+    {
+        // Unary and the prefix operators of a table count their levels in a loop
+        Assert.False(RecursionGrammars.LimitedNegation("---a", out _, out (int Offset, bool NestedTooDeeply) failure));
+        Assert.True(failure.NestedTooDeeply);
+        Assert.False(RecursionGrammars.LimitedNegation("--b", out _, out failure));
+        Assert.Equal((2, false), failure);
+        Assert.True(RecursionGrammars.LimitedNegation("--a", out _, out failure));
+        Assert.Equal(default, failure);
+
+        Assert.False(RecursionGrammars.LimitedPrefix("---a", out _, out failure));
+        Assert.True(failure.NestedTooDeeply);
+        Assert.False(RecursionGrammars.LimitedPrefix("--b", out _, out failure));
+        Assert.Equal((2, false), failure);
+        Assert.True(RecursionGrammars.LimitedPrefix("--a", out _, out failure));
+        Assert.Equal(default, failure);
+    }
+
+    [Fact]
+    public void Failure_Of_A_Callback_Is_Not_Nested_Too_Deeply()
+    {
+        // The callback throws its own ParseException, at the last level the limit allows
+        Assert.False(RecursionGrammars.Rejecting("[[item]]", out _, out var failure));
+        Assert.Equal((6, false), failure);
+
+        Assert.False(RecursionGrammars.Rejecting("[[[item]]]", out _, out failure));
+        Assert.Equal((3, true), failure);
+    }
+
+    [Fact]
     public void Deep_Input_Is_Reported_By_The_Diagnostics_Overload()
     {
         OnSmallStack(static () =>

@@ -45,6 +45,10 @@ public static partial class FailureGrammars
     public static Parser<long> BuildError() =>
         Terms.Char('[').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(']').ElseError("Expected ']'"));
 
+    [GenerateParser(nameof(ErrorNesting))]
+    public static Parser<long> BuildErrorNesting() =>
+        Terms.Char('[').SkipAnd(Terms.Integer()).AndSkip(Terms.Char(']').ElseError("Expected ']'"));
+
     // Span code: the cursor doesn't move until the whole sequence matched
     [GenerateParser(nameof(Span))]
     public static Parser<string> BuildSpan() =>

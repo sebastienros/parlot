@@ -1180,7 +1180,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowRecursionDepthExceeded(int maxRecursionDepth)
     {
-        throw new ParseException($"The maximum parser recursion depth of {maxRecursionDepth} was exceeded.", Scanner.Cursor.Position);
+        throw new ParseException($"The maximum parser recursion depth of {maxRecursionDepth} was exceeded.", Scanner.Cursor.Position) { IsNestedTooDeeply = true };
     }
 
     /// <summary>
@@ -1227,7 +1227,7 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowInsufficientStack()
     {
-        throw new ParseException("The input is nested too deeply to be parsed on the remaining stack.", Scanner.Cursor.Position);
+        throw new ParseException("The input is nested too deeply to be parsed on the remaining stack.", Scanner.Cursor.Position) { IsNestedTooDeeply = true };
     }
 
     /// <summary>
