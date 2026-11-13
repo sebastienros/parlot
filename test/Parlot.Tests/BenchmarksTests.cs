@@ -84,6 +84,27 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void LookaheadGrammars()
+    {
+        var benchmark = new LookaheadBenchmarks();
+        Assert.True(benchmark.Followed());
+        Assert.True(benchmark.NotFollowed());
+        Assert.True(benchmark.Negative());
+        Assert.True(benchmark.WhenAccepted());
+        Assert.False(benchmark.WhenRejected());
+        Assert.False(benchmark.NotFollowedRejected());
+        Assert.False(benchmark.NegativeRejected());
+
+        Assert.True(benchmark.RuntimeFollowed());
+        Assert.True(benchmark.RuntimeNotFollowed());
+        Assert.True(benchmark.RuntimeNegative());
+        Assert.True(benchmark.RuntimeWhenAccepted());
+        Assert.False(benchmark.RuntimeWhenRejected());
+        Assert.False(benchmark.RuntimeNotFollowedRejected());
+        Assert.False(benchmark.RuntimeNegativeRejected());
+    }
+
+    [Fact]
     public void ParseWithoutValueGrammars()
     {
         var benchmark = new ParseWithoutValueBenchmarks();
