@@ -331,6 +331,9 @@ public class ParseContext
         // The offset of the last Commit(), no parser can read the text before it again
         public int CommitOffset;
 
+        // The failure recorded when the token being read started, see RetryToken
+        public int TokenRecordedFailure;
+
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -851,6 +854,7 @@ public class ParseContext
 
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
+        _coldState!.TokenRecordedFailure = cursor.RecordedFailure;
 
         return cursor.Offset;
     }
@@ -865,10 +869,10 @@ public class ParseContext
             return false;
         }
 
-        // Not a failure: the token is read again, and records its own failures
-        var recorded = cursor.RecordedFailure;
+        // Not a failure: the token is read again, and records its own failures. The ones its parsers recorded so far are
+        // forgotten, like the delimiter of TextBefore which didn't match where the buffer ended.
         cursor.ResetPosition(start);
-        cursor.RestoreRecordedFailure(recorded);
+        cursor.RestoreRecordedFailure(_coldState!.TokenRecordedFailure);
         Refill(start);
         cursor.ResetHitEnd();
 
