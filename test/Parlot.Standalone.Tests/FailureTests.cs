@@ -286,7 +286,9 @@ public class FailureTests
 
     [Theory]
     [InlineData("((", 0)] // A lookahead that matched doesn't count: the 'x' expected next fails at 0, not after the "(("
+    [InlineData("((y", 0)]
     [InlineData("  ((", 2)] // The 'x' expected next fails after its white space, at the lookahead's text, not after it
+    [InlineData("  ((y", 2)]
     [InlineData("  (x", 2)] // The lookahead was expected, it fails after its white space
     [InlineData("", 0)]
     public void Peek_That_Matched_Doesnt_Count(string text, int offset)
@@ -295,6 +297,37 @@ public class FailureTests
         Assert.Equal(offset, failureOffset);
 
         Assert.False(FailureGrammars.Peeked(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("> ab", 2)] // The lookahead skips the white space before the value and matches it: the value fails where it starts
+    [InlineData(">ab", 1)]
+    [InlineData("  >  abc", 5)]
+    [InlineData("> a", 2)] // The lookahead was expected, it fails after its white space
+    [InlineData(">", 1)]
+    public void Value_Rejected_After_A_Peek_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedRejected(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedRejected(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("abc ;", 4)] // The lookahead was expected: where its parser stopped counts, unlike the text it matched
+    [InlineData("  abc  ;", 7)]
+    [InlineData("abc", 3)]
+    [InlineData("  ;", 2)]
+    [InlineData("abc : ?", 4)] // The lookahead matches up to 5, the '!' expected after the word fails after its white space
+    [InlineData("  abc:", 5)] // and here where the word ends, not after the ':' of the lookahead
+    public void Peek_That_Fails_Keeps_The_Failure_Of_Its_Parser(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedFurther(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedFurther(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
         Assert.Equal(offset, failure.Offset);
     }
 
