@@ -57,7 +57,9 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
 
         // The text is read again once the parser matched
         var pin = context.Pin();
@@ -66,7 +68,10 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         if (success)
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            // What the parser matched says nothing about what follows at this position. When it fails, it was expected:
+            // its failure counts.
+            cursor.ResetPosition(start);
+            cursor.RestoreRecordedFailure(recorded);
             result.Set(start, start, result.Value);
         }
 
@@ -80,7 +85,9 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     {
         context.EnterParser(this);
 
-        var start = context.Scanner.Cursor.Offset;
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+        var recorded = cursor.RecordedFailure;
 
         var pin = context.Pin();
         var success = _parser.ParseWithoutValue(context, ref result);
@@ -88,7 +95,8 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         if (success)
         {
-            context.Scanner.Cursor.ResetPosition(start);
+            cursor.ResetPosition(start);
+            cursor.RestoreRecordedFailure(recorded);
             result.Set(start, start, result.Value);
         }
 
