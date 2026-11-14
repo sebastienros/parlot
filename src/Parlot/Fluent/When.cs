@@ -83,12 +83,18 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         return true;
     }
 
+    // What the parser does with the white space before it, read when it is first asked for since the parser can be a
+    // Deferred set later
+    private LeadingWhiteSpace.Cache? _leading;
+
     // Where the value starts when the buffer is a compacting one, after the white space the parser skips, or -1 when it
     // doesn't skip any. Not inlined: parsing a string doesn't pay for it.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private int ReadValueStart(ParseContext context)
     {
-        if (_parser is not ISeekable { SkipWhitespace: true })
+        var leading = LeadingWhiteSpace.Of(ref _leading, _parser);
+
+        if (leading == LeadingWhiteSpaceUse.None)
         {
             return -1;
         }
@@ -100,9 +106,10 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
             return cursor.Offset;
         }
 
-        if (_parser is ISkipsWhiteSpace)
+        if (leading == LeadingWhiteSpaceUse.Skipped)
         {
-            // A token skips it before anything else: it is skipped for it, and isn't kept
+            // The parser skips it before anything else, like a token, a sequence or a choice of tokens: it is skipped
+            // for it, and isn't kept
             context.SkipWhiteSpace();
 
             return cursor.Offset;

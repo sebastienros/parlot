@@ -80,6 +80,10 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         return success;
     }
 
+    // What the parser does with the white space before it, read when it is first asked for since the parser can be a
+    // Deferred set later
+    private LeadingWhiteSpace.Cache? _leading;
+
     // A compacting buffer can't be read again from where the parser is invoked to find where a rejected value starts:
     // where the white space the parser skips ends is read first. A separate method, so that parsing a string doesn't keep
     // the position across its calls.
@@ -91,15 +95,18 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         var start = cursor.Offset;
         var valueStart = start;
 
-        if (context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
+        if (context.MaySkipWhiteSpace(cursor.Current))
         {
-            if (_parser is ISkipsWhiteSpace)
+            var leading = LeadingWhiteSpace.Of(ref _leading, _parser);
+
+            if (leading == LeadingWhiteSpaceUse.Skipped)
             {
-                // A token skips it before anything else: it is skipped for it, and isn't kept
+                // The parser skips it before anything else, like a token, a sequence or a choice of tokens: it is
+                // skipped for it, and isn't kept
                 context.SkipWhiteSpace();
                 valueStart = cursor.Offset;
             }
-            else
+            else if (leading == LeadingWhiteSpaceUse.Kept)
             {
                 // Any other parser is invoked where a string parser invokes it: a capture holds the white space it skips,
                 // and a lookahead leaves the cursor before it

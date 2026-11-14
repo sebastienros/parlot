@@ -366,26 +366,29 @@ public class CompactingStreamTests
     }
 
     [Fact]
-    public void RejectedTokensDontKeepTheWhiteSpaceBeforeThem()
+    public void ConditionsOnTokensDontKeepTheWhiteSpaceBeforeThem()
     {
-        // A token skips the white space before it itself: a condition or a conversion skips it first, to know where a
-        // value it rejects starts, and doesn't keep it
+        // A token skips the white space before it itself, before anything else, and so does a sequence or a choice of
+        // tokens: a condition or a conversion skips it first, to know where a value it rejects starts, and doesn't keep it
         var spaces = new string(' ', 10_000);
-        var text = "[" + spaces + "id1" + spaces + "]";
 
         var when = Terms.Char('[').SkipAnd(Terms.Identifier().When(static (_, value) => value.Length < 5)).AndSkip(Terms.Char(']')).Then(static value => value.ToString());
         var thenTry = Terms.Char('[').SkipAnd(Terms.Identifier().ThenTry(static value => (value.Length < 5, value.ToString()))).AndSkip(Terms.Char(']'));
+        var sequence = Terms.Char('[').SkipAnd(Terms.Identifier().AndSkip(Terms.Char('!')).When(static (_, value) => value.Length < 5)).AndSkip(Terms.Char(']')).Then(static value => value.ToString());
+        var choice = Terms.Char('[').SkipAnd(OneOf(Terms.Identifier(), Terms.Pattern(char.IsDigit)).ThenTry(static value => (value.Length < 5, value.ToString()))).AndSkip(Terms.Char(']'));
 
-        foreach (var parser in new[] { when, thenTry })
+        foreach (var parser in new[] { when, thenTry, sequence, choice })
         {
+            var mark = parser == sequence ? "!" : "";
+
             var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
-            Assert.Equal("id1", parser.Parse(new ChunkedReader(text, 3), options));
+            Assert.Equal("id1", parser.Parse(new ChunkedReader("[" + spaces + "id1" + mark + spaces + "]", 3), options));
             Assert.InRange(peak(), 1, 64);
 
             // A rejected one fails where it starts
             ParseContext? context = null;
             options = new StreamParseOptions { BufferSize = 16, ContextFactory = (scanner, ct) => context = new ParseContext(scanner, ct) };
-            Assert.False(parser.TryParse(new ChunkedReader("[" + spaces + "longer]", 3), out _, out _, options));
+            Assert.False(parser.TryParse(new ChunkedReader("[" + spaces + "longer" + mark + "]", 3), out _, out _, options));
             Assert.Equal(1 + spaces.Length, context!.Scanner.Cursor.FurthestOffset);
         }
     }
@@ -405,18 +408,18 @@ public class CompactingStreamTests
             Assert.Equal(spaces + "12", parser.Parse(new ChunkedReader(spaces + "12 ;", 1), options));
             Assert.True(peak() > 1000, $"Peak {peak()}");
 
-            // It is released once the value is read
-            (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
-            var tokens = Terms.Identifier().And(Terms.Integer()).When(static (_, value) => value.Item2 < 100).AndSkip(ZeroOrMany(Terms.Char(';')));
-            Assert.Equal(12, tokens.Parse(new ChunkedReader(spaces + "a 12 " + new string(';', 5000), 1), options).Item2);
-            Assert.InRange(peak(), 1000, 1100);
-
             ParseContext? context = null;
             options = new StreamParseOptions { BufferSize = 4, ContextFactory = (scanner, ct) => context = new ParseContext(scanner, ct) };
             Assert.False(parser.TryParse(new ChunkedReader(spaces + "12345678901 ;", 1), out _, out _, options));
             Assert.Equal(0, context!.Scanner.Cursor.Offset);
             Assert.Equal(1000, context.Scanner.Cursor.FurthestOffset);
         }
+
+        // A lookahead reads it again too, and it is released once the lookahead is done
+        var peeked = Peek(Terms.Identifier()).When(static (_, value) => value.Length < 5).SkipAnd(Terms.Identifier()).AndSkip(ZeroOrMany(Terms.Char(';'))).Then(static value => value.ToString());
+        var (peekedOptions, peekedPeak) = Observe(new StreamParseOptions { BufferSize = 4 });
+        Assert.Equal("ab", peeked.Parse(new ChunkedReader(spaces + "ab " + new string(';', 5000), 1), peekedOptions));
+        Assert.InRange(peekedPeak(), 1000, 1100);
     }
 
     [Theory]

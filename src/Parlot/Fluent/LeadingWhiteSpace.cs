@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using Parlot.Fluent;
+using System.Threading;
 using Parlot.Rewriting;
 
-namespace Parlot.SourceGeneration;
+namespace Parlot.Fluent;
 
 /// <summary>
 /// What a parser does with the white space before what it reads first, see <see cref="LeadingWhiteSpace"/>.
@@ -46,13 +46,16 @@ internal interface ILeadingWhiteSpace
 /// </summary>
 /// <remarks>
 /// <para>
-/// The code of <c>Then((context, start, end, value) => ...)</c>, <c>ThenTry</c> and <c>When</c> reads where the value of its
-/// parser starts, after the white space the parser skips: generated helpers don't return it. Skipping the white space before
-/// the parser is invoked is the cheapest way, and is the same as the parser skipping it for a token and for a sequence or a
-/// choice of tokens. It isn't for a parser which reads from where it is invoked though the parser it reads first skips white
-/// space: a <c>Capture</c> holds that white space, a lookahead leaves the cursor before it, and so does a parser which
-/// matches nothing. Such a parser forwards the <see cref="ISeekable.SkipWhitespace"/> hint, which only tells that the white
-/// space isn't to be looked at to find the chars it starts with.
+/// A parser which reads where the value of another one starts, after the white space that parser skips, can't always ask
+/// for it afterwards: generated helpers don't return it, and a compacting buffer can't be read again once the value is
+/// read. So do the code of <c>Then((context, start, end, value) => ...)</c>, <c>ThenTry</c> and <c>When</c>, and the
+/// <c>When</c> and <c>ThenTry</c> parsers reading a <c>TextReader</c>. Skipping the white space before the parser is
+/// invoked is the cheapest way, and is the same as the parser skipping it for a token and for a sequence or a choice of
+/// tokens. It isn't for a parser which reads from where it is invoked though the parser it reads first skips white space:
+/// a <c>Capture</c> holds that white space, a lookahead leaves the cursor before it, and so does a parser which matches
+/// nothing. Such a parser forwards the <see cref="ISeekable.SkipWhitespace"/> hint, which only tells that the white space
+/// isn't to be looked at to find the chars it starts with. Its white space is read with
+/// <see cref="ParseContext.WhiteSpaceEnd"/> instead, which doesn't move the cursor.
 /// </para>
 /// <para>
 /// The parsers a parser invokes first are the ones <see cref="LoopAnalysis"/> explores. A parser type it doesn't know is
@@ -61,6 +64,41 @@ internal interface ILeadingWhiteSpace
 /// </remarks>
 internal static class LeadingWhiteSpace
 {
+    /// <summary>
+    /// What a parser does with the white space before what it reads first, kept by the parser which asks for it while it
+    /// parses until the hints of the grammar change, like <see cref="ForwardedHints"/>.
+    /// </summary>
+    internal sealed class Cache
+    {
+        public readonly int Version;
+        public readonly LeadingWhiteSpaceUse Use;
+
+        public Cache(int version, LeadingWhiteSpaceUse use)
+        {
+            Version = version;
+            Use = use;
+        }
+    }
+
+    /// <summary>
+    /// Gets what <paramref name="parser"/> does with the white space before what it reads first, from
+    /// <paramref name="cache"/> when the grammar didn't change since it was read.
+    /// </summary>
+    public static LeadingWhiteSpaceUse Of(ref Cache? cache, object parser)
+    {
+        // The version is read first, so that a use read while it changes is read again the next time
+        var version = SeekableResolution.Version;
+        var cached = Volatile.Read(ref cache);
+
+        if (cached == null || cached.Version != version)
+        {
+            cached = new Cache(version, Of(parser));
+            Volatile.Write(ref cache, cached);
+        }
+
+        return cached.Use;
+    }
+
     /// <summary>
     /// Gets what <paramref name="parser"/> does with the white space before what it reads first.
     /// </summary>
