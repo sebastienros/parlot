@@ -322,8 +322,8 @@ first bad token is:
   `Terms.Identifier().When(...)` on `  from` reports 2, not 6. So does a `ThenTry` whose conversion rejects it.
 - `WhenNotFollowedBy` and `Not` fail at the start of what must not match, after the white space it skips.
 - The text a lookahead reads doesn't count otherwise: not when `WhenFollowedBy` or `Peek` matches, nor when the parser of
-  `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` doesn't match, the failure is the one of its parser,
-  which was expected there.
+  `WhenNotFollowedBy` or `Not` doesn't match. When `WhenFollowedBy` or `Peek` doesn't match, the failure is the one of
+  its parser, which was expected there.
 - The delimiter of `AnyCharBefore` is a lookahead too: what it reads where it isn't found in the text doesn't count, nor
   the delimiter which is found unless it is consumed. The text ends before it, where what follows is expected, and a
   text which is empty and can't be fails where it starts, at the delimiter.
