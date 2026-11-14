@@ -1129,6 +1129,349 @@ public class StreamingTests
         Assert.InRange(peak, 32, 128);
     }
 
+    [Theory]
+    [InlineData(' ', true)]
+    [InlineData('\n', true)]
+    [InlineData(' ', false)]
+    [InlineData('\n', false)]
+    public async Task ParseManyAsyncDropsWhiteSpaceAsItIsSkipped(char padding, bool limited)
+    {
+        // The white space of the context's set is skipped a char at a time, nothing depends on the text after it: a window
+        // which ends in it keeps none of it, and a run far longer than the limit is read through windows of the buffer size
+        var run = new string(padding, 5000);
+
+        (string Text, bool Separated, long[] Expected)[] cases =
+        [
+            ("1" + run + "2", false, [1, 2]),
+            ("1 2" + run, false, [1, 2]),
+            (run + "1 2", false, [1, 2]),
+            ("1" + run + "," + run + "2", true, [1, 2]),
+            ("1,2" + run, true, [1, 2]),
+            ("1,2" + run + ",", true, [1, 2]),
+            ("1,2," + run, true, [1, 2]),
+            (run + "1" + run + "," + run, true, [1]),
+
+            // Nothing but white space
+            (run, false, []),
+            (run, true, []),
+        ];
+
+        foreach (var (text, separated, expected) in cases)
+        {
+            foreach (var chunk in new[] { 1, 5, 16, int.MaxValue })
+            {
+                var peak = 0;
+                var parsed = 0L;
+
+                var options = new StreamParseOptions
+                {
+                    BufferSize = 16,
+                    MaxBufferedCharacters = limited ? 64 : int.MaxValue,
+                    ContextFactory = (scanner, ct) =>
+                    {
+                        peak = Math.Max(peak, scanner.Buffer.Length);
+                        parsed += scanner.Buffer.Length;
+                        return new ParseContext(scanner, cancellationToken: ct);
+                    },
+                };
+
+                var reader = new ChunkedReader(text, () => chunk, yield: false);
+                var values = await ToListAsync(separated ? Terms.Integer().ParseManyAsync(reader, Terms.Char(','), options) : Terms.Integer().ParseManyAsync(reader, options));
+
+                Assert.Equal(expected, values);
+                Assert.Equal(text.Length, reader.Position);
+
+                // An item or a separator which ends a window is retried with as much text again
+                Assert.InRange(peak, 16, 32);
+
+                // The white space is in one window only: the windows hold the text once, and again the few chars of the
+                // items and separators which a window cuts
+                Assert.InRange(parsed, text.Length, text.Length + 32);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData(" \t\r\n")]
+    public async Task ParseManyAsyncLimitsAnItemWithoutTheWhiteSpaceBeforeIt(string padding)
+    {
+        // MaxBufferedCharacters is the limit of an item: the white space before it, however long, neither fails an item
+        // which fits nor moves the error of one which doesn't, reported where that item starts in the whole text
+        const int Limit = 16;
+
+        foreach (var separated in new[] { false, true })
+        {
+            foreach (var count in new[] { 0, 1, 3, 4, 5, 15, 16, 17, 64, 65, 1000 })
+            {
+                if (count == 0 && !separated)
+                {
+                    continue;
+                }
+
+                var run = string.Concat(Enumerable.Repeat(padding, count));
+                var prefix = "a" + run + (separated ? "," + run : "");
+
+                foreach (var (chunk, bufferSize) in new[] { (1, 1), (1, 4), (1, 16), (5, 3), (int.MaxValue, 1), (int.MaxValue, 16) })
+                {
+                    var options = new StreamParseOptions { BufferSize = bufferSize, MaxBufferedCharacters = Limit };
+
+                    // An identifier ends at the char which follows it: one of Limit - 1 chars fits in the limit
+                    var fits = new string('b', Limit - 1);
+
+                    Assert.Equal(["a", fits, "c"], await ParseAsync(prefix + fits + run + (separated ? "," : " ") + "c", []));
+
+                    var items = new List<string>();
+                    var text = prefix + new string('b', Limit) + run + "c";
+                    var exception = await Assert.ThrowsAsync<ParseException>(() => ParseAsync(text, items));
+
+                    Assert.Equal(["a"], items);
+                    Assert.Equal($"The input requires more than {Limit} buffered characters to be parsed.", exception.Message);
+
+                    var lastNewLine = text.LastIndexOf('\n', prefix.Length - 1);
+                    Assert.Equal(new TextPosition(prefix.Length, 1 + prefix.Count(static c => c == '\n'), prefix.Length - lastNewLine), exception.Position);
+
+                    async Task<List<string>> ParseAsync(string text, List<string> items)
+                    {
+                        var reader = new ChunkedReader(text, () => chunk, yield: false);
+                        var parser = Terms.Identifier().Then(static span => span.ToString());
+
+                        return await ToListAsync(separated ? parser.ParseManyAsync(reader, Terms.Char(','), options) : parser.ParseManyAsync(reader, options), items);
+                    }
+                }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParseManyAsyncRejectsAnEmptyValueAfterDroppedWhiteSpace(bool separated)
+    {
+        // The windows which the white space filled are gone when the parser matches nothing at the text which follows it
+        var options = new StreamParseOptions { BufferSize = 16, MaxBufferedCharacters = 64 };
+        var parser = Terms.Integer().Optional();
+        var reader = new ChunkedReader("1" + (separated ? "," : "") + new string(' ', 5000) + "x", () => 5, yield: false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ToListAsync(separated ? parser.ParseManyAsync(reader, Terms.Char(','), options) : parser.ParseManyAsync(reader, options)));
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncKeepsTheWhiteSpaceOfAWhiteSpaceParser()
+    {
+        // What a white space parser reads can depend on the text after the window, a comment for instance, so the white
+        // space which ends a window is read again with what follows it, and counts in the limit
+        var options = new StreamParseOptions
+        {
+            BufferSize = 16,
+            MaxBufferedCharacters = 64,
+            ContextFactory = static (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceParser = Literals.WhiteSpace(includeNewLines: true) },
+        };
+
+        var items = new List<long>();
+
+        Assert.Equal([1L, 2], await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader("1" + new string(' ', 40) + "2", () => 5, false), options)));
+
+        // The limit is the one of the white space and the one of the item, not of both: the item is retried from its start
+        Assert.Equal([1L, 123456789012345678], await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader("1" + new string(' ', 60) + "123456789012345678 ", () => 5, false), options)));
+
+        var exception = await Assert.ThrowsAsync<ParseException>(() => ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader("1" + new string(' ', 5000) + "2", () => 5, false), options), items));
+
+        Assert.Single(items);
+        Assert.Equal("The input requires more than 64 buffered characters to be parsed.", exception.Message);
+        Assert.Equal(new TextPosition(1, 1, 2), exception.Position);
+    }
+
+    // The contexts of ParseManyAsyncWhiteSpaceWindowsDontChangeTheResult: every white space which SkipWhiteSpace reads from the
+    // context's set. The last one reads comments, with a white space parser which only the items set: what is skipped before
+    // an item is then still the white space of the set
+    private static readonly Dictionary<string, (Func<Scanner, CancellationToken, ParseContext> Context, Parser<TextSpan>? ItemWhiteSpace)> WindowedWhiteSpaceSets = new()
+    {
+        ["default"] = (static (scanner, ct) => new ParseContext(scanner, cancellationToken: ct), null),
+        ["new-lines"] = (static (scanner, ct) => new ParseContext(scanner, useNewLines: true, cancellationToken: ct), null),
+        ["ascii"] = (static (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceSet = WhiteSpaceSet.Ascii }, null),
+        ["ascii-new-lines"] = (static (scanner, ct) => new ParseContext(scanner, useNewLines: true, cancellationToken: ct) { WhiteSpaceSet = WhiteSpaceSet.Ascii }, null),
+        ["space-tab-crlf"] = (static (scanner, ct) => new ParseContext(scanner, cancellationToken: ct) { WhiteSpaceSet = WhiteSpaceSet.SpaceTabCrLf }, null),
+        ["item-comments"] = (static (scanner, ct) => new ParseContext(scanner, cancellationToken: ct), new CommentsBuilder().WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/").Build()),
+    };
+
+    public static TheoryData<string, string> WindowedWhiteSpaceSetCases()
+    {
+        var data = new TheoryData<string, string>();
+
+        string[] texts =
+        [
+            "", " ", "\r\n", "a", " a ", "a b", "a\nb", "a\r\nb", "a\rb", "a \r\n\r\n b\r\n", "\r\n\r\na", "a\tb\fc\vd", "a\u00A0b", "a \u00A0\u2028\u3000 b\u0085",
+            "a , b", "a,\r\n b ,", "a\r\n,\r\n,", "a b , c", "a ! b", "a \r\n !", "a,\n\n !", "a\r", "a,\r",
+            // Runs far longer than the windows, new lines which a window cuts, and a failure after them
+            "a" + new string(' ', 300) + "b",
+            new string(' ', 200) + "a" + new string('\n', 200) + "b" + new string('\t', 200),
+            "a" + string.Concat(Enumerable.Repeat("\r\n", 150)) + "b\r\n" + new string(' ', 100) + "!",
+            "a" + string.Concat(Enumerable.Repeat(" \r\n", 100)) + "," + string.Concat(Enumerable.Repeat("\n\r", 100)) + "b" + new string(' ', 100) + "," + new string('\n', 100),
+            "a" + new string('\u00A0', 200) + "b" + new string('\u2028', 200) + "c d",
+            string.Join(new string(' ', 30) + "\r\n", Enumerable.Range(0, 20).Select(static i => "id" + i)) + new string('\n', 50) + "?",
+            // Items with white space of their own, which a window keeps, and the exception of one which isn't closed
+            "(a b) c", "( a\r\n b )\r\n( c", "a ( b", "(a) , ( b c ) ,", "a , (", "( a ! )", "a\n(\n)\n\n( b !",
+            "a" + new string(' ', 300) + "( b\t)" + new string('\n', 300) + "(  c  d  )" + new string(' ', 100) + "," + string.Concat(Enumerable.Repeat("\r\n", 100)) + "( e" + new string(' ', 5) + "?",
+            // Comments, for the items which read them: the white space before them is dropped, they are kept with their item
+            "a /* b */ c", "a  /* b", "a /", "a // b\r\n c", "a /* b */ , /* c */ d", "a /**/",
+            "a" + new string(' ', 300) + "/* b */ c" + string.Concat(Enumerable.Repeat("\r\n", 150)) + "// d\ne" + new string(' ', 100) + ", /*f*/ g" + new string('\n', 100) + "/* h",
+        ];
+
+        foreach (var whiteSpace in WindowedWhiteSpaceSets.Keys)
+        {
+            foreach (var text in texts)
+            {
+                data.Add(whiteSpace, text);
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(WindowedWhiteSpaceSetCases))]
+    public async Task ParseManyAsyncWhiteSpaceWindowsDontChangeTheResult(string whiteSpace, string text)
+    {
+        // The items, their lines and columns, and the error of a stream are the ones of a single window holding the whole
+        // text, wherever the windows end and whatever white space they drop
+        var (contextFactory, itemWhiteSpace) = WindowedWhiteSpaceSets[whiteSpace];
+
+        // An item in parentheses has white space of its own and throws when it isn't closed
+        var group = Capture(Terms.Char('(').And(ZeroOrMany(Terms.Identifier())).And(Terms.Char(')').ElseError("Expected ')'")));
+
+        // New lines are items for the contexts which don't skip them
+        var item = OneOf(Terms.Identifier(), Terms.AnyOf("\r\n", maxSize: 1), group).Then(static (context, span) =>
+        {
+            var position = context.Scanner.Cursor.Position;
+            return $"{span.ToString().Replace("\r", "\\r").Replace("\n", "\\n")}@{position.Line}:{position.Column}";
+        });
+
+        if (itemWhiteSpace is not null)
+        {
+            item = item.WithWhiteSpaceParser(itemWhiteSpace);
+        }
+
+        var random = new Random(text.Length * 31 + whiteSpace.Length);
+
+        foreach (var separated in new[] { false, true })
+        {
+            var expected = await ParseAsync(() => int.MaxValue, text.Length + 1, int.MaxValue);
+
+            // The whole text agrees when it parses
+            var whole = (separated ? Separated(Terms.Char(','), item).AndSkip(Terms.Char(',').Optional()) : ZeroOrMany(item)).Eof();
+
+            if (TryParseWhole(out var values))
+            {
+                Assert.Equal(string.Join("|", values!) + "|", expected);
+            }
+
+            var configurations = new List<(Func<int> Chunk, int BufferSize, int MaxBufferedCharacters)>
+            {
+                (() => 1, 1, int.MaxValue),
+                (() => 1, 4096, int.MaxValue),
+                (() => 3, 2, int.MaxValue),
+                (() => 7, 5, int.MaxValue),
+                (() => random.Next(1, 6), 1, int.MaxValue),
+                (() => random.Next(1, 6), 3, int.MaxValue),
+                (() => int.MaxValue, 1, int.MaxValue),
+                (() => int.MaxValue, 64, int.MaxValue),
+
+                // No item or separator is longer than the limit, the white space isn't counted
+                (() => 1, 1, 16),
+                (() => random.Next(1, 6), 4, 16),
+                (() => int.MaxValue, 8, 16),
+            };
+
+            // Every size of a window: a reader which returns a char at a time fills a window with exactly BufferSize chars
+            // while it retains nothing
+            for (var size = 2; size <= 24; size++)
+            {
+                configurations.Add((() => 1, size, int.MaxValue));
+                configurations.Add((() => 1, size, 16));
+            }
+
+            foreach (var (chunk, bufferSize, maxBufferedCharacters) in configurations)
+            {
+                var actual = await ParseAsync(chunk, bufferSize, maxBufferedCharacters);
+
+                Assert.True(expected == actual, $"'{text}' with buffer size {bufferSize}, limit {maxBufferedCharacters}, separated {separated}: expected {expected}, actual {actual}");
+            }
+
+            bool TryParseWhole(out IReadOnlyList<string>? values)
+            {
+                try
+                {
+                    return whole.TryParse(contextFactory(new Scanner(text), CancellationToken.None), out values, out _);
+                }
+                catch (ParseException)
+                {
+                    values = null;
+                    return false;
+                }
+            }
+
+            async Task<string> ParseAsync(Func<int> chunk, int bufferSize, int maxBufferedCharacters)
+            {
+                var options = new StreamParseOptions
+                {
+                    BufferSize = bufferSize,
+                    MaxBufferedCharacters = maxBufferedCharacters,
+                    ContextFactory = contextFactory,
+                };
+
+                var reader = new ChunkedReader(text, chunk, yield: false);
+                var items = new List<string>();
+                var error = "";
+
+                try
+                {
+                    await ToListAsync(separated ? item.ParseManyAsync(reader, Terms.Char(','), options) : item.ParseManyAsync(reader, options), items);
+                }
+                catch (ParseException e)
+                {
+                    error = $"{e.Message} {e.Position.Offset} {e.Position}";
+                }
+
+                return string.Join("|", items) + "|" + error;
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    [InlineData(" \t\r\n")]
+    public async Task ParseManyAsyncDoesNotBufferEmptyDelimitedValues(string line)
+    {
+        // The delimited overload frames the text before it parses it: an empty frame is skipped when its delimiter is
+        // found and a white space only one once it is parsed, so the blank lines between two values aren't buffered together
+        var text = "1\n" + string.Concat(Enumerable.Repeat(line, 2000)) + "2\n" + string.Concat(Enumerable.Repeat(line, 2000));
+
+        foreach (var chunk in new[] { 1, 5, int.MaxValue })
+        {
+            var peak = 0;
+
+            var options = new StreamParseOptions
+            {
+                BufferSize = 16,
+                MaxBufferedCharacters = 64,
+                ContextFactory = (scanner, ct) =>
+                {
+                    peak = Math.Max(peak, scanner.Buffer.Length);
+                    return new ParseContext(scanner, cancellationToken: ct);
+                },
+            };
+
+            Assert.Equal([1L, 2], await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => chunk, yield: false), '\n', options)));
+
+            // A frame is a line without its delimiter
+            Assert.InRange(peak, 1, line.Length);
+        }
+    }
+
     [Fact]
     public async Task ParseManyAsyncCanBeCanceledInAComment()
     {

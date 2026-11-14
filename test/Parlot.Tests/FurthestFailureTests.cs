@@ -216,6 +216,22 @@ public class FurthestFailureTests
     private static readonly Parser<string> Followed =
         Terms.Identifier().WhenFollowedBy(Terms.Text("((")).Then(static value => value.ToString()).AndSkip(Terms.Char('x')).Eof();
 
+    private static readonly Parser<string> Peeked =
+        Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
+
+    // A value that the condition rejects after a lookahead which skipped the white space before it
+    private static readonly Parser<string> PeekedRejected =
+        Terms.Char('>').SkipAnd(Peek(Terms.Text("ab")).SkipAnd(Terms.Identifier()).When(static (_, _) => false))
+            .Then(static value => value.ToString()).Eof();
+
+    // A lookahead which reads a word before it fails
+    private static readonly Parser<string> PeekedFurther =
+        Peek(Terms.Identifier().And(Terms.Char(':'))).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char('!')).Eof();
+
+    // A lookahead whose first alternative reads further than the one which matches
+    private static readonly Parser<string> PeekedAlternatives =
+        Peek(OneOf(Terms.Identifier().AndSkip(Terms.Char('(')), Terms.Identifier())).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
+
     private static readonly Parser<string> Negative =
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
@@ -366,6 +382,76 @@ public class FurthestFailureTests
     [InlineData("abc  (", 5)]
     [InlineData("abc", 3)]
     public void Followed_By_That_Matched_Doesnt_Count(string text, int offset) => AssertFurthest(Followed, text, offset);
+
+    [Theory]
+    [InlineData("((", 0)]
+    [InlineData("((y", 0)]
+    [InlineData("  ((", 2)]
+    [InlineData("  ((y", 2)]
+    [InlineData("  (x", 2)]
+    [InlineData("", 0)]
+    public void Peek_That_Matched_Doesnt_Count(string text, int offset)
+    {
+        // The cursor is moved back from a text which matched, not a failure where it ended: the 'x' expected next fails
+        AssertFurthest(Peeked, text, offset);
+
+        // The same lookahead invoked without its value, a list
+        AssertFurthest(Peek(OneOrMany(Terms.Text("(("))).SkipAnd(Terms.Char('x')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("> ab", 2)]
+    [InlineData(">ab", 1)]
+    [InlineData("  >  abc", 5)]
+    [InlineData("> a", 2)]
+    [InlineData(">", 1)]
+    public void Value_Rejected_After_A_Peek_Fails_At_Its_Start(string text, int offset)
+    {
+        // The lookahead skips the white space before the value and matches the start of it
+        AssertFurthest(PeekedRejected, text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(Peek(OneOrMany(Terms.Text("ab"))).SkipAnd(Terms.Identifier()).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("abc ;", 4)]
+    [InlineData("  abc  ;", 7)]
+    [InlineData("abc", 3)]
+    [InlineData("  ;", 2)]
+    [InlineData("abc : ?", 4)] // The lookahead matches up to 5, the '!' expected after the word fails after its white space
+    [InlineData("  abc:", 5)] // and here where the word ends, not after the ':' of the lookahead
+    public void Peek_That_Fails_Keeps_The_Failure_Of_Its_Parser(string text, int offset)
+    {
+        // The lookahead was expected: where its parser stopped counts, unlike the text it matched
+        AssertFurthest(PeekedFurther, text, offset);
+        AssertFurthest(Peek(OneOrMany(Terms.Identifier().And(Terms.Char(':')))).SkipAnd(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData("abc ?", 0)] // The first alternative of the lookahead reads up to 4 before the second one matches
+    [InlineData("  abc  ?", 2)]
+    [InlineData("abc ( ?", 0)]
+    [InlineData("  abc", 2)]
+    [InlineData("  ( ", 2)] // No alternative matches: the lookahead was expected, after its white space
+    [InlineData("abc ? x", 0)]
+    public void Peek_That_Matched_Forgets_The_Alternatives_Which_Failed(string text, int offset)
+    {
+        // What the parser of a lookahead recorded before it matched says nothing about what follows either
+        AssertFurthest(PeekedAlternatives, text, offset);
+        AssertFurthest(Peek(OneOrMany(OneOf(Terms.Identifier().AndSkip(Terms.Char('(')), Terms.Identifier()))).SkipAnd(Terms.Char('x')).Eof(), text, offset);
+    }
+
+    [Fact]
+    public void Peek_That_Matched_Keeps_The_Failures_Recorded_Before_It()
+    {
+        // The first alternative fails at 5, after its lookahead matched: the lookahead of the second one, which fails at 3,
+        // restores that failure, not the one of its own start
+        var parser = OneOf(
+            Terms.Identifier().AndSkip(Peek(Terms.Char(':'))).AndSkip(Terms.Char(':')).AndSkip(Terms.Char('!')),
+            Terms.Identifier().AndSkip(Peek(Terms.Char(':'))).AndSkip(Terms.Char('?'))).Eof();
+
+        AssertFurthest(parser, "ab : x", 5);
+        AssertFurthest(parser, "ab :", 4);
+    }
 
     [Theory]
     [InlineData("abc", 0)]

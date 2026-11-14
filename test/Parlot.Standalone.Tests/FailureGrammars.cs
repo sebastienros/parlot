@@ -67,6 +67,15 @@ public static partial class FailureGrammars
     public static partial bool Peeked(string text, out string value, out int failureOffset);
     public static partial bool Peeked(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool PeekedRejected(string text, out string value, out int failureOffset);
+    public static partial bool PeekedRejected(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool PeekedFurther(string text, out string value, out int failureOffset);
+    public static partial bool PeekedFurther(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool PeekedAlternatives(string text, out string value, out int failureOffset);
+    public static partial bool PeekedAlternatives(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool Negative(string text, out string value, out int failureOffset);
     public static partial bool Negative(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 

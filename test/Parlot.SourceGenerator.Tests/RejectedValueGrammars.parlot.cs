@@ -43,6 +43,10 @@ public static partial class RejectedValueGrammars
     private static Parser<string> Lookahead(Func<Parser<TextSpan>, Parser<string>> reject) =>
         Not(Terms.Char('x')).SkipAnd(reject(Terms.Identifier())).AndSkip(Terms.Char(';')).Eof();
 
+    // A lookahead which matches read the word first, and moved the cursor back
+    private static Parser<string> Peeked(Func<Parser<TextSpan>, Parser<string>> reject) =>
+        Peek(Terms.Identifier()).SkipAnd(reject(Terms.Identifier())).AndSkip(Terms.Char(';')).Eof();
+
     // White space was skipped before another word first
     private static Parser<string> Second(Func<Parser<TextSpan>, Parser<string>> reject) =>
         Terms.Identifier().SkipAnd(reject(Terms.Identifier())).AndSkip(Terms.Char(';')).Eof();
@@ -96,6 +100,15 @@ public static partial class RejectedValueGrammars
 
     [GenerateParser(nameof(TryParseLookaheadTuple))]
     public static Parser<string> BuildLookaheadTuple() => Lookahead(Tuple);
+
+    [GenerateParser(nameof(TryParsePeekedWhen))]
+    public static Parser<string> BuildPeekedWhen() => Peeked(When);
+
+    [GenerateParser(nameof(TryParsePeekedConversion))]
+    public static Parser<string> BuildPeekedConversion() => Peeked(Conversion);
+
+    [GenerateParser(nameof(TryParsePeekedTuple))]
+    public static Parser<string> BuildPeekedTuple() => Peeked(Tuple);
 
     [GenerateParser(nameof(TryParseSecondWhen))]
     public static Parser<string> BuildSecondWhen() => Second(When);
