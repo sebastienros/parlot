@@ -709,6 +709,19 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData("abd:xx", 0)]
+    [InlineData("abc;xx", 3)]
+    [InlineData("abc:x", 4)]
+    [InlineData("abc:xy", 4)]
+    [InlineData("abc:xxy", 6)]
+    public void Pattern_Which_Needs_More_Chars_Fails_At_Its_Start(string text, int offset)
+    {
+        var parser = Literals.Text("abc").SkipAnd(Literals.Char(':')).SkipAnd(Literals.Pattern(static c => c == 'x', minSize: 2))
+            .Then(static value => value.ToString()).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
     [InlineData("1 + (2 + 3", 10)]
     [InlineData("((1)\n+\n(2 +\nx))", 12)]
     public void TextReader_Context_Reports_The_Furthest_Failure(string text, int offset) => AssertFurthest(Expression, text, offset);

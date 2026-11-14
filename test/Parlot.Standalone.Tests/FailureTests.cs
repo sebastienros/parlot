@@ -133,12 +133,17 @@ public class FailureTests
     [InlineData("abc:xx", true, 0)]
     [InlineData("abd:xx", false, 0)]
     [InlineData("abc;xx", false, 3)]
-    [InlineData("abc:x", false, 5)]
+    // A pattern which needs more chars fails where it started, like the parser which reads them without moving the cursor
+    [InlineData("abc:x", false, 4)]
+    [InlineData("abc:xy", false, 4)]
     [InlineData("abc:xxy", false, 6)]
     public void Span_Code_Records_Where_It_Failed(string text, bool success, int offset)
     {
         Assert.Equal(success, FailureGrammars.Span(text, out _, out var failureOffset));
         Assert.Equal(offset, failureOffset);
+
+        Assert.Equal(success, FailureGrammars.Span(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
     }
 
     [Fact]

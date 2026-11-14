@@ -615,12 +615,14 @@ internal static class NumberSource
         // More digits could follow the end of the span
         writer.Add($"if ({reachedEnd}) {writer.MarkHitEnd}");
 
-        // The value is parsed even when it's not used, since a number its type can't represent doesn't match
+        // The value is parsed even when it's not used, since a number its type can't represent doesn't match: it fails
+        // after its digits, which the parser moves the cursor back from
         var digits = allowUnderscore
             ? $"global::Parlot.Numbers.RemoveUnderscores({text}.Slice(0, {length}))"
             : $"{text}.Slice(0, {length})";
-        writer.Add($"if ({length} == 0 || !{tryParseMethod}({digits}, {numberStyles}, {culture}, out {number})) {fail.Goto()}");
+        writer.Add($"if ({length} == 0) {fail.Goto()}");
         writer.Add($"{writer.Pos} += {length};");
+        writer.Add($"if (!{tryParseMethod}({digits}, {numberStyles}, {culture}, out {number})) {fail.AfterReading.Goto()}");
 
         if (valueVariable != null)
         {

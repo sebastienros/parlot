@@ -21,6 +21,7 @@ public static partial class FailureGrammars
     public static partial bool ErrorNesting(string text, out long value, out (int Offset, bool NestedTooDeeply) failure);
 
     public static partial bool Span(string text, out string value, out int failureOffset);
+    public static partial bool Span(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
     public static partial bool Configured(string text, long factor, out long value, out (int Offset, int Line, int Column) failure);
 
