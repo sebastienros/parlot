@@ -21,7 +21,7 @@ public class NativeAotRuntimeTests
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent.Name;
         var directory = Directory.CreateDirectory(Path.Combine(
             Path.GetTempPath(), "Parlot.NativeAotRuntime.Tests", Guid.NewGuid().ToString("N"))).FullName;
-        try
+        await TestDirectory.RunAsync(directory, async () =>
         {
             File.Copy(Path.Combine(root, "global.json"), Path.Combine(directory, "global.json"));
             File.WriteAllText(Path.Combine(directory, "NuGet.config"), """
@@ -69,10 +69,6 @@ public class NativeAotRuntimeTests
             var executable = Path.Combine(publish, OperatingSystem.IsWindows() ? "Consumer.exe" : "Consumer");
             Assert.False(File.Exists(Path.Combine(publish, "Consumer.dll")));
             Assert.Equal("6", (await BuildContextIntegrationTests.RunProcess(directory, executable)).Trim());
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
+        });
     }
 }

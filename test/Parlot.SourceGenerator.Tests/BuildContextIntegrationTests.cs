@@ -106,11 +106,11 @@ public class BuildContextIntegrationTests
         => RunProcess(directory, "dotnet", arguments);
 
     [Fact]
-    public void Generating_Standalone_Parser_Does_Not_Lock_Referenced_Assembly()
+    public async Task Generating_Standalone_Parser_Does_Not_Lock_Referenced_Assembly()
     {
         var directory = Directory.CreateDirectory(Path.Combine(
             Path.GetTempPath(), "Parlot.ReferenceLoading.Tests", Guid.NewGuid().ToString("N"))).FullName;
-        try
+        await TestDirectory.RunAsync(directory, () =>
         {
             var dependency = CreateCompilation()
                 .WithAssemblyName("GrammarDependency" + Guid.NewGuid().ToString("N"))
@@ -148,11 +148,8 @@ public class BuildContextIntegrationTests
             using var writable = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             writable.SetLength(0);
             writable.Write(bytes);
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
+            return Task.CompletedTask;
+        });
     }
 
     internal static async Task<string> RunProcess(string directory, string executable, params string[] arguments)
