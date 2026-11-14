@@ -47,6 +47,9 @@ public class RejectedValueParityTests
     private static Parser<string> Lookahead(Func<Parser<TextSpan>, Parser<string>> reject) =>
         Not(Terms.Char('x')).SkipAnd(reject(Terms.Identifier())).AndSkip(Terms.Char(';')).Eof();
 
+    private static Parser<string> Peeked(Func<Parser<TextSpan>, Parser<string>> reject) =>
+        Peek(Terms.Identifier()).SkipAnd(reject(Terms.Identifier())).AndSkip(Terms.Char(';')).Eof();
+
     private static Parser<string> Second(Func<Parser<TextSpan>, Parser<string>> reject) =>
         Terms.Identifier().SkipAnd(reject(Terms.Identifier())).AndSkip(Terms.Char(';')).Eof();
 
@@ -75,6 +78,9 @@ public class RejectedValueParityTests
         ["LookaheadWhen"] = (Lookahead(When), RejectedValueGrammars.TryParseLookaheadWhen, RejectedValueGrammars.TryParseLookaheadWhen),
         ["LookaheadConversion"] = (Lookahead(Conversion), RejectedValueGrammars.TryParseLookaheadConversion, RejectedValueGrammars.TryParseLookaheadConversion),
         ["LookaheadTuple"] = (Lookahead(Tuple), RejectedValueGrammars.TryParseLookaheadTuple, RejectedValueGrammars.TryParseLookaheadTuple),
+        ["PeekedWhen"] = (Peeked(When), RejectedValueGrammars.TryParsePeekedWhen, RejectedValueGrammars.TryParsePeekedWhen),
+        ["PeekedConversion"] = (Peeked(Conversion), RejectedValueGrammars.TryParsePeekedConversion, RejectedValueGrammars.TryParsePeekedConversion),
+        ["PeekedTuple"] = (Peeked(Tuple), RejectedValueGrammars.TryParsePeekedTuple, RejectedValueGrammars.TryParsePeekedTuple),
         ["SecondWhen"] = (Second(When), RejectedValueGrammars.TryParseSecondWhen, RejectedValueGrammars.TryParseSecondWhen),
         ["SecondConversion"] = (Second(Conversion), RejectedValueGrammars.TryParseSecondConversion, RejectedValueGrammars.TryParseSecondConversion),
         ["SecondTuple"] = (Second(Tuple), RejectedValueGrammars.TryParseSecondTuple, RejectedValueGrammars.TryParseSecondTuple),
@@ -147,6 +153,14 @@ public class RejectedValueParityTests
         { "Lookahead", "  from;", 2 },
         { "Lookahead", "  fromage,", 9 },
         { "Lookahead", "  x", 2 },
+
+        // A lookahead which matched read the word, and moved the cursor back to before its white space
+        { "Peeked", "from;", 0 },
+        { "Peeked", "  from;", 2 },
+        { "Peeked", "\n\t from;", 3 },
+        { "Peeked", "  fromage,", 9 },
+        { "Peeked", "  ,", 2 },
+        { "Peeked", "  ", 2 },
 
         // White space was skipped at an earlier offset, before another word
         { "Second", "a from;", 2 },
@@ -229,6 +243,7 @@ public class RejectedValueParityTests
     [InlineData("Alternative", "  select ;", "select")]
     [InlineData("Alternative", "  word;", "word")]
     [InlineData("Lookahead", "  word;", "word")]
+    [InlineData("Peeked", "  word;", "word")]
     [InlineData("Second", " from  word;", "word")]
     [InlineData("Comments", "/* a */ word /* b */;", "word")]
     [InlineData("InnerComments", "  /* a */ word;", "word")]
@@ -336,6 +351,12 @@ public static partial class RejectedValueGrammars
     public static partial bool TryParseLookaheadConversion(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseLookaheadTuple(string text, out string value, out int failure);
     public static partial bool TryParseLookaheadTuple(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParsePeekedWhen(string text, out string value, out int failure);
+    public static partial bool TryParsePeekedWhen(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParsePeekedConversion(string text, out string value, out int failure);
+    public static partial bool TryParsePeekedConversion(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParsePeekedTuple(string text, out string value, out int failure);
+    public static partial bool TryParsePeekedTuple(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseSecondWhen(string text, out string value, out int failure);
     public static partial bool TryParseSecondWhen(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseSecondConversion(string text, out string value, out int failure);

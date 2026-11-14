@@ -333,7 +333,9 @@ public class FailureTests
 
     [Theory]
     [InlineData("((", 0)] // A lookahead that matched doesn't count: the 'x' expected next fails at 0, not after the "(("
+    [InlineData("((y", 0)]
     [InlineData("  ((", 2)] // The 'x' expected next fails after its white space, at the lookahead's text, not after it
+    [InlineData("  ((y", 2)]
     [InlineData("  (x", 2)] // The lookahead was expected, it fails after its white space
     [InlineData("", 0)]
     public void Peek_That_Matched_Doesnt_Count(string text, int offset)
@@ -343,6 +345,90 @@ public class FailureTests
 
         Assert.False(FailureGrammars.Peeked(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
         Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("> ab", 2)] // The lookahead skips the white space before the value and matches it: the value fails where it starts
+    [InlineData(">ab", 1)]
+    [InlineData("  >  abc", 5)]
+    [InlineData("> a", 2)] // The lookahead was expected, it fails after its white space
+    [InlineData(">", 1)]
+    public void Value_Rejected_After_A_Peek_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedRejected(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedRejected(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("abc ;", 4)] // The lookahead was expected: where its parser stopped counts, unlike the text it matched
+    [InlineData("  abc  ;", 7)]
+    [InlineData("abc", 3)]
+    [InlineData("  ;", 2)]
+    [InlineData("abc : ?", 4)] // The lookahead matches up to 5, the '!' expected after the word fails after its white space
+    [InlineData("  abc:", 5)] // and here where the word ends, not after the ':' of the lookahead
+    public void Peek_That_Fails_Keeps_The_Failure_Of_Its_Parser(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedFurther(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedFurther(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("abc ?", 0)] // The first alternative of the lookahead reads up to 4 before the second one matches
+    [InlineData("  abc  ?", 2)]
+    [InlineData("abc ( ?", 0)]
+    [InlineData("  abc", 2)]
+    [InlineData("  ( ", 2)] // No alternative matches: the lookahead was expected, after its white space
+    [InlineData("abc ? x", 0)]
+    public void Peek_That_Matched_Forgets_The_Alternatives_Which_Failed(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedAlternatives(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedAlternatives(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData(4092)]
+    [InlineData(4093)]
+    [InlineData(4094)]
+    [InlineData(4095)]
+    [InlineData(4096)]
+    public void Peek_Read_Across_Two_Buffers_Doesnt_Count(int padding)
+    {
+        // The buffer of the reader, of 4096 chars, ends in the white space the lookahead skips or in the text it matches:
+        // the text is read again with more of it, and the cursor moves back to a start which is still buffered
+        var text = new string(' ', padding - 1) + ">  ab";
+
+        Assert.False(FailureGrammars.PeekedRejected(text, out _, out var failureOffset));
+        Assert.Equal(padding + 2, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedRejected(new StringReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(padding + 2, failure.Offset);
+
+        Assert.False(FailureGrammars.PeekedRejected(new OneCharReader(text), out _, out failure));
+        Assert.Equal(padding + 2, failure.Offset);
+
+        text = new string(' ', padding) + "abc ?";
+
+        Assert.False(FailureGrammars.PeekedAlternatives(new StringReader(text), out _, out failure));
+        Assert.Equal(padding, failure.Offset);
+
+        text = new string(' ', padding) + "abc : ?";
+
+        Assert.False(FailureGrammars.PeekedFurther(new StringReader(text), out _, out failure));
+        Assert.Equal(padding + 4, failure.Offset);
+
+        text = new string(' ', padding) + "abc ;";
+
+        Assert.False(FailureGrammars.PeekedFurther(new StringReader(text), out _, out failure));
+        Assert.Equal(padding + 4, failure.Offset);
     }
 
     [Theory]

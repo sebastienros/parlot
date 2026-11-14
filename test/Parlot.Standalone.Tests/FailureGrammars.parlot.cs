@@ -139,6 +139,22 @@ public static partial class FailureGrammars
     public static Parser<string> BuildPeeked() =>
         Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
 
+    // A value that the condition rejects after a lookahead which skipped the white space before it
+    [GenerateParser(nameof(PeekedRejected))]
+    public static Parser<string> BuildPeekedRejected() =>
+        Terms.Char('>').SkipAnd(Peek(Terms.Text("ab")).SkipAnd(Terms.Identifier()).When(static (_, _) => false))
+            .Then(static value => value.ToString()).Eof();
+
+    // A lookahead which reads a word before it fails
+    [GenerateParser(nameof(PeekedFurther))]
+    public static Parser<string> BuildPeekedFurther() =>
+        Peek(Terms.Identifier().And(Terms.Char(':'))).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char('!')).Eof();
+
+    // A lookahead whose first alternative reads further than the one which matches
+    [GenerateParser(nameof(PeekedAlternatives))]
+    public static Parser<string> BuildPeekedAlternatives() =>
+        Peek(OneOf(Terms.Identifier().AndSkip(Terms.Char('(')), Terms.Identifier())).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
+
     [GenerateParser(nameof(Negative))]
     public static Parser<string> BuildNegative() =>
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
