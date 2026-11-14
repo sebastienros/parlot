@@ -552,6 +552,24 @@ public static partial class Grammars
             NumberOptions.Integer | NumberOptions.AllowGroupSeparators,
             groupSeparator: '_').Eof();
 
+    // The trailing decimal separator is left for the next parser
+    [GenerateParser(nameof(TryParseFractionalPartRequired))]
+    private static Parser<decimal> BuildFractionalPartRequired() =>
+        Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals)
+            .AndSkip(Literals.Char('.')).Eof();
+
+    [GenerateParser(nameof(TryParseFractionalPartOptional))]
+    private static Parser<decimal> BuildFractionalPartOptional() =>
+        Terms.Number<decimal>(NumberOptions.Number)
+            .AndSkip(ZeroOrOne(Literals.Char('.'))).Eof();
+
+    // A callback after the number generates the number as a parser of its own, not as span code
+    [GenerateParser(nameof(TryParseFractionalPartRequiredCallback))]
+    private static Parser<decimal> BuildFractionalPartRequiredCallback() =>
+        Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals)
+            .Then(static value => value + 1)
+            .AndSkip(Literals.Char('.')).Eof();
+
     [GenerateParser(nameof(TryParseUnsignedInteger))]
     private static Parser<long> BuildUnsignedInteger() => Terms.Number<long>(NumberOptions.None).Eof();
 

@@ -260,6 +260,35 @@ public class SpanSourceTests
     }
 
     [Theory]
+    [InlineData("1..5")]
+    [InlineData("1..5.")]
+    [InlineData("1.5..2.5")]
+    [InlineData("1...5")]
+    [InlineData("1.")]
+    [InlineData("1..")]
+    [InlineData("1..2.e5")]
+    [InlineData("1,000..2e3.")]
+    [InlineData("")]
+    public void Fractional_Part_Required_Numbers_Match_The_Runtime(string text)
+    {
+        Check(FractionalPartRequired(), SpanSourceGrammars.TryParseFractionalPartRequired, SpanSourceGrammars.TryParseFractionalPartRequired, text);
+    }
+
+    [Fact]
+    public void Fractional_Part_Required_Numbers_Match_The_Runtime_Across_Buffers()
+    {
+        // The buffer can end right after the separator, before the digits which make it part of the number
+        CheckPadded(FractionalPartRequired(), SpanSourceGrammars.TryParseFractionalPartRequired, SpanSourceGrammars.TryParseFractionalPartRequired, ' ', "1.5..2.5", "1..5.");
+    }
+
+    private static Parser<string> FractionalPartRequired() =>
+        Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals)
+            .AndSkip(Terms.Text(".."))
+            .And(Terms.Number<double>(NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals))
+            .AndSkip(ZeroOrOne(Literals.Char('.')))
+            .Then(static t => $"{t.Item1}|{t.Item2}");
+
+    [Theory]
     [InlineData("[ abc ]")]
     [InlineData("[ # comment\n abc # more\n ]")]
     [InlineData("[#\n_a1#\n]")]
@@ -532,6 +561,8 @@ public static partial class SpanSourceGrammars
     public static partial bool TryParseNumbers(TextReader reader, out string value);
     public static partial bool TryParseUnderscoredNumbers(string text, out string value);
     public static partial bool TryParseUnderscoredNumbers(TextReader reader, out string value);
+    public static partial bool TryParseFractionalPartRequired(string text, out string value);
+    public static partial bool TryParseFractionalPartRequired(TextReader reader, out string value);
     public static partial bool TryParseCommented(string text, out string value);
     public static partial bool TryParseCommented(TextReader reader, out string value);
 }

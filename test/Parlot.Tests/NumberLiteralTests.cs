@@ -654,4 +654,57 @@ public class NumberLiteralTests
         Assert.True(Literals.Number<decimal>(NumberOptions.Float).TryParse(source, out var result));
         Assert.Equal(expected, result);
     }
+
+    [Fact]
+    public void NumberLiteralShouldLeaveTheTrailingDecimalSeparatorWhenTheFractionalPartIsRequired()
+    {
+        var options = NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals;
+        var parser = Literals.Number<decimal>(options).And(Literals.Char('.'));
+
+        Assert.True(parser.TryParse("1.", out var result));
+        Assert.Equal(1m, result.Item1);
+
+        Assert.Equal(1.5m, Literals.Number<decimal>(options).Parse("1.5"));
+        Assert.Equal(1.5m, Terms.Number<decimal>(options).Parse(" 1.5"));
+        Assert.Equal(7, Literals.Number<int>(NumberOptions.Integer | NumberOptions.RequireFractionalPartForDecimals).Parse("7"));
+    }
+
+    [Fact]
+    public void NumberLiteralShouldNotReadAnExponentAfterATrailingDecimalSeparatorWhenTheFractionalPartIsRequired()
+    {
+        var options = NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals;
+        var parser = Literals.Number<double>(options).And(Literals.Text(".e5"));
+
+        Assert.True(parser.TryParse("1.e5", out var result));
+        Assert.Equal(1d, result.Item1);
+    }
+
+    [Fact]
+    public void NumberLiteralShouldResetTheCursorWhenTheFractionalPartIsRequiredAndThereAreNoDigits()
+    {
+        var parser = Literals.Number<decimal>(NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals);
+        var context = new ParseContext(new Scanner("-.5x"));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(-0.5m, result.Value);
+
+        context = new ParseContext(new Scanner("-.x"));
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void NumberLiteralShouldConsumeTheTrailingDecimalSeparatorByDefault()
+    {
+        var parser = Literals.Number<decimal>(NumberOptions.Number);
+
+        var context = new ParseContext(new Scanner("1."));
+        var result = new ParseResult<decimal>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(1m, result.Value);
+        Assert.Equal(2, context.Scanner.Cursor.Offset);
+    }
 }

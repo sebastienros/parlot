@@ -635,6 +635,16 @@ var parser = Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowUnder
 parser.Parse("1_000_000"); // 1000000
 ```
 
+`NumberOptions.RequireFractionalPartForDecimals` leaves a decimal separator that isn't followed by digits out of the number, so `1.`
+is read as `1` and the `.` is available to the next parser, and no exponent is read after it. Without the option the trailing separator
+is part of the number, as in `1.` or `1.e5`. This is useful when the separator can also be another token, like the range `1..5` or a
+member access `1.ToString()`. The option isn't part of `NumberOptions.Any`.
+
+```c#
+var parser = Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals).And(Literals.Char('.'));
+parser.Parse("1."); // (1, '.')
+```
+
 ### Hexadecimal, Octal and Binary
 
 Match integer digits in a specific radix and return any integer .NET type. These parsers don't consume
