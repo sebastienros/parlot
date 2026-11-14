@@ -161,11 +161,9 @@ public sealed class NumberLiteral<T> : Parser<T>, ISeekable, ISourceable, ILoopA
 
         var decimalSeparatorLiteral = $"(char){(int)_decimalSeparator}";
         var groupSeparatorLiteral = $"(char){(int)_groupSeparator}";
-        // The overload which reads underscores and the fractional part has all the flags
-        var allowUnderscore = _allowUnderscore || _requireFractionalPartForDecimals
-            ? $"{(_allowUnderscore ? "true" : "false")}, {(_requireFractionalPartForDecimals ? "true" : "false")}, "
-            : "";
-        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
+        var allowUnderscore = _allowUnderscore ? "true" : "false";
+        var requireFractionalPartForDecimals = _requireFractionalPartForDecimals ? "true" : "false";
+        result.Body.Add($"if ({scannerName}.ReadDecimal({allowLeadingSign}, {allowDecimalSeparator}, {allowGroupSeparator}, {allowExponent}, {allowUnderscore}, {requireFractionalPartForDecimals}, out {numberSpanName}, {decimalSeparatorLiteral}, {groupSeparatorLiteral}))");
         result.Body.Add("{");
         if (_allowUnderscore)
         {
