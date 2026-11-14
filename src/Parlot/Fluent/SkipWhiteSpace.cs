@@ -167,8 +167,7 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
 
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
     {
-        writer.SkipWhiteSpace();
-        writer.Generate(Parser, valueVariable, fail);
+        writer.Generate(Parser, valueVariable, writer.SkipWhiteSpace(fail));
     }
 
 public override string ToString() => $"{Parser} (Skip WS)";

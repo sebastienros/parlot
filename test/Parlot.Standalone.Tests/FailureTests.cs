@@ -665,6 +665,126 @@ public class FailureTests
         Assert.Equal(0, failureOffset);
     }
 
+    [Theory]
+    [InlineData(";;cd?", 4)] // The first alternative stops at the '?', after the word: the second one matches, and 'x' isn't found at 2
+    [InlineData(";;cd !", 6)] // The first alternative matches, 'x' isn't found after it
+    [InlineData(";;  cd", 6)]
+    [InlineData(";;?", 2)]
+    [InlineData(";?", 0)]
+    public void Span_Code_Alternative_Which_Fails_After_Reading_Is_Reported(string text, int offset)
+    {
+        // Span code moves a local position back to read the next alternative, where the other parsers move the cursor
+        Assert.False(FailureGrammars.SpanChoice(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.SpanChoice(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.SpanChoice(";;x", out var value, out failureOffset));
+        Assert.Equal(";;", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData(">;;cd?", 5)] // The rejected value keeps the failure of its first alternative
+    [InlineData(">;;cd  ?", 7)]
+    [InlineData(">;;?", 3)]
+    [InlineData(">;;cd !", 1)] // No parser of the value failed after reading: it fails where it starts
+    [InlineData(">;?", 1)]
+    public void Span_Code_Alternative_Which_Fails_After_Reading_Is_Reported_In_A_Rejected_Value(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedSpanChoice(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedSpanChoice(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData("abx", 2)] // 'c' isn't found after the 'b' of the optional sequence
+    [InlineData("abd", 2)]
+    [InlineData("abcx", 3)]
+    [InlineData("ax", 1)]
+    public void Span_Code_Optional_Parser_Which_Fails_After_Reading_Is_Reported(string text, int offset)
+    {
+        Assert.False(FailureGrammars.SpanOptional(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.SpanOptional(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.SpanOptional("abcd", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("abx", 2)] // 'c' isn't found after the 'b' of the first element
+    [InlineData("abcbx", 4)] // nor after the 'b' of the second one
+    [InlineData("abcbcx", 5)]
+    [InlineData("ax", 1)]
+    public void Span_Code_Loop_Element_Which_Fails_After_Reading_Is_Reported(string text, int offset)
+    {
+        Assert.False(FailureGrammars.SpanLoop(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.SpanLoop(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.SpanLoop("abcbcd", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("afrom?", 5)] // "fr" is kept, and "from" isn't followed by '!'
+    [InlineData("afr?", 3)]
+    [InlineData("af", 1)]
+    public void Span_Code_Longest_Alternative_Which_Fails_Further_Is_Reported(string text, int offset)
+    {
+        Assert.False(FailureGrammars.SpanLongest(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.SpanLongest(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.SpanLongest("afrom!x", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("a:from;", 0)] // Span code which matched isn't a failure where it ended
+    [InlineData("a:b,", 3)]
+    [InlineData("a:;", 2)]
+    [InlineData("a;", 1)]
+    public void Rejected_Value_Of_Span_Code_Fails_At_Its_Start(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedSpan(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedSpan(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.RejectedSpan("a:b;", out var value, out failureOffset));
+        Assert.Equal("a", value);
+        Assert.Equal(0, failureOffset);
+    }
+
+    [Theory]
+    [InlineData("a c", 2)] // 'b' isn't found after the white space, which the " c" of the value reads again
+    [InlineData("  a c", 4)]
+    [InlineData("a  b c", 0)] // Every parser of the value matched
+    [InlineData("a b", 0)]
+    public void Span_Code_Token_Which_Isnt_Found_After_White_Space_Is_Reported_In_A_Rejected_Value(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedSpanWhiteSpace(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedSpanWhiteSpace(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible
     private sealed class OneCharReader : TextReader
     {

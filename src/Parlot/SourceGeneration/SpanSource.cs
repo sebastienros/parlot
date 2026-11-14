@@ -24,8 +24,15 @@ internal interface ISpanSourceable
     /// The variable receiving the value on success, or <see langword="null"/> when the value isn't used.
     /// </param>
     /// <param name="fail">
-    /// The label the code jumps to when the parser doesn't match. The position can then have any value: the owner of
-    /// the label moves it back. On success the position is after the match.
+    /// The label the code jumps to when the parser doesn't match, with the position where the cursor of the runtime
+    /// parser is then: where the parser whose check failed started, since a literal moves the cursor once it matched. The
+    /// owner of the label moves the position back. Where the runtime parser would move the cursor back, the code jumps to
+    /// another label instead, which records the position for the furthest failure: to <see cref="SpanLabel.AfterReading"/>
+    /// when it fails after a parser it invokes matched, like
+    /// <see cref="SpanSource.GenerateSequence(SpanSourceWriter, string?, SpanLabel, ISequenceSourceable)"/> does, or after
+    /// it moved the position itself, like a number its type can't represent, and to the label
+    /// <see cref="SpanSourceWriter.SkipWhiteSpace(SpanLabel)"/> returns for what it reads after white space. On success
+    /// the position is after the match.
     /// </param>
     void GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail);
 }
@@ -36,21 +43,60 @@ internal interface ISpanSourceable
 /// </summary>
 internal sealed class SpanLabel
 {
+    private readonly SpanLabel? _afterReading;
+    private readonly bool _movesCursorBack;
+    private bool _isTarget;
+
     public SpanLabel(string name)
     {
         Name = name;
     }
 
+    /// <summary>
+    /// Creates a failure label, with the one its parser jumps to when it fails after reading.
+    /// </summary>
+    /// <param name="name">The name of the label.</param>
+    /// <param name="afterReading">The label of the failures after reading.</param>
+    /// <param name="movesCursorBack">Whether the owner of the label moves the cursor back from where white space was skipped to.</param>
+    public SpanLabel(string name, SpanLabel afterReading, bool movesCursorBack)
+    {
+        Name = name;
+        _afterReading = afterReading;
+        _movesCursorBack = movesCursorBack;
+    }
+
     public string Name { get; }
 
-    public bool IsUsed { get; private set; }
+    /// <summary>
+    /// The label to jump to when the parser fails after a parser it invokes matched, which can have read some text: the
+    /// position of the check which failed is then recorded for the furthest failure, before the owner of the label moves
+    /// the position back. A parser which fails where it started read nothing, and jumps to the label itself.
+    /// </summary>
+    public SpanLabel AfterReading => _afterReading ?? this;
+
+    /// <summary>
+    /// The label to jump to when the parser fails where it started, after white space which may have been skipped: the
+    /// end of that white space is where a runtime parser moves the cursor back from. It is <see cref="AfterReading"/>,
+    /// or the label itself when its owner moves the cursor back, which was moved to the end of the white space.
+    /// </summary>
+    public SpanLabel AfterWhiteSpace => _movesCursorBack ? this : AfterReading;
+
+    /// <summary>
+    /// Whether a jump references the label itself, which is then placed.
+    /// </summary>
+    public bool IsTarget => _isTarget;
+
+    /// <summary>
+    /// Whether a jump references the label or its <see cref="AfterReading"/>.
+    /// </summary>
+    public bool IsUsed => _isTarget || (_afterReading != null && _afterReading._isTarget);
 
     /// <summary>
     /// Returns a statement jumping to the label.
     /// </summary>
     public string Goto()
     {
-        IsUsed = true;
+        _isTarget = true;
         return $"goto {Name};";
     }
 }
@@ -77,6 +123,13 @@ internal sealed class SpanLabel
 /// code checks the current char first, and only when it can be skipped moves the cursor to the position, skips the
 /// white space and reads the position back. The span remains valid since the buffer is only replaced in compacting mode.
 /// The cursor is then moved to the end of the match, or back to the start of the span, from wherever it is.
+/// </para>
+/// <para>
+/// The cursor records the furthest offset it is moved back from, which the position local doesn't either. The span code
+/// thus records it itself where a runtime parser would move the cursor back: on the paths of a failure after some text
+/// was read (<see cref="SpanLabel.AfterReading"/>), before the position is moved back to read an alternative or what
+/// follows an optional parser or a loop, and when the span code fails. A check which fails where its parser started,
+/// like most alternatives of a choice, records nothing.
 /// </para>
 /// </remarks>
 internal sealed class SpanSourceWriter
@@ -168,14 +221,63 @@ internal sealed class SpanSourceWriter
     public SpanLabel NewLabel(string prefix) => new($"{prefix}{Context.NextNumber()}");
 
     /// <summary>
+    /// Creates the label of the failure of a parser after which the span code goes on, or ends: it has a second label for
+    /// the failures after reading, see <see cref="PlaceFailureLabel(SpanLabel, string, string)"/>.
+    /// </summary>
+    /// <param name="prefix">The prefix of the names of the labels.</param>
+    /// <param name="movesCursorBack">
+    /// Whether the owner of the label moves the cursor back, and not only the position: the cursor then records where
+    /// white space was skipped to, and a failure there needs no other record.
+    /// </param>
+    public SpanLabel NewFailureLabel(string prefix, bool movesCursorBack = false)
+    {
+        var number = Context.NextNumber();
+
+        return new SpanLabel($"{prefix}{number}", new SpanLabel($"{prefix}Read{number}"), movesCursorBack);
+    }
+
+    /// <summary>
     /// Places a label, when it's used, before <paramref name="statement"/>.
     /// </summary>
     public void PlaceLabel(SpanLabel label, string statement = ";")
     {
-        if (label.IsUsed)
+        if (label.IsTarget)
         {
             Add($"{label.Name}: {statement}");
         }
+    }
+
+    /// <summary>
+    /// Places a label created by <see cref="NewFailureLabel(string, bool)"/>, when it's used, before <paramref name="statement"/>.
+    /// </summary>
+    /// <param name="label">The label.</param>
+    /// <param name="start">The position its parser started at.</param>
+    /// <param name="statement">The statement of the failure, which moves the position back.</param>
+    /// <remarks>
+    /// The failures after reading record the position first, like the cursor records the offset a runtime parser moves it
+    /// back from, and nothing when it wasn't moved: the parsers which matched before the failure can have read nothing.
+    /// The failures of the first check of the parser, the most frequent ones, skip that.
+    /// </remarks>
+    public void PlaceFailureLabel(SpanLabel label, string start, string statement = ";")
+    {
+        var afterReading = label.AfterReading;
+
+        if (afterReading != label && afterReading.IsTarget)
+        {
+            Add($"{afterReading.Name}: if ({Pos} > {start}) {Cursor}.RecordFailure({SpanStart} + {Pos});");
+
+            if (!label.IsTarget)
+            {
+                if (statement != ";")
+                {
+                    Add(statement);
+                }
+
+                return;
+            }
+        }
+
+        PlaceLabel(label, statement);
     }
 
     /// <summary>
@@ -202,7 +304,12 @@ internal sealed class SpanSourceWriter
     /// <summary>
     /// Emits the code skipping the white space at the current position, like <c>SkipWhiteSpace</c> does.
     /// </summary>
-    public void SkipWhiteSpace()
+    /// <param name="fail">The failure label of the parser which skips the white space.</param>
+    /// <returns>
+    /// The label that what is read after the white space jumps to when it fails: where the white space ends is a failure
+    /// of what was looked for there, which the position doesn't keep when it's moved back (<see cref="SpanLabel.AfterWhiteSpace"/>).
+    /// </returns>
+    public SpanLabel SkipWhiteSpace(SpanLabel fail)
     {
         var ctx = Context.ParseContextName;
         Moved ??= DeclareLocal("bool", "moved", "false");
@@ -217,6 +324,8 @@ internal sealed class SpanSourceWriter
         Add($"{Pos} = {Cursor}.Offset - {SpanStart};");
         Add($"{Moved} = true;");
         EndBlock();
+
+        return fail.AfterWhiteSpace;
     }
 
     /// <summary>
@@ -295,7 +404,7 @@ internal static class SpanSource
         var result = context.CreateResult(valueType);
         var writer = new SpanSourceWriter(context, result.Locals, result.Body);
         var cursor = context.CursorName;
-        var fail = writer.NewLabel("fail");
+        var fail = writer.NewFailureLabel("fail", movesCursorBack: true);
 
         writer.Add($"var {writer.Span} = {cursor}.Span;");
         writer.Add($"var {writer.SpanStart} = {cursor}.Offset;");
@@ -303,40 +412,29 @@ internal static class SpanSource
 
         writer.Generate(parser, context.DiscardResult ? null : result.ValueVariable, fail);
 
-        // The cursor doesn't move when the span code fails: the position the failing check read is recorded instead, for the
-        // entry points returning the furthest failure. A single parser, with at most one wrapper such as a white space skip,
-        // fails where it started, which the cursor records already.
-        var recordFailure = weight > 2 ? $"{cursor}.RecordFailure({writer.SpanStart} + {writer.Pos});" : ";";
+        // The cursor moves once, which marks that it reached the end of the span when it does. Skipping white space moved
+        // it, and it's then moved from where it is: forward, or back when what was looked for after the last white space
+        // wasn't found, which is a failure there.
+        writer.Add(writer.Moved == null
+            ? $"{cursor}.AdvanceWithinBuffer({writer.Pos});"
+            : $"if ({writer.Moved}) {cursor}.MoveTo({writer.SpanStart} + {writer.Pos}); else {cursor}.AdvanceWithinBuffer({writer.Pos});");
+        writer.Add($"{result.SuccessVariable} = true;");
 
-        // The cursor moves once, which marks that it reached the end of the span when it does
-        if (writer.Moved == null)
+        if (fail.IsUsed)
         {
-            writer.Add($"{cursor}.AdvanceWithinBuffer({writer.Pos});");
-            writer.Add($"{result.SuccessVariable} = true;");
-            writer.PlaceLabel(fail, recordFailure);
-        }
-        else
-        {
-            // Skipping white space moved the cursor, which is moved from where it is: forward, or back when what was
-            // looked for after the last white space wasn't found, which is a failure there
-            writer.Add($"if ({writer.Moved}) {cursor}.MoveTo({writer.SpanStart} + {writer.Pos}); else {cursor}.AdvanceWithinBuffer({writer.Pos});");
-            writer.Add($"{result.SuccessVariable} = true;");
+            // The cursor doesn't move when the span code fails after reading: the position the failing check read is
+            // recorded instead, for the entry points returning the furthest failure. A match records nothing, a value which
+            // is rejected fails where it starts.
+            var done = writer.NewLabel("done");
+            var moveBack = writer.Moved == null ? ";" : $"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});";
 
-            if (fail.IsUsed)
+            if (fail.AfterReading.IsTarget || moveBack != ";")
             {
-                var done = writer.NewLabel("done");
                 writer.Add(done.Goto());
-                if (weight > 2)
-                {
-                    writer.PlaceLabel(fail, recordFailure);
-                    writer.Add($"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});");
-                }
-                else
-                {
-                    writer.PlaceLabel(fail, $"if ({writer.Moved}) {cursor}.ResetPosition({writer.SpanStart});");
-                }
-                writer.PlaceLabel(done);
             }
+
+            writer.PlaceFailureLabel(fail, "0", moveBack);
+            writer.PlaceLabel(done);
         }
 
         return result;
@@ -371,8 +469,9 @@ internal static class SpanSource
 
             values[i] = valueVariable != null && keep ? writer.DeclareLocal(valueType, "item") : null;
 
-            // A failure of any part is the failure of the sequence, whose owner moves the position back
-            writer.Generate(parser, values[i], fail);
+            // A failure of any part is the failure of the sequence, whose owner moves the position back: from the second
+            // part on, after the ones which matched read some text
+            writer.Generate(parser, values[i], i == 0 ? fail : fail.AfterReading);
         }
 
         if (valueVariable != null)
@@ -391,7 +490,7 @@ internal static class SpanSource
         var itemStart = writer.DeclareLocal("int", "itemStart", "0");
         var list = valueVariable != null ? writer.DeclareLocal($"global::Parlot.Fluent.ListBuilder<{elementTypeName}>", "list") : null;
         var item = valueVariable != null ? writer.DeclareLocal(elementType, "item") : null;
-        var itemFail = writer.NewLabel("itemFail");
+        var itemFail = writer.NewFailureLabel("itemFail");
         var pos = writer.Pos;
 
         // The locals are declared at the start of the method, and a loop can run several times in an enclosing loop
@@ -425,7 +524,7 @@ internal static class SpanSource
         if (itemFail.IsUsed)
         {
             writer.Add("continue;");
-            writer.PlaceLabel(itemFail, $"{pos} = {itemStart};");
+            writer.PlaceFailureLabel(itemFail, itemStart, $"{pos} = {itemStart};");
             writer.Add("break;");
         }
 
@@ -453,7 +552,7 @@ internal static class SpanSource
     internal static void GenerateOptional(SpanSourceWriter writer, object parser, string? itemVariable, string? matched, string? notMatched)
     {
         var start = writer.DeclareLocal("int", "optionalStart", "0");
-        var notFound = writer.NewLabel("notFound");
+        var notFound = writer.NewFailureLabel("notFound");
         var done = writer.NewLabel("optionalDone");
 
         writer.Add($"{start} = {writer.Pos};");
@@ -467,7 +566,7 @@ internal static class SpanSource
         if (notFound.IsUsed)
         {
             writer.Add(done.Goto());
-            writer.PlaceLabel(notFound, $"{writer.Pos} = {start};");
+            writer.PlaceFailureLabel(notFound, start, $"{writer.Pos} = {start};");
 
             if (notMatched != null)
             {

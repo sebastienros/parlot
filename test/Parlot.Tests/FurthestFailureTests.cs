@@ -626,6 +626,89 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData(";;cd?", 4)]
+    [InlineData(";;cd !", 6)]
+    [InlineData(";;  cd", 6)]
+    [InlineData(";;?", 2)]
+    [InlineData(";?", 0)]
+    public void Alternative_Which_Fails_After_Reading_Is_Reported(string text, int offset)
+    {
+        // The first alternative moves the cursor back from where it stopped: generated span code records that position
+        var parser = Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;")).AndSkip(Literals.Char('x')).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    [InlineData(">;;cd?", 5)]
+    [InlineData(">;;cd  ?", 7)]
+    [InlineData(">;;?", 3)]
+    [InlineData(">;;cd !", 1)]
+    [InlineData(">;?", 1)]
+    public void Alternative_Which_Fails_After_Reading_Is_Reported_In_A_Rejected_Value(string text, int offset)
+    {
+        var parser = Terms.Char('>').SkipAnd(Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;"))
+            .When(static (_, _) => false)).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    [InlineData("abx", 2)]
+    [InlineData("abd", 2)]
+    [InlineData("abcx", 3)]
+    [InlineData("ax", 1)]
+    public void Optional_Parser_Which_Fails_After_Reading_Is_Reported(string text, int offset)
+    {
+        var parser = Literals.Text("a").AndSkip(Literals.Text("b").AndSkip(Literals.Text("c")).Optional()).AndSkip(Literals.Text("d").Optional()).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    [InlineData("abx", 2)]
+    [InlineData("abcbx", 4)]
+    [InlineData("abcbcx", 5)]
+    [InlineData("ax", 1)]
+    public void Loop_Element_Which_Fails_After_Reading_Is_Reported(string text, int offset)
+    {
+        var parser = Literals.Text("a").AndSkip(ZeroOrMany(Literals.Text("b").AndSkip(Literals.Text("c")))).AndSkip(Literals.Text("d").Optional()).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    [InlineData("afrom?", 5)]
+    [InlineData("afr?", 3)]
+    [InlineData("af", 1)]
+    public void Longest_Alternative_Which_Fails_Further_Is_Reported(string text, int offset)
+    {
+        var parser = Literals.Text("a").AndSkip(Longest(Literals.Text("fr"), Literals.Text("from").AndSkip(Literals.Char('!')))).AndSkip(Literals.Char('x').Optional()).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    [InlineData("a:from;", 0)]
+    [InlineData("a:b,", 3)]
+    [InlineData("a:;", 2)]
+    [InlineData("a;", 1)]
+    public void Rejected_Value_Of_Several_Literals_Fails_At_Its_Start(string text, int offset)
+    {
+        // Generated span code reads these literals without moving the cursor: a match isn't a failure where it ended
+        var parser = Literals.Identifier().And(Literals.Char(':')).And(Literals.Identifier())
+            .When(static (_, value) => value.Item3.ToString() != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    [InlineData("a c", 2)]
+    [InlineData("  a c", 4)]
+    [InlineData("a  b c", 0)]
+    [InlineData("a b", 0)]
+    public void Token_Which_Isnt_Found_After_White_Space_Is_Reported_In_A_Rejected_Value(string text, int offset)
+    {
+        // The value goes on over the white space the token skipped
+        var parser = Terms.Text("a").AndSkip(Terms.Text("b").Optional()).AndSkip(Literals.Text(" c").Optional()).When(static (_, _) => false).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
     [InlineData("1 + (2 + 3", 10)]
     [InlineData("((1)\n+\n(2 +\nx))", 12)]
     public void TextReader_Context_Reports_The_Furthest_Failure(string text, int offset) => AssertFurthest(Expression, text, offset);

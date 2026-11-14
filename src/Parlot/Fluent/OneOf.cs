@@ -967,7 +967,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // The white space is skipped once for all the alternatives, like at runtime
         if (SkipWhitespace)
         {
-            writer.SkipWhiteSpace();
+            fail = writer.SkipWhiteSpace(fail);
         }
 
         if (start != null)
@@ -977,7 +977,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         for (var i = 0; i < parsers.Count - 1; i++)
         {
-            var next = writer.NewLabel("alternative");
+            var next = writer.NewFailureLabel("alternative");
 
             writer.Generate(parsers[i], valueVariable, next);
 
@@ -988,8 +988,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                 return;
             }
 
+            // An alternative which read some text before it failed is a candidate for the furthest failure, like the
+            // runtime one which moves the cursor back
             writer.Add(done.Goto());
-            writer.PlaceLabel(next, $"{pos} = {start};");
+            writer.PlaceFailureLabel(next, start!, $"{pos} = {start};");
         }
 
         // The failure of the last alternative is the failure of the choice, whose owner moves the position back
