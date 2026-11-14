@@ -109,6 +109,26 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void FailurePositionGrammars()
+    {
+        var benchmark = new FailurePositionBenchmarks();
+
+        // Checks that every item of the alternatives rows matches
+        benchmark.Setup();
+
+        Assert.True(benchmark.SuccessDefault());
+        Assert.True(benchmark.SuccessPosition());
+        Assert.False(benchmark.FailureDefault());
+        Assert.True(benchmark.FailureOffset() > 0);
+        Assert.Equal(benchmark.RuntimeFailurePosition(), benchmark.FailurePosition());
+        Assert.False(benchmark.RuntimeFailureDefault());
+
+        // The choices match with their first alternative, then with their last one after the others read a word
+        Assert.Equal(benchmark.FirstAlternative(), benchmark.LastAlternative());
+        Assert.Equal(benchmark.RuntimeLastAlternative(), benchmark.LastAlternative());
+    }
+
+    [Fact]
     public void ParseWithoutValueGrammars()
     {
         var benchmark = new ParseWithoutValueBenchmarks();

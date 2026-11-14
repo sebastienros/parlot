@@ -136,6 +136,7 @@ internal sealed class SpanSourceWriter
 {
     private readonly IList<string> _locals;
     private readonly IList<string> _body;
+    private readonly List<int> _records = new();
     private string? _recorded;
 
     public SpanSourceWriter(SourceGenerationContext context, IList<string> locals, IList<string> body)
@@ -272,6 +273,7 @@ internal sealed class SpanSourceWriter
 
         if (afterReading != label && afterReading.IsTarget)
         {
+            _records.Add(_body.Count);
             Add($"{afterReading.Name}: if ({Pos} > {start}) {Cursor}.RecordFailure({SpanStart} + {Pos});");
 
             if (!label.IsTarget)
@@ -286,6 +288,25 @@ internal sealed class SpanSourceWriter
         }
 
         PlaceLabel(label, statement);
+    }
+
+    /// <summary>
+    /// Makes the failures read the start of the span from the cursor when the code doesn't skip white space: the cursor
+    /// is then where it was until the code matches. The start is otherwise kept in a register for the failures, when
+    /// the values which read it aren't used: the loop of <c>FailurePositionBenchmarks.LastAlternative</c> then kept its
+    /// position on the stack across each call.
+    /// </summary>
+    public void ReadRecordedStartFromCursor()
+    {
+        if (Moved != null)
+        {
+            return;
+        }
+
+        foreach (var index in _records)
+        {
+            _body[index] = _body[index].Replace($"{Cursor}.RecordFailure({SpanStart} + {Pos});", $"{Cursor}.RecordFailure({Cursor}.Offset + {Pos});");
+        }
     }
 
     /// <summary>
@@ -455,6 +476,8 @@ internal static class SpanSource
             writer.PlaceFailureLabel(fail, "0", moveBack);
             writer.PlaceLabel(done);
         }
+
+        writer.ReadRecordedStartFromCursor();
 
         return result;
     }
