@@ -235,6 +235,20 @@ public class FurthestFailureTests
     private static readonly Parser<string> Negative =
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
+    // A capture holds the white space its parser skips: its value is rejected with it, where the value starts
+    private static readonly Parser<string> CapturedRejected =
+        Capture(Terms.Integer()).When(static (_, value) => value.Length < 3).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    private static readonly Parser<string> CapturedConversionRejected =
+        Capture(Terms.Integer()).ThenTry(static value => (value.Length < 3, value.ToString())).AndSkip(Terms.Char(';')).Eof();
+
+    // A lookahead leaves the cursor before the white space its parser skips, for a parser which doesn't skip any
+    private static readonly Parser<string> PeekedCondition =
+        Peek(Terms.Char('a')).When(static (_, _) => true).SkipAnd(Literals.Text("abc")).Eof();
+
+    private static readonly Parser<string> PeekedConversion =
+        Peek(Terms.Char('a')).ThenTry(static value => (true, value)).SkipAnd(Literals.Text("abc")).Eof();
+
     // The furthest failure of the string and of the TextReader parsers, which match the generated ones (standalone FailureTests)
     private static void AssertFurthest<T>(Parser<T> parser, string text, int offset, int bufferSize = 1)
     {
@@ -287,6 +301,42 @@ public class FurthestFailureTests
         var context = Context("  word ;");
         Assert.True(ConversionRejected.TryParse(context, out var value, out _));
         Assert.Equal("word", value);
+    }
+
+    [Theory]
+    [InlineData("  9;", 2)]
+    [InlineData(" 12;", 1)]
+    [InlineData("\n\t 9;", 3)]
+    [InlineData("123;", 0)]
+    [InlineData(" 9,", 2)]
+    [InlineData("  ,", 2)]
+    public void Captured_Value_Rejected_With_The_White_Space_Before_It_Fails_At_Its_Start(string text, int offset)
+    {
+        AssertFurthest(CapturedRejected, text, offset);
+        AssertFurthest(CapturedConversionRejected, text, offset);
+
+        foreach (var parser in new[] { CapturedRejected, CapturedConversionRejected })
+        {
+            Assert.Equal(" 9", parser.Parse(" 9;"));
+            Assert.Equal(" 9", parser.Parse(new OneCharReader(" 9;"), new StreamParseOptions { BufferSize = 1 }));
+        }
+    }
+
+    [Theory]
+    [InlineData(" abc", 0)]
+    [InlineData("  abc", 0)]
+    [InlineData("abx", 0)]
+    [InlineData(" x", 1)]
+    public void Value_After_A_Lookahead_Under_A_Condition_Is_Read_From_Before_Its_White_Space(string text, int offset)
+    {
+        AssertFurthest(PeekedCondition, text, offset);
+        AssertFurthest(PeekedConversion, text, offset);
+
+        foreach (var parser in new[] { PeekedCondition, PeekedConversion })
+        {
+            Assert.Equal("abc", parser.Parse("abc"));
+            Assert.Equal("abc", parser.Parse(new OneCharReader("abc"), new StreamParseOptions { BufferSize = 1 }));
+        }
     }
 
     [Theory]

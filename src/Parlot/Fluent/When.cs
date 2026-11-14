@@ -1,6 +1,7 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -48,18 +49,8 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to, as in generated
         // code. The start is known after the white space the parser skips, which only the failure path looks for. A
-        // compacting buffer can't be read again from the start, so it is skipped first.
-        var valueStart = -1;
-
-        if (context.IsCompacting && _parser is ISeekable { SkipWhitespace: true })
-        {
-            if (context.MaySkipWhiteSpace(cursor.Current))
-            {
-                context.SkipWhiteSpace();
-            }
-
-            valueStart = cursor.Offset;
-        }
+        // compacting buffer can't be read again from the start, so where the white space ends is read first.
+        var valueStart = context.IsCompacting ? ReadValueStart(context) : -1;
 
         if (!_parser.Parse(context, ref result))
         {
@@ -90,6 +81,36 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         context.ExitParser(this);
         return true;
+    }
+
+    // Where the value starts when the buffer is a compacting one, after the white space the parser skips, or -1 when it
+    // doesn't skip any. Not inlined: parsing a string doesn't pay for it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private int ReadValueStart(ParseContext context)
+    {
+        if (_parser is not ISeekable { SkipWhitespace: true })
+        {
+            return -1;
+        }
+
+        var cursor = context.Scanner.Cursor;
+
+        if (!context.MaySkipWhiteSpace(cursor.Current))
+        {
+            return cursor.Offset;
+        }
+
+        if (_parser is ISkipsWhiteSpace)
+        {
+            // A token skips it before anything else: it is skipped for it, and isn't kept
+            context.SkipWhiteSpace();
+
+            return cursor.Offset;
+        }
+
+        // Any other parser is invoked where a string parser invokes it: a capture holds the white space it skips, and a
+        // lookahead leaves the cursor before it
+        return context.WhiteSpaceEnd();
     }
 
     public SourceResult GenerateSource(SourceGenerationContext context)

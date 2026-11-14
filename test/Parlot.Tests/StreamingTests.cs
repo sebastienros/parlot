@@ -113,6 +113,25 @@ public class StreamingTests
             result = $"{name}@{start}-{end}";
             return !name.Span.SequenceEqual("for");
         }).Or(Terms.Keyword("for"))).Then(static values => string.Join(",", values))),
+        // A parser which reads from where it is invoked, though what it reads first skips white space: a capture holds that
+        // white space, and a lookahead leaves the cursor before it. A condition or a conversion of its value doesn't
+        // change where it starts, whatever the buffer holds. The value is followed by where the cursor is.
+        ["when-capture"] = new Grammar<string>(Capture(Terms.Integer()).When(static (_, value) => value.Length < 3).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")),
+        ["when-capture-else"] = new Grammar<string>(Capture(Terms.Integer()).When(static (_, value) => value.Length < 3).Then(static value => value.ToString()).Else("none").Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")),
+        ["when-peek"] = new Grammar<string>(Peek(Terms.Char('a')).When(static (_, _) => true).SkipAnd(Literals.Text("abc"))),
+        ["when-peek-rejected"] = new Grammar<string>(Peek(Terms.Identifier()).When(static (_, value) => value.Length < 3).SkipAnd(Capture(Literals.WhiteSpace().Optional().And(Literals.Identifier()))).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")),
+        ["when-sequence"] = new Grammar<string>(Capture(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer())).When(static (_, value) => value.Length < 8).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")),
+        ["thentry-capture"] = new Grammar<string>(Capture(Terms.Integer()).ThenTry(static value => (value.Length < 3, value.ToString())).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")),
+        ["thentry-capture-offsets"] = new Grammar<string>(Capture(Terms.Integer()).ThenTry(static (ParseContext c, int start, int end, TextSpan value, out string result) =>
+        {
+            result = $"{value}@{start}-{end}@{c.Scanner.Cursor.Offset}";
+            return value.Length < 3;
+        }).Else("none")),
+        ["thentry-peek"] = new Grammar<string>(Peek(Terms.Char('a')).ThenTry(static value => (true, value)).SkipAnd(Literals.Text("abc"))),
+        ["thentry-peek-rejected"] = new Grammar<string>(Peek(Terms.Identifier()).ThenTry(static value => (value.Length < 3, value)).SkipAnd(Capture(Literals.WhiteSpace().Optional().And(Literals.Identifier()))).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")),
+        // A token skips the white space itself: the same value whoever skips it
+        ["when-token"] = new Grammar<string>(ZeroOrMany(Terms.Integer().When(static (_, value) => value < 100).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}")).Then(static values => string.Join(",", values))),
+        ["when-comments"] = new Grammar<string>(Capture(Terms.Integer()).When(static (_, value) => value.Length < 9).Then(static (c, value) => $"{value}@{c.Scanner.Cursor.Offset}").WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"))),
         ["separated"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(','), Terms.Integer())),
         // Optional parsers and loops over sequences don't invoke them when the char after the white space can't start them
         ["guarded-optional"] = new Grammar<string>(Terms.Identifier().And(Terms.Char('?').SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(':')).And(Terms.Identifier()).Optional())
@@ -400,6 +419,20 @@ public class StreamingTests
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("thentry", "", "a", "for", "  for  forx", "a for b", " forever for\n for1 1", "fo");
         Add("separated", "", "1", "1,", "1,2", "1 , 2 ,3", "1,,2", "1,x");
+        string[] capturedNumbers = ["", "9", " 9", "  9", " 12", "  12", "   12", "123", "  123", "\n\t 9 x", " x", "  ", " 9 "];
+        Add("when-capture", capturedNumbers);
+        Add("when-capture-else", capturedNumbers);
+        Add("thentry-capture", capturedNumbers);
+        Add("thentry-capture-offsets", capturedNumbers);
+        string[] peekedTexts = ["", "abc", " abc", "  abc", "ab", " ab", " x", "  ", "a", " abcd"];
+        Add("when-peek", peekedTexts);
+        Add("thentry-peek", peekedTexts);
+        string[] peekedWords = ["", "ab", " ab", "  ab x", "abc", " abc", "  abcd ", " 1", "  "];
+        Add("when-peek-rejected", peekedWords);
+        Add("thentry-peek-rejected", peekedWords);
+        Add("when-sequence", "", "a=1", " a=1", "  a = 1", " a = 12", "  ab = 12", "a=", " a =", " a x", "  a = x");
+        Add("when-token", "", "9", " 9", "  9 12  7", " 9 123 7", "  123", " x", "   ");
+        Add("when-comments", "", "9", " 9", "/**/9", " /* a */ 9", "/* a */\n 12 x", " /* a", "  /* a */ x", " /* long */ 9");
         Add("guarded-optional", "", "a", "a;", "a ;", "a ? b : c;", "a\n ?\n b :\n c ;", "a ? b ;", "a ? b : ;", "a ?? b;", "a  \n ", "a ?");
         Add("guarded-loop", "", "}", " }", "let a; }", "let a;let b;}", "let a; le }", "let a; let }", "let a;\n\n }", "let a; x }", "let");
         Add("guarded-separated", "", "a;", "a , b ;", "a,|b,c;", "a, ;", "a,| ;", "a ,", "a  ;", "a b");

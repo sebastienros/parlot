@@ -75,6 +75,7 @@ The parsers which move back to read again keep their position with `ParseContext
 | `Unary` | Its start, while its operators are tried. |
 | `Operators()` | The start of each operator being applied, until its operand is read, and the start of the prefix operators while they are tried. |
 | `Capture` | Its start, until the captured text is created. |
+| `When`, `ThenTry` | The white space before their parser, while it is skipped, unless the parser is a `Terms` token: they read where it ends first, to report a value they reject where it starts, and their parser, like a `Capture` or a `Peek`, reads it again. |
 
 Sequences (`And`, `SkipAnd`, `AndSkip`, `Between`, ...) don't pin: they only move back to report a failure, and their
 caller pins the position it reads again from, or fails too. A failed parse can therefore leave the cursor on discarded

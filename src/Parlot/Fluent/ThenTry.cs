@@ -81,29 +81,59 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
     }
 
     // A compacting buffer can't be read again from where the parser is invoked to find where a rejected value starts:
-    // the white space the parser skips is skipped first, and the value is rejected where it is then read from. A
-    // separate method, so that parsing a string doesn't keep the position across its calls.
+    // where the white space the parser skips ends is read first. A separate method, so that parsing a string doesn't keep
+    // the position across its calls.
     private bool ParseCompacting(ParseContext context, ref ParseResult<U> result)
     {
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
         var start = cursor.Offset;
+        var valueStart = start;
 
         if (context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
         {
-            context.SkipWhiteSpace();
+            if (_parser is ISkipsWhiteSpace)
+            {
+                // A token skips it before anything else: it is skipped for it, and isn't kept
+                context.SkipWhiteSpace();
+                valueStart = cursor.Offset;
+            }
+            else
+            {
+                // Any other parser is invoked where a string parser invokes it: a capture holds the white space it skips,
+                // and a lookahead leaves the cursor before it
+                valueStart = context.WhiteSpaceEnd();
+            }
         }
 
-        var success = ParseValue(context, ref result);
+        var parsed = new ParseResult<T>();
 
-        if (!success)
+        if (_parser.Parse(context, ref parsed))
+        {
+            if (_tryConvert != null ? _tryConvert(context, parsed.Start, parsed.End, parsed.Value, out result.Value) : Convert(parsed.Value, ref result))
+            {
+                result.Start = parsed.Start;
+                result.End = parsed.End;
+
+                context.ExitParser(this);
+                return true;
+            }
+
+            // A value that the conversion rejects is the failure, at its start, wherever it was read up to
+            var recorded = cursor.RecordedFailure;
+
+            cursor.ResetPosition(start);
+            cursor.RestoreRecordedFailure(recorded);
+            cursor.RecordFailure(valueStart);
+        }
+        else
         {
             cursor.ResetPosition(start);
         }
 
         context.ExitParser(this);
-        return success;
+        return false;
     }
 
     // Reads the value at the cursor and converts it. Inlined, so that Parse is compiled as when it held this code.
@@ -146,10 +176,10 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
 
         var valueStart = start;
 
-        // The value starts after the white space the parser skips. In compacting mode it was skipped before the value
-        // was read. The char at the cursor is looked at first: a value with no white space before it, which nothing
-        // was skipped before either, doesn't pay for asking the parser whether it skips some.
-        if (!context.IsCompacting && context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
+        // The value starts after the white space the parser skips, see ParseCompacting() for a compacting buffer. The
+        // char at the cursor is looked at first: a value with no white space before it, which nothing was skipped
+        // before either, doesn't pay for asking the parser whether it skips some.
+        if (context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
         {
             // The last white space that was skipped, as before a single token, isn't read again
             valueStart = context.SkippedWhiteSpaceEnd(start);
