@@ -221,6 +221,9 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         // As in Then, the start of the value is read after the white space the parser skips: a SkipWhiteSpace wrapper is
         // unfolded and the white space skipped here. It is also where a rejected value fails, as in When, and the cursor
         // isn't moved back to read the value again, which a compacting buffer couldn't do.
+        // A parser which reads from where it is invoked, like a capture or a lookahead, is invoked there: its value
+        // starts there, and where the white space ends is only read to report a value which is rejected.
+        var leading = LeadingWhiteSpace.Of(_parser);
         var inner = _parser is SkipWhiteSpace<T> { Parser: ISourceable contentSourceable } ? contentSourceable : sourceable;
         var helperName = context.WithDiscardResult(false, () => context.Helpers
             .GetOrCreate(inner, helperKey, parsedTypeName, () => inner.GenerateSource(context))
@@ -231,10 +234,15 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         var parsedName = $"parsed{context.NextNumber()}";
         var convertedName = $"converted{context.NextNumber()}";
         var recordedName = $"recorded{context.NextNumber()}";
+        var valueStartName = startName;
+
+        // Where the white space ends is only looked for when a value is rejected, and a compacting buffer can't be read
+        // again then
+        var findsValueStartLater = leading == LeadingWhiteSpaceUse.Kept && !context.IsCompacting;
 
         result.Body.Add($"var {resetName} = {cursorName}.Offset;");
 
-        if (_parser is ISeekable { SkipWhitespace: true })
+        if (leading == LeadingWhiteSpaceUse.Skipped)
         {
             result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
             result.Body.Add("{");
@@ -243,6 +251,20 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         }
 
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
+
+        if (leading == LeadingWhiteSpaceUse.Kept)
+        {
+            valueStartName = $"valueStart{context.NextNumber()}";
+
+            if (!findsValueStartLater)
+            {
+                result.Body.Add($"var {valueStartName} = {startName};");
+                result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {valueStartName} = {ctx}.WhiteSpaceEnd();");
+                result.Body.Add("}");
+            }
+        }
 
         var convertedTarget = context.DiscardResult ? "_" : $"var {convertedName}";
         string condition;
@@ -293,7 +315,18 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         result.Body.Add($"        var {recordedName} = {cursorName}.RecordedFailure;");
         result.Body.Add($"        {cursorName}.ResetPosition({resetName});");
         result.Body.Add($"        {cursorName}.RestoreRecordedFailure({recordedName});");
-        result.Body.Add($"        {cursorName}.RecordFailure({startName});");
+        if (findsValueStartLater)
+        {
+            // The last white space which was skipped, as before a single token, isn't read again
+            result.Body.Add($"        var {valueStartName} = {ctx}.SkippedWhiteSpaceEnd({resetName});");
+            result.Body.Add($"        if ({valueStartName} < 0)");
+            result.Body.Add("        {");
+            result.Body.Add($"            {ctx}.SkipWhiteSpace();");
+            result.Body.Add($"            {valueStartName} = {cursorName}.Offset;");
+            result.Body.Add($"            {cursorName}.ResetPosition({resetName});");
+            result.Body.Add("        }");
+        }
+        result.Body.Add($"        {cursorName}.RecordFailure({valueStartName});");
         result.Body.Add("    }");
         result.Body.Add("}");
         result.Body.Add("else");

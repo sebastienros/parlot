@@ -139,17 +139,30 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to. The start is
         // known after the white space the parser skips, which only the failure path looks for. A compacting buffer can't
-        // be read again from the start, so it is skipped first.
+        // be read again from the start, so where the white space ends is read first: it is skipped for a parser which
+        // would skip it first itself, and read without moving the cursor for one which reads from where it is invoked,
+        // like a capture or a lookahead.
         var skipsWhiteSpace = _parser is ISeekable { SkipWhitespace: true };
         var valueStartName = $"valueStart{context.NextNumber()}";
 
         if (skipsWhiteSpace && context.IsCompacting)
         {
-            result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
-            result.Body.Add("{");
-            result.Body.Add($"    {context.ParseContextName}.SkipWhiteSpace();");
-            result.Body.Add("}");
-            result.Body.Add($"var {valueStartName} = {cursorName}.Offset;");
+            if (LeadingWhiteSpace.CanSkipBefore(_parser))
+            {
+                result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {context.ParseContextName}.SkipWhiteSpace();");
+                result.Body.Add("}");
+                result.Body.Add($"var {valueStartName} = {cursorName}.Offset;");
+            }
+            else
+            {
+                result.Body.Add($"var {valueStartName} = {startName};");
+                result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {valueStartName} = {context.ParseContextName}.WhiteSpaceEnd();");
+                result.Body.Add("}");
+            }
         }
 
         var innerValueName = $"innerValue{context.NextNumber()}";

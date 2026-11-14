@@ -139,6 +139,33 @@ public static partial class FailureGrammars
     public static Parser<string> BuildPeeked() =>
         Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
 
+    // A capture holds the white space its parser skips, and is rejected with it: by a condition, by a conversion, and by a
+    // conversion which receives where it starts
+    [GenerateParser(nameof(CapturedRejected))]
+    public static Parser<string> BuildCapturedRejected() =>
+        Capture(Terms.Integer()).When(static (_, value) => value.Length < 3).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(CapturedConversionRejected))]
+    public static Parser<string> BuildCapturedConversionRejected() =>
+        Capture(Terms.Integer()).ThenTry(static value => (value.Length < 3, value.ToString())).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(CapturedOffsetsRejected))]
+    public static Parser<string> BuildCapturedOffsetsRejected() =>
+        Capture(Terms.Integer()).ThenTry(static (ParseContext _, int start, int end, TextSpan value, out string result) =>
+        {
+            result = value.ToString() + "@" + start + "-" + end;
+            return value.Length < 3;
+        }).AndSkip(Terms.Char(';')).Eof();
+
+    // A lookahead under a condition leaves the cursor before the white space its parser skips
+    [GenerateParser(nameof(PeekedCondition))]
+    public static Parser<string> BuildPeekedCondition() =>
+        Peek(Terms.Char('a')).When(static (_, _) => true).SkipAnd(Literals.Text("abc")).Eof();
+
+    [GenerateParser(nameof(PeekedConversion))]
+    public static Parser<string> BuildPeekedConversion() =>
+        Peek(Terms.Char('a')).ThenTry(static value => (true, value)).SkipAnd(Literals.Text("abc")).Eof();
+
     // A value that the condition rejects after a lookahead which skipped the white space before it
     [GenerateParser(nameof(PeekedRejected))]
     public static Parser<string> BuildPeekedRejected() =>

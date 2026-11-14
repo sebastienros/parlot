@@ -15,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -387,6 +387,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     public char[] ExpectedChars { get; private set; } = [];
 
     public bool SkipWhitespace { get; private set; }
+
+    // It skips the white space for its alternatives when they all skip it
+    LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace
+    {
+        get
+        {
+            EnsureResolved();
+            return SkipWhitespace ? LeadingWhiteSpaceUse.Skipped : LeadingWhiteSpaceUse.None;
+        }
+    }
 
     // The prefixes of the alternatives each char of the lookup table selects
     string[]? ISeekablePrefixes.ExpectedPrefixes

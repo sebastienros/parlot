@@ -89,6 +89,12 @@ type implements each of these that applies:
   internal `ForwardedHints`, never in its constructor: those can be `Deferred` parsers set later, or choices whose table
   is only complete once the grammar is. A parser has no hints when it can succeed without reading, or when skipping it
   changes the outcome, like `ElseError`.
+- `ISeekable.SkipWhitespace` only tells that the white space isn't to be looked at to find the first chars: a parser which
+  forwards it can still read from where it is invoked, like `Capture`, which holds that white space, or a lookahead,
+  which leaves the cursor before it. A parser which needs where the value of another one starts never skips the white
+  space for it, unless it is a token (`ISkipsWhiteSpace`): it reads `ParseContext.WhiteSpaceEnd()`, which doesn't move
+  the cursor, and its emitter asks `LeadingWhiteSpace.Of`. A parser which forwards the hint and whose match depends on
+  that white space, or which skips it for the parsers it invokes, implements the internal `ILeadingWhiteSpace`.
 - `ISourceable` (`Parlot.SourceGeneration`): emits C# for the source generator. Generated parsers must be
   self-contained; unsupported runtime code is rejected rather than falling back to Parlot execution.
 - `ILoopAnalyzable` (internal): which parsers it invokes before reading anything and whether it can succeed without

@@ -88,9 +88,10 @@ internal sealed class SequenceStartSource
     private bool IsNullable(object parser) => !_starts.TryGetValue(parser, out var node) || node.Nullable || node.Opaque;
 
     // A part which can match nothing, but reads its content after skipping white space when it matches something, like an
-    // Optional of a Terms parser: all the parsers it can invoke first skip white space
+    // Optional of a Terms parser: all the parsers it can invoke first skip white space, and match the same when it is
+    // skipped before them
     private bool SkipsWhiteSpaceFirst(object parser)
-        => _starts.TryGetValue(parser, out var node) && node.Edges.Count > 0 && node.Edges.TrueForAll(static edge => edge.Parser is ISeekable { SkipWhitespace: true });
+        => _starts.TryGetValue(parser, out var node) && node.Edges.Count > 0 && node.Edges.TrueForAll(static edge => LeadingWhiteSpace.CanSkipBefore(edge.Parser));
 
     // atStart: whether nothing can have matched yet when the parser is invoked, which the code checks with the cursor
     private void Generate(object parser, Type valueType, bool keep, bool atStart, string indent, Action<string?, string> onSuccess)
@@ -111,7 +112,7 @@ internal sealed class SequenceStartSource
                     _body.Add($"{headIndent}if ({_context.CursorName}.Offset == {_startName})");
                     _body.Add($"{headIndent}{{");
 
-                    if (tail is ISeekable { SkipWhitespace: true })
+                    if (LeadingWhiteSpace.CanSkipBefore(tail))
                     {
                         AddSkipWhiteSpace(headIndent + "    ");
                     }

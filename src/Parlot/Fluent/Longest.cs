@@ -24,7 +24,7 @@ namespace Parlot.Fluent;
 /// </para>
 /// </remarks>
 /// <typeparam name="T">The type of the value of the alternatives.</typeparam>
-public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, ILeadingWhiteSpace
 {
     private readonly Parser<T>[] _parsers;
     private readonly Func<LongestMatches<T>, int>? _selector;
@@ -122,6 +122,9 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
     /// choice holding this one can skip the white space before it.
     /// </summary>
     public bool SkipWhitespace => Hints.SkipWhitespace;
+
+    // It skips the white space for its alternatives when they all skip it
+    LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace => SkipWhitespace ? LeadingWhiteSpaceUse.Skipped : LeadingWhiteSpaceUse.None;
 
     private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _parsers, static parsers => SeekableHints.Union(parsers));
 
