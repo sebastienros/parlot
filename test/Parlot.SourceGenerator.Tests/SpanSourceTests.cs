@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Parlot.Fluent;
 using Parlot.SourceGeneration;
 using Xunit;
@@ -413,6 +414,68 @@ public class SpanSourceTests
 
         Assert.DoesNotContain("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("AdvanceWithinBuffer(pos", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Failures_Are_Recorded_After_Reading_Only()
+    {
+        // The furthest failure is recorded where a parser would move the cursor back, after its first parser matched: a
+        // first check which fails jumps to the failure label itself, which records nothing, and a match jumps over both
+        // labels. SpanFailureParityTests checks what is recorded, this one that the paths which record nothing stay so.
+        var context = new SourceGenerationContext();
+        var body = Generate(Literals.Char('a').And(Literals.Char('b')).Or(Literals.Char('c').And(Literals.Char('d'))), context);
+
+        Assert.Single(Regex.Matches(body, @"goto alternative\d+;"));
+        Assert.Single(Regex.Matches(body, @"goto alternativeRead\d+;"));
+        Assert.Single(Regex.Matches(body, @"goto fail\d+;"));
+        Assert.Single(Regex.Matches(body, @"goto failRead\d+;"));
+        // The cursor wasn't moved, and is read rather than the start of the span, which isn't kept for the failures
+        Assert.Matches(@"alternativeRead\d+: if \(pos\d+ > choiceStart\d+\) cursor\.RecordFailure\(cursor\.Offset \+ pos\d+\);\s+alternative\d+: ", body);
+        Assert.Matches(@"success\d+ = true;\s+goto done\d+;\s+failRead\d+: if \(pos\d+ > 0\) cursor\.RecordFailure\(cursor\.Offset \+ pos\d+\);\s+fail\d+: ;\s+done\d+: ;", body);
+        Assert.Equal(2, Regex.Matches(body, @"RecordFailure\(").Count);
+
+        // Skipping white space moves the cursor
+        body = Generate(Terms.Char('a').And(Terms.Char('b')), context);
+
+        Assert.Matches(@"failRead\d+: if \(pos\d+ > 0\) cursor\.RecordFailure\(spanStart\d+ \+ pos\d+\);\s+fail\d+: if \(moved\d+\) cursor\.ResetPosition\(spanStart\d+\);", body);
+        Assert.Single(Regex.Matches(body, @"RecordFailure\("));
+
+        // The first token which isn't found after white space is recorded by the cursor, which moves back
+        Assert.Single(Regex.Matches(body, @"goto fail\d+;"));
+        Assert.Single(Regex.Matches(body, @"goto failRead\d+;"));
+
+        // The tokens of a choice which skipped the white space for them fail where they started, and the choice, after
+        // that white space, when its last one isn't found
+        body = Generate(ZeroOrMany(OneOf(Terms.Text("a").Then(static _ => 1), Terms.Text("bc").Then(static _ => 2), Terms.Text("d").Then(static _ => 3))), context);
+
+        Assert.Equal(2, Regex.Matches(body, @"goto alternative\d+;").Count);
+        Assert.DoesNotContain("goto alternativeRead", body, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(body, @"goto itemFailRead\d+;"));
+        Assert.Single(Regex.Matches(body, @"RecordFailure\("));
+
+        // Parsers which fail where they started record nothing
+        body = Generate(ZeroOrMany(OneOf(Literals.Text("a"), Literals.Text("bc"), Literals.Text("d"))), context);
+
+        Assert.Contains("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("RecordFailure", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void White_Space_Skipped_After_A_Match_Of_Longest_Keeps_The_Recorded_Failure()
+    {
+        // The alternatives after the first one can run after a match which skipped white space: the cursor is then moved
+        // back from where nothing failed
+        var context = new SourceGenerationContext();
+        var body = Generate(Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("c"))), context);
+
+        var first = body.Substring(0, body.IndexOf("longestDone", StringComparison.Ordinal));
+
+        Assert.Contains("context.SkipWhiteSpace();", first, StringComparison.Ordinal);
+        Assert.DoesNotContain("RecordedFailure", first, StringComparison.Ordinal);
+
+        // Its own white space, which was skipped already, and the one before its second text
+        Assert.Equal(2, Regex.Matches(body.Substring(first.Length), @"recorded\d+ = cursor\.RecordedFailure;\s+cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+cursor\.RestoreRecordedFailure\(recorded\d+\);\s+context\.SkipWhiteSpace\(\);").Count);
+        Assert.DoesNotMatch(@"cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+context\.SkipWhiteSpace\(\);", body.Substring(first.Length));
     }
 
     private static string Generate<T>(Parser<T> parser, SourceGenerationContext context) =>

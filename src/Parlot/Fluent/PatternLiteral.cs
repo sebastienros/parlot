@@ -224,8 +224,11 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
         else if (_minSize > 1)
         {
             writer.BeginBlock($"if ({pos} - {start} < {_minSize})");
-            // More matching chars could follow the end of the span
-            writer.Fail(fail);
+            // More matching chars could follow the end of the span. The pattern fails where it started, like the parser
+            // which doesn't move the cursor: the chars it read are no match.
+            writer.Add($"if ({writer.AtEnd}) {writer.MarkHitEnd}");
+            writer.Add($"{pos} = {start};");
+            writer.Add(fail.Goto());
             writer.EndBlock();
         }
 

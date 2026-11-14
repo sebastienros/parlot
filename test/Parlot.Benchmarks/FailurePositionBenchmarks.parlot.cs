@@ -37,4 +37,13 @@ public partial class FailurePositionBenchmarks
 
         return json.Eof();
     }
+
+    // A choice generated as span code, whose alternatives read a word before they tell whether they match: the first
+    // two fail after it for a plain word, and the position each one stopped at is recorded before the next one is read
+    [GenerateParser(nameof(TryParseItems))]
+    private static Parser<int> BuildItems() =>
+        ZeroOrMany(OneOf(
+            Literals.Identifier().AndSkip(Literals.Char('(')).AndSkip(Literals.Char(')')).Then(static _ => 1),
+            Literals.Identifier().AndSkip(Literals.Char('[')).AndSkip(Literals.Char(']')).Then(static _ => 2),
+            Literals.Identifier().Then(static _ => 3)).AndSkip(Literals.Char(';'))).Then(static items => items.Count).Eof();
 }

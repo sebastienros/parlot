@@ -16,7 +16,11 @@ public partial class FailurePositionBenchmarks
 #nullable disable
     private string _valid;
     private string _invalid;
+    private string _calls;
+    private string _words;
 #nullable restore
+
+    private const int Items = 64;
 
     [GlobalSetup]
     public void Setup()
@@ -26,6 +30,14 @@ public partial class FailurePositionBenchmarks
         // A missing comma near the end of the document
         var comma = _valid.LastIndexOf(',');
         _invalid = _valid.Remove(comma, 1);
+
+        _calls = string.Concat(System.Linq.Enumerable.Repeat("item();", Items));
+        _words = string.Concat(System.Linq.Enumerable.Repeat("item;", Items));
+
+        if (FirstAlternative() != Items || LastAlternative() != Items || RuntimeLastAlternative() != Items)
+        {
+            throw new System.InvalidOperationException("The items are expected to match.");
+        }
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Success")]
@@ -88,6 +100,25 @@ public partial class FailurePositionBenchmarks
         return Runtime.TryParse(context, out _, out _) ? -1 : context.Scanner.Cursor.FurthestPosition.Line;
     }
 
+    // A successful parse whose choices match with their first alternative, then with their last one, after the other
+    // two read a word and failed: generated span code records where each one stopped, like the cursor of the runtime
+    // parser which is moved back from there
+    [Benchmark(Baseline = true), BenchmarkCategory("Alternatives")]
+    public int FirstAlternative() => TryParseItems(_calls, out var count) ? count : -1;
+
+    [Benchmark, BenchmarkCategory("Alternatives")]
+    public int LastAlternative() => TryParseItems(_words, out var count) ? count : -1;
+
+    private static readonly Parser<int> RuntimeItems =
+        ZeroOrMany(OneOf(
+            Literals.Identifier().AndSkip(Literals.Char('(')).AndSkip(Literals.Char(')')).Then(static _ => 1),
+            Literals.Identifier().AndSkip(Literals.Char('[')).AndSkip(Literals.Char(']')).Then(static _ => 2),
+            Literals.Identifier().Then(static _ => 3)).AndSkip(Literals.Char(';'))).Then(static items => items.Count).Eof();
+
+    [Benchmark, BenchmarkCategory("Alternatives")]
+    public int RuntimeLastAlternative() => RuntimeItems.TryParse(_words, out var count) ? count : -1;
+
+    private static partial bool TryParseItems(string input, out int value);
     private static partial bool TryParse(string input, out IJson value);
     private static partial bool TryParse(string input, out IJson value, out int failureOffset);
     private static partial bool TryParse(string input, out IJson value, out (int Offset, int Line, int Column) failure);

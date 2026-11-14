@@ -868,25 +868,34 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
         // The white space is skipped once for all the alternatives, like at runtime
         if (table.SkipWhiteSpace)
         {
-            writer.SkipWhiteSpace();
+            fail = writer.SkipWhiteSpace(fail);
         }
 
         var from = writer.DeclareLocal("int", "longestFrom", "0");
         var end = writer.DeclareLocal("int", "longestEnd", "0");
-        var failure = writer.DeclareLocal("int", "longestFailure", "0");
 
         // An alternative which fails after another matched can have set the value of its own
         var item = valueVariable != null ? writer.DeclareLocal(typeof(T), "longestItem") : null;
 
         writer.Add($"{from} = {pos};");
         writer.Add($"{end} = -1;");
-        writer.Add($"{failure} = {pos};");
 
-        foreach (var parser in table.Parsers)
+        // An alternative which matched moved the cursor when it skipped white space, and the position goes back for the
+        // next ones: where they skip white space, the cursor moves back from a match, which isn't a failure there
+        var afterMatch = writer.AfterMatch;
+
+        for (var i = 0; i < table.Parsers.Length; i++)
         {
-            var next = writer.NewLabel("longestNext");
+            var next = writer.NewFailureLabel("longestNext");
 
-            writer.Generate(parser, item, next);
+            writer.AfterMatch = afterMatch || i > 0;
+
+            if (table.SkipWhiteSpace)
+            {
+                writer.WhiteSpaceWasSkipped();
+            }
+
+            writer.Generate(table.Parsers[i], item, next);
 
             // The first alternative wins a tie
             writer.BeginBlock($"if ({pos} > {end})");
@@ -901,21 +910,22 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
             if (next.IsUsed)
             {
-                // The position of an alternative which fails is where it failed, the furthest one is the failure of the choice
+                // An alternative which read some text before it failed is a candidate for the furthest failure, whether
+                // another one matches or not, like the runtime one which moves the cursor back. One which matched isn't.
                 var done = writer.NewLabel("longestDone");
 
                 writer.Add(done.Goto());
-                writer.PlaceLabel(next, $"if ({pos} > {failure}) {failure} = {pos};");
+                writer.PlaceFailureLabel(next, from);
                 writer.PlaceLabel(done);
             }
 
             writer.Add($"{pos} = {from};");
         }
 
-        writer.BeginBlock($"if ({end} < 0)");
-        writer.Add($"{pos} = {failure};");
-        writer.Add(fail.Goto());
-        writer.EndBlock();
+        writer.AfterMatch = afterMatch;
+
+        // The position is where the choice started, and the alternatives which read further are recorded already
+        writer.Add($"if ({end} < 0) {fail.Goto()}");
         writer.Add($"{pos} = {end};");
     }
 

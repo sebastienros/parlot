@@ -21,6 +21,7 @@ public static partial class FailureGrammars
     public static partial bool ErrorNesting(string text, out long value, out (int Offset, bool NestedTooDeeply) failure);
 
     public static partial bool Span(string text, out string value, out int failureOffset);
+    public static partial bool Span(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
     public static partial bool Configured(string text, long factor, out long value, out (int Offset, int Line, int Column) failure);
 
@@ -119,4 +120,28 @@ public static partial class FailureGrammars
 
     public static partial bool RejectedValuedOperators(string text, out long value, out int failureOffset);
     public static partial bool RejectedValuedOperators(TextReader reader, out long value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool SpanChoice(string text, out string value, out int failureOffset);
+    public static partial bool SpanChoice(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedSpanChoice(string text, out string value, out int failureOffset);
+    public static partial bool RejectedSpanChoice(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool SpanOptional(string text, out string value, out int failureOffset);
+    public static partial bool SpanOptional(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool SpanLoop(string text, out string value, out int failureOffset);
+    public static partial bool SpanLoop(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool SpanLongest(string text, out string value, out int failureOffset);
+    public static partial bool SpanLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedSpanLongest(string text, out string value, out int failureOffset);
+    public static partial bool RejectedSpanLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedSpan(string text, out string value, out int failureOffset);
+    public static partial bool RejectedSpan(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedSpanWhiteSpace(string text, out string value, out int failureOffset);
+    public static partial bool RejectedSpanWhiteSpace(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }

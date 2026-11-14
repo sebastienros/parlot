@@ -250,4 +250,48 @@ public static partial class FailureGrammars
             .LeftAssociative(new[] { Terms.Text("*"), Terms.Text("/") }, static (a, b, op) => op == "*" ? a * b : a / b)
             .LeftAssociative(new[] { Terms.Text("+"), Terms.Text("-") }, static (a, b, op) => op == "+" ? a + b : a - b)
             .When(static (_, value) => value != 3)).AndSkip(Terms.Char(';')).Eof();
+
+    // Span code: an alternative which reads a word and fails, before one which matches. The position it read up to is
+    // only in a local, which is moved back for the next alternative.
+    [GenerateParser(nameof(SpanChoice))]
+    public static Parser<string> BuildSpanChoice() =>
+        Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;")).AndSkip(Literals.Char('x')).Eof();
+
+    // The same choice, in a value that the condition rejects
+    [GenerateParser(nameof(RejectedSpanChoice))]
+    public static Parser<string> BuildRejectedSpanChoice() =>
+        Terms.Char('>').SkipAnd(Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;"))
+            .When(static (_, _) => false)).Eof();
+
+    // Span code: an optional sequence, and the element of a loop, which read a text and fail, without white space
+    [GenerateParser(nameof(SpanOptional))]
+    public static Parser<string> BuildSpanOptional() =>
+        Literals.Text("a").AndSkip(Literals.Text("b").AndSkip(Literals.Text("c")).Optional()).AndSkip(Literals.Text("d").Optional()).Eof();
+
+    [GenerateParser(nameof(SpanLoop))]
+    public static Parser<string> BuildSpanLoop() =>
+        Literals.Text("a").AndSkip(ZeroOrMany(Literals.Text("b").AndSkip(Literals.Text("c")))).AndSkip(Literals.Text("d").Optional()).Eof();
+
+    // Span code: the longest of two alternatives, where the one which fails read further than the one which is kept
+    [GenerateParser(nameof(SpanLongest))]
+    public static Parser<string> BuildSpanLongest() =>
+        Literals.Text("a").AndSkip(Longest(Literals.Text("fr"), Literals.Text("from").AndSkip(Literals.Char('!')))).AndSkip(Literals.Char('x').Optional()).Eof();
+
+    // Span code: alternatives of the longest match which skip white space and match, in a value that the condition
+    // rejects. The cursor is where the first one skipped white space to when the second one skips it again.
+    [GenerateParser(nameof(RejectedSpanLongest))]
+    public static Parser<string> BuildRejectedSpanLongest() =>
+        Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("b")).AndSkip(Terms.Char('!').Optional()))
+            .When(static (_, _) => false).Eof();
+
+    // A value read by span code, without white space, that the condition rejects
+    [GenerateParser(nameof(RejectedSpan))]
+    public static Parser<string> BuildRejectedSpan() =>
+        Literals.Identifier().And(Literals.Char(':')).And(Literals.Identifier())
+            .When(static (_, value) => value.Item3.ToString() != "from").Then(static value => value.Item1.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // Span code: a token which isn't found after the white space it skipped, in a value which goes on over that white space
+    [GenerateParser(nameof(RejectedSpanWhiteSpace))]
+    public static Parser<string> BuildRejectedSpanWhiteSpace() =>
+        Terms.Text("a").AndSkip(Terms.Text("b").Optional()).AndSkip(Literals.Text(" c").Optional()).When(static (_, _) => false).Eof();
 }
