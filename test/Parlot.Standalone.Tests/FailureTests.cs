@@ -845,6 +845,21 @@ public class FailureTests
     }
 
     [Theory]
+    [InlineData("a b", 0)] // Both alternatives matched: the white space they skipped isn't a failure where it ended
+    [InlineData("a  b!", 0)]
+    [InlineData("a b ?", 4)] // '!' isn't found after the white space
+    [InlineData("a ?", 2)]
+    [InlineData("a", 1)]
+    public void Span_Code_Longest_Alternatives_Which_Matched_After_White_Space_Dont_Count(string text, int offset)
+    {
+        Assert.False(FailureGrammars.RejectedSpanLongest(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.RejectedSpanLongest(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
     [InlineData("a:from;", 0)] // Span code which matched isn't a failure where it ended
     [InlineData("a:b,", 3)]
     [InlineData("a:;", 2)]

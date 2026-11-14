@@ -770,6 +770,20 @@ public class FurthestFailureTests
     }
 
     [Theory]
+    [InlineData("a b", 0)]
+    [InlineData("a  b!", 0)]
+    [InlineData("a b ?", 4)]
+    [InlineData("a ?", 2)]
+    [InlineData("a", 1)]
+    public void Longest_Alternatives_Which_Matched_After_White_Space_Dont_Count(string text, int offset)
+    {
+        // The alternatives which match move the cursor back without recording where they skipped white space to: generated
+        // span code, whose cursor only moves to skip white space, moves it back like they do
+        var parser = Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("b")).AndSkip(Terms.Char('!').Optional())).When(static (_, _) => false).Eof();
+        AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
     [InlineData("a:from;", 0)]
     [InlineData("a:b,", 3)]
     [InlineData("a:;", 2)]

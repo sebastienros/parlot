@@ -277,6 +277,13 @@ public static partial class FailureGrammars
     public static Parser<string> BuildSpanLongest() =>
         Literals.Text("a").AndSkip(Longest(Literals.Text("fr"), Literals.Text("from").AndSkip(Literals.Char('!')))).AndSkip(Literals.Char('x').Optional()).Eof();
 
+    // Span code: alternatives of the longest match which skip white space and match, in a value that the condition
+    // rejects. The cursor is where the first one skipped white space to when the second one skips it again.
+    [GenerateParser(nameof(RejectedSpanLongest))]
+    public static Parser<string> BuildRejectedSpanLongest() =>
+        Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("b")).AndSkip(Terms.Char('!').Optional()))
+            .When(static (_, _) => false).Eof();
+
     // A value read by span code, without white space, that the condition rejects
     [GenerateParser(nameof(RejectedSpan))]
     public static Parser<string> BuildRejectedSpan() =>

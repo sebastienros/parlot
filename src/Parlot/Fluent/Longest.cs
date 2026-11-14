@@ -880,11 +880,16 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
         writer.Add($"{from} = {pos};");
         writer.Add($"{end} = -1;");
 
-        foreach (var parser in table.Parsers)
+        // An alternative which matched moved the cursor when it skipped white space, and the position goes back for the
+        // next ones: where they skip white space, the cursor moves back from a match, which isn't a failure there
+        var afterMatch = writer.AfterMatch;
+
+        for (var i = 0; i < table.Parsers.Length; i++)
         {
             var next = writer.NewFailureLabel("longestNext");
 
-            writer.Generate(parser, item, next);
+            writer.AfterMatch = afterMatch || i > 0;
+            writer.Generate(table.Parsers[i], item, next);
 
             // The first alternative wins a tie
             writer.BeginBlock($"if ({pos} > {end})");
@@ -910,6 +915,8 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
             writer.Add($"{pos} = {from};");
         }
+
+        writer.AfterMatch = afterMatch;
 
         // The position is where the choice started, and the alternatives which read further are recorded already
         writer.Add($"if ({end} < 0) {fail.Goto()}");

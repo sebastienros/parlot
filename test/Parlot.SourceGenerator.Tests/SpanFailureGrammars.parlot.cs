@@ -64,6 +64,13 @@ public static partial class SpanFailureGrammars
             Literals.Text("f"))
         .AndSkip(Literals.Char('x').Optional()).Eof();
 
+    // Alternatives of the longest match which skip white space and match, before one which skips that white space again,
+    // in a value which a condition rejects: a match isn't a failure where its white space ended
+    [GenerateParser(nameof(TryParseLongestTokens))]
+    public static Parser<string> BuildLongestTokens() =>
+        Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("b")).AndSkip(Terms.Char('!').Optional()))
+            .When(static (_, _) => false).Eof();
+
     // An alternative which fails where it started, after an optional text which isn't there: nothing was read
     [GenerateParser(nameof(TryParseEmptyStart))]
     public static Parser<string> BuildEmptyStart() =>

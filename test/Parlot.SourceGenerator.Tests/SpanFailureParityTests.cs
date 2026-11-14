@@ -72,6 +72,7 @@ public class SpanFailureParityTests
         ["OneOrMany"] = Create("abcx ", SpanFailureRuntimeGrammars.BuildOneOrMany(), SpanFailureGrammars.TryParseOneOrMany, SpanFailureGrammars.TryParseOneOrMany),
         ["Longest"] = Create("afrom!x", SpanFailureRuntimeGrammars.BuildLongest(), SpanFailureGrammars.TryParseLongest, SpanFailureGrammars.TryParseLongest),
         ["LongestInChoice"] = Create("from!x", SpanFailureRuntimeGrammars.BuildLongestInChoice(), SpanFailureGrammars.TryParseLongestInChoice, SpanFailureGrammars.TryParseLongestInChoice),
+        ["LongestTokens"] = Create("ab!? ", SpanFailureRuntimeGrammars.BuildLongestTokens(), SpanFailureGrammars.TryParseLongestTokens, SpanFailureGrammars.TryParseLongestTokens),
         ["EmptyStart"] = Create("abcdx", SpanFailureRuntimeGrammars.BuildEmptyStart(), SpanFailureGrammars.TryParseEmptyStart, SpanFailureGrammars.TryParseEmptyStart),
         ["Nested"] = Create("abcd!", SpanFailureRuntimeGrammars.BuildNested(), SpanFailureGrammars.TryParseNested, SpanFailureGrammars.TryParseNested),
         ["RejectedNested"] = Create("abcd! ", SpanFailureRuntimeGrammars.BuildRejectedNested(), SpanFailureGrammars.TryParseRejectedNested, SpanFailureGrammars.TryParseRejectedNested),
@@ -108,6 +109,12 @@ public class SpanFailureParityTests
     [InlineData("Longest", "afr?", 3)]
     [InlineData("LongestInChoice", "from?", 4)]
     [InlineData("LongestInChoice", "fr?", 2)]
+    // The alternatives which matched skipped white space, which isn't a failure where it ended
+    [InlineData("LongestTokens", "a b", 0)]
+    [InlineData("LongestTokens", "a  b!", 0)]
+    [InlineData("LongestTokens", "a b ?", 4)]
+    [InlineData("LongestTokens", "a ?", 2)]
+    [InlineData("LongestTokens", "a", 1)]
     // Nothing was read by the alternative which failed, so the rejected value fails where it started
     [InlineData("EmptyStart", "ad", 0)]
     [InlineData("EmptyStart", "abd", 2)]
@@ -157,6 +164,7 @@ public class SpanFailureParityTests
     [InlineData("OneOrMany")]
     [InlineData("Longest")]
     [InlineData("LongestInChoice")]
+    [InlineData("LongestTokens")]
     [InlineData("EmptyStart")]
     [InlineData("Nested")]
     [InlineData("RejectedNested")]
@@ -219,6 +227,8 @@ public static partial class SpanFailureGrammars
     public static partial bool TryParseLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseLongestInChoice(string text, out string value, out int failure);
     public static partial bool TryParseLongestInChoice(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseLongestTokens(string text, out string value, out int failure);
+    public static partial bool TryParseLongestTokens(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseEmptyStart(string text, out string value, out int failure);
     public static partial bool TryParseEmptyStart(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseNested(string text, out string value, out int failure);
@@ -285,6 +295,12 @@ internal static class SpanFailureRuntimeGrammars
             Longest(Literals.Text("fr").AndSkip(Literals.Char('!')), Literals.Text("from").AndSkip(Literals.Char('!'))),
             Literals.Text("f"))
         .AndSkip(Literals.Char('x').Optional()).Eof();
+
+    // Alternatives of the longest match which skip white space and match, before one which skips that white space again,
+    // in a value which a condition rejects: a match isn't a failure where its white space ended
+    public static Parser<string> BuildLongestTokens() =>
+        Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("b")).AndSkip(Terms.Char('!').Optional()))
+            .When(static (_, _) => false).Eof();
 
     // An alternative which fails where it started, after an optional text which isn't there: nothing was read
     public static Parser<string> BuildEmptyStart() =>

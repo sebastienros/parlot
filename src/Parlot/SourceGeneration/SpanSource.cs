@@ -136,6 +136,7 @@ internal sealed class SpanSourceWriter
 {
     private readonly IList<string> _locals;
     private readonly IList<string> _body;
+    private string? _recorded;
 
     public SpanSourceWriter(SourceGenerationContext context, IList<string> locals, IList<string> body)
     {
@@ -156,6 +157,13 @@ internal sealed class SpanSourceWriter
     /// when the span code doesn't skip white space.
     /// </summary>
     public string? Moved { get; private set; }
+
+    /// <summary>
+    /// Whether the code being emitted can run after the position was moved back from a match, like the alternatives of
+    /// <c>Longest</c> after the first one. The cursor can then be where that match skipped white space to, further than
+    /// the position, without anything having failed there: a failure is recorded by the label its parser jumps to.
+    /// </summary>
+    public bool AfterMatch { get; set; }
 
     /// <summary>
     /// The name of the <c>ReadOnlySpan&lt;char&gt;</c> local holding the text after the cursor.
@@ -318,8 +326,19 @@ internal sealed class SpanSourceWriter
         // There is no white space at the end of the span.
         BeginBlock($"if ({ctx}.WhiteSpaceParser is not null || ((uint){Pos} < (uint){Span}.Length && global::Parlot.Character.HasMask({Span}[{Pos}], (byte)global::Parlot.CharacterMask.WhiteSpaceOrNewLine) && global::Parlot.Character.HasMask({Span}[{Pos}], {ctx}._skipMask)))");
         // To where the span was read up to. Forward isn't a failure where the cursor was, back is: the cursor is where
-        // it skipped white space to, before something which wasn't found
-        Add($"{Cursor}.MoveTo({SpanStart} + {Pos});");
+        // it skipped white space to, before something which wasn't found, unless that was a match
+        if (AfterMatch)
+        {
+            _recorded ??= DeclareLocal("int", "recorded", "0");
+            Add($"{_recorded} = {Cursor}.RecordedFailure;");
+            Add($"{Cursor}.MoveTo({SpanStart} + {Pos});");
+            Add($"{Cursor}.RestoreRecordedFailure({_recorded});");
+        }
+        else
+        {
+            Add($"{Cursor}.MoveTo({SpanStart} + {Pos});");
+        }
+
         Add($"{ctx}.SkipWhiteSpace();");
         Add($"{Pos} = {Cursor}.Offset - {SpanStart};");
         Add($"{Moved} = true;");

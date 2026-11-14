@@ -136,6 +136,9 @@ public static partial class FailureGrammars
     public static partial bool SpanLongest(string text, out string value, out int failureOffset);
     public static partial bool SpanLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool RejectedSpanLongest(string text, out string value, out int failureOffset);
+    public static partial bool RejectedSpanLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool RejectedSpan(string text, out string value, out int failureOffset);
     public static partial bool RejectedSpan(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 

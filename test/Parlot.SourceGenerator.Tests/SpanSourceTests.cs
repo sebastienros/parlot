@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Parlot.Fluent;
 using Parlot.SourceGeneration;
 using Xunit;
@@ -413,6 +414,24 @@ public class SpanSourceTests
 
         Assert.DoesNotContain("AdvanceWithinBuffer(pos", body, StringComparison.Ordinal);
         Assert.Contains(context.Helpers.Enumerate(), static helper => helper.Result.Body.Any(static line => line.Contains("AdvanceWithinBuffer(pos", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void White_Space_Skipped_After_A_Match_Of_Longest_Keeps_The_Recorded_Failure()
+    {
+        // The alternatives after the first one can run after a match which skipped white space: the cursor is then moved
+        // back from where nothing failed
+        var context = new SourceGenerationContext();
+        var body = Generate(Longest(Terms.Text("a").AndSkip(Terms.Text("b")), Terms.Text("a").AndSkip(Terms.Text("c"))), context);
+
+        var first = body.Substring(0, body.IndexOf("longestDone", StringComparison.Ordinal));
+
+        Assert.Contains("context.SkipWhiteSpace();", first, StringComparison.Ordinal);
+        Assert.DoesNotContain("RecordedFailure", first, StringComparison.Ordinal);
+
+        // Its own white space, which was skipped already, and the one before its second text
+        Assert.Equal(2, Regex.Matches(body.Substring(first.Length), @"recorded\d+ = cursor\.RecordedFailure;\s+cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+cursor\.RestoreRecordedFailure\(recorded\d+\);\s+context\.SkipWhiteSpace\(\);").Count);
+        Assert.DoesNotMatch(@"cursor\.MoveTo\(spanStart\d+ \+ pos\d+\);\s+context\.SkipWhiteSpace\(\);", body.Substring(first.Length));
     }
 
     private static string Generate<T>(Parser<T> parser, SourceGenerationContext context) =>
