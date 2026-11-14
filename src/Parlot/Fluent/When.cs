@@ -50,7 +50,14 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to, as in generated
         // code. The start is known after the white space the parser skips, which only the failure path looks for. A
         // compacting buffer can't be read again from the start, so where the white space ends is read first.
-        var valueStart = context.IsCompacting ? ReadValueStart(context) : -1;
+        var valueStart = -1;
+
+        if (context.IsCompacting)
+        {
+            // No white space to look for, the value starts here: the char is read first, as most values have none
+            // before them, which the parser that invoked this one often skipped already
+            valueStart = context.MaySkipWhiteSpace(cursor.Current) ? ReadValueStart(context) : start;
+        }
 
         if (!_parser.Parse(context, ref result))
         {
@@ -87,21 +94,16 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     // Deferred set later
     private LeadingWhiteSpace.Cache? _leading;
 
-    // Where the value starts when the buffer is a compacting one, after the white space the parser skips, or -1 when it
-    // doesn't skip any. Not inlined: parsing a string doesn't pay for it.
+    // Where the value starts when the buffer is a compacting one and there is white space at the cursor: after the white
+    // space the parser skips, or where it is invoked when it doesn't skip any. Not inlined: parsing a string doesn't pay
+    // for it.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private int ReadValueStart(ParseContext context)
     {
         var leading = LeadingWhiteSpace.Of(ref _leading, _parser);
-
-        if (leading == LeadingWhiteSpaceUse.None)
-        {
-            return -1;
-        }
-
         var cursor = context.Scanner.Cursor;
 
-        if (!context.MaySkipWhiteSpace(cursor.Current))
+        if (leading == LeadingWhiteSpaceUse.None)
         {
             return cursor.Offset;
         }
