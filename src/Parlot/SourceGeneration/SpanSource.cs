@@ -138,6 +138,7 @@ internal sealed class SpanSourceWriter
     private readonly IList<string> _body;
     private readonly List<int> _records = new();
     private string? _recorded;
+    private int _whiteSpaceSkippedAt = -1;
 
     public SpanSourceWriter(SourceGenerationContext context, IList<string> locals, IList<string> body)
     {
@@ -331,6 +332,12 @@ internal sealed class SpanSourceWriter
     }
 
     /// <summary>
+    /// Tells that the white space at the current position was skipped already, by a choice for its alternatives: the
+    /// one which starts by skipping it again finds none, and fails where it started when what it reads isn't found.
+    /// </summary>
+    public void WhiteSpaceWasSkipped() => _whiteSpaceSkippedAt = _body.Count;
+
+    /// <summary>
     /// Emits the code skipping the white space at the current position, like <c>SkipWhiteSpace</c> does.
     /// </summary>
     /// <param name="fail">The failure label of the parser which skips the white space.</param>
@@ -340,6 +347,9 @@ internal sealed class SpanSourceWriter
     /// </returns>
     public SpanLabel SkipWhiteSpace(SpanLabel fail)
     {
+        // Nothing was emitted since the white space was skipped: the label itself, so that the first check of an
+        // alternative of a choice of tokens, its hot path, doesn't go through the label which compares the position
+        var skipped = _whiteSpaceSkippedAt == _body.Count;
         var ctx = Context.ParseContextName;
         Moved ??= DeclareLocal("bool", "moved", "false");
 
@@ -365,7 +375,7 @@ internal sealed class SpanSourceWriter
         Add($"{Moved} = true;");
         EndBlock();
 
-        return fail.AfterWhiteSpace;
+        return skipped ? fail : fail.AfterWhiteSpace;
     }
 
     /// <summary>

@@ -979,6 +979,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         {
             var next = writer.NewFailureLabel("alternative");
 
+            if (SkipWhitespace)
+            {
+                writer.WhiteSpaceWasSkipped();
+            }
+
             writer.Generate(parsers[i], valueVariable, next);
 
             if (!next.IsUsed)
@@ -995,6 +1000,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }
 
         // The failure of the last alternative is the failure of the choice, whose owner moves the position back
+        if (SkipWhitespace)
+        {
+            writer.WhiteSpaceWasSkipped();
+        }
+
         writer.Generate(parsers[parsers.Count - 1], valueVariable, fail);
         writer.PlaceLabel(done);
     }

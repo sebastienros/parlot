@@ -444,6 +444,15 @@ public class SpanSourceTests
         Assert.Single(Regex.Matches(body, @"goto fail\d+;"));
         Assert.Single(Regex.Matches(body, @"goto failRead\d+;"));
 
+        // The tokens of a choice which skipped the white space for them fail where they started, and the choice, after
+        // that white space, when its last one isn't found
+        body = Generate(ZeroOrMany(OneOf(Terms.Text("a").Then(static _ => 1), Terms.Text("bc").Then(static _ => 2), Terms.Text("d").Then(static _ => 3))), context);
+
+        Assert.Equal(2, Regex.Matches(body, @"goto alternative\d+;").Count);
+        Assert.DoesNotContain("goto alternativeRead", body, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(body, @"goto itemFailRead\d+;"));
+        Assert.Single(Regex.Matches(body, @"RecordFailure\("));
+
         // Parsers which fail where they started record nothing
         body = Generate(ZeroOrMany(OneOf(Literals.Text("a"), Literals.Text("bc"), Literals.Text("d"))), context);
 

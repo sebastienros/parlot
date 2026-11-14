@@ -889,6 +889,12 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
             var next = writer.NewFailureLabel("longestNext");
 
             writer.AfterMatch = afterMatch || i > 0;
+
+            if (table.SkipWhiteSpace)
+            {
+                writer.WhiteSpaceWasSkipped();
+            }
+
             writer.Generate(table.Parsers[i], item, next);
 
             // The first alternative wins a tie
