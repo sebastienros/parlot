@@ -357,16 +357,15 @@ The parsers move the cursor back when they fail after reading, and the cursor ke
 back from: four instructions, without a branch, on that path only. They move it forward without recording anything, over
 white space which was already skipped or to where a span was read up to: what was read up to there matched. Span code
 covering several parsers, which reads the text through a position of its own and doesn't move the cursor until it
-matches, records that position where a parser would move the cursor back: when one of its parsers fails after it read
-some text or skipped white space, before an alternative, or what follows an optional parser or a loop, is read from
-before that text, and when the span code fails. That is a compare and a call on the path of such a failure only: a
-parser which fails on its first check, like most alternatives of a choice, records nothing, and neither does a match.
-The overloads which don't return the failure run the same code, and the line and column of the failure are only computed
-when they are returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse,
-successful or not, nor its allocations. A rejected value reads and writes the furthest offset on its failure path, and a
-lookahead saves and restores it, one load and one store around the lookahead, as `Longest` does around the move back
-from an alternative which matched. A `TextReader` overload returns the same failure as the `string` one: the buffer only
-drops text before positions the parse read later, and a token which is read again with more text, like the text of
+matches, records that position where a parser would move the cursor back: where one of its parsers fails after it read
+some text or skipped white space. That is two compares and a store on the path of such a failure only: a parser which
+fails on its first check, like most alternatives of a choice, records nothing, and neither does a match. The overloads
+which don't return the failure run the same code, and the line and column of the failure are only computed when they
+are returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse, successful or
+not, nor its allocations. A rejected value reads and writes the furthest offset on its failure path, and a lookahead
+saves and restores it, one load and one store around the lookahead, as `Longest` does around the move back from an
+alternative which matched. A `TextReader` overload returns the same failure as the `string` one: the buffer only drops
+text before positions the parse read later, and a token which is read again with more text, like the text of
 `AnyCharBefore` whose delimiter the buffer ends in, forgets the failures recorded at the end of the buffer.
 
 ### Cancellation
