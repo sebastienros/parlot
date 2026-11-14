@@ -81,6 +81,8 @@ public class SpanFailureParityTests
         ["RejectedStart"] = Create("abcdx", SpanFailureRuntimeGrammars.BuildRejectedStart(), SpanFailureGrammars.TryParseRejectedStart, SpanFailureGrammars.TryParseRejectedStart),
         ["RejectedEmptyStart"] = Create("abcdx", SpanFailureRuntimeGrammars.BuildRejectedEmptyStart(), SpanFailureGrammars.TryParseRejectedEmptyStart, SpanFailureGrammars.TryParseRejectedEmptyStart),
         ["RejectedWhiteSpace"] = Create("abc x", SpanFailureRuntimeGrammars.BuildRejectedWhiteSpace(), SpanFailureGrammars.TryParseRejectedWhiteSpace, SpanFailureGrammars.TryParseRejectedWhiteSpace),
+        ["RejectedWhiteSpaceChoice"] = Create("abc x", SpanFailureRuntimeGrammars.BuildRejectedWhiteSpaceChoice(), SpanFailureGrammars.TryParseRejectedWhiteSpaceChoice, SpanFailureGrammars.TryParseRejectedWhiteSpaceChoice),
+        ["RejectedWhiteSpaceLongest"] = Create("abc x", SpanFailureRuntimeGrammars.BuildRejectedWhiteSpaceLongest(), SpanFailureGrammars.TryParseRejectedWhiteSpaceLongest, SpanFailureGrammars.TryParseRejectedWhiteSpaceLongest),
         ["Number"] = Create("912!x ", SpanFailureRuntimeGrammars.BuildNumber(), SpanFailureGrammars.TryParseNumber, SpanFailureGrammars.TryParseNumber),
         ["RejectedList"] = Create("(a,)!? ", SpanFailureRuntimeGrammars.BuildRejectedList(), SpanFailureGrammars.TryParseRejectedList, SpanFailureGrammars.TryParseRejectedList),
     };
@@ -135,6 +137,10 @@ public class SpanFailureParityTests
     // The token isn't found after the white space, which the next text reads again
     [InlineData("RejectedWhiteSpace", "a c", 2)]
     [InlineData("RejectedWhiteSpace", "a  b c", 0)]
+    [InlineData("RejectedWhiteSpaceChoice", "a x", 2)]
+    [InlineData("RejectedWhiteSpaceChoice", "a  c x", 0)]
+    [InlineData("RejectedWhiteSpaceLongest", "a x", 2)]
+    [InlineData("RejectedWhiteSpaceLongest", "a  bc x", 0)]
     // 999 isn't a byte: the number fails after its digits, and the "9" which matches isn't followed by the end
     [InlineData("Number", "999", 3)]
     [InlineData("Number", " 999", 4)]
@@ -173,6 +179,8 @@ public class SpanFailureParityTests
     [InlineData("RejectedStart")]
     [InlineData("RejectedEmptyStart")]
     [InlineData("RejectedWhiteSpace")]
+    [InlineData("RejectedWhiteSpaceChoice")]
+    [InlineData("RejectedWhiteSpaceLongest")]
     [InlineData("Number")]
     [InlineData("RejectedList")]
     public void Generated_And_Runtime_Parsers_Report_The_Same_Failure(string name)
@@ -245,6 +253,10 @@ public static partial class SpanFailureGrammars
     public static partial bool TryParseRejectedEmptyStart(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseRejectedWhiteSpace(string text, out string value, out int failure);
     public static partial bool TryParseRejectedWhiteSpace(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseRejectedWhiteSpaceChoice(string text, out string value, out int failure);
+    public static partial bool TryParseRejectedWhiteSpaceChoice(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseRejectedWhiteSpaceLongest(string text, out string value, out int failure);
+    public static partial bool TryParseRejectedWhiteSpaceLongest(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseNumber(string text, out string value, out int failure);
     public static partial bool TryParseNumber(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseRejectedList(string text, out string value, out int failure);
@@ -354,6 +366,15 @@ internal static class SpanFailureRuntimeGrammars
     // A token which isn't found after the white space it skipped, in a value which goes on after that white space
     public static Parser<string> BuildRejectedWhiteSpace() =>
         Terms.Text("a").AndSkip(Terms.Text("b").Optional()).AndSkip(Literals.Text(" c").Optional()).When(static (_, _) => false).Eof();
+
+    // The same with a choice and with the longest match, which skip the white space once for their alternatives
+    public static Parser<string> BuildRejectedWhiteSpaceChoice() =>
+        Terms.Text("a").AndSkip(OneOf(Terms.Text("b"), Terms.Text("c")).Optional()).AndSkip(Literals.Text(" x").Optional())
+            .When(static (_, _) => false).Eof();
+
+    public static Parser<string> BuildRejectedWhiteSpaceLongest() =>
+        Terms.Text("a").AndSkip(Longest(Terms.Text("b"), Terms.Text("bc")).Optional()).AndSkip(Literals.Text(" x").Optional())
+            .When(static (_, _) => false).Eof();
 
     // A number which its type can't represent fails after its digits, which the parser moves the cursor back from
     public static Parser<string> BuildNumber() =>

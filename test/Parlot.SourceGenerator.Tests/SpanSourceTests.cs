@@ -440,6 +440,10 @@ public class SpanSourceTests
         Assert.Matches(@"failRead\d+: if \(pos\d+ > 0\) cursor\.RecordFailure\(spanStart\d+ \+ pos\d+\);\s+fail\d+: if \(moved\d+\) cursor\.ResetPosition\(spanStart\d+\);", body);
         Assert.Single(Regex.Matches(body, @"RecordFailure\("));
 
+        // The first token which isn't found after white space is recorded by the cursor, which moves back
+        Assert.Single(Regex.Matches(body, @"goto fail\d+;"));
+        Assert.Single(Regex.Matches(body, @"goto failRead\d+;"));
+
         // Parsers which fail where they started record nothing
         body = Generate(ZeroOrMany(OneOf(Literals.Text("a"), Literals.Text("bc"), Literals.Text("d"))), context);
 

@@ -132,6 +132,17 @@ public static partial class SpanFailureGrammars
     public static Parser<string> BuildRejectedWhiteSpace() =>
         Terms.Text("a").AndSkip(Terms.Text("b").Optional()).AndSkip(Literals.Text(" c").Optional()).When(static (_, _) => false).Eof();
 
+    // The same with a choice and with the longest match, which skip the white space once for their alternatives
+    [GenerateParser(nameof(TryParseRejectedWhiteSpaceChoice))]
+    public static Parser<string> BuildRejectedWhiteSpaceChoice() =>
+        Terms.Text("a").AndSkip(OneOf(Terms.Text("b"), Terms.Text("c")).Optional()).AndSkip(Literals.Text(" x").Optional())
+            .When(static (_, _) => false).Eof();
+
+    [GenerateParser(nameof(TryParseRejectedWhiteSpaceLongest))]
+    public static Parser<string> BuildRejectedWhiteSpaceLongest() =>
+        Terms.Text("a").AndSkip(Longest(Terms.Text("b"), Terms.Text("bc")).Optional()).AndSkip(Literals.Text(" x").Optional())
+            .When(static (_, _) => false).Eof();
+
     // A number which its type can't represent fails after its digits, which the parser moves the cursor back from
     [GenerateParser(nameof(TryParseNumber))]
     public static Parser<string> BuildNumber() =>
