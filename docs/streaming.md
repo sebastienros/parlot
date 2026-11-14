@@ -219,7 +219,7 @@ On .NET Framework and .NET Standard, `IAsyncEnumerable<T>` comes from the `Micro
 | Option | Default | Description |
 |---|---|---|
 | `BufferSize` | 4096 | Number of characters read at once, and before parsing. A refill reads at least as many characters as it retains. |
-| `MaxBufferedCharacters` | `int.MaxValue` | Maximum characters buffered: the retained text of the compacting buffer, or the window of a value for `ParseManyAsync`, with the white space and comments which a `WhiteSpaceParser` reads before it. Exceeding it throws a `ParseException` at the start of the token or value which doesn't fit. Set it for untrusted input. |
+| `MaxBufferedCharacters` | `int.MaxValue` | Maximum characters buffered: the retained text of the compacting buffer, or the window of a value for `ParseManyAsync`, which is also the one of the white space and comments a `WhiteSpaceParser` reads before it. Exceeding it throws a `ParseException` at the start of the token, value or white space which doesn't fit. Set it for untrusted input. |
 | `SkipWhiteSpace` | `true` | Whether `ParseManyAsync` skips white space before each item, separator and the end. |
 | `ContextFactory` | `null` | Creates the `ParseContext` of the parse (of each window for `ParseManyAsync`), for instance to set `WhiteSpaceParser` or use a derived context. It must use the provided scanner and pass the cancellation token. |
 
@@ -241,13 +241,15 @@ and a value matching an empty text throws an `InvalidOperationException` to avoi
 
 The white space between the values isn't buffered: the chars of the context's `WhiteSpaceSet` are white space whatever
 follows them, so a window which ends in them drops them and the next one continues after them. Blank lines or padding
-of any length are read through windows of `BufferSize` chars and don't count in `MaxBufferedCharacters`. The white space
-inside a value is part of the value.
+of any length are read one window after the other, which they don't grow, and don't count in `MaxBufferedCharacters`: a
+value which doesn't fit fails where it starts, however much white space is before it. The white space inside a value is
+part of the value.
 
 With a `WhiteSpaceParser`, what is skipped can depend on the text which follows the window, so the white space and the
-comments it reads before a value are buffered with the value while a window ends in them: a comment is read from its
-start once the window holds its end, and it is only unterminated at the end of the input. They count in
-`MaxBufferedCharacters`, so a comment or a run of white space longer than the limit fails like a value which is.
+comments it reads before a value are buffered while a window ends in them: a comment is read from its start once the
+window holds its end, and it is only unterminated at the end of the input. They are limited by `MaxBufferedCharacters`
+like a value and apart from it, since the value is retried from its own start once a window holds their end: a comment
+or a run of white space longer than the limit fails where it starts.
 
 The delimited overload reads until it finds the delimiter and parses each delimited text on its own. The
 parser must match the whole text, except white space when `SkipWhiteSpace` is enabled, and empty or white
