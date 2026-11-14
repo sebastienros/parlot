@@ -356,16 +356,18 @@ return diagnostics can't also return the failure, the diagnostics having positio
 The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved
 back from: four instructions, without a branch, on that path only. They move it forward without recording anything, over
 white space which was already skipped or to where a span was read up to: what was read up to there matched. Span code
-covering several parsers, which doesn't move the cursor until it matches, records the position of its failing check on
-its failure path. It moves the cursor to skip white space: when what follows isn't found and it reads on from before
-that white space, the cursor is moved back and keeps the offset it leaves. The overloads which don't return the failure
-run the same code, and the line and column of the failure are only computed when they are returned. On the JSON
-benchmark document, returning the failure doesn't change the time of a parse, successful or not, nor its allocations. A
-rejected value reads and writes the furthest offset on its failure path, and a lookahead saves and restores it, one load
-and one store around the lookahead, as `Longest` does around the move back from an alternative which matched. A
-`TextReader` overload returns the same failure as the `string` one: the buffer only drops text before positions the
-parse read later, and a token which is read again with more text, like the text of `AnyCharBefore` whose delimiter the
-buffer ends in, forgets the failures recorded at the end of the buffer.
+covering several parsers, which reads the text through a position of its own and doesn't move the cursor until it
+matches, records that position where a parser would move the cursor back: when one of its parsers fails after it read
+some text or skipped white space, before an alternative, or what follows an optional parser or a loop, is read from
+before that text, and when the span code fails. That is a compare and a call on the path of such a failure only: a
+parser which fails on its first check, like most alternatives of a choice, records nothing, and neither does a match.
+The overloads which don't return the failure run the same code, and the line and column of the failure are only computed
+when they are returned. On the JSON benchmark document, returning the failure doesn't change the time of a parse,
+successful or not, nor its allocations. A rejected value reads and writes the furthest offset on its failure path, and a
+lookahead saves and restores it, one load and one store around the lookahead, as `Longest` does around the move back
+from an alternative which matched. A `TextReader` overload returns the same failure as the `string` one: the buffer only
+drops text before positions the parse read later, and a token which is read again with more text, like the text of
+`AnyCharBefore` whose delimiter the buffer ends in, forgets the failures recorded at the end of the buffer.
 
 ### Cancellation
 
@@ -866,7 +868,9 @@ Parsers which only read the text are generated as *span code*, the way the .NET 
 generator emits a pattern. The text after the cursor is read through a `ReadOnlySpan<char>` local indexed by a
 position local, the parsers of the subgraph are emitted inline in a single method, with jumps to failure labels, and
 the cursor is moved once, when the subgraph matches. A failure leaves the cursor where it was: a sequence doesn't
-move it back, and choices, optional parsers and loops move the position local back rather than the cursor.
+move it back, and choices, optional parsers and loops move the position local back rather than the cursor. Where a
+parser failed after reading some text, the position it stopped at is recorded first, for the
+[furthest failure](#failure-position).
 
 `Char`, ordinal `Text`, `Pattern`, `AnyOf`, `NoneOf`, `Identifier` and the decimal number parsers (`Number<T>`,
 `Integer`, `Decimal`) are generated as span code inside the composite parsers whose parsers all are: `Terms` parsers

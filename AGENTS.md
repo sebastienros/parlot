@@ -135,12 +135,17 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   that code on `IsCompacting` so `string` output is unchanged.
 - Subgraphs of parsers which only read the text are generated as *span code* (`SourceGeneration/SpanSource.cs`): one
   method reads a span local through a position local and moves the cursor once, when it matches. Composite emitters
-  call `SpanSource.TryGenerate` first. Span code leaves the position anywhere when it jumps to a failure label, whose
-  owner moves it back; it marks `HitEnd` when a check looks at the end of the span and before a callback invoked there.
+  call `SpanSource.TryGenerate` first. Span code jumps to a failure label with the position where the cursor of the
+  parser would be when it fails, and the owner of the label moves it back; it marks `HitEnd` when a check looks at the
+  end of the span and before a callback invoked there.
   A new literal whose code only reads the text implements the internal `ISpanSourceable`.
 - The furthest failure (`out int` / `out (int Offset, int Line, int Column)` overloads) is kept by the cursor
-  (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only); span code calls `Cursor.RecordFailure` at its
-  failure label. Keep any new `RecordFailure` on failure paths only.
+  (`Cursor.FurthestOffset`, compared in `ResetPositionNotInlined` only). Span code moves a position local back where a
+  parser moves the cursor, so it calls `Cursor.RecordFailure` there itself: an emitter which fails after a parser it
+  invokes matched jumps to `SpanLabel.AfterReading`, one which skips white space passes on the label
+  `SpanSourceWriter.SkipWhiteSpace` returns, and the owner of a failure label places it with `PlaceFailureLabel`. A
+  first check which fails records nothing, nor does a match: `SpanFailureParityTests` compares the failures with the
+  runtime ones on random inputs. Keep any new `RecordFailure` on failure paths only.
 - `ResetPosition` records the offset the cursor leaves, whichever way it moves. Where the cursor can move forward over
   text which was read already (white space skipped before, a span, a match that is kept), move it with the internal
   `Cursor.MoveTo`, which only records the moves back: a value that `When` rejects after it would be reported there.
