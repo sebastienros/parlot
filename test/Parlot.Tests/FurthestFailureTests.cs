@@ -220,7 +220,7 @@ public class FurthestFailureTests
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
 
     // The furthest failure of the string and of the TextReader parsers, which match the generated ones (standalone FailureTests)
-    private static void AssertFurthest<T>(Parser<T> parser, string text, int offset)
+    private static void AssertFurthest<T>(Parser<T> parser, string text, int offset, int bufferSize = 1)
     {
         var context = Context(text);
         Assert.False(parser.TryParse(context, out _, out _));
@@ -230,7 +230,7 @@ public class FurthestFailureTests
         ParseContext readerContext = null!;
         var options = new StreamParseOptions
         {
-            BufferSize = 1,
+            BufferSize = bufferSize,
             ContextFactory = (scanner, token) => readerContext = new ParseContext(scanner, token),
         };
 
@@ -314,6 +314,46 @@ public class FurthestFailureTests
     public void Value_Rejected_By_A_Conversion_Fails_At_Its_Start_After_Another_Alternative(string text, int offset) => AssertFurthest(ConversionRejectedAlternative, text, offset);
 
     [Theory]
+    [InlineData("  a  b", 2)]
+    [InlineData("  a b", 2)]
+    [InlineData("a  b", 0)]
+    [InlineData("\n a\n b", 2)]
+    public void Rejected_Value_Of_Several_Tokens_Fails_At_Its_Start(string text, int offset)
+    {
+        // The white space before the value isn't the last one that was skipped: it is read again
+        AssertFurthest(Terms.Identifier().And(Terms.Identifier()).When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Fact]
+    public void Rejected_Value_Fails_After_The_White_Space_Of_Its_Own_Parser()
+    {
+        // The white space where a parser is invoked can have been skipped by another one, here a lookahead which doesn't
+        // match. A parser which doesn't skip any reads its value from where it is invoked.
+        var whiteSpace = Not(Terms.Char('x')).SkipAnd(Literals.WhiteSpace());
+
+        AssertFurthest(whiteSpace.When(static (_, _) => false).Eof(), "  y", 0);
+        AssertFurthest(whiteSpace.ThenTry(static value => (false, value)).Eof(), "  y", 0);
+        AssertFurthest(Terms.Identifier().WhenNotFollowedBy(whiteSpace).Eof(), "a  y", 1);
+        AssertFurthest(Not(whiteSpace).Eof(), "  y", 0);
+
+        // Whereas a parser which skips it reads its value after it, whoever skipped it first
+        AssertFurthest(Not(Terms.Char('x')).SkipAnd(Terms.Identifier().When(static (_, _) => false)).Eof(), "  y", 2);
+        AssertFurthest(Not(Terms.Char('x')).SkipAnd(Terms.Identifier().ThenTry(static value => (false, value))).Eof(), "  y", 2);
+    }
+
+    [Theory]
+    [InlineData("from;", 0)]
+    [InlineData("/* a */ from;", 8)]
+    [InlineData("  /* a */\n  from;", 12)]
+    [InlineData("/* a */ fromage,", 15)]
+    public void Rejected_Value_Fails_After_The_Comments_Of_A_White_Space_Parser(string text, int offset)
+    {
+        var comments = Capture(ZeroOrMany(Literals.WhiteSpace(includeNewLines: true).Or(Literals.Comments("/*", "*/"))));
+
+        AssertFurthest(Rejected.WithWhiteSpaceParser(comments), text, offset);
+    }
+
+    [Theory]
     [InlineData("abc((", 3)]
     [InlineData("abc  ((;", 5)]
     [InlineData("abc  (;", 5)]
@@ -387,6 +427,188 @@ public class FurthestFailureTests
         AssertFurthest(Terms.Identifier().And(longest).When(static (_, _) => false).Eof(), text, offset);
         AssertFurthest(Terms.Identifier().AndSkip(longest).When(static (_, _) => false).Eof(), text, offset);
         AssertFurthest(Terms.Identifier().And(Longest(static matches => matches.IndexOfLongest(), Terms.Text("fr"), Terms.Text("from").AndSkip(Literals.Char('!')))).When(static (_, _) => false).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;", 1)]
+    [InlineData("  >ab;;", 3)]
+    [InlineData(">a;b;;", 1)]
+    [InlineData(">ab ;;", 1)]
+    [InlineData(">a b ;;", 1)]
+    [InlineData("  >two words  and ; more ;;", 3)]
+    public void Rejected_Text_Before_A_Delimiter_Fails_At_Its_Start(string text, int offset)
+    {
+        // The delimiter is found and not consumed: the cursor is moved back from a delimiter which matched, not a failure
+        // where it ended
+        var literal = Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;")).And(Literals.Char(';')).When(static (_, _) => false)).Eof();
+        AssertFurthest(literal, text, offset);
+
+        // A delimiter which skips white space isn't searched for by its first chars
+        var term = Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;")).And(Terms.Char(';')).When(static (_, _) => false)).Eof();
+        AssertFurthest(term, text, offset);
+
+        // The text alone, and the text followed by its delimiter
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;")).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;")).AndSkip(Terms.Text(";;")).When(static (_, _) => false)).Eof(), text, offset);
+
+        // Rejected by a conversion
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;")).And(Literals.Char(';')).ThenTry(static _ => (false, 0))).Eof(), text, offset);
+
+        // A delimiter which is consumed is part of the value
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+
+        // A delimiter which reads some text before it fails, where it is looked for in the text
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Char(';').And(Literals.Char(';'))).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Char(';').And(Terms.Char(';')), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab", 1)]
+    [InlineData(">a b", 1)]
+    [InlineData("  >two words  and ; more", 3)]
+    public void Rejected_Text_Up_To_The_End_Fails_At_Its_Start(string text, int offset)
+    {
+        // The delimiter isn't found: where it was looked for in the text isn't a failure either
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;")).When(static (_, _) => false)).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Char(';').And(Terms.Char(';')), consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">12 foo bar: x", 7)]
+    [InlineData(">foo  bar baz :", 9)]
+    public void Delimiter_Looked_For_Past_The_End_Of_The_Text_Isnt_A_Failure(string text, int offset)
+    {
+        // `foo` isn't followed by a colon: the delimiter is looked for from there up to `bar`, past where the text ends
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Identifier().And(Terms.Char(':')))).AndSkip(Literals.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;?", 3)]
+    [InlineData(">a;b;;?", 4)]
+    [InlineData(">a;b;;", 4)]
+    [InlineData(">;;?", 1)]
+    public void Parser_After_A_Text_Before_A_Delimiter_Fails_Where_It_Starts(string text, int offset)
+    {
+        // The text ends before the delimiter, where the next parser is expected: the delimiter was only looked for
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), canBeEmpty: true)).AndSkip(Literals.Char('!')).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), canBeEmpty: true)).AndSkip(Literals.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">;;", 1)]
+    [InlineData("  >;;!", 3)]
+    [InlineData("  > ;;!", 3)]
+    public void Empty_Text_Before_A_Delimiter_Fails_At_The_Delimiter(string text, int offset)
+    {
+        // The delimiter matched where a text is expected, like what Not finds: nothing was read further
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"))).AndSkip(Terms.Text(";;")).AndSkip(Terms.Char('!')).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), consumeDelimiter: true)).AndSkip(Terms.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;", 4)]
+    [InlineData(">ab", 3)]
+    [InlineData(">", 1)]
+    [InlineData(">a;b;c", 6)]
+    public void Delimiter_Which_Isnt_Found_Fails_At_The_End(string text, int offset)
+    {
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), failOnEof: true)).AndSkip(Literals.Text(";;")).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Terms.Text(";;"), failOnEof: true)).AndSkip(Terms.Text(";;")).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), failOnEof: true, consumeDelimiter: true)).Eof(), text, offset);
+
+        // The whole text is read when the end isn't a failure, and the delimiter is expected there
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), canBeEmpty: true)).AndSkip(Literals.Text(";;")).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;cd?", 7)]
+    [InlineData(">ab;;  cd ?", 10)]
+    [InlineData(">ab;;?", 5)]
+    public void Parser_Failing_After_The_Delimiter_Is_Still_The_Furthest_Failure(string text, int offset)
+    {
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"))).AndSkip(Literals.Text(";;")).AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(Literals.Text(";;"), consumeDelimiter: true)).AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">ab;;cd?", 7)]
+    [InlineData(">ab;;  cd ?", 10)]
+    [InlineData(">ab;;?", 5)]
+    public void Alternative_Of_A_Delimiter_Counts_When_The_Delimiter_Is_Consumed(string text, int offset)
+    {
+        // The first alternative reads further than the one which matches
+        var delimiter = Literals.Text(";;").AndSkip(Terms.Identifier()).AndSkip(Terms.Char('!')).Or(Literals.Text(";;"));
+
+        // A delimiter which is consumed is part of the value, like the alternatives of a choice in it
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(delimiter, consumeDelimiter: true).When(static (_, _) => false)).Eof(), text, offset);
+
+        // One which isn't consumed is a lookahead, like the one of WhenFollowedBy
+        AssertFurthest(Terms.Char('>').SkipAnd(AnyCharBefore(delimiter).When(static (_, _) => false)).Eof(), text, 1);
+        AssertFurthest(Terms.Char('>').SkipAnd(Literals.Text("ab").WhenFollowedBy(delimiter).When(static (_, _) => false)).Eof(), text, 1);
+    }
+
+    [Theory]
+    [InlineData(">/* a comment */", 1)]
+    [InlineData("  >/* a comment */", 3)]
+    [InlineData(">'a\\'b' ", 1)]
+    [InlineData(">  'a\\'b' ", 3)]
+    public void Token_Read_Again_With_More_Text_Forgets_What_It_Recorded(string text, int offset)
+    {
+        // A token which ends with the buffer fails there and moves the cursor back, then is read again with more text:
+        // the end of the buffer isn't a failure
+        var comment = Terms.Char('>').SkipAnd(Terms.Comments("/*", "*/").When(static (_, _) => false)).Eof();
+        var quoted = Terms.Char('>').SkipAnd(Terms.String().When(static (_, _) => false)).Eof();
+        var parser = text.IndexOf('/') >= 0 ? comment.Then(static _ => 0) : quoted.Then(static _ => 0);
+
+        for (var bufferSize = 1; bufferSize <= 8; bufferSize++)
+        {
+            AssertFurthest(parser, text, offset, bufferSize);
+        }
+    }
+
+    [Theory]
+    [InlineData(">1 + 2", 1)]
+    [InlineData(">1  +  2", 1)]
+    [InlineData("  >  1 + 2 * 3", 5)]
+    [InlineData(">1 * 2 + 3", 1)]
+    [InlineData(">1", 1)]
+    public void Rejected_Expression_Of_Valued_Operators_Fails_At_Its_Start(string text, int offset)
+    {
+        // The white space before an operator whose value is passed to the factory is skipped to look for it, and the
+        // cursor is moved back for the level which parses the operator: not a failure
+        var valued = Terms.Integer().Operators()
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => op == "*" ? a * b : a / b)
+            .LeftAssociative([Terms.Text("+"), Terms.Text("-")], static (a, b, op) => op == "+" ? a + b : a - b);
+
+        AssertFurthest(Terms.Char('>').SkipAnd(valued.When(static (_, _) => false)).Eof(), text, offset);
+
+        // The same table, whose factories don't receive the operators
+        var plain = Terms.Integer().Operators()
+            .LeftAssociative((Terms.Text("*"), static (a, b) => a * b), (Terms.Text("/"), static (a, b) => a / b))
+            .LeftAssociative((Terms.Text("+"), static (a, b) => a + b), (Terms.Text("-"), static (a, b) => a - b));
+
+        AssertFurthest(Terms.Char('>').SkipAnd(plain.When(static (_, _) => false)).Eof(), text, offset);
+    }
+
+    [Theory]
+    [InlineData(">1 + 2 ?", 7)]
+    [InlineData(">1 +", 4)]
+    [InlineData(">1  +  x", 7)]
+    [InlineData(">1 * 2 + ", 9)]
+    public void Expression_Of_Valued_Operators_Reports_What_Follows_It(string text, int offset)
+    {
+        var valued = Terms.Integer().Operators()
+            .LeftAssociative([Terms.Text("*"), Terms.Text("/")], static (a, b, op) => op == "*" ? a * b : a / b)
+            .LeftAssociative([Terms.Text("+"), Terms.Text("-")], static (a, b, op) => op == "+" ? a + b : a - b);
+
+        AssertFurthest(Terms.Char('>').SkipAnd(valued).Eof(), text, offset);
+
+        var plain = Terms.Integer().Operators()
+            .LeftAssociative((Terms.Text("*"), static (a, b) => a * b), (Terms.Text("/"), static (a, b) => a / b))
+            .LeftAssociative((Terms.Text("+"), static (a, b) => a + b), (Terms.Text("-"), static (a, b) => a - b));
+
+        AssertFurthest(Terms.Char('>').SkipAnd(plain).Eof(), text, offset);
     }
 
     [Theory]

@@ -46,6 +46,15 @@ public static partial class FailureGrammars
     public static partial bool ConversionRejectedAlternative(string text, out string value, out int failureOffset);
     public static partial bool ConversionRejectedAlternative(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
+    public static partial bool RejectedPair(string text, out string value, out int failureOffset);
+    public static partial bool RejectedPair(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedAfterComments(string text, out string value, out int failureOffset);
+    public static partial bool RejectedAfterComments(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedWhiteSpace(string text, out string value, out int failureOffset);
+    public static partial bool RejectedWhiteSpace(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
     public static partial bool Second(string text, out string value, out int failureOffset);
 
     public static partial bool NotFollowed(string text, out string value, out int failureOffset);
@@ -77,4 +86,28 @@ public static partial class FailureGrammars
 
     public static partial bool SpanBacktracking(string text, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool SpanBacktracking(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBefore(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBefore(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBeforeTerm(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBeforeTerm(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool TextBeforeConsumed(string text, out string value, out int failureOffset);
+    public static partial bool TextBeforeConsumed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool TextBeforeThenOther(string text, out string value, out int failureOffset);
+    public static partial bool TextBeforeThenOther(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool TextBeforeRequired(string text, out string value, out int failureOffset);
+    public static partial bool TextBeforeRequired(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBeforeChoice(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBeforeChoice(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedTextBeforeConsumed(string text, out string value, out int failureOffset);
+    public static partial bool RejectedTextBeforeConsumed(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    public static partial bool RejectedValuedOperators(string text, out long value, out int failureOffset);
+    public static partial bool RejectedValuedOperators(TextReader reader, out long value, out (int Offset, int Line, int Column) failure);
 }
