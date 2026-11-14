@@ -18,62 +18,30 @@ namespace Parlot.SourceGenerator.Tests;
 /// </remarks>
 internal static class TestDirectory
 {
-    /// <summary>
-    /// The key in <see cref="Exception.Data"/> of the exception a test threw, for the exception the delete threw after it.
-    /// </summary>
-    internal const string CleanupFailure = "Parlot.TestDirectory.CleanupFailure";
-
-    public static void Run(string directory, Action body)
-        => Run(directory, body, Delete);
-
-    public static Task RunAsync(string directory, Func<Task> body)
-        => RunAsync(directory, body, Delete);
-
-    internal static void Run(string directory, Action body, Action<string> delete)
-    {
-        try
-        {
-            body();
-        }
-        catch (Exception failure)
-        {
-            DeleteAfterFailure(directory, delete, failure);
-            throw;
-        }
-
-        delete(directory);
-    }
-
-    internal static async Task RunAsync(string directory, Func<Task> body, Action<string> delete)
+    // The only form takes a Func<Task>: an async lambda given to an Action would be async void, and the directory deleted
+    // while the test still runs. A test which awaits nothing returns Task.CompletedTask.
+    public static async Task RunAsync(string directory, Func<Task> body)
     {
         try
         {
             await body();
         }
-        catch (Exception failure)
+        catch
         {
-            DeleteAfterFailure(directory, delete, failure);
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (Exception exception)
+            {
+                // The test failed already: its exception is the one to report, this one only says what was left behind
+                TestContext.Current.TestOutputHelper?.WriteLine(
+                    $"The test failed, and '{directory}' could not be deleted after it: {exception}");
+            }
+
             throw;
         }
 
-        delete(directory);
-    }
-
-    private static void Delete(string directory)
-        => Directory.Delete(directory, recursive: true);
-
-    private static void DeleteAfterFailure(string directory, Action<string> delete, Exception failure)
-    {
-        try
-        {
-            delete(directory);
-        }
-        catch (Exception exception)
-        {
-            // The test failed already: its exception is the one to report, this one only says what was left behind
-            failure.Data[CleanupFailure] = exception;
-            TestContext.Current.TestOutputHelper?.WriteLine(
-                $"The test failed, and '{directory}' could not be deleted after it: {exception}");
-        }
+        Directory.Delete(directory, recursive: true);
     }
 }

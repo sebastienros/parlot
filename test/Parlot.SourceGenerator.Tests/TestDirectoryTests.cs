@@ -1,41 +1,42 @@
 #nullable enable
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Xunit;
 
 namespace Parlot.SourceGenerator.Tests;
 
+// The bodies either throw before they return a task or return one which fails: both are a test which failed.
+// A directory which doesn't exist is one the delete fails on, on every platform.
 public class TestDirectoryTests
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task A_Delete_That_Fails_Does_Not_Hide_The_Failure_Of_The_Test(bool asynchronous)
+    public async Task A_Delete_That_Fails_Does_Not_Hide_The_Failure_Of_The_Test(bool yields)
     {
+        var directory = Missing();
         var failure = new InvalidOperationException("The test failed.");
-        var cleanup = new IOException("The directory is being used by another process.");
 
-        var reported = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Run(asynchronous, () => throw failure, _ => throw cleanup));
+        var reported = await Record.ExceptionAsync(() => TestDirectory.RunAsync(directory, Body(yields, () => throw failure)));
 
         Assert.Same(failure, reported);
-        Assert.Same(cleanup, reported.Data[TestDirectory.CleanupFailure]);
+        // What the delete threw is in the output of the test, which is reported with a test that failed
+        var output = TestContext.Current.TestOutputHelper!.Output;
+        Assert.Contains(directory, output);
+        Assert.Contains(nameof(DirectoryNotFoundException), output);
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task A_Delete_That_Fails_Fails_A_Test_That_Passed(bool asynchronous)
+    public async Task A_Delete_That_Fails_Fails_A_Test_That_Passed(bool yields)
     {
-        var cleanup = new IOException("The directory is being used by another process.");
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(
+            () => TestDirectory.RunAsync(Missing(), Body(yields, static () => { })));
 
-        var reported = await Assert.ThrowsAsync<IOException>(
-            () => Run(asynchronous, static () => { }, _ => throw cleanup));
-
-        Assert.Same(cleanup, reported);
+        Assert.Empty(TestContext.Current.TestOutputHelper!.Output);
     }
 
     [Theory]
@@ -43,82 +44,40 @@ public class TestDirectoryTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task The_Directory_Is_Deleted_Once_After_The_Test(bool asynchronous, bool fails)
+    public async Task The_Directory_And_Its_Content_Are_Deleted_After_The_Test(bool yields, bool fails)
     {
+        var directory = Directory.CreateDirectory(Missing()).FullName;
         var failure = new InvalidOperationException("The test failed.");
-        var calls = new List<string>();
 
-        var reported = await Record.ExceptionAsync(() => Run(
-            asynchronous,
-            () =>
-            {
-                calls.Add("test");
-                if (fails)
-                {
-                    throw failure;
-                }
-            },
-            directory => calls.Add(directory)));
-
-        Assert.Same(fails ? failure : null, reported);
-        Assert.Null(failure.Data[TestDirectory.CleanupFailure]);
-        Assert.Equal(["test", "directory"], calls);
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task The_Directory_And_Its_Content_Are_Deleted(bool asynchronous, bool fails)
-    {
-        var directory = Directory.CreateDirectory(Path.Combine(
-            Path.GetTempPath(), "Parlot.TestDirectory.Tests", Guid.NewGuid().ToString("N"))).FullName;
-        void Body()
+        var reported = await Record.ExceptionAsync(() => TestDirectory.RunAsync(directory, Body(yields, () =>
         {
+            // Throws when the directory was deleted before the test ended
             File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(directory, "nested")).FullName, "file"), "");
+            Assert.True(Directory.Exists(directory));
             if (fails)
             {
-                throw new InvalidOperationException("The test failed.");
+                throw failure;
             }
-        }
+        })));
 
-        var reported = await Record.ExceptionAsync(async () =>
-        {
-            if (asynchronous)
-            {
-                await TestDirectory.RunAsync(directory, async () =>
-                {
-                    await Task.Yield();
-                    Body();
-                });
-            }
-            else
-            {
-                TestDirectory.Run(directory, Body);
-            }
-        });
-
-        Assert.Equal(fails, reported is InvalidOperationException);
+        Assert.Same(fails ? failure : null, reported);
         Assert.False(Directory.Exists(directory));
+        Assert.Empty(TestContext.Current.TestOutputHelper!.Output);
     }
 
-    private static async Task Run(bool asynchronous, Action body, Action<string> delete)
-    {
-        if (asynchronous)
-        {
-            await TestDirectory.RunAsync(
-                "directory",
-                async () =>
-                {
-                    await Task.Yield();
-                    body();
-                },
-                delete);
-        }
-        else
-        {
-            TestDirectory.Run("directory", body, delete);
-        }
-    }
+    private static string Missing()
+        => Path.Combine(Path.GetTempPath(), "Parlot.TestDirectory.Tests", Guid.NewGuid().ToString("N"));
+
+    private static Func<Task> Body(bool yields, Action test)
+        => yields
+            ? async () =>
+            {
+                await Task.Yield();
+                test();
+            }
+            : () =>
+            {
+                test();
+                return Task.CompletedTask;
+            };
 }
