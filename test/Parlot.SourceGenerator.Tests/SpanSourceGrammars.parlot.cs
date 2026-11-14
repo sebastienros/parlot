@@ -124,6 +124,15 @@ public static partial class SpanSourceGrammars
             .And(Terms.Number<double>(NumberOptions.Float | NumberOptions.AllowUnderscore).ZeroOrOne())
             .Then(static t => $"{t.Item1}|{t.Item2}|{string.Join(",", t.Item3)}");
 
+    // A trailing decimal separator is left for the next parser
+    [GenerateParser(nameof(TryParseFractionalPartRequired))]
+    private static Parser<string> BuildFractionalPartRequired() =>
+        Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals)
+            .AndSkip(Terms.Text(".."))
+            .And(Terms.Number<double>(NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals))
+            .AndSkip(ZeroOrOne(Literals.Char('.')))
+            .Then(static t => $"{t.Item1}|{t.Item2}");
+
     // A custom white space parser skips comments
     [GenerateParser(nameof(TryParseCommented))]
     private static Parser<string> BuildCommented() =>

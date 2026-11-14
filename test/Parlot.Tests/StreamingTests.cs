@@ -52,6 +52,12 @@ public class StreamingTests
         // Trailing underscores aren't part of the number, but digits could follow them in the next window
         ["underscores"] = new Grammar<decimal>(Terms.Number<decimal>(NumberOptions.Any | NumberOptions.AllowUnderscore)),
         ["underscores-list"] = new Grammar<IReadOnlyList<long>>(Separated(Terms.Char(';'), Terms.Number<long>(NumberOptions.Integer | NumberOptions.AllowUnderscore))),
+        // A trailing decimal separator is left for the next parser, but digits could follow it in the next window
+        ["fractional-required"] = new Grammar<(decimal, string, decimal)>(
+            Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals)
+                .And(Terms.Text(".."))
+                .And(Terms.Number<decimal>(NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals))),
+        ["fractional-required-list"] = new Grammar<IReadOnlyList<double>>(Separated(Terms.Char('.'), Terms.Number<double>(NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals))),
         ["text"] = new Grammar<string>(Terms.Text("hello")),
         ["text-ci"] = new Grammar<string>(Terms.Text("hello", caseInsensitive: true)),
         ["keyword"] = new Grammar<string>(Terms.Keyword("for")),
@@ -224,6 +230,8 @@ public class StreamingTests
         Add("decimal", "", "1", "1.5", "1.", "1.e", "12.5e-3", "1e", "1e+", ".5", "-0.25 ", "1.e5", "1.e+", "1.E-2x");
         Add("double", "", "1", "1.5e10", "1e", "2.", "-3.25e-2x", "2.e3", "2.e");
         Add("underscores", "", "1_000", "1_", "1__", "1__2", "1_x", "1,000_000.0_5e1_0", "1._5", "1e_5", "1e1_", "-1_2 ", "_1");
+        Add("fractional-required", "", "1..5", "1.5..2.5", "1...5", "1.", "1..", "1..5.", "-1..-2", "1,000..2,000.5", ".5...5", "1.e5..2");
+        Add("fractional-required-list", "", "1.2.3", "1.5.2.5", "1..2", "1.", "1.e5.2", "1.5e2.3");
         Add("underscores-list", "", "1_000;2__0;3", "1_;2", "1;_2", "1_2_3;4_5_6", "9_223_372_036_854_775_807;1");
         Add("text", "", "h", "hel", "hello", "hello!", " hello", "help");
         Add("text-ci", "", "HEL", "HeLLo", "HELP", "hellO world");

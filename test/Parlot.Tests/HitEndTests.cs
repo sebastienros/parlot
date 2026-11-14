@@ -184,6 +184,11 @@ public class HitEndTests
     [InlineData("1e5_", NumberOptions.Float | NumberOptions.AllowUnderscore, "1e5", true)]
     [InlineData("1,5_", NumberOptions.Number | NumberOptions.AllowUnderscore, "1,5", true)]
     [InlineData("1_,", NumberOptions.Number | NumberOptions.AllowUnderscore, "1", false)]
+    // Digits could follow a trailing separator, which is then part of the number
+    [InlineData("1.", NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals, "1", true)]
+    [InlineData("1.x", NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals, "1", false)]
+    [InlineData("1.e5", NumberOptions.Float | NumberOptions.RequireFractionalPartForDecimals, "1", false)]
+    [InlineData("1,000.", NumberOptions.Number | NumberOptions.RequireFractionalPartForDecimals, "1,000", true)]
     public void ReadDecimalHitsEndWhenItReadsTheEnd(string text, NumberOptions options, string expected, bool hitEnd)
     {
         var s = new Scanner(text, isFinal: false);
