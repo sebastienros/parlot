@@ -386,8 +386,10 @@ internal sealed class StreamingItemReader<T, TSeparator>
                     throw _driver.ToAbsolute(e);
                 }
 
-                // Don't retain the white space unless it might continue
-                if (!cursor.HitEnd)
+                // Don't retain the white space unless what follows the window can change how it is read: a white space
+                // parser reads a comment which the window cuts again from its start. The chars of the context's set are
+                // white space whatever follows them, so a run of them is dropped window after window
+                if (!cursor.HitEnd || context.WhiteSpaceParser is null)
                 {
                     start = cursor.Offset;
                 }
