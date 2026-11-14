@@ -18,6 +18,10 @@ public partial class LookaheadBenchmarks
     private static Parser<string> BuildNot() =>
         Not(Terms.Text("from")).SkipAnd(Terms.Identifier()).Then(static value => "");
 
+    [GenerateParser(nameof(TryParsePeeked))]
+    private static Parser<string> BuildPeeked() =>
+        Peek(Terms.Text("from")).SkipAnd(Terms.Identifier()).Then(static value => "");
+
     [GenerateParser(nameof(TryParsePeekBlocks))]
     private static Parser<int> BuildPeekBlocks() => Blocks(usePeek: true);
 

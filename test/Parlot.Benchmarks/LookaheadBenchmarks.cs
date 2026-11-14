@@ -12,6 +12,7 @@ public partial class LookaheadBenchmarks
     public static partial bool TryParseNotFollowed(string text, out string value);
     public static partial bool TryParseNot(string text, out string value);
     public static partial bool TryParseWhen(string text, out string value);
+    public static partial bool TryParsePeeked(string text, out string value);
     public static partial bool TryParsePeekBlocks(string text, out int value);
     public static partial bool TryParseFollowedBlocks(string text, out int value);
 
@@ -56,6 +57,14 @@ public partial class LookaheadBenchmarks
     [Benchmark]
     public bool NegativeRejected() => TryParseNot("  from", out _);
 
+    // A lookahead which matches moves the cursor back and forgets what was recorded since, one which doesn't leaves its
+    // failure
+    [Benchmark]
+    public bool Peeked() => TryParsePeeked("  from", out _);
+
+    [Benchmark]
+    public bool PeekedRejected() => TryParsePeeked("  word", out _);
+
     // The same grammars at runtime, see LookaheadBenchmarks.parlot.cs
     private static readonly Parser<string> FollowedParser =
         Terms.Identifier().WhenFollowedBy(Terms.Char('(')).Then(static value => "");
@@ -68,6 +77,9 @@ public partial class LookaheadBenchmarks
 
     private static readonly Parser<string> WhenParser =
         Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f').Then(static value => "");
+
+    private static readonly Parser<string> PeekedParser =
+        Peek(Terms.Text("from")).SkipAnd(Terms.Identifier()).Then(static value => "");
 
     [Benchmark]
     public bool RuntimeFollowed() => FollowedParser.TryParse("  word  (", out _);
@@ -89,6 +101,12 @@ public partial class LookaheadBenchmarks
 
     [Benchmark]
     public bool RuntimeNegativeRejected() => NotParser.TryParse("  from", out _);
+
+    [Benchmark]
+    public bool RuntimePeeked() => PeekedParser.TryParse("  from", out _);
+
+    [Benchmark]
+    public bool RuntimePeekedRejected() => PeekedParser.TryParse("  word", out _);
 
     [Benchmark, BenchmarkCategory("Peek")]
     public int AlwaysWhenFollowedBy_Runtime() => FollowedBlocks.Parse(BlocksText);
