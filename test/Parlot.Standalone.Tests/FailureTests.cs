@@ -379,6 +379,59 @@ public class FailureTests
     }
 
     [Theory]
+    [InlineData("abc ?", 0)] // The first alternative of the lookahead reads up to 4 before the second one matches
+    [InlineData("  abc  ?", 2)]
+    [InlineData("abc ( ?", 0)]
+    [InlineData("  abc", 2)]
+    [InlineData("  ( ", 2)] // No alternative matches: the lookahead was expected, after its white space
+    [InlineData("abc ? x", 0)]
+    public void Peek_That_Matched_Forgets_The_Alternatives_Which_Failed(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedAlternatives(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedAlternatives(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    [InlineData(4092)]
+    [InlineData(4093)]
+    [InlineData(4094)]
+    [InlineData(4095)]
+    [InlineData(4096)]
+    public void Peek_Read_Across_Two_Buffers_Doesnt_Count(int padding)
+    {
+        // The buffer of the reader, of 4096 chars, ends in the white space the lookahead skips or in the text it matches:
+        // the text is read again with more of it, and the cursor moves back to a start which is still buffered
+        var text = new string(' ', padding - 1) + ">  ab";
+
+        Assert.False(FailureGrammars.PeekedRejected(text, out _, out var failureOffset));
+        Assert.Equal(padding + 2, failureOffset);
+
+        Assert.False(FailureGrammars.PeekedRejected(new StringReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(padding + 2, failure.Offset);
+
+        Assert.False(FailureGrammars.PeekedRejected(new OneCharReader(text), out _, out failure));
+        Assert.Equal(padding + 2, failure.Offset);
+
+        text = new string(' ', padding) + "abc ?";
+
+        Assert.False(FailureGrammars.PeekedAlternatives(new StringReader(text), out _, out failure));
+        Assert.Equal(padding, failure.Offset);
+
+        text = new string(' ', padding) + "abc : ?";
+
+        Assert.False(FailureGrammars.PeekedFurther(new StringReader(text), out _, out failure));
+        Assert.Equal(padding + 4, failure.Offset);
+
+        text = new string(' ', padding) + "abc ;";
+
+        Assert.False(FailureGrammars.PeekedFurther(new StringReader(text), out _, out failure));
+        Assert.Equal(padding + 4, failure.Offset);
+    }
+
+    [Theory]
     [InlineData("abc", 0)]
     [InlineData("  abc", 2)]
     [InlineData("  abd,", 5)]

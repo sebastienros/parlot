@@ -150,6 +150,11 @@ public static partial class FailureGrammars
     public static Parser<string> BuildPeekedFurther() =>
         Peek(Terms.Identifier().And(Terms.Char(':'))).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char('!')).Eof();
 
+    // A lookahead whose first alternative reads further than the one which matches
+    [GenerateParser(nameof(PeekedAlternatives))]
+    public static Parser<string> BuildPeekedAlternatives() =>
+        Peek(OneOf(Terms.Identifier().AndSkip(Terms.Char('(')), Terms.Identifier())).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
+
     [GenerateParser(nameof(Negative))]
     public static Parser<string> BuildNegative() =>
         Not(Terms.Text("abc")).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();

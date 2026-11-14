@@ -59,6 +59,8 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         var cursor = context.Scanner.Cursor;
         var start = cursor.Offset;
+
+        // Read before the parser: what its alternatives recorded before one of them matched is forgotten too
         var recorded = cursor.RecordedFailure;
 
         // The text is read again once the parser matched
