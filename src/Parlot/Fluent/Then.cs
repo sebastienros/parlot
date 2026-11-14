@@ -150,13 +150,17 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
             // emitted part by part, and gives back the white space skipped before a part when it fails
             var sequenceSource = SequenceStartSource.Create(context, content);
 
-            if (sequenceSource != null || _parser is ISeekable { SkipWhitespace: true })
+            // A parser which reads from where it is invoked, like a capture or a lookahead, is invoked there, and
+            // starts there
+            var skipBefore = LeadingWhiteSpace.CanSkipBefore(_parser);
+
+            if (sequenceSource != null || skipBefore)
             {
                 resetName = $"reset{context.NextNumber()}";
                 result.Body.Add($"var {resetName} = {cursorName}.Offset;");
             }
 
-            if (_parser is ISeekable { SkipWhitespace: true })
+            if (skipBefore)
             {
                 result.Body.Add($"if ({ctx}.MaySkipWhiteSpace({cursorName}.Current))");
                 result.Body.Add("{");

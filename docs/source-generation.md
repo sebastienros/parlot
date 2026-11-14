@@ -257,7 +257,9 @@ allocation. The scanner, cursor, and context use the shared runtime implementati
   which matched something does, as at runtime: it is emitted part by part, and the start moves past the white space the
   next part skips while nothing matched. Such a part which matches something, like an `Optional` of a `Terms` parser,
   reports the start of its content when all the parsers it can start with skip white space, and the offset where it was
-  entered otherwise. A `ThenTry` callback receives the same offsets, and a value it rejects is reported as the furthest
+  entered otherwise. A parser which reads from where it is invoked though what it reads first skips white space, like a
+  `Capture` of a `Terms` parser or a `Peek`, is invoked there and reports that offset, as at runtime: the captured text
+  holds the white space. A `ThenTry` callback receives the same offsets, and a value it rejects is reported as the furthest
   failure at its start, like one a `When` rejects.
 - The matches a `Longest` selector receives start where the choice invokes its alternatives, after the white space it
   skips when they all skip it. When they don't, the runtime reports the start of each match's content, after the white

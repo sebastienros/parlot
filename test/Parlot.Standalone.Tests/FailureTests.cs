@@ -352,6 +352,98 @@ public class FailureTests
         Assert.Equal(offset, failure.Offset);
     }
 
+    private delegate bool StringGrammar(string text, out string value, out int failureOffset);
+    private delegate bool ReaderGrammar(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+
+    [Theory]
+    [InlineData("  9;", 2)] // The capture holds the two spaces: three chars are rejected, where the value starts
+    [InlineData(" 12;", 1)]
+    [InlineData("\n\t 9;", 3)]
+    [InlineData("123;", 0)]
+    [InlineData(" 9,", 2)] // Accepted with its space, the failure is the one of what follows
+    [InlineData("  ,", 2)]
+    public void Captured_Value_Rejected_With_The_White_Space_Before_It_Fails_At_Its_Start(string text, int offset)
+    {
+        var grammars = new (StringGrammar Text, ReaderGrammar Reader)[]
+        {
+            (FailureGrammars.CapturedRejected, FailureGrammars.CapturedRejected),
+            (FailureGrammars.CapturedConversionRejected, FailureGrammars.CapturedConversionRejected),
+            (FailureGrammars.CapturedOffsetsRejected, FailureGrammars.CapturedOffsetsRejected),
+        };
+
+        foreach (var (grammar, readerGrammar) in grammars)
+        {
+            Assert.False(grammar(text, out _, out var failureOffset));
+            Assert.Equal(offset, failureOffset);
+
+            Assert.False(readerGrammar(new OneCharReader(text), out _, out var failure));
+            Assert.Equal(offset, failure.Offset);
+        }
+    }
+
+    [Theory]
+    [InlineData(4094)]
+    [InlineData(4095)]
+    [InlineData(4096)]
+    [InlineData(4097)]
+    public void Captured_Value_Holds_The_White_Space_Read_Across_Two_Buffers(int padding)
+    {
+        // The white space before the number is read across the two buffers of a TextReader parser, and captured with it
+        var text = new string(' ', padding) + "9;";
+
+        Assert.False(FailureGrammars.CapturedRejected(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(padding, failure.Offset);
+
+        Assert.False(FailureGrammars.CapturedConversionRejected(new StringReader(text), out _, out failure));
+        Assert.Equal(padding, failure.Offset);
+
+        Assert.False(FailureGrammars.CapturedOffsetsRejected(new OneCharReader(text), out _, out failure));
+        Assert.Equal(padding, failure.Offset);
+    }
+
+    [Fact]
+    public void Captured_Value_Is_Accepted_With_The_White_Space_Before_It()
+    {
+        Assert.True(FailureGrammars.CapturedRejected(" 9;", out var value, out _));
+        Assert.Equal(" 9", value);
+        Assert.True(FailureGrammars.CapturedRejected(new OneCharReader(" 9 ;"), out value, out (int Offset, int Line, int Column) _));
+        Assert.Equal(" 9", value);
+
+        Assert.True(FailureGrammars.CapturedConversionRejected(" 9;", out value, out _));
+        Assert.Equal(" 9", value);
+        Assert.True(FailureGrammars.CapturedConversionRejected(new OneCharReader(" 9 ;"), out value, out (int Offset, int Line, int Column) _));
+        Assert.Equal(" 9", value);
+
+        // The value starts where the capture does
+        Assert.True(FailureGrammars.CapturedOffsetsRejected(" 9;", out value, out _));
+        Assert.Equal(" 9@0-2", value);
+        Assert.True(FailureGrammars.CapturedOffsetsRejected(new OneCharReader(" 9 ;"), out value, out (int Offset, int Line, int Column) _));
+        Assert.Equal(" 9@0-2", value);
+    }
+
+    [Theory]
+    [InlineData(" abc", 0)] // The text is read from before the space the lookahead skipped
+    [InlineData("  abc", 0)]
+    [InlineData("abx", 0)]
+    [InlineData(" x", 1)] // The lookahead was expected, it fails after its white space
+    public void Value_After_A_Lookahead_Under_A_Condition_Is_Read_From_Before_Its_White_Space(string text, int offset)
+    {
+        Assert.False(FailureGrammars.PeekedCondition(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+        Assert.False(FailureGrammars.PeekedCondition(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.False(FailureGrammars.PeekedConversion(text, out _, out failureOffset));
+        Assert.Equal(offset, failureOffset);
+        Assert.False(FailureGrammars.PeekedConversion(new OneCharReader(text), out _, out failure));
+        Assert.Equal(offset, failure.Offset);
+
+        Assert.True(FailureGrammars.PeekedCondition("abc", out var value, out _));
+        Assert.Equal("abc", value);
+        Assert.True(FailureGrammars.PeekedConversion(new OneCharReader("abc"), out value, out (int Offset, int Line, int Column) _));
+        Assert.Equal("abc", value);
+    }
+
     [Theory]
     [InlineData("> ab", 2)] // The lookahead skips the white space before the value and matches it: the value fails where it starts
     [InlineData(">ab", 1)]

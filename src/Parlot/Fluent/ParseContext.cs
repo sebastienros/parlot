@@ -574,6 +574,43 @@ public class ParseContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int SkippedWhiteSpaceEnd(int start) => start == _cacheOffset ? _cacheEndOffset : -1;
 
+    /// <summary>
+    /// Where <see cref="SkipWhiteSpace"/> would move the cursor, which stays where it is: where the value of a parser
+    /// starts when what it reads first skips white space, for a parser which reports a value it rejects there and can't
+    /// skip the white space itself, since the parser reads from where it is invoked (a capture holds the white space, a
+    /// lookahead leaves the cursor before it).
+    /// </summary>
+    /// <remarks>
+    /// The white space stays buffered while it is read, for the parser to read it again. Invoke it when
+    /// <see cref="MaySkipWhiteSpace(char)"/> tells that there is some to skip. Not inlined: tokens skip the white space
+    /// themselves, only the other parsers pay for it.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal int WhiteSpaceEnd()
+    {
+        var cursor = Scanner.Cursor;
+        var start = cursor.Offset;
+
+        if (start == _cacheOffset)
+        {
+            return _cacheEndOffset;
+        }
+
+        // Moving the cursor back over white space is not a failure where it ends
+        var recorded = cursor.RecordedFailure;
+        var pin = Pin();
+
+        SkipWhiteSpace();
+
+        var end = cursor.Offset;
+
+        cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
+        Unpin(pin);
+
+        return end;
+    }
+
     public void SkipWhiteSpace()
     {
         var offset = Scanner.Cursor.Offset;

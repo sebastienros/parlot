@@ -248,6 +248,180 @@ public class CompactingStreamTests
         Assert.Equal(text, parser.Parse(new ChunkedReader(text, 1), new StreamParseOptions { BufferSize = 1 }).ToString());
     }
 
+    // Parsers which read from where they are invoked, though what they read first skips white space: a capture holds
+    // that white space, a lookahead leaves the cursor before it. Each is under a condition or a conversion, which reads
+    // where the value starts, after the white space, to report a value it rejects.
+    private static readonly System.Collections.Generic.Dictionary<string, Parser<string>> ReadFromTheirStart = new()
+    {
+        ["when-capture"] = Capture(Terms.Integer()).When(static (_, value) => value.Length < 3).Then(static value => value.ToString()),
+        ["thentry-capture"] = Capture(Terms.Integer()).ThenTry(static value => (value.Length < 3, value.ToString())),
+        ["thentry-capture-offsets"] = Capture(Terms.Integer()).ThenTry(static (ParseContext _, int start, int end, TextSpan value, out string result) =>
+        {
+            result = $"{value}@{start}-{end}";
+            return value.Length < 3;
+        }),
+        ["when-capture-sequence"] = Capture(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer())).When(static (_, value) => value.Length < 8).Then(static value => value.ToString()),
+        ["when-peek"] = Peek(Terms.Char('a')).When(static (_, _) => true).SkipAnd(Literals.Text("abc")),
+        ["thentry-peek"] = Peek(Terms.Char('a')).ThenTry(static value => (true, value)).SkipAnd(Literals.Text("abc")),
+        ["when-peek-rejected"] = Peek(Terms.Identifier()).When(static (_, value) => value.Length < 3).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
+        ["thentry-peek-rejected"] = Peek(Terms.Identifier()).ThenTry(static value => (value.Length < 3, value)).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
+        ["when-not"] = Not(Terms.Char('x')).SkipAnd(Capture(Terms.Identifier())).When(static (_, value) => value.Length < 4).Then(static value => value.ToString()),
+        ["when-token"] = Terms.Integer().When(static (_, value) => value < 100).Then(static value => value.ToString()),
+        ["thentry-token"] = Terms.Integer().ThenTry(static value => (value < 100, value.ToString())),
+        ["when-tokens"] = Terms.Identifier().And(Terms.Integer()).When(static (_, value) => value.Item2 < 100).Then(static value => $"{value.Item1}{value.Item2}"),
+    };
+
+    public static TheoryData<string, string> ReadFromTheirStartCases()
+    {
+        var data = new TheoryData<string, string>();
+
+        void Add(string grammar, params string[] texts)
+        {
+            foreach (var text in texts)
+            {
+                data.Add(grammar, text);
+            }
+        }
+
+        string[] numbers = ["9", " 9", "  9", " 12", "  12", "123", "  123", "\n\t 9 x", " x", "  ", ""];
+        Add("when-capture", numbers);
+        Add("thentry-capture", numbers);
+        Add("thentry-capture-offsets", numbers);
+        Add("when-capture-sequence", "a=1", " a=1", "  a = 1", " a = 12", "  ab = 12", " a =", "  a = x");
+        string[] texts = ["abc", " abc", "  abc", " ab", " x", "  ", ""];
+        Add("when-peek", texts);
+        Add("thentry-peek", texts);
+        string[] words = ["ab", " ab", "  ab x", " abc", "  abcd ", " 1", "  "];
+        Add("when-peek-rejected", words);
+        Add("thentry-peek-rejected", words);
+        Add("when-not", "ab", " ab", "  ab", "   a", " x", "  abcd", "  ");
+        Add("when-token", "9", "  9", "  123", " x", "  ");
+        Add("thentry-token", "9", "  9", "  123", " x", "  ");
+        Add("when-tokens", "a 9", "  a  9", "  a  123", " a x", "  ");
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(ReadFromTheirStartCases))]
+    public void ConditionsAndConversionsReadTheirParserFromWhereItIsInvoked(string grammar, string text)
+    {
+        var parser = ReadFromTheirStart[grammar];
+
+        // The buffer holds the text one char at a time, or a few. After 4096 spaces or about, the white space before the
+        // value, or the value, is read across two buffers of the default size.
+        foreach (var (bufferSize, padding) in new[] { (1, 0), (2, 0), (3, 0), (1, 4094), (4096, 4094), (4096, 4095), (4096, 4096), (4096, 4097) })
+        {
+            var padded = new string(' ', padding) + text;
+
+            var context = new ParseContext(new Scanner(padded));
+            var expected = parser.TryParse(context, out var expectedValue, out _);
+
+            // A failed parse leaves the cursor where it was
+            Assert.True(expected || context.Scanner.Cursor.Offset == 0);
+
+            ParseContext? readerContext = null;
+            var options = new StreamParseOptions { BufferSize = bufferSize, ContextFactory = (scanner, ct) => readerContext = new ParseContext(scanner, ct) };
+            var actual = parser.TryParse(new ChunkedReader(padded, 1), out var actualValue, out _, options);
+            var description = $"'{text}' after {padding} spaces with a buffer of {bufferSize}";
+
+            Assert.True(expected == actual, $"{description}: {(actual ? $"matched '{actualValue}'" : "failed")}, the string parser {(expected ? $"matched '{expectedValue}'" : "failed")}");
+            Assert.True(expectedValue == actualValue, $"{description}: '{actualValue}' instead of '{expectedValue}'");
+            Assert.True(context.Scanner.Cursor.Offset == readerContext!.Scanner.Cursor.Offset, $"{description}: the cursor is at {readerContext.Scanner.Cursor.Offset} instead of {context.Scanner.Cursor.Offset}");
+            Assert.True(context.Scanner.Cursor.FurthestOffset == readerContext.Scanner.Cursor.FurthestOffset, $"{description}: the furthest failure is {readerContext.Scanner.Cursor.FurthestOffset} instead of {context.Scanner.Cursor.FurthestOffset}");
+        }
+    }
+
+    [Theory]
+    [InlineData(" 9", " 9")]
+    [InlineData("  9", null)]
+    [InlineData("12", "12")]
+    [InlineData(" 12", null)]
+    public void CapturesUnderAConditionHoldTheWhiteSpaceTheirParserSkips(string text, string? expected)
+    {
+        var when = Capture(Terms.Integer()).When(static (_, value) => value.Length < 3).Then(static value => value.ToString());
+        var thenTry = Capture(Terms.Integer()).ThenTry(static value => (value.Length < 3, value.ToString()));
+
+        foreach (var parser in new[] { when, thenTry })
+        {
+            Assert.Equal(expected, parser.Parse(text));
+            Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 1), new StreamParseOptions { BufferSize = 1 }));
+            Assert.Equal(expected, parser.Parse(new ChunkedReader(text + " x", 1), new StreamParseOptions { BufferSize = 1 }));
+        }
+    }
+
+    [Theory]
+    [InlineData("abc", "abc")]
+    [InlineData(" abc", null)]
+    public void LookaheadsUnderAConditionLeaveTheCursorBeforeTheWhiteSpaceTheirParserSkips(string text, string? expected)
+    {
+        var when = Peek(Terms.Char('a')).When(static (_, _) => true).SkipAnd(Literals.Text("abc"));
+        var thenTry = Peek(Terms.Char('a')).ThenTry(static value => (true, value)).SkipAnd(Literals.Text("abc"));
+
+        foreach (var parser in new[] { when, thenTry })
+        {
+            Assert.Equal(expected, parser.Parse(text));
+            Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 1), new StreamParseOptions { BufferSize = 1 }));
+        }
+    }
+
+    [Fact]
+    public void ConditionsOnTokensDontKeepTheWhiteSpaceBeforeThem()
+    {
+        // A token skips the white space before it itself, before anything else, and so does a sequence or a choice of
+        // tokens: a condition or a conversion skips it first, to know where a value it rejects starts, and doesn't keep it
+        var spaces = new string(' ', 10_000);
+
+        var when = Terms.Char('[').SkipAnd(Terms.Identifier().When(static (_, value) => value.Length < 5)).AndSkip(Terms.Char(']')).Then(static value => value.ToString());
+        var thenTry = Terms.Char('[').SkipAnd(Terms.Identifier().ThenTry(static value => (value.Length < 5, value.ToString()))).AndSkip(Terms.Char(']'));
+        var sequence = Terms.Char('[').SkipAnd(Terms.Identifier().AndSkip(Terms.Char('!')).When(static (_, value) => value.Length < 5)).AndSkip(Terms.Char(']')).Then(static value => value.ToString());
+        var choice = Terms.Char('[').SkipAnd(OneOf(Terms.Identifier(), Terms.Pattern(char.IsDigit)).ThenTry(static value => (value.Length < 5, value.ToString()))).AndSkip(Terms.Char(']'));
+
+        foreach (var parser in new[] { when, thenTry, sequence, choice })
+        {
+            var mark = parser == sequence ? "!" : "";
+
+            var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+            Assert.Equal("id1", parser.Parse(new ChunkedReader("[" + spaces + "id1" + mark + spaces + "]", 3), options));
+            Assert.InRange(peak(), 1, 64);
+
+            // A rejected one fails where it starts
+            ParseContext? context = null;
+            options = new StreamParseOptions { BufferSize = 16, ContextFactory = (scanner, ct) => context = new ParseContext(scanner, ct) };
+            Assert.False(parser.TryParse(new ChunkedReader("[" + spaces + "longer" + mark + "]", 3), out _, out _, options));
+            Assert.Equal(1 + spaces.Length, context!.Scanner.Cursor.FurthestOffset);
+        }
+    }
+
+    [Fact]
+    public void WhiteSpaceBeforeAParserReadFromItsStartIsKeptWhileItIsSkipped()
+    {
+        // A capture holds the white space its parser skips: it is read before the capture, to know where a value which
+        // is rejected starts, and stays buffered for the capture to read it again
+        var spaces = new string(' ', 1000);
+        var when = Capture(Terms.Integer()).When(static (_, value) => value.Length < 1010).Then(static value => value.ToString()).AndSkip(Terms.Char(';'));
+        var thenTry = Capture(Terms.Integer()).ThenTry(static value => (value.Length < 1010, value.ToString())).AndSkip(Terms.Char(';'));
+
+        foreach (var parser in new[] { when, thenTry })
+        {
+            var (options, peak) = Observe(new StreamParseOptions { BufferSize = 4 });
+            Assert.Equal(spaces + "12", parser.Parse(new ChunkedReader(spaces + "12 ;", 1), options));
+            Assert.True(peak() > 1000, $"Peak {peak()}");
+
+            ParseContext? context = null;
+            options = new StreamParseOptions { BufferSize = 4, ContextFactory = (scanner, ct) => context = new ParseContext(scanner, ct) };
+            Assert.False(parser.TryParse(new ChunkedReader(spaces + "12345678901 ;", 1), out _, out _, options));
+            Assert.Equal(0, context!.Scanner.Cursor.Offset);
+            Assert.Equal(1000, context.Scanner.Cursor.FurthestOffset);
+        }
+
+        // A lookahead reads it again too, and it is released once the lookahead is done
+        var peeked = Peek(Terms.Identifier()).When(static (_, value) => value.Length < 5).SkipAnd(Terms.Identifier()).AndSkip(ZeroOrMany(Terms.Char(';'))).Then(static value => value.ToString());
+        var (peekedOptions, peekedPeak) = Observe(new StreamParseOptions { BufferSize = 4 });
+        Assert.Equal("ab", peeked.Parse(new ChunkedReader(spaces + "ab " + new string(';', 5000), 1), peekedOptions));
+        Assert.InRange(peekedPeak(), 1000, 1100);
+    }
+
     [Theory]
     [InlineData(1, 1)]
     [InlineData(2, 3)]

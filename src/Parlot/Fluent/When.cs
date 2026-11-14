@@ -1,6 +1,7 @@
 using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -48,17 +49,14 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to, as in generated
         // code. The start is known after the white space the parser skips, which only the failure path looks for. A
-        // compacting buffer can't be read again from the start, so it is skipped first.
+        // compacting buffer can't be read again from the start, so where the white space ends is read first.
         var valueStart = -1;
 
-        if (context.IsCompacting && _parser is ISeekable { SkipWhitespace: true })
+        if (context.IsCompacting)
         {
-            if (context.MaySkipWhiteSpace(cursor.Current))
-            {
-                context.SkipWhiteSpace();
-            }
-
-            valueStart = cursor.Offset;
+            // No white space to look for, the value starts here: the char is read first, as most values have none
+            // before them, which the parser that invoked this one often skipped already
+            valueStart = context.MaySkipWhiteSpace(cursor.Current) ? ReadValueStart(context) : start;
         }
 
         if (!_parser.Parse(context, ref result))
@@ -92,6 +90,38 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         return true;
     }
 
+    // What the parser does with the white space before it, read when it is first asked for since the parser can be a
+    // Deferred set later
+    private LeadingWhiteSpace.Cache? _leading;
+
+    // Where the value starts when the buffer is a compacting one and there is white space at the cursor: after the white
+    // space the parser skips, or where it is invoked when it doesn't skip any. Not inlined: parsing a string doesn't pay
+    // for it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private int ReadValueStart(ParseContext context)
+    {
+        var leading = LeadingWhiteSpace.Of(ref _leading, _parser);
+        var cursor = context.Scanner.Cursor;
+
+        if (leading == LeadingWhiteSpaceUse.None)
+        {
+            return cursor.Offset;
+        }
+
+        if (leading == LeadingWhiteSpaceUse.Skipped)
+        {
+            // The parser skips it before anything else, like a token, a sequence or a choice of tokens: it is skipped
+            // for it, and isn't kept
+            context.SkipWhiteSpace();
+
+            return cursor.Offset;
+        }
+
+        // Any other parser is invoked where a string parser invokes it: a capture holds the white space it skips, and a
+        // lookahead leaves the cursor before it
+        return context.WhiteSpaceEnd();
+    }
+
     public SourceResult GenerateSource(SourceGenerationContext context)
     {
         ThrowHelper.ThrowIfNull(context, nameof(context));
@@ -118,17 +148,30 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
 
         // A value that doesn't meet the condition is the failure, at its start, wherever it was read up to. The start is
         // known after the white space the parser skips, which only the failure path looks for. A compacting buffer can't
-        // be read again from the start, so it is skipped first.
+        // be read again from the start, so where the white space ends is read first: it is skipped for a parser which
+        // would skip it first itself, and read without moving the cursor for one which reads from where it is invoked,
+        // like a capture or a lookahead.
         var skipsWhiteSpace = _parser is ISeekable { SkipWhitespace: true };
         var valueStartName = $"valueStart{context.NextNumber()}";
 
         if (skipsWhiteSpace && context.IsCompacting)
         {
-            result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
-            result.Body.Add("{");
-            result.Body.Add($"    {context.ParseContextName}.SkipWhiteSpace();");
-            result.Body.Add("}");
-            result.Body.Add($"var {valueStartName} = {cursorName}.Offset;");
+            if (LeadingWhiteSpace.CanSkipBefore(_parser))
+            {
+                result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {context.ParseContextName}.SkipWhiteSpace();");
+                result.Body.Add("}");
+                result.Body.Add($"var {valueStartName} = {cursorName}.Offset;");
+            }
+            else
+            {
+                result.Body.Add($"var {valueStartName} = {startName};");
+                result.Body.Add($"if ({context.ParseContextName}.MaySkipWhiteSpace({cursorName}.Current))");
+                result.Body.Add("{");
+                result.Body.Add($"    {valueStartName} = {context.ParseContextName}.WhiteSpaceEnd();");
+                result.Body.Add("}");
+            }
         }
 
         var innerValueName = $"innerValue{context.NextNumber()}";
