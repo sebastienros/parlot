@@ -73,7 +73,9 @@ statements stopped matching, at the start of the statement that failed, while th
 statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
 expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
 return, with the same rules for what a parser reads and then rejects (`When`, `ThenTry`, `Not`, `WhenNotFollowedBy`) or
-only looks for (`WhenFollowedBy`, `Peek`, and the delimiter of `AnyCharBefore` unless it is found and consumed).
+only looks for (`WhenFollowedBy`, `Peek`, and the delimiter of `AnyCharBefore` unless it is found and consumed). A token
+built from `Literals`, like a dotted name, reports its failures where it starts and ends when it is wrapped in
+[AsToken](#astoken), as a scanner would.
 
 The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
 reused for successive parses reports the failure of the last one. A parse which drives `Parse(context, ref result)`
@@ -2008,6 +2010,40 @@ Result:
 ```
 "age = 12"
 ```
+
+### AsToken
+
+Reads a parser as a token, the way a lexer reads it, for the [furthest failure](#reporting-where-a-parse-failed): what
+the parser tries and drops doesn't count. When the parser fails, the failure is where it starts, after the white space
+it skips first. When it matches, the failure is where it ends, or the one of what follows. It matches what the parser
+matches, with its value.
+
+```c#
+Parser<T> AsToken<T>(Parser<T> parser)
+```
+
+A token built from `Literals` can try continuations that a scanner would not read: a dotted name tries a name after each
+`.`, and moves the cursor back from it when there is none. Without `AsToken`, `x.+y` reports offset 2, after the `.`;
+with it, offset 1, where `+` or the end is expected after the name `x`.
+
+Usage:
+
+```c#
+var name = AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier())));
+var sum = Separated(Literals.Char('+'), name).Eof();
+
+var context = new ParseContext(new Scanner("x.+y"));
+sum.TryParse(context, out _, out _);
+context.Scanner.Cursor.FurthestOffset;
+```
+
+Result:
+
+```
+1
+```
+
+Which inputs are accepted doesn't change. Generated parsers report the same failure.
 
 ## Flow parsers
 
