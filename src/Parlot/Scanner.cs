@@ -212,9 +212,11 @@ public class Scanner
         var span = Cursor.Span;
         var length = span.Length;
 
+        // A copy whose fields the JIT can keep in registers, rather than reading them through the reference for each char
+        var set = chars;
         var i = 0;
 
-        while (++i < length && chars.Contains(span[i])) ;
+        while (++i < length && set.Contains(span[i])) ;
 
         // The line and the column are computed from the text, the chars can be new lines
         Cursor.AdvanceNoNewLines(i);

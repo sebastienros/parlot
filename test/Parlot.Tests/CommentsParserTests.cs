@@ -494,6 +494,49 @@ public class CommentsParserTests
         Assert.Equal(expected, parser.TryParse(text, out _));
     }
 
+    [Theory]
+    [InlineData(false, "a\uFEFF\u2028 b", "a|b")]
+    [InlineData(true, "a\uFEFF\u2028 b", "a")]
+    [InlineData(true, "a\uFEFF\v b", "a|b")]
+    [InlineData(true, "a /* \n */ b", "a|b")]
+    [InlineData(true, "a\r\nb", "a")]
+    public void ShouldNotSkipTheNewLinesOfTheBuilderWithUseNewLines(bool useNewLines, string text, string expected)
+    {
+        // As the new lines of a WhiteSpaceSet, in the single parser and in the composed ones
+        Action<CommentsBuilder> composed = static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithMultiLine("/*", "*/").WithParser(Capture(Literals.Text("...")));
+
+        foreach (var comments in new[] { _javaScriptChars, composed })
+        {
+            var context = new ParseContext(new Scanner(text), useNewLines: useNewLines);
+            ParseResult<IReadOnlyList<TextSpan>> result = default;
+
+            Assert.True(_identifiers.WithComments(comments).Parse(context, ref result));
+            Assert.Equal(expected, string.Join("|", result.Value));
+        }
+    }
+
+    [Fact]
+    public void ShouldReadTheNewLinesOfTheBuilderAsTokensWithUseNewLines()
+    {
+        var parser = Terms.Identifier().AndSkip(Terms.Char('\u2028')).And(Terms.Identifier()).WithComments(_javaScriptChars);
+        var context = new ParseContext(new Scanner("a \uFEFF\u2028\v b"), useNewLines: true);
+        ParseResult<(TextSpan, TextSpan)> result = default;
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal("b", result.Value.Item2.ToString());
+    }
+
+    [Fact]
+    public void ShouldTreatACharOfBothSetsAsWhiteSpace()
+    {
+        // '\v' is given as white space and as a new line: UseNewLines still skips it
+        var context = new ParseContext(new Scanner("a\vb"), useNewLines: true);
+        ParseResult<IReadOnlyList<TextSpan>> result = default;
+
+        Assert.True(_identifiers.WithComments(static c => c.WithWhiteSpace("\v ", "\n\v")).Parse(context, ref result));
+        Assert.Equal("a|b", string.Join("|", result.Value));
+    }
+
     [Fact]
     public void ShouldNotSkipTheNewLinesOfTheBuilderWhenThereAreNone()
     {

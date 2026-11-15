@@ -11,46 +11,51 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <remarks>
 /// It is built by <see cref="CommentsBuilder.Build"/>. At each position it skips the white space of the context's
-/// <see cref="ParseContext.WhiteSpaceSet"/>, or the chars of <see cref="CommentsBuilder.WithWhiteSpace(string, string)"/>, when
-/// the builder includes white space, then the first comment, in the order they were added, that starts there. It succeeds
+/// <see cref="ParseContext.WhiteSpaceSet"/>, or the chars of <see cref="CommentsBuilder.WithWhiteSpace(string, string)"/> (with
+/// its new lines unless <see cref="ParseContext.UseNewLines"/> is set), when the builder includes white space, then the first comment, in the order they were added, that starts there. It succeeds
 /// when it skipped something.
 /// </remarks>
 public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
-    private readonly bool _skipWhiteSpace;
-    private readonly bool _includeNewLines;
+    private readonly WhiteSpaceKind _whiteSpace;
     private readonly CommentSyntax[] _comments;
 
-    // The chars of the white space, when the builder gives them, instead of the context's WhiteSpaceSet
-    private readonly string? _whiteSpaceChars;
-    private readonly CharSet _whiteSpaceCharSet;
+    // The chars of WhiteSpaceKind.Chars: without the new lines, which are skipped too unless UseNewLines is set, and with them
+    private readonly string? _spaceChars;
+    private readonly string? _spaceOrNewLineChars;
+    private readonly CharSet _spaces;
+    private readonly CharSet _spacesOrNewLines;
 
     // The first chars of the comments, to tell at once that no comment starts at a char
     private readonly string _firstChars;
 
-    internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments, string? whiteSpaceChars = null)
+    // Skips the white space of the context's WhiteSpaceSet, with its new lines or not
+    internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments)
+        : this(skipWhiteSpace ? includeNewLines ? WhiteSpaceKind.WhiteSpaceOrNewLine : WhiteSpaceKind.WhiteSpace : WhiteSpaceKind.None, comments)
     {
-        _skipWhiteSpace = skipWhiteSpace || whiteSpaceChars is not null;
-        // The chars of the builder are skipped instead of the context's white space and new lines
-        _includeNewLines = includeNewLines && whiteSpaceChars is null;
+        // The chars of the default set contain the ones of every WhiteSpaceSet
+        var whiteSpaceChars = skipWhiteSpace ? new WhiteSpaceLiteral(includeNewLines).ExpectedChars : [];
+        ExpectedChars = whiteSpaceChars.Concat(_firstChars).Distinct().ToArray();
+    }
+
+    // Skips the chars of whiteSpace, and those of newLines unless the context's UseNewLines is set, as with the masks of a
+    // WhiteSpaceSet
+    internal CommentsParser(string whiteSpace, string newLines, CommentSyntax[] comments)
+        : this(WhiteSpaceKind.Chars, comments)
+    {
+        _spaceChars = whiteSpace;
+        _spaceOrNewLineChars = whiteSpace + newLines;
+        _spaces = new CharSet(whiteSpace.AsSpan());
+        _spacesOrNewLines = new CharSet(_spaceOrNewLineChars.AsSpan());
+        ExpectedChars = _spaceOrNewLineChars.Concat(_firstChars).Distinct().ToArray();
+    }
+
+    private CommentsParser(WhiteSpaceKind whiteSpace, CommentSyntax[] comments)
+    {
+        _whiteSpace = whiteSpace;
         _comments = comments;
         _firstChars = new string(comments.Select(static c => c.Start[0]).Distinct().ToArray());
-        _whiteSpaceChars = whiteSpaceChars;
-
-        char[] skippedChars;
-
-        if (whiteSpaceChars is not null)
-        {
-            _whiteSpaceCharSet = new CharSet(whiteSpaceChars.AsSpan());
-            skippedChars = whiteSpaceChars.ToCharArray();
-        }
-        else
-        {
-            // The chars of the default set contain the ones of every WhiteSpaceSet
-            skippedChars = skipWhiteSpace ? new WhiteSpaceLiteral(includeNewLines).ExpectedChars : [];
-        }
-
-        ExpectedChars = skippedChars.Concat(_firstChars).Distinct().ToArray();
+        ExpectedChars = [];
 
         Name = "CommentsParser";
     }
@@ -61,7 +66,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     /// <summary>
     /// The chars of the white space it skips, and the first char of each comment.
     /// </summary>
-    public char[] ExpectedChars { get; }
+    public char[] ExpectedChars { get; private set; }
 
     /// <inheritdoc/>
     public bool SkipWhitespace => false;
@@ -85,21 +90,24 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
         while (true)
         {
-            if (_skipWhiteSpace)
+            // The context's white space and new lines, the common case, are tested first
+            if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
             {
-                // The chars of the builder have no new lines flag: the context's white space and new lines, the common
-                // case, are tested first
-                if (_includeNewLines)
+                scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
+            }
+            else if (_whiteSpace == WhiteSpaceKind.WhiteSpace)
+            {
+                scanner.SkipWhiteSpace(context.WhiteSpaceMask);
+            }
+            else if (_whiteSpace == WhiteSpaceKind.Chars)
+            {
+                if (context.UseNewLines)
                 {
-                    scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
-                }
-                else if (_whiteSpaceChars is null)
-                {
-                    scanner.SkipWhiteSpace(context.WhiteSpaceMask);
+                    scanner.SkipChars(in _spaces);
                 }
                 else
                 {
-                    scanner.SkipChars(in _whiteSpaceCharSet);
+                    scanner.SkipChars(in _spacesOrNewLines);
                 }
             }
 
@@ -212,14 +220,26 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         result.Body.Add("while (true)");
         result.Body.Add("{");
 
-        if (_whiteSpaceChars is not null)
+        if (_whiteSpace == WhiteSpaceKind.Chars)
         {
-            var charSetName = context.RegisterStaticField("private static readonly global::Parlot.CharSet", $"new global::Parlot.CharSet({LiteralHelper.StringToLiteral(_whiteSpaceChars)}.AsSpan())");
-            result.Body.Add($"    {scannerName}.SkipChars(in {charSetName});");
+            var spaceOrNewLinesName = context.GetCharSetField(_spaceOrNewLineChars!);
+
+            if (_spaceChars!.Length == _spaceOrNewLineChars!.Length)
+            {
+                result.Body.Add($"    {scannerName}.SkipChars(in {spaceOrNewLinesName});");
+            }
+            else
+            {
+                // The new lines are not white space when UseNewLines is set
+                result.Body.Add($"    if ({ctx}.UseNewLines)");
+                result.Body.Add($"        {scannerName}.SkipChars(in {context.GetCharSetField(_spaceChars)});");
+                result.Body.Add("    else");
+                result.Body.Add($"        {scannerName}.SkipChars(in {spaceOrNewLinesName});");
+            }
         }
-        else if (_skipWhiteSpace)
+        else if (_whiteSpace != WhiteSpaceKind.None)
         {
-            result.Body.Add(_includeNewLines
+            result.Body.Add(_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine
                 ? $"    {scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);"
                 : $"    {scannerName}.SkipWhiteSpace({ctx}.WhiteSpaceMask);");
         }
@@ -312,6 +332,15 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
     /// <inheritdoc/>
     public override string ToString() => "Comments";
+
+    // What CommentsParser skips as white space before each comment
+    private enum WhiteSpaceKind
+    {
+        None,
+        WhiteSpace,
+        WhiteSpaceOrNewLine,
+        Chars,
+    }
 
     // A comment of the builder: a multi line comment has an end, a single line comment can have line terminators
     internal sealed class CommentSyntax

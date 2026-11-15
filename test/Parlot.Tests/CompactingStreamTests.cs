@@ -549,6 +549,18 @@ public class CompactingStreamTests
         Assert.InRange(peak(), 1, 64);
     }
 
+    [Fact]
+    public void CommentsWithTheirOwnCharsAreTokens()
+    {
+        var parser = ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace("\t\v \u00A0\uFEFF\u3000", "\n\r\u2028\u2029").WithSingleLine("//", "\n\r\u2028\u2029").WithMultiLine("/*", "*/"));
+        var text = string.Join(" \uFEFF/* a comment */\u2028\u3000", Enumerable.Range(0, 100).Select(static i => "id" + i)) + " // end";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 2 });
+
+        Assert.Equal(100, parser.Parse(new ChunkedReader(text, 1), options)!.Count);
+        Assert.InRange(peak(), 1, 64);
+    }
+
     [Theory]
     [InlineData("var a; let b var c;\n  var d")]
     [InlineData("let a; const b; let c;")]

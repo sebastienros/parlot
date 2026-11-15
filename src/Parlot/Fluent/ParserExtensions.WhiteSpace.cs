@@ -70,8 +70,9 @@ public class CommentsBuilder
     private bool _whiteSpace;
     private bool _whiteSpaceOrNewLine;
 
-    // The chars of WithWhiteSpace(whiteSpace, newLines), without duplicates
-    private string? _whiteSpaceChars;
+    // The chars of WithWhiteSpace(whiteSpace, newLines), without duplicates: a char of both is white space
+    private string? _spaceChars;
+    private string? _newLineChars;
 
     // How many white space elements were added
     private int _whiteSpaceCount;
@@ -123,7 +124,8 @@ public class CommentsBuilder
     /// </summary>
     /// <param name="whiteSpace">The chars which are white space, for instance <c>"\t\v\f \u00A0\uFEFF"</c> and the other
     /// <c>Zs</c> chars for JavaScript.</param>
-    /// <param name="newLines">The chars which are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript. It can be
+    /// <param name="newLines">The chars which are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript. They are
+    /// skipped unless <see cref="ParseContext.UseNewLines"/> is set, as the new lines of a <see cref="WhiteSpaceSet"/>. It can be
     /// empty, to skip no new line.</param>
     /// <remarks>
     /// <para>
@@ -146,10 +148,13 @@ public class CommentsBuilder
             throw new ArgumentException("At least one white space or new line char is required.", nameof(whiteSpace));
         }
 
-        var chars = new string((whiteSpace + newLines).Distinct().ToArray());
+        var spaces = new string(whiteSpace.Distinct().ToArray());
+        var lines = new string(newLines.Distinct().Where(c => spaces.IndexOf(c) < 0).ToArray());
 
-        _parsers.Add(Literals.AnyOf(chars));
-        _whiteSpaceChars = chars;
+        // A CommentsParser without comments skips the chars when the elements are composed, as with UseNewLines
+        _parsers.Add(new CommentsParser(spaces, lines, []));
+        _spaceChars = spaces;
+        _newLineChars = lines;
         _whiteSpaceCount++;
         return this;
     }
@@ -272,7 +277,7 @@ public class CommentsBuilder
     // comment which starts with a white space char is matched by the composed parsers in the order they were added
     private bool CanSkipInOneParser()
     {
-        if (_composed || _whiteSpaceChars is not null && _whiteSpaceCount > 1)
+        if (_composed || _spaceChars is not null && _whiteSpaceCount > 1)
         {
             return false;
         }
@@ -281,7 +286,8 @@ public class CommentsBuilder
         {
             var first = comment.Start[0];
 
-            if (_whiteSpaceChars is not null ? _whiteSpaceChars.AsSpan().IndexOf(first) >= 0 : Character.IsWhiteSpaceOrNewLine(first))
+            // The context's set isn't known when the grammar is built: the default set contains the chars of every set
+            if (_spaceChars is not null ? (_spaceChars + _newLineChars).AsSpan().IndexOf(first) >= 0 : Character.IsWhiteSpaceOrNewLine(first))
             {
                 return false;
             }
@@ -304,6 +310,8 @@ public class CommentsBuilder
             return Capture(OneOrMany(OneOf(_parsers.ToArray())));
         }
 
-        return new CommentsParser(_whiteSpace || _whiteSpaceOrNewLine, _whiteSpaceOrNewLine, _comments.ToArray(), _whiteSpaceChars);
+        return _spaceChars is not null
+            ? new CommentsParser(_spaceChars, _newLineChars!, _comments.ToArray())
+            : new CommentsParser(_whiteSpace || _whiteSpaceOrNewLine, _whiteSpaceOrNewLine, _comments.ToArray());
     }
 }

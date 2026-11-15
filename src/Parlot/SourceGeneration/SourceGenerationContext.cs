@@ -390,6 +390,34 @@ public sealed class SourceGenerationContext
     internal string GetCaseCacheField(CaseCache cache)
         => GetSharedField(cache, "private static readonly global::Parlot.CaseCache", "new global::Parlot.CaseCache()");
 
+    /// <summary>
+    /// Returns the name of the static field holding a <see cref="CharSet"/> of <paramref name="chars"/>, registering it the first
+    /// time for this string instance, which the parser holds, whatever the number of times its code is generated.
+    /// </summary>
+    /// <remarks>The chars are escaped, so that the generated code shows the invisible ones like U+FEFF.</remarks>
+    internal string GetCharSetField(string chars)
+        => GetSharedField(chars, "private static readonly global::Parlot.CharSet", $"new global::Parlot.CharSet({EscapedLiteral(chars)}.AsSpan())");
+
+    // A string literal with \uXXXX for every char which isn't printable ASCII
+    private static string EscapedLiteral(string chars)
+    {
+        var builder = new System.Text.StringBuilder(chars.Length * 6 + 2).Append('"');
+
+        foreach (var c in chars)
+        {
+            if (c is >= ' ' and <= '~' and not '"' and not '\\')
+            {
+                builder.Append(c);
+            }
+            else
+            {
+                builder.Append("\\u").Append(((int)c).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
+        return builder.Append('"').ToString();
+    }
+
     private string GetSharedField(object owner, string declaration, string initializer)
     {
         _sharedFields ??= new Dictionary<object, string>(ReferenceComparer.Instance);

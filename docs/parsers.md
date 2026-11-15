@@ -1821,8 +1821,9 @@ var parser = grammar.WithComments(builder => builder
     .WithMultiLine("/*", "*/"));
 ```
 
-Both sets of chars are skipped (`newLines` can be empty), tested with a table built once, so this costs the same as the white
-space of a set. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`. The line of
+Both sets of chars are skipped, tested with a table built once, so this costs about the same as the white space of a set. As
+with the new lines of a set, those of `newLines`, which can be empty, are not skipped when `UseNewLines` is set; a char of both
+is white space. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`. The line of
 `Cursor.Position` still counts the `\n` chars only.
 
 A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
