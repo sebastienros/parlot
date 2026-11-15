@@ -1,6 +1,7 @@
 #nullable enable
 
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using System;
 using System.Linq;
 using Xunit;
@@ -117,10 +118,149 @@ public class NewLineTests
         Assert.Throws<ArgumentNullException>(() => NoNewLineBefore<TextSpan>(null!));
     }
 
+    // An arrow after a parameter read as an expression, as in JavaScript: the arrow can't follow a new line, an assignment can
+    internal static Parser<string> CreateArrowTail()
+    {
+        var assignmentOperator = OneOf(Terms.Text("="), Terms.Text("+="));
+        var assignment = assignmentOperator.And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+
+        return Terms.Identifier().And(OneOf(assignment, arrow).Else("")).Then(static x => x.Item1.ToString() + x.Item2);
+    }
+
+    // Postfix operators which can't follow a new line, as in JavaScript, in a table with binary operators
+    internal static Parser<string> CreatePostfixTable()
+    {
+        return Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix((NoNewLineBefore(Terms.Text("++")), static x => "(" + x + "++)"), (NoNewLineBefore(Terms.Text("--")), static x => "(" + x + "--)"))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => "(" + a + "*" + b + ")"))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => "(" + a + "+" + b + ")"));
+    }
+
+    [Theory]
+    [InlineData(" =>", "=>")]
+    [InlineData("=>", "=>")]
+    [InlineData(" += ", "+=")]
+    [InlineData("\n+=", "+=")]
+    [InlineData("\n=>", null)]
+    [InlineData(" \r\n =>", null)]
+    public void NoNewLineBeforeShouldKeepTheLookupOfAChoice(string input, string? expected)
+    {
+        // The choice skips the white space once for its alternatives, and NoNewLineBefore reads the white space it skipped
+        var tail = OneOf(Terms.Text("+="), NoNewLineBefore(Terms.Text("=>")));
+        var seekable = (ISeekable)tail;
+
+        Assert.True(seekable.CanSeek);
+        Assert.True(seekable.SkipWhitespace);
+        Assert.Equal(['+', '='], seekable.ExpectedChars.OrderBy(static c => c));
+
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.Equal(expected is not null, tail.Parse(context, ref result));
+
+        if (expected is null)
+        {
+            Assert.Equal(0, context.Scanner.Cursor.Offset);
+        }
+        else
+        {
+            Assert.Equal(expected, result.Value);
+            Assert.Equal(input.TrimEnd().Length, context.Scanner.Cursor.Offset);
+        }
+    }
+
+    [Theory]
+    [InlineData("a => b", "a=>b")]
+    [InlineData("a /* x */ => b", "a=>b")]
+    [InlineData("a = b", "a=b")]
+    [InlineData("a\n= b", "a=b")]
+    [InlineData("a /* x */ += b", "a+=b")]
+    [InlineData("a\n=> b", "a")]
+    [InlineData("a /* \n */ => b", "a")]
+    [InlineData("a // x\n=> b", "a")]
+    [InlineData("a\n/* x */ => b", "a")]
+    public void NoNewLineBeforeShouldSeeTheWhiteSpaceAChoiceSkipped(string input, string expected)
+    {
+        // The assignment operator, a nested choice which reads "=", is tried before the arrow and skips white space again,
+        // where there is none: NoNewLineBefore still finds the new line skipped by the choice holding both
+        Assert.Equal(expected, WithComments(CreateArrowTail()).Parse(input));
+
+        // The white space set, which caches the white space it skips whether it skips any or not
+        if (!input.Contains('/'))
+        {
+            Assert.Equal(expected, CreateArrowTail().Parse(input));
+        }
+    }
+
+    [Theory]
+    [InlineData("a++", "(a++)")]
+    [InlineData("a ++ * b", "((a++)*b)")]
+    [InlineData("a /* x */ --", "(a--)")]
+    [InlineData("a ++--", "((a++)--)")]
+    [InlineData("a * b++", "(a*(b++))")]
+    [InlineData("a\n++", "a")]
+    [InlineData("a /* \n */ ++", "a")]
+    [InlineData("a // x\n--", "a")]
+    [InlineData("a++\n++", "(a++)")]
+    [InlineData("a\n+ b", "(a+b)")]
+    [InlineData("a\n* b", "(a*b)")]
+    public void NoNewLineBeforeShouldBeAPostfixOperatorOfATable(string input, string expected)
+    {
+        Assert.Equal(expected, WithComments(CreatePostfixTable()).Parse(input));
+
+        if (!input.Contains('/'))
+        {
+            Assert.Equal(expected, CreatePostfixTable().Parse(input));
+        }
+    }
+
+    [Fact]
+    public void ATableWithNoNewLineBeforeOperatorsShouldKeepItsLookup()
+    {
+        // The operators which can't follow the next char aren't tried
+        var parser = CreatePostfixTable();
+        var entered = 0;
+        var context = new ParseContext(new Scanner("a * b")) { OnEnterParser = (p, _) => entered += p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal) ? 1 : 0 };
+        var result = new ParseResult<string>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal("(a*b)", result.Value);
+        Assert.Equal(0, entered);
+
+        context = new ParseContext(new Scanner("a ++")) { OnEnterParser = (p, _) => entered += p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal) ? 1 : 0 };
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal("(a++)", result.Value);
+        Assert.Equal(1, entered);
+    }
+
+    [Theory]
+    [InlineData("a   x")]
+    [InlineData("a \n x")]
+    [InlineData("a   =x")]
+    [InlineData("a   +x")]
+    [InlineData("a /* c */ x")]
+    [InlineData("a   ")]
+    public void AChoiceWithNoNewLineBeforeShouldFailWhereAChoiceSkippingTheWhiteSpaceDoes(string input)
+    {
+        // The alternatives are invoked before the white space, and the choice fails after it, as when it skips it for them
+        var skipping = WithComments(Terms.Identifier().And(OneOf(Terms.Text("+="), Terms.Text("=>"))).Eof());
+        var restricted = WithComments(Terms.Identifier().And(OneOf(Terms.Text("+="), NoNewLineBefore(Terms.Text("=>")))).Eof());
+
+        var expected = new ParseContext(new Scanner(input));
+        var actual = new ParseContext(new Scanner(input));
+        var result = new ParseResult<(TextSpan, string)>();
+
+        Assert.False(skipping.Parse(expected, ref result));
+        Assert.False(restricted.Parse(actual, ref result));
+        Assert.Equal(0, actual.Scanner.Cursor.Offset);
+        Assert.Equal(expected.Scanner.Cursor.FurthestOffset, actual.Scanner.Cursor.FurthestOffset);
+    }
+
     [Fact]
     public void NoNewLineBeforeShouldWorkInAChoice()
     {
-        // The choice can't skip the white space once for its alternatives, that would hide the new line
+        // The choice skips the white space once for its alternatives
         var postfix = Terms.Identifier().And(OneOf(NoNewLineBefore(Terms.Text("++")), NoNewLineBefore(Terms.Text("--")), Terms.Text("!")).Else(""))
             .Then(static x => x.Item1.ToString() + x.Item2);
 

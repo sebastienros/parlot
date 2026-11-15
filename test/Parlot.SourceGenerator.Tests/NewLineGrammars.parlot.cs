@@ -55,4 +55,44 @@ public static partial class NewLineGrammars
 
     [GenerateParser(nameof(TryParseAsciiSet))]
     private static Parser<string> BuildAsciiSet() => AsciiSet();
+
+    // NoNewLineBefore alternatives of choices which skip the white space for them: an arrow, which can't follow a new line,
+    // after an assignment operator which reads its '=', and the arrow after a new line read by the last alternative. The
+    // choice is in a sequence, which doesn't keep the text buffered when it's read from a TextReader.
+    internal static Parser<string> ArrowChoice()
+    {
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2.ToString());
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x.ToString());
+        var arrowAfterNewLine = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "|=>" + x.ToString());
+        return Terms.Identifier().And(OneOf(assignment, arrow, arrowAfterNewLine)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+    }
+
+    [GenerateParser(nameof(TryParseArrowChoice))]
+    private static Parser<string> BuildArrowChoice() => ArrowChoice();
+
+    internal static Parser<string> ArrowChoiceWithComments() =>
+        ArrowChoice().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+
+    [GenerateParser(nameof(TryParseArrowChoiceWithComments))]
+    private static Parser<string> BuildArrowChoiceWithComments() => ArrowChoiceWithComments();
+
+    // Postfix operators which can't follow a new line, in a table with binary operators
+    internal static Parser<string> PostfixTable()
+    {
+        var table = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix((NoNewLineBefore(Terms.Text("++")), static x => "(" + x + "++)"), (NoNewLineBefore(Terms.Text("--")), static x => "(" + x + "--)"))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => "(" + a + "*" + b + ")"))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => "(" + a + "+" + b + ")"));
+        var prefix = Terms.Text("++").SkipAnd(Terms.Identifier()).Then(static x => "++" + x.ToString());
+        return ZeroOrMany(OneOf(table, prefix)).Eof().Then(static x => string.Join("|", x));
+    }
+
+    [GenerateParser(nameof(TryParsePostfixTable))]
+    private static Parser<string> BuildPostfixTable() => PostfixTable();
+
+    internal static Parser<string> PostfixTableWithComments() =>
+        PostfixTable().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+
+    [GenerateParser(nameof(TryParsePostfixTableWithComments))]
+    private static Parser<string> BuildPostfixTableWithComments() => PostfixTableWithComments();
 }
