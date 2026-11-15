@@ -90,6 +90,15 @@ public static partial class GeneratedParsers
     private static Parser<IJson> BuildJsonComments() =>
         BuildJson().WithComments(static comments => comments.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
 
+    // The same comments with JavaScript's white space and line terminators, for CommentsBenchmarks
+    [GenerateParser(nameof(TryParseJsonJavaScriptComments))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonJavaScriptComments() =>
+        BuildJson().WithComments(static comments => comments
+            .WithWhiteSpace("\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000", "\n\r\u2028\u2029")
+            .WithSingleLine("//", "\n\r\u2028\u2029")
+            .WithMultiLine("/*", "*/"));
+
     // The same comments with the loop WithComments composed before CommentsParser
     [GenerateParser(nameof(TryParseJsonComposedComments))]
     [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]

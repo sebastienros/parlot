@@ -14,7 +14,8 @@ namespace Parlot.Benchmarks;
 // of each grammar has only white space, the other one comments too.
 //
 // Composed: the white space parser WithComments built before CommentsParser, Capture(ZeroOrMany(OneOf(...))) of the
-// builder's parsers. WithComments: the CommentsParser it builds now.
+// builder's parsers. WithComments: the CommentsParser it builds now. JavaScriptChars: the same comments with JavaScript's
+// white space and line terminators, the chars of WithWhiteSpace(whiteSpace, newLines), instead of the default set.
 
 [MemoryDiagnoser, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), ShortRunJob]
 public class CommentsBenchmarks
@@ -30,13 +31,28 @@ public class CommentsBenchmarks
         comments.WithMultiLine("/*", "*/");
     };
 
+    // JavaScript's white space and line terminators, which no WhiteSpaceSet describes
+    internal const string JavaScriptWhiteSpace = "\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
+    internal const string JavaScriptNewLines = "\n\r\u2028\u2029";
+
+    private static readonly Action<CommentsBuilder> _javaScriptComments = static comments =>
+    {
+        comments.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines);
+        comments.WithSingleLine("//", JavaScriptNewLines);
+        comments.WithMultiLine("/*", "*/");
+    };
+
     private static Parser<TextSpan> Composed() => Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/"))));
 
     private static readonly Parser<Tests.Calc.Expression> _parser = FluentParser.Expression.WithComments(_comments);
 
     private static readonly Parser<Tests.Calc.Expression> _composedParser = FluentParser.Expression.WithWhiteSpaceParser(Composed());
 
+    private static readonly Parser<Tests.Calc.Expression> _javaScriptParser = FluentParser.Expression.WithComments(_javaScriptComments);
+
     private static readonly Parser<IJson> _jsonParser = JsonParser.Json.WithComments(_comments);
+
+    private static readonly Parser<IJson> _javaScriptJsonParser = JsonParser.Json.WithComments(_javaScriptComments);
 
     private static readonly Parser<IJson> _composedJsonParser = JsonParser.Json.WithWhiteSpaceParser(Composed());
 
@@ -50,7 +66,8 @@ public class CommentsBenchmarks
         var expected = FluentParser.Expression.Parse(Spaces)!.Evaluate();
 
         if (Expression_Spaces().Evaluate() != expected || Expression_Comments().Evaluate() != expected
-            || Expression_ComposedSpaces().Evaluate() != expected || Expression_ComposedComments().Evaluate() != expected)
+            || Expression_ComposedSpaces().Evaluate() != expected || Expression_ComposedComments().Evaluate() != expected
+            || Expression_JavaScriptCharsSpaces().Evaluate() != expected || Expression_JavaScriptCharsComments().Evaluate() != expected)
         {
             throw new InvalidOperationException("Incorrect expression parsing.");
         }
@@ -59,7 +76,9 @@ public class CommentsBenchmarks
 
         if (Json_Default().ToString() != json || Json_Spaces().ToString() != json || Json_Comments().ToString() != json
             || Json_ComposedSpaces().ToString() != json || Json_ComposedComments().ToString() != json
-            || Json_GeneratedComments().ToString() != json || Json_GeneratedComposedComments().ToString() != json)
+            || Json_GeneratedComments().ToString() != json || Json_GeneratedComposedComments().ToString() != json
+            || Json_JavaScriptCharsSpaces().ToString() != json || Json_JavaScriptCharsComments().ToString() != json
+            || Json_GeneratedJavaScriptCharsComments().ToString() != json)
         {
             throw new InvalidOperationException("Incorrect JSON parsing.");
         }
@@ -76,6 +95,12 @@ public class CommentsBenchmarks
 
     [Benchmark, BenchmarkCategory("Expression")]
     public Tests.Calc.Expression Expression_Comments() => _parser.Parse(new ParseContext(new Scanner(Comments)))!;
+
+    [Benchmark, BenchmarkCategory("Expression")]
+    public Tests.Calc.Expression Expression_JavaScriptCharsSpaces() => _javaScriptParser.Parse(new ParseContext(new Scanner(Spaces)))!;
+
+    [Benchmark, BenchmarkCategory("Expression")]
+    public Tests.Calc.Expression Expression_JavaScriptCharsComments() => _javaScriptParser.Parse(new ParseContext(new Scanner(Comments)))!;
 
     // The JSON without comments, with the default white space set and no white space parser
     [Benchmark, BenchmarkCategory("Json")]
@@ -104,6 +129,19 @@ public class CommentsBenchmarks
     public IJson Json_GeneratedComments()
     {
         _ = GeneratedParsers.TryParseJsonComments(_jsonComments, out var result);
+        return result;
+    }
+
+    [Benchmark, BenchmarkCategory("Json")]
+    public IJson Json_JavaScriptCharsSpaces() => _javaScriptJsonParser.Parse(new ParseContext(new Scanner(_json)))!;
+
+    [Benchmark, BenchmarkCategory("Json")]
+    public IJson Json_JavaScriptCharsComments() => _javaScriptJsonParser.Parse(new ParseContext(new Scanner(_jsonComments)))!;
+
+    [Benchmark, BenchmarkCategory("Json")]
+    public IJson Json_GeneratedJavaScriptCharsComments()
+    {
+        _ = GeneratedParsers.TryParseJsonJavaScriptComments(_jsonComments, out var result);
         return result;
     }
 
