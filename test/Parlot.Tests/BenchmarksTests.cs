@@ -60,6 +60,17 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void ChainedSequenceGrammar()
+    {
+        // Each statement starts at its first token, after the white space
+        var lengths = new ChainedSequenceBenchmarks().Runtime();
+        Assert.NotNull(lengths);
+        Assert.Equal(40, lengths.Count);
+        Assert.Equal("define table a := b c;".Length, lengths[0]);
+        Assert.Equal("define table d := e;".Length, lengths[1]);
+    }
+
+    [Fact]
     public void CommentsGrammar()
     {
         var benchmark = new CommentsBenchmarks();

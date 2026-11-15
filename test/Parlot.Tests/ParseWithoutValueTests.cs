@@ -59,6 +59,26 @@ public class ParseWithoutValueTests
     }
 
     [Fact]
+    public void SequencesStartingWithAnEmptyPartShouldMatchParse()
+    {
+        // A sequence starts at its first part which matched something, after the white space it skipped
+        AssertSameAsParse(As.And(Bs));
+        AssertSameAsParse(As.And(B.Optional()).And(Bs));
+        AssertSameAsParse(As.And(B.Optional()).And(C.Optional()));
+        AssertSameAsParse(As.SkipAnd(Bs));
+        AssertSameAsParse(As.AndSkip(Bs));
+        AssertSameAsParse(As.And(B.Optional()).SkipAnd(C));
+        AssertSameAsParse(As.And(B.Optional()).AndSkip(C));
+
+        var context = new ParseContext(new Scanner("  b c"));
+        var result = new ParseResult<(IReadOnlyList<char>, Option<char>, char)>();
+
+        Assert.True(ParseWithoutValue(As.And(B.Optional()).And(C))(context, ref result));
+        Assert.Equal(2, result.Start);
+        Assert.Equal(5, result.End);
+    }
+
+    [Fact]
     public void SequencesShouldMatchParse()
     {
         AssertSameAsParse(A.And(Bs));

@@ -31,9 +31,19 @@ internal sealed class CustomWhiteSpace
 
         var chars = GetStartChars(parser);
 
-        // The parser is invoked before any char when it doesn't tell them. The end of the text is NUL: the parser is still
-        // invoked there, where a stream tells whether more text follows
-        _chars = chars is null ? CharSet.All : new CharSet([.. chars, '\0']);
+        if (chars is null)
+        {
+            // The parser is invoked before any char
+            _chars = CharSet.All;
+            return;
+        }
+
+        // OneOf<T>.NonAsciiSeekableChar stands for every char above ASCII, not for U+FFFF only: the set then doesn't store
+        // the chars above ASCII, that sentinel among them. The end of the text is NUL: the parser is still invoked there,
+        // where a stream tells whether more text follows
+        var anyOther = Array.IndexOf(chars, OneOf<object>.NonAsciiSeekableChar) >= 0;
+
+        _chars = new CharSet([.. chars, '\0'], anyOther);
     }
 
     /// <summary>

@@ -33,11 +33,20 @@ internal readonly struct CharSet
     /// <summary>
     /// Creates the set of <paramref name="chars"/>, which can repeat.
     /// </summary>
-    public CharSet(ReadOnlySpan<char> chars)
+    public CharSet(ReadOnlySpan<char> chars) : this(chars, anyOther: false)
+    {
+    }
+
+    /// <summary>
+    /// Creates the set of <paramref name="chars"/>, which can repeat, and of every char above ASCII when
+    /// <paramref name="anyOther"/> is <c>true</c>: the chars above ASCII of <paramref name="chars"/> then add nothing, and
+    /// aren't stored.
+    /// </summary>
+    public CharSet(ReadOnlySpan<char> chars, bool anyOther)
     {
         _low = 0;
         _high = 0;
-        _anyOther = false;
+        _anyOther = anyOther;
         _others = null;
 
         var others = 0;
@@ -58,7 +67,7 @@ internal readonly struct CharSet
             }
         }
 
-        if (others == 0)
+        if (others == 0 || anyOther)
         {
             return;
         }

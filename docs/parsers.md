@@ -1663,7 +1663,20 @@ identifier, a parser of white space and comments isn't invoked at all. A parser 
 hints, but `Capture`, `ZeroOrMany`, `ZeroOrOne` and `Optional` are looked through: `Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(),
 Literals.Comments("//"))))`, the parser `WithComments` builds, is invoked only before white space and `/`. A parser that can start
 with any char (one of the alternatives of its choice doesn't tell its chars, like `Literals.Pattern()`), or skips white space
-itself, is invoked before every token. The same applies to `ParseContext.WhiteSpaceParser`.
+itself, is invoked before every token. One whose hints list `OneOf<T>.NonAsciiSeekableChar` is invoked before every non-ASCII
+char, like a choice holding it, and before the ASCII chars it lists. The same applies to `ParseContext.WhiteSpaceParser`.
+
+```c#
+// Skips '~' and any non-ASCII char, and is invoked only before them
+var trivia = Literals.Scan(static s => { var i = 0; while (i < s.Length && (s[i] == '~' || s[i] >= 0x80)) i++; return i; },
+    ("~" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar).AsSpan()); // Parsers.OneOf hides the type
+
+Terms.Text("a").And(Terms.Text("b")).WithWhiteSpaceParser(trivia).Parse("aéb"); // ("a", "b")
+```
+
+> **Fixed after Parlot 2.3.0.** `OneOf<T>.NonAsciiSeekableChar` in these hints stood for U+FFFF only: the parser wasn't invoked
+> before the other non-ASCII chars. This also applied to a parser listing more than 64 non-ASCII chars, like
+> `Literals.Scan()` or `Identifier()` with such start chars, which declares them with `OneOf<T>.NonAsciiSeekableChar`.
 
 Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
 grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still
