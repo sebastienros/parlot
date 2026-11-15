@@ -26,4 +26,17 @@ public static partial class CodePointIdentifierGrammars
             static c => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
             static c => c is '$' or '_' or 0x200C or 0x200D || (c < 0x10000 ? char.IsLetterOrDigit((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
             IdentifierOptions.UnicodeEscapes | IdentifierOptions.SurrogatePairs)).And(Literals.Char(';'))).Then(static x => x.ToString())).Eof();
+
+    // A choice of keywords, punctuation, the identifier, which declares its chars, and a parser whose chars Lookup() gives
+    [GenerateParser(nameof(TryParseTokens))]
+    private static Parser<IReadOnlyList<string>> BuildTokens() =>
+        ZeroOrMany(OneOf(
+            Terms.Text("if"),
+            Terms.Text("("),
+            Terms.Identifier(
+                static c => c is '$' or '_' || (c < 0x10000 ? char.IsLetter((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
+                static c => c is '$' or '_' or 0x200C or 0x200D || (c < 0x10000 ? char.IsLetterOrDigit((char)c) : c is >= 0x1D400 and <= 0x1D7FF),
+                IdentifierOptions.JavaScript).Then(static x => "id:" + Character.DecodeIdentifier(x).ToString()),
+            Terms.Pattern(static c => c == '#').Lookup(true, '#').Then(static x => x.ToString()),
+            Terms.Text(")"))).Eof();
 }

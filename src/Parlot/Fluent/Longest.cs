@@ -999,12 +999,14 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
                 anySkip |= hints[i].SkipWhitespace;
             }
 
-            // The white space is skipped once, and the parsers which only skip it before their parser are bypassed
+            // The white space is skipped once, and the parsers which only skip it before their parser are bypassed, like the
+            // parsers of Lookup(), which only declare the hints read above
             var invoked = new Parser<T>[count];
 
             for (var i = 0; i < count; i++)
             {
-                invoked[i] = allSkip && parsers[i] is SkipWhiteSpace<T> skip ? skip.Parser : parsers[i];
+                var parser = parsers[i] is Seekable<T> seekable ? seekable.Parser : parsers[i];
+                invoked[i] = allSkip && parser is SkipWhiteSpace<T> skip ? skip.Parser : parser;
             }
 
             var groups = new Dictionary<string, Alternatives>(StringComparer.Ordinal);

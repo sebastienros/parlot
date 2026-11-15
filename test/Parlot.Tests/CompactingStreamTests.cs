@@ -141,6 +141,44 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void ChoicesOfCodePointIdentifiersKeepTheBufferBounded()
+    {
+        // The identifier declares its chars, so the choice only pins where a keyword starts like it, and invokes the
+        // parser of Lookup() directly
+        var identifier = Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript)
+            .Then(static x => Character.DecodeIdentifier(x).ToString());
+
+        var choices = new[]
+        {
+            ZeroOrMany(OneOf(Terms.Text("if"), Terms.Text("("), identifier, Terms.Text(")"))).Eof(),
+            ZeroOrMany(OneOf(Terms.Text("if"), Terms.Text("("), Terms.Pattern(static c => c == '#').Lookup(true, '#').Then(static x => x.ToString()), identifier, Terms.Text(")"))).Eof(),
+            ZeroOrMany(Longest(Terms.Text("if"), Terms.Text("("), Terms.Pattern(static c => c == '#').Lookup(true, '#').Then(static x => x.ToString()), identifier, Terms.Text(")"))).Eof(),
+        };
+
+        // The first choice has no '#' alternative
+        string[] tokens = ["if", "(", "\\u0061b", "\u00e9t\u00e9", ")", "iffy", "\U0001D49Cx", "##"];
+
+        for (var c = 0; c < choices.Length; c++)
+        {
+            var parser = choices[c];
+            var count = c == 0 ? tokens.Length - 1 : tokens.Length;
+            var text = string.Join(" ", Enumerable.Range(0, 10_000).Select(i => tokens[i % count]));
+            var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+            var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+            Assert.Equal(parser.Parse(text), result);
+            Assert.Contains("ab", result);
+            Assert.Contains("\u00e9t\u00e9", result);
+            Assert.InRange(peak(), 1, 64);
+        }
+
+        // A long identifier read again with more text
+        var name = "\\u0061" + new string('b', 1000) + "\U0001D49C";
+
+        Assert.Equal(["if", "a" + new string('b', 1000) + "\U0001D49C", ")"], choices[0].Parse(new ChunkedReader("if " + name + " )", 1), new StreamParseOptions { BufferSize = 4 }));
+    }
+
+    [Fact]
     public void LongestAlternativesKeepTheTextTheyCanReadAgain()
     {
         // Both alternatives are read from the start, and the cursor moves back to the end of the first one, the longest

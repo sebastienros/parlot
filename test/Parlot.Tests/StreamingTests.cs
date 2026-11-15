@@ -54,6 +54,8 @@ public class StreamingTests
         // Escape sequences and surrogate pairs cut by the end of the window
         ["codepoint-identifiers"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).Then(static x => Character.DecodeIdentifier(x).ToString())).Eof()),
         ["codepoint-identifier-calls"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).AndSkip(Terms.Char('(')).Then(static x => Character.DecodeIdentifier(x).ToString())).Eof()),
+        // A choice whose lookup table holds the hints of the identifier, keywords and punctuation
+        ["codepoint-identifier-tokens"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("if"), Terms.Text("("), Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).Then(static x => Character.DecodeIdentifier(x).ToString()))).Eof()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
         ["integer-standalone-eof"] = new Grammar<long>(Terms.Integer().AndSkip(Eof())),
@@ -381,6 +383,7 @@ public class StreamingTests
             "a\ud835b", "\udc9c", "a\\u0020", "\u00e9t\u00e9 caf\u00e9", "a\\u{110000}", "a( b\\u c\\u0062(", "a\\u{62}\\u"];
         Add("codepoint-identifiers", codePointIdentifiers);
         Add("codepoint-identifier-calls", codePointIdentifiers);
+        Add("codepoint-identifier-tokens", [.. codePointIdentifiers, "if(iffy (\\u0069f", "( \\u{1D4D0}", "if 1"]);
         Add("integer", "", "1", "123", " 42x", "-5", "+", "123456789012");
         Add("standalone-eof", "", " ", "a");
         Add("integer-standalone-eof", "", "42", "42a", "42 ", " 42");

@@ -75,6 +75,59 @@ public class CodePointIdentifierTests
 
         Check(runtime, CodePointIdentifierGrammars.TryParseSpans, CodePointIdentifierGrammars.TryParseSpans, input, success);
     }
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("if(iffy (\\u0069f)", true)]
+    [InlineData("( \\u{1D4D0} \u00e9t\u00e9 \U0001D49Cb", true)]
+    [InlineData("# ## a#)", true)]
+    [InlineData("if 1", false)]
+    [InlineData("\\u0031", false)]
+    [InlineData("a \u00b2", false)]
+    [InlineData("a\\u00", false)]
+    [InlineData("a<hi>", false)]
+    public void Choices_Match_The_Runtime_Parser(string input, bool success)
+    {
+        var runtime = ZeroOrMany(OneOf(
+            Terms.Text("if"),
+            Terms.Text("("),
+            Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript).Then(static x => "id:" + Character.DecodeIdentifier(x).ToString()),
+            Terms.Pattern(static c => c == '#').Lookup(true, '#').Then(static x => x.ToString()),
+            Terms.Text(")"))).Eof();
+
+        Check(runtime, CodePointIdentifierGrammars.TryParseTokens, CodePointIdentifierGrammars.TryParseTokens, input, success);
+    }
+
+    // The 4096th char, where a reader's buffer ends, falls inside each token in turn, so the choice reads it again
+    // with more text
+    [Theory]
+    [InlineData("\\u{1D4D0}x if(")]
+    [InlineData("\U0001D49Cb été)")]
+    [InlineData("iffy ## a\\u0062")]
+    [InlineData("a\\u00 b")]
+    public void Choices_Match_The_Runtime_Parser_Across_The_Buffer(string tokens)
+    {
+        var runtime = ZeroOrMany(OneOf(
+            Terms.Text("if"),
+            Terms.Text("("),
+            Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript).Then(static x => "id:" + Character.DecodeIdentifier(x).ToString()),
+            Terms.Pattern(static c => c == '#').Lookup(true, '#').Then(static x => x.ToString()),
+            Terms.Text(")"))).Eof();
+
+        for (var i = 1; i <= tokens.Length; i++)
+        {
+            var input = new string(' ', 4096 - i) + tokens;
+            var expected = runtime.TryParse(input, out var expectedValue);
+
+            Assert.Equal(expected, CodePointIdentifierGrammars.TryParseTokens(input, out var value));
+            Assert.Equal(expected, CodePointIdentifierGrammars.TryParseTokens(new StringReader(input), out var readValue));
+
+            if (expected)
+            {
+                Assert.Equal(expectedValue, value);
+                Assert.Equal(expectedValue, readValue);
+            }
+        }
+    }
 }
 
 public static partial class CodePointIdentifierGrammars
@@ -83,4 +136,6 @@ public static partial class CodePointIdentifierGrammars
     public static partial bool TryParseIdentifiers(TextReader reader, out IReadOnlyList<string> value);
     public static partial bool TryParseSpans(string text, out IReadOnlyList<string> value);
     public static partial bool TryParseSpans(TextReader reader, out IReadOnlyList<string> value);
+    public static partial bool TryParseTokens(string text, out IReadOnlyList<string> value);
+    public static partial bool TryParseTokens(TextReader reader, out IReadOnlyList<string> value);
 }
