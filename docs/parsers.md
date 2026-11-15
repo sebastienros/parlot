@@ -1703,7 +1703,9 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
 U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLines` is set. Positions only start a new line at
 `\n`, so like `\r` and `\v` these count as a column, and single line comments end at `\n` only, unless
-[`WithSingleLine(start, lineTerminators)`](#withcomments) lists their terminators.
+[`WithSingleLine(start, lineTerminators)`](#withcomments) lists their terminators. A grammar whose white space no set
+describes, like JavaScript's with U+FEFF and without U+0085, lists its chars with
+[`WithWhiteSpace(whiteSpace, newLines)`](#withcomments).
 
 > **Changed after Parlot 2.1.** The default set used to be `\t`, `\f`, space, U+00A0, U+1680, U+180E, U+2000-U+200A, U+202F,
 > U+205F, U+3000 and U+FEFF, with `\n`, `\r` and `\v` as new lines. It now follows Unicode:
@@ -1804,6 +1806,7 @@ parser.Parse("hello /* multiline\n comment\n */ world");
 |---|---|
 | `WithWhiteSpace()` | the white space of the context's `WhiteSpaceSet`, without new lines |
 | `WithWhiteSpaceOrNewLine()` | the white space and new lines of the context's `WhiteSpaceSet` |
+| `WithWhiteSpace(whiteSpace, newLines)` | the chars of `whiteSpace` and of `newLines`, instead of the context's `WhiteSpaceSet` |
 | `WithSingleLine(start)` | from `start` to the end of the line, before `"\r\n"` or `"\n"`, or to the end of the text |
 | `WithSingleLine(start, lineTerminators)` | from `start` to the first of the chars of `lineTerminators`, or to the end of the text |
 | `WithMultiLine(start, end)` | from `start` to `end` included |
@@ -1820,6 +1823,25 @@ var parser = grammar.WithComments(builder => builder
     .WithSingleLine("//", "\r\n\u2028\u2029")
     .WithMultiLine("/*", "*/"));
 ```
+
+A grammar whose white space no `WhiteSpaceSet` describes lists its chars with `WithWhiteSpace(whiteSpace, newLines)`.
+JavaScript's white space contains U+FEFF and not U+0085, which the default set has as a new line, and its line terminators are
+`\n`, `\r`, U+2028 and U+2029 only:
+
+```c#
+const string whiteSpace = "\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
+const string lineTerminators = "\n\r\u2028\u2029";
+
+var parser = grammar.WithComments(builder => builder
+    .WithWhiteSpace(whiteSpace, lineTerminators)
+    .WithSingleLine("//", lineTerminators)
+    .WithMultiLine("/*", "*/"));
+```
+
+Both sets of chars are skipped, tested with a table built once, so this costs about the same as the white space of a set. As
+with the new lines of a set, those of `newLines`, which can be empty, are not skipped when `UseNewLines` is set; a char of both
+is white space. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`. The line of
+`Cursor.Position` still counts the `\n` chars only.
 
 A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
 start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, in which case the comment is not skipped.
@@ -1843,9 +1865,9 @@ tokens.Parse("a /* b");      // a, /, *, b
 
 The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each
 token, a `Terms` parser invokes that parser only, which reads the text directly. Its `ISeekable` hints are the chars of the
-white space and the first char of each comment. When the builder has a parser added with `WithParser()`, or a comment which
-starts with white space, it builds instead the choice of the parsers of its elements, in a loop, in the order they were
-added.
+white space and the first char of each comment. When the builder has a parser added with `WithParser()`, a comment which
+starts with white space, or `WithWhiteSpace(whiteSpace, newLines)` with another white space element, it builds instead the
+choice of the parsers of its elements, in a loop, in the order they were added.
 
 > **Changed after Parlot 2.1.** `CommentsBuilder.Build()` used to return `Capture(ZeroOrMany(OneOf(...)))` of the builder's
 > parsers, which succeeds with an empty span when there is nothing to skip. Like `Literals.WhiteSpace()`, the parser it
@@ -1871,7 +1893,8 @@ Parser<T> NoNewLineBefore(string newLines)   // instance method
 The white space is the one `ParseContext.SkipWhiteSpace()` skips, so it includes the comments of a `WithComments` or
 `WithWhiteSpaceParser` parser: a multi-line comment containing a new line counts as one, and so does the new line that ends a
 single-line comment. The new lines are those of the white space set (`\n`, `\r`, `\v`, U+0085, U+2028 and U+2029 by default, see
-`WithWhiteSpaceSet`), or the chars of `newLines`. With `UseNewLines`, new lines are not white space, so none is found.
+`WithWhiteSpaceSet`), or the chars of `newLines`, which a grammar using `WithComments` with `WithWhiteSpace(whiteSpace, newLines)`
+passes. With `UseNewLines`, new lines are not white space, so none is found.
 
 Usage:
 

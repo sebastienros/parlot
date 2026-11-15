@@ -15,6 +15,7 @@ public static partial class GeneratedParsers
     public static partial bool TryParseJsonSpaceTabCrLf(string input, out IJson value);
     public static partial bool TryParseJsonWhiteSpaceParser(string input, out IJson value);
     public static partial bool TryParseJsonComments(string input, out IJson value);
+    public static partial bool TryParseJsonJavaScriptComments(string input, out IJson value);
     public static partial bool TryParseJsonComposedComments(string input, out IJson value);
     public static partial bool TryParseLog(string input, out int value);
 #if GENERATED_READER

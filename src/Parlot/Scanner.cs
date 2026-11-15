@@ -188,6 +188,39 @@ public class Scanner
     }
 
     /// <summary>
+    /// Skips the chars of <paramref name="chars"/> at the cursor, the white space of a <c>CommentsParser</c> built with its own
+    /// chars.
+    /// </summary>
+    /// <returns>Whether some chars were skipped.</returns>
+    /// <remarks>Shared by <c>CommentsParser</c> and the code it generates.</remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool SkipChars(in CharSet chars)
+    {
+        // At the end of the text Current is NUL, which can be one of the chars
+        if (!chars.Contains(Cursor.Current) || Cursor.Eof)
+        {
+            return false;
+        }
+
+        // Splitting such that not all code is inlined
+        SkipRemainingChars(in chars);
+        return true;
+    }
+
+    private void SkipRemainingChars(in CharSet chars)
+    {
+        var span = Cursor.Span;
+        var length = span.Length;
+
+        var i = 0;
+
+        while (++i < length && chars.Contains(span[i])) ;
+
+        // The line and the column are computed from the text, the chars can be new lines
+        Cursor.AdvanceNoNewLines(i);
+    }
+
+    /// <summary>
     /// Skips a single line comment whose start, of <paramref name="startLength"/> chars, is at the cursor: up to the first of
     /// <paramref name="lineTerminators"/>, which is not skipped, or to the end of the text.
     /// </summary>

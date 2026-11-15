@@ -20,6 +20,25 @@ public static partial class CommentsGrammars
             .Eof()
             .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
 
+    // JavaScript's white space and line terminators, which no WhiteSpaceSet describes: U+FEFF and \v are white space, U+0085 is not
+    private const string JavaScriptWhiteSpace = "\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
+    private const string JavaScriptNewLines = "\n\r\u2028\u2029";
+
+    [GenerateParser(nameof(TryParseJavaScriptChars))]
+    private static Parser<string> BuildJavaScriptChars() =>
+        ZeroOrMany(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithMultiLine("/*", "*/"))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+    // JavaScript's "[no LineTerminator here]" over its white space: "a b" is one statement, "a\u2028b" two
+    [GenerateParser(nameof(TryParseJavaScriptCharsNoNewLine))]
+    private static Parser<string> BuildJavaScriptCharsNoNewLine() =>
+        ZeroOrMany(Terms.Identifier().And(ZeroOrMany(NoNewLineBefore(Terms.Identifier(), JavaScriptNewLines))).Then(static x => string.Join(" ", new[] { x.Item1.ToString() }.Concat(x.Item2.Select(static y => y.ToString())))))
+            .WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithMultiLine("/*", "*/"))
+            .Eof()
+            .Then(static list => string.Join("|", list));
+
     // Several comments starting with the same char, and new lines which are not white space
     [GenerateParser(nameof(TryParseSql))]
     private static Parser<string> BuildSql() =>

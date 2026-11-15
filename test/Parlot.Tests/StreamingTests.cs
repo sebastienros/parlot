@@ -168,6 +168,7 @@ public class StreamingTests
         ["newline-choice-sequence"] = new Grammar<string>(CreateNewLineChoiceSequence()),
         ["newline-choice-sequence-comments"] = new Grammar<string>(CreateNewLineChoiceSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
+        ["comments-chars"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace(CommentsParserTests.JavaScriptWhiteSpace, CommentsParserTests.JavaScriptNewLines).WithSingleLine("//", CommentsParserTests.JavaScriptNewLines).WithMultiLine("/*", "*/"))),
         ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
         // An unterminated comment read as tokens, or running to the end of the text
         ["comments-not-a-comment"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1))).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithSingleLine("/"))),
@@ -528,6 +529,7 @@ public class StreamingTests
         Add("ascii-choice", "", "for if", "for\u00A0if", "\u00A0 if", "  \u3000", "if\tfor\nif");
         Add("ascii-whitespace", "", " \t\n\r\v\f x", "\u00A0", " \u2000", "x");
         Add("ascii-nonwhitespace", "", "a\u00A0b c", "a\u3000b\tc", "ab\fc", " x");
+        Add("comments-chars", "", "a\uFEFFb", "a\vb", "a\u0085b", "a \u0085 b", "a\u2028b /* c\u2029 */ d", "a // b\u2028c", "a\u3000\u3000\u3000b", "a /* b");
         Add("ascii-comments", "", "a // b\n c", "a\u00A0b", "a\u00A0// b", "a \u00A0b");
         Add("spacetabcrlf-separated", separated);
         Add("spacetabcrlf-context", separated);
