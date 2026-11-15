@@ -33,8 +33,19 @@ public class CommentsParserTests
     // An unterminated multi line comment which runs to the end of the text
     private static readonly Action<CommentsBuilder> _toEnd = static c => c.WithWhiteSpace().WithSingleLine("#").WithMultiLine("/*", "*/", UnterminatedComment.ToEnd).WithMultiLine("(*", "*)", UnterminatedComment.ToEnd);
 
+    // JavaScript's white space and line terminators, which no WhiteSpaceSet describes: U+FEFF and \v are white space, U+0085 is not
+    internal const string JavaScriptWhiteSpace = "\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
+    internal const string JavaScriptNewLines = "\n\r\u2028\u2029";
+
+    private static readonly Action<CommentsBuilder> _javaScriptChars = static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithMultiLine("/*", "*/");
+
+    // The chars without new lines
+    private static readonly Action<CommentsBuilder> _javaScriptCharsNoNewLines = static c => c.WithWhiteSpace(JavaScriptWhiteSpace, "").WithSingleLine("#");
+
     private static readonly Dictionary<string, (Action<CommentsBuilder> Comments, Parser<TextSpan> Composed)> _builders = new()
     {
+        ["javascript-chars"] = (_javaScriptChars, Capture(ZeroOrMany(OneOf(Literals.AnyOf(JavaScriptWhiteSpace + JavaScriptNewLines), Capture(Literals.Text("//").And(AnyCharBefore(Literals.AnyOf(JavaScriptNewLines, maxSize: 1), canBeEmpty: true, failOnEof: false, consumeDelimiter: false))), Literals.Comments("/*", "*/"))))),
+        ["javascript-chars-no-new-lines"] = (_javaScriptCharsNoNewLines, Capture(ZeroOrMany(OneOf(Literals.AnyOf(JavaScriptWhiteSpace), Literals.Comments("#"))))),
         ["not-a-comment"] = (_notAComment, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Capture(Literals.Text("/*").And(AnyCharBefore(Literals.Text("*/"), canBeEmpty: true, failOnEof: true, consumeDelimiter: true))), Literals.Comments("/"), Literals.Comments("#"))))),
         ["to-end"] = (_toEnd, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(), Literals.Comments("#"), Capture(Literals.Text("/*").And(AnyCharBefore(Literals.Text("*/"), canBeEmpty: true, failOnEof: false, consumeDelimiter: true))), Capture(Literals.Text("(*").And(AnyCharBefore(Literals.Text("*)"), canBeEmpty: true, failOnEof: false, consumeDelimiter: true))))))),
         ["javascript"] = (_javaScript, Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("//"), Literals.Comments("/*", "*/"))))),
@@ -49,6 +60,8 @@ public class CommentsParserTests
         "a /* b */ c", "a /**/ c", "a/*b*//*c*/d", "a /* b * / */ c", "a /* b", "a /*", "a /", "a / b", "/*/ a", "/* a */",
         "a -- b\n c", "a # b\n c", "a#b\nc", "a\n#b\n--c\nd", "a\tb", "a\r\n\r\nb", "a (* b *) c", "a(*b*)c", "a(*b", "a(b",
         "#", "(*", "(**)", "a\u00A0b", "a /* b */\n// c\n d /* e", "  ", "\n",
+        "a\uFEFFb", "\uFEFF a", "a\vb", "a\u0085b", "a \u0085 b", "a\u2028b", "a\u3000\u2029b", "a // b\u2028c", "a # b\u0085c\nd",
+        "a\u000Bb\u000C c", "a\u180Eb", "\u0085",
     ];
 
     public static TheoryData<string, string> Inputs()
@@ -407,6 +420,169 @@ public class CommentsParserTests
 
         Assert.IsNotType<CommentsParser>(parser);
         Assert.Equal("a|b", string.Join("|", _identifiers.WithWhiteSpaceParser(parser).Parse("a /* b")!));
+    }
+
+    [Theory]
+    [InlineData("a\uFEFFb", "a|b")]
+    [InlineData("a\vb", "a|b")]
+    [InlineData("a \u3000\u00A0\fb", "a|b")]
+    [InlineData("a\u2028b\u2029c\r\nd", "a|b|c|d")]
+    [InlineData("a /* \u0085 */ b", "a|b")]
+    [InlineData("a // \u0085 b\u2028 c", "a|c")]
+    public void ShouldSkipTheCharsOfTheBuilder(string text, string expected)
+    {
+        var parser = _identifiers.Eof().WithComments(_javaScriptChars);
+
+        Assert.Equal(expected, string.Join("|", parser.Parse(text)!));
+    }
+
+    [Theory]
+    [InlineData("a\u0085b", 1)]
+    [InlineData("a \u0085 b", 1)]
+    [InlineData("\u0085", 0)]
+    [InlineData("a\u180Eb", 1)]
+    public void ShouldStopAtACharWhichIsNotOneOfTheBuilder(string text, int offset)
+    {
+        // U+0085 is a new line of the default set, and an ordinary char of JavaScript. An identifier which isn't found after
+        // the white space leaves the cursor before it
+        var context = new ParseContext(new Scanner(text));
+        ParseResult<IReadOnlyList<TextSpan>> result = default;
+
+        Assert.True(_identifiers.WithComments(_javaScriptChars).Parse(context, ref result));
+        Assert.Equal(offset, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("a\u0085b")]
+    [InlineData("\u0085")]
+    [InlineData("x")]
+    [InlineData("")]
+    [InlineData("/")]
+    public void ShouldFailWithoutMovingTheCursorWhenNoCharOfTheBuilderIsSkipped(string text)
+    {
+        var parser = Build(_javaScriptChars);
+        var context = new ParseContext(new Scanner(text));
+        ParseResult<TextSpan> result = default;
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Theory]
+    [InlineData("a \u2028 b", false)]
+    [InlineData("a /* \u2028 */ b", false)]
+    [InlineData("a /* \n */ b", false)]
+    [InlineData("a \r b", false)]
+    [InlineData("a \uFEFF\v b", true)]
+    [InlineData("a /* \u0085 */ b", true)]
+    [InlineData("a b", true)]
+    public void ShouldFindTheNewLinesOfTheBuilder(string text, bool expected)
+    {
+        var parser = Terms.Identifier().And(NoNewLineBefore(Terms.Identifier(), JavaScriptNewLines)).WithComments(_javaScriptChars);
+
+        Assert.Equal(expected, parser.TryParse(text, out _));
+    }
+
+    [Theory]
+    [InlineData("a \u2028 b", true)]
+    [InlineData("a /* \u2029 */ b", true)]
+    [InlineData("a \uFEFF b", false)]
+    public void ShouldSeeANewLineAheadInTheCharsOfTheBuilder(string text, bool expected)
+    {
+        var parser = Terms.Identifier().And(NewLineAhead(JavaScriptNewLines)).And(Terms.Identifier()).WithComments(_javaScriptChars);
+
+        Assert.Equal(expected, parser.TryParse(text, out _));
+    }
+
+    [Fact]
+    public void ShouldNotSkipTheNewLinesOfTheBuilderWhenThereAreNone()
+    {
+        var parser = Terms.Identifier().AndSkip(Terms.Char('\n')).And(Terms.Identifier()).WithComments(_javaScriptCharsNoNewLines);
+
+        Assert.True(parser.TryParse("a\uFEFF\nb", out _));
+        Assert.False(parser.TryParse("a\uFEFF\n\nb", out _));
+    }
+
+    [Fact]
+    public void ShouldExposeTheCharsOfTheBuilder()
+    {
+        var parser = (ISeekable)Build(_javaScriptChars);
+
+        Assert.IsType<CommentsParser>(parser);
+        Assert.True(parser.CanSeek);
+        Assert.False(parser.SkipWhitespace);
+        Assert.Contains('\uFEFF', parser.ExpectedChars);
+        Assert.Contains('\v', parser.ExpectedChars);
+        Assert.Contains('\u2028', parser.ExpectedChars);
+        Assert.Contains('/', parser.ExpectedChars);
+        Assert.DoesNotContain('\u0085', parser.ExpectedChars);
+        Assert.Equal(parser.ExpectedChars.Length, parser.ExpectedChars.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData("\uFEFF", true)]
+    [InlineData("\u0085", false)]
+    [InlineData("x", false)]
+    public void ShouldBeAnAlternativeOfAChoiceWithTheCharsOfTheBuilder(string text, bool expected)
+    {
+        var parser = OneOf(Build(_javaScriptChars).Then(static _ => "comments"), Literals.Char('x').Then(static _ => "x"), Literals.Char('\u0085').Then(static _ => "nel"));
+
+        Assert.Equal(expected, parser.TryParse(text, out var value) && value == "comments");
+    }
+
+    [Theory]
+    [InlineData("a\uFEFF b")]
+    [InlineData("a /* b */\u2028c")]
+    public void ShouldSkipTheCharsOfTheBuilderBeforeAComposedParser(string text)
+    {
+        // Another white space element, or a parser, composes the elements, which skip the same text
+        var parser = _identifiers.Eof().WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithMultiLine("/*", "*/").WithParser(Capture(Literals.Text("..."))));
+
+        Assert.Equal(_identifiers.Eof().WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithMultiLine("/*", "*/")).Parse(text)!.Select(static x => x.ToString()), parser.Parse(text)!.Select(static x => x.ToString()));
+    }
+
+    [Fact]
+    public void ShouldComposeTheCharsOfTheBuilderWithAnotherWhiteSpace()
+    {
+        Assert.IsNotType<CommentsParser>(new CommentsBuilder().WithWhiteSpace("\uFEFF", "").WithWhiteSpaceOrNewLine().Build());
+        Assert.IsNotType<CommentsParser>(new CommentsBuilder().WithWhiteSpace("\uFEFF", "").WithWhiteSpace(" ", "\n").Build());
+
+        // Both white spaces are skipped
+        var parser = _identifiers.Eof().WithComments(static c => c.WithWhiteSpace("\uFEFF", "").WithWhiteSpace(" ", "\n"));
+        Assert.Equal("a|b", string.Join("|", parser.Parse("a\uFEFF \nb")!));
+
+        // The default set's elements are still a single parser
+        Assert.IsType<CommentsParser>(new CommentsBuilder().WithWhiteSpace().WithWhiteSpaceOrNewLine().Build());
+    }
+
+    [Theory]
+    [InlineData("\uFEFF--", false)]
+    [InlineData("\u2028--", false)]
+    [InlineData("\u0085--", true)]
+    [InlineData("--", true)]
+    public void ShouldComposeCommentsStartingWithACharOfTheBuilder(string start, bool single)
+    {
+        var parser = new CommentsBuilder().WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine(start).Build();
+
+        Assert.Equal(single, parser is CommentsParser);
+    }
+
+    [Fact]
+    public void ShouldReadACommentStartingWithACharOfTheBuilderAsTheComposedParsers()
+    {
+        // The composed parsers are tried in the order they were added: the comment before the white space
+        var parser = _identifiers.Eof().WithComments(static c => c.WithSingleLine(" --").WithWhiteSpace(" ", "\n"));
+
+        Assert.Equal("a|b", string.Join("|", parser.Parse("a --x\nb")!));
+        Assert.False(_identifiers.Eof().WithComments(static c => c.WithWhiteSpace(" ", "\n").WithSingleLine(" --")).TryParse("a --x\nb", out _));
+    }
+
+    [Fact]
+    public void ShouldRequireCharsForTheWhiteSpace()
+    {
+        Assert.Throws<ArgumentNullException>(() => new CommentsBuilder().WithWhiteSpace(null!, ""));
+        Assert.Throws<ArgumentNullException>(() => new CommentsBuilder().WithWhiteSpace("", null!));
+        Assert.Throws<ArgumentException>(() => new CommentsBuilder().WithWhiteSpace("", ""));
     }
 
     [Fact]

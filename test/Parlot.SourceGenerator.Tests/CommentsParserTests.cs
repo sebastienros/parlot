@@ -213,6 +213,55 @@ public class CommentsParserTests
         Assert.Equal(error, string.Join(";", errors.Select(static d => $"{d.Message} {d.Offset} {d.Line}:{d.Column}")));
     }
 
+    // The chars of the grammars of CommentsGrammars, which the test compilation doesn't include
+    private const string JavaScriptWhiteSpace = "\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000";
+    private const string JavaScriptNewLines = "\n\r\u2028\u2029";
+
+    public static TheoryData<string> JavaScriptCharsInputs() =>
+    [
+        "", "a b", "a\uFEFFb", "\uFEFF a", "a\vb", "a\u000Cb", "a\u3000\u00A0b", "a\u0085b", "a \u0085 b", "\u0085", "a\u2028b",
+        "a\u2029\r\nb", "a // b\u2028c", "a // \u0085 b\nc", "a /* \u2028 */ b", "a /* b", "a /", "a\u180Eb",
+        // Across the 4096 chars the TextReader entry point reads at once
+        "a" + new string('\uFEFF', 5000) + "b", "a" + new string(' ', 4093) + "\u2028\u3000\vb", "a" + new string('\u3000', 4094) + "\u0085b",
+    ];
+
+    [Theory]
+    [MemberData(nameof(JavaScriptCharsInputs))]
+    public void JavaScript_White_Space_Matches_The_Runtime(string text)
+    {
+        var parser = ZeroOrMany(Terms.Identifier())
+            .WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithMultiLine("/*", "*/"))
+            .Eof()
+            .Then(static list => string.Join("|", list.Select(static x => x.ToString())));
+
+        Check(parser, CommentsGrammars.TryParseJavaScriptChars, CommentsGrammars.TryParseJavaScriptChars, text);
+    }
+
+    [Theory]
+    [MemberData(nameof(JavaScriptCharsInputs))]
+    [InlineData("a b\u2028c d")]
+    [InlineData("a /* \u2029 */ b c")]
+    [InlineData("a \uFEFF\v b")]
+    public void JavaScript_New_Lines_Match_The_Runtime(string text)
+    {
+        var parser = ZeroOrMany(Terms.Identifier().And(ZeroOrMany(NoNewLineBefore(Terms.Identifier(), JavaScriptNewLines))).Then(static x => string.Join(" ", new[] { x.Item1.ToString() }.Concat(x.Item2.Select(static y => y.ToString())))))
+            .WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithMultiLine("/*", "*/"))
+            .Eof()
+            .Then(static list => string.Join("|", list));
+
+        Check(parser, CommentsGrammars.TryParseJavaScriptCharsNoNewLine, CommentsGrammars.TryParseJavaScriptCharsNoNewLine, text);
+    }
+
+    [Theory]
+    [InlineData("a\uFEFF\vb", "a b")]
+    [InlineData("a b\u2028c /* \n */ d e", "a b|c|d e")]
+    public void JavaScript_White_Space_Is_Skipped(string text, string expected)
+    {
+        Assert.True(CommentsGrammars.TryParseJavaScriptCharsNoNewLine(text, out var value));
+        Assert.Equal(expected, value);
+        Assert.False(CommentsGrammars.TryParseJavaScriptChars("a\u0085b", out _));
+    }
+
     private static void Check(Parser<string> parser, StringParser parseString, ReaderParser parseReader, string input)
     {
         bool expected;
@@ -274,6 +323,10 @@ public static partial class CommentsGrammars
 {
     public static partial bool TryParseJavaScript(string text, out string value);
     public static partial bool TryParseJavaScript(TextReader reader, out string value);
+    public static partial bool TryParseJavaScriptChars(string text, out string value);
+    public static partial bool TryParseJavaScriptChars(TextReader reader, out string value);
+    public static partial bool TryParseJavaScriptCharsNoNewLine(string text, out string value);
+    public static partial bool TryParseJavaScriptCharsNoNewLine(TextReader reader, out string value);
     public static partial bool TryParseSql(string text, out string value);
     public static partial bool TryParseSql(TextReader reader, out string value);
     public static partial bool TryParseCommentsOnly(string text, out string value);

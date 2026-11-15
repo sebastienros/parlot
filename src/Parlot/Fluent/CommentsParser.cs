@@ -11,8 +11,9 @@ namespace Parlot.Fluent;
 /// </summary>
 /// <remarks>
 /// It is built by <see cref="CommentsBuilder.Build"/>. At each position it skips the white space of the context's
-/// <see cref="ParseContext.WhiteSpaceSet"/>, when the builder includes it, then the first comment, in the order they were
-/// added, that starts there. It succeeds when it skipped something.
+/// <see cref="ParseContext.WhiteSpaceSet"/>, or the chars of <see cref="CommentsBuilder.WithWhiteSpace(string, string)"/>, when
+/// the builder includes white space, then the first comment, in the order they were added, that starts there. It succeeds
+/// when it skipped something.
 /// </remarks>
 public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
 {
@@ -20,19 +21,35 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     private readonly bool _includeNewLines;
     private readonly CommentSyntax[] _comments;
 
+    // The chars of the white space, when the builder gives them, instead of the context's WhiteSpaceSet
+    private readonly string? _whiteSpaceChars;
+    private readonly CharSet _whiteSpaceCharSet;
+
     // The first chars of the comments, to tell at once that no comment starts at a char
     private readonly string _firstChars;
 
-    internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments)
+    internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments, string? whiteSpaceChars = null)
     {
-        _skipWhiteSpace = skipWhiteSpace;
+        _skipWhiteSpace = skipWhiteSpace || whiteSpaceChars is not null;
         _includeNewLines = includeNewLines;
         _comments = comments;
         _firstChars = new string(comments.Select(static c => c.Start[0]).Distinct().ToArray());
+        _whiteSpaceChars = whiteSpaceChars;
 
-        // The chars of the default set contain the ones of every WhiteSpaceSet
-        var whiteSpaceChars = skipWhiteSpace ? new WhiteSpaceLiteral(includeNewLines).ExpectedChars : [];
-        ExpectedChars = whiteSpaceChars.Concat(_firstChars).Distinct().ToArray();
+        char[] skippedChars;
+
+        if (whiteSpaceChars is not null)
+        {
+            _whiteSpaceCharSet = new CharSet(whiteSpaceChars.AsSpan());
+            skippedChars = whiteSpaceChars.ToCharArray();
+        }
+        else
+        {
+            // The chars of the default set contain the ones of every WhiteSpaceSet
+            skippedChars = skipWhiteSpace ? new WhiteSpaceLiteral(includeNewLines).ExpectedChars : [];
+        }
+
+        ExpectedChars = skippedChars.Concat(_firstChars).Distinct().ToArray();
 
         Name = "CommentsParser";
     }
@@ -69,7 +86,11 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         {
             if (_skipWhiteSpace)
             {
-                if (_includeNewLines)
+                if (_whiteSpaceChars is not null)
+                {
+                    scanner.SkipChars(in _whiteSpaceCharSet);
+                }
+                else if (_includeNewLines)
                 {
                     scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
                 }
@@ -188,7 +209,12 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         result.Body.Add("while (true)");
         result.Body.Add("{");
 
-        if (_skipWhiteSpace)
+        if (_whiteSpaceChars is not null)
+        {
+            var charSetName = context.RegisterStaticField("private static readonly global::Parlot.CharSet", $"new global::Parlot.CharSet({LiteralHelper.StringToLiteral(_whiteSpaceChars)}.AsSpan())");
+            result.Body.Add($"    {scannerName}.SkipChars(in {charSetName});");
+        }
+        else if (_skipWhiteSpace)
         {
             result.Body.Add(_includeNewLines
                 ? $"    {scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);"

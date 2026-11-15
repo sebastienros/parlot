@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Parlot.Fluent;
 
@@ -69,6 +70,12 @@ public class CommentsBuilder
     private bool _whiteSpace;
     private bool _whiteSpaceOrNewLine;
 
+    // The chars of WithWhiteSpace(whiteSpace, newLines), without duplicates
+    private string? _whiteSpaceChars;
+
+    // How many white space elements were added
+    private int _whiteSpaceCount;
+
     // Whether a parser was added with WithParser(), or an element CommentsParser can't skip in the same order
     private bool _composed;
 
@@ -95,6 +102,7 @@ public class CommentsBuilder
     {
         _parsers.Add(Literals.WhiteSpace());
         _whiteSpace = true;
+        _whiteSpaceCount++;
         return this;
     }
 
@@ -105,6 +113,44 @@ public class CommentsBuilder
     {
         _parsers.Add(Literals.WhiteSpace(includeNewLines: true));
         _whiteSpaceOrNewLine = true;
+        _whiteSpaceCount++;
+        return this;
+    }
+
+    /// <summary>
+    /// Skips the chars of <paramref name="whiteSpace"/> and of <paramref name="newLines"/>, instead of the white space of the
+    /// context's <see cref="ParseContext.WhiteSpaceSet"/>.
+    /// </summary>
+    /// <param name="whiteSpace">The chars which are white space, for instance <c>"\t\v\f \u00A0\uFEFF"</c> and the other
+    /// <c>Zs</c> chars for JavaScript.</param>
+    /// <param name="newLines">The chars which are new lines, for instance <c>"\n\r\u2028\u2029"</c> for JavaScript. It can be
+    /// empty, to skip no new line.</param>
+    /// <remarks>
+    /// <para>
+    /// This is for a grammar whose white space no <see cref="WhiteSpaceSet"/> describes, like JavaScript's, which contains
+    /// U+FEFF and not U+0085. It costs the same as the white space of a set: the chars are tested with a table built once.
+    /// </para>
+    /// <para>
+    /// The parsers telling whether a new line was skipped, <see cref="Parsers.NoNewLineBefore{T}(Parser{T}, string)"/> and
+    /// <see cref="Parsers.NewLineAhead(string)"/>, take the same <paramref name="newLines"/>. The line of
+    /// <see cref="Cursor.Position"/> still counts the <c>'\n'</c> chars only.
+    /// </para>
+    /// </remarks>
+    public CommentsBuilder WithWhiteSpace(string whiteSpace, string newLines)
+    {
+        ThrowHelper.ThrowIfNull(whiteSpace, nameof(whiteSpace));
+        ThrowHelper.ThrowIfNull(newLines, nameof(newLines));
+
+        if (whiteSpace.Length == 0 && newLines.Length == 0)
+        {
+            throw new ArgumentException("At least one white space or new line char is required.", nameof(whiteSpace));
+        }
+
+        var chars = new string((whiteSpace + newLines).Distinct().ToArray());
+
+        _parsers.Add(Literals.AnyOf(chars));
+        _whiteSpaceChars = chars;
+        _whiteSpaceCount++;
         return this;
     }
 
@@ -212,14 +258,36 @@ public class CommentsBuilder
 
     private void AddComment(CommentsParser.CommentSyntax comment)
     {
-        // CommentsParser skips white space before it looks for a comment: a comment which starts with a white space char,
-        // or with nothing, is matched by the composed parsers in the order they were added
-        if (comment.Start.Length == 0 || comment.End?.Length == 0 || Character.IsWhiteSpaceOrNewLine(comment.Start[0]))
+        // CommentsParser needs the first char of a comment, and an end to search for
+        if (comment.Start.Length == 0 || comment.End?.Length == 0)
         {
             _composed = true;
         }
 
         _comments.Add(comment);
+    }
+
+    // Whether CommentsParser can skip the elements. It skips the white space of the context's set, with new lines when an
+    // element includes them, or the chars of a single WithWhiteSpace(whiteSpace, newLines), before it looks for a comment: a
+    // comment which starts with a white space char is matched by the composed parsers in the order they were added
+    private bool CanSkipInOneParser()
+    {
+        if (_composed || _whiteSpaceChars is not null && _whiteSpaceCount > 1)
+        {
+            return false;
+        }
+
+        foreach (var comment in _comments)
+        {
+            var first = comment.Start[0];
+
+            if (_whiteSpaceChars is not null ? _whiteSpaceChars.AsSpan().IndexOf(first) >= 0 : Character.IsWhiteSpaceOrNewLine(first))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -231,11 +299,11 @@ public class CommentsBuilder
     /// </remarks>
     public Parser<TextSpan> Build()
     {
-        if (_composed || _parsers.Count == 0)
+        if (_parsers.Count == 0 || !CanSkipInOneParser())
         {
             return Capture(OneOrMany(OneOf(_parsers.ToArray())));
         }
 
-        return new CommentsParser(_whiteSpace || _whiteSpaceOrNewLine, _whiteSpaceOrNewLine, _comments.ToArray());
+        return new CommentsParser(_whiteSpace || _whiteSpaceOrNewLine, _whiteSpaceOrNewLine, _comments.ToArray(), _whiteSpaceChars);
     }
 }
