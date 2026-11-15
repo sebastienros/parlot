@@ -74,6 +74,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     private const byte BeforeWhiteSpace = 3;
 
     private byte _whiteSpace;
+
+    // The number of alternatives up to which a choice which invokes them before the white space tries them in order, without
+    // a lookup table
+    private const int MaxAlternativesInOrder = 2;
+
     private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
     private Parser<T>[]? _otherParsersBeforeWhiteSpace;
 
@@ -480,8 +485,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             return Hoisted;
         }
 
-        // The table is written before the mode, which the parsers read first
-        (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
+        // The table is written before the mode, which the parsers read first. Two alternatives are tried in order: reading the
+        // char after the white space costs about what the one which doesn't match does.
+        if (_originalParsers.Length > MaxAlternativesInOrder)
+        {
+            (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
+        }
+
         Volatile.Write(ref _whiteSpace, BeforeWhiteSpace);
         return BeforeWhiteSpace;
     }
@@ -638,7 +648,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }
 
         // A choice whose alternatives skip the white space themselves is parsed there too
-        if (context.IsCompactingOrCollectingDiagnostics || _whiteSpace > Hoisted)
+        var whiteSpace = _whiteSpace;
+
+        if (context.IsCompactingOrCollectingDiagnostics || whiteSpace > Hoisted)
         {
             return ParseCompacting(context, ref result, withoutValue: false);
         }
@@ -652,7 +664,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         var start = 0;
 
         // If all sub-parsers skip whitespaces, do it once here
-        if (SkipWhitespace)
+        if (whiteSpace == Hoisted)
         {
             start = cursor.Offset;
             context.SkipWhiteSpace();
@@ -723,7 +735,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         // The alternatives are invoked with their value when the input is a reader or the diagnostics are collected. A choice
         // whose alternatives skip the white space themselves is parsed there too.
-        if (context.IsCompactingOrCollectingDiagnostics || _whiteSpace > Hoisted)
+        var whiteSpace = _whiteSpace;
+
+        if (context.IsCompactingOrCollectingDiagnostics || whiteSpace > Hoisted)
         {
             return ParseCompacting(context, ref result, withoutValue: true);
         }
@@ -737,7 +751,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         var start = 0;
 
         // If all sub-parsers skip whitespaces, do it once here
-        if (SkipWhitespace)
+        if (whiteSpace == Hoisted)
         {
             start = cursor.Offset;
             context.SkipWhiteSpace();
@@ -818,6 +832,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         withoutValue &= simple && _withoutValue;
 
+        if (simple && whiteSpace == BeforeWhiteSpace && Volatile.Read(ref _mapBeforeWhiteSpace) == null)
+        {
+            return ParseInOrder(context, ref result, withoutValue);
+        }
+
         context.EnterParser(this);
 
         var collecting = context.CollectDiagnostics;
@@ -892,6 +911,27 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         {
             // The cursor is already back before the white space, which a choice skipping it moves back from
             cursor.RecordFailure(failure);
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    // The alternatives of a choice which invokes them before the white space without a lookup table, from a string, tried in
+    // order where the choice is: each skips the white space, and records where it fails after it.
+    private bool ParseInOrder(ParseContext context, ref ParseResult<T> result, bool withoutValue)
+    {
+        context.EnterParser(this);
+
+        var parsers = _originalParsers;
+
+        for (var i = 0; i < parsers.Length; i++)
+        {
+            if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
+            {
+                context.ExitParser(this);
+                return true;
+            }
         }
 
         context.ExitParser(this);
