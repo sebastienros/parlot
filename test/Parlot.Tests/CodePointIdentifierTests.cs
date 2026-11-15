@@ -1,5 +1,7 @@
 using Parlot.Fluent;
+using Parlot.Rewriting;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Xunit;
 using static Parlot.Fluent.Parsers;
@@ -267,5 +269,129 @@ public class CodePointIdentifierTests
         JavaScript.Parse(context, ref result);
 
         Assert.False(context.Scanner.Cursor.HitEnd);
+    }
+
+    [Fact]
+    public void ShouldDeclareTheCharsItStartsWith()
+    {
+        var seekable = Assert.IsAssignableFrom<ISeekable>(JavaScript);
+
+        Assert.True(seekable.CanSeek);
+        Assert.False(seekable.SkipWhitespace);
+        Assert.Contains('$', seekable.ExpectedChars);
+        Assert.Contains('_', seekable.ExpectedChars);
+        Assert.Contains('a', seekable.ExpectedChars);
+        Assert.Contains('Z', seekable.ExpectedChars);
+        Assert.Contains('\\', seekable.ExpectedChars);
+        Assert.Contains(Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar, seekable.ExpectedChars);
+        Assert.DoesNotContain('0', seekable.ExpectedChars);
+        Assert.DoesNotContain('(', seekable.ExpectedChars);
+        Assert.DoesNotContain(Parlot.Fluent.OneOf<TextSpan>.OtherSeekableChar, seekable.ExpectedChars);
+
+        // The Terms variant skips the white space first
+        var terms = Assert.IsAssignableFrom<ISeekable>(Terms.Identifier(IsJavaScriptStart, IsJavaScriptPart, IdentifierOptions.JavaScript));
+        Assert.True(terms.CanSeek);
+        Assert.True(terms.SkipWhitespace);
+    }
+
+    [Fact]
+    public void ShouldNotDeclareTheBackslashWithoutEscapes()
+    {
+        var seekable = Assert.IsAssignableFrom<ISeekable>(Literals.Identifier(IsJavaScriptStart, IsJavaScriptPart, IdentifierOptions.SurrogatePairs));
+
+        Assert.DoesNotContain('\\', seekable.ExpectedChars);
+        Assert.Contains(Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar, seekable.ExpectedChars);
+
+        // A backslash the predicate accepts is an ASCII char like the others
+        seekable = Assert.IsAssignableFrom<ISeekable>(Literals.Identifier(static c => c is '\\' or 'a', static c => c == 'a', IdentifierOptions.None));
+
+        Assert.Contains('\\', seekable.ExpectedChars);
+    }
+
+    private static Parser<string> Tokens() => OneOf(
+        Terms.Text("if"),
+        Terms.Text("("),
+        Terms.Text(")"),
+        Terms.Identifier(IsJavaScriptStart, IsJavaScriptPart, IdentifierOptions.JavaScript).Then(static x => "id:" + Character.DecodeIdentifier(x).ToString()));
+
+    [Fact]
+    public void ShouldGiveAChoiceALookupTable()
+    {
+        var seekable = Assert.IsAssignableFrom<ISeekable>(Tokens());
+
+        Assert.True(seekable.CanSeek);
+        Assert.True(seekable.SkipWhitespace);
+        Assert.DoesNotContain(Parlot.Fluent.OneOf<string>.OtherSeekableChar, seekable.ExpectedChars);
+        Assert.Contains('(', seekable.ExpectedChars);
+        Assert.Contains('i', seekable.ExpectedChars);
+        Assert.Contains('\\', seekable.ExpectedChars);
+        Assert.Contains(Parlot.Fluent.OneOf<string>.NonAsciiSeekableChar, seekable.ExpectedChars);
+    }
+
+    [Theory]
+    [InlineData("if", "if")]
+    [InlineData("(", "(")]
+    [InlineData(" )", ")")]
+    [InlineData("iffy", "if")]
+    [InlineData("abc", "id:abc")]
+    [InlineData("\\u0061bc", "id:abc")]
+    [InlineData("\\u{1D4D0}x", "id:" + MathB + "x")]
+    [InlineData("\u00e9t\u00e9", "id:\u00e9t\u00e9")]
+    [InlineData(MathA + "b", "id:" + MathA + "b")]
+    public void ShouldMatchFromAChoice(string input, string expected)
+    {
+        Assert.True(Tokens().TryParse(input, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData(" 1")]
+    [InlineData("\\n")]
+    [InlineData("\\u0031")]
+    [InlineData("\u00b2")] // ², not a letter
+    [InlineData("+")]
+    [InlineData("")]
+    public void ShouldRestoreTheCursorWhenAChoiceFails(string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.False(Tokens().Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+    }
+
+    [Fact]
+    public void ShouldSeekInLoops()
+    {
+        var parser = ZeroOrMany(Tokens()).Eof();
+
+        Assert.Equal(["id:abc", "(", "id:\u00e9", ")", "if", "id:b"], parser.Parse("abc ( \\u00e9 ) if\tb"));
+        Assert.Null(parser.Parse("abc 1"));
+    }
+
+    [Fact]
+    public void ShouldInvokeTheParserOfLookupFromAChoice()
+    {
+        var pattern = Literals.Pattern(static c => c is 'a' or 'b');
+        var lookup = pattern.Lookup(false, 'a', 'b');
+        var choice = OneOf(lookup, Literals.Text("(").Then(static x => new TextSpan(x)), pattern);
+        var entered = new List<object>();
+
+        var context = new ParseContext(new Scanner("ab")) { OnEnterParser = (parser, _) => entered.Add(parser) };
+        var result = new ParseResult<TextSpan>();
+
+        Assert.True(choice.Parse(context, ref result));
+        Assert.Equal("ab", result.Value.ToString());
+        Assert.Contains(pattern, entered);
+        Assert.DoesNotContain(lookup, entered);
+
+        // The pattern is listed twice, from the Lookup and by itself: it is invoked once when it fails
+        entered.Clear();
+        context = new ParseContext(new Scanner("c")) { OnEnterParser = (parser, _) => entered.Add(parser) };
+
+        Assert.False(choice.Parse(context, ref result));
+        Assert.Single(entered, x => ReferenceEquals(x, pattern));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 }
