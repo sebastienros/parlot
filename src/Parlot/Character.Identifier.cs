@@ -122,7 +122,7 @@ public static partial class Character
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsInAsciiMask(char c, ulong low, ulong high) => c < 128 && (((c < 64 ? low : high) >> c) & 1) != 0;
+    internal static bool IsInAsciiMask(char c, ulong low, ulong high) => c < 128 && (((c < 64 ? low : high) >> c) & 1) != 0;
 
     // Reads the identifier char at index, which the masks don't accept, returning its length or 0 when it isn't one
     [MethodImpl(MethodImplOptions.NoInlining)]
