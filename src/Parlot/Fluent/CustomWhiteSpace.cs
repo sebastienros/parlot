@@ -29,7 +29,7 @@ internal sealed class CustomWhiteSpace
     private readonly ulong _low;
     private readonly ulong _high;
 
-    // Whether it can start with any char above ASCII, when it doesn't tell its chars
+    // Whether it can start with any char above ASCII: when it doesn't tell its chars, or lists OneOf<T>.NonAsciiSeekableChar
     private readonly bool _anyOther;
 
     // The chars above ASCII, null when there are none
@@ -58,7 +58,12 @@ internal sealed class CustomWhiteSpace
 
         foreach (var c in chars)
         {
-            if (c < 64)
+            if (c == OneOf<object>.NonAsciiSeekableChar)
+            {
+                // Stands for every char above ASCII, not for U+FFFF only
+                _anyOther = true;
+            }
+            else if (c < 64)
             {
                 _low |= 1UL << c;
             }
@@ -75,7 +80,8 @@ internal sealed class CustomWhiteSpace
         // The end of the text is NUL: the parser is still invoked there, where a stream tells whether more text follows
         _low |= 1UL;
 
-        if (others > 0)
+        // With NonAsciiSeekableChar, the chars above ASCII it lists add nothing
+        if (others > 0 && !_anyOther)
         {
             var otherChars = new char[others];
             var i = 0;
