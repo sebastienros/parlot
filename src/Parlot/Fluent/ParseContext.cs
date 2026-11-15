@@ -611,6 +611,38 @@ public class ParseContext
         return end;
     }
 
+    /// <summary>
+    /// The char after the white space at the cursor, which stays where it is: the char a choice selects its alternatives
+    /// with when it invokes them before the white space, since one of them looks for a new line in it.
+    /// </summary>
+    /// <param name="end">Where the white space ends, which the choice records as where it failed when no alternative matches,
+    /// like a choice which skips the white space before its alternatives.</param>
+    /// <remarks>
+    /// It is <see cref="Cursor.Current"/> after <see cref="SkipWhiteSpace"/>, NUL at the end of the input. The white space
+    /// stays cached for the alternatives, which skip it.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal char CharAfterWhiteSpace(out int end)
+    {
+        var cursor = Scanner.Cursor;
+        var start = cursor.Offset;
+
+        // Moving the cursor back over white space is not a failure where it ends
+        var recorded = cursor.RecordedFailure;
+        var pin = Pin();
+
+        SkipWhiteSpace();
+
+        var current = cursor.Current;
+        end = cursor.Offset;
+
+        cursor.ResetPosition(start);
+        cursor.RestoreRecordedFailure(recorded);
+        Unpin(pin);
+
+        return current;
+    }
+
     public void SkipWhiteSpace()
     {
         var offset = Scanner.Cursor.Offset;

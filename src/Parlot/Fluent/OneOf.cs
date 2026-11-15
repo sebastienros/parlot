@@ -64,6 +64,24 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     // Whether an alternative can be invoked without its value, such that this one is when its value isn't used
     private readonly bool _withoutValue;
 
+    // How the white space is skipped for the alternatives when they all skip it: once, before they are invoked (Hoisted), or
+    // by each of them, when one can look for a new line in it, like NoNewLineBefore (BeforeWhiteSpace). The choice then
+    // selects them with the char after the white space, from the table of _mapBeforeWhiteSpace, and invokes them before it.
+    // Unresolved until it's first invoked, since an alternative can be a Deferred set later.
+    private const byte NoWhiteSpace = 0;
+    private const byte Hoisted = 1;
+    private const byte Unresolved = 2;
+    private const byte BeforeWhiteSpace = 3;
+
+    private byte _whiteSpace;
+
+    // The number of alternatives up to which a choice which invokes them before the white space tries them in order, without
+    // a lookup table
+    private const int MaxAlternativesInOrder = 2;
+
+    private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
+    private Parser<T>[]? _otherParsersBeforeWhiteSpace;
+
     public OneOf(Parser<T>[] parsers)
     {
         _originalParsers = _parsers = parsers ?? throw new ArgumentNullException(nameof(parsers));
@@ -148,6 +166,9 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         CanSeek = false;
         ExpectedChars = [];
         SkipWhitespace = false;
+        _mapBeforeWhiteSpace = null;
+        _otherParsersBeforeWhiteSpace = null;
+        Volatile.Write(ref _whiteSpace, NoWhiteSpace);
 
         static void AddUniqueRange(List<Parser<T>> target, IReadOnlyList<Parser<T>> items)
         {
@@ -324,6 +345,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             if (parsers.All(x => x is ISeekable seekable && seekable.SkipWhitespace))
             {
                 SkipWhitespace = true;
+                Volatile.Write(ref _whiteSpace, Unresolved);
 
                 // Remove the SkipWhiteSpace parser if we can
                 Parsers = _parsers = parsers.Select(x => x is SkipWhiteSpace<T> skip ? skip.Parser : x).ToArray();
@@ -431,14 +453,115 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
     public bool SkipWhitespace { get; private set; }
 
-    // It skips the white space for its alternatives when they all skip it
+    // It skips the white space for its alternatives when they all skip it, unless one of them looks for a new line in it
     LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace
     {
         get
         {
             EnsureResolved();
-            return SkipWhitespace ? LeadingWhiteSpaceUse.Skipped : LeadingWhiteSpaceUse.None;
+
+            return ReadWhiteSpace() switch
+            {
+                Hoisted => LeadingWhiteSpaceUse.Skipped,
+                BeforeWhiteSpace => LeadingWhiteSpaceUse.Kept,
+                _ => LeadingWhiteSpaceUse.None,
+            };
         }
+    }
+
+    // How the alternatives skip the white space, resolved when the choice is first invoked
+    private byte ReadWhiteSpace()
+    {
+        var whiteSpace = Volatile.Read(ref _whiteSpace);
+        return whiteSpace == Unresolved ? ResolveWhiteSpace() : whiteSpace;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private byte ResolveWhiteSpace()
+    {
+        if (!LeadingWhiteSpace.ReadsLeadingWhiteSpace(_originalParsers))
+        {
+            Volatile.Write(ref _whiteSpace, Hoisted);
+            return Hoisted;
+        }
+
+        // The table is written before the mode, which the parsers read first. Two alternatives are tried in order: reading the
+        // char after the white space costs about what the one which doesn't match does.
+        if (_originalParsers.Length > MaxAlternativesInOrder)
+        {
+            (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
+        }
+
+        Volatile.Write(ref _whiteSpace, BeforeWhiteSpace);
+        return BeforeWhiteSpace;
+    }
+
+    // The lookup table of a choice which invokes its alternatives before the white space: the alternatives themselves, which
+    // skip it, rather than the ones of the nested choices or the parsers of SkipWhiteSpace, which the table of Build() holds.
+    // Null when no alternative tells what it starts with. The other parsers are the ones invoked for any char.
+    private (CharMap<Parser<T>[]>? Map, Parser<T>[]? OtherParsers) BuildMapBeforeWhiteSpace()
+    {
+        var groups = new Dictionary<char, List<Parser<T>>>();
+        var hints = new char[]?[_originalParsers.Length];
+
+        for (var i = 0; i < _originalParsers.Length; i++)
+        {
+            // Null for an alternative which can start with any char
+            hints[i] = _originalParsers[i] is ISeekable { CanSeek: true } seekable && Array.IndexOf(seekable.ExpectedChars, OtherSeekableChar) < 0
+                ? seekable.ExpectedChars
+                : null;
+
+            foreach (var c in hints[i] ?? [])
+            {
+                if (!groups.ContainsKey(c))
+                {
+                    groups.Add(c, []);
+                }
+            }
+        }
+
+        if (groups.Count == 0)
+        {
+            return (null, null);
+        }
+
+        List<Parser<T>>? otherParsers = null;
+        List<Parser<T>>? nonAsciiParsers = null;
+
+        for (var i = 0; i < _originalParsers.Length; i++)
+        {
+            var parser = _originalParsers[i];
+            var expected = hints[i];
+            var anyNonAscii = expected is null || Array.IndexOf(expected, NonAsciiSeekableChar) >= 0;
+
+            foreach (var entry in groups)
+            {
+                if (expected is null || Array.IndexOf(expected, entry.Key) >= 0 || (anyNonAscii && entry.Key >= 0x80))
+                {
+                    entry.Value.Add(parser);
+                }
+            }
+
+            if (expected is null)
+            {
+                (otherParsers ??= []).Add(parser);
+            }
+
+            if (anyNonAscii)
+            {
+                (nonAsciiParsers ??= []).Add(parser);
+            }
+        }
+
+        var map = new CharMap<Parser<T>[]>(groups.Select(static entry => new KeyValuePair<char, Parser<T>[]>(entry.Key, entry.Value.ToArray())));
+
+        // The non-ASCII chars without an entry select the alternatives which can start with any of them, in order
+        if (nonAsciiParsers != null)
+        {
+            map.NonAsciiFallback = nonAsciiParsers.ToArray();
+        }
+
+        return (map, otherParsers?.ToArray());
     }
 
     // The prefixes of the alternatives each char of the lookup table selects
@@ -524,9 +647,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             EnsureResolved();
         }
 
-        if (context.IsCompactingOrCollectingDiagnostics)
+        // A choice whose alternatives skip the white space themselves is parsed there too
+        var whiteSpace = _whiteSpace;
+
+        if (context.IsCompactingOrCollectingDiagnostics || whiteSpace > Hoisted)
         {
-            return ParseCompacting(context, ref result);
+            return ParseCompacting(context, ref result, withoutValue: false);
         }
 
         context.EnterParser(this);
@@ -538,7 +664,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         var start = 0;
 
         // If all sub-parsers skip whitespaces, do it once here
-        if (SkipWhitespace)
+        if (whiteSpace == Hoisted)
         {
             start = cursor.Offset;
             context.SkipWhiteSpace();
@@ -607,10 +733,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             EnsureResolved();
         }
 
-        // The alternatives are invoked with their value when the input is a reader or the diagnostics are collected
-        if (context.IsCompactingOrCollectingDiagnostics)
+        // The alternatives are invoked with their value when the input is a reader or the diagnostics are collected. A choice
+        // whose alternatives skip the white space themselves is parsed there too.
+        var whiteSpace = _whiteSpace;
+
+        if (context.IsCompactingOrCollectingDiagnostics || whiteSpace > Hoisted)
         {
-            return ParseCompacting(context, ref result);
+            return ParseCompacting(context, ref result, withoutValue: true);
         }
 
         context.EnterParser(this);
@@ -622,7 +751,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         var start = 0;
 
         // If all sub-parsers skip whitespaces, do it once here
-        if (SkipWhitespace)
+        if (whiteSpace == Hoisted)
         {
             start = cursor.Offset;
             context.SkipWhiteSpace();
@@ -688,25 +817,58 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
     // Also invoked when the diagnostics are collected, which discards those of the alternatives that aren't used. Its pins
     // do nothing when the input is a string.
-    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    // withoutValue: whether the value isn't used, see ParseWithoutValue(). The alternatives are invoked without their value
+    // only when the input is a string and the diagnostics aren't collected.
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result, bool withoutValue)
     {
+        var whiteSpace = ReadWhiteSpace();
+        var simple = !context.IsCompactingOrCollectingDiagnostics;
+
+        if (whiteSpace == Hoisted && simple)
+        {
+            // Resolved on its first invocation
+            return withoutValue ? ParseWithoutValue(context, ref result) : Parse(context, ref result);
+        }
+
+        withoutValue &= simple && _withoutValue;
+
+        if (simple && whiteSpace == BeforeWhiteSpace && Volatile.Read(ref _mapBeforeWhiteSpace) == null)
+        {
+            return ParseInOrder(context, ref result, withoutValue);
+        }
+
         context.EnterParser(this);
 
         var collecting = context.CollectDiagnostics;
         var alternatives = collecting ? context.BeginAlternatives() : default;
 
         var cursor = context.Scanner.Cursor;
-        var start = 0;
 
-        if (SkipWhitespace)
-        {
-            start = cursor.Offset;
-            context.SkipWhiteSpace();
-        }
+        // Where the cursor moves back to when no alternative matches, and where it fails, after the white space
+        var start = 0;
+        var failure = -1;
 
         // The lookup map releases the text as soon as a single alternative remains. The window may not hold the text
         // after the current char, so the alternatives aren't selected again by their prefixes.
-        var parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : _parsers;
+        Parser<T>[]? parsers;
+
+        if (whiteSpace == BeforeWhiteSpace)
+        {
+            // An alternative looks for a new line in the white space: they are selected with the char after it, and skip it
+            // themselves, from the cache of the context
+            var map = _mapBeforeWhiteSpace;
+            parsers = map != null ? map[context.CharAfterWhiteSpace(out failure)] ?? _otherParsersBeforeWhiteSpace : _originalParsers;
+        }
+        else
+        {
+            if (whiteSpace == Hoisted)
+            {
+                start = cursor.Offset;
+                context.SkipWhiteSpace();
+            }
+
+            parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : _parsers;
+        }
 
         if (parsers != null)
         {
@@ -722,7 +884,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                     context.Unpin(pin);
                 }
 
-                if (parsers[i].Parse(context, ref result))
+                if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
                 {
                     context.Unpin(pin);
                     context.ExitParser(this);
@@ -741,9 +903,35 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             context.RestoreAlternatives(in alternatives);
         }
 
-        if (SkipWhitespace)
+        if (whiteSpace == Hoisted)
         {
             cursor.ResetPosition(start);
+        }
+        else if (failure >= 0)
+        {
+            // The cursor is already back before the white space, which a choice skipping it moves back from
+            cursor.RecordFailure(failure);
+        }
+
+        context.ExitParser(this);
+        return false;
+    }
+
+    // The alternatives of a choice which invokes them before the white space without a lookup table, from a string, tried in
+    // order where the choice is: each skips the white space, and records where it fails after it.
+    private bool ParseInOrder(ParseContext context, ref ParseResult<T> result, bool withoutValue)
+    {
+        context.EnterParser(this);
+
+        var parsers = _originalParsers;
+
+        for (var i = 0; i < parsers.Length; i++)
+        {
+            if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
+            {
+                context.ExitParser(this);
+                return true;
+            }
         }
 
         context.ExitParser(this);
@@ -802,7 +990,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // The dispatch methods of PrefixDispatch, as local functions after the statements
         var localFunctions = new List<string>();
 
-        if (SkipWhitespace)
+        // An alternative looks for a new line in the white space, like NoNewLineBefore: the alternatives are selected with
+        // the char after it, and invoked before it, see ParseCompacting()
+        var beforeWhiteSpace = ReadWhiteSpace() == BeforeWhiteSpace;
+        var map = beforeWhiteSpace ? _mapBeforeWhiteSpace : _map;
+        var otherParsers = beforeWhiteSpace ? _otherParsersBeforeWhiteSpace : _otherParsers;
+
+        string? failureName = null;
+
+        if (SkipWhitespace && !beforeWhiteSpace)
         {
             startName = $"start{context.NextNumber()}";
             result.Body.Add($"var {startName} = {cursorName}.Offset;");
@@ -811,10 +1007,19 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         // If a lookup map was built, emit a switch-based dispatch that only tries
         // the relevant sub-parsers for the current char (mirroring the runtime path).
-        if (_map != null && _map.ExpectedChars.Length > 0)
+        if (map != null && map.ExpectedChars.Length > 0)
         {
             var currentName = $"current{context.NextNumber()}";
-            result.Body.Add($"var {currentName} = {cursorName}.Current;");
+            if (beforeWhiteSpace)
+            {
+                // Where the choice fails when no alternative matches, as one which moves back from the white space it skipped
+                failureName = $"failure{context.NextNumber()}";
+                result.Body.Add($"var {currentName} = {ctx}.CharAfterWhiteSpace(out var {failureName});");
+            }
+            else
+            {
+                result.Body.Add($"var {currentName} = {cursorName}.Current;");
+            }
 
             // Group characters that share the same parser list (by contents) to avoid duplicating code.
             var groups = new Dictionary<ParserListKey, ParserGroup>(ParserListKeyComparer.Instance);
@@ -822,7 +1027,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             // The chars whose alternatives tell longer prefixes are dispatched again on these
             var dispatches = new List<(char Char, PrefixDispatch Dispatch)>();
 
-            foreach (var ch in _map.ExpectedChars)
+            foreach (var ch in map.ExpectedChars)
             {
                 // Skip '\0' as it represents "no match" / default case, and the non-ASCII chars without an entry of their own
                 if (ch == OtherSeekableChar || ch == NonAsciiSeekableChar)
@@ -830,14 +1035,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                     continue;
                 }
 
-                var parsersForChar = _map[ch];
+                var parsersForChar = map[ch];
                 if (parsersForChar is null)
                 {
                     continue;
                 }
 
-                // A dispatch reads past the current char, which a compacting buffer may not have read yet
-                if (!context.IsCompacting && PrefixDispatch.TryCreate(ch, parsersForChar) is { } dispatch)
+                // A dispatch reads past the current char, which a compacting buffer may not have read yet, and from the cursor,
+                // which stays before the white space when the alternatives skip it
+                if (!context.IsCompacting && !beforeWhiteSpace && PrefixDispatch.TryCreate(ch, parsersForChar) is { } dispatch)
                 {
                     dispatches.Add((ch, dispatch));
                     continue;
@@ -854,12 +1060,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             }
 
             ParserGroup? defaultGroup = null;
-            if (_otherParsers != null)
+            if (otherParsers != null)
             {
-                var key = new ParserListKey(_otherParsers);
+                var key = new ParserListKey(otherParsers);
                 if (!groups.TryGetValue(key, out var group))
                 {
-                    group = new ParserGroup(_otherParsers);
+                    group = new ParserGroup(otherParsers);
                     groups.Add(key, group);
                 }
 
@@ -930,7 +1136,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             }
 
             // The non-ASCII chars without an entry select the alternatives which can start with any of them, see Build()
-            var nonAsciiParsers = _map.NonAsciiFallback;
+            var nonAsciiParsers = map.NonAsciiFallback;
 
             if (nonAsciiParsers is not null)
             {
@@ -965,7 +1171,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }
         else
         {
-            EmitParsers(Parsers, result, ctx, indent: string.Empty, getHelper: GetHelper, context);
+            EmitParsers(beforeWhiteSpace ? _originalParsers : Parsers, result, ctx, indent: string.Empty, getHelper: GetHelper, context);
         }
 
         if (startName is not null)
@@ -973,6 +1179,13 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             result.Body.Add($"if (!{result.SuccessVariable})");
             result.Body.Add("{");
             result.Body.Add($"    {cursorName}.ResetPosition({startName});");
+            result.Body.Add("}");
+        }
+        else if (failureName is not null)
+        {
+            result.Body.Add($"if (!{result.SuccessVariable})");
+            result.Body.Add("{");
+            result.Body.Add($"    {cursorName}.RecordFailure({failureName});");
             result.Body.Add("}");
         }
 

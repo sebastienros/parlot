@@ -100,6 +100,20 @@ public class BenchmarksTests
     }
 
     [Fact]
+    public void TokenGrammars()
+    {
+        var benchmark = new TokenBenchmarks();
+        Assert.Equal(120, benchmark.Names_Runtime());
+        Assert.Equal(120, benchmark.Tokens_Runtime());
+        Assert.Equal(120, benchmark.Names_Generated());
+        Assert.Equal(120, benchmark.Tokens_Generated());
+        Assert.False(benchmark.NamesRejected_Runtime());
+        Assert.False(benchmark.TokensRejected_Runtime());
+        Assert.False(benchmark.NamesRejected_Generated());
+        Assert.False(benchmark.TokensRejected_Generated());
+    }
+
+    [Fact]
     public void LookaheadGrammars()
     {
         var benchmark = new LookaheadBenchmarks();
@@ -1049,6 +1063,13 @@ public class BenchmarksTests
         Assert.Equal(expected, benchmarks.Lines_ReadLine());
         Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync());
         Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync_Delimited());
+    }
+
+    [Fact]
+    public void NoNewLineBeforeBenchmarks()
+    {
+        // The setup checks the results of every row, runtime and generated
+        new NoNewLineBeforeBenchmarks().Setup();
     }
 }
 #endif

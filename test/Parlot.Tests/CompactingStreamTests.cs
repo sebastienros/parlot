@@ -56,6 +56,25 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void TokensKeepTheBufferBounded()
+    {
+        // Each token tries a name after a '.' which isn't one, and the last one fails where it starts
+        var parser = ZeroOrMany(AsToken(Capture(Separated(Literals.Char('.'), Terms.Identifier())))).AndSkip(Terms.Char(';')).Eof();
+        var text = string.Join(" ", Enumerable.Range(0, 10_000).Select(static i => "a" + i + ".b" + i)) + " .;";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+
+        Assert.False(parser.TryParse(new ChunkedReader(text, 3), out _, out _, options));
+        Assert.InRange(peak(), 1, 64);
+
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = ZeroOrMany(AsToken(Capture(Separated(Literals.Char('.'), Terms.Identifier())))).Eof().Parse(new ChunkedReader(text.Substring(0, text.Length - 3), 3), options)!;
+
+        Assert.Equal(10_000, result.Count);
+        Assert.InRange(peak(), 1, 64);
+    }
+
+    [Fact]
     public void NewLinesAreFoundAcrossRefills()
     {
         // The white space is searched as a token: a new line at its end is found once its start was refilled away
@@ -75,6 +94,30 @@ public class CompactingStreamTests
         Assert.Null(parser.Parse(new ChunkedReader("a" + spaces + "b", 3), options));
         Assert.Equal("return|a", parser.Parse(new ChunkedReader("return" + spaces + "\na", 3), options));
         Assert.Equal("return a", parser.Parse(new ChunkedReader("return" + spaces + "a", 3), options));
+    }
+
+    [Fact]
+    public void ChoicesWithNoNewLineBeforeAlternativesKeepTheBufferBounded()
+    {
+        // The choice selects its alternatives with the char after the white space and invokes them before it: the white
+        // space is kept while the alternatives are read, and released after, as NoNewLineBefore keeps it while it's searched
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var arrowAfterNewLine = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "|=>" + x);
+        var statement = Terms.Identifier().And(OneOf(assignment, arrow, arrowAfterNewLine)).Then(static x => x.Item1.ToString() + x.Item2);
+        var parser = ZeroOrMany(statement).Eof().Then(static x => string.Join(";", x));
+
+        var spaces = new string(' ', 100);
+        var text = string.Join(spaces, Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 3 == 0 ? " = b" : i % 3 == 1 ? " => c" : "\n=> d")));
+        var expected = string.Join(";", Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 3 == 0 ? "=b" : i % 3 == 1 ? "=>c" : "|=>d")));
+
+        Assert.Equal(expected, parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 3), options));
+
+        // The white space between two statements is kept, not the statements before it
+        Assert.InRange(peak(), 1, 256);
     }
 
     [Fact]
@@ -307,6 +350,10 @@ public class CompactingStreamTests
         ["when-token"] = Terms.Integer().When(static (_, value) => value < 100).Then(static value => value.ToString()),
         ["thentry-token"] = Terms.Integer().ThenTry(static value => (value < 100, value.ToString())),
         ["when-tokens"] = Terms.Identifier().And(Terms.Integer()).When(static (_, value) => value.Item2 < 100).Then(static value => $"{value.Item1}{value.Item2}"),
+        // A token which fails where it starts, after the white space its parser skips, or holds
+        ["astoken-terms"] = AsToken(Terms.Char('a').And(Literals.Char('b'))).Then(static value => value.ToString()),
+        ["astoken-capture"] = AsToken(Capture(Terms.Identifier().AndSkip(Literals.Char('!')))).Then(static value => value.ToString()),
+        ["astoken-dotted"] = AsToken(Capture(Separated(Literals.Char('.'), Terms.Identifier()))).AndSkip(Terms.Char(';')).Then(static value => value.ToString()),
     };
 
     public static TheoryData<string, string> ReadFromTheirStartCases()
@@ -336,6 +383,9 @@ public class CompactingStreamTests
         Add("when-token", "9", "  9", "  123", " x", "  ");
         Add("thentry-token", "9", "  9", "  123", " x", "  ");
         Add("when-tokens", "a 9", "  a  9", "  a  123", " a x", "  ");
+        Add("astoken-terms", "ab", " ab", "  ax", " x", "  ", "");
+        Add("astoken-capture", "a!", " a!", "  ab?", "  !", "  ", "");
+        Add("astoken-dotted", "a.b;", " a.b ;", "  a.;", "  a.b.", "  ;", "  ", "");
 
         return data;
     }

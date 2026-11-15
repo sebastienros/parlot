@@ -139,6 +139,25 @@ public static partial class FailureGrammars
     public static Parser<string> BuildPeeked() =>
         Peek(Terms.Text("((")).SkipAnd(Terms.Char('x')).Then(static value => value.ToString()).Eof();
 
+    // Dotted names read as tokens: the name a '.' is followed by, which the separated list tries and drops, isn't a failure
+    [GenerateParser(nameof(DottedNames))]
+    public static Parser<string> BuildDottedNames()
+    {
+        var name = AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier())));
+
+        return name.And(ZeroOrMany(Literals.Char('+').SkipAnd(name))).Then(static value => value.Item1.ToString() + ":" + value.Item2.Count).Eof();
+    }
+
+    // A token which skips the white space before it fails where it starts, after that white space
+    [GenerateParser(nameof(TokenAfterWhiteSpace))]
+    public static Parser<string> BuildTokenAfterWhiteSpace() =>
+        Terms.Char('>').SkipAnd(AsToken(Terms.Char('a').And(Literals.Char('b')))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // A capture holds the white space before the token, which fails after it
+    [GenerateParser(nameof(CapturedToken))]
+    public static Parser<string> BuildCapturedToken() =>
+        Literals.Char('>').SkipAnd(AsToken(Capture(Terms.Identifier().AndSkip(Literals.Char('!'))))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
     // A capture holds the white space its parser skips, and is rejected with it: by a condition, by a conversion, and by a
     // conversion which receives where it starts
     [GenerateParser(nameof(CapturedRejected))]

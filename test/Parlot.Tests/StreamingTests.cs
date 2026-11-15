@@ -113,6 +113,9 @@ public class StreamingTests
         // A lookahead at the start of an alternative, the text it read is read again
         ["peek"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("ab"), Peek(Terms.Identifier()).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
         ["peek-value"] = new Grammar<(long, long)>(Peek(Terms.Integer()).And(Terms.Integer())),
+        // Tokens which try continuations they drop, and one which skips white space first, as alternatives of a choice
+        ["astoken"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(AsToken(Capture(Separated(Literals.Char('.'), Terms.Identifier()))).Or(AsToken(Capture(Terms.Integer().And(Literals.Char('!'))))))),
+        ["astoken-literals"] = new Grammar<IReadOnlyList<TextSpan>>(Separated(Literals.Char('+'), AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier()))))),
         ["followed"] = new Grammar<TextSpan>(Terms.Identifier().WhenFollowedBy(Terms.Char('('))),
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
         // A rejected value gives the cursor back to the next alternative, here the keyword the identifier rejects
@@ -158,6 +161,12 @@ public class StreamingTests
         // Statements ended by a semicolon or a new line, with "[no LineTerminator here]" before an argument and a postfix operator
         ["newlines"] = new Grammar<string>(CreateNewLineStatements()),
         ["newlines-comments"] = new Grammar<string>(CreateNewLineStatements().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // NoNewLineBefore alternatives of choices which skip the white space for them, and of an operator table
+        ["newline-choices"] = new Grammar<string>(CreateNewLineChoices()),
+        ["newline-choices-comments"] = new Grammar<string>(CreateNewLineChoices().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // A choice in a sequence, which doesn't keep the text buffered: the choice keeps the white space it skips
+        ["newline-choice-sequence"] = new Grammar<string>(CreateNewLineChoiceSequence()),
+        ["newline-choice-sequence-comments"] = new Grammar<string>(CreateNewLineChoiceSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
         ["comments-chars"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace(CommentsParserTests.JavaScriptWhiteSpace, CommentsParserTests.JavaScriptNewLines).WithSingleLine("//", CommentsParserTests.JavaScriptNewLines).WithMultiLine("/*", "*/"))),
         ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
@@ -245,6 +254,23 @@ public class StreamingTests
         var returnStatement = Terms.Keyword("return").SkipAnd(Terms.Identifier().NoNewLineBefore().Then(static x => "return " + x).Else("return"));
         var expressionStatement = Terms.Identifier().And(NoNewLineBefore(Terms.Text("++")).Else("")).Then(static x => x.Item1.ToString() + x.Item2);
         return ZeroOrMany(OneOf(returnStatement, expressionStatement).AndSkip(end)).Eof().Then(static x => string.Join("|", x));
+    }
+
+    private static Parser<string> CreateNewLineChoices()
+    {
+        var arrow = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var prefix = Terms.Text("++").SkipAnd(Terms.Identifier()).Then(static x => "++" + x);
+        var postfix = Terms.Char('#').SkipAnd(NewLineTests.CreatePostfixTable());
+        return ZeroOrMany(OneOf(postfix, NewLineTests.CreateArrowTail(), arrow, prefix)).Eof().Then(static x => string.Join("|", x));
+    }
+
+    private static Parser<string> CreateNewLineChoiceSequence()
+    {
+        // The assignment reads the '=' of an arrow before it fails, the arrow after a new line is read by the last alternative
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var arrowAfterNewLine = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "|=>" + x);
+        return Terms.Identifier().And(OneOf(assignment, arrow, arrowAfterNewLine)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
     }
 
     // A word starts with a lowercase ASCII letter or any char above ASCII, and ends before a space or a parenthesis
@@ -427,6 +453,8 @@ public class StreamingTests
         Add("not", "", "a", "ab", "abc", "ac", "xab");
         Add("peek", "", "ab", "abc", "ab abc a", "  ab  x ab", "a", "1");
         Add("peek-value", "", "12", "  12", "12 3", "x");
+        Add("astoken", "", "a", "a.b", " a . b  c.", "a.+", "  12!  a", "12", "12 !", " 1", ".a");
+        Add("astoken-literals", "", "a", "a.b+c", "a.+b", "a+b.", "a.b.c+d.e", "+a", "a+");
         Add("followed", "", "f", "f(", "f (", "f x", "f");
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("thentry", "", "a", "for", "  for  forx", "a for b", " forever for\n for1 1", "fo");
@@ -467,6 +495,26 @@ public class StreamingTests
         ];
         Add("newlines", newLines);
         Add("newlines-comments", newLines);
+
+        string[] newLineChoices =
+        [
+            "", "a", "a => b", "a=>b", "a\n=> b", "a\r\n=>b", "a = b", "a\n= b", "a += b c", "a\n+= b", "a => b\n=> c", "a /* x */ => b",
+            "a /* \n */ => b", "a // c\n=> b", "a\n/* x */ => b", "a" + new string(' ', 70) + "\n" + new string(' ', 70) + "=> b",
+            "a" + new string(' ', 140) + "=> b", "#a++", "#a ++ * b", "#a\n++b", "#a /* x */ -- c", "#a /* \n */ ++b", "#a // c\n++b",
+            "#a * b++ ++c", "#a\n+ b", "#a" + new string(' ', 70) + "\n" + new string(' ', 70) + "++b", "#a" + new string(' ', 140) + "++",
+            "#a++\n++b", "#a /* b",
+        ];
+        Add("newline-choices", newLineChoices);
+        Add("newline-choices-comments", newLineChoices);
+
+        string[] newLineChoiceSequence =
+        [
+            "a => b", "a\n=> b", "a = b", "a\n+= b", "a /* x */ => b", "a /* \n */ => b", "a // c\n=> b", "a\n/* x */ => b",
+            "a" + new string(' ', 70) + "\n" + new string(' ', 70) + "=> b", "a\n" + new string(' ', 140) + "=> b", "a" + new string(' ', 140) + "=> b",
+            "a" + new string(' ', 140) + "= b",
+        ];
+        Add("newline-choice-sequence", newLineChoiceSequence);
+        Add("newline-choice-sequence-comments", newLineChoiceSequence);
         Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
         Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
         Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");

@@ -127,6 +127,9 @@ public class ParseWithoutValueTests
         // All alternatives skip white space
         AssertSameAsParse(OneOf(Terms.Text("ab").And(Bs).Then(static x => x.Item2), Bs));
 
+        // One looks for a new line in it: they are invoked before it
+        AssertSameAsParse(OneOf(Terms.Text("ab").And(Bs).Then(static x => x.Item2), NoNewLineBefore(Terms.Text("ac")).And(Bs).Then(static x => x.Item2), Bs));
+
         // Every alternative is invoked, the longest match wins
         AssertSameAsParse(Longest(Bs, As, A.And(Bs).Then(static x => x.Item2), ZeroOrOne(C).Then<IReadOnlyList<char>>(static _ => [])));
         AssertSameAsParse(Longest(Bs, Literals.Pattern(static c => c == 'c').Then<IReadOnlyList<char>>(static _ => [])));
@@ -153,6 +156,8 @@ public class ParseWithoutValueTests
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));
         AssertSameAsParse(Peek(Bs));
         AssertSameAsParse(Peek(A.And(Bs)).And(A));
+        AssertSameAsParse(AsToken(Bs));
+        AssertSameAsParse(AsToken(A.And(Bs)).And(A));
         AssertSameAsParse(SkipWhiteSpace(OneOrMany(Literals.Char('b'))));
         AssertSameAsParse(NoNewLineBefore(OneOrMany(Literals.Char('b'))));
         AssertSameAsParse(A.And(Bs.NoNewLineBefore()));

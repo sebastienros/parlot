@@ -123,8 +123,11 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
     /// </summary>
     public bool SkipWhitespace => Hints.SkipWhitespace;
 
-    // It skips the white space for its alternatives when they all skip it
-    LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace => SkipWhitespace ? LeadingWhiteSpaceUse.Skipped : LeadingWhiteSpaceUse.None;
+    // It skips the white space for its alternatives when they all skip it, unless one of them looks for a new line in it
+    LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace => !SkipWhitespace ? LeadingWhiteSpaceUse.None
+        : LeadingWhiteSpace.ReadsLeadingWhiteSpace(ref _readsLeadingWhiteSpace, this) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
+
+    private LeadingWhiteSpace.ReaderCache? _readsLeadingWhiteSpace;
 
     private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _parsers, static parsers => SeekableHints.Union(parsers));
 
@@ -997,6 +1000,13 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
                 hints[i] = SeekableHints.Of(parsers[i]);
                 allSkip &= hints[i].SkipWhitespace;
                 anySkip |= hints[i].SkipWhitespace;
+            }
+
+            // An alternative which looks for a new line in the white space, like NoNewLineBefore, reads it itself: the
+            // alternatives are invoked where the choice is, as when only some of them skip white space
+            if (allSkip && LeadingWhiteSpace.ReadsLeadingWhiteSpace(parsers))
+            {
+                allSkip = false;
             }
 
             // The white space is skipped once, and the parsers which only skip it before their parser are bypassed, like the

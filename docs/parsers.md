@@ -73,7 +73,9 @@ statements stopped matching, at the start of the statement that failed, while th
 statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
 expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
 return, with the same rules for what a parser reads and then rejects (`When`, `ThenTry`, `Not`, `WhenNotFollowedBy`) or
-only looks for (`WhenFollowedBy`, `Peek`, and the delimiter of `AnyCharBefore` unless it is found and consumed).
+only looks for (`WhenFollowedBy`, `Peek`, and the delimiter of `AnyCharBefore` unless it is found and consumed). A token
+built from `Literals`, like a dotted name, reports its failures where it starts and ends when it is wrapped in
+[AsToken](#astoken), as a scanner would.
 
 The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
 reused for successive parses reports the failure of the last one. A parse which drives `Parse(context, ref result)`
@@ -1919,9 +1921,31 @@ Result:
 On failure the cursor is back before the white space. When there is no white space at the cursor the parser is invoked
 directly, and the white space is only searched when it was skipped, with a vectorized search on .NET 8 and later.
 
-> Note: `NoNewLineBefore` has no lookup hints. A `OneOf` whose alternatives all skip white space skips it once before invoking
-> them, which would hide the new line, so a choice holding a `NoNewLineBefore` alternative tries its alternatives in order. To
-> keep the lookup table of a choice, wrap it instead: `NoNewLineBefore(OneOf(Terms.Text("++"), Terms.Text("--")))`.
+`NoNewLineBefore` has the lookup hints of its parser and skips white space, so it can be an alternative of a choice whose
+other alternatives skip white space, and the choice keeps its lookup table. Such a choice usually skips the white space once
+before invoking its alternatives, which would hide the new line: when one of them can start with a `NoNewLineBefore`, it
+selects them with the char after the white space and invokes them before it instead. It works the same through sequences,
+conversions and nested choices, and for the operators of an [operator table](#operator-tables), which are tried through a
+choice:
+
+```c#
+// The arrow can't follow a new line, an assignment can
+var tail = OneOf(
+    Terms.Text("+=").SkipAnd(expression).Then(static x => (Node)new AddAssign(x)),
+    NoNewLineBefore(Terms.Text("=>")).SkipAnd(arrowBody).Then(static x => (Node)new Arrow(x)));
+
+// Postfix ++ and -- can't follow a new line, they are tried with the binary operators which start with the same char
+var unary = member.Operators()
+    .Postfix((NoNewLineBefore(Terms.Text("++")), static x => new PostIncrement(x)), (NoNewLineBefore(Terms.Text("--")), static x => new PostDecrement(x)))
+    .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)), (Terms.Char('-'), static (a, b) => new Subtract(a, b)));
+```
+
+The alternatives of such a choice skip the white space themselves, from the cache of the context, which costs a little
+more than one skip for all of them. A choice of two alternatives tries them in order instead: reading the char after the
+white space would cost about what trying the one which doesn't match does. A `Longest` holding a `NoNewLineBefore` alternative tries all its alternatives. A
+parser type of the application which invokes a `NoNewLineBefore` isn't looked into: when it tells that it skips white
+space, a choice holding it skips the white space before it, and the new line isn't found. Make the choice hold the
+`NoNewLineBefore` rather than the parser invoking it.
 
 ### NewLineAhead
 
@@ -2046,6 +2070,42 @@ Result:
 ```
 "age = 12"
 ```
+
+### AsToken
+
+Reads a parser as a token, the way a lexer reads it, for the [furthest failure](#reporting-where-a-parse-failed): what
+the parser tries and drops doesn't count. When the parser fails, the failure is where it starts, after the white space
+it skips first. When it matches, the failure is where it ends, or the one of what follows. It matches what the parser
+matches, with its value.
+
+```c#
+Parser<T> AsToken<T>(Parser<T> parser)
+```
+
+A token built from `Literals` can try continuations that a scanner would not read: a dotted name tries a name after each
+`.`, and moves the cursor back from it when there is none. Without `AsToken`, `x.+y` reports offset 2, after the `.`;
+with it, offset 1, where `+` or the end is expected after the name `x`.
+
+Usage:
+
+```c#
+var name = AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier())));
+var sum = Separated(Literals.Char('+'), name).Eof();
+
+var context = new ParseContext(new Scanner("x.+y"));
+sum.TryParse(context, out _, out _);
+context.Scanner.Cursor.FurthestOffset;
+```
+
+Result:
+
+```
+1
+```
+
+Which inputs are accepted doesn't change. Generated parsers report the same failure. The white space before the token
+is the one where `AsToken` is invoked: put `WithComments`, `WithWhiteSpaceParser` or `WithWhiteSpaceSet` around it
+rather than around its parser.
 
 ## Flow parsers
 

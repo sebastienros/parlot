@@ -14,12 +14,14 @@ namespace Parlot.Fluent;
 /// <see cref="ParseContext.WhiteSpaceParser"/>, and a multi-line comment containing a new line counts as one.
 /// </para>
 /// <para>
-/// It has no <see cref="ISeekable"/> hints. A choice whose alternatives all skip white space skips it once before it invokes
-/// them, which would hide the new line from this parser, so a choice holding it invokes it at the position before the white
-/// space instead. Wrap the choice, <c>NoNewLineBefore(OneOf(a, b))</c>, to keep its lookup table.
+/// It has the <see cref="ISeekable"/> hints of its parser, and skips white space, so a choice holding it with alternatives
+/// which skip white space keeps its lookup table. Such a choice usually skips the white space once before it invokes them;
+/// when one of them can start with this parser, it selects them with the char after the white space and invokes them
+/// before it instead, so that this parser finds the new lines. So do <c>Operators()</c>, whose operators are tried through
+/// a choice, and <c>Longest</c>, which tries all its alternatives then.
 /// </para>
 /// </remarks>
-public sealed class NoNewLineBefore<T> : Parser<T>, ISourceable, ILoopAnalyzable
+public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ILeadingWhiteSpace, IReadsLeadingWhiteSpace
 {
     private readonly string? _newLines;
 
@@ -42,12 +44,33 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISourceable, ILoopAnalyzable
 
         _newLines = newLines;
         _withoutValue = parser.CanParseWithoutValue;
+
+        LeadingWhiteSpace.RegisterReader();
     }
 
     /// <summary>
     /// The parser invoked after the white space.
     /// </summary>
     public Parser<T> Parser { get; }
+
+    // The hints of the parser it invokes after the white space, read when they are asked for since it can be a Deferred set
+    // later. It skips the white space itself, whether its parser does or not.
+    private ForwardedHints? _hints;
+
+    /// <inheritdoc />
+    public bool CanSeek => ForwardedHints.Get(ref _hints, Parser).CanSeek;
+
+    /// <inheritdoc />
+    public char[] ExpectedChars => ForwardedHints.Get(ref _hints, Parser).ExpectedChars;
+
+    /// <inheritdoc />
+    public bool SkipWhitespace => true;
+
+    string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(Parser);
+
+    // Its match depends on the white space: a parser which needs where its value starts reads it without skipping it before,
+    // and a choice invokes it before the white space, see IReadsLeadingWhiteSpace
+    LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace => LeadingWhiteSpaceUse.Kept;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(Parser);
 
