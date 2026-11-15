@@ -73,7 +73,9 @@ statements stopped matching, at the start of the statement that failed, while th
 statement went wrong. For `SELECT a, b FRM t` and a `SELECT` grammar, it is the offset of `FRM`, after the white space the
 expected `FROM` skipped. It is the position that [source-generated parsers](source-generation.md#failure-position)
 return, with the same rules for what a parser reads and then rejects (`When`, `ThenTry`, `Not`, `WhenNotFollowedBy`) or
-only looks for (`WhenFollowedBy`, `Peek`, and the delimiter of `AnyCharBefore` unless it is found and consumed).
+only looks for (`WhenFollowedBy`, `Peek`, and the delimiter of `AnyCharBefore` unless it is found and consumed). A token
+built from `Literals`, like a dotted name, reports its failures where it starts and ends when it is wrapped in
+[AsToken](#astoken), as a scanner would.
 
 The `Parse`, `TryParse` and `TryMatch` methods taking a `ParseContext` reset it before they parse, so a context which is
 reused for successive parses reports the failure of the last one. A parse which drives `Parse(context, ref result)`
@@ -1663,7 +1665,20 @@ identifier, a parser of white space and comments isn't invoked at all. A parser 
 hints, but `Capture`, `ZeroOrMany`, `ZeroOrOne` and `Optional` are looked through: `Capture(ZeroOrMany(OneOf(Literals.WhiteSpace(),
 Literals.Comments("//"))))`, the parser `WithComments` builds, is invoked only before white space and `/`. A parser that can start
 with any char (one of the alternatives of its choice doesn't tell its chars, like `Literals.Pattern()`), or skips white space
-itself, is invoked before every token. The same applies to `ParseContext.WhiteSpaceParser`.
+itself, is invoked before every token. One whose hints list `OneOf<T>.NonAsciiSeekableChar` is invoked before every non-ASCII
+char, like a choice holding it, and before the ASCII chars it lists. The same applies to `ParseContext.WhiteSpaceParser`.
+
+```c#
+// Skips '~' and any non-ASCII char, and is invoked only before them
+var trivia = Literals.Scan(static s => { var i = 0; while (i < s.Length && (s[i] == '~' || s[i] >= 0x80)) i++; return i; },
+    ("~" + Parlot.Fluent.OneOf<TextSpan>.NonAsciiSeekableChar).AsSpan()); // Parsers.OneOf hides the type
+
+Terms.Text("a").And(Terms.Text("b")).WithWhiteSpaceParser(trivia).Parse("aéb"); // ("a", "b")
+```
+
+> **Fixed after Parlot 2.3.0.** `OneOf<T>.NonAsciiSeekableChar` in these hints stood for U+FFFF only: the parser wasn't invoked
+> before the other non-ASCII chars. This also applied to a parser listing more than 64 non-ASCII chars, like
+> `Literals.Scan()` or `Identifier()` with such start chars, which declares them with `OneOf<T>.NonAsciiSeekableChar`.
 
 Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
 grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still
@@ -2032,6 +2047,42 @@ Result:
 ```
 "age = 12"
 ```
+
+### AsToken
+
+Reads a parser as a token, the way a lexer reads it, for the [furthest failure](#reporting-where-a-parse-failed): what
+the parser tries and drops doesn't count. When the parser fails, the failure is where it starts, after the white space
+it skips first. When it matches, the failure is where it ends, or the one of what follows. It matches what the parser
+matches, with its value.
+
+```c#
+Parser<T> AsToken<T>(Parser<T> parser)
+```
+
+A token built from `Literals` can try continuations that a scanner would not read: a dotted name tries a name after each
+`.`, and moves the cursor back from it when there is none. Without `AsToken`, `x.+y` reports offset 2, after the `.`;
+with it, offset 1, where `+` or the end is expected after the name `x`.
+
+Usage:
+
+```c#
+var name = AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier())));
+var sum = Separated(Literals.Char('+'), name).Eof();
+
+var context = new ParseContext(new Scanner("x.+y"));
+sum.TryParse(context, out _, out _);
+context.Scanner.Cursor.FurthestOffset;
+```
+
+Result:
+
+```
+1
+```
+
+Which inputs are accepted doesn't change. Generated parsers report the same failure. The white space before the token
+is the one where `AsToken` is invoked: put `WithComments`, `WithWhiteSpaceParser` or `WithWhiteSpaceSet` around it
+rather than around its parser.
 
 ## Flow parsers
 

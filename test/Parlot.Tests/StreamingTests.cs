@@ -113,6 +113,9 @@ public class StreamingTests
         // A lookahead at the start of an alternative, the text it read is read again
         ["peek"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("ab"), Peek(Terms.Identifier()).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
         ["peek-value"] = new Grammar<(long, long)>(Peek(Terms.Integer()).And(Terms.Integer())),
+        // Tokens which try continuations they drop, and one which skips white space first, as alternatives of a choice
+        ["astoken"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(AsToken(Capture(Separated(Literals.Char('.'), Terms.Identifier()))).Or(AsToken(Capture(Terms.Integer().And(Literals.Char('!'))))))),
+        ["astoken-literals"] = new Grammar<IReadOnlyList<TextSpan>>(Separated(Literals.Char('+'), AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier()))))),
         ["followed"] = new Grammar<TextSpan>(Terms.Identifier().WhenFollowedBy(Terms.Char('('))),
         ["notfollowed"] = new Grammar<long>(Terms.Integer().WhenNotFollowedBy(Literals.Char('.'))),
         // A rejected value gives the cursor back to the next alternative, here the keyword the identifier rejects
@@ -449,6 +452,8 @@ public class StreamingTests
         Add("not", "", "a", "ab", "abc", "ac", "xab");
         Add("peek", "", "ab", "abc", "ab abc a", "  ab  x ab", "a", "1");
         Add("peek-value", "", "12", "  12", "12 3", "x");
+        Add("astoken", "", "a", "a.b", " a . b  c.", "a.+", "  12!  a", "12", "12 !", " 1", ".a");
+        Add("astoken-literals", "", "a", "a.b+c", "a.+b", "a+b.", "a.b.c+d.e", "+a", "a+");
         Add("followed", "", "f", "f(", "f (", "f x", "f");
         Add("notfollowed", "", "1", "12", "12.", "12.5", "12 .", "12x");
         Add("thentry", "", "a", "for", "  for  forx", "a for b", " forever for\n for1 1", "fo");

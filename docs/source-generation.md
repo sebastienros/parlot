@@ -331,6 +331,8 @@ first bad token is:
   text which is empty and can't be fails where it starts, at the delimiter.
 - Neither does the white space skipped to look for an operator of `Operators()` whose value is passed to the factory: an
   expression which is rejected fails at its start, like with the other operators.
+- What the parser of `AsToken` reads before it fails or after where it ends doesn't count either: the token fails where
+  it starts, after the white space it skips first, and ends where it matched.
 
 To also tell input nested too deeply from other failures, add a last `bool` to the tuple, as in
 `out (int Offset, bool NestedTooDeeply)` or `out (int Offset, int Line, int Column, bool NestedTooDeeply)`:

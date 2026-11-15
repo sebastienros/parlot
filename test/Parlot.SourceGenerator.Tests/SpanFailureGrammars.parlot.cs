@@ -158,4 +158,21 @@ public static partial class SpanFailureGrammars
         Between(Terms.Char('('), Capture(ZeroOrMany(Terms.Identifier().AndSkip(Terms.Char(',')))), Terms.Char(')'))
             .And(Literals.AnyOf("!?", minSize: 2).Optional())
             .When(static (_, value) => value.Item1.Length < 3).Then(static value => value.Item1.ToString()).Eof();
+
+    [GenerateParser(nameof(TryParseTokens))]
+    public static Parser<string> BuildTokens() =>
+        Separated(Literals.Char('+'), AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier()))))
+            .Then(static value => value.Count.ToString()).Eof();
+
+    [GenerateParser(nameof(TryParseTokenWhiteSpace))]
+    public static Parser<string> BuildTokenWhiteSpace() =>
+        Terms.Char('>').SkipAnd(AsToken(Terms.Char('a').And(Literals.Char('b')))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(TryParseTokenCapture))]
+    public static Parser<string> BuildTokenCapture() =>
+        Literals.Char('>').SkipAnd(AsToken(Capture(Terms.Identifier().AndSkip(Literals.Char('!'))))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    [GenerateParser(nameof(TryParseTokenAlternative))]
+    public static Parser<string> BuildTokenAlternative() =>
+        OneOf(AsToken(Literals.Text("ab").AndSkip(Literals.Char('c'))), Literals.Text("a")).AndSkip(Literals.Char('!').Or(Terms.Char('!'))).Eof();
 }

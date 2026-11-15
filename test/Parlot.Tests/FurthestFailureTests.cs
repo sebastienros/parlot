@@ -249,6 +249,34 @@ public class FurthestFailureTests
     private static readonly Parser<string> PeekedConversion =
         Peek(Terms.Char('a')).ThenTry(static value => (true, value)).SkipAnd(Literals.Text("abc")).Eof();
 
+    // Dotted names read as tokens: the name a '.' is followed by, which the separated list tries and drops, isn't a failure
+    private static Parser<string> BuildDottedNames(bool asToken)
+    {
+        var name = Capture(Separated(Literals.Char('.'), Literals.Identifier()));
+        var token = asToken ? AsToken(name) : name;
+
+        return token.And(ZeroOrMany(Literals.Char('+').SkipAnd(token))).Then(static value => value.Item1.ToString() + ":" + value.Item2.Count).Eof();
+    }
+
+    private static readonly Parser<string> DottedNames = BuildDottedNames(asToken: true);
+
+    private static readonly Parser<string> DottedNamesNotTokens = BuildDottedNames(asToken: false);
+
+    // A token which skips the white space before it fails where it starts, after that white space
+    private static readonly Parser<string> TokenAfterWhiteSpace =
+        Terms.Char('>').SkipAnd(AsToken(Terms.Char('a').And(Literals.Char('b')))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    private static readonly Parser<string> TokenAfterComments =
+        TokenAfterWhiteSpace.WithComments(static comments => comments.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+
+    // A capture holds the white space before the token, which fails after it
+    private static readonly Parser<string> CapturedToken =
+        Literals.Char('>').SkipAnd(AsToken(Capture(Terms.Identifier().AndSkip(Literals.Char('!'))))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // A token which fails, then an alternative which matches less
+    private static readonly Parser<string> TokenAlternative =
+        OneOf(AsToken(Literals.Text("ab").AndSkip(Literals.Char('c'))), Literals.Text("a")).AndSkip(Literals.Char('!')).Eof();
+
     // The furthest failure of the string and of the TextReader parsers, which match the generated ones (standalone FailureTests)
     private static void AssertFurthest<T>(Parser<T> parser, string text, int offset, int bufferSize = 1)
     {
@@ -869,6 +897,89 @@ public class FurthestFailureTests
         var parser = Literals.Text("abc").SkipAnd(Literals.Char(':')).SkipAnd(Literals.Pattern(static c => c == 'x', minSize: 2))
             .Then(static value => value.ToString()).Eof();
         AssertFurthest(parser, text, offset);
+    }
+
+    [Theory]
+    // The '.' isn't followed by a name: the name is "x", and '+' or the end is expected after it
+    [InlineData("x.+y", 1, 2)]
+    [InlineData("x.y.+", 3, 4)]
+    [InlineData("x+y.", 3, 4)]
+    [InlineData("x.y+.z", 4, 4)]
+    [InlineData("x+", 2, 2)]
+    [InlineData(".x", 0, 0)]
+    [InlineData("", 0, 0)]
+    public void Token_Reports_Its_Failures_Where_It_Starts_And_Ends(string text, int offset, int notTokenOffset)
+    {
+        AssertFurthest(DottedNames, text, offset);
+        AssertFurthest(DottedNamesNotTokens, text, notTokenOffset);
+
+        Assert.Equal("x.y:1", DottedNames.Parse("x.y+z"));
+        Assert.Equal("x.y:1", DottedNames.Parse(new OneCharReader("x.y+z"), new StreamParseOptions { BufferSize = 1 }));
+    }
+
+    [Theory]
+    [InlineData("> ax", 2)]
+    [InlineData(">\n  ax", 4)]
+    [InlineData(">ax", 1)]
+    [InlineData(">  x", 3)]
+    [InlineData("> ab x", 5)]
+    [InlineData("> ab", 4)]
+    public void Token_Fails_After_The_White_Space_It_Skips(string text, int offset)
+    {
+        AssertFurthest(TokenAfterWhiteSpace, text, offset);
+
+        Assert.Equal("(a, b)", TokenAfterWhiteSpace.Parse("> ab ;"));
+    }
+
+    [Theory]
+    [InlineData("> a?", 2)]
+    [InlineData(">  ?", 3)]
+    [InlineData(">a!x", 3)]
+    [InlineData("> a!", 4)]
+    public void Captured_Token_Fails_After_The_White_Space_It_Holds(string text, int offset)
+    {
+        AssertFurthest(CapturedToken, text, offset);
+
+        Assert.Equal(" a!", CapturedToken.Parse("> a! ;"));
+        Assert.Equal(" a!", CapturedToken.Parse(new OneCharReader("> a! ;"), new StreamParseOptions { BufferSize = 1 }));
+    }
+
+    [Theory]
+    [InlineData("> /* c */ ax", 10)]
+    [InlineData(">/* c */\n ax;", 10)]
+    [InlineData("> /* c */ ab x", 13)]
+    public void Token_Fails_After_The_Comments_It_Skips(string text, int offset) => AssertFurthest(TokenAfterComments, text, offset);
+
+    [Theory]
+    [InlineData("abx", 1)]
+    [InlineData("ax", 1)]
+    [InlineData("x", 0)]
+    public void Token_Which_Fails_Before_An_Alternative_Fails_Where_It_Starts(string text, int offset)
+    {
+        AssertFurthest(TokenAlternative, text, offset);
+
+        Assert.Equal("ab", TokenAlternative.Parse("abc!"));
+        Assert.Equal("a", TokenAlternative.Parse("a!"));
+    }
+
+    [Fact]
+    public void Token_Which_Fails_Moves_The_Cursor_Back()
+    {
+        var context = Context("abx");
+        var result = new ParseResult<string>();
+
+        Assert.False(AsToken(Literals.Text("ab").AndSkip(Literals.Char('c'))).Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(0, context.Scanner.Cursor.FurthestOffset);
+
+        // A failure recorded before the token is kept
+        var parser = ZeroOrOne(Literals.Text("ab").AndSkip(Literals.Text("cd"))).SkipAnd(AsToken(Literals.Text("ab").AndSkip(Literals.Char('c'))));
+        context = Context("abx");
+        var tokenResult = new ParseResult<string>();
+
+        Assert.False(parser.Parse(context, ref tokenResult));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
+        Assert.Equal(2, context.Scanner.Cursor.FurthestOffset);
     }
 
     [Theory]
