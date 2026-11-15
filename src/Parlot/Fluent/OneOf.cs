@@ -204,6 +204,39 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             target.Add(item);
         }
 
+        // The parsers of Lookup() only declare hints, which the table holds once it is built, so the groups invoke the
+        // parsers they wrap. A parser listed both ways is kept once, where it comes first.
+        static void RemoveSeekable(List<Parser<T>> target)
+        {
+            var replaced = false;
+
+            for (var j = 0; j < target.Count; j++)
+            {
+                if (target[j] is Seekable<T> seekable)
+                {
+                    target[j] = seekable.Parser;
+                    replaced = true;
+                }
+            }
+
+            if (!replaced)
+            {
+                return;
+            }
+
+            for (var j = target.Count - 1; j > 0; j--)
+            {
+                for (var k = 0; k < j; k++)
+                {
+                    if (ReferenceEquals(target[k], target[j]))
+                    {
+                        target.RemoveAt(j);
+                        break;
+                    }
+                }
+            }
+        }
+
         static void RemoveSkipWhiteSpace(List<Parser<T>> target)
         {
             for (var j = 0; j < target.Count; j++)
@@ -290,6 +323,16 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                         AddUniqueSingle(entry.Value, parser);
                     }
                 }
+            }
+
+            foreach (var entry in lookupTable)
+            {
+                RemoveSeekable(entry.Value);
+            }
+
+            if (otherParsers != null)
+            {
+                RemoveSeekable(otherParsers);
             }
 
             // If only some parser use SkipWhiteSpace, we can't use a lookup table
