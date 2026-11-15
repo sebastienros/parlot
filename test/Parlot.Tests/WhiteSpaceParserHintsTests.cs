@@ -126,6 +126,77 @@ public class WhiteSpaceParserHintsTests
         Assert.Equal(expected, offsets);
     }
 
+    // Skips '~' and any non-ASCII char
+    private static int SkipTildesAndNonAscii(ReadOnlySpan<char> span)
+    {
+        var i = 0;
+
+        while (i < span.Length && (span[i] == '~' || span[i] >= 0x80))
+        {
+            i++;
+        }
+
+        return i;
+    }
+
+    // A white space parser of '~' and of every non-ASCII char, which it declares with NonAsciiSeekableChar, and some listed
+    // non-ASCII chars, which it adds nothing to
+    private static Parser<TextSpan> TildesAndNonAscii(string nonAscii = "") =>
+        Literals.Scan(SkipTildesAndNonAscii, ("~" + nonAscii + Fluent.OneOf<TextSpan>.NonAsciiSeekableChar).AsSpan());
+
+    [Theory]
+    [InlineData("a~b", new[] { 1, 3 })]
+    [InlineData("aéb", new[] { 1, 3 })]
+    [InlineData("a中~￿b", new[] { 1, 5 })]
+    [InlineData("a￿b", new[] { 1, 3 })]
+    [InlineData("ab", new[] { 2 })]
+    public void NonAsciiSeekableCharStandsForEveryNonAsciiChar(string text, int[] expected)
+    {
+        foreach (var whiteSpace in new[] { TildesAndNonAscii(), TildesAndNonAscii("é") })
+        {
+            var (value, offsets) = Parse(ZeroOrMany(Terms.AnyOf("ab", maxSize: 1)), whiteSpace, text, contextWhiteSpaceParser: whiteSpace);
+
+            // Before '~', each non-ASCII char and the end of the text, not before the tokens
+            Assert.Equal(["a", "b"], value!.Select(static t => t.ToString()));
+            Assert.Equal(expected, offsets);
+        }
+    }
+
+    [Fact]
+    public void NonAsciiSeekableCharSkipsTheSameTextAsWithoutHints()
+    {
+        var withHints = Terms.Text("a").And(Terms.Text("b")).WithWhiteSpaceParser(TildesAndNonAscii());
+        var withoutHints = Terms.Text("a").And(Terms.Text("b")).WithWhiteSpaceParser(Literals.Scan(SkipTildesAndNonAscii));
+
+        foreach (var text in new[] { "a~b", "aéb", "aé~　b", "ab" })
+        {
+            Assert.Equal(withoutHints.Parse(text), withHints.Parse(text));
+            Assert.Equal(("a", "b"), withHints.Parse(text));
+        }
+
+        foreach (var text in new[] { "aéc", "aé", "a c" })
+        {
+            var context = new ParseContext(new Scanner(text));
+
+            Assert.False(withHints.TryParse(context, out _, out _));
+            Assert.Equal(0, context.Scanner.Cursor.Offset);
+            Assert.False(withoutHints.TryParse(text, out _, out _));
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(1, 2)]
+    [InlineData(3, 4)]
+    public void StreamsInvokeItBeforeNonAsciiChars(int chunk, int bufferSize)
+    {
+        var grammar = Terms.Text("a").And(Terms.Text("b")).And(Terms.Text("c")).WithWhiteSpaceParser(TildesAndNonAscii());
+        var options = new StreamParseOptions { BufferSize = bufferSize };
+
+        Assert.Equal(("a", "b", "c"), grammar.Parse(new ChunkedReader("aééb~中c", chunk), options));
+        Assert.False(grammar.TryParse(new ChunkedReader("aébéd", chunk), out _, out _, options));
+    }
+
     [Fact]
     public void ContextWhiteSpaceParserUsesItsHints()
     {
