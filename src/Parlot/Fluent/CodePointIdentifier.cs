@@ -46,7 +46,7 @@ internal sealed class CodePointIdentifier : Parser<TextSpan>, ISeekable, ISource
 
         for (var c = 0; c < 128; c++)
         {
-            if ((((c < 64 ? startLow : startHigh) >> c) & 1) != 0)
+            if (Character.IsInAsciiMask((char)c, startLow, startHigh))
             {
                 chars.Add((char)c);
             }

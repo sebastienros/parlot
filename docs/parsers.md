@@ -826,7 +826,8 @@ the other chars, escape sequences and surrogate pairs.
 
 For `OneOf`'s lookup table, the identifier declares the ASCII chars the start predicate accepts, `\` when `options`
 accepts escape sequences, and any non-ASCII char (`OneOf<T>.NonAsciiSeekableChar`), since the ones the predicate accepts
-can't be listed. A choice of keywords, punctuation and this identifier gets a lookup table without `Lookup()`.
+can't be listed. A choice of keywords, punctuation and this identifier gets a lookup table without `Lookup()`, which a
+grammar giving it these hints can drop.
 
 ### Pattern
 
@@ -2505,8 +2506,9 @@ A parser that can start with any non-ASCII char lists its ASCII chars and `OneOf
 var identifier = Literals.Pattern(char.IsLetter).Lookup(false, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" + OneOf<TextSpan>.NonAsciiSeekableChar);
 ```
 
-A `OneOf` invokes the parser that `Lookup` wraps directly, once its lookup table holds the hints, so the hints cost nothing
-when the parser is an alternative of a choice.
+When the result of `Lookup` is itself an alternative of a `OneOf` or a `Longest`, the choice invokes the parser it wraps
+directly, since its lookup table holds the hints: they cost nothing. Behind another parser, like `Then` or
+`SkipWhiteSpace`, the wrapper is still invoked on each attempt.
 
 ## Other parsers
 

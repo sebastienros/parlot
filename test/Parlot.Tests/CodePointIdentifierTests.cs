@@ -394,4 +394,35 @@ public class CodePointIdentifierTests
         Assert.Single(entered, x => ReferenceEquals(x, pattern));
         Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
+
+    [Fact]
+    public void ShouldSkipTheWhiteSpaceOnceForTheParserOfLookup()
+    {
+        // Every alternative skips white space, the choice does it once and invokes the pattern of the Lookup
+        var pattern = Literals.Pattern(static c => c is 'a' or 'b');
+        var skip = SkipWhiteSpace(pattern);
+        var lookup = skip.Lookup(true, 'a', 'b');
+        var entered = new List<object>();
+
+        foreach (var choice in new[] { OneOf(Terms.Text("(").Then(static x => new TextSpan(x)), lookup), Longest(Terms.Text("(").Then(static x => new TextSpan(x)), lookup) })
+        {
+            entered.Clear();
+
+            var context = new ParseContext(new Scanner("  ab")) { OnEnterParser = (parser, _) => entered.Add(parser) };
+            var result = new ParseResult<TextSpan>();
+
+            Assert.True(choice.Parse(context, ref result));
+            Assert.Equal("ab", result.Value.ToString());
+            Assert.Equal(4, context.Scanner.Cursor.Offset);
+            Assert.Contains(pattern, entered);
+            Assert.DoesNotContain(lookup, entered);
+            Assert.DoesNotContain(skip, entered);
+
+            // It fails where it started, before the white space
+            context = new ParseContext(new Scanner("  c"));
+
+            Assert.False(choice.Parse(context, ref result));
+            Assert.Equal(0, context.Scanner.Cursor.Offset);
+        }
+    }
 }
