@@ -1,9 +1,6 @@
 using Parlot.Rewriting;
 using System;
 using System.Runtime.CompilerServices;
-#if NET8_0_OR_GREATER
-using System.Buffers;
-#endif
 
 namespace Parlot.Fluent;
 
@@ -25,19 +22,8 @@ internal sealed class CustomWhiteSpace
     // A white space parser is set on each context, which is created for each parse, and by WithWhiteSpaceParser for each parse
     private static readonly ConditionalWeakTable<Parser<TextSpan>, CustomWhiteSpace> s_cache = new();
 
-    // The ASCII chars, a bit each
-    private readonly ulong _low;
-    private readonly ulong _high;
-
-    // Whether it can start with any char above ASCII, when it doesn't tell its chars
-    private readonly bool _anyOther;
-
-    // The chars above ASCII, null when there are none
-#if NET8_0_OR_GREATER
-    private readonly SearchValues<char>? _others;
-#else
-    private readonly char[]? _others;
-#endif
+    // The chars it can start with
+    private readonly CharSet _chars;
 
     private CustomWhiteSpace(Parser<TextSpan> parser)
     {
@@ -45,56 +31,9 @@ internal sealed class CustomWhiteSpace
 
         var chars = GetStartChars(parser);
 
-        if (chars is null)
-        {
-            // The parser is invoked before any char
-            _low = ulong.MaxValue;
-            _high = ulong.MaxValue;
-            _anyOther = true;
-            return;
-        }
-
-        var others = 0;
-
-        foreach (var c in chars)
-        {
-            if (c < 64)
-            {
-                _low |= 1UL << c;
-            }
-            else if (c < 128)
-            {
-                _high |= 1UL << (c - 64);
-            }
-            else
-            {
-                others++;
-            }
-        }
-
-        // The end of the text is NUL: the parser is still invoked there, where a stream tells whether more text follows
-        _low |= 1UL;
-
-        if (others > 0)
-        {
-            var otherChars = new char[others];
-            var i = 0;
-
-            foreach (var c in chars)
-            {
-                if (c >= 128)
-                {
-                    otherChars[i++] = c;
-                }
-            }
-
-#if NET8_0_OR_GREATER
-            _others = SearchValues.Create(otherChars);
-#else
-            Array.Sort(otherChars);
-            _others = otherChars;
-#endif
-        }
+        // The parser is invoked before any char when it doesn't tell them. The end of the text is NUL: the parser is still
+        // invoked there, where a stream tells whether more text follows
+        _chars = chars is null ? CharSet.All : new CharSet([.. chars, '\0']);
     }
 
     /// <summary>
@@ -142,30 +81,7 @@ internal sealed class CustomWhiteSpace
     /// <see cref="Cursor.Current"/> char at the end of the text.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool MayStartWith(char c)
-    {
-        if (c < 64)
-        {
-            return ((_low >> c) & 1) != 0;
-        }
-
-        if (c < 128)
-        {
-            return ((_high >> (c - 64)) & 1) != 0;
-        }
-
-        return _anyOther || (_others is not null && MayStartWithOther(c));
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private bool MayStartWithOther(char c)
-    {
-#if NET8_0_OR_GREATER
-        return _others!.Contains(c);
-#else
-        return Array.BinarySearch(_others!, c) >= 0;
-#endif
-    }
+    public bool MayStartWith(char c) => _chars.Contains(c);
 }
 
 /// <summary>
