@@ -2043,7 +2043,9 @@ Result:
 1
 ```
 
-Which inputs are accepted doesn't change. Generated parsers report the same failure.
+Which inputs are accepted doesn't change. Generated parsers report the same failure. The white space before the token
+is the one where `AsToken` is invoked: put `WithComments`, `WithWhiteSpaceParser` or `WithWhiteSpaceSet` around it
+rather than around its parser.
 
 ## Flow parsers
 

@@ -18,7 +18,8 @@ namespace Parlot.Fluent;
 /// when it matches, where it ends, and what follows reports its own failures.
 /// </para>
 /// <para>
-/// It matches what its parser matches, with its value.
+/// It matches what its parser matches, with its value. The white space before the token is the one of where it is
+/// invoked: a white space parser or set for the token goes around it, as in <c>AsToken(parser).WithComments(...)</c>.
 /// </para>
 /// </remarks>
 public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IReadsWith
@@ -120,8 +121,8 @@ public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
             cursor.RestoreRecordedFailure(recorded);
 
             // The char is checked first: most tokens have no white space before them, which the parser that invokes them
-            // often skipped already
-            if (context.MaySkipWhiteSpace(cursor.Current) && _parser is ISeekable { SkipWhitespace: true })
+            // often skipped already. The hint is the parser's, kept until the grammar changes.
+            if (context.MaySkipWhiteSpace(cursor.Current) && SkipWhitespace)
             {
                 cursor.RecordFailure(context.WhiteSpaceEnd());
             }
@@ -178,7 +179,7 @@ public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
         var valueTypeName = SourceGenerationContext.GetTypeName(typeof(T));
 
         var recordedName = $"recorded{context.NextNumber()}";
-        var skipsWhiteSpace = _parser is ISeekable { SkipWhitespace: true };
+        var skipsWhiteSpace = SkipWhitespace;
 
         // The helper keeps the value only when it is used, like the result of this parser
         var helperName = context.Helpers
