@@ -21,7 +21,7 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     private readonly bool _skipWhitespace;
 
     // Whether the white space can't be skipped before the parser, which looks for a new line in it, see SkipsWhiteSpaceFirst
-    private LeadingWhiteSpace.Cache? _readsLeadingWhiteSpace;
+    private LeadingWhiteSpace.ReaderCache? _readsLeadingWhiteSpace;
 
     // The white space is skipped before the parser, to locate the warning, unless the parser reads it, like NoNewLineBefore:
     // the warning is located where the parser is invoked then

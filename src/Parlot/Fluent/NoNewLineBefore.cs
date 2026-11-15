@@ -44,6 +44,8 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
 
         _newLines = newLines;
         _withoutValue = parser.CanParseWithoutValue;
+
+        LeadingWhiteSpace.RegisterReader();
     }
 
     /// <summary>

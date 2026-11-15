@@ -257,6 +257,43 @@ public class NewLineTests
         Assert.Equal(expected.Scanner.Cursor.FurthestOffset, actual.Scanner.Cursor.FurthestOffset);
     }
 
+    [Theory]
+    [InlineData("a ++", "++")]
+    [InlineData("a /* x */ ++", "++")]
+    [InlineData("a\n++", "+")]
+    [InlineData("a /* \n */ ++", "+")]
+    public void NoNewLineBeforeShouldBeAnAlternativeOfLongest(string input, string expected)
+    {
+        // The alternatives are invoked where the choice is, so that NoNewLineBefore sees the white space
+        var parser = WithComments(Terms.Identifier().SkipAnd(Longest(Terms.Text("+"), NoNewLineBefore(Terms.Text("++")))));
+
+        Assert.Equal(expected, parser.Parse(input));
+    }
+
+    [Theory]
+    [InlineData("a ++", true, 1)]
+    [InlineData("a\n++", false, -1)]
+    public void NoNewLineBeforeShouldSeeTheNewLinesUnderAWarning(string input, bool matches, int location)
+    {
+        // When the diagnostics are collected, the white space isn't skipped before NoNewLineBefore to locate the warning: it
+        // is located where NoNewLineBefore is invoked
+        var parser = Terms.Identifier().SkipAnd(NoNewLineBefore(Terms.Text("++")).Warning("postfix").Else("none"));
+        var context = new ParseContext(new Scanner(input)) { CollectDiagnostics = true };
+        var result = new ParseResult<string>();
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(matches ? "++" : "none", result.Value);
+
+        if (matches)
+        {
+            Assert.Equal(location, Assert.Single(context.Diagnostics).Position.Offset);
+        }
+        else
+        {
+            Assert.Empty(context.Diagnostics);
+        }
+    }
+
     [Fact]
     public void NoNewLineBeforeShouldWorkInAChoice()
     {

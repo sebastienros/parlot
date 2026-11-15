@@ -125,7 +125,9 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
 
     // It skips the white space for its alternatives when they all skip it, unless one of them looks for a new line in it
     LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace => !SkipWhitespace ? LeadingWhiteSpaceUse.None
-        : LeadingWhiteSpace.ReadsLeadingWhiteSpace(_parsers) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
+        : LeadingWhiteSpace.ReadsLeadingWhiteSpace(ref _readsLeadingWhiteSpace, this) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
+
+    private LeadingWhiteSpace.ReaderCache? _readsLeadingWhiteSpace;
 
     private ForwardedHints Hints => ForwardedHints.Get(ref _hints, _parsers, static parsers => SeekableHints.Union(parsers));
 

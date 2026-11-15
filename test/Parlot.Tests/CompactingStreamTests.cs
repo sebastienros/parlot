@@ -78,6 +78,30 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void ChoicesWithNoNewLineBeforeAlternativesKeepTheBufferBounded()
+    {
+        // The choice selects its alternatives with the char after the white space and invokes them before it: the white
+        // space is kept while the alternatives are read, and released after, as NoNewLineBefore keeps it while it's searched
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var arrowAfterNewLine = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "|=>" + x);
+        var statement = Terms.Identifier().And(OneOf(assignment, arrow, arrowAfterNewLine)).Then(static x => x.Item1.ToString() + x.Item2);
+        var parser = ZeroOrMany(statement).Eof().Then(static x => string.Join(";", x));
+
+        var spaces = new string(' ', 100);
+        var text = string.Join(spaces, Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 3 == 0 ? " = b" : i % 3 == 1 ? " => c" : "\n=> d")));
+        var expected = string.Join(";", Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 3 == 0 ? "=b" : i % 3 == 1 ? "=>c" : "|=>d")));
+
+        Assert.Equal(expected, parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 3), options));
+
+        // The white space between two statements is kept, not the statements before it
+        Assert.InRange(peak(), 1, 256);
+    }
+
+    [Fact]
     public void GuardedRepetitionsKeepTheBufferBounded()
     {
         // The loop skips the white space to test whether a statement can start after it, then moves back before it: the

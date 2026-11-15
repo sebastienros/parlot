@@ -597,7 +597,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // A choice whose alternatives skip the white space themselves is parsed there too
         if (context.IsCompactingOrCollectingDiagnostics || _whiteSpace > Hoisted)
         {
-            return ParseCompacting(context, ref result);
+            return ParseCompacting(context, ref result, withoutValue: false);
         }
 
         context.EnterParser(this);
@@ -678,11 +678,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             EnsureResolved();
         }
 
-        // The alternatives are invoked with their value when the input is a reader or the diagnostics are collected, and when
-        // they skip the white space themselves
+        // The alternatives are invoked with their value when the input is a reader or the diagnostics are collected. A choice
+        // whose alternatives skip the white space themselves is parsed there too.
         if (context.IsCompactingOrCollectingDiagnostics || _whiteSpace > Hoisted)
         {
-            return ParseCompacting(context, ref result);
+            return ParseCompacting(context, ref result, withoutValue: true);
         }
 
         context.EnterParser(this);
@@ -760,15 +760,20 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
     // Also invoked when the diagnostics are collected, which discards those of the alternatives that aren't used. Its pins
     // do nothing when the input is a string.
-    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result)
+    // withoutValue: whether the value isn't used, see ParseWithoutValue(). The alternatives are invoked without their value
+    // only when the input is a string and the diagnostics aren't collected.
+    private bool ParseCompacting(ParseContext context, ref ParseResult<T> result, bool withoutValue)
     {
         var whiteSpace = ReadWhiteSpace();
+        var simple = !context.IsCompactingOrCollectingDiagnostics;
 
-        if (whiteSpace == Hoisted && !context.IsCompactingOrCollectingDiagnostics)
+        if (whiteSpace == Hoisted && simple)
         {
             // Resolved on its first invocation
-            return Parse(context, ref result);
+            return withoutValue ? ParseWithoutValue(context, ref result) : Parse(context, ref result);
         }
+
+        withoutValue &= simple && _withoutValue;
 
         context.EnterParser(this);
 
@@ -817,7 +822,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                     context.Unpin(pin);
                 }
 
-                if (parsers[i].Parse(context, ref result))
+                if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
                 {
                     context.Unpin(pin);
                     context.ExitParser(this);
