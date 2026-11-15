@@ -31,7 +31,8 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments, string? whiteSpaceChars = null)
     {
         _skipWhiteSpace = skipWhiteSpace || whiteSpaceChars is not null;
-        _includeNewLines = includeNewLines;
+        // The chars of the builder are skipped instead of the context's white space and new lines
+        _includeNewLines = includeNewLines && whiteSpaceChars is null;
         _comments = comments;
         _firstChars = new string(comments.Select(static c => c.Start[0]).Distinct().ToArray());
         _whiteSpaceChars = whiteSpaceChars;
@@ -86,17 +87,19 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         {
             if (_skipWhiteSpace)
             {
-                if (_whiteSpaceChars is not null)
-                {
-                    scanner.SkipChars(in _whiteSpaceCharSet);
-                }
-                else if (_includeNewLines)
+                // The chars of the builder have no new lines flag: the context's white space and new lines, the common
+                // case, are tested first
+                if (_includeNewLines)
                 {
                     scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
                 }
-                else
+                else if (_whiteSpaceChars is null)
                 {
                     scanner.SkipWhiteSpace(context.WhiteSpaceMask);
+                }
+                else
+                {
+                    scanner.SkipChars(in _whiteSpaceCharSet);
                 }
             }
 
