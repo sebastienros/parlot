@@ -1898,9 +1898,31 @@ Result:
 On failure the cursor is back before the white space. When there is no white space at the cursor the parser is invoked
 directly, and the white space is only searched when it was skipped, with a vectorized search on .NET 8 and later.
 
-> Note: `NoNewLineBefore` has no lookup hints. A `OneOf` whose alternatives all skip white space skips it once before invoking
-> them, which would hide the new line, so a choice holding a `NoNewLineBefore` alternative tries its alternatives in order. To
-> keep the lookup table of a choice, wrap it instead: `NoNewLineBefore(OneOf(Terms.Text("++"), Terms.Text("--")))`.
+`NoNewLineBefore` has the lookup hints of its parser and skips white space, so it can be an alternative of a choice whose
+other alternatives skip white space, and the choice keeps its lookup table. Such a choice usually skips the white space once
+before invoking its alternatives, which would hide the new line: when one of them can start with a `NoNewLineBefore`, it
+selects them with the char after the white space and invokes them before it instead. It works the same through sequences,
+conversions and nested choices, and for the operators of an [operator table](#operator-tables), which are tried through a
+choice:
+
+```c#
+// The arrow can't follow a new line, an assignment can
+var tail = OneOf(
+    Terms.Text("+=").SkipAnd(expression).Then(static x => (Node)new AddAssign(x)),
+    NoNewLineBefore(Terms.Text("=>")).SkipAnd(arrowBody).Then(static x => (Node)new Arrow(x)));
+
+// Postfix ++ and -- can't follow a new line, they are tried with the binary operators which start with the same char
+var unary = member.Operators()
+    .Postfix((NoNewLineBefore(Terms.Text("++")), static x => new PostIncrement(x)), (NoNewLineBefore(Terms.Text("--")), static x => new PostDecrement(x)))
+    .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)), (Terms.Char('-'), static (a, b) => new Subtract(a, b)));
+```
+
+The alternatives of such a choice skip the white space themselves, from the cache of the context, which costs a little
+more than one skip for all of them. A choice of two alternatives tries them in order instead: reading the char after the
+white space would cost about what trying the one which doesn't match does. A `Longest` holding a `NoNewLineBefore` alternative tries all its alternatives. A
+parser type of the application which invokes a `NoNewLineBefore` isn't looked into: when it tells that it skips white
+space, a choice holding it skips the white space before it, and the new line isn't found. Make the choice hold the
+`NoNewLineBefore` rather than the parser invoking it.
 
 ### NewLineAhead
 

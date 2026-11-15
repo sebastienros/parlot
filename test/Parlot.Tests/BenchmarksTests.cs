@@ -1059,5 +1059,12 @@ public class BenchmarksTests
         Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync());
         Assert.Equal(expected, await benchmarks.Lines_ParseManyAsync_Delimited());
     }
+
+    [Fact]
+    public void NoNewLineBeforeBenchmarks()
+    {
+        // The setup checks the results of every row, runtime and generated
+        new NoNewLineBeforeBenchmarks().Setup();
+    }
 }
 #endif

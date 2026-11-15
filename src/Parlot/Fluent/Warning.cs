@@ -20,6 +20,13 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     // Whether the parser skipped white space when this one was built, which is where the warning is located
     private readonly bool _skipWhitespace;
 
+    // Whether the white space can't be skipped before the parser, which looks for a new line in it, see SkipsWhiteSpaceFirst
+    private LeadingWhiteSpace.ReaderCache? _readsLeadingWhiteSpace;
+
+    // The white space is skipped before the parser, to locate the warning, unless the parser reads it, like NoNewLineBefore:
+    // the warning is located where the parser is invoked then
+    private bool SkipsWhiteSpaceFirst => _skipWhitespace && !LeadingWhiteSpace.ReadsLeadingWhiteSpace(ref _readsLeadingWhiteSpace, _parser);
+
     // The hints of the parser that reads first, read when they are asked for since it can be a Deferred set later
     private ForwardedHints? _hints;
 
@@ -61,7 +68,7 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
 
         // The warning is located after the white space the parser skips. It's skipped first, and the position read before
         // the parser runs, since a compacting buffer can discard the text the parser reads.
-        if (_skipWhitespace)
+        if (SkipsWhiteSpaceFirst)
         {
             context.SkipWhiteSpace();
         }
@@ -129,7 +136,7 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
         result.Body.Add($"var {locationName} = default(global::Parlot.TextPosition);");
         result.Body.Add($"if ({reportName})");
         result.Body.Add("{");
-        if (_skipWhitespace)
+        if (SkipsWhiteSpaceFirst)
         {
             result.Body.Add($"    {ctx}.SkipWhiteSpace();");
         }

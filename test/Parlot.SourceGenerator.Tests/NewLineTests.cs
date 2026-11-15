@@ -89,6 +89,78 @@ public class NewLineTests
     [MemberData(nameof(Inputs))]
     public void AsciiSet(string input) => Check(RuntimeNewLineGrammars.AsciiSet(), NewLineGrammars.TryParseAsciiSet, NewLineGrammars.TryParseAsciiSet, input);
 
+    // The white space before the arrow or the postfix operator crosses the end of the first buffer of a generated reader,
+    // 4096 chars, with the new line before it or not
+    public static readonly TheoryData<string> ChoiceInputs =
+    [
+        "a => b", "a=>b", "a\n=> b", "a\r\n=>b", "a = b", "a\n= b", "a += b", "a\n+= b", "a /* x */ => b", "a /* \n */ => b",
+        "a // c\n=> b", "a\n/* x */ => b", "a /* b", "a++", "a ++ * b", "a\n++b", "a /* x */ --", "a /* \n */ ++b", "a // c\n++b",
+        "a * b++ ++c", "a\n+ b", "a++\n++b", "a\n++",
+        "a" + new string(' ', 4000) + "\n" + new string(' ', 200) + "=> b", "a\n" + new string(' ', 4200) + "=> b",
+        "a" + new string(' ', 4200) + "=> b", "a" + new string(' ', 4200) + "= b", "a" + new string(' ', 4093) + "=> b",
+        "a" + new string(' ', 4000) + "\n" + new string(' ', 200) + "++b", "a" + new string(' ', 4200) + "++",
+    ];
+
+    [Theory]
+    [MemberData(nameof(ChoiceInputs))]
+    public void ArrowChoice(string input) => CheckOutcome(RuntimeNewLineGrammars.ArrowChoice(), NewLineGrammars.TryParseArrowChoice, NewLineGrammars.TryParseArrowChoice, input);
+
+    [Theory]
+    [MemberData(nameof(ChoiceInputs))]
+    public void ArrowChoiceWithComments(string input) => CheckOutcome(RuntimeNewLineGrammars.ArrowChoiceWithComments(), NewLineGrammars.TryParseArrowChoiceWithComments, NewLineGrammars.TryParseArrowChoiceWithComments, input);
+
+    [Theory]
+    [MemberData(nameof(ChoiceInputs))]
+    public void PostfixTable(string input) => CheckOutcome(RuntimeNewLineGrammars.PostfixTable(), NewLineGrammars.TryParsePostfixTable, NewLineGrammars.TryParsePostfixTable, input);
+
+    [Theory]
+    [MemberData(nameof(ChoiceInputs))]
+    public void PostfixTableWithComments(string input) => CheckOutcome(RuntimeNewLineGrammars.PostfixTableWithComments(), NewLineGrammars.TryParsePostfixTableWithComments, NewLineGrammars.TryParsePostfixTableWithComments, input);
+
+    [Fact]
+    public void GeneratedChoicesFindTheNewLines()
+    {
+        Assert.True(NewLineGrammars.TryParseArrowChoice("a => b", out var value));
+        Assert.Equal("a=>b", value);
+        Assert.True(NewLineGrammars.TryParseArrowChoice("a\n=> b", out value));
+        Assert.Equal("a|=>b", value);
+        Assert.True(NewLineGrammars.TryParseArrowChoiceWithComments("a /* \n */ => b", out value));
+        Assert.Equal("a|=>b", value);
+        Assert.True(NewLineGrammars.TryParsePostfixTable("a ++ * b\n++c", out value));
+        Assert.Equal("((a++)*b)|++c", value);
+    }
+
+    [Theory]
+    [InlineData("a   x")]
+    [InlineData("a \n x")]
+    [InlineData("a   +x")]
+    [InlineData("a /* c */ x")]
+    [InlineData("a /* \n */ =>")]
+    [InlineData("a   ")]
+    public void GeneratedChoicesFailWhereTheRuntimeOnesDo(string input)
+    {
+        var context = new ParseContext(new Scanner(input));
+        var result = new ParseResult<string>();
+
+        Assert.False(RuntimeNewLineGrammars.ArrowChoiceWithComments().Parse(context, ref result));
+        Assert.False(NewLineGrammars.TryParseArrowChoiceWithComments(input, out _, out int furthest));
+        Assert.Equal(context.Scanner.Cursor.FurthestOffset, furthest);
+    }
+
+    // The outcome of the runtime parser, from a string, is the one of the generated parser from a string and from readers,
+    // an error included
+    private static void CheckOutcome(Parser<string> parser, StringParser<string> parseString, ReaderParser<string> parseReader, string input)
+    {
+        var expected = Outcome(() => parser.TryParse(input, out var value) ? value! : "FAIL");
+
+        Assert.Equal(expected, Outcome(() => parseString(input, out var value) ? value! : "FAIL"));
+
+        foreach (var chunk in new[] { 1, 3, int.MaxValue })
+        {
+            Assert.Equal(expected, Outcome(() => parseReader(new VectorizedTokenTests.ChunkedReader(input, chunk), out var value) ? value! : "FAIL"));
+        }
+    }
+
     [Fact]
     public void GeneratedParsersFindTheNewLines()
     {
@@ -132,6 +204,15 @@ public static partial class NewLineGrammars
     public static partial bool TryParseCaptured(TextReader reader, out int value);
     public static partial bool TryParseAsciiSet(string text, out string value);
     public static partial bool TryParseAsciiSet(TextReader reader, out string value);
+    public static partial bool TryParseArrowChoice(string text, out string value);
+    public static partial bool TryParseArrowChoice(TextReader reader, out string value);
+    public static partial bool TryParseArrowChoiceWithComments(string text, out string value);
+    public static partial bool TryParseArrowChoiceWithComments(TextReader reader, out string value);
+    public static partial bool TryParseArrowChoiceWithComments(string text, out string value, out int furthest);
+    public static partial bool TryParsePostfixTable(string text, out string value);
+    public static partial bool TryParsePostfixTable(TextReader reader, out string value);
+    public static partial bool TryParsePostfixTableWithComments(string text, out string value);
+    public static partial bool TryParsePostfixTableWithComments(TextReader reader, out string value);
 }
 
 // The runtime parsers of NewLineGrammars, which the generator executes but the tests don't compile
@@ -166,4 +247,28 @@ public static class RuntimeNewLineGrammars
         Terms.Identifier().And(Terms.Identifier().NoNewLineBefore().Then(static x => " " + x.ToString()).Else(""))
             .Then(static x => x.Item1.ToString() + x.Item2)
             .WithWhiteSpaceSet(WhiteSpaceSet.Ascii);
+
+    public static Parser<string> ArrowChoice()
+    {
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2.ToString());
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x.ToString());
+        var arrowAfterNewLine = Terms.Text("=>").SkipAnd(Terms.Identifier()).Then(static x => "|=>" + x.ToString());
+        return Terms.Identifier().And(OneOf(assignment, arrow, arrowAfterNewLine)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+    }
+
+    public static Parser<string> ArrowChoiceWithComments() =>
+        ArrowChoice().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+
+    public static Parser<string> PostfixTable()
+    {
+        var table = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix((NoNewLineBefore(Terms.Text("++")), static x => "(" + x + "++)"), (NoNewLineBefore(Terms.Text("--")), static x => "(" + x + "--)"))
+            .LeftAssociative((Terms.Char('*'), static (a, b) => "(" + a + "*" + b + ")"))
+            .LeftAssociative((Terms.Char('+'), static (a, b) => "(" + a + "+" + b + ")"));
+        var prefix = Terms.Text("++").SkipAnd(Terms.Identifier()).Then(static x => "++" + x.ToString());
+        return ZeroOrMany(OneOf(table, prefix)).Eof().Then(static x => string.Join("|", x));
+    }
+
+    public static Parser<string> PostfixTableWithComments() =>
+        PostfixTable().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
 }

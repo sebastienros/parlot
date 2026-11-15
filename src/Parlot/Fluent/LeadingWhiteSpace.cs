@@ -42,6 +42,20 @@ internal interface ILeadingWhiteSpace
 }
 
 /// <summary>
+/// A parser which skips white space and whose match depends on it, like <see cref="NoNewLineBefore{T}"/>, which looks for a
+/// new line in it: though it tells that it skips white space, the white space isn't to be skipped before it is invoked.
+/// </summary>
+/// <remarks>
+/// A choice whose alternatives all skip white space, and can invoke such a parser before they read anything, selects them
+/// with the char after the white space and invokes them before it, and so do the parsers which skip the white space before
+/// the one they invoke, see <see cref="LeadingWhiteSpace.ReadsLeadingWhiteSpace(IReadOnlyList{object})"/>. A parser type
+/// implementing it calls <see cref="LeadingWhiteSpace.RegisterReader"/> in its constructor.
+/// </remarks>
+internal interface IReadsLeadingWhiteSpace
+{
+}
+
+/// <summary>
 /// Tells whether skipping the white space before a parser is invoked is what the parser does itself.
 /// </summary>
 /// <remarks>
@@ -117,6 +131,81 @@ internal static class LeadingWhiteSpace
         var starts = LoopAnalysis.ExploreStarts([parser]);
 
         return Of(parser, starts, new HashSet<object>(LoopAnalysis.ReferenceComparer.Instance));
+    }
+
+    /// <summary>
+    /// Whether a parser reads the leading white space, kept by the parser which asks for it until the hints of the grammar
+    /// change, like <see cref="Cache"/>.
+    /// </summary>
+    internal sealed class ReaderCache
+    {
+        public readonly int Version;
+        public readonly bool Reads;
+
+        public ReaderCache(int version, bool reads)
+        {
+            Version = version;
+            Reads = reads;
+        }
+    }
+
+    // Whether an IReadsLeadingWhiteSpace parser was ever built: the grammars which have none aren't explored
+    private static volatile bool s_anyReader;
+
+    /// <summary>
+    /// Records that an <see cref="IReadsLeadingWhiteSpace"/> parser was built, before any grammar holding it is analyzed.
+    /// </summary>
+    public static void RegisterReader() => s_anyReader = true;
+
+    /// <summary>
+    /// Gets whether <paramref name="parser"/> can invoke an <see cref="IReadsLeadingWhiteSpace"/> parser before it reads
+    /// anything, from <paramref name="cache"/> when the grammar didn't change since it was read.
+    /// </summary>
+    public static bool ReadsLeadingWhiteSpace(ref ReaderCache? cache, object parser)
+    {
+        var version = SeekableResolution.Version;
+        var cached = Volatile.Read(ref cache);
+
+        if (cached == null || cached.Version != version)
+        {
+            cached = new ReaderCache(version, ReadsLeadingWhiteSpace(parser));
+            Volatile.Write(ref cache, cached);
+        }
+
+        return cached.Reads;
+    }
+
+    /// <summary>
+    /// Gets whether <paramref name="parser"/> can invoke an <see cref="IReadsLeadingWhiteSpace"/> parser before it reads
+    /// anything.
+    /// </summary>
+    public static bool ReadsLeadingWhiteSpace(object parser) => ReadsLeadingWhiteSpace([parser]);
+
+    /// <summary>
+    /// Gets whether one of <paramref name="parsers"/> can invoke an <see cref="IReadsLeadingWhiteSpace"/> parser before it
+    /// reads anything.
+    /// </summary>
+    /// <remarks>
+    /// A parser type the analysis doesn't know, like the ones of an application, isn't looked into: it is trusted not to
+    /// invoke one.
+    /// </remarks>
+    public static bool ReadsLeadingWhiteSpace(IReadOnlyList<object> parsers)
+    {
+        // No grammar of the process can hold one
+        if (!s_anyReader)
+        {
+            return false;
+        }
+
+        foreach (var start in LoopAnalysis.ExploreStarts(parsers).Keys)
+        {
+            if (start is IReadsLeadingWhiteSpace)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
