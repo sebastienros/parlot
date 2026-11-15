@@ -20,6 +20,15 @@ namespace Parlot.Benchmarks;
 // | CodePoints                      | 39.43 us | 0.966 us | 2.849 us |  1.00 |  31.46 KB |
 // | JavaScript                      | 38.58 us | 1.171 us | 3.452 us |  0.98 |  31.46 KB |
 // | JavaScriptEscapesAndAstralChars | 41.82 us | 1.233 us | 3.636 us |  1.06 |  31.46 KB |
+//
+// The Tokens rows read 2,000 JavaScript tokens with a choice which holds the identifier before the numbers and the
+// punctuation. The identifier declares the ASCII chars of its start predicate, the backslash and any non-ASCII char, so the
+// choice doesn't try it for the other tokens, and invokes the parser of Lookup() directly (fastest of alternating slices):
+//
+// | Method                 | Before   | After    |
+// |----------------------- |---------:|---------:|
+// | TokensJavaScript       | 34.6 us  | 29.7 us  |
+// | TokensJavaScriptLookup | 32.2 us  | 29.6 us  |
 [MemoryDiagnoser]
 public class CodePointIdentifierBenchmarks
 {
@@ -48,8 +57,32 @@ public class CodePointIdentifierBenchmarks
 
     private static readonly Parser<int> _javaScript = ZeroOrMany(Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript)).Then(static x => x.Count);
 
+    // The tokens of JavaScript code: keywords, identifiers, numbers and punctuation, read by a choice which holds the
+    // identifier before the numbers and the punctuation, like the primary expressions of JavaScript
+    private static readonly string[] _tokens = ["var", "elem", "=", "jQuery", ".", "fn", "(", "type", ",", "0", ")", ";", "if", "(", "!", "length", ")", "return", "handleObj", "[", "1", "]", "{", "}", "function", "$"];
+
+    private static readonly string _code = string.Join(" ", Enumerable.Range(0, 2000).Select(static i => _tokens[i % _tokens.Length]));
+
+    private static Parser<TextSpan> Text(string text) => Terms.Text(text).Then(static x => new TextSpan(x));
+
+    private static Parser<int> Tokens(Parser<TextSpan> identifier) => ZeroOrMany(OneOf(
+        Text("var"), Text("if"), Text("return"), Text("function"),
+        identifier,
+        Terms.Integer().Then(static x => default(TextSpan)),
+        Text("="), Text("."), Text(","), Text("("), Text(")"), Text(";"), Text("!"), Text("["), Text("]"), Text("{"), Text("}")))
+        .Then(static x => x.Count);
+
+    // The identifier declares its hints
+    private static readonly Parser<int> _tokensJavaScript = Tokens(Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript));
+
+    // The hints are given with Lookup(), whose parser the choice invokes directly
+    private static readonly Parser<int> _tokensJavaScriptLookup = Tokens(Terms.Identifier(IsStart, IsPart, IdentifierOptions.JavaScript)
+        .Lookup(true, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$_\\" + Fluent.OneOf<TextSpan>.NonAsciiSeekableChar));
+
     public CodePointIdentifierBenchmarks()
     {
+        if (TokensJavaScript() != 2000) throw new InvalidOperationException(nameof(TokensJavaScript));
+        if (TokensJavaScriptLookup() != 2000) throw new InvalidOperationException(nameof(TokensJavaScriptLookup));
         if (Default() != 2000) throw new InvalidOperationException(nameof(Default));
         if (CharPredicates() != 2000) throw new InvalidOperationException(nameof(CharPredicates));
         if (CodePoints() != 2000) throw new InvalidOperationException(nameof(CodePoints));
@@ -71,4 +104,10 @@ public class CodePointIdentifierBenchmarks
 
     [Benchmark]
     public int JavaScriptEscapesAndAstralChars() => _javaScript.Parse(_unicode);
+
+    [Benchmark]
+    public int TokensJavaScript() => _tokensJavaScript.Parse(_code);
+
+    [Benchmark]
+    public int TokensJavaScriptLookup() => _tokensJavaScriptLookup.Parse(_code);
 }
