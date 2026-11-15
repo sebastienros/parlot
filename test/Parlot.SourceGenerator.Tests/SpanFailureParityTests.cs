@@ -85,6 +85,10 @@ public class SpanFailureParityTests
         ["RejectedWhiteSpaceLongest"] = Create("abc x", SpanFailureRuntimeGrammars.BuildRejectedWhiteSpaceLongest(), SpanFailureGrammars.TryParseRejectedWhiteSpaceLongest, SpanFailureGrammars.TryParseRejectedWhiteSpaceLongest),
         ["Number"] = Create("912!x ", SpanFailureRuntimeGrammars.BuildNumber(), SpanFailureGrammars.TryParseNumber, SpanFailureGrammars.TryParseNumber),
         ["RejectedList"] = Create("(a,)!? ", SpanFailureRuntimeGrammars.BuildRejectedList(), SpanFailureGrammars.TryParseRejectedList, SpanFailureGrammars.TryParseRejectedList),
+        ["Tokens"] = Create("ab.+", SpanFailureRuntimeGrammars.BuildTokens(), SpanFailureGrammars.TryParseTokens, SpanFailureGrammars.TryParseTokens),
+        ["TokenWhiteSpace"] = Create(">ab; x", SpanFailureRuntimeGrammars.BuildTokenWhiteSpace(), SpanFailureGrammars.TryParseTokenWhiteSpace, SpanFailureGrammars.TryParseTokenWhiteSpace),
+        ["TokenCapture"] = Create(">a!; ", SpanFailureRuntimeGrammars.BuildTokenCapture(), SpanFailureGrammars.TryParseTokenCapture, SpanFailureGrammars.TryParseTokenCapture),
+        ["TokenAlternative"] = Create("abc! ", SpanFailureRuntimeGrammars.BuildTokenAlternative(), SpanFailureGrammars.TryParseTokenAlternative, SpanFailureGrammars.TryParseTokenAlternative),
     };
 
     [Theory]
@@ -149,6 +153,16 @@ public class SpanFailureParityTests
     [InlineData("RejectedList", "(a, b,)", 0)]
     [InlineData("RejectedList", "(a, b)", 5)]
     [InlineData("RejectedList", "(a,)!", 4)]
+    // A token's failures are where it starts, after its white space, and where it ends when it matched
+    [InlineData("Tokens", "a.+b", 1)]
+    [InlineData("Tokens", "a+b.", 3)]
+    [InlineData("Tokens", "a.b.+", 3)]
+    [InlineData("TokenWhiteSpace", "> ax", 2)]
+    [InlineData("TokenWhiteSpace", "> ab x", 5)]
+    [InlineData("TokenCapture", "> a?", 2)]
+    [InlineData("TokenCapture", ">  ;", 3)]
+    [InlineData("TokenAlternative", "abx", 1)]
+    [InlineData("TokenAlternative", "ab c", 1)]
     public void Reports_Where_A_Parser_Failed_After_Reading(string name, string text, int offset)
     {
         var grammar = Grammars[name];
@@ -183,6 +197,10 @@ public class SpanFailureParityTests
     [InlineData("RejectedWhiteSpaceLongest")]
     [InlineData("Number")]
     [InlineData("RejectedList")]
+    [InlineData("Tokens")]
+    [InlineData("TokenWhiteSpace")]
+    [InlineData("TokenCapture")]
+    [InlineData("TokenAlternative")]
     public void Generated_And_Runtime_Parsers_Report_The_Same_Failure(string name)
     {
         var grammar = Grammars[name];
@@ -261,6 +279,14 @@ public static partial class SpanFailureGrammars
     public static partial bool TryParseNumber(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
     public static partial bool TryParseRejectedList(string text, out string value, out int failure);
     public static partial bool TryParseRejectedList(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseTokens(string text, out string value, out int failure);
+    public static partial bool TryParseTokens(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseTokenWhiteSpace(string text, out string value, out int failure);
+    public static partial bool TryParseTokenWhiteSpace(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseTokenCapture(string text, out string value, out int failure);
+    public static partial bool TryParseTokenCapture(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
+    public static partial bool TryParseTokenAlternative(string text, out string value, out int failure);
+    public static partial bool TryParseTokenAlternative(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 }
 
 // The runtime parsers of SpanFailureGrammars, whose file is only compiled by the generator
@@ -389,4 +415,21 @@ internal static class SpanFailureRuntimeGrammars
         Between(Terms.Char('('), Capture(ZeroOrMany(Terms.Identifier().AndSkip(Terms.Char(',')))), Terms.Char(')'))
             .And(Literals.AnyOf("!?", minSize: 2).Optional())
             .When(static (_, value) => value.Item1.Length < 3).Then(static value => value.Item1.ToString()).Eof();
+
+    // Dotted names as tokens, which try a name after each '.' and drop it
+    public static Parser<string> BuildTokens() =>
+        Separated(Literals.Char('+'), AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier()))))
+            .Then(static value => value.Count.ToString()).Eof();
+
+    // A token which skips white space, then a token after it
+    public static Parser<string> BuildTokenWhiteSpace() =>
+        Terms.Char('>').SkipAnd(AsToken(Terms.Char('a').And(Literals.Char('b')))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // A capture holds the white space before the token
+    public static Parser<string> BuildTokenCapture() =>
+        Literals.Char('>').SkipAnd(AsToken(Capture(Terms.Identifier().AndSkip(Literals.Char('!'))))).Then(static value => value.ToString()).AndSkip(Terms.Char(';')).Eof();
+
+    // A token which fails after reading, then an alternative which matches less, in span code
+    public static Parser<string> BuildTokenAlternative() =>
+        OneOf(AsToken(Literals.Text("ab").AndSkip(Literals.Char('c'))), Literals.Text("a")).AndSkip(Literals.Char('!').Or(Terms.Char('!'))).Eof();
 }

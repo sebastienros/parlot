@@ -352,6 +352,54 @@ public class FailureTests
         Assert.Equal(offset, failure.Offset);
     }
 
+    [Theory]
+    [InlineData("x.+y", 1)] // The '.' isn't followed by a name: the name is "x", and '+' or the end is expected after it
+    [InlineData("x.y.+", 3)]
+    [InlineData("x+y.", 3)]
+    [InlineData("x.y+.z", 4)]
+    [InlineData("x+", 2)]
+    [InlineData(".x", 0)]
+    [InlineData("", 0)]
+    public void Token_Reports_Its_Failures_Where_It_Starts_And_Ends(string text, int offset)
+    {
+        AssertFailure(FailureGrammars.DottedNames, FailureGrammars.DottedNames, text, offset);
+
+        Assert.True(FailureGrammars.DottedNames("x.y+z", out var value, out _));
+        Assert.Equal("x.y:1", value);
+    }
+
+    [Theory]
+    [InlineData("> ax", 2)]
+    [InlineData(">\n  ax", 4)]
+    [InlineData(">ax", 1)]
+    [InlineData(">  x", 3)]
+    [InlineData("> ab x", 5)]
+    [InlineData("> ab", 4)]
+    public void Token_Fails_After_The_White_Space_It_Skips(string text, int offset)
+        => AssertFailure(FailureGrammars.TokenAfterWhiteSpace, FailureGrammars.TokenAfterWhiteSpace, text, offset);
+
+    [Theory]
+    [InlineData("> a?", 2)]
+    [InlineData(">  ?", 3)]
+    [InlineData(">a!x", 3)]
+    [InlineData("> a!", 4)]
+    public void Captured_Token_Fails_After_The_White_Space_It_Holds(string text, int offset)
+    {
+        AssertFailure(FailureGrammars.CapturedToken, FailureGrammars.CapturedToken, text, offset);
+
+        Assert.True(FailureGrammars.CapturedToken("> a! ;", out var value, out _));
+        Assert.Equal(" a!", value);
+    }
+
+    private static void AssertFailure(StringGrammar stringGrammar, ReaderGrammar readerGrammar, string text, int offset)
+    {
+        Assert.False(stringGrammar(text, out _, out var failureOffset));
+        Assert.Equal(offset, failureOffset);
+
+        Assert.False(readerGrammar(new OneCharReader(text), out _, out var failure));
+        Assert.Equal(offset, failure.Offset);
+    }
+
     private delegate bool StringGrammar(string text, out string value, out int failureOffset);
     private delegate bool ReaderGrammar(TextReader reader, out string value, out (int Offset, int Line, int Column) failure);
 
