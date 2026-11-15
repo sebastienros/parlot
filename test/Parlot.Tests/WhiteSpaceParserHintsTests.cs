@@ -184,16 +184,57 @@ public class WhiteSpaceParserHintsTests
         }
     }
 
+    [Fact]
+    public void ManyListedNonAsciiCharsStandForEveryNonAsciiChar()
+    {
+        // More than SeekableHints.MaxNonAsciiChars start chars are declared as NonAsciiSeekableChar
+        var nonAscii = new string(Enumerable.Range(0xC0, 100).Select(static c => (char)c).ToArray());
+        var whiteSpace = Literals.Scan(SkipTildesAndNonAscii, ("~" + nonAscii).AsSpan());
+
+        Assert.Contains(Fluent.OneOf<TextSpan>.NonAsciiSeekableChar, ((Rewriting.ISeekable)whiteSpace).ExpectedChars);
+
+        // A listed char and one which isn't
+        foreach (var text in new[] { "aÅb", "a中b" })
+        {
+            var (value, offsets) = Parse(ZeroOrMany(Terms.AnyOf("ab", maxSize: 1)), whiteSpace, text, contextWhiteSpaceParser: whiteSpace);
+
+            Assert.Equal(["a", "b"], value!.Select(static t => t.ToString()));
+            Assert.Equal([1, 3], offsets);
+        }
+    }
+
     [Theory]
     [InlineData(1, 1)]
     [InlineData(1, 2)]
     [InlineData(3, 4)]
     public void StreamsInvokeItBeforeNonAsciiChars(int chunk, int bufferSize)
     {
-        var grammar = Terms.Text("a").And(Terms.Text("b")).And(Terms.Text("c")).WithWhiteSpaceParser(TildesAndNonAscii());
-        var options = new StreamParseOptions { BufferSize = bufferSize };
+        const string text = "aééb~中c";
+        var whiteSpace = TildesAndNonAscii();
+        var grammar = Terms.Text("a").And(Terms.Text("b")).And(Terms.Text("c")).WithWhiteSpaceParser(whiteSpace);
+        var offsets = new List<int>();
+        var options = new StreamParseOptions
+        {
+            BufferSize = bufferSize,
+            ContextFactory = (scanner, ct) => new ParseContext(scanner, ct)
+            {
+                OnEnterParser = (parser, c) =>
+                {
+                    if (ReferenceEquals(parser, whiteSpace))
+                    {
+                        offsets.Add(c.Scanner.Cursor.Offset);
+                    }
+                },
+            },
+        };
 
-        Assert.Equal(("a", "b", "c"), grammar.Parse(new ChunkedReader("aééb~中c", chunk), options));
+        Assert.Equal(("a", "b", "c"), grammar.Parse(new ChunkedReader(text, chunk), options));
+
+        // A token can be parsed again after a refill, the white space parser too, but never before a token
+        Assert.All(offsets, offset => Assert.True(offset == text.Length || text[offset] is '~' or >= '\u0080', $"Invoked at {offset}"));
+        Assert.Contains(1, offsets);
+        Assert.Contains(4, offsets);
+
         Assert.False(grammar.TryParse(new ChunkedReader("aébéd", chunk), out _, out _, options));
     }
 

@@ -1673,7 +1673,8 @@ Terms.Text("a").And(Terms.Text("b")).WithWhiteSpaceParser(trivia).Parse("aéb");
 ```
 
 > **Fixed after Parlot 2.3.0.** `OneOf<T>.NonAsciiSeekableChar` in these hints stood for U+FFFF only: the parser wasn't invoked
-> before the other non-ASCII chars.
+> before the other non-ASCII chars. This also applied to a parser listing more than 64 non-ASCII chars, like
+> `Literals.Scan()` or `Identifier()` with such start chars, which declares them with `OneOf<T>.NonAsciiSeekableChar`.
 
 Skipping white space ignores the value of the parser, so not invoking it where it would read nothing doesn't change what a
 grammar parses. Only `ParseContext.OnEnterParser` sees fewer invocations. A [source-generated](source-generation.md) parser still
