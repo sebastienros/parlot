@@ -82,6 +82,7 @@ public class LoopAnalysisTests
     [InlineData("always")]
     [InlineData("peek")]
     [InlineData("peekNullable")]
+    [InlineData("asToken")]
     [InlineData("skipWhiteSpace")]
     [InlineData("withWhiteSpaceParser")]
     [InlineData("customEmptyLeaf")]
@@ -105,6 +106,7 @@ public class LoopAnalysisTests
             "whenFollowedBy" => Always("w").WhenFollowedBy(a),
             "peek" => Peek(a).AndSkip(z),
             "peekNullable" => Peek(Literals.Char('y')).SkipAnd(a),
+            "asToken" => AsToken(a).AndSkip(z),
             "whenNotFollowedBy" => Always("w").WhenNotFollowedBy(a).AndSkip(z),
             "else" => a.AndSkip(z).Else("e").AndSkip(z),
             "nested" => b,

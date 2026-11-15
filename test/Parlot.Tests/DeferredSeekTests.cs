@@ -295,6 +295,7 @@ public class DeferredSeekTests
             deferred.WhenFollowedBy(Literals.Char(';')),
             deferred.WhenNotFollowedBy(Literals.Char(';')),
             Peek(deferred),
+            AsToken(deferred),
             Separated(Literals.Char(','), deferred),
             OneOrMany(deferred),
             If(static () => true, deferred),

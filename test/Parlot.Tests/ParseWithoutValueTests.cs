@@ -153,6 +153,8 @@ public class ParseWithoutValueTests
         AssertSameAsParse(A.WhenNotFollowedBy(Bs));
         AssertSameAsParse(Peek(Bs));
         AssertSameAsParse(Peek(A.And(Bs)).And(A));
+        AssertSameAsParse(AsToken(Bs));
+        AssertSameAsParse(AsToken(A.And(Bs)).And(A));
         AssertSameAsParse(SkipWhiteSpace(OneOrMany(Literals.Char('b'))));
         AssertSameAsParse(NoNewLineBefore(OneOrMany(Literals.Char('b'))));
         AssertSameAsParse(A.And(Bs.NoNewLineBefore()));

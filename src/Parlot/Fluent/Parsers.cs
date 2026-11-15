@@ -144,6 +144,18 @@ public static partial class Parsers
     public static Parser<T> Peek<T>(Parser<T> parser) => new Peek<T>(parser);
 
     /// <summary>
+    /// Builds a parser that reports the failures of the specified parser where it starts, and where it ends when it
+    /// matches, for the furthest failure: the parser is read as a token, the way a lexer reads it.
+    /// </summary>
+    /// <remarks>
+    /// The continuations a token built from <c>Literals</c> tries and drops, like a name after each <c>.</c> of a dotted
+    /// name, don't move the furthest failure past the token. When the parser fails, it is where it starts, after the white
+    /// space it skips first. It matches what the specified parser matches, with its value.
+    /// </remarks>
+    /// <param name="parser">The parser of the token.</param>
+    public static Parser<T> AsToken<T>(Parser<T> parser) => new AsToken<T>(parser);
+
+    /// <summary>
     /// Evaluates a condition once and executes <paramref name="parser"/> if it is true.
     /// Otherwise, fails without consuming input or changing the result.
     /// </summary>
