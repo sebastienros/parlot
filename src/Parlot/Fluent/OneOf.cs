@@ -1241,10 +1241,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                     result.Body.Add($"{ctx}.SkipWhiteSpace();");
                     result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName});");
                 }
-
-                // The white space recorded before is restored when an alternative throws too
-                result.Body.Add("try");
-                result.Body.Add("{");
             }
             else
             {
@@ -1421,13 +1417,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             EmitParsers(beforeWhiteSpace ? _originalParsers : Parsers, result, ctx, indent: string.Empty, getHelper: GetHelper, context);
         }
 
+        // Without a finally block, which the operators of a table would pay for after each operand: a token which is read
+        // again after a parser threw restores the white space recorded when it started, see ParseContext.RetryToken()
         if (skippedName is not null)
         {
-            result.Body.Add("}");
-            result.Body.Add("finally");
-            result.Body.Add("{");
-            result.Body.Add($"    {ctx}.ExitSkippedWhiteSpace({skippedName});");
-            result.Body.Add("}");
+            result.Body.Add($"{ctx}.ExitSkippedWhiteSpace({skippedName});");
         }
 
         if (startName is not null)

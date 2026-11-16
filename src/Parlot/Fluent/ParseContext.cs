@@ -334,6 +334,9 @@ public class ParseContext
         // The failure recorded when the token being read started, see RetryToken
         public int TokenRecordedFailure;
 
+        // The white space a choice recorded when the token being read started, see RetryToken
+        public long TokenSkippedWhiteSpace;
+
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -590,19 +593,7 @@ public class ParseContext
     /// skipped none, the white space recorded before is kept: there is none before the cursor either way.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal long EnterSkippedWhiteSpace(int start)
-    {
-        var previous = PackSkippedWhiteSpace();
-        var end = Scanner.Cursor.Offset;
-
-        if (end != start)
-        {
-            _skippedStart = start;
-            _skippedEnd = end;
-        }
-
-        return previous;
-    }
+    internal long EnterSkippedWhiteSpace(int start) => RecordSkippedWhiteSpace(start, start);
 
     /// <summary>
     /// <see cref="EnterSkippedWhiteSpace(int)"/>, for white space the choice searched already, with the new lines of all the
@@ -610,14 +601,18 @@ public class ParseContext
     /// white space then.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal long EnterSkippedWhiteSpace(int start, bool newLine)
+    internal long EnterSkippedWhiteSpace(int start, bool newLine) => RecordSkippedWhiteSpace(start, newLine ? NewLineSkipped : NoNewLineSkipped);
+
+    // recorded: the start of the white space, or whether it contains a new line
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private long RecordSkippedWhiteSpace(int start, int recorded)
     {
         var previous = PackSkippedWhiteSpace();
         var end = Scanner.Cursor.Offset;
 
         if (end != start)
         {
-            _skippedStart = newLine ? NewLineSkipped : NoNewLineSkipped;
+            _skippedStart = recorded;
             _skippedEnd = end;
         }
 
@@ -1041,6 +1036,7 @@ public class ParseContext
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
         _coldState!.TokenRecordedFailure = cursor.RecordedFailure;
+        _coldState.TokenSkippedWhiteSpace = PackSkippedWhiteSpace();
 
         return cursor.Offset;
     }
@@ -1061,6 +1057,9 @@ public class ParseContext
         cursor.RestoreRecordedFailure(_coldState!.TokenRecordedFailure);
         Refill(start);
         cursor.ResetHitEnd();
+
+        // A generated choice of the token which threw doesn't restore the white space recorded before it
+        ExitSkippedWhiteSpace(_coldState.TokenSkippedWhiteSpace);
 
         return true;
     }
