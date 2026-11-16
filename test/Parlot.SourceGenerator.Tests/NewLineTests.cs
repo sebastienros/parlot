@@ -111,6 +111,14 @@ public class NewLineTests
 
     [Theory]
     [MemberData(nameof(ChoiceInputs))]
+    public void ArrowTail(string input) => CheckOutcome(RuntimeNewLineGrammars.ArrowTail(), NewLineGrammars.TryParseArrowTail, NewLineGrammars.TryParseArrowTail, input);
+
+    [Theory]
+    [MemberData(nameof(ChoiceInputs))]
+    public void ArrowTailWithComments(string input) => CheckOutcome(RuntimeNewLineGrammars.ArrowTailWithComments(), NewLineGrammars.TryParseArrowTailWithComments, NewLineGrammars.TryParseArrowTailWithComments, input);
+
+    [Theory]
+    [MemberData(nameof(ChoiceInputs))]
     public void PostfixTable(string input) => CheckOutcome(RuntimeNewLineGrammars.PostfixTable(), NewLineGrammars.TryParsePostfixTable, NewLineGrammars.TryParsePostfixTable, input);
 
     [Theory]
@@ -144,6 +152,12 @@ public class NewLineTests
 
         Assert.False(RuntimeNewLineGrammars.ArrowChoiceWithComments().Parse(context, ref result));
         Assert.False(NewLineGrammars.TryParseArrowChoiceWithComments(input, out _, out int furthest));
+        Assert.Equal(context.Scanner.Cursor.FurthestOffset, furthest);
+
+        // A choice of two composite alternatives, selected with its table
+        context = new ParseContext(new Scanner(input));
+        Assert.False(RuntimeNewLineGrammars.ArrowTailWithComments().Parse(context, ref result));
+        Assert.False(NewLineGrammars.TryParseArrowTailWithComments(input, out _, out furthest));
         Assert.Equal(context.Scanner.Cursor.FurthestOffset, furthest);
     }
 
@@ -209,6 +223,11 @@ public static partial class NewLineGrammars
     public static partial bool TryParseArrowChoiceWithComments(string text, out string value);
     public static partial bool TryParseArrowChoiceWithComments(TextReader reader, out string value);
     public static partial bool TryParseArrowChoiceWithComments(string text, out string value, out int furthest);
+    public static partial bool TryParseArrowTail(string text, out string value);
+    public static partial bool TryParseArrowTail(TextReader reader, out string value);
+    public static partial bool TryParseArrowTailWithComments(string text, out string value);
+    public static partial bool TryParseArrowTailWithComments(TextReader reader, out string value);
+    public static partial bool TryParseArrowTailWithComments(string text, out string value, out int furthest);
     public static partial bool TryParsePostfixTable(string text, out string value);
     public static partial bool TryParsePostfixTable(TextReader reader, out string value);
     public static partial bool TryParsePostfixTableWithComments(string text, out string value);
@@ -258,6 +277,16 @@ public static class RuntimeNewLineGrammars
 
     public static Parser<string> ArrowChoiceWithComments() =>
         ArrowChoice().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
+
+    public static Parser<string> ArrowTail()
+    {
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2.ToString());
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x.ToString());
+        return Terms.Identifier().And(OneOf(assignment, arrow).Else("")).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+    }
+
+    public static Parser<string> ArrowTailWithComments() =>
+        ArrowTail().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"));
 
     public static Parser<string> PostfixTable()
     {

@@ -6,7 +6,7 @@ using System.Buffers;
 
 namespace Parlot.Fluent;
 
-internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable
+internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, IFailsAtFirstChar
 {
     private readonly SearchValues<char> _searchValues;
     private readonly string? _valuesString;
@@ -45,6 +45,9 @@ internal sealed class SearchValuesCharLiteral : Parser<TextSpan>, ISeekable, ISo
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _minSize <= 0;
+
+    // It reads its chars only, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

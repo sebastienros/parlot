@@ -15,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace, IFailsAtFirstChar
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -76,7 +76,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     private byte _whiteSpace;
 
     // The number of alternatives up to which a choice which invokes them before the white space tries them in order, without
-    // a lookup table
+    // a lookup table, when they all fail at their first char without invoking another parser, see AllFailAtFirstChar()
     private const int MaxAlternativesInOrder = 2;
 
     private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
@@ -485,15 +485,33 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             return Hoisted;
         }
 
-        // The table is written before the mode, which the parsers read first. Two alternatives are tried in order: reading the
-        // char after the white space costs about what the one which doesn't match does.
-        if (_originalParsers.Length > MaxAlternativesInOrder)
+        // The table is written before the mode, which the parsers read first. Two literals, or parsers which only wrap one, are
+        // tried in order: reading the char after the white space costs about what the one which doesn't match does. A composite
+        // alternative invokes what it starts with before it fails, so they are selected with the table then (#581).
+        if (_originalParsers.Length > MaxAlternativesInOrder || !AllFailAtFirstChar(_originalParsers))
         {
             (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
         }
 
         Volatile.Write(ref _whiteSpace, BeforeWhiteSpace);
         return BeforeWhiteSpace;
+    }
+
+    // A nested choice of literals, which only reads the text, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => AllFailAtFirstChar(_originalParsers);
+
+    // Whether each alternative fails at its first chars without invoking another parser than a literal, see IFailsAtFirstChar
+    private static bool AllFailAtFirstChar(Parser<T>[] parsers)
+    {
+        foreach (var parser in parsers)
+        {
+            if (!FailsAtFirstChar.Of(parser))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // The lookup table of a choice which invokes its alternatives before the white space: the alternatives themselves, which

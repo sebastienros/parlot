@@ -22,7 +22,7 @@ namespace Parlot.Fluent;
 /// invoked: a white space parser or set for the token goes around it, as in <c>AsToken(parser).WithComments(...)</c>.
 /// </para>
 /// </remarks>
-public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IReadsWith
+public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IReadsWith, IFailsAtFirstChar
 {
     private readonly Parser<T> _parser;
 
@@ -57,6 +57,9 @@ public sealed class AsToken<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     object IReadsWith.Parser => _parser;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    // When the parser it wraps is a literal, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(_parser);
 
     /// <inheritdoc />
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

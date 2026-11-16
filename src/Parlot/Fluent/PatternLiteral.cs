@@ -3,7 +3,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable, ISpanSourceable, IFailsAtFirstChar
 {
     private readonly Func<char, bool> _predicate;
     private readonly int _minSize;
@@ -19,6 +19,9 @@ public sealed class PatternLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyza
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _minSize <= 0;
+
+    // It reads its chars only, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

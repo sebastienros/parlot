@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IReadsWith, ILeadingWhiteSpace
+public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IReadsWith, ILeadingWhiteSpace, IFailsAtFirstChar
 {
     private readonly Parser<T> _parser;
 
@@ -37,6 +37,9 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
     LeadingWhiteSpaceUse ILeadingWhiteSpace.LeadingWhiteSpace => LeadingWhiteSpaceUse.Kept;
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    // When the parser it wraps is a literal, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

@@ -11,7 +11,7 @@ namespace Parlot.Fluent;
 /// This class is used as a base class for custom number parsers which don't implement INumber<typeparamref name="T"/> after .NET 7.0.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable
+public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IFailsAtFirstChar
 {
     private readonly char _decimalSeparator;
     private readonly char _groupSeparator;
@@ -75,8 +75,13 @@ public abstract class NumberLiteralBase<T> : Parser<T>, ISeekable, ISourceable, 
         Name = "NumberLiteral";
     }
 
-    // A derived type can override Parse()
-    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => GetType().Assembly == typeof(NumberLiteralBase<T>).Assembly ? false : analysis.AnalyzeUnknown(this);
+    // A derived type of the application can override Parse()
+    private bool IsParlotType => GetType().Assembly == typeof(NumberLiteralBase<T>).Assembly;
+
+    bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => IsParlotType ? false : analysis.AnalyzeUnknown(this);
+
+    // It reads its chars only, unless it is a type of the application, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => IsParlotType;
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

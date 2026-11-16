@@ -4,7 +4,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISkipsWhiteSpace
+public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISkipsWhiteSpace, IFailsAtFirstChar
 {
     public Parser<T> Parser { get; }
 
@@ -31,6 +31,9 @@ public sealed class SkipWhiteSpace<T> : Parser<T>, ISeekablePrefixes, ISourceabl
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(Parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(Parser);
+
+    // When the parser it wraps is a literal, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(Parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

@@ -24,7 +24,7 @@ namespace Parlot.Fluent;
 /// text between its quotes as it is.
 /// </para>
 /// </remarks>
-public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IFailsAtFirstChar
 {
     private readonly Parser<TextSpan> _parser;
     private readonly StringPool _pool = new();
@@ -67,6 +67,9 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    // When the parser it wraps is a literal, see IFailsAtFirstChar
+    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(_parser);
 
     /// <inheritdoc />
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
