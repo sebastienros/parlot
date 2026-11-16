@@ -277,6 +277,24 @@ public class FurthestFailureTests
     private static readonly Parser<string> TokenAlternative =
         OneOf(AsToken(Literals.Text("ab").AndSkip(Literals.Char('c'))), Literals.Text("a")).AndSkip(Literals.Char('!')).Eof();
 
+    [Theory]
+    [InlineData("`abc", 4)]
+    [InlineData("`a\\", 3)]
+    [InlineData("`a${b}c", 7)]
+    [InlineData("`a${b c}`", 6)]
+    [InlineData("`a${}`", 4)]
+    [InlineData("`a${`b", 4)]
+    [InlineData("  `a${b", 7)]
+    public void Unterminated_Interpolated_Text_Fails_Where_It_Ends(string text, int offset)
+        => AssertFurthest(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Eof(), text, offset);
+
+    [Theory]
+    [InlineData("$\"ab\ncd\"", 4)]
+    [InlineData("$\"a{b}\r\"", 6)]
+    [InlineData("$\"a\\\nb\"", 4)]
+    public void Interpolated_Text_Fails_At_A_New_Line(string text, int offset)
+        => AssertFurthest(Literals.Interpolated("$\"", "\"", "{", "}", Terms.Identifier(), InterpolationOptions.NoNewLines).Eof(), text, offset);
+
     // The furthest failure of the string and of the TextReader parsers, which match the generated ones (standalone FailureTests)
     private static void AssertFurthest<T>(Parser<T> parser, string text, int offset, int bufferSize = 1)
     {

@@ -60,7 +60,7 @@ internal sealed class GrammarAnalysis
         "Sequence", "SequenceAndSkip", "SequenceSkipAnd", "Then", "PooledString", "Discard", "Capture", "SkipWhiteSpace", "NoNewLineBefore",
         "When", "ThenTry", "WhenFollowedBy", "WhenNotFollowedBy", "Peek", "ElseError", "Between", "OneOrMany", "Separated", "Deferred", "Commit",
         "Switch", "Seekable", "IParserAdapter", "AsToken", "OperatorIndex", "LeftAssociative", "LeftAssociativeWithContext", "RightAssociative",
-        "RightAssociativeWithContext", "AssociativeWithOperator",
+        "RightAssociativeWithContext", "AssociativeWithOperator", "Interpolated",
     };
 
     // Parlot's parsers which succeed exactly when the parser they invoke does, at the same position
@@ -985,6 +985,7 @@ internal sealed class GrammarAnalysis
             "SpanScannerLiteral" => "Scan(...)",
             "IdentifierLiteral" or "Identifier" => "Identifier(...)",
             "StringLiteral" => "String(...)",
+            "Interpolated" => "Interpolated(...)",
             "WhiteSpaceLiteral" => "WhiteSpace(...)",
             "NonWhiteSpaceLiteral" => "NonWhiteSpace(...)",
             "ListOfCharsLiteral" or "SearchValuesCharLiteral" => "AnyOf(...)",
