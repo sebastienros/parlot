@@ -131,12 +131,14 @@ public class LineStartCommentTests
     }
 
     [Theory]
-    [InlineData("a\n--> b", "a|\n|--|>|b")]
+    [InlineData("a\n--> b", "a|\n")]
     [InlineData("--> b\nc", "\n|c")]
-    public void ShouldNotStartALineWhenTheNewLinesAreNotWhiteSpace(string text, string expected)
+    [InlineData("a\n --> b", "a|\n")]
+    [InlineData("a --> b", "a|--|>|b")]
+    public void ShouldStartALineAfterANewLineReadAsAToken(string text, string expected)
     {
         // With UseNewLines the new lines are not skipped: the chars of WithWhiteSpace(whiteSpace, newLines) stop before them.
-        // The grammar reads them as tokens
+        // The grammar reads them as tokens, and the skip of the token after one starts a line
         var parser = ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Text("\n")))
             .WithComments(JavaScriptChars);
         var context = new ParseContext(new Scanner(text), useNewLines: true);
@@ -201,11 +203,12 @@ public class LineStartCommentTests
     [Theory]
     [InlineData("a --> b", "a|--|>|b")]
     [InlineData("--> b\nc", "c")]
-    [InlineData("a #x\n--> b\nc", "a|--|>|b|c")]
+    [InlineData("a #x\n--> b\nc", "a|c")]
+    [InlineData("a #x\n --> b\nc", "a|--|>|b|c")]
     public void ShouldStartALineWithoutWhiteSpace(string text, string expected)
     {
-        // Without white space, only the start of the text starts a line: the grammar reads the white space and the new lines,
-        // which end a single line comment, as tokens, and each skip starts after them
+        // Without white space, the grammar reads the white space and the new lines, which end a single line comment, as
+        // tokens: a skip which starts after a new line starts a line
         var parser = ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Char(' ').Or(Terms.Char('\n')).Then(static _ => "_")))
             .WithComments(static c => c.WithSingleLine("#", "\n").WithSingleLine("-->", "\n", CommentPlacement.LineStart))
             .Then(static list => string.Join("|", list.Where(static x => x != "_")));
@@ -227,18 +230,40 @@ public class LineStartCommentTests
     }
 
     [Theory]
-    [InlineData(1, 1, true)]
-    [InlineData(3, 1, false)]
-    [InlineData(1, 5, false)]
-    public void ShouldStartALineWhereTheScannerStartsTheInputOnly(int line, int column, bool expected)
+    [InlineData("--> a\nb", 0, 6)]
+    [InlineData("\n--> a\nb", 1, 7)]
+    [InlineData("\r--> a\nb", 1, 7)]
+    [InlineData("\u2028--> a\nb", 1, 7)]
+    [InlineData("x--> a\nb", 1, 1)]
+    [InlineData("\u0085--> a\nb", 1, 1)]
+    public void ShouldStartALineAtTheStartOfTheTextOrAfterANewLine(string text, int start, int end)
     {
-        // A scanner created elsewhere, as the windows and the delimited texts of ParseManyAsync
+        // The new lines of the chars: U+0085 isn't one for JavaScript
         var parser = Build(JavaScriptChars);
-        var context = new ParseContext(new Scanner("--> a\nb", new TextPosition(0, line, column), isFinal: true));
+        var context = new ParseContext(new Scanner(text));
+        context.Scanner.Cursor.Advance(start);
         ParseResult<TextSpan> result = default;
 
-        Assert.Equal(expected, parser.Parse(context, ref result));
-        Assert.Equal(expected ? 6 : 0, context.Scanner.Cursor.Offset);
+        Assert.Equal(start != end, parser.Parse(context, ref result));
+        Assert.Equal(end, context.Scanner.Cursor.Offset);
+
+        // Wherever the scanner starts in the input
+        context = new ParseContext(new Scanner(text.Substring(start), new TextPosition(0, 3, 2), isFinal: true));
+
+        Assert.True(parser.Parse(context, ref result));
+    }
+
+    [Fact]
+    public void ShouldStartALineAfterANewLineOfTheSet()
+    {
+        // U+0085 is a new line of the default set
+        var parser = Build(JavaScriptSet);
+        var context = new ParseContext(new Scanner("\u0085--> a\nb"));
+        context.Scanner.Cursor.Advance(1);
+        ParseResult<TextSpan> result = default;
+
+        Assert.True(parser.Parse(context, ref result));
+        Assert.Equal(7, context.Scanner.Cursor.Offset);
     }
 
     [Fact]
@@ -342,11 +367,12 @@ public class LineStartCommentTests
     // The end of the trivia from start: JavaScript's white space, line terminators, comments, and "-->" after a new line
     private static int ScanTrivia(string text, int start, bool isChars)
     {
-        var lineStart = start == 0;
-        var i = start;
-
         bool IsNewLine(char c) => NewLines.IndexOf(c) >= 0 || !isChars && Character.IsWhiteSpaceOrNewLine(c) && !Character.IsWhiteSpace(c);
         bool IsSpace(char c) => isChars ? CommentsParserTests.JavaScriptWhiteSpace.IndexOf(c) >= 0 : Character.IsWhiteSpace(c);
+
+        // At the start of the text, or after a new line
+        var lineStart = start == 0 || IsNewLine(text[start - 1]);
+        var i = start;
 
         while (i < text.Length)
         {

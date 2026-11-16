@@ -204,7 +204,8 @@ public class CommentsBuilder
     /// <param name="singleLineStart">The text which starts a comment.</param>
     /// <param name="lineTerminators">The chars which end a comment, for instance <c>"\r\n\u2028\u2029"</c> for JavaScript or C#.</param>
     /// <param name="placement">Where the comment starts. With <see cref="CommentPlacement.LineStart"/>, it only starts when
-    /// the white space and comments skipped before it contain a new line, or when the skip started at the start of the input:
+    /// the white space and comments skipped before it contain a new line, or when the skip started at the start of the input or
+    /// after a new line:
     /// a new line of the white space, like the one which ends a single line comment, or a multi line comment containing a new
     /// line (see <see cref="WithMultiLine(string, string, UnterminatedComment, string)"/>).</param>
     /// <remarks>
@@ -273,6 +274,8 @@ public class CommentsBuilder
     /// </remarks>
     public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated, string lineTerminators)
     {
+        ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
+        ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
         ThrowHelper.ThrowIfNull(lineTerminators, nameof(lineTerminators));
 
         if (lineTerminators.Length == 0)

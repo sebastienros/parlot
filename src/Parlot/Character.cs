@@ -500,6 +500,11 @@ public static partial class Character
     internal static bool ContainsNewLine(ReadOnlySpan<char> span, string? newLines, byte whiteSpaceMask)
         => (newLines is null ? IndexOfNewLine(span, whiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0;
 
+    // Whether a char is a new line: one of the chars of newLines, or of a white space set when it is null, the set given by its
+    // white space bit: a char of its white space or new lines which isn't one of its white space
+    internal static bool IsNewLine(char c, string? newLines, byte whiteSpaceMask)
+        => newLines is null ? HasMask(c, (byte)(whiteSpaceMask << 1)) && !HasMask(c, whiteSpaceMask) : newLines.AsSpan().IndexOf(c) >= 0;
+
     // The index of the first new line of a white space set in a span, the set given by its white space bit (see
     // GetWhiteSpaceMask): a char of the set's white space or new lines which isn't one of its white space. -1 when there is none.
     internal static int IndexOfNewLine(ReadOnlySpan<char> span, byte whiteSpaceMask)

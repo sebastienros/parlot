@@ -30,8 +30,9 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     // The first chars of the comments, to tell at once that no comment starts at a char
     private readonly string _firstChars;
 
-    // Whether the white space has new lines
+    // Whether the white space has new lines, and their chars for WhiteSpaceKind.Chars, null for the context's set
     private readonly bool _hasNewLines;
+    private readonly string? _newLines;
 
     // For each comment, when the parser tracks where a line starts, the new lines a multi line comment can contain: its line
     // terminators, the new lines of WhiteSpaceKind.Chars, or null for those of the context's set
@@ -66,6 +67,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     {
         _whiteSpace = whiteSpace;
         _hasNewLines = newLines is null ? whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine : newLines.Length > 0;
+        _newLines = newLines;
         _comments = comments;
         _firstChars = new string(comments.Select(static c => c.Start[0]).Distinct().ToArray());
         _tracksLineStart = comments.Any(static c => c.Placement == CommentPlacement.LineStart);
@@ -165,13 +167,13 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     }
 
     // Skips the white space and the comments, and tells whether a line starts at the cursor, for the comments which only
-    // start there: at the start of the input, after a new line of the white space, or after a multi line comment containing
-    // one
+    // start there: at the start of the input or after a new line, one of the white space or in a multi line comment, or one
+    // read before the skip, which a token can read with UseNewLines
     private void SkipTrackingLineStart(ParseContext context, Cursor cursor)
     {
         var scanner = context.Scanner;
-        // The start of the input, not of a window or a delimited text
-        var lineStart = cursor.IsAtInputStart;
+        // The start of the input, or after a new line which was read before
+        var lineStart = cursor.IsAtLineStart(_newLines, context.WhiteSpaceMask);
 
         while (true)
         {
@@ -243,7 +245,8 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
             if (context.Scanner.SkipMultiLineComment(comment.Start.Length, comment.End.AsSpan()))
             {
-                if (default(TTracking).Enabled && !lineStart)
+                // The new lines of WithWhiteSpace(whiteSpace, newLines) can be empty: the comment then contains none
+                if (default(TTracking).Enabled && !lineStart && _commentNewLines![i]?.Length != 0)
                 {
                     if (Character.ContainsNewLine(cursor.GetSpan(commentStart, cursor.Offset - commentStart), _commentNewLines![i], context.WhiteSpaceMask))
                     {
@@ -362,8 +365,8 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
         if (_tracksLineStart)
         {
-            // The start of the input, not of a window or a delimited text
-            result.Body.Add($"var {lineStartName} = {cursorName}.IsAtInputStart;");
+            // The start of the input, or after a new line which was read before
+            result.Body.Add($"var {lineStartName} = {cursorName}.IsAtLineStart({(_newLines is null ? "null" : LiteralHelper.StringToLiteral(_newLines))}, {ctx}.WhiteSpaceMask);");
         }
 
         result.Body.Add("while (true)");
