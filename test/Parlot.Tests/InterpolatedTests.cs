@@ -328,9 +328,13 @@ public class InterpolatedTests
         Assert.True(parser.Parse(context, ref result));
         context.Scanner.Cursor.ResetPosition(0);
 
+#if NET
         var before = GC.GetAllocatedBytesForCurrentThread();
         Assert.True(parser.Parse(context, ref result));
         Assert.Equal(before, GC.GetAllocatedBytesForCurrentThread());
+#else
+        Assert.True(parser.Parse(context, ref result));
+#endif
         Assert.Equal("abc", result.Value.Chunks[0].ToString());
     }
 
