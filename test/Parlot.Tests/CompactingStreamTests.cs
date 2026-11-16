@@ -42,6 +42,26 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void InterpolatedTextsKeepTheBufferBounded()
+    {
+        // A template doesn't pin its start: only its chunks and the tokens of its holes are buffered while they are read
+        var parser = Literals.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count).Eof();
+        var text = "`" + string.Concat(Enumerable.Range(0, 5_000).Select(static i => "chunk " + i + " ${ hole" + i + " }")) + " end`";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+
+        Assert.Equal(5_000, parser.Parse(new ChunkedReader(text, 3), options));
+        Assert.InRange(peak(), 1, 64);
+
+        // A chunk is a token, buffered while it is read
+        var longChunk = "`" + new string('a', 1_000) + "${b}`";
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+
+        Assert.Equal(1, parser.Parse(new ChunkedReader(longChunk, 3), options));
+        Assert.InRange(peak(), 1_000, 4_096);
+    }
+
+    [Fact]
     public void RepetitionsKeepTheBufferBounded()
     {
         var parser = ZeroOrMany(Terms.Identifier()).Eof();
@@ -118,6 +138,113 @@ public class CompactingStreamTests
 
         // The white space between two statements is kept, not the statements before it
         Assert.InRange(peak(), 1, 256);
+    }
+
+    [Fact]
+    public void ChoicesSkippingTheWhiteSpaceOfNoNewLineBeforeAlternativesKeepTheBufferBounded()
+    {
+        // The choice skips the white space once for its alternatives, and searches it for the new line of the arrow: it isn't
+        // kept while the block, its last alternative, is read
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var block = Terms.Char('{').SkipAnd(ZeroOrMany(Terms.Identifier())).AndSkip(Terms.Char('}')).Then(static x => "{" + x.Count + "}");
+        var parser = Terms.Identifier().And(OneOf(arrow, block)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+
+        var body = string.Join(" ", Enumerable.Range(0, 2_000).Select(static i => "b" + i));
+        var text = "d" + new string(' ', 100) + "\n{ " + body + " }";
+        var expected = "d{2000}";
+
+        Assert.Equal(expected, parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 3), options));
+
+        // The white space before the block isn't kept while it's read
+        Assert.InRange(peak(), 1, 256);
+    }
+
+    [Fact]
+    public void ChoicesWithNoNewLineBeforeAlternativesOfOtherNewLinesKeepTheBufferBounded()
+    {
+        // The NoNewLineBefore alternatives look for other new lines: the choice invokes them before the white space, which it
+        // doesn't keep while the block is read
+        var id = Terms.Identifier();
+        var block = Terms.Char('{').SkipAnd(ZeroOrMany(Terms.Identifier())).AndSkip(Terms.Char('}')).Then(static x => "{" + x.Count + "}");
+        var parser = Terms.Identifier().And(OneOf(
+            NoNewLineBefore(Terms.Text("=>"), "\r").SkipAnd(id).Then(static x => "=>" + x),
+            NoNewLineBefore(Terms.Text("->")).SkipAnd(id).Then(static x => "->" + x),
+            block)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+
+        var body = string.Join(" ", Enumerable.Range(0, 2_000).Select(static i => "b" + i));
+        var text = "d" + new string(' ', 100) + "\n{ " + body + " }";
+
+        Assert.Equal("d{2000}", parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal("d{2000}", parser.Parse(new ChunkedReader(text, 3), options));
+        Assert.InRange(peak(), 1, 256);
+
+        Assert.Equal("d=>e", parser.Parse(new ChunkedReader("d \n => e", 1)));
+        Assert.Null(parser.Parse(new ChunkedReader("d \r => e", 1)));
+        Assert.Null(parser.Parse(new ChunkedReader("d \n -> e", 1)));
+    }
+
+    [Fact]
+    public void ListsWithALastElementKeepTheBufferBounded()
+    {
+        // The last element is read where the parser of the values failed, and a separator which no element follows is read
+        // again by the next parser: each list only pins from the end of its last value (#588)
+        var name = Terms.Identifier().Then(static x => x.ToString());
+        var rest = Terms.Text("...").SkipAnd(Terms.Identifier()).Then(static x => "..." + x);
+        var list = Separated(Terms.Char(','), name, rest);
+        var parser = ZeroOrMany(Between(Terms.Char('('), list.AndSkip(Terms.Char(',').Optional()), Terms.Char(')'))).Eof();
+        var text = string.Join(" ", Enumerable.Range(0, 10_000).Select(static i => (i % 3) switch
+        {
+            0 => "(a" + i + ", b" + i + ", ...r" + i + ")",
+            1 => "(a" + i + ", b" + i + ",)",
+            _ => "(...r" + i + ")",
+        }));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var result = parser.Parse(new ChunkedReader(text, 3), options)!;
+
+        Assert.Equal(10_000, result.Count);
+        Assert.Equal(["a9999", "b9999", "...r9999"], result[9_999]);
+        Assert.Equal(["...r9998"], result[9_998]);
+        Assert.Equal(["a9997", "b9997"], result[9_997]);
+        Assert.InRange(peak(), 1, 64);
+
+        // A single long list
+        var values = string.Join(", ", Enumerable.Range(0, 10_000).Select(static i => "a" + i)) + ", ...rest";
+
+        (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        var all = list.Eof().Parse(new ChunkedReader(values, 3), options)!;
+
+        Assert.Equal(10_001, all.Count);
+        Assert.Equal("...rest", all[10_000]);
+        Assert.InRange(peak(), 1, 64);
+    }
+
+    [Fact]
+    public void ChoicesOfTwoCompositeAlternativesBeforeTheWhiteSpaceKeepTheBufferBounded()
+    {
+        // A choice of two composite alternatives selects them with its table too (#581): most statements have no tail, and
+        // the white space before the next one is kept while the char after it is read, then released
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var statement = Terms.Identifier().And(OneOf(assignment, arrow).Else("")).Then(static x => x.Item1.ToString() + x.Item2);
+        var parser = ZeroOrMany(statement).Eof().Then(static x => string.Join(";", x));
+
+        var spaces = new string(' ', 100);
+        var text = string.Join(spaces, Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 4 == 0 ? " = b" : i % 4 == 1 ? " => c" : i % 4 == 2 ? "\n" : "")));
+        var expected = string.Join(";", Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 4 == 0 ? "=b" : i % 4 == 1 ? "=>c" : "")));
+
+        Assert.Equal(expected, parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 3), options));
+
+        // A statement and the white space around it are kept, not the 100k chars before them
+        Assert.InRange(peak(), 1, 512);
     }
 
     [Fact]
@@ -347,6 +474,8 @@ public class CompactingStreamTests
         ["when-peek-rejected"] = Peek(Terms.Identifier()).When(static (_, value) => value.Length < 3).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
         ["thentry-peek-rejected"] = Peek(Terms.Identifier()).ThenTry(static value => (value.Length < 3, value)).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
         ["when-not"] = Not(Terms.Char('x')).SkipAnd(Capture(Terms.Identifier())).When(static (_, value) => value.Length < 4).Then(static value => value.ToString()),
+        // A lookahead which tests the char after the white space its parser skips before invoking it, and moves back
+        ["not-guard"] = Not(OneOf(Terms.Text("ab"), Terms.Text("cd"))).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
         ["when-token"] = Terms.Integer().When(static (_, value) => value < 100).Then(static value => value.ToString()),
         ["thentry-token"] = Terms.Integer().ThenTry(static value => (value < 100, value.ToString())),
         ["when-tokens"] = Terms.Identifier().And(Terms.Integer()).When(static (_, value) => value.Item2 < 100).Then(static value => $"{value.Item1}{value.Item2}"),
@@ -380,6 +509,8 @@ public class CompactingStreamTests
         Add("when-peek-rejected", words);
         Add("thentry-peek-rejected", words);
         Add("when-not", "ab", " ab", "  ab", "   a", " x", "  abcd", "  ");
+        string[] guarded = ["ab", " ab", "  abc", " x", "  cd", "  xy", " a", "  ", ""];
+        Add("not-guard", guarded);
         Add("when-token", "9", "  9", "  123", " x", "  ");
         Add("thentry-token", "9", "  9", "  123", " x", "  ");
         Add("when-tokens", "a 9", "  a  9", "  a  123", " a x", "  ");
@@ -649,6 +780,22 @@ public class CompactingStreamTests
         Assert.InRange(peak(), 1, 64);
     }
 
+    [Fact]
+    public void CommentsAtTheStartOfALineAreTokens()
+    {
+        var parser = LineStartCommentTests.Tokens.WithComments(LineStartCommentTests.JavaScriptChars);
+        var text = string.Join(" /* a\n comment */ --> b\n", Enumerable.Range(0, 100).Select(static i => "id" + i)) + " --> c";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 2 });
+
+        var tokens = parser.Parse(new ChunkedReader(text, 1), options)!;
+
+        Assert.Equal(parser.Parse(text), tokens);
+        // The last "-->" is in the middle of a line: "--", ">" and "c"
+        Assert.Equal(100 + 3, tokens.Count);
+        Assert.InRange(peak(), 1, 64);
+    }
+
     [Theory]
     [InlineData("var a; let b var c;\n  var d")]
     [InlineData("let a; const b; let c;")]
@@ -727,6 +874,71 @@ public class CompactingStreamTests
         Assert.InRange(peak(), 1, Math.Max(bufferSize, 128) * 2);
     }
 #endif
+
+    [Fact]
+    public void PositionsRequestedBackwardKeepTheLinesBounded()
+    {
+        // Each identifier asks for the position of its end, then of its start many times, which records the lines up to its end
+        var parser = ZeroOrMany(Terms.Identifier().Then(static (context, start, end, _) =>
+        {
+            var cursor = context.Scanner.Cursor;
+            var line = cursor.GetPosition(end).Line;
+
+            // Requested again and again, such that the lines up to the end are recorded
+            for (var i = 0; i < 100; i++)
+            {
+                cursor.GetPosition(start);
+            }
+
+            return line * 1_000 + cursor.GetPosition(start).Column;
+        })).Eof();
+
+        var text = string.Join("\r\n", Enumerable.Range(0, 20_000).Select(static i => "  id" + i));
+        Cursor? cursor = null;
+        var peak = 0;
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = 16,
+            ContextFactory = (scanner, token) =>
+            {
+                cursor = scanner.Cursor;
+                return new ParseContext(scanner, token)
+                {
+                    NewLines = "\r\n",
+                    OnEnterParser = (_, _) => peak = Math.Max(peak, RecordedLineStarts(cursor)),
+                };
+            },
+        };
+
+        var result = parser.Parse(new ChunkedReader(text, 5), options)!;
+
+        Assert.Equal(20_000, result.Count);
+        Assert.Equal(20_000 * 1_000 + 3, result[19_999]);
+        Assert.Equal(parser.Parse(new ParseContext(new Scanner(text)) { NewLines = "\r\n" }), result);
+
+        // The lines before the window are dropped with its text
+        Assert.InRange(peak, 1, 16);
+    }
+
+    // The capacity of the line starts recorded by a cursor, read by reflection since the map is private
+    private static int RecordedLineStarts(Cursor? cursor)
+    {
+        var linesField = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(linesField);
+
+        var lines = linesField.GetValue(cursor);
+
+        if (lines is null)
+        {
+            return 0;
+        }
+
+        var startsField = lines.GetType().GetField("Starts");
+        Assert.NotNull(startsField);
+
+        return ((int[])startsField.GetValue(lines)!).Length;
+    }
 
     /// <summary>
     /// Records the largest buffer seen by the parsers.

@@ -41,7 +41,35 @@ public partial class LookaheadBenchmarks
         return ZeroOrMany(block).Then(static blocks => blocks.Count).Eof();
     }
 
+    [GenerateParser(nameof(TryParseRestrictedStatements))]
+    private static Parser<int> BuildRestrictedStatements() => RestrictedStatements();
+
+    // Statements whose expression statements can't start with a reserved word or a '{', as CreateRestrictedStatements
+    private static Parser<int> RestrictedStatements()
+    {
+        var statement = Deferred<int>();
+        var expression = Deferred<int>();
+        var reserved = OneOf(Terms.Keyword("let"), Terms.Keyword("if"), Terms.Text("{"));
+
+        var block = Between(Terms.Char('{'), ZeroOrMany(statement), Terms.Char('}')).Then(static statements => statements.Count);
+        var let = Terms.Keyword("let").SkipAnd(Terms.Identifier()).AndSkip(Terms.Char(';')).Then(static _ => 1);
+        var conditional = Terms.Keyword("if").SkipAnd(Between(Terms.Char('('), expression, Terms.Char(')'))).SkipAnd(statement).Then(static x => x + 1);
+
+        // ExpressionStatement: [lookahead ∉ { {, let, if }] Expression ;
+        var expressionStatement = Not(reserved).SkipAnd(expression).AndSkip(Terms.Char(';'));
+
+        statement.Parser = OneOf(block, let, conditional, expressionStatement);
+        expression.Parser = Terms.Identifier().Then(static _ => 1).Or(Between(Terms.Char('('), expression, Terms.Char(')')));
+
+        return ZeroOrMany(statement).Then(static statements => statements.Count).Eof();
+    }
+
     [GenerateParser(nameof(TryParseWhen))]
     private static Parser<string> BuildWhen() =>
         Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f').Then(static value => "");
+
+    // The same condition, which records a reason with the failure
+    [GenerateParser(nameof(TryParseWhenReason))]
+    private static Parser<string> BuildWhenReason() =>
+        Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f', "reserved").Then(static value => "");
 }

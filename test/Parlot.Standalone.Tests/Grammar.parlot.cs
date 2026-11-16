@@ -119,6 +119,15 @@ public static partial class Grammar
         Terms.Text("hello").AndSkip(Terms.Text("world")).Eof()
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n").WithMultiLine("/*", "*/"));
 
+    // JavaScript's "-->", a comment at the start of a line only
+    [GenerateParser(nameof(TryParseLineStartComments))]
+    private static Parser<string> LineStartComments() =>
+        ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">")))
+            .AndSkip(SkipWhiteSpace(Always()))
+            .Eof()
+            .Then(static x => string.Join("|", x))
+            .WithComments(static c => c.WithWhiteSpace("\t\v\f \u00A0\uFEFF", "\n\r\u2028\u2029").WithSingleLine("-->", "\n\r\u2028\u2029", CommentPlacement.LineStart).WithMultiLine("/*", "*/", UnterminatedComment.Throw, "\n\r\u2028\u2029"));
+
     [GenerateParser(nameof(TryParseConfigured))]
     private static Parser<string> Configured(GrammarOptions options) =>
         If(() => { options.Evaluations++; return options.Formal; }, Terms.Text("Hello"), Terms.Text("Hi"))
@@ -290,5 +299,23 @@ public static partial class Grammar
         return ZeroOrMany(OneOf(returnStatement, expression).AndSkip(end)).Eof()
             .Then(static x => string.Join("|", x))
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
+    }
+
+    // A template literal whose holes hold identifiers or templates, its chunks between brackets
+    [GenerateParser(nameof(TryParseTemplate))]
+    private static Parser<string> Template()
+    {
+        var expression = Deferred<string>();
+        var template = Terms.Interpolated("`", "`", "${", "}", expression).Then(static x =>
+        {
+            var result = "[" + x.Chunks[0].ToString() + "]";
+            for (var i = 0; i < x.Holes.Count; i++)
+            {
+                result += "{" + x.Holes[i] + "}[" + x.Chunks[i + 1].ToString() + "]";
+            }
+            return result;
+        });
+        expression.Parser = OneOf(Terms.Identifier().Then(static x => x.ToString()), template);
+        return template.Eof();
     }
 }

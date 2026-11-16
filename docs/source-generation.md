@@ -317,7 +317,10 @@ When the parse fails, `failure` is the *furthest failure*: the position where th
 stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white space the expected `FROM` skipped. When the
 grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
 `TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
-like `TextPosition`. The names of the tuple elements are free. Runtime parsers report the same position through
+like `TextPosition`, ending at `\n`. The names of the tuple elements are free. `[GenerateParser(nameof(TryParse), NewLines =
+"\n\r\u2028\u2029")]` sets other line terminators, like `ParseContext.NewLines` (see
+[Lines and columns](parsers.md#lines-and-columns)), for the failures, the diagnostics and the positions callbacks request
+with `context.Scanner.Cursor.GetPosition(offset)`. Runtime parsers report the same position through
 `Cursor.FurthestOffset` and `Cursor.FurthestPosition`, see [Reporting where a parse failed](parsers.md#reporting-where-a-parse-failed).
 
 What a parser read and then rejected is not what moved the attempt forward, so the failure is at its start, where the
@@ -353,6 +356,24 @@ It is `true` when the parse exceeded `MaxRecursionDepth` or the stack of the thr
 was reached, and `false` for every other failure, an `Error`, an `ElseError` and a `ParseException` thrown by a callback
 included. It is what `ParseException.IsNestedTooDeeply` and `ParseError.IsNestedTooDeeply` report at runtime. It costs
 nothing until such a failure: the entry point reads it in the handler of the exception which ended the parse.
+
+To also learn why the parse failed there, add an `object` element before the `bool`, or last, as in
+`out (int Offset, object? Reason)` or `out (int Offset, int Line, int Column, object? Reason, bool NestedTooDeeply)`. It is
+the reason a `When(predicate, reason)`, `ThenTry(conversion, reason)`, `Not(parser, reason)` or
+`WhenNotFollowedBy(lookahead, reason)` recorded at the furthest failure, or a conversion with
+`context.Scanner.Cursor.RecordFailure(offset, reason)`, like the runtime `ParseError.Reason` (see
+[Why it failed there](parsers.md#why-it-failed-there)), and `null` when there is none, for an `Error` or an `ElseError`
+too. A reason is a `string`, which the generated code writes as a literal, or an `enum` value, an integer, a `bool` or a
+`char`, which it holds boxed in a static field: recording it allocates nothing.
+
+```csharp
+public static partial bool TryParse(string input, out MyValue value, out (int Offset, int Line, int Column, object? Reason) failure);
+
+if (!Script.TryParse(source, out var value, out var failure))
+{
+    throw new FormatException($"{failure.Reason as string ?? "Syntax error"} at line {failure.Line}, column {failure.Column}.");
+}
+```
 
 The overload doesn't generate the parser again: it calls the parser generated for the overload with the same input
 and without the failure, which takes the same arguments, a `CancellationToken` included (declare one of them as a

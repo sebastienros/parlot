@@ -235,6 +235,221 @@ public class NewLineTests
     }
 
     [Theory]
+    [InlineData("a ++", "(a++)")]
+    [InlineData("a /* x */ ++", "(a++)")]
+    [InlineData("a /* \n */ ++", "a")]
+    [InlineData("a\n++", "a")]
+    public void AChoiceWithNoNewLineBeforeOperatorsShouldSkipTheWhiteSpaceOnce(string input, string expected)
+    {
+        // The choice of the operators skips the white space and invokes them after it: the comments are parsed once, and
+        // NoNewLineBefore searches the white space the choice skipped
+        var comments = OneOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("/*", "*/"))).Then(static _ => new TextSpan());
+        var parser = CreatePostfixTable().Eof().WithWhiteSpaceParser(comments);
+
+        var whiteSpace = new System.Collections.Generic.List<int>();
+        var entered = new System.Collections.Generic.List<int>();
+        var context = new ParseContext(new Scanner(input))
+        {
+            OnEnterParser = (p, c) =>
+            {
+                if (ReferenceEquals(p, comments))
+                {
+                    whiteSpace.Add(c.Scanner.Cursor.Offset);
+                }
+                else if (p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal))
+                {
+                    entered.Add(c.Scanner.Cursor.Offset);
+                }
+            },
+        };
+
+        var result = new ParseResult<string>();
+        var matches = expected != "a";
+
+        Assert.Equal(matches, parser.Parse(context, ref result));
+
+        if (matches)
+        {
+            Assert.Equal(expected, result.Value);
+        }
+
+        // The white space after "a" is parsed once, and the operator is tried after it
+        Assert.Equal(1, whiteSpace.Count(static x => x == 1));
+        Assert.Equal([input.IndexOf('+')], entered);
+    }
+
+    [Theory]
+    [InlineData(0, " b", "b")]
+    [InlineData(0, " \nb", "b")]
+    [InlineData(0, " \n c", null)]
+    [InlineData(0, " c", "c")]
+    [InlineData(1, " \n d", "d")]
+    [InlineData(1, " d", "d")]
+    [InlineData(1, " \r d", null)]
+    [InlineData(1, " \n c", null)]
+    public void AChoiceShouldNotTellTheWhiteSpaceItSkippedToANoNewLineBeforeAfterAnotherSkip(int grammar, string input, string? expected)
+    {
+        // SkipWhiteSpace is invoked after the white space the choice skips, where it skips none, and so is NoNewLineBefore,
+        // which sees no new line either way. A NoNewLineBefore holding another one, with other new lines, is the same: the
+        // alternatives skip the white space themselves.
+        var parser = Literals.Char('a').SkipAnd(grammar == 0
+            ? OneOf(SkipWhiteSpace(NoNewLineBefore(Literals.Text("b"))), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))
+            : OneOf(NoNewLineBefore(NoNewLineBefore(Terms.Text("d")), "\r"), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse("a" + input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader("a" + input)));
+    }
+
+    [Theory]
+    [InlineData("a \n foo", null)]
+    [InlineData("a foo", "foo")]
+    [InlineData("a \n x", "x")]
+    [InlineData("a \n y", "y")]
+    public void AChoiceShouldTellTheWhiteSpaceItSkippedThroughALookupOfAChoice(string input, string? expected)
+    {
+        // The table invokes the choice of Lookup() itself, which skips no white space after the one the outer choice skipped
+        var inner = OneOf(Terms.Text("x"), NoNewLineBefore(Terms.Identifier().Then(static x => x.ToString()))).Lookup(skipWhiteSpace: true, 'f', 'x');
+        var parser = Literals.Char('a').SkipAnd(OneOf(Terms.Text("y"), inner)).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+
+        // The white space is skipped once, before the choice of Lookup() and its NoNewLineBefore are invoked
+        if (input.Contains('f'))
+        {
+            var entered = new System.Collections.Generic.List<int>();
+            var context = new ParseContext(new Scanner(input))
+            {
+                OnEnterParser = (p, c) =>
+                {
+                    if (p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal))
+                    {
+                        entered.Add(c.Scanner.Cursor.Offset);
+                    }
+                },
+            };
+
+            var result = new ParseResult<string>();
+            parser.Parse(context, ref result);
+            Assert.Equal([input.IndexOf('f')], entered);
+        }
+    }
+
+    [Theory]
+    [InlineData("a \r y", "y")]
+    [InlineData("a \n y", null)]
+    [InlineData("a \r x y", "y")]
+    [InlineData("a \n c", null)]
+    [InlineData("a \n e", "e")]
+    public void ANoNewLineBeforeAfterOneMatchingNothingShouldSeeNoWhiteSpace(string input, string? expected)
+    {
+        // The first NoNewLineBefore can match nothing, after the white space: the second one is invoked there, where it sees
+        // none, as when the alternatives skip the white space themselves
+        var parser = Literals.Char('a').SkipAnd(OneOf(
+            NoNewLineBefore(ZeroOrOne(Terms.Text("x")), "\n").And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2),
+            NoNewLineBefore(Terms.Text("c")),
+            Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Theory]
+    [InlineData(0, "a \n y", "y")]
+    [InlineData(0, "a \n x y", "y")]
+    [InlineData(1, "a \n y", "y")]
+    [InlineData(1, "a \n zz y", "y")]
+    [InlineData(1, "a \n zz \n y", null)]
+    [InlineData(0, "a \n c", null)]
+    public void ANoNewLineBeforeAfterAParserSkippingTheWhiteSpaceAndMatchingNothingShouldSeeNoWhiteSpace(int grammar, string input, string? expected)
+    {
+        // SkipWhiteSpace, or a token, skips the white space and can match nothing: the NoNewLineBefore after it sees none
+        var first = grammar == 0
+            ? SkipWhiteSpace(Literals.Text("x").Optional()).And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2)
+            : Terms.Pattern(static c => c == 'z', minSize: 0).And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2);
+        var parser = Literals.Char('a').SkipAnd(OneOf(first, NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Fact]
+    public void AChoiceShouldForgetTheWhiteSpaceItSkippedWhenAnAlternativeThrows()
+    {
+        // The second alternative throws after the choice recorded the white space: a NoNewLineBefore after SkipWhiteSpace,
+        // where it ends, sees none when the context is used again
+        var throwing = Literals.Char('a').SkipAnd(OneOf(NoNewLineBefore(Terms.Text("b")), Terms.Text("c").AndSkip(Terms.Text("d").ElseError("boom"))));
+        var skipping = Literals.Char('a').SkipAnd(SkipWhiteSpace(NoNewLineBefore(Literals.Text("c"))));
+
+        var context = new ParseContext(new Scanner("a \n c x"));
+        var result = new ParseResult<string>();
+
+        var thrown = false;
+
+        try
+        {
+            throwing.Parse(context, ref result);
+        }
+        catch (ParseException)
+        {
+            thrown = true;
+        }
+
+        Assert.True(thrown);
+
+        context.Scanner.Cursor.ResetPosition(0);
+        Assert.True(skipping.Parse(context, ref result));
+        Assert.Equal("c", result.Value);
+    }
+
+    [Fact]
+    public void AChoiceReachedAgainWhileItsWhiteSpaceIsResolvedShouldParse()
+    {
+        // The analysis of the alternatives reaches the choice again through the Lookup()
+        var expression = Deferred<string>();
+        expression.Parser = OneOf(
+            NoNewLineBefore(Terms.Text("x")),
+            expression.And(Terms.Char('+')).Then(static x => x.Item1 + "+").Lookup(skipWhiteSpace: true, 'x'));
+
+        Assert.Equal("x", expression.Parse("x"));
+        Assert.Equal("x", expression.Parse(" x"));
+    }
+
+    [Theory]
+    [InlineData("x \n ac", null)]
+    [InlineData("x ac", "ac")]
+    [InlineData("x \n ab", "ab")]
+    public void AChoiceShouldTellTheWhiteSpaceItSkippedAfterAnAlternativeWithAnotherWhiteSpaceParser(string input, string? expected)
+    {
+        // The first alternative reads "a" and fails with its own white space parser, which doesn't hide the white space the
+        // choice skipped from the second one
+        var first = Terms.Text("a").And(Terms.Text("b").WithWhiteSpaceParser(Literals.WhiteSpace())).Then(static x => x.Item1 + x.Item2);
+        var parser = Literals.Char('x').SkipAnd(OneOf(first, NoNewLineBefore(Terms.Identifier().Then(static x => x.ToString())))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Theory]
+    [InlineData("a \nb", "b")]
+    [InlineData("a \rb", null)]
+    [InlineData("a \nc", null)]
+    [InlineData("a \rc", null)]
+    [InlineData("a c", "c")]
+    [InlineData("a \n e", "e")]
+    public void NoNewLineBeforeAlternativesShouldFindTheirOwnNewLines(string input, string? expected)
+    {
+        // Each finds its new lines in the white space the choice skipped
+        var parser = Literals.Char('a').SkipAnd(OneOf(
+            NoNewLineBefore(Terms.Text("b"), "\r"),
+            NoNewLineBefore(Terms.Text("c")),
+            Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Theory]
     [InlineData("a   x")]
     [InlineData("a \n x")]
     [InlineData("a   =x")]
@@ -255,6 +470,283 @@ public class NewLineTests
         Assert.False(restricted.Parse(actual, ref result));
         Assert.Equal(0, actual.Scanner.Cursor.Offset);
         Assert.Equal(expected.Scanner.Cursor.FurthestOffset, actual.Scanner.Cursor.FurthestOffset);
+    }
+
+    // How many times a parse enters the parsers which are counted
+    private static (bool Success, T? Value, int Offset, int Furthest, int Entered) ParseCounting<T>(Parser<T> parser, string input, Func<object, bool> counted)
+    {
+        var entered = 0;
+        var context = new ParseContext(new Scanner(input)) { OnEnterParser = (p, _) => entered += counted(p) ? 1 : 0 };
+        var result = new ParseResult<T>();
+        var success = parser.Parse(context, ref result);
+
+        return (success, success ? result.Value : default, context.Scanner.Cursor.Offset, context.Scanner.Cursor.FurthestOffset, entered);
+    }
+
+    [Theory]
+    [InlineData("a", "a", 0, 0)]
+    [InlineData("a b", "a", 0, 0)]
+    [InlineData("a ; b", "a", 0, 0)]
+    [InlineData("a += b", "a+=b", 1, 0)]
+    [InlineData("a /* x */ += b", "a+=b", 1, 0)]
+    [InlineData("a = b", "a=b", 1, 0)]
+    [InlineData("a => b", "a=>b", 1, 1)]
+    [InlineData("a\n=> b", "a", 1, 1)]
+    [InlineData("a /* \n */ => b", "a", 1, 1)]
+    public void AChoiceOfTwoCompositeAlternativesBeforeTheWhiteSpaceShouldUseItsTable(string input, string expected, int assignments, int arrows)
+    {
+        // The alternatives invoke what they start with before they fail: only the ones which can start with the char after the
+        // white space are invoked, as when there are more of them (#581)
+        var assignmentOperator = OneOf(Terms.Text("="), Terms.Text("+="));
+        var assignment = assignmentOperator.And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var parser = WithComments(Terms.Identifier().And(OneOf(assignment, arrow).Else("")).Then(static x => x.Item1.ToString() + x.Item2));
+
+        var outcome = ParseCounting(parser, input, p => ReferenceEquals(p, assignment));
+        Assert.True(outcome.Success);
+        Assert.Equal(expected, outcome.Value);
+        Assert.Equal(assignments, outcome.Entered);
+        Assert.Equal(arrows, ParseCounting(parser, input, p => ReferenceEquals(p, arrow)).Entered);
+    }
+
+    [Theory]
+    [InlineData("a x", 0, 0, 0)]
+    [InlineData("a ++", 1, 0, 0)]
+    [InlineData("a --", 0, 1, 0)]
+    [InlineData("a\n--", 0, 1, 0)]
+    [InlineData("a /* x */ += b", 1, 0, 0)]
+    [InlineData("a\n=> b", 0, 0, 1)]
+    public void AChoiceOfTwoLiteralsAfterTheWhiteSpaceShouldUseItsTable(string input, int increments, int decrements, int arrows)
+    {
+        // The choice skips the white space once and tells it to its NoNewLineBefore alternatives (#582): only the ones which
+        // can start with the text after it are invoked, as for a choice which skips the white space for them
+        var increment = NoNewLineBefore(Terms.Text("++"));
+        var decrement = NoNewLineBefore(Terms.Text("--"));
+        var postfix = WithComments(Terms.Identifier().SkipAnd(OneOf(increment, decrement).Else("")));
+
+        Assert.Equal(increments, ParseCounting(postfix, input, p => ReferenceEquals(p, increment)).Entered);
+        Assert.Equal(decrements, ParseCounting(postfix, input, p => ReferenceEquals(p, decrement)).Entered);
+
+        // A text of Terms, with a NoNewLineBefore one
+        var assignment = Terms.Text("+=");
+        var arrow = NoNewLineBefore(Terms.Text("=>"));
+        var tail = WithComments(Terms.Identifier().SkipAnd(OneOf(assignment, arrow).Else("")));
+
+        Assert.Equal(arrows, ParseCounting(tail, input, p => ReferenceEquals(p, arrow)).Entered);
+        Assert.Equal(input.EndsWith("+= b", StringComparison.Ordinal), ParseCounting(tail, input, static _ => false).Value == "+=");
+    }
+
+    [Theory]
+    [InlineData("a x", 1)]
+    [InlineData("a ++", 0)]
+    [InlineData("a --", 1)]
+    [InlineData("a\n--", 1)]
+    [InlineData("a /* x */ += b", 1)]
+    public void AChoiceOfTwoLiteralsBeforeTheWhiteSpaceShouldTryThemInOrder(string input, int seconds)
+    {
+        // A NoNewLineBefore holding another one can't be told the white space: the choice invokes its alternatives before it,
+        // and trying the one which doesn't match costs about what reading the char after the white space does, so the first
+        // one is invoked whatever the char is, and the second one when the first one fails (#581)
+        var increment = NoNewLineBefore(NoNewLineBefore(Terms.Text("++")), "\r");
+        var decrement = NoNewLineBefore(Terms.Text("--"));
+        var postfix = WithComments(Terms.Identifier().SkipAnd(OneOf(increment, decrement).Else("")));
+
+        Assert.Equal(1, ParseCounting(postfix, input, p => ReferenceEquals(p, increment)).Entered);
+        Assert.Equal(seconds, ParseCounting(postfix, input, p => ReferenceEquals(p, decrement)).Entered);
+    }
+
+    [Theory]
+    [InlineData("a => b")]
+    [InlineData("a=>b")]
+    [InlineData("a += b")]
+    [InlineData("a /* x */ = b")]
+    [InlineData("a b")]
+    [InlineData("a")]
+    [InlineData("a =>")]
+    [InlineData("a = ")]
+    [InlineData("a += ;")]
+    [InlineData("a /* x */ =>")]
+    [InlineData("a  ")]
+    [InlineData("a ;")]
+    public void AChoiceOfTwoCompositeAlternativesBeforeTheWhiteSpaceShouldParseAsTheOneSkippingTheWhiteSpace(string input)
+    {
+        // Selected with its table, it parses as the choice which skips the white space once for them when there is no new line:
+        // the same values, positions and furthest failures, when it matches and when it fails
+        static Parser<string> Create(Func<Parser<string>, Parser<string>> restrict)
+        {
+            var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+            var arrow = restrict(Terms.Text("=>")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+            return WithComments(Terms.Identifier().And(OneOf(assignment, arrow)).Then(static x => x.Item1.ToString() + x.Item2).Eof());
+        }
+
+        var expected = ParseCounting(Create(static p => p), input, static _ => false);
+        var actual = ParseCounting(Create(NoNewLineBefore), input, static _ => false);
+
+        Assert.Equal(expected, actual);
+
+        if (!actual.Success)
+        {
+            Assert.Equal(0, actual.Offset);
+        }
+    }
+
+    [Theory]
+    [InlineData("a => b")]
+    [InlineData("a += b")]
+    [InlineData("a b")]
+    [InlineData("a")]
+    [InlineData("a =>")]
+    [InlineData("a = ")]
+    [InlineData("a /* x */ =>")]
+    [InlineData("a ;")]
+    [InlineData("a\n=> b")]
+    [InlineData("a\n= b")]
+    [InlineData("a /* \n */ => b")]
+    [InlineData("a /* \n */ x")]
+    [InlineData("a // c\n=>")]
+    [InlineData("a\n")]
+    public void AChoiceOfTwoCompositeAlternativesBeforeTheWhiteSpaceShouldParseAsWhenTriedInOrder(string input)
+    {
+        // The alternatives selected with the table, and the same ones invoked in order where the choice is, which a choice does
+        // when they tell no hints, as an ordered choice is defined: the same values, positions and furthest failures, new
+        // lines included
+        static Parser<string> Create(Func<Parser<string>, Parser<string>> wrap)
+        {
+            var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+            var arrow = NoNewLineBefore(Terms.Text("=>")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+            return WithComments(Terms.Identifier().And(OneOf(wrap(assignment), wrap(arrow))).Then(static x => x.Item1.ToString() + x.Item2).Eof());
+        }
+
+        var expected = ParseCounting(Create(static p => new WithoutHints<string>(p)), input, static _ => false);
+        var actual = ParseCounting(Create(static p => p), input, static _ => false);
+
+        Assert.Equal(expected, actual);
+
+        if (!actual.Success)
+        {
+            Assert.Equal(0, actual.Offset);
+        }
+    }
+
+    // A parser which tells no hints, so that a choice holding it tries it in order
+    private sealed class WithoutHints<T> : Parser<T>
+    {
+        private readonly Parser<T> _parser;
+
+        public WithoutHints(Parser<T> parser) => _parser = parser;
+
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        {
+            context.EnterParser(this);
+            var success = _parser.Parse(context, ref result);
+            context.ExitParser(this);
+            return success;
+        }
+    }
+
+    [Theory]
+    [InlineData("a x", 0, 0, 0)]
+    [InlineData("a ++", 1, 0, 1)]
+    [InlineData("a --", 0, 1, 1)]
+    [InlineData("a\n++", 1, 0, 1)]
+    public void AChoiceOfTwoConvertedLiteralsAfterTheWhiteSpaceShouldUseItsTable(string input, int increments, int decrements, int operators)
+    {
+        // A Then of a literal, as the operators of a level of Operators(), which are wrapped too: the ones which can't start
+        // with the char after the white space aren't invoked
+        var increment = NoNewLineBefore(Terms.Text("++")).Then(static _ => 1);
+        var decrement = NoNewLineBefore(Terms.Text("--")).Then(static _ => -1);
+        var postfix = WithComments(Terms.Identifier().SkipAnd(OneOf(increment, decrement).Else(0)));
+
+        Assert.Equal(increments, ParseCounting(postfix, input, p => ReferenceEquals(p, increment)).Entered);
+        Assert.Equal(decrements, ParseCounting(postfix, input, p => ReferenceEquals(p, decrement)).Entered);
+
+        // A level of postfix operators alone, tried again after one which matched
+        var table = Terms.Identifier().Then(static x => x.ToString()).Operators()
+            .Postfix((NoNewLineBefore(Terms.Text("++")), static x => x + "++"), (NoNewLineBefore(Terms.Text("--")), static x => x + "--"));
+        var outcome = ParseCounting(WithComments(table), input, static p => p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal));
+
+        Assert.True(outcome.Success);
+        Assert.Equal(operators, outcome.Entered);
+    }
+
+    [Theory]
+    [InlineData("a ;", 0, 0)]
+    [InlineData("a of", 0, 1)]
+    [InlineData("a in", 1, 1)]
+    [InlineData("a 12", 0, 0)]
+    [InlineData("a\nb", 0, 1)]
+    public void AChoiceOfTwoTokensAfterTheWhiteSpaceShouldUseItsTable(string input, int keywords, int names)
+    {
+        // Keywords, identifiers and numbers: the NoNewLineBefore one is only invoked before a char it can start with
+        var inKeyword = NoNewLineBefore(Terms.Keyword("in"));
+        var keyword = WithComments(Terms.Identifier().SkipAnd(OneOf(inKeyword, Terms.Keyword("of")).Else("")));
+        Assert.Equal(keywords, ParseCounting(keyword, input, p => ReferenceEquals(p, inKeyword)).Entered);
+
+        var name = NoNewLineBefore(Terms.Identifier()).Then(static x => x.ToString());
+        var token = WithComments(Terms.Identifier().SkipAnd(OneOf(name, Terms.Integer().Then(static x => x.ToString())).Else("")));
+        Assert.Equal(names, ParseCounting(token, input, p => ReferenceEquals(p, name)).Entered);
+    }
+
+    [Theory]
+    [InlineData("a ;", 0)]
+    [InlineData("a\n;", 0)]
+    [InlineData("a +=", 1)]
+    [InlineData("a ++", 1)]
+    [InlineData("a\n++", 1)]
+    public void AChoiceOfTwoWrappedTokensAfterTheWhiteSpaceShouldUseItsTable(string input, int increments)
+    {
+        // The wrappers of a token which only invoke it tell its hints: the first alternative is only invoked before a char it
+        // can start with
+        static void AssertEntered<T>(Parser<T> first, Parser<T> second, string input, int entered)
+        {
+            var parser = WithComments(Terms.Identifier().SkipAnd(OneOf(first, second).Then(static _ => "").Else("")));
+            Assert.Equal(entered, ParseCounting(parser, input, p => ReferenceEquals(p, first)).Entered);
+        }
+
+        var arrow = NoNewLineBefore(Terms.Text("=>"));
+
+        AssertEntered(NoNewLineBefore(Terms.Text("++")).Warning("postfix"), arrow, input, increments);
+    }
+
+    [Fact]
+    public void AChoiceOfTwoCompositeAlternativesShouldInvokeFewerParsersThanOneAlternativePerOperator()
+    {
+        // The tail of a JavaScript conditional expression: an assignment operator and its operand, or an arrow which can't follow
+        // a new line. Most expressions have no tail, and the choice of two alternatives invokes none for them, like the choice of
+        // an alternative per operator (#581).
+        string[] operators = ["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", ">>>=", "&=", "|=", "^=", "**=", "&&=", "||=", "??="];
+
+        var value = Terms.Identifier().Then(static x => x.ToString());
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(value).Then(static x => "=>" + x);
+
+        var assignmentOperator = OneOf(operators.Select(static o => Terms.Text(o)).ToArray());
+        var twoAlternatives = OneOf(assignmentOperator.And(value).Then(static x => x.Item1 + x.Item2), arrow);
+
+        var perOperator = OneOf(operators.Select(o => Terms.Text(o).SkipAnd(value).Then(x => o + x)).Append(arrow).ToArray());
+
+        static Parser<string> Statements(Parser<string> tail)
+            => ZeroOrMany(Terms.Identifier().And(tail.Else("")).Then(static x => x.Item1.ToString() + x.Item2).AndSkip(Terms.Char(';')))
+                .Eof().Then(static x => string.Join("|", x));
+
+        var input = string.Concat(Enumerable.Range(0, 50).Select(static i => (i % 5) switch
+        {
+            0 => "a = b;",
+            1 => "c => d;\n",
+            2 => "e >>>= f;",
+            _ => "g;\n",
+        })).TrimEnd();
+
+        var two = ParseCounting(Statements(twoAlternatives), input, static _ => true);
+        var per = ParseCounting(Statements(perOperator), input, static _ => true);
+
+        Assert.True(two.Success);
+        Assert.True(per.Success);
+        Assert.Equal(per.Value, two.Value);
+
+        // The sequence of the operators and their operand is invoked for each assignment, and its choice selects the operator
+        // with its table, rather than the operators being tried one by one. When the two alternatives were tried in order, the
+        // sequence and the arrow were invoked for every statement: more parsers than with an alternative per operator.
+        Assert.True(two.Entered < per.Entered, $"{two.Entered} parsers invoked, {per.Entered} with an alternative per operator");
     }
 
     [Theory]

@@ -53,7 +53,8 @@ instead of overflowing the stack. The parsers which can't be invoked again where
 
 ## Reporting where a parse failed
 
-A parse that fails without an error leaves `TryParse` with a `null` error and the cursor where it started. The most
+A parse that fails without an error leaves `TryParse` with a `null` error and the cursor where it started, unless a
+reason was recorded where it failed (see [Why it failed there](#why-it-failed-there)): the error then has a `Reason`. The most
 useful position is then the *furthest failure*: where the attempt which matched the most text stopped. The cursor keeps
 it in `Cursor.FurthestOffset`, and `Cursor.FurthestPosition` adds its line and column, computed when it is read:
 
@@ -85,6 +86,97 @@ furthest failure as the one of the `string`.
 
 The parsers move the cursor back when they fail after reading, and the cursor keeps the furthest offset it was moved back
 from on that path only: it doesn't change the time of a successful parse.
+
+### Why it failed there
+
+A parser which rejects what it read can say why, with a reason it records with the failure: `When(predicate, reason)`,
+`ThenTry(conversion, reason)`, `Not(parser, reason)` and `WhenNotFollowedBy(lookahead, reason)`. Unlike `ElseError`,
+which stops the parse at the first rejection, the parse goes on: another alternative can still match, and the reason is
+only reported when the parse failed where it was recorded. `TryParse(..., out ParseError error)` then returns an error
+whose `Reason` is the reason, `Position` the furthest failure, and `Message` the reason when it is a `string`, its text
+otherwise. `Cursor.FurthestReason` is the same reason, `null` when there is none:
+
+```csharp
+var number = Terms.Integer().WhenNotFollowedBy(Literals.Identifier(), "An identifier can't follow a number");
+var word = Terms.Identifier().When(static (_, value) => !value.Span.SequenceEqual("in".AsSpan()), "'in' is reserved");
+var statement = number.Then(static value => value.ToString()).Or(word.Then(static value => value.ToString()))
+    .AndSkip(Terms.Char(';'));
+
+statement.TryParse("3in;", out _, out var error);  // An identifier can't follow a number, at 1
+statement.TryParse("in;", out _, out error);       // 'in' is reserved, at 0
+statement.TryParse("word", out _, out error);      // null: the ';' expected at 4 has no reason
+```
+
+- The reason is a constant, like a message or an `enum` value boxed once in a static field, so that a rejection allocates
+  nothing. A source-generated parser takes a `string`, an `enum` value, an integer, a `bool` or a `char`, which it holds
+  in a literal or a static field of its own: compare reasons with `Equals`, not by reference.
+- A conversion which rejects values for different reasons records its own with
+  `context.Scanner.Cursor.RecordFailure(offset, reason)` before it returns `false`, at the start of the value (the
+  `start` argument of a `ThenTry` callback) or of the part of it which is wrong, like the digit `8` of an octal number.
+  `ThenTry` records the failure of a rejected value where it starts, after the white space its parser skips: a parser
+  which reads that white space, like a `Capture`, passes a `start` before it, where a reason would be hidden.
+  `ParseError.Reason` holds the reason, `TryParse(text, out value)` doesn't build the error.
+- A further failure without a reason hides it: the reason is reported only while it is at `FurthestOffset`.
+- The first reason recorded at an offset is kept: the alternatives which are tried first are the more specific ones. It
+  is kept over the reason of a parser around them too, like a `When` rejecting at the same offset the value of a choice
+  whose first alternative was rejected there with a reason: give the reasons to one of them.
+- A lookahead (`Not`, `WhenFollowedBy`, `Peek`, `WhenNotFollowedBy`) forgets a reason its parser recorded further than
+  the failure recorded before it, like it forgets that failure. The cursor keeps a single reason, so that nothing is
+  saved when a lookahead starts: a reason its parser recorded where that failure already was is kept, and a reason
+  recorded before the lookahead is forgotten when its parser records one further. Rejections with a reason inside a
+  lookahead are best avoided: give the reason to the lookahead, like `Not(parser, reason)`, instead. `AsToken` forgets the
+  reasons its parser recorded too, like its failures: give the reason to a parser around the token.
+- An `Error` or `ElseError` which stops the parse is reported instead, with a `null` `Reason`. With
+  `CollectDiagnostics`, the error of `TryParse` is only a fatal one: read the reason from `Cursor.FurthestReason`.
+
+Source-generated parsers return the reason in their failure tuple, see
+[Failure position](source-generation.md#failure-position). Recording a reason costs a compare and two stores, on the
+failure path of the parsers which have one. Otherwise the reason costs a compare where a lookahead forgets the failures
+its parser recorded, and two fields of the cursor.
+
+## Lines and columns
+
+A position is an offset with its line and column, which start at 1. The cursor only tracks the offset as it moves: the
+line and column of `Cursor.Position`, `Cursor.FurthestPosition`, the errors of a parse and `Cursor.GetPosition(offset)` are
+counted from the text when they are requested. `GetPosition` takes any absolute offset, like the ones a
+`Then((context, start, end, value) => ...)` callback receives, such that a parser building an AST with locations asks for the
+start and the end of each node:
+
+```csharp
+var identifier = Terms.Identifier().Then(static (context, start, end, name) =>
+{
+    var cursor = context.Scanner.Cursor;
+    return new Identifier(name.ToString(), cursor.GetPosition(start), cursor.GetPosition(end));
+});
+```
+
+The offsets can be requested in any order. The cursor keeps the position of the furthest offset requested: a request after
+it counts the lines between them, and one behind it, like the start of a node whose end was just located, counts them from
+the closest position known, vectorized on .NET 8 and later. When the text counted for those requests exceeds a multiple
+of the text whose lines aren't recorded, as with deeply nested nodes or requests in a random order, the cursor records
+the start of each line up to the furthest position, and the position of an offset counted over is then a binary search:
+a parse reads its text a bounded number of times to count its lines, whatever the order of the requests. A parse of a string which requests no
+positions counts no lines, and one which requests a single position near its start allocates nothing for it; a further
+request, or a first one far from the start, allocates the small object that keeps the furthest position. A stream counts
+the lines of the text it drops from its buffer, as before.
+
+A line ends at `\n` by default, every other char, `\r` included, occupying a column. `ParseContext.NewLines` (or
+`Cursor.NewLines`) sets the chars which end a line, as a string like the other APIs which take new lines. When both `\r`
+and `\n` are in it, `\r\n` ends a single line, and an offset between them is on the line they end:
+
+```csharp
+// The line terminators of JavaScript; C# also ends lines at U+0085
+var context = new ParseContext(new Scanner(text)) { NewLines = "\n\r\u2028\u2029" };
+```
+
+They only change how positions are counted, not what the parsers read: [`UseNewLines`](#withwhitespaceset) and the white
+space parsers select the new lines a grammar skips. For a `TextReader`, set them in `StreamParseOptions.ContextFactory`; a
+source-generated parser sets them with `[GenerateParser(..., NewLines = "...")]`, see
+[Failure position](source-generation.md#failure-position).
+
+The offsets before the initial position of a cursor created with one, `new Scanner(text, position, isFinal)`, are counted
+backward from it each time they are requested, the start of the text starting a line. In compacting mode, the text dropped
+from the buffer can't be counted: an offset in it gets the line of the first buffered char.
 
 ## Collecting diagnostics without stopping
 
@@ -753,7 +845,7 @@ Code points above U+FFFF decode to surrogate pairs. A sequence a flag claims but
 `StringEscapes.EscapedQuote | StringEscapes.Quotes | StringEscapes.NewLineAndTab | StringEscapes.Null | StringEscapes.TwoDigitHex | StringEscapes.BracedUnicode | StringEscapes.LineContinuation`
 (except that Rust also skips the white space after a line continuation), and a JavaScript template literal, which can span
 lines, is `StringEscapes.JavaScript & ~StringEscapes.SingleLine` with `StringLiteralQuotes.Backtick` (without its `${}`
-substitutions). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
+substitutions, which [Interpolated](#interpolated) reads). The escape char is always a backslash: a language with another one, like PowerShell's backtick, needs its
 own parser. To get the raw text of a literal as well, as a JavaScript AST does, read its offsets in a
 `Then(static (context, start, end, value) => ...)` callback, or wrap the string parser in `Capture()` for the raw text only.
 
@@ -771,6 +863,60 @@ parser.Parse("'a\\nb'"); // a\nb, the backslash and the `n` are kept
 
 var javaScript = Terms.String(StringLiteralQuotes.SingleOrDouble, StringEscapes.JavaScript, returnDecoded: false);
 ```
+
+### Interpolated
+
+Matches an interpolated text, like a JavaScript template literal (`` `a${x}b` ``), a C# interpolated string (`$"a{x}b"`)
+or a string template: a text between two delimiters, with escapes, and holes between two other delimiters whose values a
+parser reads.
+
+```c#
+Parser<Interpolation<T>> Interpolated<T>(string open, string close, string holeOpen, string holeClose, Parser<T> hole,
+    InterpolationOptions options = InterpolationOptions.None, char escape = '\\')
+```
+
+Usage:
+
+```c#
+var expression = Deferred<Expression>();
+
+// The holes of a template hold expressions, which can be templates too
+var template = Terms.Interpolated("`", "`", "${", "}", expression);
+
+expression.Parser = OneOf(template.Then<Expression>(static x => new Template(x)), /* ... */);
+```
+
+The value is an `Interpolation<T>`:
+
+- `Chunks` is the raw text between the delimiters and the holes, as `TextSpan`s of the input, one more than the holes:
+  `Chunks[i]` is the text before `Holes[i]`, and the last chunk the text after the last hole. A chunk can be empty, so
+  `` `${a}${b}` `` has three empty chunks.
+- `Holes` are the values `hole` read, in the order of the text.
+
+`Chunks` and `Holes` are lists (`IReadOnlyList<T>`) without allocations of their own: a text without a hole keeps its
+chunk in the value, and a text with holes keeps each hole with the chunk before it in a single array.
+
+A chunk ends at the first `close` or `holeOpen`. The `escape` char skips the char after it, whatever it is, so `` \` ``
+and `\${` are text; `'\0'` is no escape char. The escape sequences aren't decoded: the chunks are the raw text, which a
+grammar decodes with its own escapes, and a JavaScript grammar keeps for the raw strings of tagged templates. A first
+char of `holeOpen` which isn't followed by the rest of it is text, like the `$` of `` `a$b` ``. The chunks are found
+with a vectorized search of the chars they can end at, not by invoking a parser for each char or run of chars.
+
+After the value of a hole, the white space is skipped before `holeClose`, as a `Terms` parser does, unless `options`
+holds `InterpolationOptions.NoWhiteSpaceBeforeHoleClose`, which a `holeClose` that starts with white space, or with a
+comment of the context, needs (one that starts with a space or a tab is rejected without it). With `InterpolationOptions.NoNewLines`, a chunk can't hold
+`'\n'` or `'\r'`, even after the escape char, as in a regular C# interpolated string. `Terms.Interpolated` skips the white
+space before `open`, `Literals.Interpolated` doesn't.
+
+The parser fails, with the cursor where it was, when the text ends before `close`, when a hole doesn't match or isn't
+followed by `holeClose`, or at a new line with `NoNewLines`. `close` and `holeOpen` can't start with one another, nor with
+the escape char. Doubled delimiters, like `{{` and `}}` in C#, aren't escapes: parse the chunks of such a language with
+a `holeOpen` that a choice tells apart, or with its own parser.
+
+A choice dispatches to the parser on the first char of `open`, and tells it from the other alternatives by the whole
+`open` text. When parsing a stream, the delimiters and each chunk are tokens, and a chunk is buffered while it is read;
+the holes aren't, and the parser doesn't pin its start, so a template doesn't need to fit in the buffer unless a parser
+which invokes it does, like a choice which can try another alternative.
 
 ### Identifier
 
@@ -1445,6 +1591,26 @@ hello // failure
 null // success
 ```
 
+`Not` doesn't invoke its parser where the current char, after the white space the parser skips, is one the parser
+can't start with (from its `ISeekable` hints): it succeeds at once. A sequence which starts with `Not`, like
+`Not(reserved).SkipAnd(expression)`, has the hints of both parsers, so a choice holding it keeps its lookup table:
+the chars of the parser which follows, where the sequence can match, and those of the parser of `Not`, which is invoked
+first and could fail with an error there. This writes the lookahead restrictions of a specification as it states them,
+like ECMAScript's `[lookahead ∉ { {, function, class }] Expression`:
+
+```c#
+var expressionStatement = Not(OneOf(Terms.Text("{"), Terms.Keyword("function"), Terms.Keyword("class")))
+    .SkipAnd(expression)
+    .AndSkip(Terms.Char(';'));
+
+// The choice only tries the expression statement for the chars an expression or a reserved word can start with
+var statement = OneOf(block, functionDeclaration, classDeclaration, expressionStatement);
+```
+
+The hints are only kept when both parsers tell them and skip white space the same way: a choice whose alternatives all
+skip white space skips it before invoking them, which would change what `Not` sees. `Not(Literals.Char('a'))
+.SkipAnd(Terms.Identifier())` has no hints.
+
 ### Peek
 
 Succeeds with the value of a parser when it matches, without consuming any input. This is the positive lookahead
@@ -1475,6 +1641,9 @@ Result:
 failure
 ```
 
+A sequence which starts with `Peek` has the hints of its parser, which is invoked first, unless that parser skips white
+space and the one which follows doesn't.
+
 The result starts and ends where the parser was invoked. When the parser fails, `Peek` fails and the cursor is where it
 was. `Peek` tells the chars its parser can start with, so a choice only tries it for these chars. In a choice whose
 alternatives all skip white space, like `semicolon` above, the choice skips the white space once before trying them, so
@@ -1500,6 +1669,9 @@ Parser<IReadOnlyList<T>> Separated<U, T>(
 Parser<IReadOnlyList<T>> Separated<U, T>(
     Parser<U> separator, Parser<T> parser, int min, int max,
     bool removeEmptyEntries, bool allowLeadingSeparator, bool allowTrailingSeparator)
+Parser<IReadOnlyList<T>> Separated<U, T>(
+    Parser<U> separator, Parser<T> parser, Parser<T> last,
+    int min = 0, bool allowTrailingSeparator = false, bool removeEmptyEntries = false)
 ```
 
 Usage:
@@ -1559,6 +1731,31 @@ parser.Parse("");      // [""]
 With `removeEmptyEntries`, `allowLeadingSeparator` or `allowTrailingSeparator`, a value
 that matches without consuming input is an empty entry instead, wherever it is: a leading
 separator is then skipped without recording a value for the omitted part.
+
+#### A last element
+
+A list can end with an element of another kind, which no separator follows, like the rest element of JavaScript's
+parameters `(a, b, ...rest)` and patterns `[a, , ...rest]`, or Python's `*args, **kwargs`. Pass it as `last`:
+
+```c#
+var name = Terms.Identifier().Then(static x => x.ToString());
+var rest = Terms.Text("...").SkipAnd(Terms.Identifier()).Then(static x => "..." + x);
+var parameters = Separated(Terms.Char(','), name, rest);
+
+parameters.Parse("a, b, ...r");  // ["a", "b", "...r"]
+parameters.Parse("...r");        // ["...r"]
+parameters.Parse("");            // []
+parameters.Parse("a, ...r, b");  // ["a", "...r"], the cursor is after "...r"
+```
+
+- `last` is tried where a value would be, where the list starts and after each separator, when `parser` doesn't match.
+  It ends the list: no separator is consumed after it, so that `, b` above is left to the next parser.
+- The list holds the values and the last element, without a copy. `min` counts them both, and its default, zero, accepts
+  an empty list.
+- `allowTrailingSeparator` consumes a separator after the last value of `parser` (`a, b,`), never after `last`.
+- `removeEmptyEntries` skips successive separators, before `last` too (`a, , ...r`). A separator can't lead the list.
+- An element is only found when it reads text: an element that matches without consuming input isn't a value, and
+  `last` is then tried.
 
 ### Between
 
@@ -1709,7 +1906,8 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 `Default` is the Unicode `White_Space` property: the chars `char.IsWhiteSpace` and the `\s` of .NET regular expressions accept.
 Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
 U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLines` is set. Positions only start a new line at
-`\n`, so like `\r` and `\v` these count as a column, and single line comments end at `\n` only, unless
+`\n` unless [`ParseContext.NewLines`](#lines-and-columns) lists other line terminators, so like `\r` and `\v` these count
+as a column by default, and single line comments end at `\n` only, unless
 [`WithSingleLine(start, lineTerminators)`](#withcomments) lists their terminators. A grammar whose white space no set
 describes, like JavaScript's with U+FEFF and without U+0085, lists its chars with
 [`WithWhiteSpace(whiteSpace, newLines)`](#withcomments).
@@ -1816,8 +2014,10 @@ parser.Parse("hello /* multiline\n comment\n */ world");
 | `WithWhiteSpace(whiteSpace, newLines)` | the chars of `whiteSpace` and of `newLines`, instead of the context's `WhiteSpaceSet` |
 | `WithSingleLine(start)` | from `start` to the end of the line, before `"\r\n"` or `"\n"`, or to the end of the text |
 | `WithSingleLine(start, lineTerminators)` | from `start` to the first of the chars of `lineTerminators`, or to the end of the text |
+| `WithSingleLine(start, lineTerminators, placement)` | the same, starting where `placement` says: anywhere, or at the start of a line only |
 | `WithMultiLine(start, end)` | from `start` to `end` included |
 | `WithMultiLine(start, end, unterminated)` | from `start` to `end` included, and a comment without its end as `unterminated` says |
+| `WithMultiLine(start, end, unterminated, lineTerminators)` | the same, and a comment contains a new line when it contains one of the chars of `lineTerminators` |
 | `WithParser(parser)` | what `parser` matches |
 
 Without white space, only the comments are skipped. The line terminators are not part of a single line comment: they are
@@ -1847,8 +2047,8 @@ var parser = grammar.WithComments(builder => builder
 
 Both sets of chars are skipped, tested with a table built once, so this costs about the same as the white space of a set. As
 with the new lines of a set, those of `newLines`, which can be empty, are not skipped when `UseNewLines` is set; a char of both
-is white space. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`. The line of
-`Cursor.Position` still counts the `\n` chars only.
+is white space. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`, and to
+[`ParseContext.NewLines`](#lines-and-columns) for the lines of the positions, which count the `\n` chars only by default.
 
 A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
 start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, in which case the comment is not skipped.
@@ -1869,6 +2069,44 @@ var tokens = ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1))
 tokens.Parse("a /* b */ c"); // a, c
 tokens.Parse("a /* b");      // a, /, *, b
 ```
+
+#### Comments at the start of a line
+
+`WithSingleLine(start, lineTerminators, CommentPlacement.LineStart)` describes a single line comment which only starts at
+the start of a line: when the white space and comments skipped before it, since the skip started, contain a new line, or
+when the skip started at the start of the input or after a new line. The skip starts a line after:
+
+- a new line of the white space: the new lines of `WithWhiteSpace(whiteSpace, newLines)`, which are not white space when
+  `UseNewLines` is set, or of the context's `WhiteSpaceSet` with `WithWhiteSpaceOrNewLine()`, which skips them even then. The
+  new line which ends a single line comment is one of them;
+- a multi line comment containing a new line: one of the chars of `WithMultiLine(start, end, unterminated,
+  lineTerminators)`, or for the other overloads a new line of the white space: one of the chars of `newLines` with
+  `WithWhiteSpace(whiteSpace, newLines)`, which can be none, or of the context's set otherwise.
+
+Elsewhere its start is not a comment, like a start which doesn't match: the cursor stays before it, and the comments added
+after it can start there. JavaScript scripts (ECMAScript Annex B.1.1) have such a comment, `-->`, besides `<!--`, which starts
+one anywhere:
+
+```c#
+var parser = script.WithComments(builder => builder
+    .WithWhiteSpace(whiteSpace, lineTerminators)
+    .WithSingleLine("//", lineTerminators)
+    .WithSingleLine("<!--", lineTerminators)
+    .WithSingleLine("-->", lineTerminators, CommentPlacement.LineStart)
+    .WithMultiLine("/*", "*/", UnterminatedComment.Throw, lineTerminators));
+
+parser.Parse("x = 1 /*\n*/ --> comment"); // x = 1
+parser.Parse("x = a --> b");               // x = a-- > b
+```
+
+A skip which starts after a new line starts a line too: one which a grammar reading the new lines as tokens read, with
+`UseNewLines`, or which `ParseManyAsync` skipped before a value, or the delimiter of a delimited text. The driver skips the
+white space of the context's set between the values, before the value skips its comments: a value after a new line and
+white space, which the driver skipped, doesn't start a line. Set the comments as the `WhiteSpaceParser` of the
+`ContextFactory` for the driver to skip them between the values, as `Parse` does.
+
+The hints of the parser are the same, the first char of the comment among them. Only `CommentsParser` tracks where a line
+starts: `Build()` throws an `InvalidOperationException` when the builder would compose the parsers of its elements instead.
 
 The builder builds a single parser, `CommentsParser`, which skips the white space and the comments in a loop: before each
 token, a `Terms` parser invokes that parser only, which reads the text directly. Its `ISeekable` hints are the chars of the
@@ -1929,11 +2167,11 @@ On failure the cursor is back before the white space. When there is no white spa
 directly, and the white space is only searched when it was skipped, with a vectorized search on .NET 8 and later.
 
 `NoNewLineBefore` has the lookup hints of its parser and skips white space, so it can be an alternative of a choice whose
-other alternatives skip white space, and the choice keeps its lookup table. Such a choice usually skips the white space once
-before invoking its alternatives, which would hide the new line: when one of them can start with a `NoNewLineBefore`, it
-selects them with the char after the white space and invokes them before it instead. It works the same through sequences,
-conversions and nested choices, and for the operators of an [operator table](#operator-tables), which are tried through a
-choice:
+other alternatives skip white space, and the choice keeps its lookup table. Such a choice skips the white space once before
+invoking its alternatives, which would hide the new line: when one of them can start with a `NoNewLineBefore`, the choice
+records the white space it skipped, and the `NoNewLineBefore` looks for the new line in it. It works the same through
+sequences, conversions and nested choices, and for the operators of an [operator table](#operator-tables), which are tried
+through a choice:
 
 ```c#
 // The arrow can't follow a new line, an assignment can
@@ -1947,9 +2185,18 @@ var unary = member.Operators()
     .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)), (Terms.Char('-'), static (a, b) => new Subtract(a, b)));
 ```
 
-The alternatives of such a choice skip the white space themselves, from the cache of the context, which costs a little
-more than one skip for all of them. A choice of two alternatives tries them in order instead: reading the char after the
-white space would cost about what trying the one which doesn't match does. A `Longest` holding a `NoNewLineBefore` alternative tries all its alternatives. A
+Only a `NoNewLineBefore` which the alternative invokes before anything else skips white space finds the white space of the
+choice. When an alternative can skip white space or match nothing before a `NoNewLineBefore`, like
+`SkipWhiteSpace(NoNewLineBefore(p))` or `ZeroOrOne(a).And(NoNewLineBefore(p))`, or a `NoNewLineBefore` holding another
+one, the choice selects the alternatives with the char after the white space and invokes them before it instead, and they
+skip the white space themselves, from the cache of the context. So does a choice reading a `TextReader` whose
+`NoNewLineBefore` alternatives look for different new lines: it would keep the white space buffered while they are read.
+A choice of two such alternatives which each invoke no other parser than literals (a text, a char, a keyword, an
+identifier, a number... of `Terms`, and the parsers which only wrap them or a choice of them, like `NoNewLineBefore`,
+`Then`, `Capture` or `AsToken`) tries them in order: reading the char after the white space would cost about what trying the
+one which doesn't match does. Other alternatives invoke what they start with before they fail, and are selected with the
+char after the white space however many they are. A `Longest` holding a `NoNewLineBefore` alternative tries all its
+alternatives. A
 parser type of the application which invokes a `NoNewLineBefore` isn't looked into: when it tells that it skips white
 space, a choice holding it skips the white space before it, and the new line isn't found. Make the choice hold the
 `NoNewLineBefore` rather than the parser invoking it.

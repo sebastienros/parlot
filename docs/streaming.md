@@ -44,6 +44,7 @@ discarding it.
 ### Tokens
 
 The parsers which read the cursor directly, such as literals, identifiers, numbers, strings or patterns, are *tokens*.
+`Interpolated` reads its delimiters and each chunk of its text as tokens, and its holes with their own parsers.
 In compacting mode they run through `ParseContext.ParseToken`:
 
 1. the token parses the current window, which isn't final: the `Cursor` records in `HitEnd` that the token read its end;
@@ -56,7 +57,9 @@ Between tokens the cursor is never at the end of a non-final window: white space
 needed, and a custom `ParseContext.WhiteSpaceParser`, which can parse comments, runs as a token. It isn't invoked before a
 char it can't start with (see [WithWhiteSpaceParser](parsers.md#withwhitespaceparser)), but it always is at the end of the
 buffer, the NUL of `Cursor.Current`, to refill it. `NoNewLineBefore` and `NewLineAhead` read the
-white space they search for a new line as a token too, so it stays buffered while it's searched.
+white space they search for a new line as a token too, so it stays buffered while it's searched. A choice which skips the
+white space once for the `NoNewLineBefore` alternatives it holds reads it the same way, and tells them whether it contains
+a new line.
 
 ### Backtrack floor and pins
 
@@ -67,7 +70,7 @@ The parsers which move back to read again keep their position with `ParseContext
 
 | Parser | Pinned text |
 |---|---|
-| `OneOf` (`Or`, `|`) | The start of the choice while alternatives remain to be tried. With a lookup table (see `ISeekable`), the next char selects the alternatives first, so an exclusive choice, like the JSON values, pins nothing. |
+| `OneOf` (`Or`, `|`) | The start of the choice while alternatives remain to be tried. With a lookup table (see `ISeekable`), the next char selects the alternatives first, so an exclusive choice, like the JSON values, pins nothing. A choice which skips the white space once for its `NoNewLineBefore` alternatives searches it for them as a token and pins nothing more; when they look for different new lines, it invokes them before the white space instead. |
 | `Longest` | The start of the choice while its alternatives are tried, until the cursor moves to the end of the longest match. The next char selects the alternatives first, like for `OneOf`, and a single one pins nothing. |
 | `Optional`, `ZeroOrOne`, `Else`, `Not`, `Peek`, `WhenFollowedBy`, `WhenNotFollowedBy` | Their start, while their parser runs. |
 | `ZeroOrMany`, `OneOrMany`, `Separated` | The start of the current element only: a root array or list streams. |

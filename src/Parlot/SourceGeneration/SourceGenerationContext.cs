@@ -398,6 +398,42 @@ public sealed class SourceGenerationContext
     internal string GetCharSetField(string chars)
         => GetSharedField(chars, "private static readonly global::Parlot.CharSet", $"new global::Parlot.CharSet({EscapedLiteral(chars)}.AsSpan())");
 
+    /// <summary>
+    /// Returns the argument which passes a reason a parser records with a failure after the others, see
+    /// <see cref="Cursor.RecordFailure(int, object)"/>: <c>", reason"</c>, or nothing when there is no reason. The reason is
+    /// a string literal, or a static field holding the boxed value of an <see langword="enum"/>, an integer, a
+    /// <see langword="bool"/> or a <see langword="char"/>, so that the generated code allocates nothing when it records it.
+    /// A floating-point number isn't a constant to compare with.
+    /// </summary>
+    /// <exception cref="NotSupportedException">The reason is of another type.</exception>
+    internal string ReasonArgument(object? reason)
+    {
+        if (reason is null)
+        {
+            return "";
+        }
+
+        if (reason is string text)
+        {
+            return $", {LiteralHelper.StringToLiteral(text)}";
+        }
+
+        // A small integer is cast, so that the field holds a value of the type of the reason, like at runtime
+        var literal = reason switch
+        {
+            Enum or int or uint or long or ulong or bool or char => LiteralHelper.ToLiteral(reason),
+            byte or sbyte or short or ushort => $"({SourceGenerationContext.GetTypeName(reason.GetType())})({LiteralHelper.ToLiteral(reason)})",
+            _ => null,
+        };
+
+        if (literal is null)
+        {
+            throw new NotSupportedException($"A reason of type '{reason.GetType()}' can't be generated: use a string, an enum value, an integer, a bool or a char.");
+        }
+
+        return $", {GetSharedField(reason, "private static readonly object", $"({literal})")}";
+    }
+
     // A string literal with \uXXXX for every char which isn't printable ASCII
     private static string EscapedLiteral(string chars)
     {
@@ -418,14 +454,41 @@ public sealed class SourceGenerationContext
         return builder.Append('"').ToString();
     }
 
-    private string GetSharedField(object owner, string declaration, string initializer)
-    {
-        _sharedFields ??= new Dictionary<object, string>(ReferenceComparer.Instance);
+    /// <summary>
+    /// Returns the name of the static field holding a <c>SearchValues&lt;char&gt;</c> of <paramref name="chars"/>, declared on
+    /// .NET 8 and later only, registering it the first time for <paramref name="owner"/>, whatever the number of times its
+    /// code is generated.
+    /// </summary>
+    internal string GetSearchValuesField(object owner, string chars)
+        => GetSharedField(ref _searchValuesFields, owner, "private static readonly global::System.Buffers.SearchValues<char>",
+            $"global::System.Buffers.SearchValues.Create({LiteralHelper.StringToLiteral(chars)})", condition: "NET8_0_OR_GREATER");
 
-        if (!_sharedFields.TryGetValue(owner, out var fieldName))
+    // The SearchValues fields, by the object they are generated for, apart from the other fields of the same object
+    private Dictionary<object, string>? _searchValuesFields;
+
+    private string GetSharedField(object owner, string declaration, string initializer)
+        => GetSharedField(ref _sharedFields, owner, declaration, initializer, condition: null);
+
+    // The field is declared under #if condition when there is one
+    private string GetSharedField(ref Dictionary<object, string>? fields, object owner, string declaration, string initializer, string? condition)
+    {
+        fields ??= new Dictionary<object, string>(ReferenceComparer.Instance);
+
+        if (!fields.TryGetValue(owner, out var fieldName))
         {
+            if (condition is not null)
+            {
+                StaticFields.Add("#if " + condition);
+            }
+
             fieldName = RegisterStaticField(declaration, initializer);
-            _sharedFields[owner] = fieldName;
+
+            if (condition is not null)
+            {
+                StaticFields.Add("#endif");
+            }
+
+            fields[owner] = fieldName;
         }
 
         return fieldName;

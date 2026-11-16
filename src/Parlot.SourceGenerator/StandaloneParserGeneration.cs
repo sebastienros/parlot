@@ -51,6 +51,25 @@ public sealed partial class ParserSourceGenerator
             IsReader = isReader;
             CollectsDiagnostics = collectsDiagnostics;
             Failure = failure;
+
+            // The named arguments of the factory's attribute, read once
+            foreach (var argument in factory.Method.GetAttributes()
+                .FirstOrDefault(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")?.NamedArguments
+                ?? ImmutableArray<KeyValuePair<string, TypedConstant>>.Empty)
+            {
+                switch (argument.Key)
+                {
+                    case "MaxRecursionDepth" when argument.Value.Value is int maxRecursionDepth:
+                        MaxRecursionDepth = maxRecursionDepth;
+                        break;
+                    case "Diagnostics" when argument.Value.Value is true:
+                        _diagnostics = true;
+                        break;
+                    case "NewLines" when argument.Value.Value is string newLines:
+                        NewLines = newLines;
+                        break;
+                }
+            }
         }
 
         public IMethodSymbol Method { get; }
@@ -71,17 +90,16 @@ public sealed partial class ParserSourceGenerator
         private int TrailingOutputs => CollectsDiagnostics || Failure != FailureOutput.None ? 1 : 0;
 
         // The Parser Explorer traces the entry points whose result is the last parameter
-        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && Factory.Method.GetAttributes().Any(static attribute =>
-            attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
-            attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
+        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && _diagnostics;
+
+        // Whether the factory's attribute asks for the diagnostics
+        private readonly bool _diagnostics;
 
         // The recursion limit of the factory's attribute, 0 for none
-        public int MaxRecursionDepth => Factory.Method.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
-            .SelectMany(static attribute => attribute.NamedArguments)
-            .Where(static argument => argument.Key == "MaxRecursionDepth" && argument.Value.Value is int)
-            .Select(static argument => (int)argument.Value.Value!)
-            .FirstOrDefault();
+        public int MaxRecursionDepth { get; }
+
+        // The line terminators of the factory's attribute, null for the default "\n"
+        public string? NewLines { get; }
 
         public MethodToGenerate Factory { get; }
         public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - 1 - TrailingOutputs];
@@ -103,22 +121,25 @@ public sealed partial class ParserSourceGenerator
         public List<Diagnostic> GrammarDiagnostics { get; } = [];
     }
 
-    // What an entry point returns of the furthest failure
+    // What an entry point returns of the furthest failure: the offset, or the position, and in a tuple after them the
+    // reason recorded there and whether the input is nested too deeply
+    [Flags]
     private enum FailureOutput
     {
-        None,
+        None = 0,
 
-        // out int: the offset
-        Offset,
+        // out int: the offset alone, or the first element of a tuple when another flag is set (a tuple has two elements
+        // at least)
+        Offset = 1,
 
         // out (int Offset, int Line, int Column)
-        Position,
+        Position = 2,
 
-        // out (int Offset, bool NestedTooDeeply)
-        OffsetAndNesting,
+        // (..., bool NestedTooDeeply)
+        Nesting = 4,
 
-        // out (int Offset, int Line, int Column, bool NestedTooDeeply)
-        PositionAndNesting,
+        // (..., object Reason, ...): the reason recorded with the furthest failure, see Cursor.FurthestReason
+        Reason = 8,
     }
 
     private static void InitializeStandalone(IncrementalGeneratorInitializationContext context)
@@ -612,7 +633,8 @@ public sealed partial class ParserSourceGenerator
             + "out IReadOnlyList<(string Message, bool IsWarning, int Offset, int Line, int Column)> receiving the diagnostics, "
             + "or a last out int or out (int Offset, int Line, int Column) receiving the furthest failure, or one of these with "
             + "whether the input is nested too deeply: out (int Offset, bool NestedTooDeeply) or "
-            + "out (int Offset, int Line, int Column, bool NestedTooDeeply).";
+            + "out (int Offset, int Line, int Column, bool NestedTooDeeply), and an object before the bool, or last, receiving "
+            + "the reason recorded with the failure: out (int Offset, object? Reason) or out (int Offset, int Line, int Column, object? Reason).";
         var name = GetStandaloneEntryPointName(factory.Method);
         var type = factory.Method.ContainingType;
         if (string.IsNullOrWhiteSpace(name) || type.ContainingType is not null || type.IsGenericType
@@ -698,7 +720,8 @@ public sealed partial class ParserSourceGenerator
     }
 
     // Whether the entry point ends with the out result followed by an out int, or an out (int Offset, int Line, int Column),
-    // receiving the furthest failure, or by a tuple of one of these and a bool, receiving whether the input is nested too deeply
+    // receiving the furthest failure, or by a tuple of one of these followed by an object, receiving the reason recorded
+    // there, and/or a bool, receiving whether the input is nested too deeply
     private static FailureOutput GetFailureOutput(IMethodSymbol method, IMethodSymbol factory, ITypeSymbol resultType)
     {
         if (method.Parameters.Length < factory.Parameters.Length + 3)
@@ -724,21 +747,32 @@ public sealed partial class ParserSourceGenerator
             return FailureOutput.None;
         }
 
-        // A last bool tells that the input is nested too deeply
+        // A last bool tells that the input is nested too deeply, and an object before it is the reason of the failure
         var elements = tuple.TupleElements;
-        var nesting = elements[elements.Length - 1].Type.SpecialType == SpecialType.System_Boolean;
-        var positions = nesting ? elements.Length - 1 : elements.Length;
+        var positions = elements.Length;
+        var output = FailureOutput.None;
+
+        if (elements[positions - 1].Type.SpecialType == SpecialType.System_Boolean)
+        {
+            output |= FailureOutput.Nesting;
+            positions--;
+        }
+
+        if (positions > 0 && elements[positions - 1].Type.SpecialType == SpecialType.System_Object)
+        {
+            output |= FailureOutput.Reason;
+            positions--;
+        }
 
         if (elements.Take(positions).Any(static element => element.Type.SpecialType != SpecialType.System_Int32))
         {
             return FailureOutput.None;
         }
 
-        return (positions, nesting) switch
+        return positions switch
         {
-            (1, true) => FailureOutput.OffsetAndNesting,
-            (3, false) => FailureOutput.Position,
-            (3, true) => FailureOutput.PositionAndNesting,
+            1 when output != FailureOutput.None => output | FailureOutput.Offset,
+            3 => output | FailureOutput.Position,
             _ => FailureOutput.None,
         };
     }
@@ -815,6 +849,10 @@ public sealed partial class ParserSourceGenerator
                 ? $"new {wrapper}({scanner}{cancellationArgument})"
                 : $"new global::Parlot.Fluent.ParseContext({ParseContextArguments(scanner, token)})";
         source.AppendLine($"            var {context} = {contextCreation};");
+        if (standalone.NewLines is { } newLines && newLines != "\n")
+        {
+            source.AppendLine($"            {context}.Scanner.Cursor.NewLines = {SymbolDisplay.FormatLiteral(newLines, quote: true)};");
+        }
         var diagnostics = standalone.DiagnosticsParameter is { } diagnosticsParameter ? EscapeIdentifier(diagnosticsParameter.Name) : null;
         var diagnosticType = standalone.DiagnosticsParameter is { Type: INamedTypeSymbol { TypeArguments: [var element] } }
             ? element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
@@ -853,23 +891,14 @@ public sealed partial class ParserSourceGenerator
         {
             // Read while the buffer of a TextReader is still held. The parsers moved the cursor back from where they failed.
             var furthest = prefix + "_furthest";
-            switch (standalone.Failure)
+            var cursor = $"{context}.Scanner.Cursor";
+            if ((standalone.Failure & FailureOutput.Position) != 0)
             {
-                case FailureOutput.Offset:
-                    source.AppendLine($"                {failure} = {context}.Scanner.Cursor.FurthestOffset;");
-                    break;
-                case FailureOutput.OffsetAndNesting:
-                    source.AppendLine($"                {failure} = ({context}.Scanner.Cursor.FurthestOffset, false);");
-                    break;
-                case FailureOutput.Position:
-                    source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
-                    source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column);");
-                    break;
-                default:
-                    source.AppendLine($"                var {furthest} = {context}.Scanner.Cursor.GetPosition({context}.Scanner.Cursor.FurthestOffset);");
-                    source.AppendLine($"                {failure} = ({furthest}.Offset, {furthest}.Line, {furthest}.Column, false);");
-                    break;
+                source.AppendLine($"                var {furthest} = {cursor}.GetPosition({cursor}.FurthestOffset);");
             }
+            var offset = (standalone.Failure & FailureOutput.Position) != 0 ? $"{furthest}.Offset" : $"{cursor}.FurthestOffset";
+            var failed = FailureTuple(standalone.Failure, offset, $"{furthest}.Line", $"{furthest}.Column", $"{cursor}.FurthestReason!", "false");
+            source.AppendLine($"                {failure} = {failed};");
         }
         source.AppendLine("            }");
         if (diagnostics is not null || failure is not null)
@@ -886,13 +915,10 @@ public sealed partial class ParserSourceGenerator
             if (failure is not null)
             {
                 // An Error or ElseError parser reports where it failed
-                source.AppendLine(standalone.Failure switch
-                {
-                    FailureOutput.Offset => $"                {failure} = {exception}.Position.Offset;",
-                    FailureOutput.OffsetAndNesting => $"                {failure} = ({exception}.Position.Offset, {exception}.IsNestedTooDeeply);",
-                    FailureOutput.Position => $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column);",
-                    _ => $"                {failure} = ({exception}.Position.Offset, {exception}.Position.Line, {exception}.Position.Column, {exception}.IsNestedTooDeeply);",
-                });
+                // An exception has no reason: its message tells why
+                var position = $"{exception}.Position";
+                var tuple = FailureTuple(standalone.Failure, $"{position}.Offset", $"{position}.Line", $"{position}.Column", "null!", $"{exception}.IsNestedTooDeeply");
+                source.AppendLine($"                {failure} = {tuple};");
             }
             source.AppendLine("                return false;");
             source.AppendLine("            }");
@@ -937,6 +963,32 @@ public sealed partial class ParserSourceGenerator
         source.AppendLine($"            {value} = default!;");
         source.AppendLine("            return false;");
         source.AppendLine("        }");
+    }
+
+    // The value of the failure parameter: the offset alone for an out int, or the tuple of what it returns
+    private static string FailureTuple(FailureOutput output, string offset, string line, string column, string reason, string nesting)
+    {
+        if (output == FailureOutput.Offset)
+        {
+            return offset;
+        }
+
+        var elements = new List<string> { offset };
+        if ((output & FailureOutput.Position) != 0)
+        {
+            elements.Add(line);
+            elements.Add(column);
+        }
+        if ((output & FailureOutput.Reason) != 0)
+        {
+            elements.Add(reason);
+        }
+        if ((output & FailureOutput.Nesting) != 0)
+        {
+            elements.Add(nesting);
+        }
+
+        return $"({string.Join(", ", elements)})";
     }
 
     private static string StandaloneSignature(IMethodSymbol entry)

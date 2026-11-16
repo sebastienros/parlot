@@ -12,7 +12,7 @@ namespace Parlot.Fluent;
 /// It is only recorded when <see cref="ParseContext.CollectDiagnostics"/> is enabled. When
 /// <see cref="ParseContext.TreatWarningsAsErrors"/> is enabled it is reported as an error instead, and this parser fails.
 /// </remarks>
-public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
     private readonly Parser<T> _parser;
     private readonly string _message;
@@ -50,6 +50,10 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    // When the parser it wraps is a literal, see IInvokesOnlyLiterals: it only fails after the literal matched when the
+    // warnings are errors, which stops the parse
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {
@@ -175,5 +179,5 @@ public sealed class Warning<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoo
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => writer.Generate(_parser, valueVariable, fail);
 
-    public override string ToString() => $"{_parser} (Warning)";
+    public override string ToString() => FormatOnce($"{_parser} (Warning)");
 }

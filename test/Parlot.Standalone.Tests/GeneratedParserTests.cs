@@ -549,6 +549,11 @@ public class GeneratedParserTests
         Assert.True(Grammar.TryParseString("\"line\\nquote\\\"\"", out var value));
         Assert.Equal("line\nquote\"", value);
         Assert.False(Grammar.TryParseString("\"unterminated", out _));
+
+        Assert.True(Grammar.TryParseTemplate(" `a${ b }c${`d${e}`}\\${f}`", out value));
+        Assert.Equal("[a]{b}[c]{[d]{e}[]}[\\${f}]", value);
+        Assert.False(Grammar.TryParseTemplate("`a${b", out _));
+        Assert.False(Grammar.TryParseTemplate("`a${b} c", out _));
         Assert.True(Grammar.TryParseNumbers("1, 2, 3, 4, 5, 6", out var values));
         Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, values);
         Assert.False(Grammar.TryParseNumbers("1, x", out _));
@@ -585,6 +590,20 @@ public class GeneratedParserTests
     {
         Assert.Equal(success, Grammar.TryParseComments(input, out var value));
         Assert.Equal(success ? "hello" : null, value);
+    }
+
+    [Theory]
+    [InlineData("--> a\nb", "b")]
+    [InlineData("a\n--> b\nc", "a|c")]
+    [InlineData("a /*\u2028*/ --> b", "a")]
+    [InlineData("a /* b */ --> c", "a|--|>|c")]
+    [InlineData("a --> b", "a|--|>|b")]
+    public void Comments_At_The_Start_Of_A_Line_Are_Skipped(string input, string expected)
+    {
+        Assert.True(Grammar.TryParseLineStartComments(input, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(Grammar.TryParseLineStartComments(new StringReader(input), out value));
+        Assert.Equal(expected, value);
     }
 
     [Fact]

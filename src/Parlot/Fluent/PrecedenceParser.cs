@@ -2561,5 +2561,5 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
     }
 
     /// <inheritdoc />
-    public override string ToString() => Name ?? $"Operators({_operand})";
+    public override string ToString() => Name ?? FormatOnce($"Operators({_operand})");
 }

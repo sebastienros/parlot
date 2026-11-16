@@ -13,6 +13,8 @@
     <Compile Include="../Parlot.Standalone.Tests/DiagnosticsGrammars.cs" Link="DiagnosticsGrammars.cs" />
     <AdditionalFiles Include="../Parlot.Standalone.Tests/DiagnosticsGrammars.parlot.cs" Link="DiagnosticsGrammars.parlot.cs" />
     <Compile Include="../Parlot.Standalone.Tests/Grammar.cs" Link="Grammar.cs" />
+    <Compile Include="../Parlot.Standalone.Tests/LineGrammars.cs" Link="LineGrammars.cs" />
+    <AdditionalFiles Include="../Parlot.Standalone.Tests/LineGrammars.parlot.cs" Link="LineGrammars.parlot.cs" />
     <AdditionalFiles Include="../Parlot.Standalone.Tests/Grammar.parlot.cs" Link="Grammar.parlot.cs" />
     <ProjectReference Include="../../src/Parlot.SourceGenerator/Parlot.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

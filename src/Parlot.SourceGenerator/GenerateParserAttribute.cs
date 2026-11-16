@@ -50,4 +50,16 @@ sealed class GenerateParserAttribute : System.Attribute
     /// <c>out (int Offset, int Line, int Column, bool NestedTooDeeply)</c> tells both from other failures.
     /// </remarks>
     public int MaxRecursionDepth { get; set; }
+
+    /// <summary>
+    /// Gets or sets the chars which end a line in the positions the parse reports, or <see langword="null"/> (the default)
+    /// for <c>"\n"</c>.
+    /// </summary>
+    /// <remarks>
+    /// Like <c>ParseContext.NewLines</c> at runtime, they are the line terminators of the lines and columns of the failure
+    /// overloads, of the diagnostics and of <c>context.Scanner.Cursor.GetPosition(offset)</c> in callbacks, such as
+    /// <c>"\n\r\u2028\u2029"</c> for JavaScript. When both <c>'\r'</c> and <c>'\n'</c> are in the set, <c>"\r\n"</c> ends a
+    /// single line. They don't change what the parsers read.
+    /// </remarks>
+    public string? NewLines { get; set; }
 }
