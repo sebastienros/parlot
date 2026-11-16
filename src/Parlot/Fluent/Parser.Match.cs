@@ -12,7 +12,7 @@ public abstract partial class Parser<T>
     /// <returns><see langword="true"/> when <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/> succeeds.</returns>
     public bool IsMatch(string text)
     {
-        return TryMatch(new ParseContext(new Scanner(text)), out _, out _);
+        return TryMatch(new ParseContext(new Scanner(text)), out _, out _, withReason: false);
     }
 
     /// <summary>
@@ -23,7 +23,7 @@ public abstract partial class Parser<T>
     /// <returns><see langword="true"/> when <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/> succeeds.</returns>
     public bool IsMatch(string text, CancellationToken cancellationToken)
     {
-        return TryMatch(new ParseContext(new Scanner(text), cancellationToken), out _, out _);
+        return TryMatch(new ParseContext(new Scanner(text), cancellationToken), out _, out _, withReason: false);
     }
 
     /// <summary>
@@ -33,7 +33,7 @@ public abstract partial class Parser<T>
     /// <returns><see langword="true"/> when <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/> succeeds.</returns>
     public bool IsMatch(ParseContext context)
     {
-        return TryMatch(context, out _, out _);
+        return TryMatch(context, out _, out _, withReason: false);
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public abstract partial class Parser<T>
     /// <remarks>See <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/>.</remarks>
     public bool TryMatch(string text, out TextSpan match)
     {
-        return TryMatch(new ParseContext(new Scanner(text)), out match, out _);
+        return TryMatch(new ParseContext(new Scanner(text)), out match, out _, withReason: false);
     }
 
     /// <summary>
@@ -58,7 +58,7 @@ public abstract partial class Parser<T>
     /// <remarks>See <see cref="TryMatch(ParseContext, out TextSpan, out ParseError)"/>.</remarks>
     public bool TryMatch(string text, CancellationToken cancellationToken, out TextSpan match)
     {
-        return TryMatch(new ParseContext(new Scanner(text), cancellationToken), out match, out _);
+        return TryMatch(new ParseContext(new Scanner(text), cancellationToken), out match, out _, withReason: false);
     }
 
     /// <summary>
@@ -110,6 +110,12 @@ public abstract partial class Parser<T>
     /// </remarks>
     public bool TryMatch(ParseContext context, out TextSpan match, out ParseError? error)
     {
+        return TryMatch(context, out match, out error, withReason: true);
+    }
+
+    // withReason: whether a failure with a reason returns its error, which computes its position
+    private bool TryMatch(ParseContext context, out TextSpan match, out ParseError? error, bool withReason)
+    {
         ThrowHelper.ThrowIfNull(context, nameof(context));
 
         error = null;
@@ -131,6 +137,11 @@ public abstract partial class Parser<T>
                 var cursor = context.Scanner.Cursor;
                 match = cursor.CreateSpan(start, cursor.Offset - start);
                 return true;
+            }
+
+            if (withReason)
+            {
+                error = ParseError.FromFurthestReason(context);
             }
         }
         catch (ParseException e)
