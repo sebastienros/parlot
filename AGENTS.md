@@ -162,7 +162,7 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
 - A parser which rejects what it read can record why with the failure: the public `Cursor.RecordFailure(offset, reason)`
   keeps the first reason recorded at the furthest offset, and `FurthestReason` reports it only while its offset is
   `FurthestOffset`, so that `ResetPositionNotInlined` doesn't touch it; `RestoreRecordedFailure` forgets a reason further
-  than what it restores. `When`, `ThenTry`, `Not` and `WhenNotFollowedBy` take one, and pass it on their failure path
+  than what it restores, the only cost of reasons outside their failure paths (a compare). `When`, `ThenTry`, `Not` and `WhenNotFollowedBy` take one, and pass it on their failure path
   only (`ParseContext.RecordRejected` takes it too); emitters pass it with `SourceGenerationContext.ReasonArgument`, a
   literal or a static field, never a new box per failure. A token read again (`RetryToken`) restores the reason exactly. Entry points return it in an `object` element of the
   failure tuple; `FailureReasonParityTests` compares it with the runtime `ParseError.Reason` on random inputs.

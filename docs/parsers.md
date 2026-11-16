@@ -53,7 +53,8 @@ instead of overflowing the stack. The parsers which can't be invoked again where
 
 ## Reporting where a parse failed
 
-A parse that fails without an error leaves `TryParse` with a `null` error and the cursor where it started. The most
+A parse that fails without an error leaves `TryParse` with a `null` error and the cursor where it started, unless a
+reason was recorded where it failed (see [Why it failed there](#why-it-failed-there)): the error then has a `Reason`. The most
 useful position is then the *furthest failure*: where the attempt which matched the most text stopped. The cursor keeps
 it in `Cursor.FurthestOffset`, and `Cursor.FurthestPosition` adds its line and column, computed when it is read:
 
@@ -126,8 +127,9 @@ statement.TryParse("word", out _, out error);      // null: the ';' expected at 
 - An `Error` or `ElseError` which stops the parse is reported instead, with a `null` `Reason`.
 
 Source-generated parsers return the reason in their failure tuple, see
-[Failure position](source-generation.md#failure-position). Recording it costs a compare and two stores, on the failure
-path of the parsers which have a reason only.
+[Failure position](source-generation.md#failure-position). Recording a reason costs a compare and two stores, on the
+failure path of the parsers which have one. Otherwise the reason costs a compare where a lookahead forgets the failures
+its parser recorded, and two fields of the cursor.
 
 ## Collecting diagnostics without stopping
 

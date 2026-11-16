@@ -625,6 +625,7 @@ public class Cursor
     /// <see langword="false"/>, with the start of the value (the <c>start</c> argument of the callback) or of the part of it
     /// which is wrong. Call it on failure paths only.
     /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RecordFailure(int offset, object? reason)
     {
         RecordFailure(offset);

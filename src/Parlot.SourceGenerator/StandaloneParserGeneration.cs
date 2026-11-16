@@ -110,7 +110,8 @@ public sealed partial class ParserSourceGenerator
     {
         None = 0,
 
-        // out int: the offset, or the first element of a tuple
+        // out int: the offset alone, or the first element of a tuple when another flag is set (a tuple has two elements
+        // at least)
         Offset = 1,
 
         // out (int Offset, int Line, int Column)
@@ -701,7 +702,8 @@ public sealed partial class ParserSourceGenerator
     }
 
     // Whether the entry point ends with the out result followed by an out int, or an out (int Offset, int Line, int Column),
-    // receiving the furthest failure, or by a tuple of one of these and a bool, receiving whether the input is nested too deeply
+    // receiving the furthest failure, or by a tuple of one of these followed by an object, receiving the reason recorded
+    // there, and/or a bool, receiving whether the input is nested too deeply
     private static FailureOutput GetFailureOutput(IMethodSymbol method, IMethodSymbol factory, ITypeSymbol resultType)
     {
         if (method.Parameters.Length < factory.Parameters.Length + 3)
