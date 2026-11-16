@@ -88,7 +88,9 @@ type implements each of these that applies:
 - A parser that takes its hints from the parsers it starts with reads them when they are asked for, through the
   internal `ForwardedHints`, never in its constructor: those can be `Deferred` parsers set later, or choices whose table
   is only complete once the grammar is. A parser has no hints when it can succeed without reading, or when skipping it
-  changes the outcome, like `ElseError`.
+  changes the outcome, like `ElseError`. A parser which never moves the cursor when it succeeds, like `Not` and `Peek`,
+  implements the internal `ILookahead`: a sequence which starts with it takes hints through it (`SeekableHints.Sequence`),
+  and `Not` tests the char with a `SeekGuard` before invoking its parser.
 - `ISeekable.SkipWhitespace` only tells that the white space isn't to be looked at to find the first chars: a parser which
   forwards it can still read from where it is invoked, like `Capture`, which holds that white space, or a lookahead,
   which leaves the cursor before it. A parser which needs where the value of another one starts, like `When` and

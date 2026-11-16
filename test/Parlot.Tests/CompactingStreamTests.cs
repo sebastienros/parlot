@@ -390,6 +390,8 @@ public class CompactingStreamTests
         ["when-peek-rejected"] = Peek(Terms.Identifier()).When(static (_, value) => value.Length < 3).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
         ["thentry-peek-rejected"] = Peek(Terms.Identifier()).ThenTry(static value => (value.Length < 3, value)).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
         ["when-not"] = Not(Terms.Char('x')).SkipAnd(Capture(Terms.Identifier())).When(static (_, value) => value.Length < 4).Then(static value => value.ToString()),
+        // A lookahead which tests the char after the white space its parser skips before invoking it, and moves back
+        ["not-guard"] = Not(OneOf(Terms.Text("ab"), Terms.Text("cd"))).SkipAnd(Terms.Identifier()).Then(static value => value.ToString()),
         ["when-token"] = Terms.Integer().When(static (_, value) => value < 100).Then(static value => value.ToString()),
         ["thentry-token"] = Terms.Integer().ThenTry(static value => (value < 100, value.ToString())),
         ["when-tokens"] = Terms.Identifier().And(Terms.Integer()).When(static (_, value) => value.Item2 < 100).Then(static value => $"{value.Item1}{value.Item2}"),
@@ -423,6 +425,8 @@ public class CompactingStreamTests
         Add("when-peek-rejected", words);
         Add("thentry-peek-rejected", words);
         Add("when-not", "ab", " ab", "  ab", "   a", " x", "  abcd", "  ");
+        string[] guarded = ["ab", " ab", "  abc", " x", "  cd", "  xy", " a", "  ", ""];
+        Add("not-guard", guarded);
         Add("when-token", "9", "  9", "  123", " x", "  ");
         Add("thentry-token", "9", "  9", "  123", " x", "  ");
         Add("when-tokens", "a 9", "  a  9", "  a  123", " a x", "  ");

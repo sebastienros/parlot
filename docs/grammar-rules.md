@@ -152,6 +152,10 @@ start with any char. The message names the parser that keeps the alternative fro
   tell them, and are vectorized on .NET 8 and later.
 - `Scan` without start chars: pass the chars a token can start with as its second argument.
 - An alternative that starts with a parser that can succeed without reading anything, like `ZeroOrOne` or `Optional`.
+- An alternative that starts with `Not` or `Peek`: the sequence `Not(x).SkipAnd(y)` tells the chars of `x` and `y` when
+  both tell them and skip white space the same way, and `Peek(x).SkipAnd(y)` those of `x` when it tells them, unless
+  `x` skips white space and `y` doesn't. The message names the parser which doesn't tell them, or the white space only
+  one of them skips.
 - A parser type that doesn't implement `ISeekable`.
 
 Any of them can be wrapped in `Lookup` with the chars it can start with. Alternatives that can succeed without reading

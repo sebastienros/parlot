@@ -125,6 +125,11 @@ public class StreamingTests
         // A lookahead at the start of an alternative, the text it read is read again
         ["peek"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("ab"), Peek(Terms.Identifier()).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
         ["peek-value"] = new Grammar<(long, long)>(Peek(Terms.Integer()).And(Terms.Integer())),
+        // Lookahead restrictions in a choice, which selects them with the chars of the parser that follows
+        ["not-restriction"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("ab").Then(static x => "[" + x + "]"),
+            Not(OneOf(Terms.Text("ab"), Terms.Text("cd"))).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
+        ["peek-restriction"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Integer().Then(static x => x.ToString()),
+            Peek(OneOf(Terms.Text("ab"), Terms.Char('c').Then(static _ => "c"))).SkipAnd(Terms.Identifier().Then(static x => x.ToString()))))),
         // Tokens which try continuations they drop, and one which skips white space first, as alternatives of a choice
         ["astoken"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(AsToken(Capture(Separated(Literals.Char('.'), Terms.Identifier()))).Or(AsToken(Capture(Terms.Integer().And(Literals.Char('!'))))))),
         ["astoken-literals"] = new Grammar<IReadOnlyList<TextSpan>>(Separated(Literals.Char('+'), AsToken(Capture(Separated(Literals.Char('.'), Literals.Identifier()))))),

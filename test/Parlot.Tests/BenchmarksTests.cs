@@ -109,6 +109,8 @@ public class BenchmarksTests
         Assert.Equal(150, benchmark.Peek_Runtime());
         Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Generated());
         Assert.Equal(150, benchmark.Peek_Generated());
+        Assert.Equal(200, benchmark.Restriction_Runtime());
+        Assert.Equal(200, benchmark.Restriction_Generated());
     }
 
     [Fact]
