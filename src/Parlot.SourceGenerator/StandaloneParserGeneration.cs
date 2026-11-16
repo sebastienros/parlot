@@ -83,6 +83,14 @@ public sealed partial class ParserSourceGenerator
             .Select(static argument => (int)argument.Value.Value!)
             .FirstOrDefault();
 
+        // The line terminators of the factory's attribute, null for the default "\n"
+        public string? NewLines => Factory.Method.GetAttributes()
+            .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
+            .SelectMany(static attribute => attribute.NamedArguments)
+            .Where(static argument => argument.Key == "NewLines" && argument.Value.Value is string)
+            .Select(static argument => (string?)argument.Value.Value)
+            .FirstOrDefault();
+
         public MethodToGenerate Factory { get; }
         public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - 1 - TrailingOutputs];
         public IParameterSymbol? DiagnosticsParameter => CollectsDiagnostics ? Method.Parameters[Method.Parameters.Length - 1] : null;
@@ -815,6 +823,10 @@ public sealed partial class ParserSourceGenerator
                 ? $"new {wrapper}({scanner}{cancellationArgument})"
                 : $"new global::Parlot.Fluent.ParseContext({ParseContextArguments(scanner, token)})";
         source.AppendLine($"            var {context} = {contextCreation};");
+        if (standalone.NewLines is { } newLines && newLines != "\n")
+        {
+            source.AppendLine($"            {context}.Scanner.Cursor.NewLines = {SymbolDisplay.FormatLiteral(newLines, quote: true)};");
+        }
         var diagnostics = standalone.DiagnosticsParameter is { } diagnosticsParameter ? EscapeIdentifier(diagnosticsParameter.Name) : null;
         var diagnosticType = standalone.DiagnosticsParameter is { Type: INamedTypeSymbol { TypeArguments: [var element] } }
             ? element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(

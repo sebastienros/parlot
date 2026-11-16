@@ -1143,6 +1143,11 @@ public sealed partial class ParserSourceGenerator : IIncrementalGenerator
             throw new ArgumentException("GenerateParser.MaxRecursionDepth can't be negative.");
         }
 
+        if (standalone.NewLines is { Length: 0 })
+        {
+            throw new ArgumentException("GenerateParser.NewLines can't be empty.");
+        }
+
         sgContext.MaxRecursionDepth = standalone.MaxRecursionDepth;
 
         // Invoke GenerateSource via reflection

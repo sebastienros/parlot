@@ -334,6 +334,52 @@ public class GeneratorFixesTests
             && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("MaxRecursionDepth", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Empty_New_Lines_Are_A_Generation_Error()
+    {
+        const string grammar = """
+            using Parlot.Fluent;
+            using Parlot.SourceGenerator;
+            public static partial class Grammar
+            {
+                [GenerateParser(nameof(TryParse), NewLines = "")]
+                private static Parser<string> Build() => Parsers.Literals.Text("item");
+            }
+            """;
+        var (result, _) = Generate(Declaration, grammar);
+
+        Assert.Contains(result.Diagnostics, static diagnostic => diagnostic.Id == "PARLOT024"
+            && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("NewLines", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void New_Lines_Are_Set_On_The_Cursor_Of_The_Entry_Point()
+    {
+        static string Source(string attribute)
+        {
+            var grammar = $$"""
+                using Parlot.Fluent;
+                using Parlot.SourceGenerator;
+                public static partial class Grammar
+                {
+                    [GenerateParser({{attribute}})]
+                    private static Parser<string> Build() => Parsers.Literals.Text("item");
+                }
+                """;
+            var (result, compilation) = Generate(Declaration, grammar);
+            AssertNoErrors(result, compilation);
+            return string.Join("\n", result.Results.SelectMany(static run => run.GeneratedSources)
+                .Where(static source => source.HintName.StartsWith("StandaloneParser", StringComparison.Ordinal))
+                .Select(static source => source.SourceText.ToString()));
+        }
+
+        Assert.Contains("Scanner.Cursor.NewLines = \"\\n\\r\\u2028\\u2029\";", Source("nameof(TryParse), NewLines = \"\\n\\r\\u2028\\u2029\""), StringComparison.Ordinal);
+
+        // The default terminators set nothing
+        Assert.DoesNotContain("Cursor.NewLines =", Source("nameof(TryParse), NewLines = \"\\n\""), StringComparison.Ordinal);
+        Assert.DoesNotContain("Cursor.NewLines =", Source("nameof(TryParse)"), StringComparison.Ordinal);
+    }
+
     internal const string Declaration = """
         public static partial class Grammar
         {
