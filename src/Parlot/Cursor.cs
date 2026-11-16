@@ -269,13 +269,21 @@ public class Cursor
 
         if (offset > lines.Counted)
         {
+            var behind = lines.FrontierOffset - offset;
+
+            if (behind <= CountBackwardDistance)
+            {
+                // Just behind the furthest position, like the start of a token whose end was requested
+                return CountBackward(lines, offset);
+            }
+
             if (!keep || !lines.RequestedBehind)
             {
-                // Behind the furthest position requested for the first time: counted from the closest position known, the
-                // lines are only recorded on the next request
+                // Far behind the furthest position requested for the first time: counted from the closest position known,
+                // the lines are only recorded on the next request
                 lines.RequestedBehind |= keep;
 
-                if (offset - lines.Counted <= lines.FrontierOffset - offset)
+                if (offset - lines.Counted <= behind)
                 {
                     var counted = FindPosition(lines, lines.Counted);
                     return CountForward(counted.Offset, counted.Line, counted.Column, offset);
@@ -284,12 +292,16 @@ public class Cursor
                 return CountBackward(lines, offset);
             }
 
-            // Behind the furthest position requested: the lines up to it are recorded once
+            // Far behind the furthest position requested: the lines up to it are recorded once
             RecordLines(lines, lines.FrontierOffset);
         }
 
         return FindPosition(lines, offset);
     }
+
+    // The distance behind the furthest position requested up to which a position is counted from it rather than from the
+    // lines recorded, which costs a pass over the text to record them
+    private const int CountBackwardDistance = 1024;
 
     // The position of an offset between the origin and the end of the lines recorded
     private TextPosition FindPosition(LineMap lines, int offset)
@@ -324,6 +336,10 @@ public class Cursor
     private void RecordLines(LineMap lines, int offset)
     {
         var from = lines.Counted;
+
+        // The number of lines to record is known from the line of the furthest position
+        lines.EnsureCapacity(lines.Count + (lines.FrontierLine - FindPosition(lines, from).Line));
+
         var text = GetSpan(from, offset - from);
         var newLines = NewLines.AsSpan();
         var position = 0;
@@ -546,6 +562,14 @@ public class Cursor
             FrontierOffset = position.Offset;
             FrontierLine = position.Line;
             FrontierColumn = position.Column;
+        }
+
+        public void EnsureCapacity(int count)
+        {
+            if (Starts.Length < count)
+            {
+                Array.Resize(ref Starts, Math.Max(count, Starts.Length * 2));
+            }
         }
 
         public void Add(int start)
