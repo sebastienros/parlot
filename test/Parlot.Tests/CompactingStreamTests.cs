@@ -769,8 +769,20 @@ public class CompactingStreamTests
     // The capacity of the line starts recorded by a cursor, read by reflection since the map is private
     private static int RecordedLineStarts(Cursor? cursor)
     {
-        var lines = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(cursor);
-        return lines is null ? 0 : ((int[])lines.GetType().GetField("Starts")!.GetValue(lines)!).Length;
+        var linesField = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(linesField);
+
+        var lines = linesField.GetValue(cursor);
+
+        if (lines is null)
+        {
+            return 0;
+        }
+
+        var startsField = lines.GetType().GetField("Starts");
+        Assert.NotNull(startsField);
+
+        return ((int[])startsField.GetValue(lines)!).Length;
     }
 
     /// <summary>

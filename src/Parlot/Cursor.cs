@@ -42,7 +42,7 @@ public class Cursor
     private const byte HitEndFlag = 1;
     private const byte NotFinalFlag = 2;
 
-    // Set on a final buffer only, see MarkFollowedByLineFeed
+    // Whether a '\n' follows the end of the buffer in the input, see MarkFollowedByLineFeed
     private const byte FollowedByLineFeedFlag = 4;
 
     // Whether a position was requested without creating the line map: the second request creates it, such that a single
@@ -120,15 +120,13 @@ public class Cursor
     }
 
     /// <summary>
-    /// Records that a <c>'\n'</c> follows the end of a final <see cref="Buffer"/> in the input, as the delimiter of a frame
-    /// of a stream: a <c>'\r'</c> ending the buffer doesn't end a line when <see cref="NewLines"/> has both.
+    /// Records that a <c>'\n'</c> follows the end of <see cref="Buffer"/> in the input, as the delimiter of a frame of a stream
+    /// or the first char of the next window: a <c>'\r'</c> ending the buffer doesn't end a line when <see cref="NewLines"/>
+    /// has both. A new buffer forgets it.
     /// </summary>
     internal void MarkFollowedByLineFeed()
     {
-        if (IsFinal)
-        {
-            _flags |= FollowedByLineFeedFlag;
-        }
+        _flags |= FollowedByLineFeedFlag;
     }
 
     public Cursor(string buffer) : this(buffer, TextPosition.Start)
@@ -194,7 +192,7 @@ public class Cursor
     /// <remarks>
     /// <para>
     /// The offsets can be requested in any order. The position of the furthest offset requested is kept: a request after
-    /// it counts the lines of the text between them. A request before it records the start of each line up to it the first
+    /// it counts the lines of the text between them. A request before it records the start of each line up to it the second
     /// time it is needed, such that the position of an offset already counted over is then a binary search: a parse reads
     /// its text a few times at most to count its lines, and a parse which doesn't request positions doesn't count them. A
     /// single request counts the lines from the initial position of the cursor without allocating.
@@ -217,15 +215,26 @@ public class Cursor
             return GetPositionOutsideOrigin(offset);
         }
 
+        return GetPositionInBuffer(offset, keep: true);
+    }
+
+    // The position of an offset between the origin and the end of the buffer. When keep is false, as for the text a new
+    // window drops, it neither creates the line map, nor moves the furthest position, nor records lines.
+    private TextPosition GetPositionInBuffer(int offset, bool keep)
+    {
         var lines = _lines;
 
         if (lines is null)
         {
-            if ((_flags & PositionRequestedFlag) == 0)
+            if (!keep || (_flags & PositionRequestedFlag) == 0)
             {
                 // No line map until a second position is requested
-                _flags |= PositionRequestedFlag;
-                return CountForward(_originOffset, _originLine, _originColumn, offset, -1);
+                if (keep)
+                {
+                    _flags |= PositionRequestedFlag;
+                }
+
+                return CountForward(_originOffset, _originLine, _originColumn, offset);
             }
 
             lines = _lines = new LineMap(_originOffset, _originLine, _originColumn);
@@ -234,37 +243,42 @@ public class Cursor
         if (offset >= lines.FrontierOffset)
         {
             // Forward from the furthest position requested, counting without recording
-            if ((_flags & CrLfFlag) != 0 && offset - _base == _textLength && !IsFinal && _textLength > 0 && Buffer[_textLength - 1] == '\r' && offset > lines.FrontierOffset)
-            {
-                // After a '\r' ending a buffer which more text follows, which a '\n' can still follow: the furthest position
-                // is the one of the '\r'
-                var carriageReturn = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset - 1, -1);
-                lines.SetFrontier(carriageReturn);
-                return new TextPosition(offset, carriageReturn.Line + 1, 1);
-            }
-
             if (offset == lines.FrontierOffset)
             {
                 return new TextPosition(offset, lines.FrontierLine, lines.FrontierColumn);
             }
 
-            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset, -1);
-            lines.SetFrontier(position);
+            if (keep && FollowsCarriageReturn(offset - 1) == FollowedByUnknown)
+            {
+                // After a '\r' ending a buffer which more text follows, which a '\n' can still follow: the furthest position
+                // is the one of the '\r'
+                var carriageReturn = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset - 1);
+                lines.SetFrontier(carriageReturn);
+                return new TextPosition(offset, carriageReturn.Line + 1, 1);
+            }
+
+            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
+
+            if (keep)
+            {
+                lines.SetFrontier(position);
+            }
+
             return position;
         }
 
         if (offset > lines.Counted)
         {
-            if (!lines.RequestedBehind)
+            if (!keep || !lines.RequestedBehind)
             {
                 // Behind the furthest position requested for the first time: counted from the closest position known, the
                 // lines are only recorded on the next request
-                lines.RequestedBehind = true;
+                lines.RequestedBehind |= keep;
 
                 if (offset - lines.Counted <= lines.FrontierOffset - offset)
                 {
                     var counted = FindPosition(lines, lines.Counted);
-                    return CountForward(counted.Offset, counted.Line, counted.Column, offset, -1);
+                    return CountForward(counted.Offset, counted.Line, counted.Column, offset);
                 }
 
                 return CountBackward(lines, offset);
@@ -320,7 +334,7 @@ public class Cursor
             var end = position + index;
             position = end + 1;
 
-            if (EndsLineAt(from + end, -1))
+            if (EndsLineAt(from + end))
             {
                 lines.Add(from + end + 1);
             }
@@ -329,11 +343,10 @@ public class Cursor
         lines.Counted = offset;
     }
 
-    // The position of an offset of the buffer from a position before it. The char after the end of the buffer is next, or -1
-    // when it isn't known.
-    private TextPosition CountForward(int fromOffset, int fromLine, int fromColumn, int offset, int next)
+    // The position of an offset of the buffer from a position before it
+    private TextPosition CountForward(int fromOffset, int fromLine, int fromColumn, int offset)
     {
-        var count = CountLineStarts(fromOffset, offset, next, out var lastStart);
+        var count = CountLineStarts(fromOffset, offset, out var lastStart);
 
         return count == 0
             ? new TextPosition(offset, fromLine, fromColumn + (offset - fromOffset))
@@ -343,7 +356,7 @@ public class Cursor
     // The position of an offset between the origin and the furthest position requested, counted backward from it
     private TextPosition CountBackward(LineMap lines, int offset)
     {
-        var newLines = CountLineStarts(offset, lines.FrontierOffset, -1, out _);
+        var newLines = CountLineStarts(offset, lines.FrontierOffset, out _);
 
         if (newLines == 0)
         {
@@ -356,52 +369,6 @@ public class Cursor
         return start > _originOffset
             ? new TextPosition(offset, lines.FrontierLine - newLines, offset - start + 1)
             : new TextPosition(offset, lines.FrontierLine - newLines, _originColumn + (offset - _originOffset));
-    }
-
-    /// <summary>
-    /// The position of the end of the buffer when the input goes on with <paramref name="next"/>, or <c>-1</c> at its end:
-    /// a <c>'\r'</c> ending the buffer doesn't end a line when a <c>'\n'</c> follows it.
-    /// </summary>
-    internal TextPosition GetEndPosition(int next)
-    {
-        var end = _base + _textLength;
-
-        if (next == '\n' && (_flags & CrLfFlag) != 0 && _textLength > 0 && Buffer[_textLength - 1] == '\r')
-        {
-            var carriageReturn = GetPosition(end - 1);
-            return new TextPosition(end, carriageReturn.Line, carriageReturn.Column + 1);
-        }
-
-        return GetPosition(end);
-    }
-
-    // The position of the offset the start of a new window moves the origin to, see ReplaceBuffer, without recording the
-    // lines it counts, which are dropped with the text. The char after the end of the buffer is next, or -1.
-    private TextPosition GetPositionToDrop(int offset, int next)
-    {
-        var lines = _lines;
-
-        if (lines is not null && offset <= lines.Counted)
-        {
-            return FindPosition(lines, offset);
-        }
-
-        var known = GetKnownPositionBefore(lines, offset);
-        return CountForward(known.Offset, known.Line, known.Column, offset, next);
-    }
-
-    // The furthest position known at or before an offset after the lines recorded: the furthest position requested, the
-    // end of the lines recorded, or the origin
-    private TextPosition GetKnownPositionBefore(LineMap? lines, int offset)
-    {
-        if (lines is null)
-        {
-            return new TextPosition(_originOffset, _originLine, _originColumn);
-        }
-
-        return offset >= lines.FrontierOffset
-            ? new TextPosition(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn)
-            : FindPosition(lines, lines.Counted);
     }
 
     // The offsets before the origin, or after the end of the buffer, are not recorded such that the lines recorded are
@@ -425,7 +392,7 @@ public class Cursor
             return new TextPosition(offset, _originLine, Math.Max(1, _originColumn - (_originOffset - offset)));
         }
 
-        var newLines = CountLineStarts(offset, _originOffset, -1, out _);
+        var newLines = CountLineStarts(offset, _originOffset, out _);
 
         return newLines == 0
             ? new TextPosition(offset, _originLine, Math.Max(1, _originColumn - (_originOffset - offset)))
@@ -433,8 +400,8 @@ public class Cursor
     }
 
     // The number of lines which start after the offset from and up to the offset to of the buffer, and the start of the
-    // last one. The char after the end of the buffer is next, or -1 when it isn't known.
-    private int CountLineStarts(int from, int to, int next, out int lastStart)
+    // last one
+    private int CountLineStarts(int from, int to, out int lastStart)
     {
         var newLines = NewLines.AsSpan();
         var text = GetSpan(from, to - from);
@@ -475,7 +442,7 @@ public class Cursor
             var end = position + found;
             position = end + 1;
 
-            if (EndsLineAt(from + end, next))
+            if (EndsLineAt(from + end))
             {
                 count++;
                 lastStart = from + end + 1;
@@ -500,7 +467,7 @@ public class Cursor
                 return _base;
             }
 
-            if (EndsLineAt(_base + end, -1))
+            if (EndsLineAt(_base + end))
             {
                 return _base + end + 1;
             }
@@ -509,31 +476,34 @@ public class Cursor
         }
     }
 
-    // Whether the line terminator at an offset of the buffer ends a line: a '\r' followed by a '\n' doesn't when "\r\n" ends
-    // a single line. The char after the end of the buffer is next, or -1 when it isn't known.
-    private bool EndsLineAt(int offset, int next)
-    {
-        return (_flags & CrLfFlag) == 0 || Buffer[offset - _base] != '\r' || FollowsCarriageReturn(offset, next) != FollowedByLineFeed;
-    }
+    // Whether the line terminator at an offset of the buffer ends a line
+    private bool EndsLineAt(int offset) => EndsLine(Buffer[offset - _base], FollowsCarriageReturn(offset) == FollowedByLineFeed);
 
-    // Whether a '\r' at an offset of the buffer is followed by a '\n', which ends the line instead when "\r\n" ends a single
-    // line, by another char, or by the end of the input, or ends a buffer which more text follows. The char after the end of
-    // the buffer is next, or -1 when it isn't known.
-    private int FollowsCarriageReturn(int offset, int next)
-    {
-        var index = offset + 1 - _base;
+    // Whether a line terminator ends a line: a '\r' followed by a '\n' doesn't when "\r\n" ends a single line
+    private bool EndsLine(char c, bool followedByLineFeed) => !(followedByLineFeed && c == '\r' && (_flags & CrLfFlag) != 0);
 
-        if (index < _textLength)
+    // Whether the char at an offset of the buffer, a '\r' when "\r\n" ends a single line, is followed by a '\n', by another
+    // char or by the end of the input, or ends a buffer which more text follows
+    private int FollowsCarriageReturn(int offset)
+    {
+        var index = offset - _base;
+
+        if ((_flags & CrLfFlag) == 0 || index < 0 || Buffer[index] != '\r')
+        {
+            return FollowedByOther;
+        }
+
+        if (++index < _textLength)
         {
             return Buffer[index] == '\n' ? FollowedByLineFeed : FollowedByOther;
         }
 
-        if (next == '\n' || (_flags & FollowedByLineFeedFlag) != 0)
+        if ((_flags & FollowedByLineFeedFlag) != 0)
         {
             return FollowedByLineFeed;
         }
 
-        return next >= 0 || IsFinal ? FollowedByOther : FollowedByUnknown;
+        return IsFinal ? FollowedByOther : FollowedByUnknown;
     }
 
     private const int FollowedByOther = 0;
@@ -541,13 +511,10 @@ public class Cursor
     private const int FollowedByUnknown = 2;
 
     /// <summary>
-    /// Whether a char which follows another one ends a line, <paramref name="next"/> being the char after it or <c>-1</c>
-    /// at the end of the input.
+    /// Whether a char of <see cref="NewLines"/>, outside of the buffer, ends a line, <paramref name="next"/> being the char
+    /// after it or <c>-1</c> at the end of the input.
     /// </summary>
-    internal bool EndsLine(char c, int next)
-    {
-        return NewLines.AsSpan().IndexOf(c) >= 0 && !((_flags & CrLfFlag) != 0 && c == '\r' && next == '\n');
-    }
+    internal bool EndsLine(char c, int next) => NewLines.AsSpan().IndexOf(c) >= 0 && EndsLine(c, next == '\n');
 
     // The furthest position requested and the starts of the lines recorded after the origin
     private sealed class LineMap
@@ -673,8 +640,12 @@ public class Cursor
             var end = _base + _textLength;
 
             // The new window tells whether a '\r' ending the current one is followed by a '\n'
-            var next = end - bufferStart < buffer.Length ? buffer[end - bufferStart] : -1;
-            var start = GetPositionToDrop(bufferStart, next);
+            if (end - bufferStart < buffer.Length && buffer[end - bufferStart] == '\n')
+            {
+                MarkFollowedByLineFeed();
+            }
+
+            var start = GetPositionInBuffer(bufferStart, keep: false);
 
             _originOffset = bufferStart;
             _originLine = start.Line;

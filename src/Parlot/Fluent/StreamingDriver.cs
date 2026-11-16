@@ -76,10 +76,11 @@ internal sealed class StreamingDriver : IDisposable
     /// <param name="start">The offset of the text to keep in the current window.</param>
     public async ValueTask GrowAsync(int start)
     {
-        // The line and column of the new window are the ones of its first char in the current window
-        var position = Cursor.GetPosition(start);
-        var available = _length - start;
+        // The line and column of the new window are the ones of its first char in the current window. At its end, they
+        // depend on whether a '\r' ending it is followed by a '\n', which is read first.
         var atEnd = start == _length;
+        var position = atEnd ? default : Cursor.GetPosition(start);
+        var available = _length - start;
 
         if (available >= _options.MaxBufferedCharacters)
         {
@@ -93,8 +94,11 @@ internal sealed class StreamingDriver : IDisposable
             _offset += start;
         }
 
-        _line = position.Line;
-        _column = position.Column;
+        if (!atEnd)
+        {
+            _line = position.Line;
+            _column = position.Column;
+        }
 
         // Grow geometrically so that the retries cost a bounded multiple of a single parse
         var target = available + Math.Max(available, _options.BufferSize);
@@ -134,10 +138,14 @@ internal sealed class StreamingDriver : IDisposable
             _length += read;
         }
 
-        // A '\r' ending the window is followed by a '\n' or not, which the line of the start of the new window depends on
         if (atEnd)
         {
-            position = Cursor.GetEndPosition(_length > 0 ? _chars[0] : -1);
+            if (_length > 0 && _chars[0] == '\n')
+            {
+                Cursor.MarkFollowedByLineFeed();
+            }
+
+            position = Cursor.GetPosition(start);
             _line = position.Line;
             _column = position.Column;
         }
