@@ -79,6 +79,20 @@ internal sealed class OperatorStart
             }
         }
 
+        if (skipsWhiteSpace)
+        {
+            // The ASCII white space, which an operator that skips it can follow: in the set, the char after an operand is
+            // tested once when it is a space. A set of the context which doesn't skip one of them invokes the choices for
+            // nothing, which then fail as they would.
+            foreach (var c in " \t\n\r\v\f")
+            {
+                if (!chars.Contains(c))
+                {
+                    chars.Add(c);
+                }
+            }
+        }
+
         return new OperatorStart(chars, anyNonAscii, skipsWhiteSpace);
     }
 
