@@ -109,7 +109,27 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         {
             while (true)
             {
-                SkipWhiteSpace(context, scanner);
+                // The context's white space and new lines, the common case, are tested first. The same as SkipWhiteSpace,
+                // inlined in the loop
+                if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
+                {
+                    scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
+                }
+                else if (_whiteSpace == WhiteSpaceKind.WhiteSpace)
+                {
+                    scanner.SkipWhiteSpace(context.WhiteSpaceMask);
+                }
+                else if (_whiteSpace == WhiteSpaceKind.Chars)
+                {
+                    if (context.UseNewLines)
+                    {
+                        scanner.SkipChars(in _spaces);
+                    }
+                    else
+                    {
+                        scanner.SkipChars(in _spacesOrNewLines);
+                    }
+                }
 
                 // At the end of the text Current is the null char, which a delimiter can start with: Match tells
                 if (_firstChars.IndexOf(cursor.Current) < 0 || SkipComment(context, cursor, lineStart: true) == CommentResult.None)
