@@ -141,6 +141,29 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void ChoicesOfTwoCompositeAlternativesBeforeTheWhiteSpaceKeepTheBufferBounded()
+    {
+        // A choice of two composite alternatives selects them with its table too (#581): most statements have no tail, and
+        // the white space before the next one is kept while the char after it is read, then released
+        var assignment = OneOf(Terms.Text("="), Terms.Text("+=")).And(Terms.Identifier()).Then(static x => x.Item1 + x.Item2);
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var statement = Terms.Identifier().And(OneOf(assignment, arrow).Else("")).Then(static x => x.Item1.ToString() + x.Item2);
+        var parser = ZeroOrMany(statement).Eof().Then(static x => string.Join(";", x));
+
+        var spaces = new string(' ', 100);
+        var text = string.Join(spaces, Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 4 == 0 ? " = b" : i % 4 == 1 ? " => c" : i % 4 == 2 ? "\n" : "")));
+        var expected = string.Join(";", Enumerable.Range(0, 1_000).Select(static i => "a" + i + (i % 4 == 0 ? "=b" : i % 4 == 1 ? "=>c" : "")));
+
+        Assert.Equal(expected, parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 3), options));
+
+        // A statement and the white space around it are kept, not the 100k chars before them
+        Assert.InRange(peak(), 1, 512);
+    }
+
+    [Fact]
     public void GuardedRepetitionsKeepTheBufferBounded()
     {
         // The loop skips the white space to test whether a statement can start after it, then moves back before it: the

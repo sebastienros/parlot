@@ -2,7 +2,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable
+public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     private readonly bool _includeNewLines;
 
@@ -13,6 +13,9 @@ public sealed class NonWhiteSpaceLiteral : Parser<TextSpan>, ISourceable, ILoopA
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
+    // It reads its chars only, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {
