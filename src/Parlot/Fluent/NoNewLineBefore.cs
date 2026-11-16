@@ -21,7 +21,7 @@ namespace Parlot.Fluent;
 /// a choice, and <c>Longest</c>, which tries all its alternatives then.
 /// </para>
 /// </remarks>
-public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ILeadingWhiteSpace, IReadsLeadingWhiteSpace, IFailsAtFirstChar
+public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ILeadingWhiteSpace, IReadsLeadingWhiteSpace, IInvokesOnlyLiterals
 {
     private readonly string? _newLines;
 
@@ -74,8 +74,8 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(Parser);
 
-    // When the parser it wraps is a literal, see IFailsAtFirstChar
-    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(Parser);
+    // When the parser it wraps is a literal, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(Parser);
 
     /// <inheritdoc />
     public override bool Parse(ParseContext context, ref ParseResult<T> result)

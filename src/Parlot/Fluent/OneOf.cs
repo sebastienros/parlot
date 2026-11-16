@@ -15,7 +15,7 @@ namespace Parlot.Fluent;
 /// We then return the actual result of each parser.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace, IFailsAtFirstChar
+public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable, ISourceable, ILoopAnalyzable, IChoiceParser /**/, ISpanSourceable /**/, ILeadingWhiteSpace, IInvokesOnlyLiterals
 {
     // Used as a lookup for OneOf<T> to find other OneOf<T> parsers that could
     // be invoked when there is no match.
@@ -76,7 +76,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     private byte _whiteSpace;
 
     // The number of alternatives up to which a choice which invokes them before the white space tries them in order, without
-    // a lookup table, when they all fail at their first char without invoking another parser, see AllFailAtFirstChar()
+    // a lookup table, when they all fail at their first char without invoking another parser, see AllInvokeOnlyLiterals()
     private const int MaxAlternativesInOrder = 2;
 
     private CharMap<Parser<T>[]>? _mapBeforeWhiteSpace;
@@ -489,7 +489,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // them, are tried in order: reading the char after the white space costs about what the one which doesn't match does. A
         // composite alternative, even a single one, invokes what it starts with before it fails, so the table selects them then
         // (#581).
-        if (_originalParsers.Length > MaxAlternativesInOrder || !AllFailAtFirstChar(_originalParsers))
+        if (_originalParsers.Length > MaxAlternativesInOrder || !AllInvokeOnlyLiterals(_originalParsers))
         {
             (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
         }
@@ -498,15 +498,15 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         return BeforeWhiteSpace;
     }
 
-    // A nested choice of literals, which only reads the text, see IFailsAtFirstChar
-    bool IFailsAtFirstChar.FailsAtFirstChar => AllFailAtFirstChar(_originalParsers);
+    // A nested choice of literals, which only reads the text, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => AllInvokeOnlyLiterals(_originalParsers);
 
-    // Whether no alternative invokes another parser than literals, see IFailsAtFirstChar
-    private static bool AllFailAtFirstChar(Parser<T>[] parsers)
+    // Whether no alternative invokes another parser than literals, see IInvokesOnlyLiterals
+    private static bool AllInvokeOnlyLiterals(Parser<T>[] parsers)
     {
         foreach (var parser in parsers)
         {
-            if (!FailsAtFirstChar.Of(parser))
+            if (!InvokesOnlyLiterals.Of(parser))
             {
                 return false;
             }

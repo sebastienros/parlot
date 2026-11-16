@@ -7,7 +7,7 @@ namespace Parlot.Fluent;
 /// <summary>
 /// Wraps an existing parser as an <see cref="ISeekable"/> implementation by provide the seekable properties.
 /// </summary>
-internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IFailsAtFirstChar
+internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     public bool CanSeek { get; set; }
 
@@ -27,8 +27,8 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnal
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(Parser);
 
-    // When the parser it wraps is a literal, see IFailsAtFirstChar
-    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(Parser);
+    // When the parser it wraps is a literal, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(Parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<T> result)
     {

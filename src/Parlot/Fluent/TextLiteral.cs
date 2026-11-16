@@ -6,7 +6,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IFailsAtFirstChar
+public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
     private readonly StringComparison _comparisonType;
     private readonly bool _returnMatchedText;
@@ -154,8 +154,8 @@ public sealed class TextLiteral : Parser<string>, ISeekablePrefixes, ISourceable
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => Text.Length == 0;
 
-    // It reads its text only, see IFailsAtFirstChar
-    bool IFailsAtFirstChar.FailsAtFirstChar => true;
+    // It reads its text only, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<string> result)
     {

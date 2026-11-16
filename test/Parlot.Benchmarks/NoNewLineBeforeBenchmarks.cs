@@ -9,7 +9,8 @@ namespace Parlot.Benchmarks;
 
 // NoNewLineBefore alternatives of choices which skip the white space for their alternatives, as JavaScript's postfix
 // operators and arrows. Before #551 such a choice had no lookup table and tried its alternatives in order; it now selects
-// them with the char after the white space. The Plain rows are the same grammars without NoNewLineBefore.
+// them with the char after the white space, and since #581 also when it has only two alternatives which aren't literals, like
+// the ones of Arrows and Tails. The Plain rows are the same grammars without NoNewLineBefore.
 
 [MemoryDiagnoser, ShortRunJob, GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory), CategoriesColumn]
 public class NoNewLineBeforeBenchmarks
@@ -104,14 +105,14 @@ public class NoNewLineBeforeBenchmarks
     [Benchmark, BenchmarkCategory("Arrows")]
     public int PlainArrows() => _plainArrows.Parse(Statements);
 
+    [Benchmark, BenchmarkCategory("Arrows")]
+    public int ArrowsGenerated() => NoNewLineBeforeGenerated.TryParseArrows(Statements, out var value) ? value : -1;
+
     [Benchmark(Baseline = true), BenchmarkCategory("Tails")]
     public int TwoAlternativeTails() => _twoAlternativeTails.Parse(Tails);
 
     [Benchmark, BenchmarkCategory("Tails")]
     public int PerOperatorTails() => _perOperatorTails.Parse(Tails);
-
-    [Benchmark, BenchmarkCategory("Arrows")]
-    public int ArrowsGenerated() => NoNewLineBeforeGenerated.TryParseArrows(Statements, out var value) ? value : -1;
 }
 
 public static partial class NoNewLineBeforeGenerated

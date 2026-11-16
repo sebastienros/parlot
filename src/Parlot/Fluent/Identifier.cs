@@ -4,7 +4,7 @@ using System;
 
 namespace Parlot.Fluent;
 
-public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IFailsAtFirstChar
+public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
     private readonly Func<char, bool>? _extraStart;
     private readonly Func<char, bool>? _extraPart;
@@ -33,8 +33,8 @@ public sealed class Identifier : Parser<TextSpan>, ISeekable, ISourceable, ILoop
     // A custom start can accept the end of the text, where the cursor doesn't move
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => _extraStart != null;
 
-    // It reads its chars only, see IFailsAtFirstChar
-    bool IFailsAtFirstChar.FailsAtFirstChar => true;
+    // It reads its chars only, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

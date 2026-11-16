@@ -258,14 +258,14 @@ public class NewLineTests
     }
 
     // How many times a parse enters the parsers which are counted
-    private static (bool Success, string? Value, int Offset, int Furthest, int Entered) ParseCounting(Parser<string> parser, string input, Func<object, bool> counted)
+    private static (bool Success, T? Value, int Offset, int Furthest, int Entered) ParseCounting<T>(Parser<T> parser, string input, Func<object, bool> counted)
     {
         var entered = 0;
         var context = new ParseContext(new Scanner(input)) { OnEnterParser = (p, _) => entered += counted(p) ? 1 : 0 };
-        var result = new ParseResult<string>();
+        var result = new ParseResult<T>();
         var success = parser.Parse(context, ref result);
 
-        return (success, success ? result.Value : null, context.Scanner.Cursor.Offset, context.Scanner.Cursor.FurthestOffset, entered);
+        return (success, success ? result.Value : default, context.Scanner.Cursor.Offset, context.Scanner.Cursor.FurthestOffset, entered);
     }
 
     [Theory]
@@ -422,8 +422,8 @@ public class NewLineTests
         var decrement = NoNewLineBefore(Terms.Text("--")).Then(static _ => -1);
         var postfix = WithComments(Terms.Identifier().SkipAnd(OneOf(increment, decrement).Else(0)));
 
-        Assert.Equal(1, ParseCountingInt(postfix, input, p => ReferenceEquals(p, increment)));
-        Assert.Equal(seconds, ParseCountingInt(postfix, input, p => ReferenceEquals(p, decrement)));
+        Assert.Equal(1, ParseCounting(postfix, input, p => ReferenceEquals(p, increment)).Entered);
+        Assert.Equal(seconds, ParseCounting(postfix, input, p => ReferenceEquals(p, decrement)).Entered);
 
         // A level of postfix operators alone, tried again after one which matched
         var table = Terms.Identifier().Then(static x => x.ToString()).Operators()
@@ -432,16 +432,6 @@ public class NewLineTests
 
         Assert.True(outcome.Success);
         Assert.Equal(operators, outcome.Entered);
-
-        static int ParseCountingInt(Parser<int> parser, string input, Func<object, bool> counted)
-        {
-            var entered = 0;
-            var context = new ParseContext(new Scanner(input)) { OnEnterParser = (p, _) => entered += counted(p) ? 1 : 0 };
-            var result = new ParseResult<int>();
-
-            Assert.True(parser.Parse(context, ref result));
-            return entered;
-        }
     }
 
     [Theory]

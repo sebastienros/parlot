@@ -14,15 +14,15 @@ namespace Parlot.Fluent;
 /// It is read where the choice resolves how it skips the white space, from the parsers' fields: no reflection, which native
 /// AOT trims.
 /// </remarks>
-internal interface IFailsAtFirstChar
+internal interface IInvokesOnlyLiterals
 {
-    bool FailsAtFirstChar { get; }
+    bool InvokesOnlyLiterals { get; }
 }
 
-internal static class FailsAtFirstChar
+internal static class InvokesOnlyLiterals
 {
     /// <summary>
     /// Whether <paramref name="parser"/> invokes no other parser than literals.
     /// </summary>
-    public static bool Of(object parser) => parser is IFailsAtFirstChar { FailsAtFirstChar: true };
+    public static bool Of(object parser) => parser is IInvokesOnlyLiterals { InvokesOnlyLiterals: true };
 }

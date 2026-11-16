@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace Parlot.Fluent;
 
-public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IChoiceParser, IFailsAtFirstChar
+public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable, IChoiceParser, IInvokesOnlyLiterals
     where A : T
     where B : T
 {
@@ -35,8 +35,8 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parserA) | analysis.Invoke(_parserB);
 
-    // A choice of two literals, see IFailsAtFirstChar
-    bool IFailsAtFirstChar.FailsAtFirstChar => FailsAtFirstChar.Of(_parserA) && FailsAtFirstChar.Of(_parserB);
+    // A choice of two literals, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(_parserA) && InvokesOnlyLiterals.Of(_parserB);
 
     IReadOnlyList<object> IChoiceParser.Alternatives => [_parserA, _parserB];
 
