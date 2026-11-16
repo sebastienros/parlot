@@ -15,10 +15,11 @@ namespace Parlot.Fluent;
 /// </para>
 /// <para>
 /// It has the <see cref="ISeekable"/> hints of its parser, and skips white space, so a choice holding it with alternatives
-/// which skip white space keeps its lookup table. Such a choice usually skips the white space once before it invokes them;
-/// when one of them can start with this parser, it selects them with the char after the white space and invokes them
-/// before it instead, so that this parser finds the new lines. So do <c>Operators()</c>, whose operators are tried through
-/// a choice, and <c>Longest</c>, which tries all its alternatives then.
+/// which skip white space keeps its lookup table, and skips the white space once before it invokes them. When one of them
+/// can start with this parser, the choice tells it the white space it skipped, where this parser looks for the new lines.
+/// So does <c>Operators()</c>, whose operators are tried through a choice. When an alternative can start with a parser which
+/// skips the white space before this one, the choice selects them with the char after the white space and invokes them
+/// before it instead, and so does <c>Longest</c>, which tries all its alternatives then.
 /// </para>
 /// </remarks>
 public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ILeadingWhiteSpace, IReadsLeadingWhiteSpace, IInvokesOnlyLiterals
@@ -53,6 +54,10 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
     /// </summary>
     public Parser<T> Parser { get; }
 
+    object IReadsLeadingWhiteSpace.Parser => Parser;
+
+    string? IReadsLeadingWhiteSpace.NewLines => _newLines;
+
     // The hints of the parser it invokes after the white space, read when they are asked for since it can be a Deferred set
     // later. It skips the white space itself, whether its parser does or not.
     private ForwardedHints? _hints;
@@ -85,7 +90,7 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
         var cursor = context.Scanner.Cursor;
         var start = cursor.Offset;
 
-        if (!context.SkipWhiteSpaceAndFindNewLine(_newLines) && Parser.Parse(context, ref result))
+        if (!context.SkipWhiteSpaceAndFindNewLineBefore(_newLines) && Parser.Parse(context, ref result))
         {
             context.ExitParser(this);
             return true;
@@ -107,7 +112,7 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
         var cursor = context.Scanner.Cursor;
         var start = cursor.Offset;
 
-        if (!context.SkipWhiteSpaceAndFindNewLine(_newLines) && (_withoutValue ? Parser.ParseWithoutValue(context, ref result) : Parser.Parse(context, ref result)))
+        if (!context.SkipWhiteSpaceAndFindNewLineBefore(_newLines) && (_withoutValue ? Parser.ParseWithoutValue(context, ref result) : Parser.Parse(context, ref result)))
         {
             context.ExitParser(this);
             return true;
@@ -139,14 +144,14 @@ public sealed class NoNewLineBefore<T> : Parser<T>, ISeekablePrefixes, ISourceab
             .MethodName;
 
         // var start = cursor.Offset;
-        // success = !context.SkipWhiteSpaceAndFindNewLine(newLines) && Helper(context, out value);
+        // success = !context.SkipWhiteSpaceAndFindNewLineBefore(newLines) && Helper(context, out value);
         // if (!success) cursor.ResetPosition(start);
         var startName = $"start{context.NextNumber()}";
         var newLines = _newLines is null ? "null" : LiteralHelper.StringToLiteral(_newLines);
         var output = context.DiscardResult ? "_" : result.ValueVariable;
 
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
-        result.Body.Add($"{result.SuccessVariable} = !{ctx}.SkipWhiteSpaceAndFindNewLine({newLines}) && {helperName}({ctx}, out {output});");
+        result.Body.Add($"{result.SuccessVariable} = !{ctx}.SkipWhiteSpaceAndFindNewLineBefore({newLines}) && {helperName}({ctx}, out {output});");
         result.Body.Add($"if (!{result.SuccessVariable})");
         result.Body.Add("{");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
