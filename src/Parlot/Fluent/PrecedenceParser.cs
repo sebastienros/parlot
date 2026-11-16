@@ -1500,7 +1500,9 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // The local functions testing the chars the operators of the choices can start with, see OperatorStart. A reader is
         // read through the choices, which pin the white space, as are the diagnostics collected.
         var startTests = new List<string>();
+        var startTestNames = new Dictionary<string, string>();
 
+        // The tables which have the same chars share their test
         string? StartTest(OperatorStart? start)
         {
             if (compacting || context.CollectDiagnostics || start is null)
@@ -1508,14 +1510,25 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 return null;
             }
 
-            var name = $"operatorStart{id}_{startTests.Count.ToString(CultureInfo.InvariantCulture)}";
-            startTests.Add(start.GenerateTest(name, ctx, cursor));
+            var test = start.GenerateTest("{0}", ctx, cursor);
+
+            if (!startTestNames.TryGetValue(test, out var name))
+            {
+                name = $"operatorStart{id}_{startTests.Count.ToString(CultureInfo.InvariantCulture)}";
+                startTestNames.Add(test, name);
+                startTests.Add(start.GenerateTest(name, ctx, cursor));
+            }
+
             return name;
         }
 
-        var segmentHelpers = new Dictionary<Segment, (LookupHelper? Choice, LookupHelper? Plain)>();
+        // The call of a choice of the lookup, only when one of its operators can start with the char after the operand. Its
+        // test is emitted when the lookup uses the choice.
+        string? LookupCall(LookupChoice? choice) => choice is null
+            ? null
+            : $"{(StartTest(choice.Start) is { } test ? $"{test}() && " : "")}{ChoiceHelper(choice.Choice)}({ctx}, out next)";
 
-        LookupHelper? LookupHelperOf(LookupChoice? choice) => choice is null ? null : new LookupHelper(ChoiceHelper(choice.Choice), choice.Start);
+        var segmentChoices = new Dictionary<Segment, (LookupChoice? Choice, LookupChoice? Plain)>();
 
         if (_hasFollowingOperators)
         {
@@ -1523,7 +1536,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             {
                 var segmentChoice = GetChoice(segment, plain: false);
                 var plainChoice = segment.Valued >= 0 ? GetChoice(segment, plain: true) : null;
-                segmentHelpers[segment] = (LookupHelperOf(segmentChoice), LookupHelperOf(plainChoice));
+                segmentChoices[segment] = (segmentChoice, plainChoice);
             }
         }
 
@@ -1615,7 +1628,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         if (_hasFollowingOperators)
         {
-            result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentHelpers, StartTest, ctx, cursor));
+            result.Body.Add(GenerateLookup(lookupName, levelHelpers, segmentChoices, LookupCall, ctx, cursor));
         }
 
         if (_prefixLevels.Length > 0)
@@ -1890,11 +1903,8 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         return sb.ToString();
     }
 
-    // The helper of a choice of the lookup, and the chars its operators can start with
-    private sealed record LookupHelper(string Helper, OperatorStart? Start);
-
-    // startTest emits the local function testing the chars of a choice that is used, and returns its name, if any
-    private string GenerateLookup(string lookup, string?[] levelHelpers, Dictionary<Segment, (LookupHelper? Choice, LookupHelper? Plain)> segmentHelpers, Func<OperatorStart?, string?> startTest, string ctx, string cursor)
+    // The choices of each segment, whose calls lookupCall returns, null when there is none, see GenerateSource()
+    private string GenerateLookup(string lookup, string?[] levelHelpers, Dictionary<Segment, (LookupChoice? Choice, LookupChoice? Plain)> segmentChoices, Func<LookupChoice?, string?> lookupCall, string ctx, string cursor)
     {
         var sb = new StringBuilder();
 
@@ -1911,13 +1921,11 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
         // which parses the operators, and an operator which can be there isn't a failure where it starts. Most operators
         // follow their operand: only the ones after white space restore the failure, which cost
         // ValuedOperatorsBenchmarks.TableGenerated 1.4% on its mixed input otherwise.
-        void Choice(LookupHelper? helper)
+        void Choice(LookupChoice? choice)
         {
-            if (helper is not null)
+            if (lookupCall(choice) is { } call)
             {
-                // The choice is only invoked when one of its operators can start with the char after the operand
-                var start = startTest(helper.Start) is { } test ? $"{test}() && " : "";
-                Line($"        if ({start}{helper.Helper}({ctx}, out next))");
+                Line($"        if ({call})");
                 Line("        {");
                 Line($"            if (next < 0 && {cursor}.Offset != nextPosition)");
                 Line("            {");
@@ -1935,19 +1943,19 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         foreach (var segment in Segments())
         {
-            var (choiceHelper, plainHelper) = segmentHelpers[segment];
+            var (segmentChoice, plainChoice) = segmentChoices[segment];
 
             if (segment.Valued >= 0)
             {
                 // The previous segments returned, so it is the lookup from the level of valued operators
                 Line($"    if (lowest <= {Text(segment.Valued)})");
                 Line("    {");
-                Choice(choiceHelper);
+                Choice(segmentChoice);
                 Line("    }");
             }
             else
             {
-                plainHelper = choiceHelper;
+                plainChoice = segmentChoice;
             }
 
             // The levels before the first one without valued operators are prefix levels
@@ -1957,7 +1965,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             {
                 Line($"    if (lowest <= {Text(plainStart)})");
                 Line("    {");
-                Choice(plainHelper);
+                Choice(plainChoice);
                 Line("    }");
             }
 
