@@ -277,5 +277,5 @@ public sealed class Then<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoo
         }
     }
 
-    override public string ToString() => $"{_parser} (Then)";
+    public override string ToString() => FormatOnce($"{_parser} (Then)");
 }

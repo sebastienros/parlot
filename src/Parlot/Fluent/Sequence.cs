@@ -178,7 +178,7 @@ public sealed class Sequence<T1, T2> : Parser<ValueTuple<T1, T2>>, ISeekablePref
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
-    public override string ToString() => $"{_parser1} & {_parser2}";
+    public override string ToString() => FormatOnce($"{_parser1} & {_parser2}");
 }
 
 public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
@@ -286,7 +286,7 @@ public sealed class Sequence<T1, T2, T3> : Parser<ValueTuple<T1, T2, T3>>, ISeek
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
-    public override string ToString() => $"{_parser} & {_lastParser} ";
+    public override string ToString() => FormatOnce($"{_parser} & {_lastParser} ");
 
 
 
@@ -524,7 +524,7 @@ public sealed class Sequence<T1, T2, T3, T4> : Parser<ValueTuple<T1, T2, T3, T4>
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
-    public override string ToString() => $"{_parser} & {_lastParser} ";
+    public override string ToString() => FormatOnce($"{_parser} & {_lastParser} ");
 }
 
 public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3, T4, T5>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
@@ -696,7 +696,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5> : Parser<ValueTuple<T1, T2, T3,
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
-    public override string ToString() => $"{_parser} & {_lastParser} ";
+    public override string ToString() => FormatOnce($"{_parser} & {_lastParser} ");
 }
 
 public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
@@ -869,7 +869,7 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6> : Parser<ValueTuple<T1, T2,
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
-    public override string ToString() => $"{_parser} & {_lastParser} ";
+    public override string ToString() => FormatOnce($"{_parser} & {_lastParser} ");
 }
 
 public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1, T2, T3, T4, T5, T6, T7>>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, ISpanSourceable, ISequenceSourceable
@@ -1043,5 +1043,5 @@ public sealed class Sequence<T1, T2, T3, T4, T5, T6, T7> : Parser<ValueTuple<T1,
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateSequence(writer, valueVariable, fail, this);
 
-    public override string ToString() => $"{_parser} & {_lastParser} ";
+    public override string ToString() => FormatOnce($"{_parser} & {_lastParser} ");
 }

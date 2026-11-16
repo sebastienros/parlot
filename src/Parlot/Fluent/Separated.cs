@@ -723,5 +723,5 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         return result;
     }
 
-    public override string ToString() => $"Separated({_separator}, {_parser})";
+    public override string ToString() => FormatOnce($"Separated({_separator}, {_parser})");
 }

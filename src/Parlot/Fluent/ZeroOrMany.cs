@@ -143,7 +143,7 @@ public sealed class ZeroOrMany<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoop
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateLoop(writer, _parser, typeof(T), _max, oneOrMore: false, valueVariable, fail);
 
-    public override string ToString() => $"{_parser}*";
+    public override string ToString() => FormatOnce($"{_parser}*");
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

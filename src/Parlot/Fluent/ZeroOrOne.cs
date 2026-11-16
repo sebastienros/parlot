@@ -149,5 +149,5 @@ public sealed class ZeroOrOne<T> : Parser<IReadOnlyList<T>>, ISourceable, ILoopA
             valueVariable != null ? $"{valueVariable} = global::System.Array.Empty<{elementTypeName}>();" : null);
     }
 
-    public override string ToString() => $"{_parser}?";
+    public override string ToString() => FormatOnce($"{_parser}?");
 }

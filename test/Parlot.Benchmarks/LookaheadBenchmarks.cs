@@ -12,6 +12,7 @@ public partial class LookaheadBenchmarks
     public static partial bool TryParseNotFollowed(string text, out string value);
     public static partial bool TryParseNot(string text, out string value);
     public static partial bool TryParseWhen(string text, out string value);
+    public static partial bool TryParseWhenReason(string text, out string value, out (int Offset, object Reason) failure);
     public static partial bool TryParsePeeked(string text, out string value);
     public static partial bool TryParsePeekBlocks(string text, out int value);
     public static partial bool TryParseFollowedBlocks(string text, out int value);
@@ -77,6 +78,10 @@ public partial class LookaheadBenchmarks
     [Benchmark]
     public bool WhenRejected() => TryParseWhen("  from", out _);
 
+    // A rejection which records a reason, returned with the failure
+    [Benchmark]
+    public bool WhenReasonRejected() => TryParseWhenReason("  from", out _, out _);
+
     // What must not follow, or must not match, is there: the failure is at its start, after the white space it skips
     [Benchmark]
     public bool NotFollowedRejected() => TryParseNotFollowed("  word  (", out _);
@@ -105,6 +110,9 @@ public partial class LookaheadBenchmarks
     private static readonly Parser<string> WhenParser =
         Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f').Then(static value => "");
 
+    private static readonly Parser<string> WhenReasonParser =
+        Terms.Identifier().When(static (_, value) => value.Length == 0 || value.Span[0] != 'f', "reserved").Then(static value => "");
+
     private static readonly Parser<string> PeekedParser =
         Peek(Terms.Text("from")).SkipAnd(Terms.Identifier()).Then(static value => "");
 
@@ -122,6 +130,13 @@ public partial class LookaheadBenchmarks
 
     [Benchmark]
     public bool RuntimeWhenRejected() => WhenParser.TryParse("  from", out _);
+
+    // The error with the reason isn't built when it isn't returned
+    [Benchmark]
+    public bool RuntimeWhenReasonRejected() => WhenReasonParser.TryParse("  from", out _);
+
+    [Benchmark]
+    public bool RuntimeWhenReasonError() => WhenReasonParser.TryParse("  from", out _, out _);
 
     [Benchmark]
     public bool RuntimeNotFollowedRejected() => NotFollowedParser.TryParse("  word  (", out _);

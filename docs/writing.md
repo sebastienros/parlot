@@ -240,6 +240,32 @@ var b = Terms.Text("b");
 var p = Select(c => c.OptionA ? 0 : 1, a, b);
 ```
 
+## The text of a parser
+
+`ToString()` describes a parser with the parsers it invokes. A parser which invokes others is written once per call:
+where it is reached again, from another parser which shares it or through a cycle, it is written as a reference, its
+`Named()` name or `#n`, and its text is labelled with it, `#n:(...)`. The referenced parsers which have no name, or the
+name of another referenced parser, are numbered in the order their texts start: `#1`, `#2`, or `x#3` for a second
+parser named `x`. The text of a grammar is then as long as the parsers it holds rather than the paths to them. Literals, and the
+`Terms` which skip the white space before them, are written each time.
+
+```c#
+var pair = Terms.Char('a').And(Terms.Char('b'));
+var parser = pair.And(pair);
+
+parser.ToString(); // "#1:(Char('a') (Skip WS) & Char('b') (Skip WS)) & #1 "
+pair.Named("pair");
+parser.ToString(); // "pair:(Char('a') (Skip WS) & Char('b') (Skip WS)) & pair "
+```
+
+As a last resort for the grammars which hold many parsers, which a debugger shows, the text stops with `...` once it
+reaches 4,096 chars, and the parsers nested deeper than 500 others, or than the stack allows, are written as `...`. A
+label whose references are past the end of the text is kept.
+
+A custom parser is written as its `ToString()` returns it, each time it is reached, and the parsers it writes are written
+in full in its text, with their own references. A parser which is reached again through it, in a cycle, is written as
+its name, or `...`.
+
 ## Grammar rules
 
 [Grammar rules](grammar-rules.md) lists the patterns that make a grammar slower than it could be or keep it from parsing

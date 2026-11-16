@@ -36,6 +36,20 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable, ILookahead
         _guard = new SeekGuard(parser, guardChoices: true);
     }
 
+    /// <summary>
+    /// Creates a parser failing when <paramref name="parser"/> matches, which records <paramref name="reason"/> with the
+    /// failure, see <see cref="Cursor.FurthestReason"/>.
+    /// </summary>
+    /// <param name="parser">The parser which must not match.</param>
+    /// <param name="reason">Why it must not: a constant, like a message or an <see langword="enum"/> value.</param>
+    public Not(Parser<T> parser, object reason) : this(parser)
+    {
+        _reason = reason ?? throw new ArgumentNullException(nameof(reason));
+    }
+
+    // Recorded with the failure when the parser matches, null when there is none
+    private readonly object? _reason;
+
     object ILookahead.Parser => _parser;
 
     bool ILookahead.MatchesParser => false;
@@ -74,7 +88,7 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable, ILookahead
         }
 
         // The failure is at the start of what matched, wherever it was read up to
-        context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true });
+        context.RecordRejected(start, recorded, _parser is ISeekable { SkipWhitespace: true }, _reason);
         cursor.ResetPosition(start);
 
         context.ExitParser(this);
@@ -120,7 +134,9 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable, ILookahead
         var success = context.PinnedCall(result, $"{helperName}({context.ParseContextName}, out _)");
         result.Body.Add($"if ({success})");
         result.Body.Add("{");
-        result.Body.Add($"    {context.ParseContextName}.RecordRejected({startName}, {recordedName}, {(_parser is ISeekable { SkipWhitespace: true } ? "true" : "false")});");
+        // A reason is a constant, recorded with the failure
+        var reason = context.ReasonArgument(_reason);
+        result.Body.Add($"    {context.ParseContextName}.RecordRejected({startName}, {recordedName}, {(_parser is ISeekable { SkipWhitespace: true } ? "true" : "false")}{reason});");
         result.Body.Add($"    {cursorName}.ResetPosition({startName});");
         result.Body.Add($"    {result.SuccessVariable} = false;");
         result.Body.Add("}");
@@ -133,5 +149,5 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable, ILookahead
         return result;
     }
 
-    public override string ToString() => $"Not ({_parser})";
+    public override string ToString() => FormatOnce($"Not ({_parser})");
 }

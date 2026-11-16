@@ -57,6 +57,13 @@ public class StreamingTests
         // A choice whose lookup table holds the hints of the identifier, keywords and punctuation
         ["codepoint-identifier-tokens"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(Terms.Text("if"), Terms.Text("("), Terms.Identifier(CodePointIdentifierTests.IsJavaScriptStart, CodePointIdentifierTests.IsJavaScriptPart, IdentifierOptions.JavaScript).Then(static x => Character.DecodeIdentifier(x).ToString()))).Eof()),
         ["integer"] = new Grammar<long>(Terms.Integer()),
+        // Rejections with a reason, reported with the furthest failure, and a token read again where the buffer ends
+        ["reasons"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(OneOf(
+            Terms.Identifier().When(static (_, value) => !value.Span.SequenceEqual("from".AsSpan()), "reserved").Then(static value => value.ToString()),
+            Terms.Integer().WhenNotFollowedBy(Literals.Identifier(), "identifier after a number").Then(static value => "#"),
+            Not(Terms.Keyword("let"), 7).SkipAnd(Terms.Char('(')).Then(static _ => "("),
+            Terms.Pattern(static c => c == '"').SkipAnd(Literals.Pattern(static c => c != '"').ThenTry(static value => (value.Length < 4, value.ToString()), "too long")).AndSkip(Literals.Char('"'))))
+            .AndSkip(Terms.Char(';')).Eof()),
         ["standalone-eof"] = new Grammar<object?>(Eof()),
         ["integer-standalone-eof"] = new Grammar<long>(Terms.Integer().AndSkip(Eof())),
         ["integer-eof-error"] = new Grammar<long>(Terms.Integer().AndSkip(Eof().ElseError("Unexpected trailing input"))),
@@ -575,6 +582,7 @@ public class StreamingTests
         Add("position-backtrack", "", "abc", "abc\n =\n (", "abc\n =\n x", "a\r\n=\r\n(", "\n\n abc \n = x", "abc =", "abc\n\n", "1");
         Add("elseerror", "(\n1\n x", "( 12\n )", "\n(\n\n1 \n x", "(1\r\n\r\n");
         Add("integer-eof-error", " 42\n\n x", "\n\n42\n");
+        Add("reasons", "", "a b;", " from;", "a from;", "12ab;", "a 12 ab ;", "let", " ( let (;", "\"ab\" \"abcd\";", "\"abcdefg", "a b", "from ;x");
 
         return data;
     }
@@ -1917,7 +1925,7 @@ public class StreamingTests
                     return null;
                 }
 
-                return success ? "OK " + Dump(result.Value) : "FAIL";
+                return success ? "OK " + Dump(result.Value) : "FAIL" + Reason(scanner.Cursor);
             }
             catch (ParseException e)
             {
@@ -1927,17 +1935,30 @@ public class StreamingTests
 
         public async Task<string> ParseAsync(Func<TextReader> reader, StreamParseOptions options)
         {
-            var (success, value) = await _parser.TryParseAsync(reader(), options);
+            // The context of the parse, whose cursor reports the reason of a failure. Every option is copied.
+            ParseContext? context = null;
+            var factory = options.ContextFactory;
+            var capturing = new StreamParseOptions
+            {
+                BufferSize = options.BufferSize,
+                MaxBufferedCharacters = options.MaxBufferedCharacters,
+                SkipWhiteSpace = options.SkipWhiteSpace,
+                ContextFactory = (scanner, token) => context = factory?.Invoke(scanner, token) ?? new ParseContext(scanner, token),
+            };
+
+            var (success, value) = await _parser.TryParseAsync(reader(), capturing);
 
             if (success)
             {
                 return "OK " + Dump(value);
             }
 
+            var reason = Reason(context!.Scanner.Cursor);
+
             try
             {
                 await _parser.ParseAsync(reader(), options);
-                return "FAIL";
+                return "FAIL" + reason;
             }
             catch (ParseException e)
             {
@@ -1965,11 +1986,15 @@ public class StreamingTests
                 return message;
             }
 
-            Assert.Null(error);
-            return "FAIL";
+            // A failure without an exception has an error when it has a reason
+            Assert.True(error is null || error.Reason is not null);
+            return error is null ? "FAIL" : $"FAIL {Dump(error.Reason)} at {error.Position.Offset}{error.Position}";
         }
 
         private static string Error(ParseException e) => $"ERROR {e.Message} at {e.Position.Offset}{e.Position}";
+
+        // The reason recorded at the furthest failure, if any
+        private static string Reason(Cursor cursor) => cursor.FurthestReason is { } reason ? $" {Dump(reason)} at {cursor.FurthestOffset}{cursor.FurthestPosition}" : "";
     }
 
     private static string Dump(object? value, int depth = 0)

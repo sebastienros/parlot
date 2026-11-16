@@ -134,5 +134,5 @@ public sealed class Capture<T> : Parser<TextSpan>, ISeekablePrefixes, ISourceabl
         writer.Add($"{valueVariable} = {writer.CreateSpan(start, $"{writer.Pos} - {start}")};");
     }
 
-    public override string ToString() => $"{_parser} (Capture)";
+    public override string ToString() => FormatOnce($"{_parser} (Capture)");
 }
