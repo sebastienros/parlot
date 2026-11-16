@@ -649,6 +649,22 @@ public class CompactingStreamTests
         Assert.InRange(peak(), 1, 64);
     }
 
+    [Fact]
+    public void CommentsAtTheStartOfALineAreTokens()
+    {
+        var parser = LineStartCommentTests.Tokens.WithComments(LineStartCommentTests.JavaScriptChars);
+        var text = string.Join(" /* a\n comment */ --> b\n", Enumerable.Range(0, 100).Select(static i => "id" + i)) + " --> c";
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 2 });
+
+        var tokens = parser.Parse(new ChunkedReader(text, 1), options)!;
+
+        Assert.Equal(parser.Parse(text), tokens);
+        // The last "-->" is in the middle of a line: "--", ">" and "c"
+        Assert.Equal(100 + 3, tokens.Count);
+        Assert.InRange(peak(), 1, 64);
+    }
+
     [Theory]
     [InlineData("var a; let b var c;\n  var d")]
     [InlineData("let a; const b; let c;")]

@@ -39,6 +39,32 @@ public static partial class CommentsGrammars
             .Eof()
             .Then(static list => string.Join("|", list));
 
+    // JavaScript's script trivia: "-->" is a comment at the start of a line only
+    [GenerateParser(nameof(TryParseJavaScriptScript))]
+    private static Parser<string> BuildJavaScriptScript() =>
+        ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Text("<"), Terms.Text("!"), Terms.Text("/"), Terms.Text("*")))
+            .AndSkip(SkipWhiteSpace(Always()))
+            .Eof()
+            .Then(static list => string.Join("|", list))
+            .WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithSingleLine("<!--", JavaScriptNewLines).WithSingleLine("-->", JavaScriptNewLines, CommentPlacement.LineStart).WithMultiLine("/*", "*/", UnterminatedComment.NotAComment, JavaScriptNewLines));
+
+    // The same over the context's set, and a multi line comment containing a new line when it contains '\n'
+    [GenerateParser(nameof(TryParseJavaScriptScriptSet))]
+    private static Parser<string> BuildJavaScriptScriptSet() =>
+        ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Text("<"), Terms.Text("!"), Terms.Text("/"), Terms.Text("*")))
+            .AndSkip(SkipWhiteSpace(Always()))
+            .Eof()
+            .Then(static list => string.Join("|", list))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("-->", JavaScriptNewLines, CommentPlacement.LineStart).WithSingleLine("//", JavaScriptNewLines).WithSingleLine("<!--", JavaScriptNewLines).WithMultiLine("/*", "*/"));
+
+    // White space without new lines: only the start of the text starts a line
+    [GenerateParser(nameof(TryParseLineStartWithoutNewLines))]
+    private static Parser<string> BuildLineStartWithoutNewLines() =>
+        ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Text("\n")))
+            .WithComments(static c => c.WithWhiteSpace().WithSingleLine("#", "\n").WithSingleLine("-->", "\n", CommentPlacement.LineStart))
+            .Eof()
+            .Then(static list => string.Join("|", list));
+
     // Several comments starting with the same char, and new lines which are not white space
     [GenerateParser(nameof(TryParseSql))]
     private static Parser<string> BuildSql() =>

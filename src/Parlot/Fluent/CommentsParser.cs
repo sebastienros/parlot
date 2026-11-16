@@ -2,6 +2,7 @@ using Parlot.Rewriting;
 using Parlot.SourceGeneration;
 using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Parlot.Fluent;
 
@@ -29,6 +30,9 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     // The first chars of the comments, to tell at once that no comment starts at a char
     private readonly string _firstChars;
 
+    // Whether a comment only starts at the start of a line, which the parser then tracks
+    private readonly bool _tracksLineStart;
+
     // Skips the white space of the context's WhiteSpaceSet, with its new lines or not
     internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments)
         : this(skipWhiteSpace ? includeNewLines ? WhiteSpaceKind.WhiteSpaceOrNewLine : WhiteSpaceKind.WhiteSpace : WhiteSpaceKind.None, comments)
@@ -55,6 +59,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         _whiteSpace = whiteSpace;
         _comments = comments;
         _firstChars = new string(comments.Select(static c => c.Start[0]).Distinct().ToArray());
+        _tracksLineStart = comments.Any(static c => c.Placement == CommentPlacement.LineStart);
         ExpectedChars = [];
 
         Name = "CommentsParser";
@@ -88,33 +93,21 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         var cursor = scanner.Cursor;
         var start = cursor.Offset;
 
-        while (true)
+        if (_tracksLineStart)
         {
-            // The context's white space and new lines, the common case, are tested first
-            if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
+            SkipTrackingLineStart(context, cursor);
+        }
+        else
+        {
+            while (true)
             {
-                scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
-            }
-            else if (_whiteSpace == WhiteSpaceKind.WhiteSpace)
-            {
-                scanner.SkipWhiteSpace(context.WhiteSpaceMask);
-            }
-            else if (_whiteSpace == WhiteSpaceKind.Chars)
-            {
-                if (context.UseNewLines)
-                {
-                    scanner.SkipChars(in _spaces);
-                }
-                else
-                {
-                    scanner.SkipChars(in _spacesOrNewLines);
-                }
-            }
+                SkipWhiteSpace(context, scanner);
 
-            // At the end of the text Current is the null char, which a delimiter can start with: Match tells
-            if (_firstChars.IndexOf(cursor.Current) < 0 || !SkipComment(context, cursor))
-            {
-                break;
+                // At the end of the text Current is the null char, which a delimiter can start with: Match tells
+                if (_firstChars.IndexOf(cursor.Current) < 0 || !SkipComment(context, cursor))
+                {
+                    break;
+                }
             }
         }
 
@@ -129,6 +122,74 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
         result.Set(start, end, cursor.CreateSpan(start, end - start));
         return true;
+    }
+
+    // Skips the white space of the parser, the common case: the context's white space and new lines are tested first
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SkipWhiteSpace(ParseContext context, Scanner scanner)
+    {
+        if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
+        {
+            scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
+        }
+        else if (_whiteSpace == WhiteSpaceKind.WhiteSpace)
+        {
+            scanner.SkipWhiteSpace(context.WhiteSpaceMask);
+        }
+        else if (_whiteSpace == WhiteSpaceKind.Chars)
+        {
+            if (context.UseNewLines)
+            {
+                scanner.SkipChars(in _spaces);
+            }
+            else
+            {
+                scanner.SkipChars(in _spacesOrNewLines);
+            }
+        }
+    }
+
+    // Skips the white space and the comments, and tells whether a line starts at the cursor, for the comments which only
+    // start there: at the start of the text, after a new line of the white space, a multi line comment containing one of its
+    // line terminators, or a single line comment, which ends at one
+    private void SkipTrackingLineStart(ParseContext context, Cursor cursor)
+    {
+        var scanner = context.Scanner;
+        var lineStart = cursor.IsAtKnownLineStart;
+
+        while (true)
+        {
+            if (lineStart || _whiteSpace is WhiteSpaceKind.None or WhiteSpaceKind.WhiteSpace)
+            {
+                // No new line to look for
+                SkipWhiteSpace(context, scanner);
+            }
+            else if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
+            {
+                // The white space without new lines first: what is skipped after it starts with a new line
+                scanner.SkipWhiteSpace(context.WhiteSpaceMask);
+                var spaces = cursor.Offset;
+                scanner.SkipWhiteSpaceOrNewLine(context.WhiteSpaceOrNewLineMask);
+                lineStart = cursor.Offset != spaces;
+            }
+            else
+            {
+                scanner.SkipChars(in _spaces);
+
+                // The new lines are not white space when UseNewLines is set
+                if (!context.UseNewLines)
+                {
+                    var spaces = cursor.Offset;
+                    scanner.SkipChars(in _spacesOrNewLines);
+                    lineStart = cursor.Offset != spaces;
+                }
+            }
+
+            if (_firstChars.IndexOf(cursor.Current) < 0 || !SkipCommentTrackingLineStart(context, cursor, ref lineStart))
+            {
+                break;
+            }
+        }
     }
 
     // Skips the first comment at the cursor, whether one was skipped
@@ -155,35 +216,99 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 return true;
             }
 
-            if (comment.Unterminated == UnterminatedComment.ToEnd)
-            {
-                cursor.Advance(cursor.Span.Length);
-                return true;
-            }
+            var unterminated = SkipUnterminated(context, cursor, comment, commentStart);
 
-            if (comment.Unterminated == UnterminatedComment.NotAComment)
+            if (unterminated != UnterminatedResult.NotAComment)
             {
-                // The comments added after this one can start here. Like a start which doesn't match, it is not a failure
-                // of the parse: the cursor goes back without recording where the search for the end began
-                var recorded = cursor.RecordedFailure;
-                cursor.ResetPosition(commentStart);
-                cursor.RestoreRecordedFailure(recorded);
-                continue;
+                return unterminated == UnterminatedResult.Skipped;
             }
-
-            // The error of Literals.Comments(start, end), after the start of the comment
-            if (!context.CollectDiagnostics)
-            {
-                context.ExitParser(this);
-                throw new ParseException(comment.Message!, cursor.Position);
-            }
-
-            context.AddDiagnostic(comment.Message!, cursor.Position, ParseDiagnosticSeverity.Error);
-            cursor.ResetPosition(commentStart);
-            return false;
         }
 
         return false;
+    }
+
+    // SkipComment, which also tells whether a line starts after the comment. lineStart tells whether one starts at the cursor
+    private bool SkipCommentTrackingLineStart(ParseContext context, Cursor cursor, ref bool lineStart)
+    {
+        foreach (var comment in _comments)
+        {
+            // A comment at the start of a line only. Elsewhere its start isn't read, it doesn't depend on what follows
+            if (comment.Placement == CommentPlacement.LineStart && !lineStart)
+            {
+                continue;
+            }
+
+            if (!cursor.Match(comment.Start))
+            {
+                continue;
+            }
+
+            if (comment.End is null)
+            {
+                context.Scanner.SkipSingleLineComment(comment.Start.Length, comment.LineTerminators.AsSpan());
+                lineStart = true;
+                return true;
+            }
+
+            var commentStart = cursor.Offset;
+
+            if (context.Scanner.SkipMultiLineComment(comment.Start.Length, comment.End.AsSpan()))
+            {
+                if (!lineStart)
+                {
+                    lineStart = comment.ContainsLineTerminator(cursor.GetSpan(commentStart, cursor.Offset - commentStart));
+                }
+
+                return true;
+            }
+
+            var unterminated = SkipUnterminated(context, cursor, comment, commentStart);
+
+            if (unterminated != UnterminatedResult.NotAComment)
+            {
+                return unterminated == UnterminatedResult.Skipped;
+            }
+        }
+
+        return false;
+    }
+
+    // A multi line comment whose end is not in the text, after its start
+    private UnterminatedResult SkipUnterminated(ParseContext context, Cursor cursor, CommentSyntax comment, int commentStart)
+    {
+        if (comment.Unterminated == UnterminatedComment.ToEnd)
+        {
+            cursor.Advance(cursor.Span.Length);
+            return UnterminatedResult.Skipped;
+        }
+
+        if (comment.Unterminated == UnterminatedComment.NotAComment)
+        {
+            // The comments added after this one can start here. Like a start which doesn't match, it is not a failure
+            // of the parse: the cursor goes back without recording where the search for the end began
+            var recorded = cursor.RecordedFailure;
+            cursor.ResetPosition(commentStart);
+            cursor.RestoreRecordedFailure(recorded);
+            return UnterminatedResult.NotAComment;
+        }
+
+        // The error of Literals.Comments(start, end), after the start of the comment
+        if (!context.CollectDiagnostics)
+        {
+            context.ExitParser(this);
+            throw new ParseException(comment.Message!, cursor.Position);
+        }
+
+        context.AddDiagnostic(comment.Message!, cursor.Position, ParseDiagnosticSeverity.Error);
+        cursor.ResetPosition(commentStart);
+        return UnterminatedResult.Failed;
+    }
+
+    private enum UnterminatedResult
+    {
+        Skipped,
+        NotAComment,
+        Failed,
     }
 
     /// <inheritdoc/>
@@ -216,32 +341,59 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         //     break;
         // }
 
+        var lineStartName = _tracksLineStart ? $"lineStart{context.NextNumber()}" : null;
+
         result.Body.Add($"var {startName} = {cursorName}.Offset;");
+
+        if (_tracksLineStart)
+        {
+            // The start of the input, or where the window driver of ParseManyAsync dropped a new line
+            result.Body.Add($"var {lineStartName} = {cursorName}.IsAtKnownLineStart;");
+        }
+
         result.Body.Add("while (true)");
         result.Body.Add("{");
 
-        if (_whiteSpace == WhiteSpaceKind.Chars)
+        if (_tracksLineStart && _whiteSpace is WhiteSpaceKind.WhiteSpaceOrNewLine or WhiteSpaceKind.Chars)
         {
-            var spaceOrNewLinesName = context.GetCharSetField(_spaceOrNewLineChars!);
+            result.Body.Add($"    if ({lineStartName})");
+            result.Body.Add("    {");
+            AddWhiteSpaceSkip(result, context, "        ");
+            result.Body.Add("    }");
+            result.Body.Add("    else");
+            result.Body.Add("    {");
 
-            if (_spaceChars!.Length == _spaceOrNewLineChars!.Length)
+            // The white space without new lines first: what is skipped after it starts with a new line
+            var spacesName = $"spaces{context.NextNumber()}";
+
+            if (_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine)
             {
-                result.Body.Add($"    {scannerName}.SkipChars(in {spaceOrNewLinesName});");
+                result.Body.Add($"        {scannerName}.SkipWhiteSpace({ctx}.WhiteSpaceMask);");
+                result.Body.Add($"        var {spacesName} = {cursorName}.Offset;");
+                result.Body.Add($"        {scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);");
+                result.Body.Add($"        {lineStartName} = {cursorName}.Offset != {spacesName};");
             }
             else
             {
-                // The new lines are not white space when UseNewLines is set
-                result.Body.Add($"    if ({ctx}.UseNewLines)");
-                result.Body.Add($"        {scannerName}.SkipChars(in {context.GetCharSetField(_spaceChars)});");
-                result.Body.Add("    else");
-                result.Body.Add($"        {scannerName}.SkipChars(in {spaceOrNewLinesName});");
+                result.Body.Add($"        {scannerName}.SkipChars(in {context.GetCharSetField(_spaceChars!)});");
+
+                if (_spaceChars!.Length != _spaceOrNewLineChars!.Length)
+                {
+                    // The new lines are not white space when UseNewLines is set
+                    result.Body.Add($"        if (!{ctx}.UseNewLines)");
+                    result.Body.Add("        {");
+                    result.Body.Add($"            var {spacesName} = {cursorName}.Offset;");
+                    result.Body.Add($"            {scannerName}.SkipChars(in {context.GetCharSetField(_spaceOrNewLineChars)});");
+                    result.Body.Add($"            {lineStartName} = {cursorName}.Offset != {spacesName};");
+                    result.Body.Add("        }");
+                }
             }
+
+            result.Body.Add("    }");
         }
-        else if (_whiteSpace != WhiteSpaceKind.None)
+        else
         {
-            result.Body.Add(_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine
-                ? $"    {scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);"
-                : $"    {scannerName}.SkipWhiteSpace({ctx}.WhiteSpaceMask);");
+            AddWhiteSpaceSkip(result, context, "    ");
         }
 
         // The comments starting with each char, in the order they were added
@@ -259,13 +411,22 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
                 var start = LiteralHelper.StringToLiteral(comment.Start);
 
-                result.Body.Add($"        if ({cursorName}.Match({start}.AsSpan()))");
+                // A comment at the start of a line only. Elsewhere its start isn't read
+                var placement = comment.Placement == CommentPlacement.LineStart ? $"{lineStartName} && " : "";
+
+                result.Body.Add($"        if ({placement}{cursorName}.Match({start}.AsSpan()))");
                 result.Body.Add("        {");
 
                 if (comment.End is null)
                 {
                     var terminators = comment.LineTerminators is null ? "default" : $"{LiteralHelper.StringToLiteral(comment.LineTerminators)}.AsSpan()";
                     result.Body.Add($"            {scannerName}.SkipSingleLineComment({comment.Start.Length}, {terminators});");
+
+                    if (_tracksLineStart)
+                    {
+                        result.Body.Add($"            {lineStartName} = true;");
+                    }
+
                     result.Body.Add("            continue;");
                 }
                 else
@@ -273,13 +434,26 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                     var commentStartName = $"commentStart{context.NextNumber()}";
                     var throws = comment.Unterminated == UnterminatedComment.Throw;
 
-                    if (comment.Unterminated == UnterminatedComment.NotAComment || throws && context.CollectDiagnostics)
+                    if (comment.Unterminated == UnterminatedComment.NotAComment || throws && context.CollectDiagnostics || _tracksLineStart)
                     {
                         result.Body.Add($"            var {commentStartName} = {cursorName}.Offset;");
                     }
 
                     result.Body.Add($"            if ({scannerName}.SkipMultiLineComment({comment.Start.Length}, {LiteralHelper.StringToLiteral(comment.End)}.AsSpan()))");
                     result.Body.Add("            {");
+
+                    if (_tracksLineStart)
+                    {
+                        // Whether the comment contains a new line
+                        var text = $"{cursorName}.GetSpan({commentStartName}, {cursorName}.Offset - {commentStartName})";
+                        var search = comment.LineTerminators is null ? $"{text}.IndexOf('\\n')" : $"{text}.IndexOfAny({LiteralHelper.StringToLiteral(comment.LineTerminators)}.AsSpan())";
+
+                        result.Body.Add($"                if (!{lineStartName})");
+                        result.Body.Add("                {");
+                        result.Body.Add($"                    {lineStartName} = {search} >= 0;");
+                        result.Body.Add("                }");
+                    }
+
                     result.Body.Add("                continue;");
                     result.Body.Add("            }");
 
@@ -330,6 +504,37 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         return result;
     }
 
+    // The white space skip of the emitted loop
+    private void AddWhiteSpaceSkip(SourceResult result, SourceGenerationContext context, string indent)
+    {
+        var ctx = context.ParseContextName;
+        var scannerName = context.ScannerName;
+
+        if (_whiteSpace == WhiteSpaceKind.Chars)
+        {
+            var spaceOrNewLinesName = context.GetCharSetField(_spaceOrNewLineChars!);
+
+            if (_spaceChars!.Length == _spaceOrNewLineChars!.Length)
+            {
+                result.Body.Add($"{indent}{scannerName}.SkipChars(in {spaceOrNewLinesName});");
+            }
+            else
+            {
+                // The new lines are not white space when UseNewLines is set
+                result.Body.Add($"{indent}if ({ctx}.UseNewLines)");
+                result.Body.Add($"{indent}    {scannerName}.SkipChars(in {context.GetCharSetField(_spaceChars)});");
+                result.Body.Add($"{indent}else");
+                result.Body.Add($"{indent}    {scannerName}.SkipChars(in {spaceOrNewLinesName});");
+            }
+        }
+        else if (_whiteSpace != WhiteSpaceKind.None)
+        {
+            result.Body.Add(_whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine
+                ? $"{indent}{scannerName}.SkipWhiteSpaceOrNewLine({ctx}.WhiteSpaceOrNewLineMask);"
+                : $"{indent}{scannerName}.SkipWhiteSpace({ctx}.WhiteSpaceMask);");
+        }
+    }
+
     /// <inheritdoc/>
     public override string ToString() => "Comments";
 
@@ -342,17 +547,25 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         Chars,
     }
 
-    // A comment of the builder: a multi line comment has an end, a single line comment can have line terminators
+    // A comment of the builder: a multi line comment has an end, a comment can have line terminators
     internal sealed class CommentSyntax
     {
-        public CommentSyntax(string start, string? end, string? lineTerminators, UnterminatedComment unterminated = UnterminatedComment.Throw)
+        public CommentSyntax(string start, string? end, string? lineTerminators, UnterminatedComment unterminated = UnterminatedComment.Throw, CommentPlacement placement = CommentPlacement.Anywhere)
         {
             Start = start;
             End = end;
             LineTerminators = lineTerminators;
             Unterminated = unterminated;
+            Placement = placement;
             Message = end is null ? null : $"End-of-file found, '{end}' expected";
         }
+
+        // Where the comment starts
+        public CommentPlacement Placement { get; }
+
+        // Whether the text of a multi line comment contains a new line, for the comments which start at the start of a line
+        public bool ContainsLineTerminator(ReadOnlySpan<char> text)
+            => LineTerminators is null ? text.IndexOf('\n') >= 0 : text.IndexOfAny(LineTerminators.AsSpan()) >= 0;
 
         public string Start { get; }
 
@@ -361,7 +574,8 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         // What a multi line comment without its end is
         public UnterminatedComment Unterminated { get; }
 
-        // null: "\r\n" or "\n", as Literals.Comments(start)
+        // The chars which end a single line comment, null for "\r\n" or "\n" as Literals.Comments(start). For a multi line
+        // comment, the chars of the new lines it can contain, null for '\n'
         public string? LineTerminators { get; }
 
         public string? Message { get; }

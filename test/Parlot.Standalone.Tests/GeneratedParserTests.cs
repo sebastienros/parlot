@@ -587,6 +587,20 @@ public class GeneratedParserTests
         Assert.Equal(success ? "hello" : null, value);
     }
 
+    [Theory]
+    [InlineData("--> a\nb", "b")]
+    [InlineData("a\n--> b\nc", "a|c")]
+    [InlineData("a /*\u2028*/ --> b", "a")]
+    [InlineData("a /* b */ --> c", "a|--|>|c")]
+    [InlineData("a --> b", "a|--|>|b")]
+    public void Comments_At_The_Start_Of_A_Line_Are_Skipped(string input, string expected)
+    {
+        Assert.True(Grammar.TryParseLineStartComments(input, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(Grammar.TryParseLineStartComments(new StringReader(input), out value));
+        Assert.Equal(expected, value);
+    }
+
     [Fact]
     public void Configuration_Is_Read_At_Parse_Time_Without_Build_Time_Effects()
     {

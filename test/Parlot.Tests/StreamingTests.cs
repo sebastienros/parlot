@@ -169,6 +169,9 @@ public class StreamingTests
         ["newline-choice-sequence-comments"] = new Grammar<string>(CreateNewLineChoiceSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
         ["comments-chars"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace(CommentsParserTests.JavaScriptWhiteSpace, CommentsParserTests.JavaScriptNewLines).WithSingleLine("//", CommentsParserTests.JavaScriptNewLines).WithMultiLine("/*", "*/"))),
+        // JavaScript's "-->", a comment at the start of a line only, over the chars of the language and the context's set
+        ["comments-line-start"] = new Grammar<string>(LineStartCommentTests.Tokens.Then(static list => string.Join("|", list)).WithComments(LineStartCommentTests.JavaScriptSet)),
+        ["comments-line-start-chars"] = new Grammar<string>(LineStartCommentTests.Tokens.Then(static list => string.Join("|", list)).WithComments(LineStartCommentTests.JavaScriptChars)),
         ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
         // An unterminated comment read as tokens, or running to the end of the text
         ["comments-not-a-comment"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(OneOf(Terms.Identifier(), Terms.AnyOf("/*", maxSize: 1))).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/", UnterminatedComment.NotAComment).WithSingleLine("/"))),
@@ -544,6 +547,9 @@ public class StreamingTests
             new string('a', 30) + "\n" + new string('b', 40) + "\n\n" + new string('c', 50) + "\n" + new string('d', 60) + " x");
         string[] lineStart = ["", "-->", "--> c", "x-->y", "x --> y", "x\n-->y", "x\n--> y\nz", "x\r\n--> y", "x\n\n-->", "a--\n-->", "a--\n>", "--", "x\n--", "abc\n-->\nghi-->jkl"];
         Add("scan-line-start", lineStart);
+        string[] lineStartComments = [.. lineStart, "a /*\n*/ --> b\nc", "a /* b */ --> c", "a // b\n--> c\nd", "a <!-- b\n-->", "a\u2028--> b\u2029c", "a\r\n\r\n  --> b", "/* a */ --> b\nc", "a /*\n --> b", "a /* b\u2028 */--> c\rd"];
+        Add("comments-line-start", lineStartComments);
+        Add("comments-line-start-chars", lineStartComments);
         Add("scan-line-start-literals", lineStart);
         Add("position-textbefore", "", "a\r\nb--c", "a\rb--", "a\n--\n");
         Add("position-elseerror", "", "begin", "begin x = 1", "begin x = y", "begin\n", "begin\n x\n =\n 12", "begin\n\n x\n =\n y", "\n\nbegin\r\n  x =\n\n y",
@@ -743,6 +749,58 @@ public class StreamingTests
         var values = await ToListAsync(Terms.Integer().ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), new StreamParseOptions { BufferSize = 1 }));
 
         Assert.Equal(text.Split([' ', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(long.Parse), values);
+    }
+
+    [Theory]
+    [InlineData("--> a\nb --> c\n--> d\ne")]
+    [InlineData("b\n--> c")]
+    [InlineData("b --> c")]
+    [InlineData("  --> a\n/* b */ --> c\nd")]
+    public async Task ParseManyAsyncStartsALineAtTheStartOfTheInputOnly(string text)
+    {
+        // Each value is parsed in a window of the text, whose start is not the start of a line. The comments are the white
+        // space of the context, which the driver skips between the values
+        var builder = new CommentsBuilder();
+        LineStartCommentTests.JavaScriptChars(builder);
+        var comments = builder.Build();
+        var token = OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"));
+        var options = new StreamParseOptions { BufferSize = 1, ContextFactory = (scanner, cancellationToken) => new ParseContext(scanner, cancellationToken) { WhiteSpaceParser = comments } };
+        var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), options));
+
+        Assert.Equal(ZeroOrMany(token).Parse(new ParseContext(new Scanner(text)) { WhiteSpaceParser = comments }), values);
+    }
+
+    [Theory]
+    [InlineData("a\n--> b\nc", "a|c")]
+    [InlineData("a --> b", "a|--|>|b")]
+    [InlineData("a\n  --> b\nc", "a|c")]
+    [InlineData("a\u2028--> b\nc", "a|c")]
+    [InlineData("a  \n\n  --> b\r--> c\nd --> e", "a|d|--|>|e")]
+    [InlineData("--> a\nb", "b")]
+    public async Task ParseManyAsyncStartsALineAfterTheNewLinesItSkips(string text, string expected)
+    {
+        // Without a WhiteSpaceParser, the driver skips the white space of the context's set between the values: the value
+        // starts a line after a new line
+        var token = OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">")).WithComments(LineStartCommentTests.JavaScriptChars);
+        Assert.Equal(expected, string.Join("|", ZeroOrMany(token).Parse(text)!));
+
+        // Values in windows of their own, and in the same window
+        foreach (var bufferSize in new[] { 1, 4096 })
+        {
+            var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), new StreamParseOptions { BufferSize = bufferSize }));
+
+            Assert.Equal(expected, string.Join("|", values));
+        }
+    }
+
+    [Fact]
+    public async Task ParseManyAsyncStartsALineInEachDelimitedText()
+    {
+        // Each text after a '\n' starts a line, a text after another delimiter doesn't
+        var tokens = ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"))).AndSkip(SkipWhiteSpace(Always())).Then(static x => string.Join("|", x)).WithComments(LineStartCommentTests.JavaScriptChars);
+
+        Assert.Equal(["", "a", "", "b"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x\na\n--> y\nb", () => 1, yield: false), '\n')));
+        Assert.Equal(["", "--|>|y"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x;--> y", () => 1, yield: false), ';')));
     }
 
     [Theory]
