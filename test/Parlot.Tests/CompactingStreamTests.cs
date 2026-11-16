@@ -728,6 +728,51 @@ public class CompactingStreamTests
     }
 #endif
 
+    [Fact]
+    public void PositionsRequestedBackwardKeepTheLinesBounded()
+    {
+        // Each identifier asks for the position of its end, then of its start, which records the lines up to its end
+        var parser = ZeroOrMany(Terms.Identifier().Then(static (context, start, end, _) =>
+        {
+            var cursor = context.Scanner.Cursor;
+            return cursor.GetPosition(end).Line * 1_000 + cursor.GetPosition(start).Column;
+        })).Eof();
+
+        var text = string.Join("\r\n", Enumerable.Range(0, 20_000).Select(static i => "  id" + i));
+        Cursor? cursor = null;
+        var peak = 0;
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = 16,
+            ContextFactory = (scanner, token) =>
+            {
+                cursor = scanner.Cursor;
+                return new ParseContext(scanner, token)
+                {
+                    NewLines = "\r\n",
+                    OnEnterParser = (_, _) => peak = Math.Max(peak, RecordedLineStarts(cursor)),
+                };
+            },
+        };
+
+        var result = parser.Parse(new ChunkedReader(text, 5), options)!;
+
+        Assert.Equal(20_000, result.Count);
+        Assert.Equal(20_000 * 1_000 + 3, result[19_999]);
+        Assert.Equal(parser.Parse(new ParseContext(new Scanner(text)) { NewLines = "\r\n" }), result);
+
+        // The lines before the window are dropped with its text
+        Assert.InRange(peak, 1, 16);
+    }
+
+    // The capacity of the line starts recorded by a cursor, read by reflection since the map is private
+    private static int RecordedLineStarts(Cursor? cursor)
+    {
+        var lines = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(cursor);
+        return lines is null ? 0 : ((int[])lines.GetType().GetField("Starts")!.GetValue(lines)!).Length;
+    }
+
     /// <summary>
     /// Records the largest buffer seen by the parsers.
     /// </summary>

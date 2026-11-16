@@ -449,4 +449,23 @@ public class LinePositionTests
 
         Assert.Equal(new[] { ("ab", 1, 4), ("cd", 2, 4), ("ef", 3, 3) }, items);
     }
+
+    [Fact]
+    public void PositionsRequestedForwardRecordNoLines()
+    {
+        var text = string.Join("\n", Enumerable.Range(0, 1_000).Select(static i => "id" + i));
+        var cursor = new Cursor(text);
+
+        for (var offset = 0; offset <= text.Length; offset += 7)
+        {
+            Assert.Equal(References(text, "\n")[offset], (cursor.GetPosition(offset).Line, cursor.GetPosition(offset).Column));
+        }
+
+        var lines = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(cursor)!;
+        Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
+
+        // A request behind the furthest one records the lines up to it
+        AssertPosition(cursor, 3, 1, 4);
+        Assert.True((int)lines.GetType().GetField("Count")!.GetValue(lines)! > 900);
+    }
 }

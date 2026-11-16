@@ -62,6 +62,9 @@ public sealed partial class ParserSourceGenerator
                     case "MaxRecursionDepth" when argument.Value.Value is int maxRecursionDepth:
                         MaxRecursionDepth = maxRecursionDepth;
                         break;
+                    case "Diagnostics" when argument.Value.Value is true:
+                        _diagnostics = true;
+                        break;
                     case "NewLines" when argument.Value.Value is string newLines:
                         NewLines = newLines;
                         break;
@@ -87,9 +90,10 @@ public sealed partial class ParserSourceGenerator
         private int TrailingOutputs => CollectsDiagnostics || Failure != FailureOutput.None ? 1 : 0;
 
         // The Parser Explorer traces the entry points whose result is the last parameter
-        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && Factory.Method.GetAttributes().Any(static attribute =>
-            attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
-            attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
+        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && _diagnostics;
+
+        // Whether the factory's attribute asks for the diagnostics
+        private readonly bool _diagnostics;
 
         // The recursion limit of the factory's attribute, 0 for none
         public int MaxRecursionDepth { get; }
