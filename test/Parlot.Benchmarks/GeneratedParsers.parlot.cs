@@ -99,6 +99,17 @@ public static partial class GeneratedParsers
             .WithSingleLine("//", "\n\r\u2028\u2029")
             .WithMultiLine("/*", "*/"));
 
+    // JavaScript's script comments, with "-->" at the start of a line only, for CommentsBenchmarks
+    [GenerateParser(nameof(TryParseJsonJavaScriptScriptComments))]
+    [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
+    private static Parser<IJson> BuildJsonJavaScriptScriptComments() =>
+        BuildJson().WithComments(static comments => comments
+            .WithWhiteSpace("\t\v\f \u00A0\uFEFF\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000", "\n\r\u2028\u2029")
+            .WithSingleLine("//", "\n\r\u2028\u2029")
+            .WithSingleLine("<!--", "\n\r\u2028\u2029")
+            .WithSingleLine("-->", "\n\r\u2028\u2029", CommentPlacement.LineStart)
+            .WithMultiLine("/*", "*/", UnterminatedComment.Throw, "\n\r\u2028\u2029"));
+
     // The same comments with the loop WithComments composed before CommentsParser
     [GenerateParser(nameof(TryParseJsonComposedComments))]
     [IncludeUsings("System.Collections.Generic", "Parlot.Tests.Json")]
