@@ -130,15 +130,34 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
     string[]? ISeekablePrefixes.ExpectedPrefixes => _last is null ? SeekableHints.Prefixes(_parser) : UnionPrefixes();
 
-    // The prefixes of both elements, kept like the hints until SeekableResolution.Version changes
-    private Tuple<int, string[]?>? _prefixes;
+    // The prefixes of both elements, kept until SeekableResolution.Version changes, like the hints and LeadingWhiteSpace.Cache
+    private PrefixesCache? _prefixes;
+
+    private sealed class PrefixesCache
+    {
+        public PrefixesCache(int version, string[]? prefixes)
+        {
+            Version = version;
+            Prefixes = prefixes;
+        }
+
+        public int Version { get; }
+
+        public string[]? Prefixes { get; }
+    }
 
     private string[]? UnionPrefixes()
     {
+        // The prefixes are only read where the list can seek, which an empty list can't
+        if (_min == 0)
+        {
+            return null;
+        }
+
         var version = SeekableResolution.Version;
         var cached = Volatile.Read(ref _prefixes);
 
-        if (cached == null || cached.Item1 != version)
+        if (cached == null || cached.Version != version)
         {
             string[]? prefixes = null;
 
@@ -157,11 +176,11 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
                 prefixes = union.ToArray();
             }
 
-            cached = Tuple.Create(version, prefixes);
+            cached = new PrefixesCache(version, prefixes);
             Volatile.Write(ref _prefixes, cached);
         }
 
-        return cached.Item2;
+        return cached.Prefixes;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)
@@ -385,6 +404,27 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
     // last element, which ends the list. An element is only found when it reads text.
     private bool ParseWithLast(ParseContext context, ref ParseResult<IReadOnlyList<T>> result, bool withValue)
     {
+        // Without the value nothing is added to the builder, so there is nothing to release
+        if (!withValue)
+        {
+            var none = new ListBuilder<T>();
+            return ParseWithLast(context, ref result, ref none, withValue: false);
+        }
+
+        var results = new ListBuilder<T>();
+
+        try
+        {
+            return ParseWithLast(context, ref result, ref results, withValue: true);
+        }
+        finally
+        {
+            results.Release();
+        }
+    }
+
+    private bool ParseWithLast(ParseContext context, ref ParseResult<IReadOnlyList<T>> result, ref ListBuilder<T> results, bool withValue)
+    {
         context.EnterParser(this);
 
         var cursor = context.Scanner.Cursor;
@@ -396,98 +436,90 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         var separatorResult = new ParseResult<U>();
         var parserWithoutValue = !withValue && _withoutValue;
         var lastWithoutValue = !withValue && _lastWithoutValue;
-        var results = new ListBuilder<T>();
 
         // The end of the last element is read again when a separator isn't followed by an element, and the last element is
         // read where the parser failed
         var pin = context.Pin();
 
-        try
+        while (true)
         {
-            while (true)
+            var before = cursor.Offset;
+            var isLast = false;
+
+            if (!((parserWithoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)) && cursor.Offset != before))
             {
-                var before = cursor.Offset;
-                var isLast = false;
-
-                if (!((parserWithoutValue ? _parser.ParseWithoutValue(context, ref parsed) : _parser.Parse(context, ref parsed)) && cursor.Offset != before))
+                if (!((lastWithoutValue ? _last!.ParseWithoutValue(context, ref parsed) : _last!.Parse(context, ref parsed)) && cursor.Offset != before))
                 {
-                    if (!((lastWithoutValue ? _last!.ParseWithoutValue(context, ref parsed) : _last!.Parse(context, ref parsed)) && cursor.Offset != before))
+                    // No element where the list starts: a separator can't lead it
+                    if (count == 0)
                     {
-                        // No element where the list starts: a separator can't lead it
-                        if (count == 0)
-                        {
-                            break;
-                        }
-
-                        // An empty entry, the separator which follows it is skipped
-                        if (_removeEmptyEntries)
-                        {
-                            var beforeSeparator = cursor.Offset;
-
-                            if (_separatorGuard.CanStart(context) && (_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) && cursor.Offset != beforeSeparator)
-                            {
-                                continue;
-                            }
-                        }
-
-                        // A separator not followed by an element
-                        if (_allowTrailingSeparator)
-                        {
-                            end = cursor.Offset;
-                        }
-                        else
-                        {
-                            cursor.ResetPosition(end);
-                        }
-
                         break;
                     }
 
-                    isLast = true;
-                }
+                    // An empty entry, the separator which follows it is skipped
+                    if (_removeEmptyEntries)
+                    {
+                        var beforeSeparator = cursor.Offset;
 
-                if (count++ == 0)
-                {
-                    start = parsed.Start;
-                }
+                        if (_separatorGuard.CanStart(context) && (_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)) && cursor.Offset != beforeSeparator)
+                        {
+                            continue;
+                        }
+                    }
 
-                if (withValue)
-                {
-                    results.Add(parsed.Value);
-                }
+                    // A separator not followed by an element
+                    if (_allowTrailingSeparator)
+                    {
+                        end = cursor.Offset;
+                    }
+                    else
+                    {
+                        cursor.ResetPosition(end);
+                    }
 
-                end = cursor.Offset;
-                context.MovePin(pin);
-
-                // No separator follows the last element
-                if (isLast || !_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
-                {
                     break;
                 }
+
+                isLast = true;
             }
 
-            context.Unpin(pin);
-
-            if (count < _min)
+            if (count++ == 0)
             {
-                cursor.ResetPosition(initial);
-                context.ExitParser(this);
-                return false;
+                start = parsed.Start;
             }
 
             if (withValue)
             {
-                result.Set(start, end, results.ToArray());
+                results.Add(parsed.Value);
             }
-            else
+
+            end = cursor.Offset;
+            context.MovePin(pin);
+
+            // No separator follows the last element
+            if (isLast || !_separatorGuard.CanStart(context) || !(_separatorWithoutValue ? _separator.ParseWithoutValue(context, ref separatorResult) : _separator.Parse(context, ref separatorResult)))
             {
-                result.Start = start;
-                result.End = end;
+                break;
             }
         }
-        finally
+
+        context.Unpin(pin);
+
+        if (count < _min)
         {
-            results.Release();
+            cursor.ResetPosition(initial);
+            context.ExitParser(this);
+            return false;
+        }
+
+        if (withValue)
+        {
+            result.Set(start, end, results.ToArray());
+        }
+        else
+        {
+            result.Start = start;
+            result.End = end;
         }
 
         context.ExitParser(this);
