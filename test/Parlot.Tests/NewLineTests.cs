@@ -235,6 +235,91 @@ public class NewLineTests
     }
 
     [Theory]
+    [InlineData("a ++", "(a++)")]
+    [InlineData("a /* x */ ++", "(a++)")]
+    [InlineData("a /* \n */ ++", "a")]
+    [InlineData("a\n++", "a")]
+    public void AChoiceWithNoNewLineBeforeOperatorsShouldSkipTheWhiteSpaceOnce(string input, string expected)
+    {
+        // The choice of the operators skips the white space and invokes them after it: the comments are parsed once, and
+        // NoNewLineBefore searches the white space the choice skipped
+        var comments = OneOrMany(OneOf(Literals.WhiteSpace(includeNewLines: true), Literals.Comments("/*", "*/"))).Then(static _ => new TextSpan());
+        var parser = CreatePostfixTable().Eof().WithWhiteSpaceParser(comments);
+
+        var whiteSpace = new System.Collections.Generic.List<int>();
+        var entered = new System.Collections.Generic.List<int>();
+        var context = new ParseContext(new Scanner(input))
+        {
+            OnEnterParser = (p, c) =>
+            {
+                if (ReferenceEquals(p, comments))
+                {
+                    whiteSpace.Add(c.Scanner.Cursor.Offset);
+                }
+                else if (p.GetType().Name.StartsWith("NoNewLineBefore", StringComparison.Ordinal))
+                {
+                    entered.Add(c.Scanner.Cursor.Offset);
+                }
+            },
+        };
+
+        var result = new ParseResult<string>();
+        var matches = expected != "a";
+
+        Assert.Equal(matches, parser.Parse(context, ref result));
+
+        if (matches)
+        {
+            Assert.Equal(expected, result.Value);
+        }
+
+        // The white space after "a" is parsed once, and the operator is tried after it
+        Assert.Equal(1, whiteSpace.Count(static x => x == 1));
+        Assert.Equal([input.IndexOf('+')], entered);
+    }
+
+    [Theory]
+    [InlineData(0, " b", "b")]
+    [InlineData(0, " \nb", "b")]
+    [InlineData(0, " \n c", null)]
+    [InlineData(0, " c", "c")]
+    [InlineData(1, " \n d", "d")]
+    [InlineData(1, " d", "d")]
+    [InlineData(1, " \r d", null)]
+    [InlineData(1, " \n c", null)]
+    public void AChoiceShouldNotTellTheWhiteSpaceItSkippedToANoNewLineBeforeAfterAnotherSkip(int grammar, string input, string? expected)
+    {
+        // SkipWhiteSpace is invoked after the white space the choice skips, where it skips none, and so is NoNewLineBefore,
+        // which sees no new line either way. A NoNewLineBefore holding another one, with other new lines, is the same: the
+        // alternatives skip the white space themselves.
+        var parser = Literals.Char('a').SkipAnd(grammar == 0
+            ? OneOf(SkipWhiteSpace(NoNewLineBefore(Literals.Text("b"))), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))
+            : OneOf(NoNewLineBefore(NoNewLineBefore(Terms.Text("d")), "\r"), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse("a" + input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader("a" + input)));
+    }
+
+    [Theory]
+    [InlineData("a \nb", "b")]
+    [InlineData("a \rb", null)]
+    [InlineData("a \nc", null)]
+    [InlineData("a \rc", null)]
+    [InlineData("a c", "c")]
+    [InlineData("a \n e", "e")]
+    public void NoNewLineBeforeAlternativesShouldFindTheirOwnNewLines(string input, string? expected)
+    {
+        // Each finds its new lines in the white space the choice skipped
+        var parser = Literals.Char('a').SkipAnd(OneOf(
+            NoNewLineBefore(Terms.Text("b"), "\r"),
+            NoNewLineBefore(Terms.Text("c")),
+            Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Theory]
     [InlineData("a   x")]
     [InlineData("a \n x")]
     [InlineData("a   =x")]

@@ -167,6 +167,10 @@ public class StreamingTests
         // A choice in a sequence, which doesn't keep the text buffered: the choice keeps the white space it skips
         ["newline-choice-sequence"] = new Grammar<string>(CreateNewLineChoiceSequence()),
         ["newline-choice-sequence-comments"] = new Grammar<string>(CreateNewLineChoiceSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // NoNewLineBefore alternatives with their own new lines, told the white space the choice skips, and ones which can't be
+        // told: a NoNewLineBefore after SkipWhiteSpace, which sees none, and one holding another one
+        ["newline-choice-sets"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(NoNewLineBefore(Terms.Text("b"), "\r"), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof()),
+        ["newline-choice-skipped"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(SkipWhiteSpace(NoNewLineBefore(Literals.Text("b"))), NoNewLineBefore(NoNewLineBefore(Terms.Text("d")), "\r"), NoNewLineBefore(Terms.Text("c")))).Eof()),
         ["comments-terminators"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//", "\r\n\u2028\u2029").WithMultiLine("<!--", "-->"))),
         ["comments-chars"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithWhiteSpace(CommentsParserTests.JavaScriptWhiteSpace, CommentsParserTests.JavaScriptNewLines).WithSingleLine("//", CommentsParserTests.JavaScriptNewLines).WithMultiLine("/*", "*/"))),
         ["comments-only"] = new Grammar<IReadOnlyList<TextSpan>>(ZeroOrMany(Terms.Identifier()).WithComments(static c => c.WithSingleLine("#").WithMultiLine("(*", "*)"))),
@@ -515,6 +519,13 @@ public class StreamingTests
         ];
         Add("newline-choice-sequence", newLineChoiceSequence);
         Add("newline-choice-sequence-comments", newLineChoiceSequence);
+        string[] newLineChoiceSets =
+        [
+            "a b", "a\nb", "a\rb", "a\r\nb", "a c", "a\nc", "a\n e", "a e", "a \r d", "a \n d", "a d", "a",
+            "a" + new string(' ', 140) + "\nb", "a" + new string(' ', 140) + "\rc", "a\n" + new string(' ', 140) + "c",
+        ];
+        Add("newline-choice-sets", newLineChoiceSets);
+        Add("newline-choice-skipped", newLineChoiceSets);
         Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");
         Add("comments-terminators", "", "a // b\r c", "a // b\u2028c", "a // b\u2029 c", "a // b\n c", "a <!-- b --> c", "a <!-- b -- > c", "a <!- b", "a <", "a //");
         Add("comments-only", "", "a#b\nc", "a(*b*)c", "a (*b*) c", "a#b", "a(*b", "a(b", "#", "(*", "(**)");

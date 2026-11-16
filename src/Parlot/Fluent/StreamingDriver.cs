@@ -431,6 +431,8 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 }
                 catch (ParseException) when (cursor.HitEnd)
                 {
+                    // A choice which threw doesn't record the white space it skipped anymore
+                    context.ForgetSkippedWhiteSpace();
                     RetryOffset = start;
                     return StreamingStep.NeedMore;
                 }
@@ -459,6 +461,8 @@ internal sealed class StreamingItemReader<T, TSeparator>
             }
             catch (ParseException) when (cursor.HitEnd)
             {
+                // A choice which threw doesn't record the white space it skipped anymore
+                context.ForgetSkippedWhiteSpace();
                 RetryOffset = start;
                 return StreamingStep.NeedMore;
             }
