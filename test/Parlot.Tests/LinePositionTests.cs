@@ -569,4 +569,44 @@ public class LinePositionTests
 
         Assert.Equal(new[] { (1, 3), (3, 1), (4, 1) }, items);
     }
+
+    [Theory]
+    [InlineData(12, 8, 1)]
+    [InlineData(11, 7, 3)]
+    [InlineData(9, 7, 1)]
+    [InlineData(8, 6, 4)]
+    [InlineData(7, 6, 3)]
+    [InlineData(3, 5, 8)]
+    public void FirstRequestBehindTheFurthestIsCountedFromTheClosestPosition(int offset, int line, int column)
+    {
+        // The origin is at offset 2, line 5, column 7
+        const string text = "xxab\ncd\r\nef\rg";
+
+        var cursor = new Cursor(text, new TextPosition(2, 5, 7)) { NewLines = "\r\n" };
+
+        // The second request creates the map and keeps the furthest position
+        AssertPosition(cursor, 13, 8, 2);
+        AssertPosition(cursor, 13, 8, 2);
+
+        AssertPosition(cursor, offset, line, column);
+
+        // Then recorded
+        AssertPosition(cursor, offset, line, column);
+        AssertPosition(cursor, 5, 6, 1);
+    }
+
+    [Fact]
+    public void FirstRequestBehindTheFurthestOnTheLineOfTheOrigin()
+    {
+        const string text = "xxabcdefghijklmnop\nq";
+        var cursor = new Cursor(text, new TextPosition(2, 5, 7));
+
+        AssertPosition(cursor, 20, 6, 2);
+        AssertPosition(cursor, 20, 6, 2);
+
+        // Counted backward from the furthest position, the line starting before the origin
+        AssertPosition(cursor, 15, 5, 20);
+        AssertPosition(cursor, 19, 6, 1);
+        AssertPosition(cursor, 15, 5, 20);
+    }
 }

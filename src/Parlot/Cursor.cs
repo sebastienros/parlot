@@ -257,11 +257,17 @@ public class Cursor
         {
             if (!lines.RequestedBehind)
             {
-                // Behind the furthest position requested for the first time: counted, the lines are only recorded on the next
+                // Behind the furthest position requested for the first time: counted from the closest position known, the
+                // lines are only recorded on the next request
                 lines.RequestedBehind = true;
 
-                var counted = FindPosition(lines, lines.Counted);
-                return CountForward(counted.Offset, counted.Line, counted.Column, offset, -1);
+                if (offset - lines.Counted <= lines.FrontierOffset - offset)
+                {
+                    var counted = FindPosition(lines, lines.Counted);
+                    return CountForward(counted.Offset, counted.Line, counted.Column, offset, -1);
+                }
+
+                return CountBackward(lines, offset);
             }
 
             // Behind the furthest position requested: the lines up to it are recorded once
@@ -332,6 +338,41 @@ public class Cursor
         return count == 0
             ? new TextPosition(offset, fromLine, fromColumn + (offset - fromOffset))
             : new TextPosition(offset, fromLine + count, offset - lastStart + 1);
+    }
+
+    // The position of an offset between the origin and the furthest position requested, counted backward from it
+    private TextPosition CountBackward(LineMap lines, int offset)
+    {
+        var newLines = CountLineStarts(offset, lines.FrontierOffset, -1, out _);
+
+        if (newLines == 0)
+        {
+            return new TextPosition(offset, lines.FrontierLine, lines.FrontierColumn - (lines.FrontierOffset - offset));
+        }
+
+        // The line of the offset is the origin's when it starts before it
+        var start = FindLineStart(offset);
+
+        return start > _originOffset
+            ? new TextPosition(offset, lines.FrontierLine - newLines, offset - start + 1)
+            : new TextPosition(offset, lines.FrontierLine - newLines, _originColumn + (offset - _originOffset));
+    }
+
+    /// <summary>
+    /// The position of the end of the buffer when the input goes on with <paramref name="next"/>, or <c>-1</c> at its end:
+    /// a <c>'\r'</c> ending the buffer doesn't end a line when a <c>'\n'</c> follows it.
+    /// </summary>
+    internal TextPosition GetEndPosition(int next)
+    {
+        var end = _base + _textLength;
+
+        if (next == '\n' && (_flags & CrLfFlag) != 0 && _textLength > 0 && Buffer[_textLength - 1] == '\r')
+        {
+            var carriageReturn = GetPosition(end - 1);
+            return new TextPosition(end, carriageReturn.Line, carriageReturn.Column + 1);
+        }
+
+        return GetPosition(end);
     }
 
     // The position of the offset the start of a new window moves the origin to, see ReplaceBuffer, without recording the

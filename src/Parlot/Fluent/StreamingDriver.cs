@@ -79,7 +79,7 @@ internal sealed class StreamingDriver : IDisposable
         // The line and column of the new window are the ones of its first char in the current window
         var position = Cursor.GetPosition(start);
         var available = _length - start;
-
+        var atEnd = start == _length;
 
         if (available >= _options.MaxBufferedCharacters)
         {
@@ -134,30 +134,12 @@ internal sealed class StreamingDriver : IDisposable
             _length += read;
         }
 
-        // A '\r' ending a window which more text follows is followed by a '\n' or not, and the line of the position after it
-        // depends on it when both end a single line (see Cursor.NewLines): the window goes on with the next chars
-        while (!IsFinal && _length > 0 && _chars[_length - 1] == '\r' && _length < _options.MaxBufferedCharacters)
+        // A '\r' ending the window is followed by a '\n' or not, which the line of the start of the new window depends on
+        if (atEnd)
         {
-            if (_length == _chars.Length)
-            {
-                var chars = ArrayPool<char>.Shared.Rent(_length + 1);
-                Array.Copy(_chars, chars, _length);
-                ReturnChars();
-                _chars = chars;
-            }
-
-#if NET8_0_OR_GREATER
-            var read = await _reader.ReadAsync(_chars.AsMemory(_length, 1), _cancellationToken).ConfigureAwait(false);
-#else
-            var read = await _reader.ReadAsync(_chars, _length, 1).ConfigureAwait(false);
-#endif
-
-            if (read == 0)
-            {
-                IsFinal = true;
-            }
-
-            _length += read;
+            position = Cursor.GetEndPosition(_length > 0 ? _chars[0] : -1);
+            _line = position.Line;
+            _column = position.Column;
         }
 
         Context = CreateContext(new string(_chars, 0, _length), IsFinal);

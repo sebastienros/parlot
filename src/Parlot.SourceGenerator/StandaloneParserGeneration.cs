@@ -54,8 +54,8 @@ public sealed partial class ParserSourceGenerator
 
             // The named arguments of the factory's attribute, read once
             foreach (var argument in factory.Method.GetAttributes()
-                .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
-                .SelectMany(static attribute => attribute.NamedArguments))
+                .FirstOrDefault(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")?.NamedArguments
+                ?? ImmutableArray<KeyValuePair<string, TypedConstant>>.Empty)
             {
                 switch (argument.Key)
                 {
