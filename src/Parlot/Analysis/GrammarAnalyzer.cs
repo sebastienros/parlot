@@ -481,13 +481,20 @@ internal sealed class GrammarAnalysis
 
             if (first is ISeekable { CanSeek: true })
             {
-                // A parser which can start with several ones, like a list with a last element, can't seek because of another one
-                if (UnseekableStart(parser) is not { } other)
+                // A parser which can start with several ones, like a list with a last element, can't seek because of another
+                // one. A list with a last element also can't seek when only one of its elements skips white space.
+                if (UnseekableStart(parser) is { } other)
+                {
+                    first = other;
+                }
+                else if (parser is ISeparatedList { Last: ISeekable { CanSeek: true } last } && last.SkipWhitespace != ((ISeekable)first).SkipWhitespace)
+                {
+                    return $"{Describe(parser)} can start with {Describe(first)} or {Describe(last)}, and only one of them skips white space";
+                }
+                else
                 {
                     return $"{Describe(parser)} doesn't tell which chars {Describe(first)} starts with";
                 }
-
-                first = other;
             }
 
             parser = first;

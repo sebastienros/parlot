@@ -393,6 +393,20 @@ public class GrammarAnalyzerTests
 
         Assert.Contains("Separated(Literals.Identifier(...), last: Literals.Pattern(...))", finding.Message);
         Assert.Contains("Literals.Pattern(...) tests the chars with a predicate", finding.Message);
+
+        // Both elements tell their chars, but only one of them skips white space
+        var mixed = Literals.Char('x').Then(static _ => 1).Or(Separated(Literals.Char(','), Literals.Identifier(), Terms.Text("...").Then(static _ => TextSpan.Empty), min: 1).Then(static _ => 2));
+
+        finding = Single(GrammarAnalyzer.Analyze(mixed), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("can start with Literals.Identifier(...) or Terms.Text(\"...\"), and only one of them skips white space", finding.Message);
+
+        // A prefix operator is invoked before its operand, which can't seek
+        var unary = Literals.Char('x').Then(static _ => TextSpan.Empty).Or(Literals.Pattern(char.IsDigit).Unary((Literals.Char('-'), static x => x)));
+
+        finding = Single(GrammarAnalyzer.Analyze(unary), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("Literals.Pattern(...) tests the chars with a predicate", finding.Message);
     }
 
     [Fact]
