@@ -79,14 +79,20 @@ internal sealed class StreamingDriver : IDisposable
     /// <param name="start">The offset of the text to keep in the current window.</param>
     public async ValueTask GrowAsync(int start)
     {
-        // The line and column of the new window are the ones of its first char in the current window
-        var position = Cursor.GetPosition(start);
+        // The cursor of the current window, which tells the line and column of the start of the new one once it is read
+        var cursor = Cursor;
+        var atEnd = start == _length;
         var available = _length - start;
 
         if (available >= _options.MaxBufferedCharacters)
         {
-            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(position));
+            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(cursor.GetPosition(start)));
         }
+
+        // At the end of the current window, a '\r' ending it is counted as the end of a line until the next char is read
+        var position = cursor.GetPosition(start);
+        _line = position.Line;
+        _column = position.Column;
 
         if (start > 0)
         {
@@ -95,9 +101,6 @@ internal sealed class StreamingDriver : IDisposable
             _length = available;
             _offset += start;
         }
-
-        _line = position.Line;
-        _column = position.Column;
 
         // Grow geometrically so that the retries cost a bounded multiple of a single parse
         var target = available + Math.Max(available, _options.BufferSize);
@@ -135,6 +138,15 @@ internal sealed class StreamingDriver : IDisposable
             }
 
             _length += read;
+        }
+
+        // It doesn't when a '\n' starts the new window
+        if (atEnd && _length > 0 && _chars[0] == '\n')
+        {
+            cursor.MarkFollowedByLineFeed();
+            position = cursor.GetPosition(start);
+            _line = position.Line;
+            _column = position.Column;
         }
 
         Context = CreateContext(new string(_chars, 0, _length), IsFinal);
@@ -203,6 +215,13 @@ internal sealed class StreamingDriver : IDisposable
             if (_frameLength > 0)
             {
                 Context = CreateContext(new string(_chars, _frameStart, _frameLength), isFinal: true);
+
+                // A '\r' ending the frame doesn't end a line when the delimiter is a '\n', see Cursor.NewLines
+                if (_frameDelimited && delimiter == '\n')
+                {
+                    Cursor.MarkFollowedByLineFeed();
+                }
+
                 return true;
             }
 
@@ -278,8 +297,8 @@ internal sealed class StreamingDriver : IDisposable
 
         _pendingDelimiter = false;
 
-        // Same rule as the cursor: only '\n' ends a line, every other char occupies a column
-        if (delimiter == '\n')
+        // Same rule as the cursor, whose line terminators are the ones of the frame before it
+        if (Cursor.EndsLine(delimiter, _length > _frameStart ? _chars[_frameStart] : -1))
         {
             _line++;
             _column = 1;

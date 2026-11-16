@@ -47,6 +47,19 @@ public class ParseContext
         get => (_skipMask & WhiteSpaceBits) != 0;
     }
 
+    /// <summary>
+    /// The chars which end a line in the positions of the parse, <c>"\n"</c> by default, see <see cref="Cursor.NewLines"/>.
+    /// </summary>
+    /// <remarks>
+    /// They only change how the lines and columns of positions, like the ones of errors, are counted, not what the parsers
+    /// read: <see cref="UseNewLines"/> and the white space parsers select the new lines a grammar skips.
+    /// </remarks>
+    public string NewLines
+    {
+        get => Scanner.Cursor.NewLines;
+        set => Scanner.Cursor.NewLines = value;
+    }
+
     // The white space bits of the sets in Character._characterData, each followed by the bit of the set with new lines
     private const byte WhiteSpaceBits = (byte)(CharacterMask.WhiteSpace | CharacterMask.AsciiWhiteSpace | CharacterMask.SpaceTabCrLfWhiteSpace);
 

@@ -314,7 +314,10 @@ When the parse fails, `failure` is the *furthest failure*: the position where th
 stopped. For `SELECT a, b FRM t` it is the offset of `FRM`, after the white space the expected `FROM` skipped. When the
 grammar fails through an `Error` or `ElseError` parser, it is the position of that error, like the runtime
 `TryParse(..., out ParseError)` reports. On success it is `default`. Lines and columns start at 1 and count lines
-like `TextPosition`. The names of the tuple elements are free. Runtime parsers report the same position through
+like `TextPosition`, ending at `\n`. The names of the tuple elements are free. `[GenerateParser(nameof(TryParse), NewLines =
+"\n\r\u2028\u2029")]` sets other line terminators, like `ParseContext.NewLines` (see
+[Lines and columns](parsers.md#lines-and-columns)), for the failures, the diagnostics and the positions callbacks request
+with `context.Scanner.Cursor.GetPosition(offset)`. Runtime parsers report the same position through
 `Cursor.FurthestOffset` and `Cursor.FurthestPosition`, see [Reporting where a parse failed](parsers.md#reporting-where-a-parse-failed).
 
 What a parser read and then rejected is not what moved the attempt forward, so the failure is at its start, where the

@@ -134,6 +134,50 @@ Source-generated parsers return the reason in their failure tuple, see
 failure path of the parsers which have one. Otherwise the reason costs a compare where a lookahead forgets the failures
 its parser recorded, and two fields of the cursor.
 
+## Lines and columns
+
+A position is an offset with its line and column, which start at 1. The cursor only tracks the offset as it moves: the
+line and column of `Cursor.Position`, `Cursor.FurthestPosition`, the errors of a parse and `Cursor.GetPosition(offset)` are
+counted from the text when they are requested. `GetPosition` takes any absolute offset, like the ones a
+`Then((context, start, end, value) => ...)` callback receives, such that a parser building an AST with locations asks for the
+start and the end of each node:
+
+```csharp
+var identifier = Terms.Identifier().Then(static (context, start, end, name) =>
+{
+    var cursor = context.Scanner.Cursor;
+    return new Identifier(name.ToString(), cursor.GetPosition(start), cursor.GetPosition(end));
+});
+```
+
+The offsets can be requested in any order. The cursor keeps the position of the furthest offset requested: a request after
+it counts the lines between them, and one behind it, like the start of a node whose end was just located, counts them from
+the closest position known, vectorized on .NET 8 and later. When the text counted for those requests exceeds a multiple
+of the text whose lines aren't recorded, as with deeply nested nodes or requests in a random order, the cursor records
+the start of each line up to the furthest position, and the position of an offset counted over is then a binary search:
+a parse reads its text a bounded number of times to count its lines, whatever the order of the requests. A parse of a string which requests no
+positions counts no lines, and one which requests a single position near its start allocates nothing for it; a further
+request, or a first one far from the start, allocates the small object that keeps the furthest position. A stream counts
+the lines of the text it drops from its buffer, as before.
+
+A line ends at `\n` by default, every other char, `\r` included, occupying a column. `ParseContext.NewLines` (or
+`Cursor.NewLines`) sets the chars which end a line, as a string like the other APIs which take new lines. When both `\r`
+and `\n` are in it, `\r\n` ends a single line, and an offset between them is on the line they end:
+
+```csharp
+// The line terminators of JavaScript; C# also ends lines at U+0085
+var context = new ParseContext(new Scanner(text)) { NewLines = "\n\r\u2028\u2029" };
+```
+
+They only change how positions are counted, not what the parsers read: [`UseNewLines`](#withwhitespaceset) and the white
+space parsers select the new lines a grammar skips. For a `TextReader`, set them in `StreamParseOptions.ContextFactory`; a
+source-generated parser sets them with `[GenerateParser(..., NewLines = "...")]`, see
+[Failure position](source-generation.md#failure-position).
+
+The offsets before the initial position of a cursor created with one, `new Scanner(text, position, isFinal)`, are counted
+backward from it each time they are requested, the start of the text starting a line. In compacting mode, the text dropped
+from the buffer can't be counted: an offset in it gets the line of the first buffered char.
+
 ## Collecting diagnostics without stopping
 
 By default, `Error(...)` and `ElseError(...)` throw `ParseException`; `TryParse(..., out error)`
@@ -1855,7 +1899,8 @@ Parser<T> WithWhiteSpaceSet<T>(this Parser<T> parser, WhiteSpaceSet whiteSpaceSe
 `Default` is the Unicode `White_Space` property: the chars `char.IsWhiteSpace` and the `\s` of .NET regular expressions accept.
 Its new lines are the line breaks, including the next line char U+0085 and the line and paragraph separators U+2028 and
 U+2029. As with the other new lines, `Terms` parsers skip them unless `UseNewLines` is set. Positions only start a new line at
-`\n`, so like `\r` and `\v` these count as a column, and single line comments end at `\n` only, unless
+`\n` unless [`ParseContext.NewLines`](#lines-and-columns) lists other line terminators, so like `\r` and `\v` these count
+as a column by default, and single line comments end at `\n` only, unless
 [`WithSingleLine(start, lineTerminators)`](#withcomments) lists their terminators. A grammar whose white space no set
 describes, like JavaScript's with U+FEFF and without U+0085, lists its chars with
 [`WithWhiteSpace(whiteSpace, newLines)`](#withcomments).
@@ -1995,8 +2040,8 @@ var parser = grammar.WithComments(builder => builder
 
 Both sets of chars are skipped, tested with a table built once, so this costs about the same as the white space of a set. As
 with the new lines of a set, those of `newLines`, which can be empty, are not skipped when `UseNewLines` is set; a char of both
-is white space. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`. The line of
-`Cursor.Position` still counts the `\n` chars only.
+is white space. Pass the same new lines to [`NoNewLineBefore`](#nonewlinebefore) and `NewLineAhead`, and to
+[`ParseContext.NewLines`](#lines-and-columns) for the lines of the positions, which count the `\n` chars only by default.
 
 A multi line comment without its end throws a `ParseException` "End-of-file found, '*/' expected" at the position after its
 start, or reports it as an error when `ParseContext.CollectDiagnostics` is set, in which case the comment is not skipped.

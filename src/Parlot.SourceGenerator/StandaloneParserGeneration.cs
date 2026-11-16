@@ -51,6 +51,25 @@ public sealed partial class ParserSourceGenerator
             IsReader = isReader;
             CollectsDiagnostics = collectsDiagnostics;
             Failure = failure;
+
+            // The named arguments of the factory's attribute, read once
+            foreach (var argument in factory.Method.GetAttributes()
+                .FirstOrDefault(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")?.NamedArguments
+                ?? ImmutableArray<KeyValuePair<string, TypedConstant>>.Empty)
+            {
+                switch (argument.Key)
+                {
+                    case "MaxRecursionDepth" when argument.Value.Value is int maxRecursionDepth:
+                        MaxRecursionDepth = maxRecursionDepth;
+                        break;
+                    case "Diagnostics" when argument.Value.Value is true:
+                        _diagnostics = true;
+                        break;
+                    case "NewLines" when argument.Value.Value is string newLines:
+                        NewLines = newLines;
+                        break;
+                }
+            }
         }
 
         public IMethodSymbol Method { get; }
@@ -71,17 +90,16 @@ public sealed partial class ParserSourceGenerator
         private int TrailingOutputs => CollectsDiagnostics || Failure != FailureOutput.None ? 1 : 0;
 
         // The Parser Explorer traces the entry points whose result is the last parameter
-        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && Factory.Method.GetAttributes().Any(static attribute =>
-            attribute.AttributeClass?.Name == "GenerateParserAttribute" &&
-            attribute.NamedArguments.Any(static argument => argument.Key == "Diagnostics" && argument.Value.Value is true));
+        public bool Diagnostics => !CollectsDiagnostics && Failure == FailureOutput.None && _diagnostics;
+
+        // Whether the factory's attribute asks for the diagnostics
+        private readonly bool _diagnostics;
 
         // The recursion limit of the factory's attribute, 0 for none
-        public int MaxRecursionDepth => Factory.Method.GetAttributes()
-            .Where(static attribute => attribute.AttributeClass?.Name == "GenerateParserAttribute")
-            .SelectMany(static attribute => attribute.NamedArguments)
-            .Where(static argument => argument.Key == "MaxRecursionDepth" && argument.Value.Value is int)
-            .Select(static argument => (int)argument.Value.Value!)
-            .FirstOrDefault();
+        public int MaxRecursionDepth { get; }
+
+        // The line terminators of the factory's attribute, null for the default "\n"
+        public string? NewLines { get; }
 
         public MethodToGenerate Factory { get; }
         public IParameterSymbol ResultParameter => Method.Parameters[Method.Parameters.Length - 1 - TrailingOutputs];
@@ -831,6 +849,10 @@ public sealed partial class ParserSourceGenerator
                 ? $"new {wrapper}({scanner}{cancellationArgument})"
                 : $"new global::Parlot.Fluent.ParseContext({ParseContextArguments(scanner, token)})";
         source.AppendLine($"            var {context} = {contextCreation};");
+        if (standalone.NewLines is { } newLines && newLines != "\n")
+        {
+            source.AppendLine($"            {context}.Scanner.Cursor.NewLines = {SymbolDisplay.FormatLiteral(newLines, quote: true)};");
+        }
         var diagnostics = standalone.DiagnosticsParameter is { } diagnosticsParameter ? EscapeIdentifier(diagnosticsParameter.Name) : null;
         var diagnosticType = standalone.DiagnosticsParameter is { Type: INamedTypeSymbol { TypeArguments: [var element] } }
             ? element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(

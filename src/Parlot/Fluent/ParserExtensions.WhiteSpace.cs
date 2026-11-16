@@ -134,8 +134,8 @@ public class CommentsBuilder
     /// </para>
     /// <para>
     /// The parsers telling whether a new line was skipped, <see cref="Parsers.NoNewLineBefore{T}(Parser{T}, string)"/> and
-    /// <see cref="Parsers.NewLineAhead(string)"/>, take the same <paramref name="newLines"/>. The line of
-    /// <see cref="Cursor.Position"/> still counts the <c>'\n'</c> chars only.
+    /// <see cref="Parsers.NewLineAhead(string)"/>, take the same <paramref name="newLines"/>, and so does
+    /// <see cref="ParseContext.NewLines"/> for the lines of the positions, which count the <c>'\n'</c> chars only by default.
     /// </para>
     /// </remarks>
     public CommentsBuilder WithWhiteSpace(string whiteSpace, string newLines)

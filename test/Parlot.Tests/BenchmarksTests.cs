@@ -568,6 +568,8 @@ public class BenchmarksTests
         Assert.Equal(2000, benchmarks.Identifiers());
         Assert.Equal(400, benchmarks.PositionAfterEachIdentifier());
         Assert.Equal(400, benchmarks.ErrorPositionAtTheEnd());
+        Assert.Equal(benchmarks.TreeWithLocations(), benchmarks.TreeWithLocationsCrLf());
+        Assert.NotEqual(0, benchmarks.TreeWithoutLocations());
     }
 
     [Fact]

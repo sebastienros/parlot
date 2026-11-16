@@ -875,6 +875,71 @@ public class CompactingStreamTests
     }
 #endif
 
+    [Fact]
+    public void PositionsRequestedBackwardKeepTheLinesBounded()
+    {
+        // Each identifier asks for the position of its end, then of its start many times, which records the lines up to its end
+        var parser = ZeroOrMany(Terms.Identifier().Then(static (context, start, end, _) =>
+        {
+            var cursor = context.Scanner.Cursor;
+            var line = cursor.GetPosition(end).Line;
+
+            // Requested again and again, such that the lines up to the end are recorded
+            for (var i = 0; i < 100; i++)
+            {
+                cursor.GetPosition(start);
+            }
+
+            return line * 1_000 + cursor.GetPosition(start).Column;
+        })).Eof();
+
+        var text = string.Join("\r\n", Enumerable.Range(0, 20_000).Select(static i => "  id" + i));
+        Cursor? cursor = null;
+        var peak = 0;
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = 16,
+            ContextFactory = (scanner, token) =>
+            {
+                cursor = scanner.Cursor;
+                return new ParseContext(scanner, token)
+                {
+                    NewLines = "\r\n",
+                    OnEnterParser = (_, _) => peak = Math.Max(peak, RecordedLineStarts(cursor)),
+                };
+            },
+        };
+
+        var result = parser.Parse(new ChunkedReader(text, 5), options)!;
+
+        Assert.Equal(20_000, result.Count);
+        Assert.Equal(20_000 * 1_000 + 3, result[19_999]);
+        Assert.Equal(parser.Parse(new ParseContext(new Scanner(text)) { NewLines = "\r\n" }), result);
+
+        // The lines before the window are dropped with its text
+        Assert.InRange(peak, 1, 16);
+    }
+
+    // The capacity of the line starts recorded by a cursor, read by reflection since the map is private
+    private static int RecordedLineStarts(Cursor? cursor)
+    {
+        var linesField = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(linesField);
+
+        var lines = linesField.GetValue(cursor);
+
+        if (lines is null)
+        {
+            return 0;
+        }
+
+        var startsField = lines.GetType().GetField("Starts");
+        Assert.NotNull(startsField);
+
+        return ((int[])startsField.GetValue(lines)!).Length;
+    }
+
     /// <summary>
     /// Records the largest buffer seen by the parsers.
     /// </summary>
