@@ -873,7 +873,7 @@ public class ParseContext
     // Whether the white space contains one of the new lines, or one of WhiteSpaceSet's when they are null
     private bool ContainsNewLine(ReadOnlySpan<char> whiteSpace, string? newLines)
     {
-        return (newLines is null ? Character.IndexOfNewLine(whiteSpace, WhiteSpaceMask) : whiteSpace.IndexOfAny(newLines.AsSpan())) >= 0;
+        return Character.ContainsNewLine(whiteSpace, newLines, WhiteSpaceMask);
     }
 
 #if !PARLOT_STRING_ONLY

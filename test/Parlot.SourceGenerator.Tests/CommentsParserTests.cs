@@ -262,6 +262,79 @@ public class CommentsParserTests
         Assert.False(CommentsGrammars.TryParseJavaScriptChars("a\u0085b", out _));
     }
 
+    public static TheoryData<string> LineStartInputs()
+    {
+        var data = new TheoryData<string>
+        {
+            "", "-->", "--> a\nb", "  --> a\nb", "/* */ --> a\nb", "a\n--> b\nc", "a\r\n  --> b\u2028c", "a /*\n*/ --> b\nc",
+            "a /*\r*/ --> b\nc", "a /*\u2028*/ --> b", "a /* b */ --> c", "a // b\n--> c\nd", "a <!-- b\u2029--> c\rd", "a --> b",
+            "a-->b", "a /*\n --> b", "a\n--> b\n--> c\nd", "a # b\n--> c", "--> a\nb --> c", "a\u0085--> b", "a\v--> b",
+            // Across the 4096 chars the TextReader entry point reads at once
+            "a" + new string(' ', 4094) + "\n--> b\nc", "a /*" + new string(' ', 4094) + "\n*/ --> b\nc", "a" + new string(' ', 4093) + "--> b",
+        };
+
+        // Random texts of the chars of the tokens, the comments, the white space and new lines of both sets
+        const string chars = "ab-->-<!/* \t\n\r\u2028\u2029\u0085\v\u00A0\uFEFF#";
+        var random = new Random(585);
+
+        for (var i = 0; i < 300; i++)
+        {
+            var text = new char[random.Next(25)];
+
+            for (var j = 0; j < text.Length; j++)
+            {
+                text[j] = chars[random.Next(chars.Length)];
+            }
+
+            data.Add(new string(text));
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(LineStartInputs))]
+    public void Comments_At_The_Start_Of_A_Line_Match_The_Runtime(string text)
+    {
+        var tokens = ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Text("<"), Terms.Text("!"), Terms.Text("/"), Terms.Text("*")));
+
+        var script = tokens
+            .AndSkip(SkipWhiteSpace(Always()))
+            .Eof()
+            .Then(static list => string.Join("|", list))
+            .WithComments(static c => c.WithWhiteSpace(JavaScriptWhiteSpace, JavaScriptNewLines).WithSingleLine("//", JavaScriptNewLines).WithSingleLine("<!--", JavaScriptNewLines).WithSingleLine("-->", JavaScriptNewLines, CommentPlacement.LineStart).WithMultiLine("/*", "*/", UnterminatedComment.NotAComment, JavaScriptNewLines));
+
+        Check(script, CommentsGrammars.TryParseJavaScriptScript, CommentsGrammars.TryParseJavaScriptScript, text);
+
+        var scriptSet = tokens
+            .AndSkip(SkipWhiteSpace(Always()))
+            .Eof()
+            .Then(static list => string.Join("|", list))
+            .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("-->", JavaScriptNewLines, CommentPlacement.LineStart).WithSingleLine("//", JavaScriptNewLines).WithSingleLine("<!--", JavaScriptNewLines).WithMultiLine("/*", "*/"));
+
+        Check(scriptSet, CommentsGrammars.TryParseJavaScriptScriptSet, CommentsGrammars.TryParseJavaScriptScriptSet, text);
+
+        var withoutNewLines = ZeroOrMany(OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">"), Terms.Text("\n")))
+            .WithComments(static c => c.WithWhiteSpace().WithSingleLine("#", "\n").WithSingleLine("-->", "\n", CommentPlacement.LineStart))
+            .Eof()
+            .Then(static list => string.Join("|", list));
+
+        Check(withoutNewLines, CommentsGrammars.TryParseLineStartWithoutNewLines, CommentsGrammars.TryParseLineStartWithoutNewLines, text);
+    }
+
+    [Theory]
+    [InlineData("--> a\nb", "b")]
+    [InlineData("a\u2028--> b\nc", "a|c")]
+    [InlineData("a /*\r*/ --> b", "a")]
+    [InlineData("a /* b */ --> c", "a|--|>|c")]
+    public void Comments_At_The_Start_Of_A_Line_Are_Skipped(string text, string expected)
+    {
+        Assert.True(CommentsGrammars.TryParseJavaScriptScript(text, out var value));
+        Assert.Equal(expected, value);
+        Assert.True(CommentsGrammars.TryParseJavaScriptScript(new ChunkedReader(text, 1), out value));
+        Assert.Equal(expected, value);
+    }
+
     private static void Check(Parser<string> parser, StringParser parseString, ReaderParser parseReader, string input)
     {
         bool expected;
@@ -327,6 +400,12 @@ public static partial class CommentsGrammars
     public static partial bool TryParseJavaScriptChars(TextReader reader, out string value);
     public static partial bool TryParseJavaScriptCharsNoNewLine(string text, out string value);
     public static partial bool TryParseJavaScriptCharsNoNewLine(TextReader reader, out string value);
+    public static partial bool TryParseJavaScriptScript(string text, out string value);
+    public static partial bool TryParseJavaScriptScript(TextReader reader, out string value);
+    public static partial bool TryParseJavaScriptScriptSet(string text, out string value);
+    public static partial bool TryParseJavaScriptScriptSet(TextReader reader, out string value);
+    public static partial bool TryParseLineStartWithoutNewLines(string text, out string value);
+    public static partial bool TryParseLineStartWithoutNewLines(TextReader reader, out string value);
     public static partial bool TryParseSql(string text, out string value);
     public static partial bool TryParseSql(TextReader reader, out string value);
     public static partial bool TryParseCommentsOnly(string text, out string value);

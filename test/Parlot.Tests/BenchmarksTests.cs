@@ -99,6 +99,11 @@ public class BenchmarksTests
         Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_JavaScriptCharsSpaces().ToString());
         Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_JavaScriptCharsComments().ToString());
         Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_GeneratedJavaScriptCharsComments().ToString());
+        Assert.Equal(-64.5m, benchmark.Expression_JavaScriptScriptSpaces().Evaluate());
+        Assert.Equal(-64.5m, benchmark.Expression_JavaScriptScriptComments().Evaluate());
+        Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_JavaScriptScriptSpaces().ToString());
+        Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_JavaScriptScriptComments().ToString());
+        Assert.Equal(benchmark.Json_Default().ToString(), benchmark.Json_GeneratedJavaScriptScriptComments().ToString());
     }
 
     [Fact]

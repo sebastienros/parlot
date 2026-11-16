@@ -27,6 +27,9 @@ internal sealed class StreamingDriver : IDisposable
 
     // Absolute position of the window start
     private long _offset;
+
+    // The char before the window start, -1 at the start of the input, see Cursor.IsAtLineStart
+    private int _charBefore = -1;
     private int _line = 1;
     private int _column = 1;
 
@@ -87,6 +90,7 @@ internal sealed class StreamingDriver : IDisposable
 
         if (start > 0)
         {
+            _charBefore = _chars[start - 1];
             Array.Copy(_chars, start, _chars, 0, available);
             _length = available;
             _offset += start;
@@ -153,6 +157,12 @@ internal sealed class StreamingDriver : IDisposable
                 _column = end.Column;
 
                 var consumed = _frameLength + (_frameDelimited ? 1 : 0);
+
+                // The next frame follows the delimiter
+                if (_frameDelimited)
+                {
+                    _charBefore = delimiter;
+                }
                 _offset += consumed;
                 _frameStart += consumed;
                 _pendingDelimiter = _frameDelimited;
@@ -309,6 +319,8 @@ internal sealed class StreamingDriver : IDisposable
         {
             throw new InvalidOperationException("The ContextFactory must return a context using the provided scanner.");
         }
+
+        scanner.Cursor.SetCharBeforeBuffer(_charBefore);
 
         return context;
     }
