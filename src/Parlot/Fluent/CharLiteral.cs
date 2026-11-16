@@ -3,7 +3,7 @@ using Parlot.SourceGeneration;
 
 namespace Parlot.Fluent;
 
-public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable
+public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
     public CharLiteral(char c)
     {
@@ -20,6 +20,9 @@ public sealed class CharLiteral : Parser<char>, ISeekable, ISourceable, ILoopAna
     public bool SkipWhitespace { get; }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
+    // It reads its char only, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<char> result)
     {

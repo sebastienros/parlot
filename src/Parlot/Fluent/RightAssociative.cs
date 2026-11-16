@@ -158,7 +158,7 @@ public sealed class RightAssociative<T, TInput> : Parser<T>, ISeekablePrefixes, 
             "RightAssoc");
     }
 
-    public override string ToString() => Name ?? $"RightAssociative({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"RightAssociative({_parser})");
 }
 
 /// <summary>
@@ -312,7 +312,7 @@ public sealed class RightAssociativeWithContext<T, TInput> : Parser<T>, ISeekabl
             "RightAssocCtx");
     }
 
-    public override string ToString() => Name ?? $"RightAssociative({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"RightAssociative({_parser})");
 }
 
 /// <summary>

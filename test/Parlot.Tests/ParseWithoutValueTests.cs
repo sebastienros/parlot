@@ -168,6 +168,20 @@ public class ParseWithoutValueTests
     }
 
     [Fact]
+    public void InterpolatedShouldMatchParse()
+    {
+        string[] inputs = ["", "`", "``", "`a`", "`a${b}c`", "`a${b`", "`a${`b${a}`}c`", " `${a} ${b}`", "`a${ b }`", "`a", "`a${b c}`"];
+
+        var hole = Deferred<IReadOnlyList<char>>();
+        var template = Terms.Interpolated("`", "`", "${", "}", hole);
+        hole.Parser = OneOf(OneOrMany(Terms.Char('b')), OneOrMany(Terms.Char('a')), template.Then(static x => (IReadOnlyList<char>)[]));
+
+        AssertSameAsParse(template, inputs);
+        AssertSameAsParse(Literals.Interpolated("`", "`", "${", "}", A), inputs);
+        AssertSameAsParse(Capture(template), inputs);
+    }
+
+    [Fact]
     public void SeparatedShouldMatchParse()
     {
         AssertSameAsParse(Separated(B, As));
@@ -183,6 +197,13 @@ public class ParseWithoutValueTests
         // The options parse with the values
         AssertSameAsParse(Separated(B, OneOrMany(Terms.Char('a')), removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true),
             ["b a b b a b", "a b", "b", ""]);
+
+        // A last element, which ends the list (#588)
+        string[] lastInputs = ["", "a", "c", "a b c", "a b a b c b a", "a b b c", "a b", "c b a", "b c", "a b b", "  a b  c"];
+        AssertSameAsParse(Separated(B, A, C), lastInputs);
+        AssertSameAsParse(Separated(B, A, C, min: 2), lastInputs);
+        AssertSameAsParse(Separated(B, A, C, allowTrailingSeparator: true, removeEmptyEntries: true), lastInputs);
+        AssertSameAsParse(Separated(Bs, OneOrMany(Terms.Char('a')), ZeroOrMany(Terms.Char('c')), min: 1), lastInputs);
     }
 
     [Fact]
@@ -225,6 +246,7 @@ public class ParseWithoutValueTests
         AssertSamePositions(Separated(Bs, A), Separated(Bs.Then(static x => x), A));
         AssertSamePositions(Separated(Bs, A, removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true),
             Separated(Bs.Then(static x => x), A, removeEmptyEntries: true, allowLeadingSeparator: true, allowTrailingSeparator: true));
+        AssertSamePositions(Separated(Bs, A, C, min: 1), Separated(Bs.Then(static x => x), A, C, min: 1));
     }
 
     [Fact]

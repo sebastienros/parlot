@@ -176,5 +176,5 @@ public sealed class Switch<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, IL
         return result;
     }
 
-    public override string ToString() => $"{_previousParser} (Switch)";
+    public override string ToString() => FormatOnce($"{_previousParser} (Switch)");
 }

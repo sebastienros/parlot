@@ -14,7 +14,7 @@ namespace Parlot.Fluent;
 /// predicates are only invoked for the other chars, the escape sequences and the surrogate pairs. The value is the text
 /// of the identifier, escape sequences included, which <see cref="Character.DecodeIdentifier(TextSpan)"/> decodes.
 /// </remarks>
-internal sealed class CodePointIdentifier : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable
+internal sealed class CodePointIdentifier : Parser<TextSpan>, ISeekable, ISourceable, ILoopAnalyzable, ISpanSourceable, IInvokesOnlyLiterals
 {
     private readonly Func<int, bool> _isStart;
     private readonly Func<int, bool> _isPart;
@@ -70,6 +70,9 @@ internal sealed class CodePointIdentifier : Parser<TextSpan>, ISeekable, ISource
 
     // An identifier reads at least one char
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => false;
+
+    // It reads its chars only, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => true;
 
     public override bool Parse(ParseContext context, ref ParseResult<TextSpan> result)
     {

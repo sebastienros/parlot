@@ -118,6 +118,27 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void AlternativeStartingWithALookaheadIsReportedForTheParserAfterIt()
+    {
+        // The parser after the lookahead doesn't tell which chars it can start with
+        var parser = Literals.Text("1").Or(Not(Literals.Char('a')).SkipAnd(Literals.Pattern(static c => c != '1')).Then(static x => x.ToString()));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("tests the chars with a predicate", finding.Message);
+
+        // The lookahead's parser doesn't skip the white space which the parser after it skips
+        parser = Literals.Text("1").Or(Not(Literals.Char('a')).SkipAnd(Terms.Char('b')).Then(static x => x.ToString()));
+        finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+        Assert.Contains("don't both skip white space", finding.Message);
+
+        // The parser after it tells them, and the lookahead's parser skips the white space it skips: the alternative has its
+        // hints
+        var seekable = Terms.Integer().Then(static _ => "").Or(Not(Terms.Char('a')).SkipAnd(Terms.Identifier()).Then(static x => x.ToString()));
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(seekable), static finding => finding.Rule == GrammarRule.UnseekableAlternative);
+    }
+
+    [Fact]
     public void AlternativeThatCantTellIfItSkipsWhiteSpaceIsReported()
     {
         var parser = Terms.Text("a").Or(ZeroOrOne(Terms.Char('-')).SkipAnd(Terms.Text("b")));
@@ -326,6 +347,20 @@ public class GrammarAnalyzerTests
     }
 
     [Fact]
+    public void InterpolatedTextAfterItsOpeningTextIsReported()
+    {
+        // The text only matches where its opening delimiter does
+        var parser = Terms.Text("`").Then(static _ => 0).Or(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.ShadowedAlternative);
+
+        Assert.Equal(1, finding.Alternative);
+        Assert.Contains("alternative 2 (Terms.Interpolated(...))", finding.Message);
+        Assert.Equal(0, parser.Parse("`a${b}`"));
+        Assert.Empty(GrammarAnalyzer.Analyze(Terms.Interpolated("`", "`", "${", "}", Terms.Identifier()).Then(static x => x.Holes.Count).Or(Terms.Text("`").Then(static _ => 0))));
+    }
+
+    [Fact]
     public void LongerTextFirstIsNotReported()
     {
         Assert.Empty(GrammarAnalyzer.Analyze(Terms.Text("<=").Or(Terms.Text("<"))));
@@ -355,6 +390,58 @@ public class GrammarAnalyzerTests
         Single(GrammarAnalyzer.Analyze(Terms.Text("in").Or(Terms.Keyword("int"))), GrammarRule.ShadowedAlternative);
         Single(GrammarAnalyzer.Analyze(Terms.Char('a').Then(static x => x.ToString()).Or(Terms.Text("ab"))), GrammarRule.ShadowedAlternative);
         Single(GrammarAnalyzer.Analyze(Terms.Text("a", caseInsensitive: true).Or(Terms.Text("AB"))), GrammarRule.ShadowedAlternative);
+    }
+
+    [Fact]
+    public void SeparatedWithLastIsNotShadowedByItsFirstParser()
+    {
+        // A list with a last element matches its last element where its first parser fails (#588)
+        var item = Terms.Identifier();
+        var rest = Terms.Text("...").SkipAnd(Terms.Identifier());
+
+        Single(GrammarAnalyzer.Analyze(item.Then(static _ => 1).Or(Separated(Terms.Char(','), item).Then(static _ => 2))), GrammarRule.ShadowedAlternative);
+
+        var parser = item.Then(static _ => 1).Or(Separated(Terms.Char(','), item, rest, min: 1).Then(static _ => 2));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(parser), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal(2, parser.Parse("...r"));
+
+        // A leading separator, or no minimum, also lets a list succeed where its first parser fails
+        var leading = item.Then(static _ => 1).Or(Separated(Terms.Char(','), item, allowLeadingSeparator: true).Then(static _ => 2));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(leading), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal(2, leading.Parse(", a"));
+
+        var empty = item.Then(static _ => 1).Or(Separated(Terms.Char(','), item, min: 0).Then(static _ => 2));
+
+        Assert.DoesNotContain(GrammarAnalyzer.Analyze(empty), static finding => finding.Rule == GrammarRule.ShadowedAlternative);
+        Assert.Equal(2, empty.Parse(""));
+    }
+
+    [Fact]
+    public void SeparatedWithUnseekableLastIsReported()
+    {
+        // The list can't tell its chars because of its last element, not its first parser
+        var parser = Literals.Char('x').Then(static _ => 1).Or(Separated(Literals.Char(','), Literals.Identifier(), Literals.Pattern(char.IsDigit), min: 1).Then(static _ => 2));
+
+        var finding = Single(GrammarAnalyzer.Analyze(parser), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("Separated(Literals.Identifier(...), last: Literals.Pattern(...))", finding.Message);
+        Assert.Contains("Literals.Pattern(...) tests the chars with a predicate", finding.Message);
+
+        // Both elements tell their chars, but only one of them skips white space
+        var mixed = Literals.Char('x').Then(static _ => 1).Or(Separated(Literals.Char(','), Literals.Identifier(), Terms.Text("...").Then(static _ => TextSpan.Empty), min: 1).Then(static _ => 2));
+
+        finding = Single(GrammarAnalyzer.Analyze(mixed), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("can start with Literals.Identifier(...) or Terms.Text(\"...\"), and only one of them skips white space", finding.Message);
+
+        // A prefix operator is invoked before its operand, which can't seek
+        var unary = Literals.Char('x').Then(static _ => TextSpan.Empty).Or(Literals.Pattern(char.IsDigit).Unary((Literals.Char('-'), static x => x)));
+
+        finding = Single(GrammarAnalyzer.Analyze(unary), GrammarRule.UnseekableAlternative);
+
+        Assert.Contains("Literals.Pattern(...) tests the chars with a predicate", finding.Message);
     }
 
     [Fact]

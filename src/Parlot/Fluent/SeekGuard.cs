@@ -33,11 +33,19 @@ internal sealed class SeekGuard
     private const int MaximumGeneratedRanges = 16;
 
     private readonly object _parser;
+    private readonly bool _guardChoices;
     private Lookup? _lookup;
 
-    public SeekGuard(object parser)
+    /// <summary>
+    /// Creates a guard for <paramref name="parser"/>.
+    /// </summary>
+    /// <param name="parser">The parser which may not be invoked.</param>
+    /// <param name="guardChoices">Whether a choice is also guarded, though it selects its alternatives from the char: a
+    /// negative lookahead mostly finds that its parser fails, which the char tells without entering it.</param>
+    public SeekGuard(object parser, bool guardChoices = false)
     {
         _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _guardChoices = guardChoices;
     }
 
     /// <summary>
@@ -64,7 +72,7 @@ internal sealed class SeekGuard
     private Lookup Resolve()
     {
         // Choices reached through the parser build their complete lookup table first, as when a choice builds its own
-        var lookup = Lookup.Create(Hints(_parser));
+        var lookup = Lookup.Create(Hints(_parser, _guardChoices));
 
         // The lookup is immutable, a thread reading another one built concurrently reads the same chars
         _lookup = lookup;
@@ -74,12 +82,13 @@ internal sealed class SeekGuard
     /// <summary>
     /// Gets the hints a parser can be skipped with, or <see langword="null"/> when it must always be invoked.
     /// </summary>
-    private static (char[] ExpectedChars, bool SkipWhitespace)? Hints(object parser)
+    private static (char[] ExpectedChars, bool SkipWhitespace)? Hints(object parser, bool guardChoices)
     {
         // A parser which reads the cursor itself, like a literal, tests the char as fast as the guard would, and a choice
         // already selects its alternatives from it: the guard would only skip the white space a second time when it matches.
         // The analysis takes its own lock, so it isn't run under the lock of the hints.
-        if (!LoopAnalysis.InvokesParsersAtStart(SkippedParser(parser)) || IsGeneric(parser, typeof(OneOf<>)) || IsGeneric(parser, typeof(Longest<>)))
+        // A lookahead guards a choice too: it mostly finds that the choice fails, which the char tells without entering it.
+        if (!LoopAnalysis.InvokesParsersAtStart(SkippedParser(parser)) || (!guardChoices && (IsGeneric(parser, typeof(OneOf<>)) || IsGeneric(parser, typeof(Longest<>)))))
         {
             return null;
         }
@@ -113,10 +122,14 @@ internal sealed class SeekGuard
     /// or a method which first tests whether the parser can start at the current position and fails without invoking it when
     /// it can't, leaving the cursor where it was.
     /// </summary>
-    public static string GetHelper(SourceGenerationContext context, object parser, string helperName, Type valueType)
+    /// <remarks>
+    /// With <paramref name="guardChoices"/>, a choice is guarded too, see
+    /// <see cref="SeekGuard(object, bool)"/>.
+    /// </remarks>
+    public static string GetHelper(SourceGenerationContext context, object parser, string helperName, Type valueType, bool guardChoices = false)
     {
         // The factories of the grammar have run, so every choice can build its complete table
-        if (Hints(parser) is not { } usable)
+        if (Hints(parser, guardChoices) is not { } usable)
         {
             return helperName;
         }

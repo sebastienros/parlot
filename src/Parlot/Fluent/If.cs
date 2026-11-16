@@ -159,5 +159,7 @@ public sealed class If<C, T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzabl
         return result;
     }
 
-    public override string ToString() => _elseParser is null ? $"{_thenParser} (If)" : $"{_thenParser} (If) {_elseParser} (Else)";
+    public override string ToString() => _elseParser is null
+        ? FormatOnce($"{_thenParser} (If)")
+        : FormatOnce($"{_thenParser} (If) {_elseParser} (Else)");
 }

@@ -216,7 +216,7 @@ public sealed class Unary<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopA
         return UnarySource.Generate(context, typeof(T), typeof(TInput), parserSourceable, operators, factories, false, "_Unary");
     }
 
-    public override string ToString() => Name ?? $"Unary({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"Unary({_parser})");
 }
 
 public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourceable, ILoopAnalyzable
@@ -422,7 +422,7 @@ public sealed class UnaryWithContext<T, TInput> : Parser<T>, ISeekable, ISourcea
         return UnarySource.Generate(context, typeof(T), typeof(TInput), parserSourceable, operators, factories, true, "_UnaryCtx");
     }
 
-    public override string ToString() => Name ?? $"Unary({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"Unary({_parser})");
 }
 
 /// <summary>

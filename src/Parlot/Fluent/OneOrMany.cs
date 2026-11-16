@@ -234,5 +234,5 @@ public sealed class OneOrMany<T> : Parser<IReadOnlyList<T>>, ISeekablePrefixes, 
     void ISpanSourceable.GenerateSpanSource(SpanSourceWriter writer, string? valueVariable, SpanLabel fail)
         => SpanSource.GenerateLoop(writer, _parser, typeof(T), _max, oneOrMore: true, valueVariable, fail);
 
-    public override string ToString() => $"{_parser}+";
+    public override string ToString() => FormatOnce($"{_parser}+");
 }

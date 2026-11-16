@@ -46,6 +46,18 @@ public class BenchmarksTests
     }
 
     [Theory]
+    [InlineData(10)]
+    [InlineData(100)]
+    public void InterpolatedGrammars(int chunkLength)
+    {
+        // Setup checks that the four parsers count the same holes
+        var benchmark = new InterpolatedBenchmarks { ChunkLength = chunkLength };
+        benchmark.Setup();
+        Assert.Equal(InterpolatedBenchmarks.ExpectedHoles, benchmark.RuntimeInterpolated());
+        Assert.Equal(InterpolatedBenchmarks.ExpectedHoles, benchmark.GeneratedInterpolated());
+    }
+
+    [Theory]
     [InlineData("   class a", 7)]
     [InlineData("  @a @b class a", 13)]
     public void SequenceStartGrammars(string input, int length)
@@ -97,6 +109,8 @@ public class BenchmarksTests
         Assert.Equal(150, benchmark.Peek_Runtime());
         Assert.Equal(150, benchmark.AlwaysWhenFollowedBy_Generated());
         Assert.Equal(150, benchmark.Peek_Generated());
+        Assert.Equal(200, benchmark.Restriction_Runtime());
+        Assert.Equal(200, benchmark.Restriction_Generated());
     }
 
     [Fact]
@@ -122,6 +136,7 @@ public class BenchmarksTests
         Assert.True(benchmark.Negative());
         Assert.True(benchmark.WhenAccepted());
         Assert.False(benchmark.WhenRejected());
+        Assert.False(benchmark.WhenReasonRejected());
         Assert.False(benchmark.NotFollowedRejected());
         Assert.False(benchmark.NegativeRejected());
         Assert.True(benchmark.Peeked());
@@ -132,6 +147,8 @@ public class BenchmarksTests
         Assert.True(benchmark.RuntimeNegative());
         Assert.True(benchmark.RuntimeWhenAccepted());
         Assert.False(benchmark.RuntimeWhenRejected());
+        Assert.False(benchmark.RuntimeWhenReasonRejected());
+        Assert.False(benchmark.RuntimeWhenReasonError());
         Assert.False(benchmark.RuntimeNotFollowedRejected());
         Assert.False(benchmark.RuntimeNegativeRejected());
         Assert.True(benchmark.RuntimePeeked());
@@ -1001,6 +1018,21 @@ public class BenchmarksTests
                 var benchmarks = new CollectionBenchmarks { Count = count, Combinator = combinator };
                 benchmarks.Setup();
                 Assert.Equal(count > 0 || combinator == "ZeroOrMany", benchmarks.Generated());
+            }
+        }
+    }
+
+    [Fact]
+    public void SeparatedLast()
+    {
+        foreach (var count in new[] { 0, 2, 8 })
+        {
+            foreach (var withRest in new[] { false, true })
+            {
+                // The setup checks that each parser returns the list
+                var benchmarks = new SeparatedLastBenchmarks { Count = count, WithRest = withRest };
+                benchmarks.Setup();
+                Assert.Equal(count + (withRest ? 1 : 0), benchmarks.SeparatedRuntime());
             }
         }
     }

@@ -58,6 +58,87 @@ internal static class SeekableHints
     }
 
     /// <summary>
+    /// Gets the hints of a sequence which invokes <paramref name="first"/> then <paramref name="second"/>: those of
+    /// <paramref name="first"/>, or, when it is a <see cref="Not{T}"/>, which succeeds without reading, those of both its
+    /// parser and <paramref name="second"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// After a <c>Not</c>, the sequence only matches where <paramref name="second"/> matches, at the same position. Its
+    /// parser is invoked first though: where it can start, it can read further and fail with an error, like a parser of
+    /// <c>ElseError</c>, which skipping the sequence would hide. Where neither can start, the parser fails at once and so
+    /// does the sequence. After a <see cref="Peek{T}"/>, whose parser must match too, the sequence has its hints.
+    /// </para>
+    /// <para>
+    /// A choice whose alternatives all skip white space skips it before it invokes them, which mustn't change what either
+    /// parser sees: hints which skip white space are only kept when both parsers tell that they skip it. Whether a parser
+    /// skips it is read from its hint, as a choice does. A parser whose match depends on that white space, like
+    /// <see cref="NoNewLineBefore{T}"/>, is found by the choice through the lookahead, which then invokes its alternatives
+    /// before the white space, see <see cref="IReadsLeadingWhiteSpace"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="first">The parser the sequence invokes first.</param>
+    /// <param name="second">The parser it invokes then.</param>
+    /// <param name="prefixes">The parsers whose prefixes the sequence has, see <see cref="SequencePrefixes"/>: none when
+    /// it has no hints.</param>
+    public static (bool CanSeek, char[] ExpectedChars, bool SkipWhitespace) Sequence(object first, object second, out (object? First, object? Second) prefixes)
+    {
+        // The prefixes of another first parser are read from it, see ForwardedHints.SequencePrefixes
+        prefixes = (null, null);
+
+        if (first is not ILookahead lookahead)
+        {
+            return Of(first);
+        }
+
+        var parser = Of(lookahead.Parser);
+        var next = Of(second);
+
+        if (lookahead.MatchesParser)
+        {
+            // The parser of the lookahead is the one which reads first: where it can't start, it fails at once. Its hints are
+            // those the Peek forwards, unless they skip white space and the parser which follows tells that it doesn't. A
+            // parser which tells nothing is trusted, as a choice trusts it.
+            if (!parser.SkipWhitespace || second is not ISeekable { SkipWhitespace: false })
+            {
+                prefixes = parser.CanSeek ? (lookahead.Parser, null) : (null, null);
+                return parser;
+            }
+
+            return (false, [], false);
+        }
+        else if (parser.CanSeek && next.CanSeek && parser.SkipWhitespace == next.SkipWhitespace)
+        {
+            prefixes = (lookahead.Parser, second);
+
+            // The hints of both are already read: Union() would read them again
+            return (true, ExpectedChars([.. parser.ExpectedChars, .. next.ExpectedChars]), parser.SkipWhitespace);
+        }
+
+        return (false, [], false);
+    }
+
+    /// <summary>
+    /// Gets the prefixes of a sequence, from the parsers <see cref="Sequence"/> tells: the prefixes of both when it tells
+    /// two, which are only usable when both tell them. They are read when they are asked for, like the prefixes of other
+    /// parsers, rather than with the hints.
+    /// </summary>
+    public static string[]? SequencePrefixes((object? First, object? Second) prefixes)
+    {
+        if (prefixes.First is null || Prefixes(prefixes.First) is not { } first)
+        {
+            return null;
+        }
+
+        if (prefixes.Second is null)
+        {
+            return first;
+        }
+
+        return Prefixes(prefixes.Second) is { } second ? [.. first, .. second] : null;
+    }
+
+    /// <summary>
     /// Gets the hints of a parser, or none when it doesn't tell them.
     /// </summary>
     /// <remarks>
