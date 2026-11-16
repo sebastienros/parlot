@@ -141,6 +141,54 @@ public class CompactingStreamTests
     }
 
     [Fact]
+    public void ChoicesSkippingTheWhiteSpaceOfNoNewLineBeforeAlternativesKeepTheBufferBounded()
+    {
+        // The choice skips the white space once for its alternatives, and searches it for the new line of the arrow: it isn't
+        // kept while the block, its last alternative, is read
+        var arrow = NoNewLineBefore(Terms.Text("=>")).SkipAnd(Terms.Identifier()).Then(static x => "=>" + x);
+        var block = Terms.Char('{').SkipAnd(ZeroOrMany(Terms.Identifier())).AndSkip(Terms.Char('}')).Then(static x => "{" + x.Count + "}");
+        var parser = Terms.Identifier().And(OneOf(arrow, block)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+
+        var body = string.Join(" ", Enumerable.Range(0, 2_000).Select(static i => "b" + i));
+        var text = "d" + new string(' ', 100) + "\n{ " + body + " }";
+        var expected = "d{2000}";
+
+        Assert.Equal(expected, parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal(expected, parser.Parse(new ChunkedReader(text, 3), options));
+
+        // The white space before the block isn't kept while it's read
+        Assert.InRange(peak(), 1, 256);
+    }
+
+    [Fact]
+    public void ChoicesWithNoNewLineBeforeAlternativesOfOtherNewLinesKeepTheBufferBounded()
+    {
+        // The NoNewLineBefore alternatives look for other new lines: the choice invokes them before the white space, which it
+        // doesn't keep while the block is read
+        var id = Terms.Identifier();
+        var block = Terms.Char('{').SkipAnd(ZeroOrMany(Terms.Identifier())).AndSkip(Terms.Char('}')).Then(static x => "{" + x.Count + "}");
+        var parser = Terms.Identifier().And(OneOf(
+            NoNewLineBefore(Terms.Text("=>"), "\r").SkipAnd(id).Then(static x => "=>" + x),
+            NoNewLineBefore(Terms.Text("->")).SkipAnd(id).Then(static x => "->" + x),
+            block)).Then(static x => x.Item1.ToString() + x.Item2).Eof();
+
+        var body = string.Join(" ", Enumerable.Range(0, 2_000).Select(static i => "b" + i));
+        var text = "d" + new string(' ', 100) + "\n{ " + body + " }";
+
+        Assert.Equal("d{2000}", parser.Parse(text));
+
+        var (options, peak) = Observe(new StreamParseOptions { BufferSize = 16 });
+        Assert.Equal("d{2000}", parser.Parse(new ChunkedReader(text, 3), options));
+        Assert.InRange(peak(), 1, 256);
+
+        Assert.Equal("d=>e", parser.Parse(new ChunkedReader("d \n => e", 1)));
+        Assert.Null(parser.Parse(new ChunkedReader("d \r => e", 1)));
+        Assert.Null(parser.Parse(new ChunkedReader("d \n -> e", 1)));
+    }
+
+    [Fact]
     public void ListsWithALastElementKeepTheBufferBounded()
     {
         // The last element is read where the parser of the values failed, and a separator which no element follows is read

@@ -187,6 +187,12 @@ public class StreamingTests
         // A choice in a sequence, which doesn't keep the text buffered: the choice keeps the white space it skips
         ["newline-choice-sequence"] = new Grammar<string>(CreateNewLineChoiceSequence()),
         ["newline-choice-sequence-comments"] = new Grammar<string>(CreateNewLineChoiceSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
+        // NoNewLineBefore alternatives with their own new lines, told the white space the choice skips, and ones which can't be
+        // told: a NoNewLineBefore after SkipWhiteSpace, which sees none, and one holding another one
+        ["newline-choice-sets"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(NoNewLineBefore(Terms.Text("b"), "\r"), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof()),
+        // A NoNewLineBefore which can match nothing, before another one
+        ["newline-choice-empty"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(NoNewLineBefore(ZeroOrOne(Terms.Text("x")), "\n").And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof()),
+        ["newline-choice-skipped"] = new Grammar<string>(Terms.Identifier().SkipAnd(OneOf(SkipWhiteSpace(NoNewLineBefore(Literals.Text("b"))), NoNewLineBefore(NoNewLineBefore(Terms.Text("d")), "\r"), NoNewLineBefore(Terms.Text("c")))).Eof()),
         // A choice of two composite alternatives in a sequence, selected with its table (#581)
         ["newline-tail-sequence"] = new Grammar<string>(CreateNewLineTailSequence()),
         ["newline-tail-sequence-comments"] = new Grammar<string>(CreateNewLineTailSequence().WithComments(static c => c.WithWhiteSpaceOrNewLine().WithSingleLine("//").WithMultiLine("/*", "*/"))),
@@ -558,6 +564,14 @@ public class StreamingTests
         ];
         Add("newline-choice-sequence", newLineChoiceSequence);
         Add("newline-choice-sequence-comments", newLineChoiceSequence);
+        string[] newLineChoiceSets =
+        [
+            "a b", "a\nb", "a\rb", "a\r\nb", "a c", "a\nc", "a\n e", "a e", "a \r d", "a \n d", "a d", "a",
+            "a" + new string(' ', 140) + "\nb", "a" + new string(' ', 140) + "\rc", "a\n" + new string(' ', 140) + "c",
+        ];
+        Add("newline-choice-sets", newLineChoiceSets);
+        Add("newline-choice-skipped", newLineChoiceSets);
+        Add("newline-choice-empty", "a \r y", "a \n y", "a \r x y", "a\r\nx y", "a \n c", "a c", "a \n e", "a" + new string(' ', 140) + "\ry");
         Add("newline-tail-sequence", newLineChoiceSequence);
         Add("newline-tail-sequence-comments", newLineChoiceSequence);
         Add("comments", "a /* b */", "a /**/ b", "a /* b * / c */ d", "a //", "a /", "a /*", "a/*b*//*c*/d", "a // b\r\n c", "a // b\r c", "a\r\n//\r\n\r\nb");

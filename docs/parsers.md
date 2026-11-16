@@ -2120,11 +2120,11 @@ On failure the cursor is back before the white space. When there is no white spa
 directly, and the white space is only searched when it was skipped, with a vectorized search on .NET 8 and later.
 
 `NoNewLineBefore` has the lookup hints of its parser and skips white space, so it can be an alternative of a choice whose
-other alternatives skip white space, and the choice keeps its lookup table. Such a choice usually skips the white space once
-before invoking its alternatives, which would hide the new line: when one of them can start with a `NoNewLineBefore`, it
-selects them with the char after the white space and invokes them before it instead. It works the same through sequences,
-conversions and nested choices, and for the operators of an [operator table](#operator-tables), which are tried through a
-choice:
+other alternatives skip white space, and the choice keeps its lookup table. Such a choice skips the white space once before
+invoking its alternatives, which would hide the new line: when one of them can start with a `NoNewLineBefore`, the choice
+records the white space it skipped, and the `NoNewLineBefore` looks for the new line in it. It works the same through
+sequences, conversions and nested choices, and for the operators of an [operator table](#operator-tables), which are tried
+through a choice:
 
 ```c#
 // The arrow can't follow a new line, an assignment can
@@ -2138,13 +2138,18 @@ var unary = member.Operators()
     .LeftAssociative((Terms.Char('+'), static (a, b) => new Add(a, b)), (Terms.Char('-'), static (a, b) => new Subtract(a, b)));
 ```
 
-The alternatives of such a choice skip the white space themselves, from the cache of the context, which costs a little
-more than one skip for all of them. A choice of two alternatives which each invoke no other parser than literals (a text, a
-char, a keyword, an identifier, a number... of `Terms`, and the parsers which only wrap them or a choice of them, like
-`NoNewLineBefore`, `Then`, `Capture` or `AsToken`, as the operators of a level of `Operators()`) tries them in order instead:
-reading the char after the white space would cost about what trying the one which doesn't match does. Other alternatives,
-like the sequences of `tail` above, invoke what they start with before they fail, and are selected with the char after the
-white space however many they are. A `Longest` holding a `NoNewLineBefore` alternative tries all its alternatives. A
+Only a `NoNewLineBefore` which the alternative invokes before anything else skips white space finds the white space of the
+choice. When an alternative can skip white space or match nothing before a `NoNewLineBefore`, like
+`SkipWhiteSpace(NoNewLineBefore(p))` or `ZeroOrOne(a).And(NoNewLineBefore(p))`, or a `NoNewLineBefore` holding another
+one, the choice selects the alternatives with the char after the white space and invokes them before it instead, and they
+skip the white space themselves, from the cache of the context. So does a choice reading a `TextReader` whose
+`NoNewLineBefore` alternatives look for different new lines: it would keep the white space buffered while they are read.
+A choice of two such alternatives which each invoke no other parser than literals (a text, a char, a keyword, an
+identifier, a number... of `Terms`, and the parsers which only wrap them or a choice of them, like `NoNewLineBefore`,
+`Then`, `Capture` or `AsToken`) tries them in order: reading the char after the white space would cost about what trying the
+one which doesn't match does. Other alternatives invoke what they start with before they fail, and are selected with the
+char after the white space however many they are. A `Longest` holding a `NoNewLineBefore` alternative tries all its
+alternatives. A
 parser type of the application which invokes a `NoNewLineBefore` isn't looked into: when it tells that it skips white
 space, a choice holding it skips the white space before it, and the new line isn't found. Make the choice hold the
 `NoNewLineBefore` rather than the parser invoking it.

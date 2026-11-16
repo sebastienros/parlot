@@ -113,4 +113,19 @@ public static partial class NewLineGrammars
 
     [GenerateParser(nameof(TryParsePostfixTableWithComments))]
     private static Parser<string> BuildPostfixTableWithComments() => PostfixTableWithComments();
+
+    // NoNewLineBefore alternatives looking for their own new lines in the white space the choice skips for them
+    internal static Parser<string> NewLineSets() =>
+        Terms.Identifier().SkipAnd(OneOf(NoNewLineBefore(Terms.Text("b"), "\r"), NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof();
+
+    [GenerateParser(nameof(TryParseNewLineSets))]
+    private static Parser<string> BuildNewLineSets() => NewLineSets();
+
+    // A NoNewLineBefore after a parser skipping the white space, which sees none, and one holding another one: the choice
+    // invokes its alternatives before the white space
+    internal static Parser<string> SkippedNewLines() =>
+        Terms.Identifier().SkipAnd(OneOf(SkipWhiteSpace(NoNewLineBefore(Literals.Text("b"))), NoNewLineBefore(NoNewLineBefore(Terms.Text("d")), "\r"), NoNewLineBefore(Terms.Text("c")))).Eof();
+
+    [GenerateParser(nameof(TryParseSkippedNewLines))]
+    private static Parser<string> BuildSkippedNewLines() => SkippedNewLines();
 }
