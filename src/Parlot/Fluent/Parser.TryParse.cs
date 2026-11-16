@@ -1,9 +1,10 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Parlot.Fluent;
 
-public abstract partial class Parser<T>
+public abstract partial class Parser<T> : IParserText
 {
     /// <summary>
     /// Gets or sets the text which is to render the textual representation of the parser.
@@ -42,12 +43,13 @@ public abstract partial class Parser<T>
 
     public bool TryParse(string text, out T? value)
     {
-        return TryParse(text, out value, out _);
+        // The error isn't returned: the one of a reason isn't built
+        return TryParse(new ParseContext(new Scanner(text)), out value!, out _, withReason: false);
     }
 
     public bool TryParse(string text, CancellationToken cancellationToken, out T? value)
     {
-        return TryParse(text, cancellationToken, out value, out _);
+        return TryParse(new ParseContext(new Scanner(text), cancellationToken), out value!, out _, withReason: false);
     }
 
     public bool TryParse(string text, out T value, out ParseError? error)
@@ -61,6 +63,12 @@ public abstract partial class Parser<T>
     }
 
     public bool TryParse(ParseContext context, out T value, out ParseError? error)
+    {
+        return TryParse(context, out value, out error, withReason: true);
+    }
+
+    // withReason: whether a failure with a reason returns its error, which computes its position
+    private bool TryParse(ParseContext context, out T value, out ParseError? error, bool withReason)
     {
         error = null;
 
@@ -76,6 +84,11 @@ public abstract partial class Parser<T>
             {
                 value = localResult.Value;
                 return true;
+            }
+
+            if (withReason)
+            {
+                error = ParseError.FromFurthestReason(context);
             }
         }
         catch (ParseException e)
@@ -101,4 +114,22 @@ public abstract partial class Parser<T>
     }
 
     public override string ToString() => $"{Name ?? GetType().Name}";
+
+    /// <summary>
+    /// Formats the text of this parser for <see cref="ToString"/>, once per call to <see cref="ToString"/>: where the
+    /// parser is reached again, from another parser which shares it or through a cycle, it is written as a reference,
+    /// its <see cref="Name"/> or <c>#n</c>, and its text is labelled with it, <c>#n:(...)</c>. The parsers which the
+    /// text interpolates write their own text in the same builder.
+    /// </summary>
+#pragma warning disable CA1822 // The handler receives this parser
+    private protected string FormatOnce([InterpolatedStringHandlerArgument("")] ref ParserTextHandler handler)
+        => handler.ToStringAndClear();
+#pragma warning restore CA1822
+
+    /// <summary>
+    /// Whether this parser only adds to the text of the parser it invokes, and is written each time it is reached.
+    /// </summary>
+    private protected virtual bool IsTextWrapper => false;
+
+    bool IParserText.IsTextWrapper => IsTextWrapper;
 }

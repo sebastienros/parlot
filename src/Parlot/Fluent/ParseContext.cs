@@ -334,6 +334,10 @@ public class ParseContext
         // The failure recorded when the token being read started, see RetryToken
         public int TokenRecordedFailure;
 
+        // The reason recorded before the token, and its offset, which a token read again doesn't change
+        public object? TokenRecordedReason;
+        public int TokenRecordedReasonOffset;
+
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -530,10 +534,11 @@ public class ParseContext
     /// </summary>
     /// <remarks>
     /// Not inlined, so that only this failure path pays for it. The caller moves the cursor where it needs it: it is left at
-    /// <paramref name="start"/>, or after the white space there when it had to be read again.
+    /// <paramref name="start"/>, or after the white space there when it had to be read again. A <paramref name="reason"/> is
+    /// recorded with the failure, see <see cref="Cursor.RecordFailure(int, object)"/>.
     /// </remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal void RecordRejected(int start, int recorded, bool skipWhiteSpace)
+    internal void RecordRejected(int start, int recorded, bool skipWhiteSpace, object? reason = null)
     {
         var cursor = Scanner.Cursor;
         cursor.ResetPosition(start);
@@ -552,7 +557,7 @@ public class ParseContext
             }
         }
 
-        cursor.RecordFailure(valueStart);
+        cursor.RecordFailure(valueStart, reason);
     }
 
     /// <summary>
@@ -940,6 +945,8 @@ public class ParseContext
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
         _coldState!.TokenRecordedFailure = cursor.RecordedFailure;
+        _coldState.TokenRecordedReason = cursor.RecordedReason;
+        _coldState.TokenRecordedReasonOffset = cursor.RecordedReasonOffset;
 
         return cursor.Offset;
     }
@@ -958,6 +965,7 @@ public class ParseContext
         // forgotten, like the delimiter of TextBefore which didn't match where the buffer ended.
         cursor.ResetPosition(start);
         cursor.RestoreRecordedFailure(_coldState!.TokenRecordedFailure);
+        cursor.RestoreRecordedReason(_coldState.TokenRecordedReason, _coldState.TokenRecordedReasonOffset);
         Refill(start);
         cursor.ResetHitEnd();
 

@@ -88,7 +88,9 @@ type implements each of these that applies:
 - A parser that takes its hints from the parsers it starts with reads them when they are asked for, through the
   internal `ForwardedHints`, never in its constructor: those can be `Deferred` parsers set later, or choices whose table
   is only complete once the grammar is. A parser has no hints when it can succeed without reading, or when skipping it
-  changes the outcome, like `ElseError`.
+  changes the outcome, like `ElseError`. A parser which never moves the cursor when it succeeds, like `Not` and `Peek`,
+  implements the internal `ILookahead`: a sequence which starts with it takes hints through it (`SeekableHints.Sequence`),
+  and `Not` tests the char with a `SeekGuard` before invoking its parser.
 - `ISeekable.SkipWhitespace` only tells that the white space isn't to be looked at to find the first chars: a parser which
   forwards it can still read from where it is invoked, like `Capture`, which holds that white space, or a lookahead,
   which leaves the cursor before it. A parser which needs where the value of another one starts, like `When` and
@@ -106,8 +108,16 @@ type implements each of these that applies:
   parser that ignores the value of a parser it invokes (`Capture`, `AndSkip`'s skipped parser, `Between`'s delimiters,
   a constant `Then`) reads `CanParseWithoutValue` once, in its constructor. Add each override to
   `ParseWithoutValueTests`.
+- A `ToString()` which writes the parsers it invokes is `FormatOnce($"...")`, an interpolated string handler
+  (`ParserPrinter`) in which they write their own text in one builder: a parser shared by others is then written once
+  per call, then as a reference (`docs/writing.md`, "The text of a parser"), instead of once per path to it, which grows
+  exponentially. A list of parsers is interpolated as a `ParserList`. A wrapper which only adds to the text of the parser
+  it invokes, like `SkipWhiteSpace` around the `Terms`, also overrides `IsTextWrapper`, to be written each time.
 - A wrapper, a parser that never fails, or one that starts with a fixed text goes in the sets at the top of
   `GrammarAnalysis`.
+- A literal, which only reads the text, implements the internal `IInvokesOnlyLiterals`, and a wrapper which invokes a single
+  parser, reading at most the white space before it, forwards it (`InvokesOnlyLiterals.Of`): a choice invoked before the white
+  space tries two of them in order rather than with its table. A type left out only costs that choice a table lookup.
 - A parser that recurses (`Deferred`) calls the internal `EnsureSufficientStack()` on each entry and counts a level with
   `EnterRecursion` / `ExitRecursion` when `MaxRecursionDepth` is set; its emitter does the same, counting only when
   `SourceGenerationContext.MaxRecursionDepth` is set. A parser that would repeat itself reads in a loop instead and only
@@ -159,6 +169,13 @@ Full reference: `docs/source-generation.md`. Inspect output under `obj/.../Gener
   Span code moves back with it too, to before the white space it skipped when what follows wasn't found. Leave
   `ResetPositionNotInlined` as it is: the parsers which reset the cursor the most inline it, and recording only the
   moves back there, two instructions, cost `ExprBench.ParlotFluentBig` 3% with dynamic PGO, nothing without it.
+- A parser which rejects what it read can record why with the failure: the public `Cursor.RecordFailure(offset, reason)`
+  keeps the first reason recorded at the furthest offset, and `FurthestReason` reports it only while its offset is
+  `FurthestOffset`, so that `ResetPositionNotInlined` doesn't touch it; `RestoreRecordedFailure` forgets a reason further
+  than what it restores, the only cost of reasons outside their failure paths (a compare). `When`, `ThenTry`, `Not` and `WhenNotFollowedBy` take one, and pass it on their failure path
+  only (`ParseContext.RecordRejected` takes it too); emitters pass it with `SourceGenerationContext.ReasonArgument`, a
+  literal or a static field, never a new box per failure. A token read again (`RetryToken`) restores the reason exactly. Entry points return it in an `object` element of the
+  failure tuple; `FailureReasonParityTests` compares it with the runtime `ParseError.Reason` on random inputs.
 - Where the cursor moves back from text which matched (an alternative of `Longest`, the white space before a valued
   operator), read `Cursor.RecordedFailure` before `ResetPosition` and call `RestoreRecordedFailure` after: a match isn't
   a failure where it ends. In span code the cursor only moves to skip white space: code emitted after the position was

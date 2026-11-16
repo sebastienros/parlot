@@ -8,7 +8,7 @@ namespace Parlot.Fluent;
 /// Doesn't parse anything and return the default value.
 /// </summary>
 [Obsolete("Use the Then parser instead.")]
-public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
+public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable, IInvokesOnlyLiterals
 {
     private readonly Parser<T> _parser;
     private readonly U _value;
@@ -38,6 +38,9 @@ public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
     string[]? ISeekablePrefixes.ExpectedPrefixes => SeekableHints.Prefixes(_parser);
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis) => analysis.Invoke(_parser);
+
+    // When the parser it wraps is a literal, see IInvokesOnlyLiterals
+    bool IInvokesOnlyLiterals.InvokesOnlyLiterals => InvokesOnlyLiterals.Of(_parser);
 
     public override bool Parse(ParseContext context, ref ParseResult<U> result)
     {
@@ -72,5 +75,5 @@ public sealed class Discard<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
             $"Use .Then(static _ => yourValue) instead of .Discard(value).");
     }
 
-    public override string ToString() => $"{_parser} (Discard)";
+    public override string ToString() => FormatOnce($"{_parser} (Discard)");
 }

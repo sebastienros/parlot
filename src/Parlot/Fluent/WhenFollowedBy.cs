@@ -153,5 +153,5 @@ public sealed class WhenFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISourceabl
         return result;
     }
 
-    public override string ToString() => $"{_parser} (WhenFollowedBy {_lookahead})";
+    public override string ToString() => FormatOnce($"{_parser} (WhenFollowedBy {_lookahead})");
 }

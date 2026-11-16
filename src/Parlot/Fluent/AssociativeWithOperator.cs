@@ -285,5 +285,5 @@ internal sealed class AssociativeWithOperator<T, TOperator> : Parser<T>, ISeekab
         return result;
     }
 
-    public override string ToString() => Name ?? $"{(_rightAssociative ? "Right" : "Left")}Associative({_parser})";
+    public override string ToString() => Name ?? FormatOnce($"{(_rightAssociative ? "Right" : "Left")}Associative({_parser})");
 }

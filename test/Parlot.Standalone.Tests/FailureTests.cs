@@ -30,6 +30,21 @@ public class FailureTests
         Assert.Equal(failure, readerFailure);
     }
 
+    [Theory]
+    [InlineData("`abc", 4, 1, 5)]
+    [InlineData("`a\\", 3, 1, 4)]
+    [InlineData("`a${b}\nc", 8, 2, 2)]
+    [InlineData("`a${b c}`", 6, 1, 7)]
+    [InlineData("`a${}`", 4, 1, 5)]
+    [InlineData("`a` x", 3, 1, 4)]
+    public void Interpolated_Text_Returns_The_Furthest_Failure(string text, int offset, int line, int column)
+    {
+        Assert.False(FailureGrammars.Template(text, out _, out var failure));
+        Assert.Equal((offset, line, column), failure);
+        Assert.False(FailureGrammars.Template(new StringReader(text), out _, out var readerFailure));
+        Assert.Equal(failure, readerFailure);
+    }
+
     [Fact]
     public void Success_Returns_No_Failure()
     {
@@ -1029,6 +1044,53 @@ public class FailureTests
 
         Assert.False(FailureGrammars.RejectedSpanWhiteSpace(new OneCharReader(text), out _, out (int Offset, int Line, int Column) failure));
         Assert.Equal(offset, failure.Offset);
+    }
+
+    [Theory]
+    // A rejected value fails at its start, with the reason of the parser which rejected it
+    [InlineData("from;", 0, 1, 1, FailureReason.ReservedWord)]
+    [InlineData("\n  from;", 3, 2, 3, FailureReason.ReservedWord)]
+    [InlineData(" 12ab;", 3, 1, 4, "A number can't be followed by a letter")]
+    // A further failure without a reason hides it
+    [InlineData("word ,", 5, 1, 6, null)]
+    [InlineData("12 ab;", 3, 1, 4, null)]
+    public void Entry_Point_Returns_The_Reason_Of_The_Furthest_Failure(string text, int offset, int line, int column, object reason)
+    {
+        Assert.False(FailureGrammars.Reasoned(text, out var value, out var failure));
+        Assert.Null(value);
+        Assert.Equal((offset, reason), failure);
+
+        Assert.False(FailureGrammars.Reasoned(text, out _));
+        Assert.False(FailureGrammars.Reasoned(new OneCharReader(text), out _, out var readerFailure));
+        Assert.Equal((offset, line, column, reason), readerFailure);
+    }
+
+    [Fact]
+    public void Success_Returns_No_Reason()
+    {
+        Assert.True(FailureGrammars.Reasoned(" word;", out var value, out var failure));
+        Assert.Equal("word", value);
+        Assert.Equal(default, failure);
+
+        Assert.True(FailureGrammars.Reasoned(new StringReader("12;"), out value, out var readerFailure));
+        Assert.Equal("#", value);
+        Assert.Equal(default, readerFailure);
+    }
+
+    [Fact]
+    public void Error_Returns_No_Reason()
+    {
+        Assert.False(FailureGrammars.ReasonedError("from;", out _, out var failure));
+        Assert.Equal((4, (object)null, false), failure);
+
+        Assert.False(FailureGrammars.ReasonedError("  from", out _, out failure));
+        Assert.Equal((6, (object)null, false), failure);
+
+        Assert.False(FailureGrammars.ReasonedError("  from!x", out _, out failure));
+        Assert.Equal((7, (object)null, false), failure);
+
+        Assert.False(FailureGrammars.ReasonedError(" 1", out _, out failure));
+        Assert.Equal((1, (object)null, false), failure);
     }
 
     // Returns one char per read, so that a TextReader entry point refills its buffer as often as possible

@@ -300,4 +300,22 @@ public static partial class Grammar
             .Then(static x => string.Join("|", x))
             .WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/"));
     }
+
+    // A template literal whose holes hold identifiers or templates, its chunks between brackets
+    [GenerateParser(nameof(TryParseTemplate))]
+    private static Parser<string> Template()
+    {
+        var expression = Deferred<string>();
+        var template = Terms.Interpolated("`", "`", "${", "}", expression).Then(static x =>
+        {
+            var result = "[" + x.Chunks[0].ToString() + "]";
+            for (var i = 0; i < x.Holes.Count; i++)
+            {
+                result += "{" + x.Holes[i] + "}[" + x.Chunks[i + 1].ToString() + "]";
+            }
+            return result;
+        });
+        expression.Parser = OneOf(Terms.Identifier().Then(static x => x.ToString()), template);
+        return template.Eof();
+    }
 }
