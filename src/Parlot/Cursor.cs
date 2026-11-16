@@ -272,8 +272,8 @@ public class Cursor
     // The absolute offset of the first char of Buffer, 0 unless the input is streamed in compacting mode
     internal int BufferStart => _base;
 
-    // Whether a line starts at the cursor, for the comments which only start there: at the start of the input, or after a
-    // new line, one of newLines or of the white space set of whiteSpaceMask when it is null. The char before the buffer is
+    // Whether a line starts at the cursor, for the comments which only start there: at the start of the input, unless the
+    // cursor was created in the middle of a line, or after a new line, one of newLines or of the white space set of whiteSpaceMask when it is null. The char before the buffer is
     // the one which the compacting buffer dropped, or which is before a window or a delimited text of ParseManyAsync
     internal bool IsAtLineStart(string? newLines, byte whiteSpaceMask)
     {
@@ -285,16 +285,15 @@ public class Cursor
         }
         else
         {
-#if PARLOT_STRING_ONLY
-            return true;
-#else
+#if !PARLOT_STRING_ONLY
             previous = _charBeforeBuffer;
 
             if (previous < 0)
-            {
-                return true;
-            }
 #endif
+            {
+                // The start of the text: a line starts there unless the cursor was created in the middle of one
+                return _originOffset != 0 || _originColumn == 1;
+            }
         }
 
         return Character.IsNewLine((char)previous, newLines, whiteSpaceMask);

@@ -34,7 +34,6 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     private readonly bool _hasNewLines;
     private readonly string? _newLines;
 
-
     // Whether a comment only starts at the start of a line, which the parser then tracks
     private readonly bool _tracksLineStart;
 
@@ -113,7 +112,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 SkipWhiteSpace(context, scanner);
 
                 // At the end of the text Current is the null char, which a delimiter can start with: Match tells
-                if (_firstChars.IndexOf(cursor.Current) < 0 || SkipComment<NoTracking>(context, cursor, lineStart: true) == CommentResult.None)
+                if (_firstChars.IndexOf(cursor.Current) < 0 || SkipComment(context, cursor, lineStart: true) == CommentResult.None)
                 {
                     break;
                 }
@@ -191,7 +190,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                 }
             }
 
-            var skipped = _firstChars.IndexOf(cursor.Current) < 0 ? CommentResult.None : SkipComment<Tracking>(context, cursor, lineStart);
+            var skipped = _firstChars.IndexOf(cursor.Current) < 0 ? CommentResult.None : SkipComment(context, cursor, lineStart);
 
             if (skipped == CommentResult.None)
             {
@@ -202,16 +201,15 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         }
     }
 
-    // Skips the first comment at the cursor, and tells whether one was skipped. With Tracking, lineStart tells whether a line
-    // starts at the cursor, for the comments which only start there, and the result whether a multi line comment containing
-    // a new line was skipped. The JIT compiles a copy for each struct, without the tracking for NoTracking
-    private CommentResult SkipComment<TTracking>(ParseContext context, Cursor cursor, bool lineStart)
-        where TTracking : struct, ILineStartTracking
+    // Skips the first comment at the cursor, and tells whether one was skipped. lineStart tells whether a line starts at the
+    // cursor, for the comments which only start there, and the result whether a multi line comment containing a new line was
+    // skipped when it is false. A parser without such comments passes true: lineStart is tested first
+    private CommentResult SkipComment(ParseContext context, Cursor cursor, bool lineStart)
     {
         foreach (var comment in _comments)
         {
             // A comment at the start of a line only. Elsewhere its start isn't read, it doesn't depend on what follows
-            if (default(TTracking).Enabled && comment.Placement == CommentPlacement.LineStart && !lineStart)
+            if (!lineStart && comment.Placement == CommentPlacement.LineStart)
             {
                 continue;
             }
@@ -233,7 +231,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
             if (context.Scanner.SkipMultiLineComment(comment.Start.Length, comment.End.AsSpan()))
             {
-                if (default(TTracking).Enabled && !lineStart && CanContainNewLine(comment))
+                if (!lineStart && CanContainNewLine(comment))
                 {
                     if (Character.ContainsNewLine(cursor.GetSpan(commentStart, cursor.Offset - commentStart), NewLinesOf(comment), context.WhiteSpaceMask))
                     {
@@ -273,22 +271,6 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
         // An unterminated comment which is not one, the comments added after it can start there
         NotAComment,
-    }
-
-    // Whether SkipComment tracks where a line starts
-    private interface ILineStartTracking
-    {
-        bool Enabled { get; }
-    }
-
-    private readonly struct Tracking : ILineStartTracking
-    {
-        public bool Enabled => true;
-    }
-
-    private readonly struct NoTracking : ILineStartTracking
-    {
-        public bool Enabled => false;
     }
 
     // A multi line comment whose end is not in the text, after its start
@@ -510,7 +492,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
         {
             var spaceOrNewLinesName = context.GetCharSetField(_spaceOrNewLineChars!);
 
-            if (_spaceChars!.Length == _spaceOrNewLineChars!.Length)
+            if (!_hasNewLines)
             {
                 result.Body.Add($"{indent}{scannerName}.SkipChars(in {spaceOrNewLinesName});");
             }
@@ -518,7 +500,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
             {
                 // The new lines are not white space when UseNewLines is set
                 result.Body.Add($"{indent}if ({ctx}.UseNewLines)");
-                result.Body.Add($"{indent}    {scannerName}.SkipChars(in {context.GetCharSetField(_spaceChars)});");
+                result.Body.Add($"{indent}    {scannerName}.SkipChars(in {context.GetCharSetField(_spaceChars!)});");
                 result.Body.Add($"{indent}else");
                 result.Body.Add($"{indent}    {scannerName}.SkipChars(in {spaceOrNewLinesName});");
             }

@@ -247,10 +247,15 @@ public class LineStartCommentTests
         Assert.Equal(start != end, parser.Parse(context, ref result));
         Assert.Equal(end, context.Scanner.Cursor.Offset);
 
-        // Wherever the scanner starts in the input
-        context = new ParseContext(new Scanner(text.Substring(start), new TextPosition(0, 3, 2), isFinal: true));
+        // A scanner created at the start of a line, and in the middle of one
+        context = new ParseContext(new Scanner(text.Substring(start), new TextPosition(0, 3, 1), isFinal: true));
 
         Assert.True(parser.Parse(context, ref result));
+
+        context = new ParseContext(new Scanner(text.Substring(start), new TextPosition(0, 3, 17), isFinal: true));
+
+        Assert.False(parser.Parse(context, ref result));
+        Assert.Equal(0, context.Scanner.Cursor.Offset);
     }
 
     [Fact]
