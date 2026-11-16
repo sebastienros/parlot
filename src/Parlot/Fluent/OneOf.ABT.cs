@@ -194,5 +194,5 @@ public sealed class OneOf<A, B, T> : Parser<T>, ISeekable, ISourceable, ILoopAna
         return result;
     }
 
-    public override string ToString() => $"{_parserA} | {_parserB}";
+    public override string ToString() => FormatOnce($"{_parserA} | {_parserB}");
 }

@@ -169,5 +169,5 @@ public sealed class PooledString : Parser<string>, ISeekablePrefixes, ISourceabl
     }
 
     /// <inheritdoc />
-    public override string ToString() => $"{_parser} (PooledString)";
+    public override string ToString() => FormatOnce($"{_parser} (PooledString)");
 }

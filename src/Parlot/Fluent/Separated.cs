@@ -1106,7 +1106,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         return result;
     }
 
-    public override string ToString() => _last is null ? $"Separated({_separator}, {_parser})" : $"Separated({_separator}, {_parser}, {_last})";
+    public override string ToString() => _last is null ? FormatOnce($"Separated({_separator}, {_parser})") : FormatOnce($"Separated({_separator}, {_parser}, {_last})");
 }
 
 /// <summary>

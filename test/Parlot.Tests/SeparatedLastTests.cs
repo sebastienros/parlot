@@ -258,6 +258,23 @@ public class SeparatedLastTests
     public void ShouldReportTheLastElement()
     {
         Assert.Equal($"Separated({Terms.Char(',')}, {Item}, {Rest})", List().ToString());
+
+        // A parser used as both elements is written once
+        var text = Separated(Terms.Char(','), Item, Item).ToString();
+
+        Assert.Equal(1, CountOf(text, Item.ToString()));
+    }
+
+    private static int CountOf(string text, string value)
+    {
+        var count = 0;
+
+        for (var index = text.IndexOf(value, System.StringComparison.Ordinal); index >= 0; index = text.IndexOf(value, index + value.Length, System.StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     [Fact]

@@ -163,5 +163,5 @@ public sealed class Else<T> : Parser<T>, ISourceable, ILoopAnalyzable
         return result;
     }
 
-    public override string ToString() => $"{_parser} (Else)";
+    public override string ToString() => FormatOnce($"{_parser} (Else)");
 }

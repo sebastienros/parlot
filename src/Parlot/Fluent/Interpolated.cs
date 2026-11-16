@@ -394,7 +394,7 @@ public sealed class Interpolated<T> : Parser<Interpolation<T>>, ISeekablePrefixe
         return result;
     }
 
-    public override string ToString() => Name ?? $"Interpolated({_openText.Text}…{_chunk.Close}, {_hole})";
+    public override string ToString() => Name ?? FormatOnce($"Interpolated({_openText.Text}…{_chunk.Close}, {_hole})");
 }
 
 /// <summary>

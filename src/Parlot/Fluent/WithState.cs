@@ -229,5 +229,5 @@ public sealed class WithState<C, S, T> : Parser<T>, ISeekablePrefixes, ISourceab
         return result;
     }
 
-    public override string ToString() => $"{_parser} (With State)";
+    public override string ToString() => FormatOnce($"{_parser} (With State)");
 }

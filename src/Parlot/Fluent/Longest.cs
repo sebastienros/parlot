@@ -485,7 +485,7 @@ public sealed class Longest<T> : Parser<T>, ISeekable, ISourceable, ILoopAnalyza
         }
     }
 
-    public override string ToString() => $"Longest({string.Join(", ", (object[])_parsers)})";
+    public override string ToString() => FormatOnce($"Longest({new ParserList(", ", _parsers)})");
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

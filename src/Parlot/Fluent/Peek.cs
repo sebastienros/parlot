@@ -154,5 +154,5 @@ public sealed class Peek<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
     }
 
     /// <inheritdoc />
-    public override string ToString() => $"Peek ({_parser})";
+    public override string ToString() => FormatOnce($"Peek ({_parser})");
 }

@@ -176,5 +176,5 @@ public sealed class WithWhiteSpaceParser<T> : Parser<T>, ISeekable, ISourceable,
         return result;
     }
 
-    public override string ToString() => $"{_parser} (With Custom WS)";
+    public override string ToString() => FormatOnce($"{_parser} (With Custom WS)");
 }
