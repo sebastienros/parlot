@@ -80,6 +80,9 @@ internal sealed class StreamingDriver : IDisposable
         var position = Cursor.GetPosition(start);
         var available = _length - start;
 
+        // A '\r' ending the window ends a line unless the next window starts with a '\n', which is read below
+        var atEnd = start == _length;
+
         if (available >= _options.MaxBufferedCharacters)
         {
             throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(position));
@@ -133,6 +136,13 @@ internal sealed class StreamingDriver : IDisposable
             _length += read;
         }
 
+        if (atEnd)
+        {
+            position = Cursor.GetEndPosition(_length > 0 ? _chars[0] : -1);
+            _line = position.Line;
+            _column = position.Column;
+        }
+
         Context = CreateContext(new string(_chars, 0, _length), IsFinal);
     }
 
@@ -148,7 +158,8 @@ internal sealed class StreamingDriver : IDisposable
             if (_frameLength >= 0)
             {
                 // The previous frame is consumed, its end is the position of the delimiter
-                var end = Cursor.Position;
+                // A '\r' ending the frame doesn't end a line when the delimiter is a '\n'
+                var end = Cursor.GetEndPosition(_frameDelimited ? delimiter : -1);
                 _line = end.Line;
                 _column = end.Column;
 
@@ -268,8 +279,8 @@ internal sealed class StreamingDriver : IDisposable
 
         _pendingDelimiter = false;
 
-        // Same rule as the cursor: only '\n' ends a line, every other char occupies a column
-        if (delimiter == '\n')
+        // Same rule as the cursor, whose line terminators are the ones of the frame before it
+        if (Cursor.EndsLine(delimiter, _length > _frameStart ? _chars[_frameStart] : -1))
         {
             _line++;
             _column = 1;
