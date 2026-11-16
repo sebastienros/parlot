@@ -152,8 +152,8 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
 
     private string[]? UnionPrefixes()
     {
-        // The prefixes are only read where the list can seek, which an empty list can't
-        if (_min == 0)
+        // The prefixes are only read where the list can seek: both elements tell their chars and skip white space the same way
+        if (!Hints.CanSeek)
         {
             return null;
         }
@@ -165,7 +165,7 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         {
             string[]? prefixes = null;
 
-            if (SeekableHints.Prefixes(_parser) is { } first && SeekableHints.Prefixes(_last!) is { } second)
+            if (ElementPrefixes(_parser) is { } first && ElementPrefixes(_last!) is { } second)
             {
                 var union = new List<string>(first);
 
@@ -185,6 +185,31 @@ public sealed class Separated<U, T> : Parser<IReadOnlyList<T>>, ISeekablePrefixe
         }
 
         return cached.Prefixes;
+    }
+
+    // The prefixes of an element, or its chars as prefixes of one char when it doesn't tell more, like a choice reads them
+    private static string[]? ElementPrefixes(Parser<T> element)
+    {
+        if (SeekableHints.Prefixes(element) is { } prefixes)
+        {
+            return prefixes;
+        }
+
+        var hints = SeekableHints.Of(element);
+
+        if (!hints.CanSeek || !SeekableHints.IsExact(hints.ExpectedChars))
+        {
+            return null;
+        }
+
+        var chars = new string[hints.ExpectedChars.Length];
+
+        for (var i = 0; i < chars.Length; i++)
+        {
+            chars[i] = hints.ExpectedChars[i].ToString();
+        }
+
+        return chars;
     }
 
     bool ILoopAnalyzable.AnalyzeStart(LoopAnalysis analysis)

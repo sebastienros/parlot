@@ -207,6 +207,19 @@ public class SeparatedLastTests
     }
 
     [Fact]
+    public void ShouldForwardTheCharsOfAnElementWithoutPrefixes()
+    {
+        // The first element tells its chars only, the choice still selects the list by "..." for the last one
+        var list = Separated(Literals.Char(','), Literals.Identifier(), Literals.Text("...").SkipAnd(Literals.Identifier()), min: 1).Then(static x => string.Join("|", x));
+        var choice = OneOf(Literals.Text(".5"), list, Literals.Text(".."));
+
+        Assert.Equal(".5", choice.Parse(".5"));
+        Assert.Equal("r", choice.Parse("...r"));
+        Assert.Equal("..", choice.Parse("..x"));
+        Assert.Equal("a|r", choice.Parse("a,...r"));
+    }
+
+    [Fact]
     public void ShouldNotInvokeTheLastElementWhereItCanNotStart()
     {
         var entered = 0;
