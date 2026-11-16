@@ -157,6 +157,8 @@ start with any char. The message names the parser that keeps the alternative fro
   `x` skips white space and `y` doesn't. The message names the parser which doesn't tell them, or the white space only
   one of them skips.
 - A parser type that doesn't implement `ISeekable`.
+- A `Separated` list with a last element, which can start with either element: one of them doesn't tell its chars, or
+  only one of them skips white space. Use `Terms` or `Literals` for both.
 
 Any of them can be wrapped in `Lookup` with the chars it can start with. Alternatives that can succeed without reading
 anything are not reported: they are a fallback by design, or [PARLOT112](#parlot112) reports them.
@@ -270,6 +272,9 @@ whenever it would:
 - the earlier alternative is a text, or a char, that starts the texts of the later one, like `"<"` before `"<="`;
 - the later alternative starts with the parser that is the earlier alternative, like `identifier` before
   `identifier.And(arguments)`.
+
+A `Separated` list which can match without its first parser, with a last element, a leading separator or no minimum,
+doesn't start with that parser here.
 
 ```csharp
 // Reported: "<=" never matches, "<=" parses as "<"
