@@ -461,11 +461,46 @@ public class LinePositionTests
             Assert.Equal(References(text, "\n")[offset], (cursor.GetPosition(offset).Line, cursor.GetPosition(offset).Column));
         }
 
-        var lines = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(cursor)!;
+        var field = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var lines = field.GetValue(cursor)!;
         Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
 
         // A request behind the furthest one records the lines up to it
         AssertPosition(cursor, 3, 1, 4);
         Assert.True((int)lines.GetType().GetField("Count")!.GetValue(lines)! > 900);
+    }
+
+    [Fact]
+    public void ASinglePositionAllocatesNoLineMap()
+    {
+        var field = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var cursor = new Cursor("ab\ncd\nef");
+
+        AssertPosition(cursor, 7, 3, 2);
+        Assert.Null(field.GetValue(cursor));
+
+        // The second one creates it
+        AssertPosition(cursor, 4, 2, 2);
+        Assert.NotNull(field.GetValue(cursor));
+        AssertPosition(cursor, 7, 3, 2);
+    }
+
+    [Fact]
+    public void NegativeOffsetsAreRejected()
+    {
+        var cursor = new Cursor("ab");
+        Assert.Throws<ArgumentOutOfRangeException>(() => cursor.GetPosition(-1));
+    }
+
+    [Fact]
+    public void RequestsAfterACarriageReturnEndingANonFinalBufferKeepTheFurthestPosition()
+    {
+        var cursor = new Cursor("a\nb\r", TextPosition.Start, isFinal: false) { NewLines = "\r\n" };
+
+        AssertPosition(cursor, 4, 3, 1);
+        AssertPosition(cursor, 4, 3, 1);
+        AssertPosition(cursor, 3, 2, 2);
+        AssertPosition(cursor, 2, 2, 1);
+        AssertPosition(cursor, 4, 3, 1);
     }
 }
