@@ -76,15 +76,14 @@ internal sealed class StreamingDriver : IDisposable
     /// <param name="start">The offset of the text to keep in the current window.</param>
     public async ValueTask GrowAsync(int start)
     {
-        // The line and column of the new window are the ones of its first char in the current window. At its end, they
-        // depend on whether a '\r' ending it is followed by a '\n', which is read first.
+        // The cursor of the current window, which tells the line and column of the start of the new one once it is read
+        var cursor = Cursor;
         var atEnd = start == _length;
-        var position = atEnd ? default : Cursor.GetPosition(start);
         var available = _length - start;
 
         if (available >= _options.MaxBufferedCharacters)
         {
-            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(position));
+            throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(cursor.GetPosition(start)));
         }
 
         if (start > 0)
@@ -92,12 +91,6 @@ internal sealed class StreamingDriver : IDisposable
             Array.Copy(_chars, start, _chars, 0, available);
             _length = available;
             _offset += start;
-        }
-
-        if (!atEnd)
-        {
-            _line = position.Line;
-            _column = position.Column;
         }
 
         // Grow geometrically so that the retries cost a bounded multiple of a single parse
@@ -138,17 +131,15 @@ internal sealed class StreamingDriver : IDisposable
             _length += read;
         }
 
-        if (atEnd)
+        // At the end of the current window, a '\r' ending it ends a line unless a '\n' starts the new one
+        if (atEnd && _length > 0 && _chars[0] == '\n')
         {
-            if (_length > 0 && _chars[0] == '\n')
-            {
-                Cursor.MarkFollowedByLineFeed();
-            }
-
-            position = Cursor.GetPosition(start);
-            _line = position.Line;
-            _column = position.Column;
+            cursor.MarkFollowedByLineFeed();
         }
+
+        var position = cursor.GetPosition(start);
+        _line = position.Line;
+        _column = position.Column;
 
         Context = CreateContext(new string(_chars, 0, _length), IsFinal);
     }

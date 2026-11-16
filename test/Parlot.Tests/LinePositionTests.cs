@@ -620,4 +620,30 @@ public class LinePositionTests
         AssertPosition(cursor, 19, 6, 1);
         AssertPosition(cursor, 15, 5, 20);
     }
+
+    [Fact]
+    public void RequestsBehindOnALongLineEndUpRecorded()
+    {
+        var text = new string('x', 100_000) + "\ncd";
+        var cursor = new Cursor(text);
+        var field = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        AssertPosition(cursor, text.Length, 2, 3);
+        AssertPosition(cursor, text.Length, 2, 3);
+
+        // Each request scans the long line back to its start, until the lines are recorded
+        for (var i = 0; i < 40; i++)
+        {
+            AssertPosition(cursor, 100_000, 1, 100_001);
+        }
+
+        var lines = field.GetValue(cursor)!;
+        Assert.Equal(1, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
+
+        // The line start isn't looked for before the origin
+        cursor = new Cursor(text, new TextPosition(99_990, 3, 5));
+        AssertPosition(cursor, text.Length, 4, 3);
+        AssertPosition(cursor, text.Length, 4, 3);
+        AssertPosition(cursor, 100_000, 3, 15);
+    }
 }

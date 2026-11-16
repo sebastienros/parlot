@@ -219,21 +219,12 @@ public class Cursor
     {
         var lines = _lines;
 
-        // The common cases, without a '\r' a '\n' can still follow: forward from the furthest position requested, or just
-        // behind it, like the start of a token whose end was requested, which costs as little as counting a few chars
-        if (lines is not null && (_flags & CrLfFlag) == 0 && offset - _base <= _textLength)
+        // Forward from the furthest position requested, the common case, without a '\r' a '\n' can still follow
+        if (lines is not null && offset > lines.FrontierOffset && offset - _base <= _textLength && (_flags & CrLfFlag) == 0)
         {
-            if (offset > lines.FrontierOffset)
-            {
-                var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
-                lines.SetFrontier(position);
-                return position;
-            }
-
-            if (offset > lines.Counted && lines.FrontierOffset - offset <= JustBehind && offset >= _originOffset)
-            {
-                return CountBackward(lines, offset);
-            }
+            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
+            lines.SetFrontier(position);
+            return position;
         }
 
         if (offset < _originOffset || offset - _base > _textLength)
@@ -252,9 +243,9 @@ public class Cursor
 
         if (lines is null)
         {
-            if (!keep || (_flags & PositionRequestedFlag) == 0)
+            if (!keep || ((_flags & PositionRequestedFlag) == 0 && offset - _originOffset <= CountWithoutMapDistance))
             {
-                // No line map until a second position is requested
+                // No line map until a second position is requested, unless the first one is far
                 if (keep)
                 {
                     _flags |= PositionRequestedFlag;
@@ -309,7 +300,9 @@ public class Cursor
                     return CountForward(counted.Offset, counted.Line, counted.Column, offset);
                 }
 
-                return CountBackward(lines, offset);
+                var position = CountBackward(lines, offset, out var scanned);
+                lines.CountedBehind += scanned;
+                return position;
             }
 
             RecordLines(lines, lines.FrontierOffset);
@@ -319,8 +312,8 @@ public class Cursor
         return FindPosition(lines, offset);
     }
 
-    // The distance behind the furthest position up to which a position is always counted from it
-    private const int JustBehind = 64;
+    // The distance from the origin up to which a first position is counted without creating the line map, which keeps it
+    private const int CountWithoutMapDistance = 4096;
 
     // How many times the text not recorded is counted for the positions behind the furthest one before its lines are
     // recorded: recording a line costs about as much as counting a few dozen chars
@@ -393,21 +386,30 @@ public class Cursor
     }
 
     // The position of an offset between the origin and the furthest position requested, counted backward from it
-    private TextPosition CountBackward(LineMap lines, int offset)
+    private TextPosition CountBackward(LineMap lines, int offset, out int scanned)
     {
         var newLines = CountLineStarts(offset, lines.FrontierOffset, out _);
+
+        scanned = 0;
 
         if (newLines == 0)
         {
             return new TextPosition(offset, lines.FrontierLine, lines.FrontierColumn - (lines.FrontierOffset - offset));
         }
 
-        // The line of the offset is the origin's when it starts before it. Each terminator ends a line without "\r\n".
-        var start = (_flags & CrLfFlag) == 0 ? _base + GetSpan(_base, offset - _base).LastIndexOfAny(NewLines.AsSpan()) + 1 : FindLineStart(offset);
+        // The start of the line of the offset is looked for after the origin and the lines recorded, whose positions are known
+        var from = Math.Max(_originOffset, lines.Counted);
+        var start = FindLineStartAfter(from, offset);
 
-        return start > _originOffset
-            ? new TextPosition(offset, lines.FrontierLine - newLines, offset - start + 1)
-            : new TextPosition(offset, lines.FrontierLine - newLines, _originColumn + (offset - _originOffset));
+        scanned = offset - (start < 0 ? from : start);
+
+        if (start >= 0)
+        {
+            return new TextPosition(offset, lines.FrontierLine - newLines, offset - start + 1);
+        }
+
+        var known = from > _originOffset ? FindPosition(lines, from) : new TextPosition(_originOffset, _originLine, _originColumn);
+        return new TextPosition(offset, lines.FrontierLine - newLines, known.Column + (offset - from));
     }
 
     // The offsets before the origin, or after the end of the buffer, are not recorded such that the lines recorded are
@@ -582,8 +584,15 @@ public class Cursor
     // The start of the line of an offset of the buffer, the start of the buffer starting a line
     private int FindLineStart(int offset)
     {
+        var start = FindLineStartAfter(_base, offset);
+        return start < 0 ? _base : start;
+    }
+
+    // The start of the line of an offset of the buffer when it is after the offset from, or -1
+    private int FindLineStartAfter(int from, int offset)
+    {
         var newLines = NewLines.AsSpan();
-        var text = GetSpan(_base, offset - _base);
+        var text = GetSpan(from, offset - from);
 
         while (true)
         {
@@ -591,12 +600,12 @@ public class Cursor
 
             if (end < 0)
             {
-                return _base;
+                return -1;
             }
 
-            if (EndsLineAt(_base + end))
+            if (EndsLineAt(from + end))
             {
-                return _base + end + 1;
+                return from + end + 1;
             }
 
             text = text.Slice(0, end);
@@ -719,6 +728,8 @@ public class Cursor
             {
                 SetFrontier(origin);
             }
+
+            CountedBehind = 0;
         }
     }
 

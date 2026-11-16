@@ -731,11 +731,19 @@ public class CompactingStreamTests
     [Fact]
     public void PositionsRequestedBackwardKeepTheLinesBounded()
     {
-        // Each identifier asks for the position of its end, then of its start, which records the lines up to its end
+        // Each identifier asks for the position of its end, then of its start many times, which records the lines up to its end
         var parser = ZeroOrMany(Terms.Identifier().Then(static (context, start, end, _) =>
         {
             var cursor = context.Scanner.Cursor;
-            return cursor.GetPosition(end).Line * 1_000 + cursor.GetPosition(start).Column;
+            var line = cursor.GetPosition(end).Line;
+
+            // Requested again and again, such that the lines up to the end are recorded
+            for (var i = 0; i < 100; i++)
+            {
+                cursor.GetPosition(start);
+            }
+
+            return line * 1_000 + cursor.GetPosition(start).Column;
         })).Eof();
 
         var text = string.Join("\r\n", Enumerable.Range(0, 20_000).Select(static i => "  id" + i));
