@@ -120,7 +120,7 @@ public sealed class ElseError<T> : Parser<T>, ISourceable, ILoopAnalyzable
         return result;
     }
 
-    public override string ToString() => $"{_parser} (ElseError)";
+    public override string ToString() => FormatOnce($"{_parser} (ElseError)");
 }
 
 public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
@@ -221,7 +221,7 @@ public sealed class Error<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopA
         return result;
     }
 
-    public override string ToString() => $"{_parser} (Error)";
+    public override string ToString() => FormatOnce($"{_parser} (Error)");
 }
 
 public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILoopAnalyzable
@@ -319,7 +319,7 @@ public sealed class Error<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, ILo
         return result;
     }
 
-    public override string ToString() => $"{_parser} (Error)";
+    public override string ToString() => FormatOnce($"{_parser} (Error)");
 }
 
 internal static class ErrorSource

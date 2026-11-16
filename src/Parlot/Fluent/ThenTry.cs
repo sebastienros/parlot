@@ -344,5 +344,5 @@ public sealed class ThenTry<T, U> : Parser<U>, ISeekablePrefixes, ISourceable, I
         return result;
     }
 
-    public override string ToString() => $"{_parser} (ThenTry)";
+    public override string ToString() => FormatOnce($"{_parser} (ThenTry)");
 }

@@ -157,5 +157,5 @@ public sealed class WhenNotFollowedBy<T> : Parser<T>, ISeekablePrefixes, ISource
         return result;
     }
 
-    public override string ToString() => $"{_parser} (WhenNotFollowedBy {_lookahead})";
+    public override string ToString() => FormatOnce($"{_parser} (WhenNotFollowedBy {_lookahead})");
 }

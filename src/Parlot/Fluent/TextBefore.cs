@@ -381,5 +381,5 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
         result.Body.Add("#endif");
     }
 
-    public override string ToString() => $"TextBefore({_delimiter})";
+    public override string ToString() => FormatOnce($"TextBefore({_delimiter})");
 }

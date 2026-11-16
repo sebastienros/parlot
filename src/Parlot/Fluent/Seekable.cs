@@ -50,6 +50,6 @@ internal sealed class Seekable<T> : Parser<T>, ISeekable, ISourceable, ILoopAnal
         return sourceable.GenerateSource(context);
     }
 
-    public override string ToString() => $"{Parser} (Seekable)";
+    public override string ToString() => FormatOnce($"{Parser} (Seekable)");
 }
 

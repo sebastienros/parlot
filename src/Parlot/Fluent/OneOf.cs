@@ -938,7 +938,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         return false;
     }
 
-    public override string ToString() => $"{string.Join(" | ", Parsers)} on [{string.Join(" ", ExpectedChars)}]";
+    public override string ToString() => FormatOnce($"{new ParserList(" | ", Parsers)} on [{new ParserList(" ", ExpectedChars)}]");
 
     public SourceResult GenerateSource(SourceGenerationContext context)
     {

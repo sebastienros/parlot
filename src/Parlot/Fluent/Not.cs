@@ -110,5 +110,5 @@ public sealed class Not<T> : Parser<T>, ISourceable, ILoopAnalyzable
         return result;
     }
 
-    public override string ToString() => $"Not ({_parser})";
+    public override string ToString() => FormatOnce($"Not ({_parser})");
 }

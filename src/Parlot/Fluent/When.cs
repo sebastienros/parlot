@@ -220,5 +220,5 @@ public sealed class When<T> : Parser<T>, ISeekablePrefixes, ISourceable, ILoopAn
         return result;
     }
 
-    public override string ToString() => $"{_parser} (When)";
+    public override string ToString() => FormatOnce($"{_parser} (When)");
 }
