@@ -115,7 +115,6 @@ public abstract partial class Parser<T>
         error = null;
 
         context.Scanner.Cursor.ResetFurthestOffset();
-        context.ForgetSkippedWhiteSpace();
 
         try
         {

@@ -563,16 +563,6 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             {
                 switch (parser)
                 {
-                    // Its parser is invoked after the white space, where it skips none: it mustn't find the new lines in the
-                    // white space the choice skipped
-                    case SkipWhiteSpace<T> skip:
-                        if (LeadingWhiteSpace.ReadsLeadingWhiteSpace(skip.Parser))
-                        {
-                            return false;
-                        }
-
-                        break;
-
                     // The nested choices are replaced by their alternatives
                     case OneOf<T> { _map: not null } oneOf when flattened:
                         if (!CollectInvoked(oneOf._originalParsers, flattened: true, parsers))
@@ -931,30 +921,37 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         context.SkipWhiteSpace();
 
         var skipped = context.EnterSkippedWhiteSpace(start);
-        var map = _parseMap;
-        var parsers = map != null ? map[cursor.Current] ?? _otherParsers : _parsers;
 
-        if (parsers != null)
+        // The white space recorded before is restored when an alternative throws too, for a parser which catches it
+        try
         {
-            if (parsers.Length == 0)
-            {
-                parsers = SelectByPrefix(cursor);
-            }
+            var map = _parseMap;
+            var parsers = map != null ? map[cursor.Current] ?? _otherParsers : _parsers;
 
-            var length = parsers.Length;
-
-            for (var i = 0; i < length; i++)
+            if (parsers != null)
             {
-                if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
+                if (parsers.Length == 0)
                 {
-                    context.ExitSkippedWhiteSpace(skipped);
-                    context.ExitParser(this);
-                    return true;
+                    parsers = SelectByPrefix(cursor);
+                }
+
+                var length = parsers.Length;
+
+                for (var i = 0; i < length; i++)
+                {
+                    if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
+                    {
+                        context.ExitParser(this);
+                        return true;
+                    }
                 }
             }
         }
+        finally
+        {
+            context.ExitSkippedWhiteSpace(skipped);
+        }
 
-        context.ExitSkippedWhiteSpace(skipped);
         cursor.ResetPosition(start);
 
         context.ExitParser(this);
@@ -1052,48 +1049,34 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             parsers = _map != null ? _map[cursor.Current] ?? _otherParsers : _parsers;
         }
 
-        if (parsers != null)
+        bool success;
+
+        if (whiteSpace == HoistedWithNewLine)
         {
-            var length = parsers.Length;
-
-            // Each alternative is read from the same position
-            var pin = length > 1 ? context.Pin() : -1;
-
-            for (var i = 0; i < length; i++)
+            // The white space recorded before is restored when an alternative throws too, for a parser which catches it
+            try
             {
-                if (i == length - 1)
-                {
-                    context.Unpin(pin);
-                }
-
-                if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
-                {
-                    context.Unpin(pin);
-
-                    if (whiteSpace == HoistedWithNewLine)
-                    {
-                        context.ExitSkippedWhiteSpace(skipped);
-                    }
-
-                    context.ExitParser(this);
-                    return true;
-                }
-
-                if (collecting)
-                {
-                    context.RejectAlternative(ref alternatives);
-                }
+                success = TryAlternatives(context, ref result, parsers, withoutValue, collecting, ref alternatives);
             }
+            finally
+            {
+                context.ExitSkippedWhiteSpace(skipped);
+            }
+        }
+        else
+        {
+            success = TryAlternatives(context, ref result, parsers, withoutValue, collecting, ref alternatives);
+        }
+
+        if (success)
+        {
+            context.ExitParser(this);
+            return true;
         }
 
         if (collecting)
         {
             context.RestoreAlternatives(in alternatives);
-        }
-
-        if (whiteSpace == HoistedWithNewLine)
-        {
-            context.ExitSkippedWhiteSpace(skipped);
         }
 
         if (hoisted)
@@ -1107,6 +1090,40 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }
 
         context.ExitParser(this);
+        return false;
+    }
+
+    // The alternatives of ParseCompacting(), each read from the same position. The lookup map releases the text as soon as a
+    // single alternative remains.
+    private static bool TryAlternatives(ParseContext context, ref ParseResult<T> result, Parser<T>[]? parsers, bool withoutValue, bool collecting, ref ParseContext.AlternativeDiagnostics alternatives)
+    {
+        if (parsers == null)
+        {
+            return false;
+        }
+
+        var length = parsers.Length;
+        var pin = length > 1 ? context.Pin() : -1;
+
+        for (var i = 0; i < length; i++)
+        {
+            if (i == length - 1)
+            {
+                context.Unpin(pin);
+            }
+
+            if (withoutValue ? parsers[i].ParseWithoutValue(context, ref result) : parsers[i].Parse(context, ref result))
+            {
+                context.Unpin(pin);
+                return true;
+            }
+
+            if (collecting)
+            {
+                context.RejectAlternative(ref alternatives);
+            }
+        }
+
         return false;
     }
 
@@ -1224,6 +1241,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
                     result.Body.Add($"{ctx}.SkipWhiteSpace();");
                     result.Body.Add($"var {skippedName} = {ctx}.EnterSkippedWhiteSpace({startName});");
                 }
+
+                // The white space recorded before is restored when an alternative throws too
+                result.Body.Add("try");
+                result.Body.Add("{");
             }
             else
             {
@@ -1402,7 +1423,11 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         if (skippedName is not null)
         {
-            result.Body.Add($"{ctx}.ExitSkippedWhiteSpace({skippedName});");
+            result.Body.Add("}");
+            result.Body.Add("finally");
+            result.Body.Add("{");
+            result.Body.Add($"    {ctx}.ExitSkippedWhiteSpace({skippedName});");
+            result.Body.Add("}");
         }
 
         if (startName is not null)

@@ -354,6 +354,54 @@ public class NewLineTests
         Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
     }
 
+    [Theory]
+    [InlineData(0, "a \n y", "y")]
+    [InlineData(0, "a \n x y", "y")]
+    [InlineData(1, "a \n y", "y")]
+    [InlineData(1, "a \n zz y", "y")]
+    [InlineData(1, "a \n zz \n y", null)]
+    [InlineData(0, "a \n c", null)]
+    public void ANoNewLineBeforeAfterAParserSkippingTheWhiteSpaceAndMatchingNothingShouldSeeNoWhiteSpace(int grammar, string input, string? expected)
+    {
+        // SkipWhiteSpace, or a token, skips the white space and can match nothing: the NoNewLineBefore after it sees none
+        var first = grammar == 0
+            ? SkipWhiteSpace(Literals.Text("x").Optional()).And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2)
+            : Terms.Pattern(static c => c == 'z', minSize: 0).And(NoNewLineBefore(Terms.Text("y"))).Then(static x => x.Item2);
+        var parser = Literals.Char('a').SkipAnd(OneOf(first, NoNewLineBefore(Terms.Text("c")), Terms.Text("e"))).Eof();
+
+        Assert.Equal(expected, parser.Parse(input));
+        Assert.Equal(expected, parser.Parse(new System.IO.StringReader(input)));
+    }
+
+    [Fact]
+    public void AChoiceShouldForgetTheWhiteSpaceItSkippedWhenAnAlternativeThrows()
+    {
+        // The second alternative throws after the choice recorded the white space: a NoNewLineBefore after SkipWhiteSpace,
+        // where it ends, sees none when the context is used again
+        var throwing = Literals.Char('a').SkipAnd(OneOf(NoNewLineBefore(Terms.Text("b")), Terms.Text("c").AndSkip(Terms.Text("d").ElseError("boom"))));
+        var skipping = Literals.Char('a').SkipAnd(SkipWhiteSpace(NoNewLineBefore(Literals.Text("c"))));
+
+        var context = new ParseContext(new Scanner("a \n c x"));
+        var result = new ParseResult<string>();
+
+        var thrown = false;
+
+        try
+        {
+            throwing.Parse(context, ref result);
+        }
+        catch (ParseException)
+        {
+            thrown = true;
+        }
+
+        Assert.True(thrown);
+
+        context.Scanner.Cursor.ResetPosition(0);
+        Assert.True(skipping.Parse(context, ref result));
+        Assert.Equal("c", result.Value);
+    }
+
     [Fact]
     public void AChoiceReachedAgainWhileItsWhiteSpaceIsResolvedShouldParse()
     {

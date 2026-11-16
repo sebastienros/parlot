@@ -334,9 +334,6 @@ public class ParseContext
         // The failure recorded when the token being read started, see RetryToken
         public int TokenRecordedFailure;
 
-        // The white space a choice recorded when the token being read started, see RetryToken
-        public long TokenSkippedWhiteSpace;
-
 #if PARLOT_STANDALONE
         // Loop detection and recursion limit, see _activePositions and MaxRecursionDepth
         public int[]? ActivePositions;
@@ -630,11 +627,6 @@ public class ParseContext
     // The recorded white space as one value, unchecked since generated consumers can compile with checked arithmetic
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private long PackSkippedWhiteSpace() => unchecked(((long)_skippedStart << 32) | (uint)_skippedEnd);
-
-    /// <summary>
-    /// Forgets the white space a choice recorded, when the text is parsed again after a parser it invoked threw.
-    /// </summary>
-    internal void ForgetSkippedWhiteSpace() => _skippedEnd = -1;
 
     /// <summary>
     /// Restores the white space recorded before <see cref="EnterSkippedWhiteSpace(int)"/>, which returned it.
@@ -1049,7 +1041,6 @@ public class ParseContext
         _flags = (byte)((_flags & ~CompactingFlag) | InTokenFlag);
         cursor.ResetHitEnd();
         _coldState!.TokenRecordedFailure = cursor.RecordedFailure;
-        _coldState.TokenSkippedWhiteSpace = PackSkippedWhiteSpace();
 
         return cursor.Offset;
     }
@@ -1070,10 +1061,6 @@ public class ParseContext
         cursor.RestoreRecordedFailure(_coldState!.TokenRecordedFailure);
         Refill(start);
         cursor.ResetHitEnd();
-
-        // A choice of the token which threw recorded white space which isn't skipped anymore: the one recorded when the token
-        // started is restored
-        ExitSkippedWhiteSpace(_coldState.TokenSkippedWhiteSpace);
 
         return true;
     }

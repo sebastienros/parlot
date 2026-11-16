@@ -365,15 +365,17 @@ internal static class LeadingWhiteSpace
     {
         if (readers != null)
         {
+            // A parser which can match nothing leaves the cursor where the white space ends, where a reader which follows it
+            // would search the white space it skipped rather than skip none: this one included, when its parser can
+            if (starts.TryGetValue(parser, out var start) && start.Nullable)
+            {
+                return LeadingWhiteSpaceUse.Kept;
+            }
+
             if (parser is IReadsLeadingWhiteSpace reader)
             {
                 readers.Add(reader.NewLines);
-
-                // A parser which can match nothing leaves the cursor where the white space ends, where the reader which can
-                // follow it would search the white space again rather than skip none
-                return ReachesReader(reader.Parser, starts) || (starts.TryGetValue(reader.Parser, out var readerNode) && readerNode.Nullable)
-                    ? LeadingWhiteSpaceUse.Kept
-                    : LeadingWhiteSpaceUse.Skipped;
+                return ReachesReader(reader.Parser, starts) ? LeadingWhiteSpaceUse.Kept : LeadingWhiteSpaceUse.Skipped;
             }
 
             if (parser is ISkipsWhiteSpace skips)
