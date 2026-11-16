@@ -169,6 +169,7 @@ public class Cursor
 
             _newLines = value == DefaultNewLines ? null : value;
             _lines = null;
+            _flags &= unchecked((byte)~PositionRequestedFlag);
 
             var crLf = value.AsSpan().IndexOf('\r') >= 0 && value.AsSpan().IndexOf('\n') >= 0;
             _flags = (byte)(crLf ? _flags | CrLfFlag : _flags & ~CrLfFlag);
@@ -198,11 +199,11 @@ public class Cursor
     /// <para>
     /// The offsets can be requested in any order. The position of the furthest offset requested is kept: a request after
     /// it counts the lines of the text between them, and a request before it counts them from the closest position known.
-    /// When the text counted for those exceeds a multiple of the text read so far, the start of each line up to the furthest
-    /// position is recorded, and the position of an offset counted over is then a binary search: a parse reads its text a
-    /// bounded number of times to count its lines, whatever the order of the requests. A parse which doesn't request
-    /// positions doesn't count them, and a single request counts the lines from the initial position of the cursor without
-    /// allocating.
+    /// When the text counted for those exceeds a multiple of the text whose lines aren't recorded, the start of each line up
+    /// to the furthest position is recorded, and the position of an offset counted over is then a binary search: a parse
+    /// reads its text a bounded number of times to count its lines, whatever the order of the requests. A parse of a string
+    /// which doesn't request positions doesn't count them, and a single request near the initial position of the cursor
+    /// counts the lines from it without allocating; a stream counts the lines of the text it drops.
     /// </para>
     /// <para>
     /// An offset between the <c>'\r'</c> and the <c>'\n'</c> of a <c>"\r\n"</c> is on the line they end. The lines and columns
@@ -222,9 +223,7 @@ public class Cursor
         // Forward from the furthest position requested, the common case, without a '\r' a '\n' can still follow
         if (lines is not null && offset > lines.FrontierOffset && offset - _base <= _textLength && (_flags & CrLfFlag) == 0)
         {
-            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
-            lines.SetFrontier(position);
-            return position;
+            return MoveFrontier(lines, offset);
         }
 
         if (offset < _originOffset || offset - _base > _textLength)
@@ -274,14 +273,7 @@ public class Cursor
                 return new TextPosition(offset, carriageReturn.Line + 1, 1);
             }
 
-            var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
-
-            if (keep)
-            {
-                lines.SetFrontier(position);
-            }
-
-            return position;
+            return keep ? MoveFrontier(lines, offset) : CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
         }
 
         if (offset > lines.Counted)
@@ -314,6 +306,14 @@ public class Cursor
 
     // The distance from the origin up to which a first position is counted without creating the line map, which keeps it
     private const int CountWithoutMapDistance = 4096;
+
+    // The position of an offset after the furthest position requested, which it becomes
+    private TextPosition MoveFrontier(LineMap lines, int offset)
+    {
+        var position = CountForward(lines.FrontierOffset, lines.FrontierLine, lines.FrontierColumn, offset);
+        lines.SetFrontier(position);
+        return position;
+    }
 
     // How many times the text not recorded is counted for the positions behind the furthest one before its lines are
     // recorded: recording a line costs about as much as counting a few dozen chars

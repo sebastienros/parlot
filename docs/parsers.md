@@ -105,10 +105,12 @@ var identifier = Terms.Identifier().Then(static (context, start, end, name) =>
 The offsets can be requested in any order. The cursor keeps the position of the furthest offset requested: a request after
 it counts the lines between them, and one behind it, like the start of a node whose end was just located, counts them from
 the closest position known, vectorized on .NET 8 and later. When the text counted for those requests exceeds a multiple
-of the text read, as with deeply nested nodes or requests in a random order, the cursor records the start of each line
-up to the furthest position, and the position of an offset counted over is then a binary search: a parse reads its text
-a bounded number of times to count its lines, whatever the order of the requests. A parse which requests no positions
-counts no lines, and one which requests a single position, like the one of an error, allocates nothing for it.
+of the text whose lines aren't recorded, as with deeply nested nodes or requests in a random order, the cursor records
+the start of each line up to the furthest position, and the position of an offset counted over is then a binary search:
+a parse reads its text a bounded number of times to count its lines, whatever the order of the requests. A parse of a string which requests no
+positions counts no lines, and one which requests a single position near its start allocates nothing for it; a further
+request, or a first one far from the start, allocates the small object that keeps the furthest position. A stream counts
+the lines of the text it drops from its buffer, as before.
 
 A line ends at `\n` by default, every other char, `\r` included, occupying a column. `ParseContext.NewLines` (or
 `Cursor.NewLines`) sets the chars which end a line, as a string like the other APIs which take new lines. When both `\r`

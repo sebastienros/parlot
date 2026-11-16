@@ -86,6 +86,11 @@ internal sealed class StreamingDriver : IDisposable
             throw new ParseException($"The input requires more than {_options.MaxBufferedCharacters} buffered characters to be parsed.", ToAbsolute(cursor.GetPosition(start)));
         }
 
+        // At the end of the current window, a '\r' ending it is counted as the end of a line until the next char is read
+        var position = cursor.GetPosition(start);
+        _line = position.Line;
+        _column = position.Column;
+
         if (start > 0)
         {
             Array.Copy(_chars, start, _chars, 0, available);
@@ -131,15 +136,14 @@ internal sealed class StreamingDriver : IDisposable
             _length += read;
         }
 
-        // At the end of the current window, a '\r' ending it ends a line unless a '\n' starts the new one
+        // It doesn't when a '\n' starts the new window
         if (atEnd && _length > 0 && _chars[0] == '\n')
         {
             cursor.MarkFollowedByLineFeed();
+            position = cursor.GetPosition(start);
+            _line = position.Line;
+            _column = position.Column;
         }
-
-        var position = cursor.GetPosition(start);
-        _line = position.Line;
-        _column = position.Column;
 
         Context = CreateContext(new string(_chars, 0, _length), IsFinal);
     }
