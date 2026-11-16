@@ -2,7 +2,6 @@ using Parlot.Rewriting;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Parlot.Fluent;
 
@@ -103,24 +102,13 @@ internal sealed class OperatorStart
     }
 
     /// <summary>
-    /// Emits the local function <paramref name="name"/> which returns whether an operator can start at the cursor, like
+    /// Gets the C# expression which tells whether an operator can start at the cursor, like
     /// <see cref="MayStart(ParseContext)"/>. Not when the input is a reader, or when the diagnostics are collected.
     /// </summary>
-    public string GenerateTest(string name, string ctx, string cursor)
+    public string GenerateTest(string ctx, string cursor)
     {
-        var sb = new StringBuilder();
-
-        void Line(string text) => sb.Append(text).Append('\n');
-
-        Line($"bool {name}()");
-        Line("{");
-        Line($"    var operatorChar = {cursor}.Current;");
-        Line(_skipsWhiteSpace
-            ? $"    return {Test("operatorChar", _chars, _anyNonAscii)} || {ctx}.MaySkipWhiteSpace(operatorChar);"
-            : $"    return {Test("operatorChar", _chars, _anyNonAscii)};");
-
-        sb.Append('}');
-        return sb.ToString();
+        var test = Test($"{cursor}.Current", _chars, _anyNonAscii);
+        return _skipsWhiteSpace ? $"({test} || {ctx}.MaySkipWhiteSpace({cursor}.Current))" : $"({test})";
     }
 
     // A C# expression which tests whether the char value is one of chars, or above ASCII when anyNonAscii is set

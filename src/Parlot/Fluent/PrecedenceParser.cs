@@ -1497,36 +1497,16 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
             }
         }
 
-        // The local functions testing the chars the operators of the choices can start with, see OperatorStart. A reader is
-        // read through the choices, which pin the white space, as are the diagnostics collected.
-        var startTests = new List<string>();
-        var startTestNames = new Dictionary<string, string>();
+        // The expressions testing the char the operators of the choices can start with, see OperatorStart, inlined where the
+        // choices are invoked: a local function cost ExprBench.ParlotGeneratedBig 6%, whose operators are all after white
+        // space. A reader is read through the choices, which pin the white space, as are the diagnostics collected.
+        string? StartTest(OperatorStart? start) =>
+            compacting || context.CollectDiagnostics || start is null ? null : start.GenerateTest(ctx, cursor);
 
-        // The tables which have the same chars share their test
-        string? StartTest(OperatorStart? start)
-        {
-            if (compacting || context.CollectDiagnostics || start is null)
-            {
-                return null;
-            }
-
-            var test = start.GenerateTest("{0}", ctx, cursor);
-
-            if (!startTestNames.TryGetValue(test, out var name))
-            {
-                name = $"operatorStart{id}_{startTests.Count.ToString(CultureInfo.InvariantCulture)}";
-                startTestNames.Add(test, name);
-                startTests.Add(start.GenerateTest(name, ctx, cursor));
-            }
-
-            return name;
-        }
-
-        // The call of a choice of the lookup, only when one of its operators can start with the char after the operand. Its
-        // test is emitted when the lookup uses the choice.
+        // The call of a choice of the lookup, only when one of its operators can start with the char after the operand
         string? LookupCall(LookupChoice? choice) => choice is null
             ? null
-            : $"{(StartTest(choice.Start) is { } test ? $"{test}() && " : "")}{ChoiceHelper(choice.Choice)}({ctx}, out next)";
+            : $"{(StartTest(choice.Start) is { } test ? $"{test} && " : "")}{ChoiceHelper(choice.Choice)}({ctx}, out next)";
 
         var segmentChoices = new Dictionary<Segment, (LookupChoice? Choice, LookupChoice? Plain)>();
 
@@ -1642,11 +1622,6 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                     ? GenerateValuedPrefix($"prefix{id}_{level}", PrefixValueName(idText, level), valuedPrefix, Helper, context)
                     : GeneratePrefix(level, $"prefix{id}_{level}", levelHelpers[level]!, prefix, context));
             }
-        }
-
-        foreach (var startTest in startTests)
-        {
-            result.Body.Add(startTest);
         }
 
         return result;
@@ -2056,7 +2031,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
                 top--;
             }
 
-            return top >= 0 && prefixStarts[top] is { } test ? $"{test}()" : null;
+            return top >= 0 ? prefixStarts[top] : null;
         }
 
         // From the loosest level: no operator is tried below the tightest one
@@ -2064,7 +2039,7 @@ public sealed class PrecedenceParser<T> : Parser<T>, ISeekable, ISourceable, ILo
 
         for (var i = 0; i < _prefixLevels.Length; i++)
         {
-            var test = prefixStarts[i] is { } name ? $"{name}()" : "true";
+            var test = prefixStarts[i] ?? "true";
             expression = $"{maxLevel} >= {_prefixLevels[i].ToString(CultureInfo.InvariantCulture)} ? {test} : {expression}";
         }
 
