@@ -254,7 +254,12 @@ public class CommentsBuilder
     /// <param name="unterminated">What a comment without its end is: an error, not a comment, or a comment running to the
     /// end of the text.</param>
     public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated)
-        => AddMultiLine(multiLineStart, multiLineEnd, unterminated, lineTerminators: null, hasLineTerminators: false);
+    {
+        ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
+        ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
+
+        return AddMultiLine(multiLineStart, multiLineEnd, unterminated, lineTerminators: null);
+    }
 
     /// <summary>
     /// Skips multi line comments, from <paramref name="multiLineStart"/> to <paramref name="multiLineEnd"/> included, which
@@ -273,23 +278,22 @@ public class CommentsBuilder
     /// <see cref="WithSingleLine(string, string, CommentPlacement)"/> with <see cref="CommentPlacement.LineStart"/> can start.
     /// </remarks>
     public CommentsBuilder WithMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated, string lineTerminators)
-        => AddMultiLine(multiLineStart, multiLineEnd, unterminated, lineTerminators, hasLineTerminators: true);
-
-    private CommentsBuilder AddMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated, string? lineTerminators, bool hasLineTerminators)
     {
         ThrowHelper.ThrowIfNull(multiLineStart, nameof(multiLineStart));
         ThrowHelper.ThrowIfNull(multiLineEnd, nameof(multiLineEnd));
+        ThrowHelper.ThrowIfNull(lineTerminators, nameof(lineTerminators));
 
-        if (hasLineTerminators)
+        if (lineTerminators.Length == 0)
         {
-            ThrowHelper.ThrowIfNull(lineTerminators, nameof(lineTerminators));
-
-            if (lineTerminators!.Length == 0)
-            {
-                throw new ArgumentException("At least one line terminator is required.", nameof(lineTerminators));
-            }
+            throw new ArgumentException("At least one line terminator is required.", nameof(lineTerminators));
         }
 
+        return AddMultiLine(multiLineStart, multiLineEnd, unterminated, lineTerminators);
+    }
+
+    // Adds a multi line comment, whose arguments the public overloads checked
+    private CommentsBuilder AddMultiLine(string multiLineStart, string multiLineEnd, UnterminatedComment unterminated, string? lineTerminators)
+    {
         if (unterminated is not (UnterminatedComment.Throw or UnterminatedComment.NotAComment or UnterminatedComment.ToEnd))
         {
             throw new ArgumentOutOfRangeException(nameof(unterminated));

@@ -502,6 +502,7 @@ public static partial class Character
 
     // Whether a char is a new line: one of the chars of newLines, or of a white space set when it is null, the set given by its
     // white space bit: a char of its white space or new lines which isn't one of its white space
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsNewLine(char c, string? newLines, byte whiteSpaceMask)
         => newLines is null ? HasMask(c, (byte)(whiteSpaceMask << 1)) && !HasMask(c, whiteSpaceMask) : newLines.AsSpan().IndexOf(c) >= 0;
 

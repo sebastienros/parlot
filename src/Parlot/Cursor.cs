@@ -355,7 +355,7 @@ public class Cursor
         }
 
         // The char before the new window, which a comment at the start of a line reads
-        if (bufferStart > _base && bufferStart - _base <= _textLength)
+        if (bufferStart > _base)
         {
             _charBeforeBuffer = Buffer[bufferStart - _base - 1];
         }
