@@ -1941,9 +1941,12 @@ var unary = member.Operators()
 ```
 
 Only a `NoNewLineBefore` which the alternative invokes before anything else skips white space finds the white space of the
-choice. When an alternative can skip white space before a `NoNewLineBefore`, like `SkipWhiteSpace(NoNewLineBefore(p))`,
-or a `NoNewLineBefore` holding another one, the choice selects the alternatives with the char after the white space and
-invokes them before it instead, and they skip the white space themselves, from the cache of the context. A choice of two
+choice. When an alternative can skip white space or match nothing before a `NoNewLineBefore`, like
+`SkipWhiteSpace(NoNewLineBefore(p))` or `ZeroOrOne(a).And(NoNewLineBefore(p))`, or a `NoNewLineBefore` holding another
+one, the choice selects the alternatives with the char after the white space and invokes them before it instead, and they
+skip the white space themselves, from the cache of the context. So does a choice reading a `TextReader` whose
+`NoNewLineBefore` alternatives look for different new lines: it would keep the white space buffered while they are read.
+A choice of two
 such alternatives tries them in order: reading the char after the white space would cost about what trying the one which
 doesn't match does. A `Longest` holding a `NoNewLineBefore` alternative tries all its alternatives. A
 parser type of the application which invokes a `NoNewLineBefore` isn't looked into: when it tells that it skips white

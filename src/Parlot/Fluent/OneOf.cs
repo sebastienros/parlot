@@ -494,6 +494,12 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         }
     }
 
+    // How the alternatives skip the white space when the input is read through a compacting buffer: a HoistedWithNewLine
+    // choice whose alternatives look for different new lines would keep the white space buffered while they are read, it
+    // invokes them before it instead. The same for the runtime and the generated parsers.
+    private byte CompactingWhiteSpace(byte whiteSpace, bool compacting)
+        => whiteSpace == HoistedWithNewLine && compacting && !_sameNewLines ? BeforeWhiteSpace : whiteSpace;
+
     // How the alternatives skip the white space, resolved when the choice is first invoked
     private byte ReadWhiteSpace()
     {
@@ -985,11 +991,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
 
         withoutValue &= simple && _withoutValue;
 
-        if (whiteSpace == HoistedWithNewLine && context.IsCompacting && !_sameNewLines)
-        {
-            // The white space would stay buffered while the alternatives are read
-            whiteSpace = BeforeWhiteSpace;
-        }
+        whiteSpace = CompactingWhiteSpace(whiteSpace, context.IsCompacting);
 
         if (simple && whiteSpace == BeforeWhiteSpace && Volatile.Read(ref _mapBeforeWhiteSpace) == null)
         {
@@ -1204,11 +1206,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
         // the char after it, and invoked before it, see ParseCompacting()
         var whiteSpace = ReadWhiteSpace();
 
-        // A compacting buffer would keep the white space while the alternatives are read, see ParseCompacting()
-        if (whiteSpace == HoistedWithNewLine && context.IsCompacting && !_sameNewLines)
-        {
-            whiteSpace = BeforeWhiteSpace;
-        }
+        whiteSpace = CompactingWhiteSpace(whiteSpace, context.IsCompacting);
 
         var beforeWhiteSpace = whiteSpace == BeforeWhiteSpace;
         var map = beforeWhiteSpace ? _mapBeforeWhiteSpace : _map;

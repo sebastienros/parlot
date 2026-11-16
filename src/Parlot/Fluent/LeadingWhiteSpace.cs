@@ -182,23 +182,23 @@ internal static class LeadingWhiteSpace
     // The choices whose white space this thread resolves, see Resolving(): one reached again through a cycle keeps the
     // white space for its alternatives meanwhile
     [ThreadStatic]
-    private static HashSet<object>? t_resolving;
+    private static HashSet<object>? _resolving;
 
     /// <summary>
     /// Records that <paramref name="choice"/> resolves how it skips the white space, until <see cref="EndResolving"/>.
     /// </summary>
-    public static void BeginResolving(object choice) => (t_resolving ??= new HashSet<object>(LoopAnalysis.ReferenceComparer.Instance)).Add(choice);
+    public static void BeginResolving(object choice) => (_resolving ??= new HashSet<object>(LoopAnalysis.ReferenceComparer.Instance)).Add(choice);
 
     /// <summary>
     /// Records that <paramref name="choice"/> resolved how it skips the white space.
     /// </summary>
-    public static void EndResolving(object choice) => t_resolving!.Remove(choice);
+    public static void EndResolving(object choice) => _resolving!.Remove(choice);
 
     /// <summary>
     /// Gets whether this thread resolves how <paramref name="choice"/> skips the white space, which the analysis of its
     /// alternatives reached again.
     /// </summary>
-    public static bool Resolving(object choice) => t_resolving?.Contains(choice) == true;
+    public static bool Resolving(object choice) => _resolving?.Contains(choice) == true;
 
     // Whether an IReadsLeadingWhiteSpace parser was ever built: the grammars which have none aren't explored
     private static volatile bool s_anyReader;

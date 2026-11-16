@@ -133,7 +133,9 @@ A parser that starts with another one, like a sequence, reads its hints when the
 built before the `Deferred` it starts with is set is not reported.
 
 A `NoNewLineBefore` alternative skips white space: the choice skips the white space once and records it, and the
-`NoNewLineBefore` looks for the new lines in it.
+`NoNewLineBefore` looks for the new lines in it. When an alternative can skip white space or match nothing before a
+`NoNewLineBefore`, the choice selects the alternatives with the char after the white space and invokes them before it
+instead, see [NoNewLineBefore](parsers.md#nonewlinebefore).
 
 | Benchmark | Mean |
 |---|---:|
