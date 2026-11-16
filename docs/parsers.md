@@ -105,9 +105,9 @@ var identifier = Terms.Identifier().Then(static (context, start, end, name) =>
 The offsets can be requested in any order. The cursor keeps the position of the furthest offset requested, and a request
 after it counts the lines between them, as when positions are read in the order of the text. A request behind it records the
 start of each line up to it the first time, so that the position of an offset already counted over is then a binary search
-among them: a parse reads the text at most twice to count its lines, however far back the requests go, like the start of a
-function whose end was just located. A parse which requests no positions counts no lines, and one which requests a single
-position, like the one of an error, allocates nothing for it.
+among them: a parse reads its text a few times at most to count its lines, however far back the requests go, like the start
+of a function whose end was just located. A parse which requests no positions counts no lines, and one which requests a
+single position, like the one of an error, allocates nothing for it.
 
 A line ends at `\n` by default, every other char, `\r` included, occupying a column. `ParseContext.NewLines` (or
 `Cursor.NewLines`) sets the chars which end a line, as a string like the other APIs which take new lines. When both `\r`

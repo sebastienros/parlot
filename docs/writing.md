@@ -97,16 +97,19 @@ must keep that text buffered with `context.Pin()` and `context.Unpin(pin)`. Both
 ## Moving the cursor
 
 `Cursor.Position` is the absolute offset, the line and the column of the current char. The line starts at 1 and
-increases after each `'\n'`. The column starts at 1 on each line and counts every char other than `'\n'`, `'\r'` included:
-it is one more than the number of chars between the previous `'\n'` (or the start of the text) and the position. A
-position at the end of the text follows the same rule, so after `"ab\n"` the cursor is at line 2, column 1, and after
-`"ab\r"` at line 1, column 4. This is also what source generated parsers report.
+increases after each `'\n'`, or each line terminator of `ParseContext.NewLines` when it is set (see
+[Lines and columns](parsers.md#lines-and-columns)). The column starts at 1 on each line and counts every char which
+doesn't end a line, `'\r'` included by default: it is one more than the number of chars between the end of the previous
+line (or the start of the text) and the position. A position at the end of the text follows the same rule, so after
+`"ab\n"` the cursor is at line 2, column 1, and after `"ab\r"` at line 1, column 4. This is also what source generated
+parsers report.
 
-The cursor only tracks its offset. The line and the column are computed when `Position` is read, by counting the `'\n'`
-chars between the last position read and this one (vectorized on .NET 8 and later), as Roslyn computes the lines of a
-`SourceText` only when they are asked for. Reading a position thus costs a scan of the text moved over since the last
-read, which is why parsers save `Cursor.Offset` rather than `Cursor.Position` to move back. Read `Position` where it is
-reported: in an error, or in a callback which records it in a result.
+The cursor only tracks its offset. The line and the column are computed when `Position` is read, by counting the line
+terminators between the furthest position read and this one (vectorized on .NET 8 and later for a single terminator), as
+Roslyn computes the lines of a `SourceText` only when they are asked for. A position behind the furthest one is counted
+from the lines the cursor recorded, see `Cursor.GetPosition(offset)`. Reading a position thus costs a scan of the text
+moved over since the furthest read, which is why parsers save `Cursor.Offset` rather than `Cursor.Position` to move back.
+Read `Position` where it is reported: in an error, or in a callback which records it in a result.
 
 All the ways of moving the cursor forward only move the offset, so the chars they leave can contain `'\n'`:
 

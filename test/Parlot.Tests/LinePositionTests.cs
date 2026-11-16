@@ -465,9 +465,12 @@ public class LinePositionTests
         var lines = field.GetValue(cursor)!;
         Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
 
-        // A request behind the furthest one records the lines up to it
+        // The first request behind the furthest one is counted, the next one records the lines up to it
         AssertPosition(cursor, 3, 1, 4);
+        Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
+        AssertPosition(cursor, 10, 3, 3);
         Assert.True((int)lines.GetType().GetField("Count")!.GetValue(lines)! > 900);
+        AssertPosition(cursor, 3, 1, 4);
     }
 
     [Fact]
@@ -502,5 +505,68 @@ public class LinePositionTests
         AssertPosition(cursor, 3, 2, 2);
         AssertPosition(cursor, 2, 2, 1);
         AssertPosition(cursor, 4, 3, 1);
+    }
+
+    [Fact]
+    public void SettingNewLinesAllocatesNoLineMap()
+    {
+        var field = typeof(Cursor).GetField("_lines", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var cursor = new Cursor("a\r\nb\rc") { NewLines = JavaScriptNewLines };
+
+        Assert.Null(field.GetValue(cursor));
+        AssertPosition(cursor, 6, 3, 2);
+        Assert.Null(field.GetValue(cursor));
+        AssertPosition(cursor, 2, 1, 3);
+        Assert.NotNull(field.GetValue(cursor));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void TextReaderWindowsDontEndAfterACarriageReturn(int bufferSize)
+    {
+        // The '\r' is consumed at the end of a window, and the error reads the position after it before more text is read
+        const string text = "a\r\n;";
+        var parser = Literals.Text("a\r").SkipAnd(Literals.Char('x').ElseError("x expected"));
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = bufferSize,
+            ContextFactory = static (scanner, token) => new ParseContext(scanner, token) { NewLines = "\r\n" },
+        };
+
+        Assert.False(parser.TryParse(new StringReader(text), out _, out var error, options));
+        Assert.Equal((2, 1, 3), (error!.Position.Offset, error.Position.Line, error.Position.Column));
+
+        Assert.False(parser.TryParse(new ParseContext(new Scanner(text)) { NewLines = "\r\n" }, out _, out error));
+        Assert.Equal((2, 1, 3), (error!.Position.Offset, error.Position.Line, error.Position.Column));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task ParseManyWindowsDontEndAfterACarriageReturn(int bufferSize)
+    {
+        var item = Literals.Text("a\r").Then(static (context, start, end, _) =>
+        {
+            var position = context.Scanner.Cursor.GetPosition(end);
+            return (position.Line, position.Column);
+        });
+
+        var options = new StreamParseOptions
+        {
+            BufferSize = bufferSize,
+            ContextFactory = static (scanner, token) => new ParseContext(scanner, token) { NewLines = "\r\n" },
+        };
+
+        var items = new List<(int, int)>();
+
+        await foreach (var parsed in item.ParseManyAsync(new StringReader("a\r\na\ra\r"), Literals.Char('\n').Optional(), options))
+        {
+            items.Add(parsed);
+        }
+
+        Assert.Equal(new[] { (1, 3), (3, 1), (4, 1) }, items);
     }
 }
