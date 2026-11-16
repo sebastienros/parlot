@@ -206,8 +206,8 @@ public class CommentsBuilder
     /// <param name="placement">Where the comment starts. With <see cref="CommentPlacement.LineStart"/>, it only starts when
     /// the white space and comments skipped before it contain a new line, or when the skip started where the scanner starts, at
     /// column 1, as at the start of the text:
-    /// a new line of the white space, a multi line comment containing one of its line terminators (see
-    /// <see cref="WithMultiLine(string, string, UnterminatedComment, string)"/>), or a single line comment, which ends at one.</param>
+    /// a new line of the white space, like the one which ends a single line comment, or a multi line comment containing a new
+    /// line (see <see cref="WithMultiLine(string, string, UnterminatedComment, string)"/>).</param>
     /// <remarks>
     /// <para>
     /// JavaScript scripts (ECMAScript Annex B.1.1) skip <c>&lt;!--</c> anywhere and <c>--&gt;</c> at the start of a line:
@@ -265,7 +265,8 @@ public class CommentsBuilder
     /// <param name="unterminated">What a comment without its end is: an error, not a comment, or a comment running to the
     /// end of the text.</param>
     /// <param name="lineTerminators">The chars of the new lines a comment can contain, for instance <c>"\n\r\u2028\u2029"</c>
-    /// for JavaScript. A comment of the other overloads contains a new line when it contains <c>'\n'</c>.</param>
+    /// for JavaScript. A comment of the other overloads contains a new line when it contains one of the white space of the
+    /// builder, or of the context's <see cref="WhiteSpaceSet"/> when the builder skips no new line.</param>
     /// <remarks>
     /// A comment containing a new line starts a line, where the comments of
     /// <see cref="WithSingleLine(string, string, CommentPlacement)"/> with <see cref="CommentPlacement.LineStart"/> can start.

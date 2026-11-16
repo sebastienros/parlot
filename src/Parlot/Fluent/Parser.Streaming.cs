@@ -170,7 +170,7 @@ public abstract partial class Parser<T>
         {
             if (skipWhiteSpace)
             {
-                context.SkipWhiteSpace();
+                StreamingDriver.SkipWhiteSpaceBeforeValue(context);
 
                 if (cursor.Eof)
                 {

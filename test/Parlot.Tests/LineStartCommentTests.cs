@@ -148,14 +148,42 @@ public class LineStartCommentTests
 
     [Theory]
     [InlineData("a /*\n*/ --> b\nc", "a|c")]
-    [InlineData("a /*\r*/ --> b\nc", "a|--|>|b|c")]
-    [InlineData("a /*\r*/ --> b", "a|--|>|b")]
-    public void ShouldStartALineAfterAMultiLineCommentContainingANewLineByDefault(string text, string expected)
+    [InlineData("a /*\r*/ --> b\nc", "a|c")]
+    [InlineData("a /*\u0085*/ --> b", "a")]
+    [InlineData("a /* b */ --> c", "a|--|>|c")]
+    public void ShouldStartALineAfterAMultiLineCommentContainingANewLineOfTheSetByDefault(string text, string expected)
     {
-        // A multi line comment without line terminators contains a new line when it contains '\n'
+        // A multi line comment without line terminators contains a new line when it contains one of the white space
         var parser = Tokens.WithComments(static c => c.WithWhiteSpaceOrNewLine().WithMultiLine("/*", "*/").WithSingleLine("-->", "\n", CommentPlacement.LineStart));
 
         Assert.Equal(expected, string.Join("|", parser.Parse(text)!));
+    }
+
+    [Theory]
+    [InlineData("a /*\n*/ --> b\nc", "a|c")]
+    [InlineData("a /*\r*/ --> b", "a|--|>|b")]
+    [InlineData("a /*\u2028*/ --> b", "a|--|>|b")]
+    public void ShouldStartALineAfterAMultiLineCommentContainingANewLineOfTheCharsByDefault(string text, string expected)
+    {
+        // The new lines of WithWhiteSpace(whiteSpace, newLines)
+        var parser = Tokens.WithComments(static c => c.WithWhiteSpace(" ", "\n").WithMultiLine("/*", "*/").WithSingleLine("-->", "\n", CommentPlacement.LineStart));
+
+        Assert.Equal(expected, string.Join("|", parser.Parse(text)!));
+
+        // Without new lines, a comment contains none
+        var withoutNewLines = Tokens.WithComments(static c => c.WithWhiteSpace(" ", "").WithMultiLine("/*", "*/").WithSingleLine("-->", "\n", CommentPlacement.LineStart));
+
+        Assert.Equal("a|--|>|b", string.Join("|", withoutNewLines.Parse("a /*\n*/ --> b")!));
+    }
+
+    [Fact]
+    public void ShouldNotStartALineAfterASingleLineCommentEndingAtWhiteSpace()
+    {
+        // The comment ends at a tab, which is white space: the line goes on
+        var parser = Tokens.WithComments(static c => c.WithWhiteSpace(" \t", "\n").WithSingleLine("#", "\t\n").WithSingleLine("-->", "\n", CommentPlacement.LineStart));
+
+        Assert.Equal("a|--|>|y", string.Join("|", parser.Parse("a #x\t--> y")!));
+        Assert.Equal("a|z", string.Join("|", parser.Parse("a #x\n--> y\nz")!));
     }
 
     [Theory]

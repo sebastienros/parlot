@@ -1873,10 +1873,11 @@ when the skip started where a line is known to start: where the scanner starts a
 delimited text of `ParseManyAsync` after a `'\n'`. The skip starts a line after:
 
 - a new line of the white space: the new lines of `WithWhiteSpace(whiteSpace, newLines)`, which are not white space when
-  `UseNewLines` is set, or of the context's `WhiteSpaceSet` with `WithWhiteSpaceOrNewLine()`, which skips them even then;
-- a multi line comment containing one of its line terminators: the chars of `WithMultiLine(start, end, unterminated,
-  lineTerminators)`, or `'\n'` for the other overloads;
-- a single line comment, which ends at one.
+  `UseNewLines` is set, or of the context's `WhiteSpaceSet` with `WithWhiteSpaceOrNewLine()`, which skips them even then. The
+  new line which ends a single line comment is one of them;
+- a multi line comment containing a new line: one of the chars of `WithMultiLine(start, end, unterminated,
+  lineTerminators)`, or for the other overloads a new line of the white space (of the context's set without new lines in
+  the white space).
 
 Elsewhere its start is not a comment, like a start which doesn't match: the cursor stays before it, and the comments added
 after it can start there. JavaScript scripts (ECMAScript Annex B.1.1) have such a comment, `-->`, besides `<!--`, which starts

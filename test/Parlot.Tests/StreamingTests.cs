@@ -801,6 +801,28 @@ public class StreamingTests
 
         Assert.Equal(["", "a", "", "b"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x\na\n--> y\nb", () => 1, yield: false), '\n')));
         Assert.Equal(["", "--|>|y"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("--> x;--> y", () => 1, yield: false), ';')));
+
+        // The white space the driver skips before the text, with a new line or after the start of a line
+        Assert.Equal(["", "a"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("  --> x\na", () => 1, yield: false), '\n')));
+        Assert.Equal(["a", "", "--|>|z"], await ToListAsync(tokens.ParseManyAsync(new ChunkedReader("a;\n--> y; --> z", () => 1, yield: false), ';')));
+    }
+
+    [Theory]
+    [InlineData("a\n--> b\nc", "a|c")]
+    [InlineData("a --> b", "a|--|>|b")]
+    public async Task ParseManyAsyncStartsALineAfterTheWhiteSpaceParser(string text, string expected)
+    {
+        // A white space parser which isn't the comments of the value: the driver tells whether it skipped a new line
+        var token = OneOf(Terms.Identifier().Then(static x => x.ToString()), Terms.Text("--"), Terms.Text(">")).WithComments(LineStartCommentTests.JavaScriptChars);
+        var whiteSpace = Literals.WhiteSpace(includeNewLines: true);
+
+        foreach (var bufferSize in new[] { 1, 4096 })
+        {
+            var options = new StreamParseOptions { BufferSize = bufferSize, ContextFactory = (scanner, cancellationToken) => new ParseContext(scanner, cancellationToken) { WhiteSpaceParser = whiteSpace } };
+            var values = await ToListAsync(token.ParseManyAsync(new ChunkedReader(text, () => 1, yield: false), options));
+
+            Assert.Equal(expected, string.Join("|", values));
+        }
     }
 
     [Theory]

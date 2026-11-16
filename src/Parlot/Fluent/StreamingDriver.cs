@@ -303,6 +303,25 @@ internal sealed class StreamingDriver : IDisposable
         return exception;
     }
 
+    /// <summary>
+    /// Skips the white space before a value, as the context does, and tells the cursor whether a line starts after it, for the
+    /// comments of the value which only start at the start of a line (see <see cref="CommentPlacement.LineStart"/>): when a
+    /// line starts before it, or it contains a new line of the context's set. Not after a <see cref="CommentsParser"/>, which
+    /// skips those comments itself: it stops where no comment starts.
+    /// </summary>
+    public static void SkipWhiteSpaceBeforeValue(ParseContext context)
+    {
+        var cursor = context.Scanner.Cursor;
+        var start = cursor.Offset;
+        var startsLine = cursor.IsAtKnownLineStart;
+        var newLine = context.SkipWhiteSpaceAndFindNewLine(newLines: null);
+
+        if (cursor.Offset != start && (startsLine || newLine) && context.WhiteSpaceParser is not CommentsParser)
+        {
+            cursor.SetKnownLineStart(cursor.Offset);
+        }
+    }
+
     private ParseContext CreateContext(string text, bool isFinal)
     {
         var scanner = new Scanner(text, new TextPosition(0, _line, _column), isFinal);
@@ -392,7 +411,7 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 // A white space parser can throw too, for a comment which the window doesn't end
                 try
                 {
-                    context.SkipWhiteSpace();
+                    StreamingDriver.SkipWhiteSpaceBeforeValue(context);
                 }
                 catch (ParseException) when (cursor.HitEnd)
                 {
@@ -409,25 +428,8 @@ internal sealed class StreamingItemReader<T, TSeparator>
                 // white space whatever follows them, so a run of them is dropped window after window
                 if (!cursor.HitEnd || context.WhiteSpaceParser is null)
                 {
-                    // The comments of the value which only start at the start of a line are told whether the white space
-                    // dropped contains a new line. A WhiteSpaceParser skips those comments itself, up to text which no
-                    // comment starts
-                    if (context.WhiteSpaceParser is not null)
-                    {
-                        startsLine = false;
-                    }
-                    else if (cursor.Offset > start)
-                    {
-                        startsLine = startsLine || Character.IndexOfNewLine(cursor.GetSpan(start, cursor.Offset - start), context.WhiteSpaceMask) >= 0;
-
-                        if (startsLine)
-                        {
-                            // The value parsed next in this window starts a line too
-                            cursor.SetKnownLineStart(cursor.Offset);
-                        }
-                    }
-
                     start = cursor.Offset;
+                    startsLine = cursor.IsAtKnownLineStart;
                 }
             }
 
