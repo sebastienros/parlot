@@ -348,11 +348,7 @@ public sealed class TextBefore<T> : Parser<TextSpan>, ISourceable, ILoopAnalyzab
             return;
         }
 
-        context.StaticFields.Add("#if NET8_0_OR_GREATER");
-        var fieldName = context.RegisterStaticField(
-            "private static readonly global::System.Buffers.SearchValues<char>",
-            $"global::System.Buffers.SearchValues.Create({LiteralHelper.StringToLiteral(new string(expectedChars))})");
-        context.StaticFields.Add("#endif");
+        var fieldName = context.GetSearchValuesField(expectedChars, new string(expectedChars));
 
         var iName = $"i{context.NextNumber()}";
         var cName = $"c{context.NextNumber()}";
