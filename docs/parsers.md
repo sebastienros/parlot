@@ -1438,6 +1438,26 @@ hello // failure
 null // success
 ```
 
+`Not` doesn't invoke its parser where the current char, after the white space the parser skips, is one the parser
+can't start with (from its `ISeekable` hints): it succeeds at once. A sequence which starts with `Not`, like
+`Not(reserved).SkipAnd(expression)`, has the hints of both parsers, so a choice holding it keeps its lookup table:
+the chars of the parser which follows, where the sequence can match, and those of the parser of `Not`, which is invoked
+first and could fail with an error there. This writes the lookahead restrictions of a specification as it states them,
+like ECMAScript's `[lookahead ∉ { {, function, class }] Expression`:
+
+```c#
+var expressionStatement = Not(OneOf(Terms.Text("{"), Terms.Keyword("function"), Terms.Keyword("class")))
+    .SkipAnd(expression)
+    .AndSkip(Terms.Char(';'));
+
+// The choice only tries the expression statement for the chars an expression or a reserved word can start with
+var statement = OneOf(block, functionDeclaration, classDeclaration, expressionStatement);
+```
+
+The hints are only kept when both parsers tell them and skip white space the same way: a choice whose alternatives all
+skip white space skips it before invoking them, which would change what `Not` sees. `Not(Literals.Char('a'))
+.SkipAnd(Terms.Identifier())` has no hints.
+
 ### Peek
 
 Succeeds with the value of a parser when it matches, without consuming any input. This is the positive lookahead
@@ -1467,6 +1487,9 @@ Result:
 (42, 42)
 failure
 ```
+
+A sequence which starts with `Peek` has the hints of its parser, which is invoked first, unless that parser skips white
+space and the one which follows doesn't.
 
 The result starts and ends where the parser was invoked. When the parser fails, `Peek` fails and the cursor is where it
 was. `Peek` tells the chars its parser can start with, so a choice only tries it for these chars. In a choice whose
