@@ -108,6 +108,11 @@ public class StreamingTests
         ["nonwhitespace"] = new Grammar<TextSpan>(Literals.NonWhiteSpace()),
         ["textbefore"] = new Grammar<TextSpan>(AnyCharBefore(Literals.Text("--"), failOnEof: true, consumeDelimiter: true)),
         ["textbefore-eof"] = new Grammar<TextSpan>(AnyCharBefore(Literals.Text("--"))),
+        // The window can end inside a chunk, an escape, a delimiter, or a hole, which can hold templates too
+        ["interpolated"] = new Grammar<string>(InterpolatedTests.CreateTemplate()),
+        ["interpolated-list"] = new Grammar<IReadOnlyList<string>>(ZeroOrMany(InterpolatedTests.CreateTemplate()).Eof()),
+        ["interpolated-no-newlines"] = new Grammar<string>(InterpolatedTests.CreateInterpolatedString()),
+        ["interpolated-long-delimiters"] = new Grammar<string>(Literals.Interpolated("<<", ">>", "#[[", "]]", Terms.Identifier().Then(static x => x.ToString()), escape: '\0').Then(static x => InterpolatedTests.Render(x))),
         ["capture"] = new Grammar<TextSpan>(Capture(Terms.Identifier().And(Terms.Char('=')).And(Terms.Integer()))),
         ["not"] = new Grammar<TextSpan>(Not(Literals.Text("ab")).SkipAnd(Literals.NonWhiteSpace())),
         // A lookahead at the start of an alternative, the text it read is read again
@@ -460,6 +465,15 @@ public class StreamingTests
         Add("nonwhitespace", "", "a", "abc def", " x");
         Add("textbefore", "", "a", "abc", "abc-", "abc--", "a-b--c", "--");
         Add("textbefore-eof", "", "a", "abc", "abc-", "abc--", "--");
+        string[] templates =
+        [
+            "", "`", "``", "`abc`", "`abc", "`a${b}c`", "`${a}`", "`${a}${b}`", "`a\\`b`", "`a\\${b}`", "`a\\", "`a$", "`a$b`", "`$$${a}`",
+            "`a${", "`a${b", "`a${b }`", "`a${b c}`", "`a${`b${c}d`}e`", "`a${`b`", " `a\nb` ", "`${`${`${a}`}`}`", "x",
+        ];
+        Add("interpolated", templates);
+        Add("interpolated-list", "", "`a` `b${c}`", "`a` `b${c}", "`a`x", " `${`x`}` `y` ");
+        Add("interpolated-no-newlines", "", "$\"a{b}c\"", "$\"a\nb\"", "$\"a\\\nb\"", "$\"{ b\n}\"", "$\"a", "$", "$x", "\"a\"");
+        Add("interpolated-long-delimiters", "", "<<a>>", "<<a>", "<<a>b>>", "<<a#[[b]]c>>", "<<a#[b]]>>", "<<a#[[b]>>", "<<a#[[b]]", "<<a#", "<<a#[");
         Add("capture", "", "a", "a=", "a = 12", "a = 12 x", "a=x");
         Add("not", "", "a", "ab", "abc", "ac", "xab");
         Add("peek", "", "ab", "abc", "ab abc a", "  ab  x ab", "a", "1");
