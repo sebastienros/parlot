@@ -465,12 +465,23 @@ public class LinePositionTests
         var lines = field.GetValue(cursor)!;
         Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
 
-        // The first request behind the furthest one is counted, the next one records the lines up to it
+        // The requests behind the furthest one are counted, until they counted many times the text
         AssertPosition(cursor, 3, 1, 4);
-        Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
         AssertPosition(cursor, 10, 3, 3);
+        Assert.Equal(0, (int)lines.GetType().GetField("Count")!.GetValue(lines)!);
+
+        var middle = text.Length / 2;
+        var expected = References(text, "\n")[middle];
+
+        for (var i = 0; i < 40; i++)
+        {
+            Assert.Equal(expected, (cursor.GetPosition(middle).Line, cursor.GetPosition(middle).Column));
+        }
+
+        // Then the lines up to the furthest position are recorded
         Assert.True((int)lines.GetType().GetField("Count")!.GetValue(lines)! > 900);
         AssertPosition(cursor, 3, 1, 4);
+        AssertPosition(cursor, 10, 3, 3);
     }
 
     [Fact]

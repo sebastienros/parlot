@@ -1,5 +1,10 @@
 using System;
 using System.Runtime.CompilerServices;
+#if NET8_0_OR_GREATER
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+#endif
 
 namespace Parlot;
 
@@ -192,10 +197,12 @@ public class Cursor
     /// <remarks>
     /// <para>
     /// The offsets can be requested in any order. The position of the furthest offset requested is kept: a request after
-    /// it counts the lines of the text between them. A request before it records the start of each line up to it the second
-    /// time it is needed, such that the position of an offset already counted over is then a binary search: a parse reads
-    /// its text a few times at most to count its lines, and a parse which doesn't request positions doesn't count them. A
-    /// single request counts the lines from the initial position of the cursor without allocating.
+    /// it counts the lines of the text between them, and a request before it counts them from the closest position known.
+    /// When the text counted for those exceeds a multiple of the text read so far, the start of each line up to the furthest
+    /// position is recorded, and the position of an offset counted over is then a binary search: a parse reads its text a
+    /// bounded number of times to count its lines, whatever the order of the requests. A parse which doesn't request
+    /// positions doesn't count them, and a single request counts the lines from the initial position of the cursor without
+    /// allocating.
     /// </para>
     /// <para>
     /// An offset between the <c>'\r'</c> and the <c>'\n'</c> of a <c>"\r\n"</c> is on the line they end. The lines and columns
@@ -248,7 +255,7 @@ public class Cursor
                 return new TextPosition(offset, lines.FrontierLine, lines.FrontierColumn);
             }
 
-            if (keep && FollowsCarriageReturn(offset - 1) == FollowedByUnknown)
+            if (keep && (_flags & CrLfFlag) != 0 && FollowsCarriageReturn(offset - 1) == FollowedByUnknown)
             {
                 // After a '\r' ending a buffer which more text follows, which a '\n' can still follow: the furthest position
                 // is the one of the '\r'
@@ -269,21 +276,15 @@ public class Cursor
 
         if (offset > lines.Counted)
         {
+            // Behind the furthest position requested, like the start of a node whose end was requested: counted from the
+            // closest position known, until the text counted so exceeds the text not recorded by RecordFactor, when the lines
+            // up to the furthest position are recorded. A request costs a binary search then.
             var behind = lines.FrontierOffset - offset;
+            var ahead = offset - lines.Counted;
 
-            if (behind <= CountBackwardDistance)
+            if (!keep || (lines.CountedBehind += Math.Min(behind, ahead)) <= (long)RecordFactor * (lines.FrontierOffset - lines.Counted))
             {
-                // Just behind the furthest position, like the start of a token whose end was requested
-                return CountBackward(lines, offset);
-            }
-
-            if (!keep || !lines.RequestedBehind)
-            {
-                // Far behind the furthest position requested for the first time: counted from the closest position known,
-                // the lines are only recorded on the next request
-                lines.RequestedBehind |= keep;
-
-                if (offset - lines.Counted <= behind)
+                if (ahead < behind)
                 {
                     var counted = FindPosition(lines, lines.Counted);
                     return CountForward(counted.Offset, counted.Line, counted.Column, offset);
@@ -292,16 +293,16 @@ public class Cursor
                 return CountBackward(lines, offset);
             }
 
-            // Far behind the furthest position requested: the lines up to it are recorded once
             RecordLines(lines, lines.FrontierOffset);
+            lines.CountedBehind = 0;
         }
 
         return FindPosition(lines, offset);
     }
 
-    // The distance behind the furthest position requested up to which a position is counted from it rather than from the
-    // lines recorded, which costs a pass over the text to record them
-    private const int CountBackwardDistance = 1024;
+    // How many times the text not recorded is counted for the positions behind the furthest one before its lines are
+    // recorded: recording a line costs about as much as counting a few dozen chars
+    private const int RecordFactor = 16;
 
     // The position of an offset between the origin and the end of the lines recorded
     private TextPosition FindPosition(LineMap lines, int offset)
@@ -450,6 +451,13 @@ public class Cursor
             return count;
         }
 
+#if NET8_0_OR_GREATER
+        if (text.Length >= 256)
+        {
+            return CountLineStartsVectorized(from, to, newLines, text, out lastStart);
+        }
+#endif
+
         var position = 0;
         int found;
 
@@ -467,6 +475,82 @@ public class Cursor
 
         return count;
     }
+
+#if NET8_0_OR_GREATER
+    // The number of "\r\n" in a text, vectorized
+    private static int CountCarriageReturnLineFeeds(ReadOnlySpan<char> text)
+    {
+        var count = 0;
+        var i = 0;
+        ref var start = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
+
+        if (Vector128.IsHardwareAccelerated)
+        {
+            var carriageReturns = Vector128.Create((ushort)'\r');
+            var lineFeeds = Vector128.Create((ushort)'\n');
+
+            for (; i + Vector128<ushort>.Count < text.Length; i += Vector128<ushort>.Count)
+            {
+                var pairs = Vector128.Equals(Vector128.LoadUnsafe(ref start, (nuint)i), carriageReturns)
+                    & Vector128.Equals(Vector128.LoadUnsafe(ref start, (nuint)i + 1), lineFeeds);
+
+                count += BitOperations.PopCount(pairs.ExtractMostSignificantBits());
+            }
+        }
+
+        for (; i + 1 < text.Length; i++)
+        {
+            if (text[i] == '\r' && text[i + 1] == '\n')
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    // CountLineStarts for a long text and several terminators: a vectorized pass for each terminator rather than a search
+    // for each line
+    private int CountLineStartsVectorized(int from, int to, ReadOnlySpan<char> newLines, ReadOnlySpan<char> text, out int lastStart)
+    {
+        var count = 0;
+
+        lastStart = -1;
+
+        for (var i = 0; i < newLines.Length; i++)
+        {
+            if (newLines.Slice(0, i).IndexOf(newLines[i]) < 0)
+            {
+                count += text.Count(newLines[i]);
+            }
+        }
+
+        if ((_flags & CrLfFlag) != 0)
+        {
+            // The '\r' of a "\r\n" doesn't end a line, nor one ending the text which a '\n' follows
+            count -= CountCarriageReturnLineFeeds(text);
+
+            if (text.Length > 0 && !EndsLineAt(to - 1))
+            {
+                count--;
+            }
+        }
+
+        if (count > 0)
+        {
+            var end = text.LastIndexOfAny(newLines);
+
+            while (!EndsLineAt(from + end))
+            {
+                end = text.Slice(0, end).LastIndexOfAny(newLines);
+            }
+
+            lastStart = from + end + 1;
+        }
+
+        return count;
+    }
+#endif
 
     // The start of the line of an offset of the buffer, the start of the buffer starting a line
     private int FindLineStart(int offset)
@@ -554,8 +638,8 @@ public class Cursor
         public int Count;
         public int Counted;
 
-        // Whether a position was requested behind the furthest one: the next one records the lines up to it
-        public bool RequestedBehind;
+        // The chars counted for the positions requested behind the furthest one since the lines were last recorded
+        public long CountedBehind;
 
         public void SetFrontier(in TextPosition position)
         {
