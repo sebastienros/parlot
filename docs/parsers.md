@@ -1941,9 +1941,9 @@ var unary = member.Operators()
 ```
 
 The alternatives of such a choice skip the white space themselves, from the cache of the context, which costs a little
-more than one skip for all of them. A choice of two alternatives which are each a token of `Terms` (a text, a char, a keyword,
-an identifier, a number...), a `NoNewLineBefore` of one, a choice of these, or a `Then` or a `Capture` of these, like the
-operators of a level of `Operators()`, tries them in order instead:
+more than one skip for all of them. A choice of two alternatives which each invoke no other parser than literals (a text, a
+char, a keyword, an identifier, a number... of `Terms`, and the parsers which only wrap them or a choice of them, like
+`NoNewLineBefore`, `Then`, `Capture` or `AsToken`, as the operators of a level of `Operators()`) tries them in order instead:
 reading the char after the white space would cost about what trying the one which doesn't match does. Other alternatives,
 like the sequences of `tail` above, invoke what they start with before they fail, and are selected with the char after the
 white space however many they are. A `Longest` holding a `NoNewLineBefore` alternative tries all its alternatives. A

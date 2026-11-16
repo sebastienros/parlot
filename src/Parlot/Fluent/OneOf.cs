@@ -485,9 +485,10 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
             return Hoisted;
         }
 
-        // The table is written before the mode, which the parsers read first. Two literals, or parsers which only wrap one, are
-        // tried in order: reading the char after the white space costs about what the one which doesn't match does. A composite
-        // alternative invokes what it starts with before it fails, so they are selected with the table then (#581).
+        // The table is written before the mode, which the parsers read first. Up to two literals, or parsers which only wrap
+        // them, are tried in order: reading the char after the white space costs about what the one which doesn't match does. A
+        // composite alternative, even a single one, invokes what it starts with before it fails, so the table selects them then
+        // (#581).
         if (_originalParsers.Length > MaxAlternativesInOrder || !AllFailAtFirstChar(_originalParsers))
         {
             (_mapBeforeWhiteSpace, _otherParsersBeforeWhiteSpace) = BuildMapBeforeWhiteSpace();
@@ -500,7 +501,7 @@ public sealed class OneOf<T> : Parser<T>, ISeekablePrefixes, IResolvableSeekable
     // A nested choice of literals, which only reads the text, see IFailsAtFirstChar
     bool IFailsAtFirstChar.FailsAtFirstChar => AllFailAtFirstChar(_originalParsers);
 
-    // Whether each alternative fails at its first chars without invoking another parser than a literal, see IFailsAtFirstChar
+    // Whether no alternative invokes another parser than literals, see IFailsAtFirstChar
     private static bool AllFailAtFirstChar(Parser<T>[] parsers)
     {
         foreach (var parser in parsers)

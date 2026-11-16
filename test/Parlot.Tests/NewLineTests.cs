@@ -519,8 +519,8 @@ public class NewLineTests
         Assert.Equal(per.Value, two.Value);
 
         // The sequence of the operators and their operand is invoked for each assignment, and its choice selects the operator
-        // with its table: 753 parsers, against 783 with an alternative per operator, and 913 when the two alternatives were tried
-        // in order
+        // with its table, rather than the operators being tried one by one. When the two alternatives were tried in order, the
+        // sequence and the arrow were invoked for every statement: more parsers than with an alternative per operator.
         Assert.True(two.Entered < per.Entered, $"{two.Entered} parsers invoked, {per.Entered} with an alternative per operator");
     }
 
