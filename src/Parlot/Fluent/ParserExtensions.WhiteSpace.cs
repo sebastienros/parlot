@@ -264,8 +264,9 @@ public class CommentsBuilder
     /// <param name="unterminated">What a comment without its end is: an error, not a comment, or a comment running to the
     /// end of the text.</param>
     /// <param name="lineTerminators">The chars of the new lines a comment can contain, for instance <c>"\n\r\u2028\u2029"</c>
-    /// for JavaScript. A comment of the other overloads contains a new line when it contains one of the white space of the
-    /// builder, or of the context's <see cref="WhiteSpaceSet"/> when the builder skips no new line.</param>
+    /// for JavaScript. A comment of the other overloads contains a new line when it contains one of the new lines of the
+    /// white space: the chars of <c>newLines</c> with <see cref="WithWhiteSpace(string, string)"/>, which can be none, or
+    /// the new lines of the context's <see cref="WhiteSpaceSet"/> otherwise.</param>
     /// <remarks>
     /// A comment containing a new line starts a line, where the comments of
     /// <see cref="WithSingleLine(string, string, CommentPlacement)"/> with <see cref="CommentPlacement.LineStart"/> can start.
@@ -362,8 +363,9 @@ public class CommentsBuilder
     /// Without <see cref="WithParser(Parser{TextSpan})"/> it is a <see cref="CommentsParser"/>, which skips everything in a
     /// single loop. Otherwise it is the choice of the parsers of the elements, in a loop.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">A comment of <see cref="CommentPlacement.LineStart"/> can't be skipped in
-    /// a single loop.</exception>
+    /// <exception cref="InvalidOperationException">The builder has a comment of <see cref="CommentPlacement.LineStart"/>,
+    /// which needs the single loop of <see cref="CommentsParser"/>, and composes the parsers of its elements
+    /// instead.</exception>
     public Parser<TextSpan> Build()
     {
         if (_parsers.Count == 0 || !CanSkipInOneParser())

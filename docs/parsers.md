@@ -1875,8 +1875,8 @@ when the skip started at the start of the input (offset 0 at line 1 and column 1
   `UseNewLines` is set, or of the context's `WhiteSpaceSet` with `WithWhiteSpaceOrNewLine()`, which skips them even then. The
   new line which ends a single line comment is one of them;
 - a multi line comment containing a new line: one of the chars of `WithMultiLine(start, end, unterminated,
-  lineTerminators)`, or for the other overloads a new line of the white space (of the context's set without new lines in
-  the white space).
+  lineTerminators)`, or for the other overloads a new line of the white space: one of the chars of `newLines` with
+  `WithWhiteSpace(whiteSpace, newLines)`, which can be none, or of the context's set otherwise.
 
 Elsewhere its start is not a comment, like a start which doesn't match: the cursor stays before it, and the comments added
 after it can start there. JavaScript scripts (ECMAScript Annex B.1.1) have such a comment, `-->`, besides `<!--`, which starts

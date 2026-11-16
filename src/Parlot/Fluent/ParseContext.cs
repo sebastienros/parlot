@@ -761,7 +761,7 @@ public class ParseContext
         {
             var span = cursor.GetSpan(start, end - start);
 
-            if ((newLines is null ? Character.IndexOfNewLine(span, WhiteSpaceMask) : span.IndexOfAny(newLines.AsSpan())) >= 0)
+            if (Character.ContainsNewLine(span, newLines, WhiteSpaceMask))
             {
                 return true;
             }

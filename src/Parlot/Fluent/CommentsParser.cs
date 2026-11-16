@@ -35,14 +35,14 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
 
     // For each comment, when the parser tracks where a line starts, the new lines a multi line comment can contain: its line
     // terminators, the new lines of WhiteSpaceKind.Chars, or null for those of the context's set
-    private readonly string?[] _commentNewLines = [];
+    private readonly string?[]? _commentNewLines;
 
     // Whether a comment only starts at the start of a line, which the parser then tracks
     private readonly bool _tracksLineStart;
 
     // Skips the white space of the context's WhiteSpaceSet, with its new lines or not
     internal CommentsParser(bool skipWhiteSpace, bool includeNewLines, CommentSyntax[] comments)
-        : this(skipWhiteSpace ? includeNewLines ? WhiteSpaceKind.WhiteSpaceOrNewLine : WhiteSpaceKind.WhiteSpace : WhiteSpaceKind.None, comments)
+        : this(skipWhiteSpace ? includeNewLines ? WhiteSpaceKind.WhiteSpaceOrNewLine : WhiteSpaceKind.WhiteSpace : WhiteSpaceKind.None, comments, newLines: null)
     {
         // The chars of the default set contain the ones of every WhiteSpaceSet
         var whiteSpaceChars = skipWhiteSpace ? new WhiteSpaceLiteral(includeNewLines).ExpectedChars : [];
@@ -52,25 +52,29 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
     // Skips the chars of whiteSpace, and those of newLines unless the context's UseNewLines is set, as with the masks of a
     // WhiteSpaceSet
     internal CommentsParser(string whiteSpace, string newLines, CommentSyntax[] comments)
-        : this(WhiteSpaceKind.Chars, comments)
+        : this(WhiteSpaceKind.Chars, comments, newLines)
     {
         _spaceChars = whiteSpace;
-        _hasNewLines = newLines.Length > 0;
-        _commentNewLines = comments.Select(c => c.LineTerminators ?? newLines).ToArray();
         _spaceOrNewLineChars = whiteSpace + newLines;
         _spaces = new CharSet(whiteSpace.AsSpan());
         _spacesOrNewLines = new CharSet(_spaceOrNewLineChars.AsSpan());
         ExpectedChars = _spaceOrNewLineChars.Concat(_firstChars).Distinct().ToArray();
     }
 
-    private CommentsParser(WhiteSpaceKind whiteSpace, CommentSyntax[] comments)
+    // newLines: the new lines of WhiteSpaceKind.Chars, null for the context's set
+    private CommentsParser(WhiteSpaceKind whiteSpace, CommentSyntax[] comments, string? newLines)
     {
         _whiteSpace = whiteSpace;
-        _hasNewLines = whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine;
+        _hasNewLines = newLines is null ? whiteSpace == WhiteSpaceKind.WhiteSpaceOrNewLine : newLines.Length > 0;
         _comments = comments;
         _firstChars = new string(comments.Select(static c => c.Start[0]).Distinct().ToArray());
         _tracksLineStart = comments.Any(static c => c.Placement == CommentPlacement.LineStart);
-        _commentNewLines = comments.Select(static c => c.LineTerminators).ToArray();
+
+        if (_tracksLineStart)
+        {
+            _commentNewLines = comments.Select(c => c.LineTerminators ?? newLines).ToArray();
+        }
+
         ExpectedChars = [];
 
         Name = "CommentsParser";
@@ -241,10 +245,7 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
             {
                 if (default(TTracking).Enabled && !lineStart)
                 {
-                    var text = cursor.GetSpan(commentStart, cursor.Offset - commentStart);
-                    var newLines = _commentNewLines[i];
-
-                    if (newLines is null ? Character.IndexOfNewLine(text, context.WhiteSpaceMask) >= 0 : newLines.Length > 0 && text.IndexOfAny(newLines.AsSpan()) >= 0)
+                    if (Character.ContainsNewLine(cursor.GetSpan(commentStart, cursor.Offset - commentStart), _commentNewLines![i], context.WhiteSpaceMask))
                     {
                         return CommentResult.SkippedNewLine;
                     }
@@ -432,7 +433,10 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                     var commentStartName = $"commentStart{context.NextNumber()}";
                     var throws = comment.Unterminated == UnterminatedComment.Throw;
 
-                    if (comment.Unterminated == UnterminatedComment.NotAComment || throws && context.CollectDiagnostics || _tracksLineStart)
+                    // The new lines of WithWhiteSpace(whiteSpace, newLines) can be empty: the comment then contains none
+                    var findsNewLine = _tracksLineStart && _commentNewLines![i]?.Length != 0;
+
+                    if (comment.Unterminated == UnterminatedComment.NotAComment || throws && context.CollectDiagnostics || findsNewLine)
                     {
                         result.Body.Add($"            var {commentStartName} = {cursorName}.Offset;");
                     }
@@ -440,23 +444,16 @@ public sealed class CommentsParser : Parser<TextSpan>, ISeekable, ISourceable, I
                     result.Body.Add($"            if ({scannerName}.SkipMultiLineComment({comment.Start.Length}, {LiteralHelper.StringToLiteral(comment.End)}.AsSpan()))");
                     result.Body.Add("            {");
 
-                    if (_tracksLineStart)
+                    if (findsNewLine)
                     {
                         // Whether the comment contains a new line
+                        var newLines = _commentNewLines![i];
                         var text = $"{cursorName}.GetSpan({commentStartName}, {cursorName}.Offset - {commentStartName})";
-                        var newLines = _commentNewLines[i];
-                        var search = newLines is not null
-                            ? $"{text}.IndexOfAny({LiteralHelper.StringToLiteral(newLines)}.AsSpan()) >= 0"
-                            : $"global::Parlot.Character.IndexOfNewLine({text}, {ctx}.WhiteSpaceMask) >= 0";
 
-                        // The chars of WithWhiteSpace(whiteSpace, newLines) can have no new line
-                        if (newLines?.Length != 0)
-                        {
-                            result.Body.Add($"                if (!{lineStartName})");
-                            result.Body.Add("                {");
-                            result.Body.Add($"                    {lineStartName} = {search};");
-                            result.Body.Add("                }");
-                        }
+                        result.Body.Add($"                if (!{lineStartName})");
+                        result.Body.Add("                {");
+                        result.Body.Add($"                    {lineStartName} = global::Parlot.Character.ContainsNewLine({text}, {(newLines is null ? "null" : LiteralHelper.StringToLiteral(newLines))}, {ctx}.WhiteSpaceMask);");
+                        result.Body.Add("                }");
                     }
 
                     result.Body.Add("                continue;");
